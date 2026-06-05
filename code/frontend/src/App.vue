@@ -132,6 +132,7 @@ const phase = ref('adding')
 // Player identity
 const playerId = ref(localStorage.getItem('playerId') || '')
 const playerName = ref(localStorage.getItem('playerName') || '')
+const showNameEntry = ref(false)
 const checking = ref(false)
 const nameStatus = ref('')
 const nameFound = ref(false)

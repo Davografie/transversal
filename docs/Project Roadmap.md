@@ -83,6 +83,15 @@ aliases:
 - [x] Universe entity type with seeded universe entities (Earth, Three Realms)
 - [x] Retractable dice roller panel (hover to reveal on desktop, swipe on touch)
 - [x] Zone coordinate editing via GM toggle (drag-and-drop on background)
+- [x] Dot-based location UI (zones, occupants, nav dots as interactive map markers)
+- [x] Two-phase interaction (tap to pop, tap to navigate)
+- [x] Portal expansion travel animation (dot → viewport)
+- [x] Navigation dots (parent/portal) with persistable positions
+- [x] Drag-and-drop die-to-slot assignment in dice pool picking
+- [x] Best Total / Best Effect auto-assign for dice picking
+- [x] Self-character always popped with proximity-based dot expansion
+- [x] Character arrival positioning at source location dot
+- [x] Delayed character fade-in after travel
 - [ ] End-to-end playtest of a full scene
 
 ## Phase 5: Polish & Launch
@@ -112,6 +121,9 @@ aliases:
 | Zone hotspots with percentage coordinates | Scalable positioning on background images; drag-and-drop GM editing | 2026-06-05 |
 | Occupant map positioning (map_x/map_y) | Characters/GMCs remember their position on each location's map | 2026-06-05 |
 | Universe as entity type | Universe metadata (name, image) is first-class data, not magic strings | 2026-06-05 |
+| Dot-based navigation UI | Zones, occupants, and nav destinations rendered as interactive dots on the background image; two-phase tap-to-pop interaction | 2026-06-05 |
+| Portal expansion travel animation | Clip-path circle expanding from zone dot to full viewport creates immersive location transitions | 2026-06-05 |
+| Nav dot positioning per location | Parent/portal dot positions stored on the location entity; persist across drag-and-drop editing | 2026-06-05 |
 
 ## Next
 

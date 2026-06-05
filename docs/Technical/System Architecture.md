@@ -154,11 +154,11 @@ The frontend is a Vue3 PWA served by Vite in development.
 
 | Component | Transport | Function |
 |-----------|-----------|----------|
-| `LocationViewer` | REST + SSE | Full-screen background image with zone hotspots (navigable), occupant circles (draggable), and navigation arrows (▲ parent, ◎ portal). Zones and occupants support drag-and-drop repositioning. |
+| `LocationViewer` | REST + SSE | Full-screen background image with interactive dots: **zone dots** (green, navigate to child locations), **occupant dots** (blue=PC, orange=GMC), and **nav dots** (gold=parent, purple=portal). Two-phase interaction: tap to pop (expand to show image), tap again to navigate. Player's own character always expanded. **Portal expansion animation**: clip-path circle expands from zone dot to fill viewport on travel. Proximity pop during drag shows nearby dots. Nav dot positions persist per location. "Arrange Map" mode expands all dots for drag-and-drop editing. |
 | `CharacterSheet` | GraphQL | Slide-out panel showing entity traits grouped by trait set. Filters by current universe (morph traits) and always shows ego traits. Clicking a trait toggles it in the dice pool. SFX buttons appear next to traits. |
-| `DiceRoller` | REST `POST /roll` | Retractable bottom panel. **Closed**: only the phase bar is visible as a drag handle at the bottom edge. **Desktop**: hover reveals. **Touch**: swipe up on the handle to open, swipe down or tap outside to dismiss. Four-phase lifecycle (adding/rolling/picking/resolved). |
-| `GmPanel` | GraphQL + REST | Slide-in panel from the right. Entity list with type filters, create/edit/delete entities, trait assignment, background image upload (with auto-persist), universe/location dropdowns, and "Edit Zones" toggle for drag-and-drop zone repositioning. |
-| `DieIcon` | — | SVG dice renderer (d4–d12), color-coded. Shows result value and hitch/botch highlighting. |
+| `DiceRoller` | REST `POST /roll` | Retractable bottom panel. **Closed**: only the phase bar is visible as a drag handle at the bottom edge. **Desktop**: hover reveals. **Touch**: swipe up on the handle to open, swipe down or tap outside to dismiss. Four-phase lifecycle (adding/rolling/picking/resolved). Picking phase uses drag-and-drop die-to-slot assignment; clicking Total:/Effect: labels auto-assigns Best Total or Best Effect. Resolved phase shows total result and effect die. |
+| `GmPanel` | GraphQL + REST | Slide-in panel from the upper-right. Entity list with type filters, create/edit/delete entities, trait assignment (add/remove trait settings), background image file upload (auto-renames and persists to database), universe/location dropdowns populated from existing entities, and "Arrange Map" toggle for drag-and-drop zone/nav-dot repositioning. |
+| `DieIcon` | — | SVG dice renderer (d4–d12), color-coded. Shows result value with white text and dark stroke for legibility on transparent backgrounds. |
 
 ### State Management
 

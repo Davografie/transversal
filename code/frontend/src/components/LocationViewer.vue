@@ -5,9 +5,8 @@
     <div class="uni-label fade-in" v-if="showElements">{{ displayUniverse }}</div>
 
     <!-- Zone dots (nested: dot is trigger, overlay is visual) -->
+    <template v-for="(z, i) in zones" :key="'z-' + z.name">
     <button
-      v-for="(z, i) in zones"
-      :key="'z-' + z.name"
       v-if="showElements"
       class="map-dot zone-dot fade-in"
       :class="{ expanded: (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name, draggable: editZones }"
@@ -19,12 +18,12 @@
       <div class="dot-overlay" v-if="childImage(z.name)" :style="{ backgroundImage: 'url(' + childImage(z.name) + ')' }" @click.stop="onExpandedClick('zone', z)" />
       <span v-else class="dot-label" @click.stop="onExpandedClick('zone', z)">{{ z.name }}</span>
     </button>
+    </template>
 
     <!-- Occupant dots (nested: dot is trigger, overlay is visual) -->
+    <template v-for="(o, i) in occupants" :key="'o-' + o.id + (o.id === entityId ? '-' + showSelf : '')">
     <button
-      v-for="(o, i) in occupants"
-      :key="'o-' + o.id"
-      v-show="!travelAnim.active"
+      v-if="!travelAnim.active && showElements && (o.id !== entityId || showSelf)"
       class="map-dot occ-dot fade-in"
       :class="['occ-' + o.type, { expanded: (activeElement?.type === 'occupant' && activeElement?.id === o.id) || hoveredDot === 'occupant-' + o.id || o.id === entityId, self: o.id === entityId, draggable: canDragOccupant(o) }]"
       :style="occupantStyle(i, o)"
@@ -36,11 +35,11 @@
       <div v-if="o.image" class="dot-overlay occ-img-overlay" :style="{ backgroundImage: 'url(' + o.image + ')' }" @click.stop="onExpandedClick('occupant', o)" />
       <span v-else class="dot-initials" @click.stop="onExpandedClick('occupant', o)">{{ occupantInitials(o.name) }}</span>
     </button>
+    </template>
 
     <!-- Navigation dots -->
+    <template v-for="nd in navDots" :key="'nav-' + nd.key">
     <button
-      v-for="nd in navDots"
-      :key="'nav-' + nd.key"
       v-if="showElements"
       class="map-dot nav-dot fade-in"
       :class="'nav-' + nd.type + ((activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key ? ' expanded' : '') + (editZones ? ' draggable' : '')"
@@ -52,6 +51,7 @@
       <div v-if="nd.image" class="dot-overlay" :style="{ backgroundImage: 'url(' + nd.image + ')' }" @click.stop="onExpandedClick('nav', nd)" />
       <span v-else class="dot-label" @click.stop="onExpandedClick('nav', nd)">{{ nd.name }}</span>
     </button>
+    </template>
 
     <!-- Travel expansion animation -->
     <div
@@ -69,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -90,6 +90,7 @@ const viewerEl = ref(null)
 const activeElement = ref(null)  // { type: 'zone'|'occupant', name?, id? } — which dot is popped out
 const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })
 const showElements = ref(true)  // toggled off during portal for fade-in remount
+const showSelf = ref(true)     // delayed after travel for dramatic arrival
 
 // ── Drag state ─────────────────────────────────────
 
@@ -465,6 +466,7 @@ function onDotClick(type, item) {
 
 async function travelWithAnimation(zone, child, imageUrl = null) {
   const img = imageUrl || childImage(zone.name)
+  const sourceId = props.locationId  // remember where we came from
   if (!img) {
     moveTo(child._key, child.current_universe)
     return
@@ -483,6 +485,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
 
   // Hide elements during portal
   showElements.value = false
+  showSelf.value = false
 
   // Start portal animation (background stays old, portal shows new)
   travelAnim.value = { active: true, x: zone.x, y: zone.y, image: img }
@@ -495,9 +498,46 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     travelAnim.value.active = false
     activeElement.value = null
     await fetchNav()
+    // Position character at the dot matching the source location
+    placeCharacterAtSource(sourceId)
+    await nextTick()
     // Fade-in elements after new data is loaded
     showElements.value = true
+    // Delay character arrival for dramatic effect
+    setTimeout(() => { showSelf.value = true }, 1000)
   }, 1300)
+}
+
+function placeCharacterAtSource(sourceId) {
+  if (!sourceId) return
+  const self = occupants.value.find(o => o.id === props.entityId)
+  if (!self) return
+
+  // Determine new position
+  let nx = 50, ny = 50
+  for (const z of zones.value) {
+    const children = nav.value.children || []
+    const child = children.find(c => c.name === z.name)
+    if (child && child._key === sourceId) { nx = z.x; ny = z.y; break }
+  }
+  if (nx === 50 && ny === 50) {
+    const nd = navDots.value.find(d => d.key === 'parent')
+    if (nd && nav.value.parent?._key === sourceId) { nx = nd.x; ny = nd.y }
+  }
+  if (nx === 50 && ny === 50) {
+    const pd = navDots.value.find(d => d.key === 'portal')
+    if (pd && nav.value.transversal?.some(t => t._key === sourceId)) { nx = pd.x; ny = pd.y }
+  }
+
+  // Set position (dot not mounted yet, just update data)
+  self.map_x = nx; self.map_y = ny
+
+  // Save position
+  fetch(`/api/v1/entities/${props.entityId}/map-position`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ map_x: nx, map_y: ny }),
+  }).catch(() => {})
 }
 
 function onExpandedClick(type, item) {
@@ -589,7 +629,7 @@ onMounted(fetchNav)
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
   z-index: 3;

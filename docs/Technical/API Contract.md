@@ -41,6 +41,8 @@ type Entity {
   # Map positioning (percentage, per-location)
   mapX: Float
   mapY: Float
+  # Navigation dot positions (JSON)
+  navPositions: String
   # Faction
   nodeIds: [ID!]!
   # Asset
@@ -191,6 +193,7 @@ input UpdateEntityInput {
   hidden: Boolean
   knownTo: [String!]
   backgroundImage: String
+  navPositions: String
   ownedBy: String
 }
 
@@ -318,7 +321,7 @@ Returns parent (up), children (down), transversal destinations (lateral), zones,
 
 ```json
 {
-  "location": { "name": "Valley of Ascension", "zones": [{"name": "Verdant Dominion", "x": 30, "y": 40}, ...] },
+  "location": { "name": "Valley of Ascension", "zones": [{"name": "Verdant Dominion", "x": 30, "y": 40}, ...], "nav_positions": {"parent": {"x": 90, "y": 15}, "portal": {"x": 90, "y": 50}} },
   "parent": { "name": "...", "_key": "..." },
   "children": [{ "name": "Verdant Dominion", "_key": "loc-40646134", "current_universe": "three_realms" }],
   "transversal": [{ "name": "The Arrival Platform", "_key": "loc-platform", "current_universe": "three_realms" }],
