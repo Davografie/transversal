@@ -93,7 +93,11 @@ function setPoolSources(sources) {
   poolSources.value = new Set(sources)
 }
 
-defineExpose({ resetSfxCounts, setPoolSources, fetchEntity })
+function closeSheet() {
+  open.value = false
+}
+
+defineExpose({ resetSfxCounts, setPoolSources, fetchEntity, closeSheet })
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0

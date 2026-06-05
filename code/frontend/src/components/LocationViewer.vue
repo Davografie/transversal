@@ -1,16 +1,16 @@
 <template>
-  <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" :style="{ backgroundImage: bgStyle }" @click="onBgClick">
+  <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" :style="bgStyle" @click="onBgClick">
     <!-- Location label -->
     <div class="loc-label fade-in" v-if="showElements">{{ displayName }}</div>
     <div class="uni-label fade-in" v-if="showElements">{{ displayUniverse }}</div>
 
-    <!-- Zone dots (nested: dot is trigger, overlay is visual) -->
+    <!-- Zone dots -->
     <template v-for="(z, i) in zones" :key="'z-' + z.name">
     <button
       v-if="showElements"
       class="map-dot zone-dot fade-in"
       :class="{ expanded: (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name, draggable: editZones }"
-      :style="{ left: z.x + '%', top: z.y + '%' }"
+      :style="parallaxedStyle(z.x, z.y)"
       @mousedown="(e) => onZoneDragStart(e, z, i)"
       @touchstart="(e) => onZoneDragStart(e, z, i)"
       @click.stop="onDotClick('zone', z)"
@@ -20,13 +20,13 @@
     </button>
     </template>
 
-    <!-- Occupant dots (nested: dot is trigger, overlay is visual) -->
-    <template v-for="(o, i) in occupants" :key="'o-' + o.id + (o.id === entityId ? '-' + showSelf : '')">
+    <!-- Occupant dots (non-self only) -->
+    <template v-for="(o, i) in occupants.filter(x => x.id !== entityId)" :key="'o-' + o.id">
     <button
-      v-if="!travelAnim.active && showElements && (o.id !== entityId || showSelf)"
+      v-if="!travelAnim.active && showElements"
       class="map-dot occ-dot fade-in"
-      :class="['occ-' + o.type, { expanded: (activeElement?.type === 'occupant' && activeElement?.id === o.id) || hoveredDot === 'occupant-' + o.id || o.id === entityId, self: o.id === entityId, draggable: canDragOccupant(o) }]"
-      :style="occupantStyle(i, o)"
+      :class="['occ-' + o.type, { expanded: (activeElement?.type === 'occupant' && activeElement?.id === o.id) || hoveredDot === 'occupant-' + o.id, draggable: canDragOccupant(o) }]"
+      :style="parallaxedStyle(o.map_x ?? occupantX(index, o), o.map_y ?? occupantY(index, o))"
       :title="canDragOccupant(o) ? 'Drag to reposition' : o.name"
       @mousedown="(e) => onOccupantDragStart(e, o, i)"
       @touchstart="(e) => onOccupantDragStart(e, o, i)"
@@ -43,7 +43,7 @@
       v-if="showElements"
       class="map-dot nav-dot fade-in"
       :class="'nav-' + nd.type + ((activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key ? ' expanded' : '') + (editZones ? ' draggable' : '')"
-      :style="{ left: nd.x + '%', top: nd.y + '%' }"
+      :style="parallaxedStyle(nd.x, nd.y)"
       @mousedown="(e) => onNavDragStart(e, nd)"
       @touchstart="(e) => onNavDragStart(e, nd)"
       @click.stop="onDotClick('nav', nd)"
@@ -53,6 +53,20 @@
     </button>
     </template>
 
+    <!-- Self character dot (no parallax — 1:1 with touch) -->
+    <button
+      v-if="!travelAnim.active && showElements && showSelf"
+      class="map-dot occ-dot fade-in self"
+      :class="['occ-character', { expanded: true }]"
+      :style="selfStyle"
+      title="Drag to explore"
+      @mousedown="(e) => onSelfDragStart(e)"
+      @touchstart="(e) => onSelfDragStart(e)"
+    >
+      <div v-if="selfImage" class="dot-overlay occ-img-overlay" :style="{ backgroundImage: 'url(' + selfImage + ')' }" />
+      <span v-else class="dot-initials">{{ selfInitials }}</span>
+    </button>
+
     <!-- Travel expansion animation -->
     <div
       v-if="travelAnim.active"
@@ -61,6 +75,7 @@
         '--travel-x': travelAnim.x + '%',
         '--travel-y': travelAnim.y + '%',
         backgroundImage: 'url(' + travelAnim.image + ')',
+        backgroundPosition: (travelAnim.bgX || 50) + '% ' + (travelAnim.bgY || 50) + '%',
       }"
     />
 
@@ -92,9 +107,110 @@ const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })
 const showElements = ref(true)  // toggled off during portal for fade-in remount
 const showSelf = ref(true)     // delayed after travel for dramatic arrival
 
+const selfOccupant = computed(() => occupants.value.find(o => o.id === props.entityId) || { map_x: 50, map_y: 50, name: '', image: null })
+const selfStyle = computed(() => {
+  const s = selfOccupant.value
+  return { left: (s.map_x ?? 50).toFixed(1) + '%', top: (s.map_y ?? 50).toFixed(1) + '%' }
+})
+const selfImage = computed(() => selfOccupant.value.image || null)
+const selfInitials = computed(() => occupantInitials(selfOccupant.value.name || 'You'))
+
+function onSelfDragStart(e) {
+  const idx = occupants.value.findIndex(o => o.id === props.entityId)
+  if (idx === -1) return
+  onOccupantDragStart(e, occupants.value[idx], idx)
+}
+
+function parallaxOffset() {
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
+  return { x: mx, y: my }
+}
+
+// Convert image-relative position to viewport position based on pan offset
+function toViewportPos(imgX, imgY) {
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const charX = self?.map_x ?? 50
+  const charY = self?.map_y ?? 50
+  const vw = window.innerWidth, vh = window.innerHeight
+  const viewAspect = vw / vh
+  const imgAspect = imageAspect.value
+
+  if (imgAspect && imgAspect > viewAspect) {
+    // Landscape: image fills height, overflows horizontally
+    const imgW = vh * imgAspect
+    const overflow = imgW - vw
+    const panPx = ((charX / 100) * overflow)
+    const dotPx = (imgX / 100) * imgW
+    const viewX = ((dotPx - panPx) / vw) * 100
+    return { left: viewX.toFixed(1) + '%', top: imgY.toFixed(1) + '%' }
+  }
+  if (imgAspect && imgAspect < viewAspect) {
+    // Portrait: image fills width, overflows vertically
+    const imgH = vw / imgAspect
+    const overflow = imgH - vh
+    const panPx = ((charY / 100) * overflow)
+    const dotPy = (imgY / 100) * imgH
+    const viewY = ((dotPy - panPx) / vh) * 100
+    return { left: imgX.toFixed(1) + '%', top: viewY.toFixed(1) + '%' }
+  }
+  // Unknown aspect: fallback — dots locked to image via pan
+  return { left: imgX.toFixed(1) + '%', top: imgY.toFixed(1) + '%' }
+}
+
+function parallaxedStyle(imgX, imgY) {
+  return toViewportPos(imgX, imgY)
+}
+
+function occupantX(index, occupant) {
+  if (zones.value.length > 0) {
+    const zoneIdx = index % zones.value.length
+    const z = zones.value[zoneIdx]
+    const offset = 5 + (Math.floor(index / zones.value.length) * 5)
+    return z.x + offset
+  }
+  return 20 + (index * 15) % 60
+}
+
+function occupantY(index, occupant) {
+  if (zones.value.length > 0) {
+    const zoneIdx = index % zones.value.length
+    const z = zones.value[zoneIdx]
+    const offset = 5 + (Math.floor(index / zones.value.length) * 5)
+    return z.y + offset
+  }
+  return 75 + (index * 5) % 15
+}
+
 // ── Drag state ─────────────────────────────────────
 
 const dragging = ref(null)  // { zoneIndex, startX, startY, origX, origY }
+
+function toImagePos(viewX, viewY) {
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const charX = self?.map_x ?? 50
+  const charY = self?.map_y ?? 50
+  const vw = window.innerWidth, vh = window.innerHeight
+  const viewAspect = vw / vh
+  const imgAspect = imageAspect.value
+
+  if (imgAspect && imgAspect > viewAspect) {
+    const imgW = vh * imgAspect
+    const overflow = imgW - vw
+    const panPx = (charX / 100) * overflow
+    const dotPx = (viewX / 100) * vw + panPx
+    return { x: (dotPx / imgW) * 100, y: viewY }
+  }
+  if (imgAspect && imgAspect < viewAspect) {
+    const imgH = vw / imgAspect
+    const overflow = imgH - vh
+    const panPy = (charY / 100) * overflow
+    const dotPy = (viewY / 100) * vh + panPy
+    return { x: viewX, y: (dotPy / imgH) * 100 }
+  }
+  return { x: viewX, y: viewY }
+}
 
 function getPosFromEvent(e) {
   const el = viewerEl.value
@@ -102,10 +218,9 @@ function getPosFromEvent(e) {
   const rect = el.getBoundingClientRect()
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
-  return {
-    x: ((clientX - rect.left) / rect.width) * 100,
-    y: ((clientY - rect.top) / rect.height) * 100,
-  }
+  const vx = ((clientX - rect.left) / rect.width) * 100
+  const vy = ((clientY - rect.top) / rect.height) * 100
+  return toImagePos(vx, vy)
 }
 
 function onZoneDragStart(e, zone, index) {
@@ -196,9 +311,49 @@ const navDots = computed(() => {
   return dots
 })
 
+const imageAspect = ref(null)  // width/height ratio of current image, or null if unknown
+
 const bgStyle = computed(() => {
-  if (currentImage.value) return `url(${currentImage.value})`
-  return ''
+  if (!currentImage.value) return ''
+
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const viewAspect = vw / vh
+  const imgAspect = imageAspect.value
+
+  if (imgAspect && imgAspect > viewAspect) {
+    // Image is wider: fit height, pan horizontally only
+    return {
+      backgroundImage: `url(${currentImage.value})`,
+      backgroundSize: `auto 100%`,
+      backgroundPosition: `${mx}% 50%`,
+    }
+  } else if (imgAspect && imgAspect < viewAspect) {
+    // Image is taller: fit width, pan vertically only
+    return {
+      backgroundImage: `url(${currentImage.value})`,
+      backgroundSize: `100% auto`,
+      backgroundPosition: `50% ${my}%`,
+    }
+  }
+  // Unknown aspect: default 180% both axes
+  return {
+    backgroundImage: `url(${currentImage.value})`,
+    backgroundSize: '180%',
+    backgroundPosition: `${mx}% ${my}%`,
+  }
+})
+
+// Track image aspect ratio on load
+watch(currentImage, (url) => {
+  if (!url) { imageAspect.value = null; return }
+  const img = new Image()
+  img.onload = () => { imageAspect.value = img.width / img.height }
+  img.onerror = () => { imageAspect.value = null }
+  img.src = url
 })
 
 // ── Occupant positioning ────────────────────────────
@@ -269,11 +424,14 @@ function onOccDragMove(e) {
   const dy = ((clientY - occDragging.value.startY) / rect.height) * 100
   const occ = occupants.value[occDragging.value.index]
   if (occ) {
-    occ.map_x = Math.max(2, Math.min(98, Math.round(occDragging.value.origX + dx)))
-    occ.map_y = Math.max(2, Math.min(98, Math.round(occDragging.value.origY + dy)))
+    const viewX = occDragging.value.origX + dx
+    const viewY = occDragging.value.origY + dy
+    const img = toImagePos(viewX, viewY)
+    occ.map_x = Math.max(2, Math.min(98, Math.round(img.x)))
+    occ.map_y = Math.max(2, Math.min(98, Math.round(img.y)))
   }
 
-  // Track nearest target — visual proximity highlight, no reactive activeElement change
+  // Track nearest target — all positions now image-relative
   if (occ && occ.id === props.entityId) {
     const px = occ.map_x, py = occ.map_y
     let nearest = null, nearestDist = 12
@@ -308,7 +466,7 @@ async function onOccDragEnd() {
   if (!occ) return
 
   // If player dropped near a target, trigger interaction
-  if (occ.id === props.entityId && dragTarget) {
+  if (occ.id === props.entityId && dragTarget && !props.editZones) {
     const t = dragTarget
     dragTarget = null
     if (t.type === 'zone') {
@@ -487,24 +645,71 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   showElements.value = false
   showSelf.value = false
 
-  // Start portal animation (background stays old, portal shows new)
-  travelAnim.value = { active: true, x: zone.x, y: zone.y, image: img }
+  // Pre-fetch destination nav data to find the exact arrival position
+  let arriveX = zone.x, arriveY = zone.y  // fallback: use source zone position
+  try {
+    const r = await fetch(`/api/v1/locations/${child._key}/navigate`)
+    const destNav = await r.json()
+    const destLoc = destNav.location
+    // Find which dot on destination points back to source
+    for (const z of (destLoc?.zones || [])) {
+      const destChildren = destNav.children || []
+      const c = destChildren.find(ch => ch.name === z.name)
+      if (c && c._key === sourceId) { arriveX = z.x; arriveY = z.y; break }
+    }
+    if (arriveX === zone.x && arriveY === zone.y) {
+      // Check parent dot
+      const parent = destNav.parent
+      if (parent && parent._key === sourceId) {
+        const parentPos = (destLoc?.nav_positions?.parent) || { x: 90, y: 15 }
+        arriveX = parentPos.x; arriveY = parentPos.y
+      }
+      // Check portal dot
+      const trans = destNav.transversal || []
+      if (trans.some(t => t._key === sourceId)) {
+        const portalPos = (destLoc?.nav_positions?.portal) || { x: 90, y: 50 }
+        arriveX = portalPos.x; arriveY = portalPos.y
+      }
+    }
+  } catch { /* use fallback */ }
+
+  // Compute portal origin using current character position
+  const vp = toViewportPos(zone.x, zone.y)
+
+  travelAnim.value = { active: true, x: parseFloat(vp.left), y: parseFloat(vp.top), image: img, bgX: arriveX, bgY: arriveY }
+
+  // Now set the new aspect ratio so background switch uses correct sizing
+  if (preload.naturalWidth && preload.naturalHeight) {
+    imageAspect.value = preload.naturalWidth / preload.naturalHeight
+  }
+
   moveTo(child._key, child.current_universe)
 
-  // Switch background once portal has fully expanded (at 70% of 1.2s = 840ms)
-  setTimeout(() => { currentImage.value = img }, 900)
-
   setTimeout(async () => {
+    await fetchNav()
+
+    // Lock position, switch background, and remove portal — all in one frame
+    const so = occupants.value.find(o => o.id === props.entityId)
+    if (so) { so.map_x = arriveX; so.map_y = arriveY }
+    currentImage.value = img
+
+    // Force-disable transitions on the viewer element to prevent any cross-frame animation
+    if (viewerEl.value) {
+      viewerEl.value.style.transition = 'none'
+    }
     travelAnim.value.active = false
     activeElement.value = null
-    await fetchNav()
-    // Position character at the dot matching the source location
-    placeCharacterAtSource(sourceId)
-    await nextTick()
-    // Fade-in elements after new data is loaded
+
+    // Fade-in elements
     showElements.value = true
-    // Delay character arrival for dramatic effect
-    setTimeout(() => { showSelf.value = true }, 1000)
+
+    // Re-enable transitions after paint
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (viewerEl.value) viewerEl.value.style.transition = ''
+      })
+    })
+    showSelf.value = true
   }, 1300)
 }
 
@@ -541,6 +746,7 @@ function placeCharacterAtSource(sourceId) {
 }
 
 function onExpandedClick(type, item) {
+  if (props.editZones) return
   if (type === 'zone') {
     const children = nav.value.children || []
     const child = children.find(c => c.name === item.name)
@@ -592,7 +798,7 @@ onMounted(fetchNav)
   background-repeat: no-repeat;
   background-color: #0a0a0f;
   background-image: radial-gradient(ellipse at 40% 40%, #1a1a2e 0%, #0a0a0f 70%);
-  transition: background-image 0.8s ease;
+  transition: background-image 0.8s ease, background-position 0.3s ease-out;
   z-index: 0;
 }
 /* No background fade during portal travel — portal handles the transition */
@@ -648,7 +854,7 @@ onMounted(fetchNav)
 }
 .occ-dot.occ-character { background: rgba(64,136,212,0.8); box-shadow: 0 0 6px rgba(64,136,212,0.4); }
 .occ-dot.occ-gmc { background: rgba(232,136,48,0.8); box-shadow: 0 0 6px rgba(232,136,48,0.4); }
-.occ-dot.self { z-index: 8 !important; }
+.occ-dot.self { z-index: 20 !important; }
 
 /* Navigation dots */
 .nav-dot {
@@ -773,25 +979,42 @@ onMounted(fetchNav)
   clip-path: circle(120px at var(--travel-x, 50%) var(--travel-y, 50%));
   animation: portal-expand 1.2s ease-out forwards;
   pointer-events: none;
+  opacity: 1;
 }
 
 @keyframes portal-expand {
   0% {
     clip-path: circle(120px at var(--travel-x, 50%) var(--travel-y, 50%));
-    opacity: 1;
-  }
-  70% {
-    clip-path: circle(150vmax at var(--travel-x, 50%) var(--travel-y, 50%));
-    opacity: 1;
   }
   100% {
     clip-path: circle(150vmax at var(--travel-x, 50%) var(--travel-y, 50%));
-    opacity: 0;
   }
 }
 
 .fade-in {
   animation: fadeIn 0.4s ease both;
+}
+/* Self character gets a pop animation on arrival */
+.self.fade-in {
+  animation: arrivePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes arrivePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+    filter: brightness(2);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.1);
+    filter: brightness(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
 }
 
 @keyframes fadeIn {

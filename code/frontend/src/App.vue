@@ -115,6 +115,7 @@ function onMoved(data) {
   locationName.value = data.location
   if (data.universe) universe.value = data.universe
   currentLocationId.value = data.location_id || data.location
+  sheetRef.value?.closeSheet()
   fetchLocationBg()
 }
 const entityId = ref('kael-1')

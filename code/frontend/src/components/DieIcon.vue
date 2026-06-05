@@ -44,6 +44,7 @@ const display = computed(() => {
   height: 40px;
   display: block;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+  pointer-events: none;  /* let parent handle drag/click */
 }
 .die-shape {
   fill: rgba(10,10,20,0.75);

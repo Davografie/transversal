@@ -59,6 +59,7 @@
               :class="[rollClass(i)]"
               :draggable="!isHitch(i)"
               @dragstart="onDieDragStart($event, i)"
+              @touchstart="onDieTouchStart($event, i)"
               @click="toggleDie(i)"
             >
               <DieIcon :die="r.die" :result="r.result" :is-hitch="isHitch(i)" :label="r.source" />
@@ -117,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import DieIcon from './DieIcon.vue'
 
@@ -326,14 +327,80 @@ function selectSlot(type, i) {
   }
 }
 
-// ── Drag-and-drop ──────────────────────────────────
+// ── Drag-and-drop (mouse + touch) ──────────────────
 
 const dragDieIndex = ref(null)
+const touchDrag = ref(null)  // { dieIdx, el, startX, startY, ghost }
+const ghostEl = ref(null)
 
 function onDieDragStart(e, idx) {
   dragDieIndex.value = idx
   e.dataTransfer.effectAllowed = 'move'
   e.dataTransfer.setData('text/plain', String(idx))
+}
+
+function onDieTouchStart(e, idx) {
+  if (isHitch(idx)) return
+  e.preventDefault()
+  const touch = e.touches[0]
+  const el = e.currentTarget
+  const rect = el.getBoundingClientRect()
+
+  // Create ghost clone
+  const ghost = el.cloneNode(true)
+  ghost.style.position = 'fixed'
+  ghost.style.left = (touch.clientX - rect.width / 2) + 'px'
+  ghost.style.top = (touch.clientY - rect.height / 2) + 'px'
+  ghost.style.zIndex = '100'
+  ghost.style.pointerEvents = 'none'
+  ghost.style.opacity = '0.85'
+  ghost.style.transform = 'scale(1.2)'
+  document.body.appendChild(ghost)
+
+  touchDrag.value = { dieIdx: idx, el, ghost, startX: touch.clientX, startY: touch.clientY }
+  el.style.opacity = '0.3'
+}
+
+function onDocTouchMove(e) {
+  if (!touchDrag.value) return
+  e.preventDefault()
+  const touch = e.touches[0]
+  const ghost = touchDrag.value.ghost
+  ghost.style.left = (touch.clientX - 18) + 'px'
+  ghost.style.top = (touch.clientY - 20) + 'px'
+}
+
+function onDocTouchEnd(e) {
+  if (!touchDrag.value) return
+  const { dieIdx, el, ghost } = touchDrag.value
+  touchDrag.value = null
+  el.style.opacity = ''
+  ghost.remove()
+
+  // Find which slot the touch ended on
+  const touch = e.changedTouches[0]
+  const target = document.elementFromPoint(touch.clientX, touch.clientY)
+  const slot = target?.closest('.sel-slot')
+  if (!slot) return
+
+  const type = slot.classList.contains('total-slot') ? 'total' : 'effect'
+  const slots = Array.from(slot.parentElement.querySelectorAll('.sel-slot'))
+  const slotIndex = slots.indexOf(slot)
+  if (slotIndex < 0 || slotIndex >= selection[type].length) return  // out of bounds
+
+  // Remove die from any existing slot
+  const tIdx = selection.total.indexOf(dieIdx)
+  if (tIdx !== -1) selection.total[tIdx] = null
+  const eIdx = selection.effect.indexOf(dieIdx)
+  if (eIdx !== -1) selection.effect[eIdx] = null
+
+  // Swap if target slot occupied
+  const existing = selection[type][slotIndex]
+  if (existing !== null) {
+    selection[type][slotIndex] = null
+  }
+
+  selection[type][slotIndex] = dieIdx
 }
 
 function onSlotDrop(type, slotIndex, e) {
@@ -458,6 +525,15 @@ function clearResult() {
   selection.effect = []
   setPhase(Phase.ADDING)
 }
+
+onMounted(() => {
+  document.addEventListener('touchmove', onDocTouchMove, { passive: false })
+  document.addEventListener('touchend', onDocTouchEnd)
+})
+onUnmounted(() => {
+  document.removeEventListener('touchmove', onDocTouchMove)
+  document.removeEventListener('touchend', onDocTouchEnd)
+})
 </script>
 
 <style scoped>
@@ -562,9 +638,13 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 
 .roll-die-wrap {
-  cursor: pointer; transition: all 0.15s;
+  cursor: grab; transition: all 0.15s;
   border-radius: 8px; border: 2px solid transparent;
   padding: 2px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: element;
+  touch-action: none;
 }
 .roll-die-wrap:hover { border-color: var(--accent-dim); }
 .roll-die-wrap.selected-total { border-color: var(--accent); background: rgba(64,136,212,0.1); }
