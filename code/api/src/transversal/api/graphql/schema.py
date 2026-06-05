@@ -1,5 +1,6 @@
 """Strawberry GraphQL schema — queries and mutations."""
 
+import json
 import strawberry
 from typing import Optional
 
@@ -42,6 +43,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         background_image=e.background_image,
         zones=[Zone(name=z.name, background_image=z.background_image, x=z.x, y=z.y) for z in e.zones],
         map_x=e.map_x, map_y=e.map_y,
+        nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,
     )
 
@@ -219,6 +221,8 @@ class Mutation:
             e.background_image = input.background_image
         if input.owned_by is not None:
             e.owned_by = input.owned_by
+        if input.nav_positions is not None:
+            e.nav_positions = json.loads(input.nav_positions)
         updated = _em(info).update(e)
         return _entity_to_gql(updated)
 

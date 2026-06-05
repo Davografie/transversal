@@ -17,7 +17,7 @@
             class="edit-zones-toggle"
             :class="{ active: editZones }"
             @click="$emit('update:editZones', !editZones)"
-          >{{ editZones ? 'Done Editing' : 'Edit Zones' }}</button>
+          >{{ editZones ? 'Done' : 'Arrange Map' }}</button>
           <div class="type-filters">
             <button
               v-for="t in typeFilters"

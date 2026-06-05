@@ -137,6 +137,7 @@ class Entity:
     zones: list[Zone] = strawberry.field(default_factory=list)
     map_x: Optional[float] = None
     map_y: Optional[float] = None
+    nav_positions: str = "{}"
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
 
@@ -187,6 +188,7 @@ class UpdateEntityInput:
     hidden: Optional[bool] = None
     known_to: Optional[list[str]] = None
     background_image: Optional[str] = None
+    nav_positions: Optional[str] = None
     owned_by: Optional[str] = None
 
 

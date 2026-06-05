@@ -249,6 +249,8 @@ class Entity(BaseModel):
     # Map positioning (percentage, per-location)
     map_x: Optional[float] = None
     map_y: Optional[float] = None
+    # Navigation dot positions
+    nav_positions: dict = Field(default_factory=dict)  # e.g. {"parent": {"x": 90, "y": 15}}
     # Faction (conspyramid)
     node_ids: list[str] = Field(default_factory=list)
     # Asset

@@ -43,8 +43,10 @@
       :key="'nav-' + nd.key"
       v-if="showElements"
       class="map-dot nav-dot fade-in"
-      :class="'nav-' + nd.type + ((activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key ? ' expanded' : '')"
+      :class="'nav-' + nd.type + ((activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key ? ' expanded' : '') + (editZones ? ' draggable' : '')"
       :style="{ left: nd.x + '%', top: nd.y + '%' }"
+      @mousedown="(e) => onNavDragStart(e, nd)"
+      @touchstart="(e) => onNavDragStart(e, nd)"
       @click.stop="onDotClick('nav', nd)"
     >
       <div v-if="nd.image" class="dot-overlay" :style="{ backgroundImage: 'url(' + nd.image + ')' }" @click.stop="onExpandedClick('nav', nd)" />
@@ -156,22 +158,37 @@ const UNIVERSE_NAMES = { earth: 'Earth', three_realms: 'Three Realms' }
 const displayUniverse = computed(() => UNIVERSE_NAMES[props.universe] || props.universe)
 const displayName = computed(() => nav.value.location?.name || props.locationName || props.locationId)
 
+const navDotPositions = ref({ parent: { x: 90, y: 15 }, portal: { x: 90, y: 50 } })
+
+function loadNavPositions() {
+  const raw = nav.value.location?.nav_positions
+  if (raw) {
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      if (parsed.parent) navDotPositions.value.parent = parsed.parent
+      if (parsed.portal) navDotPositions.value.portal = parsed.portal
+    } catch {}
+  }
+}
+
 const navDots = computed(() => {
   const dots = []
   if (nav.value.parent) {
+    const pos = navDotPositions.value.parent
     dots.push({
       key: 'parent', type: 'parent', name: nav.value.parent.name,
       image: nav.value.parent.background_image || null,
-      x: 90, y: 15,
+      x: pos.x, y: pos.y,
       target: { id: nav.value.parent._key, universe: nav.value.parent.current_universe },
     })
   }
   if (nav.value.transversal?.length) {
     const t = nav.value.transversal[0]
+    const pos = navDotPositions.value.portal
     dots.push({
       key: 'portal', type: 'portal', name: t.name,
       image: t.background_image || null,
-      x: 90, y: 50,
+      x: pos.x, y: pos.y,
       target: { id: t._key, universe: t.current_universe },
     })
   }
@@ -339,6 +356,7 @@ async function fetchNav() {
     nav.value = data
     zones.value = data.location?.zones || []
     occupants.value = data.occupants || []
+    loadNavPositions()
 
     // Auto-pop the player's own character
     const self = occupants.value.find(o => o.id === props.entityId)
@@ -368,6 +386,60 @@ function childImage(zoneName) {
   const children = nav.value.children || []
   const child = children.find(c => c.name === zoneName)
   return child?.background_image || null
+}
+
+// ── Nav dot drag ───────────────────────────────────
+
+function onNavDragStart(e, nd) {
+  if (!props.editZones) return
+  e.preventDefault()
+  const el = viewerEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  const startX = clientX, startY = clientY
+  const origX = nd.x, origY = nd.y
+
+  function onMove(ev) {
+    ev.preventDefault()
+    const cx = ev.touches ? ev.touches[0].clientX : ev.clientX
+    const cy = ev.touches ? ev.touches[0].clientY : ev.clientY
+    const dx = ((cx - startX) / rect.width) * 100
+    const dy = ((cy - startY) / rect.height) * 100
+    navDotPositions.value[nd.key] = {
+      x: Math.max(2, Math.min(98, Math.round(origX + dx))),
+      y: Math.max(2, Math.min(98, Math.round(origY + dy))),
+    }
+  }
+
+  async function onEnd() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onEnd)
+    document.removeEventListener('touchmove', onMove)
+    document.removeEventListener('touchend', onEnd)
+    // Persist to database
+    try {
+      await fetch('/api/v1/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id } }`,
+          variables: {
+            input: {
+              id: nav.value.location?._key || props.locationId,
+              navPositions: JSON.stringify(navDotPositions.value),
+            }
+          }
+        }),
+      })
+    } catch {}
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onEnd)
+  document.addEventListener('touchmove', onMove, { passive: false })
+  document.addEventListener('touchend', onEnd)
 }
 
 // ── Two-phase interaction ──────────────────────────
@@ -605,18 +677,43 @@ onMounted(fetchNav)
   font-size: 18px; font-weight: 800; color: #fff;
 }
 
-/* Draggable state */
+/* Draggable state — show as expanded bubbles */
 .map-dot.draggable {
   cursor: grab; border: 2px dashed var(--accent);
-  width: 20px; height: 20px;
-  margin-left: -10px; margin-top: -10px;
   animation: dot-pulse 2s ease-in-out infinite;
 }
-.map-dot.draggable.expanded {
+/* Zones full-size when editing */
+.zone-dot.draggable {
+  width: 240px !important; height: 240px !important;
   margin-left: -120px; margin-top: -120px;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  overflow: hidden;
 }
-.occ-dot.draggable.expanded {
+/* Occupants full-size when editing (self stays same) */
+.occ-dot.draggable:not(.self) {
+  width: 96px !important; height: 96px !important;
   margin-left: -48px; margin-top: -48px;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  overflow: hidden;
+}
+/* Nav dots full-size when editing */
+.nav-dot.draggable {
+  width: 240px !important; height: 240px !important;
+  margin-left: -120px; margin-top: -120px;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  overflow: hidden;
+}
+/* Show overlay in edit mode */
+.map-dot.draggable .dot-overlay,
+.map-dot.draggable .dot-label,
+.map-dot.draggable .dot-initials {
+  opacity: 1;
 }
 @keyframes dot-pulse {
   0%, 100% { border-color: var(--accent); }
