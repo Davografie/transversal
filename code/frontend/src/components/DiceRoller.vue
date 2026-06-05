@@ -1,0 +1,584 @@
+<template>
+  <div v-if="panelOpen" class="dice-backdrop" @click="dismissPanel" @touchstart="dismissPanel" />
+  <div class="dice-roller panel" :class="{ open: panelOpen }" :style="swipeTranslate ? { transform: `translateX(-50%) translateY(calc(${panelOpen ? '-16px + ' : '100% - 48px + '}${swipeTranslate}px))` } : {}">
+    <div
+      class="phase-bar drag-handle"
+      @mousedown="onDragHandleStart"
+      @touchstart="onDragHandleStart"
+    >
+      <span class="phase-label">{{ phase }} {{ isPicking() ? `· ${keepCount}t ${effectCount}e` : '' }}</span>
+    </div>
+
+    <div class="dice-pool" v-if="isAdding()">
+      <div
+        v-for="(die, i) in pool"
+        :key="i"
+        class="die-chip"
+        @click="removeDie(i)"
+      >
+        <DieIcon :die="die.die" :label="die.label || die.source" />
+      </div>
+    </div>
+
+    <div class="add-die" v-if="isAdding()">
+      <button v-for="d in dies" :key="d" class="die-btn" :class="`die-btn-${d}`" @click="addDie(d)">
+        {{ d }}
+      </button>
+    </div>
+
+    <div class="controls" v-if="isAdding() || isPicking()">
+      <button v-if="isAdding()" @click="doRoll" :disabled="loading || pool.length === 0" class="roll-btn">
+        {{ loading ? 'Rolling…' : 'Roll' }}
+      </button>
+      <button v-if="isPicking()" @click="commitPicks" class="roll-btn commit-btn">
+        Done
+      </button>
+    </div>
+
+    <div class="controls" v-if="isResolved()">
+      <button @click="clearResult" class="roll-btn">New Pool</button>
+    </div>
+
+    <div v-if="result" class="result panel">
+      <!-- Simplified result -->
+      <template v-if="result.pipeline === 'simplified'">
+        <div class="result-line">
+          {{ result.highest }} → <strong>{{ result.tier }}</strong>
+          <span v-if="result.effect_die"> (effect: {{ result.effect_die }})</span>
+        </div>
+      </template>
+
+      <!-- Dice Pool: picking phase (interactive) -->
+      <template v-else-if="isPicking()">
+        <div class="pool-result">
+          <div class="roll-dice">
+            <div
+              v-for="(r, i) in result.rolls"
+              :key="i"
+              class="roll-die-wrap"
+              :class="[rollClass(i)]"
+              :draggable="!isHitch(i)"
+              @dragstart="onDieDragStart($event, i)"
+              @click="toggleDie(i)"
+            >
+              <DieIcon :die="r.die" :result="r.result" :is-hitch="isHitch(i)" :label="r.source" />
+            </div>
+          </div>
+          <div class="selection-row">
+            <span class="sel-label" @click="assignBestTotal">Total:</span>
+            <span
+              v-for="(idx, i) in selection.total" :key="'t'+i"
+              class="sel-slot total-slot"
+              :class="{ empty: idx === null }"
+              @dragover.prevent
+              @drop="onSlotDrop('total', i, $event)"
+              @click="clearSlot('total', i)"
+            >
+              {{ idx !== null ? result.rolls[idx].result : '' }}
+            </span>
+            <span class="sel-value">= <strong>{{ computedTotal }}</strong></span>
+          </div>
+          <div class="selection-row">
+            <span class="sel-label" @click="assignBestEffect">Effect:</span>
+            <span
+              v-for="(idx, i) in selection.effect" :key="'e'+i"
+              class="sel-slot effect-slot"
+              :class="{ empty: idx === null, filled: idx !== null }"
+              @dragover.prevent
+              @drop="onSlotDrop('effect', i, $event)"
+              @click="clearSlot('effect', i)"
+            >
+              <DieIcon v-if="idx !== null" :die="result.rolls[idx].die" class="effect-die-icon" />
+              <span v-else class="empty-text"></span>
+            </span>
+          </div>
+        </div>
+      </template>
+
+      <!-- Dice Pool: resolved phase (read-only) -->
+      <template v-else>
+        <div class="resolved-result">
+          <strong class="resolved-total">{{ computedTotal }}</strong>
+          <DieIcon v-if="effectDie" :die="effectDie" class="resolved-eff-die" />
+        </div>
+      </template>
+
+      <div v-if="result.botch" class="botch">BOTCH</div>
+      <div v-if="result.hitches?.length" class="hitches">
+        {{ result.hitches.length }} hitch{{ result.hitches.length > 1 ? 'es' : '' }}
+      </div>
+      <div v-if="result.challenge_result" class="challenge">
+        Challenge: {{ result.challenge_result.outcome }}
+      </div>
+    </div>
+
+    <div v-if="error" class="error">{{ error }}</div>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, watch } from 'vue'
+import { useApi } from '../composables/useApi.js'
+import DieIcon from './DieIcon.vue'
+
+const props = defineProps({
+  entityId: { type: String, default: 'kael-1' },
+  universe: { type: String, default: 'earth' },
+  keepCount: { type: Number, default: 2 },
+  effectCount: { type: Number, default: 1 }
+})
+
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked'])
+
+const { loading, error, roll: apiRoll } = useApi()
+const pool = reactive([])
+const result = ref(null)
+const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
+const panelOpen = ref(false)
+
+// ── Touch / pointer drag ────────────────────────────
+
+const touchStartY = ref(0)
+const touchDelta = ref(0)
+const swipeTranslate = ref(0)
+
+function onDragHandleStart(e) {
+  e.preventDefault()
+  const y = e.touches ? e.touches[0].clientY : e.clientY
+  touchStartY.value = y
+  touchDelta.value = 0
+  swipeTranslate.value = 0
+  document.addEventListener('touchmove', onDocMove, { passive: false })
+  document.addEventListener('touchend', onDocEnd)
+  document.addEventListener('mousemove', onDocMove)
+  document.addEventListener('mouseup', onDocEnd)
+}
+
+function onDocMove(e) {
+  e.preventDefault()
+  const y = e.touches ? e.touches[0].clientY : e.clientY
+  const dy = y - touchStartY.value
+  touchDelta.value = dy
+  if (!panelOpen.value) {
+    swipeTranslate.value = Math.min(0, dy)
+  } else {
+    swipeTranslate.value = Math.max(0, dy)
+  }
+}
+
+function onDocEnd() {
+  document.removeEventListener('touchmove', onDocMove)
+  document.removeEventListener('touchend', onDocEnd)
+  document.removeEventListener('mousemove', onDocMove)
+  document.removeEventListener('mouseup', onDocEnd)
+  if (touchDelta.value < -40) {
+    panelOpen.value = true
+  } else if (touchDelta.value > 40) {
+    panelOpen.value = false
+  }
+  swipeTranslate.value = 0
+  touchDelta.value = 0
+}
+
+function dismissPanel() {
+  panelOpen.value = false
+}
+
+// ── Phases ──────────────────────────────────────────
+const Phase = { ADDING: 'adding', ROLLING: 'rolling', PICKING: 'picking', RESOLVED: 'resolved' }
+const phase = ref(Phase.ADDING)
+
+function setPhase(p) {
+  phase.value = p
+  emit('phaseChange', p)
+  if (p !== Phase.ADDING) panelOpen.value = true  // show results
+}
+
+function isAdding()  { return phase.value === Phase.ADDING }
+function isRolling() { return phase.value === Phase.ROLLING }
+function isPicking() { return phase.value === Phase.PICKING }
+function isResolved(){ return phase.value === Phase.RESOLVED }
+
+// Dice pool die selection (only used for pool pipeline)
+const selection = reactive({ total: [], effect: [] })
+
+function ensureSlots() {
+  while (selection.total.length < props.keepCount) selection.total.push(null)
+  while (selection.total.length > props.keepCount) selection.total.pop()
+  while (selection.effect.length < props.effectCount) selection.effect.push(null)
+  while (selection.effect.length > props.effectCount) selection.effect.pop()
+}
+
+watch([() => props.keepCount, () => props.effectCount], () => {
+  if (result.value?.pipeline === 'pool') ensureSlots()
+})
+
+function setUniverse(u) {
+  emit('update:universe', u)
+}
+
+function notifyPool() {
+  emit('poolChange', pool.map(d => d.label || d.source || d.die).filter(Boolean))
+}
+
+function addDie(die) {
+  pool.push({ die, source: '', label: die })
+  notifyPool()
+  panelOpen.value = true
+}
+
+function removeDie(i) {
+  pool.splice(i, 1)
+  notifyPool()
+}
+
+function addFromSheet({ die, source, label, tsId }) {
+  // Toggle: if the trait is in the pool, remove it; otherwise add it
+  const idx = pool.findIndex(d => d.tsId && d.tsId === tsId)
+  if (idx !== -1) {
+    pool.splice(idx, 1)
+  } else {
+    pool.push({ die, source, label: label || source, tsId: tsId || null })
+    panelOpen.value = true
+  }
+  notifyPool()
+}
+
+function removeBySource(source) {
+  const idx = pool.findIndex(d => d.source === source)
+  if (idx !== -1) { pool.splice(idx, 1); notifyPool() }
+}
+
+function removeByTsId(tsId) {
+  if (!tsId) return
+  const idx = pool.findIndex(d => d.tsId === tsId)
+  if (idx !== -1) { pool.splice(idx, 1); notifyPool() }
+}
+
+const DIE_STEP = { d12: 'd10', d10: 'd8', d8: 'd6', d6: 'd4', d4: null }
+
+function splitDie({ source, label }) {
+  const idx = pool.findIndex(d => d.source === source)
+  if (idx === -1) return
+  const die = pool[idx].die
+  const tsId = pool[idx].tsId
+  const smaller = DIE_STEP[die]
+  if (!smaller) return
+  pool.splice(idx, 1)
+  pool.push({ die: smaller, source: `${source}-a`, label: `${label} A`, tsId })
+  pool.push({ die: smaller, source: `${source}-b`, label: `${label} B`, tsId })
+  notifyPool()
+}
+
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie })
+
+function isHitch(idx) {
+  if (!result.value) return false
+  const r = result.value
+  if (!r.hitches || !r.hitches.length) return false
+  return r.hitches.some(h => h.result === r.rolls[idx].result && h.source === r.rolls[idx].source)
+}
+
+function toggleDie(idx) {
+  if (!result.value || result.value.pipeline !== 'pool') return
+  if (isHitch(idx)) return
+  ensureSlots()
+
+  // If die is already placed, remove it
+  const tIdx = selection.total.indexOf(idx)
+  if (tIdx !== -1) { selection.total[tIdx] = null; return }
+  const eIdx = selection.effect.indexOf(idx)
+  if (eIdx !== -1) { selection.effect[eIdx] = null; return }
+
+  // If a slot is selected, place die there
+  if (selectedSlot.value) {
+    const { type, index } = selectedSlot.value
+    if (selection[type][index] === null) {
+      selection[type][index] = idx
+      selectedSlot.value = null
+      return
+    }
+  }
+
+  // Fallback: auto-assign to first empty total, then effect
+  const emptyTotal = selection.total.indexOf(null)
+  if (emptyTotal !== -1) { selection.total[emptyTotal] = idx }
+  else {
+    const emptyEffect = selection.effect.indexOf(null)
+    if (emptyEffect !== -1) { selection.effect[emptyEffect] = idx }
+  }
+}
+
+function clearSlot(type, i) {
+  if (type === 'total') selection.total[i] = null
+  else selection.effect[i] = null
+}
+
+// ── Drag-and-drop ──────────────────────────────────
+
+const dragDieIndex = ref(null)
+
+function onDieDragStart(e, idx) {
+  dragDieIndex.value = idx
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(idx))
+}
+
+function onSlotDrop(type, slotIndex, e) {
+  const dieIdx = dragDieIndex.value
+  dragDieIndex.value = null
+  if (dieIdx === null || dieIdx === undefined) return
+
+  // Remove die from any existing slot
+  const tIdx = selection.total.indexOf(dieIdx)
+  if (tIdx !== -1) selection.total[tIdx] = null
+  const eIdx = selection.effect.indexOf(dieIdx)
+  if (eIdx !== -1) selection.effect[eIdx] = null
+
+  // If target slot has a die, swap it back to unpicked
+  const existing = selection[type][slotIndex]
+  if (existing !== null) {
+    selection[type][slotIndex] = null
+  }
+
+  // Place die in target slot
+  selection[type][slotIndex] = dieIdx
+}
+
+// ── Auto-assign ────────────────────────────────────
+
+function assignBestTotal() {
+  if (!result.value || result.value.pipeline !== 'pool') return
+  clearAllSlots()
+  const r = result.value.rolls
+  const valid = r.map((roll, i) => isHitch(i) ? -1 : i).filter(i => i !== -1)
+  const sorted = [...valid].sort((a, b) => r[b].result - r[a].result)
+  for (let i = 0; i < props.keepCount; i++) {
+    if (i < sorted.length) selection.total[i] = sorted[i]
+  }
+  const used = new Set(selection.total.filter(i => i !== null))
+  const unused = valid.filter(i => !used.has(i))
+  const dieSize = { d4: 1, d6: 2, d8: 3, d10: 4, d12: 5 }
+  const byDie = [...unused].sort((a, b) => (dieSize[r[b].die] || 0) - (dieSize[r[a].die] || 0))
+  for (let i = 0; i < props.effectCount; i++) {
+    if (i < byDie.length) selection.effect[i] = byDie[i]
+  }
+}
+
+function assignBestEffect() {
+  if (!result.value || result.value.pipeline !== 'pool') return
+  clearAllSlots()
+  const r = result.value.rolls
+  const valid = r.map((roll, i) => isHitch(i) ? -1 : i).filter(i => i !== -1)
+  const dieSize = { d4: 1, d6: 2, d8: 3, d10: 4, d12: 5 }
+  const byDie = [...valid].sort((a, b) => (dieSize[r[b].die] || 0) - (dieSize[r[a].die] || 0))
+  for (let i = 0; i < props.effectCount; i++) {
+    if (i < byDie.length) selection.effect[i] = byDie[i]
+  }
+  const used = new Set(selection.effect.filter(i => i !== null))
+  const unused = valid.filter(i => !used.has(i))
+  const byResult = [...unused].sort((a, b) => r[b].result - r[a].result)
+  for (let i = 0; i < props.keepCount; i++) {
+    if (i < byResult.length) selection.total[i] = byResult[i]
+  }
+}
+
+function clearAllSlots() {
+  for (let i = 0; i < selection.total.length; i++) selection.total[i] = null
+  for (let i = 0; i < selection.effect.length; i++) selection.effect[i] = null
+}
+
+const nextSlot = computed(() => {
+  if (selection.total.includes(null)) return 'total'
+  if (selection.effect.includes(null)) return 'effect'
+  return ''
+})
+
+function rollClass(idx) {
+  if (selection.total.includes(idx)) return 'selected-total'
+  if (selection.effect.includes(idx)) return 'selected-effect'
+  return ''
+}
+
+const computedTotal = computed(() => {
+  if (!result.value || result.value.pipeline !== 'pool') return 0
+  const r = result.value.rolls
+  return selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0)
+})
+
+const effectDie = computed(() => {
+  if (!result.value || result.value.pipeline !== 'pool') return null
+  const idx = selection.effect.find(i => i !== null)
+  return idx !== undefined && idx !== null ? result.value.rolls[idx].die : null
+})
+
+async function doRoll() {
+  setPhase(Phase.ROLLING)
+  const dice = pool.map(d => [d.die, d.source])
+  result.value = await apiRoll(props.entityId, props.universe, dice)
+  pool.length = 0
+  if (result.value?.pipeline === 'pool') {
+    setPhase(Phase.PICKING)
+    ensureSlots()
+  } else {
+    setPhase(Phase.RESOLVED)
+  }
+  emit('rolled', result.value)
+}
+
+function commitPicks() {
+  setPhase(Phase.RESOLVED)
+  // Emit final picked result for sharing
+  if (result.value?.pipeline === 'pool') {
+    const r = result.value.rolls
+    const total = selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0)
+    const effIdx = selection.effect[0]
+    const effDie = effIdx !== null ? r[effIdx].die : 'd4'
+    emit('picked', { total, effect_die: effDie, pipeline: 'pool', botch: result.value.botch })
+  } else if (result.value) {
+    emit('picked', result.value)
+  }
+}
+
+function clearResult() {
+  result.value = null
+  selection.total = []
+  selection.effect = []
+  setPhase(Phase.ADDING)
+}
+</script>
+
+<style scoped>
+.dice-backdrop {
+  position: fixed; inset: 0; z-index: 9;
+  background: transparent;
+}
+
+.dice-roller {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(calc(100% - 48px));
+  width: min(400px, calc(100vw - 32px));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  transition: transform 0.3s ease;
+}
+
+.dice-roller:hover,
+.dice-roller.open {
+  transform: translateX(-50%) translateY(-16px);
+}
+
+.phase-bar {
+  text-align: center; margin-bottom: 4px;
+}
+.drag-handle {
+  cursor: grab; padding: 10px 0; border-top: 2px solid rgba(255,255,255,0.1);
+  min-height: 44px; display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.phase-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+  color: var(--text-dim); background: rgba(255,255,255,0.05);
+  padding: 2px 12px; border-radius: 4px;
+}
+
+h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
+
+.commit-btn { background: var(--success) !important; color: #0a0a0f !important; }
+
+.dice-pool { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+
+.die-chip {
+  cursor: pointer; transition: opacity 0.2s;
+}
+.die-chip:hover { opacity: 0.7; }
+
+.add-die { display: flex; gap: 6px; justify-content: center; }
+.die-btn {
+  flex: 1; padding: 8px 4px; font-size: 14px; font-weight: 700;
+  border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  border: 2px solid transparent; background: rgba(255,255,255,0.06);
+  color: var(--text);
+}
+.die-btn:hover { background: rgba(255,255,255,0.12); border-color: var(--accent-dim); }
+.die-btn-d4  { color: #e88830; }
+.die-btn-d6  { color: #e0e0e0; }
+.die-btn-d8  { color: #d44040; }
+.die-btn-d10 { color: #4088d4; }
+.die-btn-d12 { color: #40b860; }
+
+.controls { display: flex; gap: 8px; }
+.roll-btn { width: 100%; font-size: 18px; font-weight: 700; padding: 10px; }
+
+.result { text-align: center; }
+.result-line { font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.result-line strong { font-size: 24px; color: var(--accent); }
+.result-eff-icon { width: 28px; height: 32px; }
+
+.resolved-result {
+  display: flex; align-items: center; justify-content: center; gap: 16px; padding: 8px 0;
+}
+.resolved-total {
+  font-size: 48px; font-weight: 800; color: var(--accent);
+  text-shadow: 0 2px 8px rgba(64,136,212,0.3);
+  line-height: 1;
+}
+.resolved-eff-die {
+  width: 72px; height: 80px;
+}
+
+.botch {
+  color: var(--danger); font-size: 20px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 4px; margin-top: 6px;
+}
+
+.hitches { color: var(--warn); font-size: 13px; }
+.challenge { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
+.error { color: var(--danger); font-size: 13px; }
+
+/* Pool result with die selection */
+.pool-result {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.roll-dice {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+}
+
+.roll-die-wrap {
+  cursor: pointer; transition: all 0.15s;
+  border-radius: 8px; border: 2px solid transparent;
+  padding: 2px;
+}
+.roll-die-wrap:hover { border-color: var(--accent-dim); }
+.roll-die-wrap.selected-total { border-color: var(--accent); background: rgba(64,136,212,0.1); }
+.roll-die-wrap.selected-effect { border-color: var(--success); background: rgba(64,184,96,0.1); }
+.roll-die-wrap.unused { opacity: 0.3; }
+
+.selection-row {
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+}
+.sel-label { color: var(--text-dim); min-width: 42px; cursor: pointer; }
+.sel-label:hover { color: var(--accent); }
+.sel-slot {
+  width: 36px; height: 28px; border-radius: 6px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 16px;
+  border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+}
+.total-slot { border-color: var(--accent-dim); }
+.effect-slot { border-color: var(--success); min-width: 44px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
+.effect-slot.filled { border-color: transparent; background: transparent; }
+.sel-slot.empty { border-style: dashed; opacity: 0.5; }
+.sel-slot.empty .empty-text { font-size: 10px; color: var(--text-dim); }
+.sel-slot.next { border-style: solid; opacity: 0.8; animation: pulse-slot 1.5s ease-in-out infinite; }
+.sel-slot.selected { border-style: solid; opacity: 1; border-color: var(--accent); background: rgba(64,136,212,0.25); box-shadow: 0 0 6px rgba(64,136,212,0.3); }
+.effect-die-icon { width: 44px; height: 48px; }
+@keyframes pulse-slot { 0%, 100% { border-color: var(--accent); } 50% { border-color: var(--accent-dim); } }
+.sel-value { color: var(--text-dim); }
+.sel-value strong { color: var(--accent); font-size: 20px; }
+</style>

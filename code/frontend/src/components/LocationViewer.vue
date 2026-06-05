@@ -1,0 +1,664 @@
+<template>
+  <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" :style="{ backgroundImage: bgStyle }" @click="onBgClick">
+    <!-- Location label -->
+    <div class="loc-label fade-in" v-if="showElements">{{ displayName }}</div>
+    <div class="uni-label fade-in" v-if="showElements">{{ displayUniverse }}</div>
+
+    <!-- Zone dots (nested: dot is trigger, overlay is visual) -->
+    <button
+      v-for="(z, i) in zones"
+      :key="'z-' + z.name"
+      v-if="showElements"
+      class="map-dot zone-dot fade-in"
+      :class="{ expanded: (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name, draggable: editZones }"
+      :style="{ left: z.x + '%', top: z.y + '%' }"
+      @mousedown="(e) => onZoneDragStart(e, z, i)"
+      @touchstart="(e) => onZoneDragStart(e, z, i)"
+      @click.stop="onDotClick('zone', z)"
+    >
+      <div class="dot-overlay" v-if="childImage(z.name)" :style="{ backgroundImage: 'url(' + childImage(z.name) + ')' }" @click.stop="onExpandedClick('zone', z)" />
+      <span v-else class="dot-label" @click.stop="onExpandedClick('zone', z)">{{ z.name }}</span>
+    </button>
+
+    <!-- Occupant dots (nested: dot is trigger, overlay is visual) -->
+    <button
+      v-for="(o, i) in occupants"
+      :key="'o-' + o.id"
+      v-show="!travelAnim.active"
+      class="map-dot occ-dot fade-in"
+      :class="['occ-' + o.type, { expanded: (activeElement?.type === 'occupant' && activeElement?.id === o.id) || hoveredDot === 'occupant-' + o.id || o.id === entityId, self: o.id === entityId, draggable: canDragOccupant(o) }]"
+      :style="occupantStyle(i, o)"
+      :title="canDragOccupant(o) ? 'Drag to reposition' : o.name"
+      @mousedown="(e) => onOccupantDragStart(e, o, i)"
+      @touchstart="(e) => onOccupantDragStart(e, o, i)"
+      @click.stop="onDotClick('occupant', o)"
+    >
+      <div v-if="o.image" class="dot-overlay occ-img-overlay" :style="{ backgroundImage: 'url(' + o.image + ')' }" @click.stop="onExpandedClick('occupant', o)" />
+      <span v-else class="dot-initials" @click.stop="onExpandedClick('occupant', o)">{{ occupantInitials(o.name) }}</span>
+    </button>
+
+    <!-- Navigation dots -->
+    <button
+      v-for="nd in navDots"
+      :key="'nav-' + nd.key"
+      v-if="showElements"
+      class="map-dot nav-dot fade-in"
+      :class="'nav-' + nd.type + ((activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key ? ' expanded' : '')"
+      :style="{ left: nd.x + '%', top: nd.y + '%' }"
+      @click.stop="onDotClick('nav', nd)"
+    >
+      <div v-if="nd.image" class="dot-overlay" :style="{ backgroundImage: 'url(' + nd.image + ')' }" @click.stop="onExpandedClick('nav', nd)" />
+      <span v-else class="dot-label" @click.stop="onExpandedClick('nav', nd)">{{ nd.name }}</span>
+    </button>
+
+    <!-- Travel expansion animation -->
+    <div
+      v-if="travelAnim.active"
+      class="travel-overlay"
+      :style="{
+        '--travel-x': travelAnim.x + '%',
+        '--travel-y': travelAnim.y + '%',
+        backgroundImage: 'url(' + travelAnim.image + ')',
+      }"
+    />
+
+
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+
+const props = defineProps({
+  locationId: { type: String, required: true },
+  locationName: { type: String, default: '' },
+  universe: { type: String, default: 'earth' },
+  backgroundImage: { type: String, default: '' },
+  entityId: { type: String, required: true },
+  editZones: { type: Boolean, default: false },
+})
+
+const emit = defineEmits(['moved'])
+
+const currentImage = ref('')
+const nav = ref({})
+const zones = ref([])
+const occupants = ref([])
+const viewerEl = ref(null)
+const activeElement = ref(null)  // { type: 'zone'|'occupant', name?, id? } — which dot is popped out
+const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })
+const showElements = ref(true)  // toggled off during portal for fade-in remount
+
+// ── Drag state ─────────────────────────────────────
+
+const dragging = ref(null)  // { zoneIndex, startX, startY, origX, origY }
+
+function getPosFromEvent(e) {
+  const el = viewerEl.value
+  if (!el) return { x: 50, y: 50 }
+  const rect = el.getBoundingClientRect()
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  return {
+    x: ((clientX - rect.left) / rect.width) * 100,
+    y: ((clientY - rect.top) / rect.height) * 100,
+  }
+}
+
+function onZoneDragStart(e, zone, index) {
+  if (!props.editZones) return
+  e.preventDefault()
+  const pos = getPosFromEvent(e)
+  dragging.value = { index, startX: pos.x, startY: pos.y, origX: zone.x, origY: zone.y }
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+  document.addEventListener('touchmove', onDragMove, { passive: false })
+  document.addEventListener('touchend', onDragEnd)
+}
+
+function onDragMove(e) {
+  if (!dragging.value) return
+  e.preventDefault()
+  const pos = getPosFromEvent(e)
+  const dz = zones.value[dragging.value.index]
+  if (dz) {
+    dz.x = Math.max(2, Math.min(98, Math.round(pos.x)))
+    dz.y = Math.max(2, Math.min(98, Math.round(pos.y)))
+  }
+}
+
+async function onDragEnd() {
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+  document.removeEventListener('touchmove', onDragMove)
+  document.removeEventListener('touchend', onDragEnd)
+  if (!dragging.value) return
+  dragging.value = null
+
+  // Save to API
+  try {
+    await fetch(`/api/v1/locations/${props.locationId}/zones`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(zones.value.map(z => ({ name: z.name, x: z.x, y: z.y }))),
+    })
+  } catch { /* silent */ }
+}
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+  document.removeEventListener('touchmove', onDragMove)
+  document.removeEventListener('touchend', onDragEnd)
+})
+
+const UNIVERSE_NAMES = { earth: 'Earth', three_realms: 'Three Realms' }
+const displayUniverse = computed(() => UNIVERSE_NAMES[props.universe] || props.universe)
+const displayName = computed(() => nav.value.location?.name || props.locationName || props.locationId)
+
+const navDots = computed(() => {
+  const dots = []
+  if (nav.value.parent) {
+    dots.push({
+      key: 'parent', type: 'parent', name: nav.value.parent.name,
+      image: nav.value.parent.background_image || null,
+      x: 90, y: 15,
+      target: { id: nav.value.parent._key, universe: nav.value.parent.current_universe },
+    })
+  }
+  if (nav.value.transversal?.length) {
+    const t = nav.value.transversal[0]
+    dots.push({
+      key: 'portal', type: 'portal', name: t.name,
+      image: t.background_image || null,
+      x: 90, y: 50,
+      target: { id: t._key, universe: t.current_universe },
+    })
+  }
+  return dots
+})
+
+const bgStyle = computed(() => {
+  if (currentImage.value) return `url(${currentImage.value})`
+  return ''
+})
+
+// ── Occupant positioning ────────────────────────────
+
+function occupantStyle(index, occupant) {
+  // Position only — dot styling is handled by CSS
+  if (occupant.map_x != null && occupant.map_y != null) {
+    return { left: occupant.map_x + '%', top: occupant.map_y + '%' }
+  }
+  if (zones.value.length > 0) {
+    const zoneIdx = index % zones.value.length
+    const z = zones.value[zoneIdx]
+    const offset = 5 + (Math.floor(index / zones.value.length) * 5)
+    return { left: (z.x + offset) + '%', top: (z.y + offset) + '%' }
+  }
+  const x = 20 + (index * 15) % 60
+  const y = 75 + (index * 5) % 15
+  return { left: x + '%', top: y + '%' }
+}
+
+function canDragOccupant(occupant) {
+  if (props.editZones) return true          // GM can drag anyone
+  if (occupant.id === props.entityId) return true  // player can drag self
+  return false
+}
+
+function occupantInitials(name) {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
+
+// ── Occupant drag ──────────────────────────────────
+
+const occDragging = ref(null)  // { index }
+let dragTarget = null  // non-reactive: nearest target during self-drag
+const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
+
+function onOccupantDragStart(e, occupant, index) {
+  if (!canDragOccupant(occupant)) return
+  e.preventDefault()
+  const el = viewerEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  // Store initial position so we can compute delta
+  occDragging.value = {
+    index,
+    startX: clientX,
+    startY: clientY,
+    origX: (occupant.map_x ?? parseFloat(occupantStyle(index, occupant).left)) || 50,
+    origY: (occupant.map_y ?? parseFloat(occupantStyle(index, occupant).top)) || 50,
+  }
+  document.addEventListener('mousemove', onOccDragMove)
+  document.addEventListener('mouseup', onOccDragEnd)
+  document.addEventListener('touchmove', onOccDragMove, { passive: false })
+  document.addEventListener('touchend', onOccDragEnd)
+}
+
+function onOccDragMove(e) {
+  if (!occDragging.value) return
+  e.preventDefault()
+  const el = viewerEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  const dx = ((clientX - occDragging.value.startX) / rect.width) * 100
+  const dy = ((clientY - occDragging.value.startY) / rect.height) * 100
+  const occ = occupants.value[occDragging.value.index]
+  if (occ) {
+    occ.map_x = Math.max(2, Math.min(98, Math.round(occDragging.value.origX + dx)))
+    occ.map_y = Math.max(2, Math.min(98, Math.round(occDragging.value.origY + dy)))
+  }
+
+  // Track nearest target — visual proximity highlight, no reactive activeElement change
+  if (occ && occ.id === props.entityId) {
+    const px = occ.map_x, py = occ.map_y
+    let nearest = null, nearestDist = 12
+    for (const z of zones.value) {
+      const dist = Math.sqrt((z.x - px) ** 2 + (z.y - py) ** 2)
+      if (dist < nearestDist) { nearest = { type: 'zone', name: z.name }; nearestDist = dist }
+    }
+    for (const o of occupants.value) {
+      if (o.id === props.entityId) continue
+      const ox = o.map_x ?? 50, oy = o.map_y ?? 50
+      const dist = Math.sqrt((ox - px) ** 2 + (oy - py) ** 2)
+      if (dist < nearestDist) { nearest = { type: 'occupant', id: o.id }; nearestDist = dist }
+    }
+    for (const nd of navDots.value) {
+      const dist = Math.sqrt((nd.x - px) ** 2 + (nd.y - py) ** 2)
+      if (dist < nearestDist) { nearest = { type: 'nav', key: nd.key }; nearestDist = dist }
+    }
+    dragTarget = nearest
+    hoveredDot.value = nearest ? `${nearest.type}-${nearest.name || nearest.key || nearest.id}` : ''
+  }
+}
+
+async function onOccDragEnd() {
+  document.removeEventListener('mousemove', onOccDragMove)
+  document.removeEventListener('mouseup', onOccDragEnd)
+  document.removeEventListener('touchmove', onOccDragMove)
+  document.removeEventListener('touchend', onOccDragEnd)
+  hoveredDot.value = ''
+  if (!occDragging.value) return
+  const occ = occupants.value[occDragging.value.index]
+  occDragging.value = null
+  if (!occ) return
+
+  // If player dropped near a target, trigger interaction
+  if (occ.id === props.entityId && dragTarget) {
+    const t = dragTarget
+    dragTarget = null
+    if (t.type === 'zone') {
+      const children = nav.value.children || []
+      const child = children.find(c => c.name === t.name)
+      if (child) {
+        const zone = zones.value.find(z => z.name === t.name)
+        if (zone) {
+          travelWithAnimation(zone, child)
+        } else {
+          moveTo(child._key, child.current_universe)
+        }
+        return
+      }
+    }
+    if (t.type === 'nav') {
+      const nd = navDots.value.find(d => d.key === t.key)
+      if (nd) {
+        activeElement.value = { type: 'nav', key: nd.key }
+        const fakeZone = { x: nd.x, y: nd.y }
+        const fakeChild = { _key: nd.target.id, current_universe: nd.target.universe }
+        travelWithAnimation(fakeZone, fakeChild, nd.image)
+        return
+      }
+    }
+  }
+  dragTarget = null
+  // Keep self popped
+  activeElement.value = { type: 'occupant', id: props.entityId }
+
+  try {
+    await fetch(`/api/v1/entities/${occ.id}/map-position`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ map_x: occ.map_x, map_y: occ.map_y }),
+    })
+  } catch { /* silent */ }
+}
+
+// ── Fetch nav data ─────────────────────────────────
+
+async function fetchNav() {
+  try {
+    const r = await fetch(`/api/v1/locations/${props.locationId}/navigate`)
+    const data = await r.json()
+    nav.value = data
+    zones.value = data.location?.zones || []
+    occupants.value = data.occupants || []
+
+    // Auto-pop the player's own character
+    const self = occupants.value.find(o => o.id === props.entityId)
+    if (self) {
+      activeElement.value = { type: 'occupant', id: self.id }
+    }
+  } catch { /* silent */ }
+}
+
+// ── Navigation ─────────────────────────────────────
+
+async function moveTo(locationId, universe) {
+  try {
+    const r = await fetch(`/api/v1/entities/${props.entityId}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: locationId, universe })
+    })
+    const data = await r.json()
+    emit('moved', data)
+  } catch { /* silent */ }
+}
+
+// ── Child location image lookup ────────────────────
+
+function childImage(zoneName) {
+  const children = nav.value.children || []
+  const child = children.find(c => c.name === zoneName)
+  return child?.background_image || null
+}
+
+// ── Two-phase interaction ──────────────────────────
+
+function onDotClick(type, item) {
+  if (props.editZones) return
+  // Never un-pop the player's own character
+  if (type === 'occupant' && item.id === props.entityId) return
+  // If already popped, dismiss; otherwise pop this one
+  if (activeElement.value?.type === type) {
+    const match = type === 'zone' ? activeElement.value.name === item.name
+      : type === 'nav' ? activeElement.value.key === item.key
+      : activeElement.value.id === item.id
+    if (match) {
+      activeElement.value = null
+      return
+    }
+  }
+  activeElement.value = type === 'zone' ? { type: 'zone', name: item.name }
+    : type === 'nav' ? { type: 'nav', key: item.key }
+    : { type: 'occupant', id: item.id }
+}
+
+async function travelWithAnimation(zone, child, imageUrl = null) {
+  const img = imageUrl || childImage(zone.name)
+  if (!img) {
+    moveTo(child._key, child.current_universe)
+    return
+  }
+
+  // Keep dot expanded during animation
+  activeElement.value = { type: 'zone', name: zone.name }
+
+  // Preload destination image
+  const preload = new Image()
+  preload.src = img
+  await new Promise((resolve) => {
+    if (preload.complete) resolve()
+    else { preload.onload = resolve; preload.onerror = resolve }
+  })
+
+  // Hide elements during portal
+  showElements.value = false
+
+  // Start portal animation (background stays old, portal shows new)
+  travelAnim.value = { active: true, x: zone.x, y: zone.y, image: img }
+  moveTo(child._key, child.current_universe)
+
+  // Switch background once portal has fully expanded (at 70% of 1.2s = 840ms)
+  setTimeout(() => { currentImage.value = img }, 900)
+
+  setTimeout(async () => {
+    travelAnim.value.active = false
+    activeElement.value = null
+    await fetchNav()
+    // Fade-in elements after new data is loaded
+    showElements.value = true
+  }, 1300)
+}
+
+function onExpandedClick(type, item) {
+  if (type === 'zone') {
+    const children = nav.value.children || []
+    const child = children.find(c => c.name === item.name)
+    if (child) {
+      travelWithAnimation(item, child)
+    }
+  } else if (type === 'nav') {
+    // Use travel animation for nav dots too
+    activeElement.value = { type: 'nav', key: item.key }
+    const fakeZone = { x: item.x, y: item.y }
+    const fakeChild = { _key: item.target.id, current_universe: item.target.universe }
+    travelWithAnimation(fakeZone, fakeChild, item.image)
+  } else {
+    activeElement.value = null
+  }
+}
+
+// Dismiss pop-out when clicking background
+function onBgClick(e) {
+  if (e.target === viewerEl.value) {
+    // Keep self popped
+    const self = occupants.value.find(o => o.id === props.entityId)
+    activeElement.value = self ? { type: 'occupant', id: self.id } : null
+  }
+}
+
+
+
+// ── Reactivity ─────────────────────────────────────
+
+watch(() => props.backgroundImage, (img) => {
+  if (img === currentImage.value || travelAnim.value.active) return
+  currentImage.value = img || ''
+}, { immediate: true })
+
+watch(() => props.locationId, () => {
+  if (!travelAnim.value.active) fetchNav()
+})
+
+onMounted(fetchNav)
+</script>
+
+<style scoped>
+.location-viewer {
+  position: fixed;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #0a0a0f;
+  background-image: radial-gradient(ellipse at 40% 40%, #1a1a2e 0%, #0a0a0f 70%);
+  transition: background-image 0.8s ease;
+  z-index: 0;
+}
+/* No background fade during portal travel — portal handles the transition */
+.location-viewer.portal-active {
+  transition: none;
+}
+
+.loc-label {
+  position: absolute;
+  top: env(safe-area-inset-top, 16px);
+  left: 16px;
+  font-size: 20px; font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.uni-label {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 16px) + 24px);
+  left: 16px;
+  font-size: 12px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 2px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* ── Map dots ────────────────────────────────────── */
+
+.map-dot {
+  position: absolute;
+  /* Centered via negative margins (not transform) to preserve background-attachment: fixed */
+  margin-left: -8px; margin-top: -8px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  z-index: 3;
+}
+
+/* Zone dots: small colored circle */
+.zone-dot {
+  width: 16px; height: 16px;
+  background: rgba(64,184,96,0.7);
+  box-shadow: 0 0 6px rgba(64,184,96,0.4);
+}
+
+/* Occupant dots */
+.occ-dot {
+  width: 16px; height: 16px;
+}
+.occ-dot.occ-character { background: rgba(64,136,212,0.8); box-shadow: 0 0 6px rgba(64,136,212,0.4); }
+.occ-dot.occ-gmc { background: rgba(232,136,48,0.8); box-shadow: 0 0 6px rgba(232,136,48,0.4); }
+.occ-dot.self { z-index: 8 !important; }
+
+/* Navigation dots */
+.nav-dot {
+  width: 16px; height: 16px;
+}
+.nav-dot.nav-parent { background: rgba(200,170,60,0.8); box-shadow: 0 0 6px rgba(200,170,60,0.4); }
+.nav-dot.nav-portal { background: rgba(160,80,200,0.8); box-shadow: 0 0 6px rgba(160,80,200,0.4); }
+.nav-dot.expanded {
+  width: 240px !important; height: 240px !important;
+  margin-left: -120px; margin-top: -120px;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255,255,255,0.2);
+  z-index: 10;
+  overflow: hidden;
+}
+
+/* Expanded state — smooth transition from dot to circle */
+.map-dot.expanded {
+  width: 240px !important; height: 240px !important;
+  margin-left: -120px; margin-top: -120px;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255,255,255,0.2);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 10;
+  overflow: hidden;
+}
+.occ-dot.expanded {
+  width: 96px !important; height: 96px !important;
+  margin-left: -48px; margin-top: -48px;
+}
+
+/* Inner overlay — fills the expanded dot, hidden when collapsed */
+.dot-overlay {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+.map-dot.expanded .dot-overlay { opacity: 1; }
+
+.zone-dot .dot-overlay,
+.nav-dot .dot-overlay {
+  background-attachment: fixed;
+}
+.occ-img-overlay { border-radius: 50%; }
+
+.dot-label, .dot-initials {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+.map-dot.expanded .dot-label,
+.map-dot.expanded .dot-initials { opacity: 1; }
+
+.dot-label {
+  font-size: 11px; font-weight: 600; color: var(--text);
+  text-align: center; padding: 4px; line-height: 1.2;
+}
+.dot-initials {
+  font-size: 18px; font-weight: 800; color: #fff;
+}
+
+/* Draggable state */
+.map-dot.draggable {
+  cursor: grab; border: 2px dashed var(--accent);
+  width: 20px; height: 20px;
+  margin-left: -10px; margin-top: -10px;
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+.map-dot.draggable.expanded {
+  margin-left: -120px; margin-top: -120px;
+}
+.occ-dot.draggable.expanded {
+  margin-left: -48px; margin-top: -48px;
+}
+@keyframes dot-pulse {
+  0%, 100% { border-color: var(--accent); }
+  50% { border-color: rgba(64,136,212,0.3); }
+}
+
+
+
+/* ── Transitions ─────────────────────────────────── */
+
+/* ── Travel expansion animation ──────────────────── */
+
+.travel-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background-size: cover;
+  background-position: center;
+  clip-path: circle(120px at var(--travel-x, 50%) var(--travel-y, 50%));
+  animation: portal-expand 1.2s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes portal-expand {
+  0% {
+    clip-path: circle(120px at var(--travel-x, 50%) var(--travel-y, 50%));
+    opacity: 1;
+  }
+  70% {
+    clip-path: circle(150vmax at var(--travel-x, 50%) var(--travel-y, 50%));
+    opacity: 1;
+  }
+  100% {
+    clip-path: circle(150vmax at var(--travel-x, 50%) var(--travel-y, 50%));
+    opacity: 0;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+</style>

@@ -1,0 +1,240 @@
+"""Stateless dice resolver.
+
+Implements both resolution pipelines:
+  - Simplified (1-2 dice): take highest, map to outcome tier
+  - Dice Pool (3+ dice): keep two highest, add, compare
+
+The resolver is pure — it takes a pool spec and returns a result.
+It does not mutate state, apply effects, or touch the database.
+"""
+
+import random
+import secrets
+from typing import Optional
+
+from transversal.domain import (
+    ChallengeResult,
+    DicePoolRequest,
+    DieRoll,
+    DieType,
+    Opposition,
+    OutcomeTier,
+    PoolResult,
+    RollResult,
+    SimplifiedResult,
+)
+
+
+def _roll_die(die: DieType, source: str) -> DieRoll:
+    """Roll a single die using cryptographically secure randomness."""
+    return DieRoll(die=die, result=secrets.randbelow(die.max_value) + 1, source=source)
+
+
+def _determine_tier(highest: int) -> OutcomeTier:
+    """Map the highest die result to an outcome tier."""
+    if highest <= 2:
+        return OutcomeTier.FAIL
+    elif highest <= 5:
+        return OutcomeTier.MARGINAL
+    elif highest <= 8:
+        return OutcomeTier.SUCCESS
+    elif highest <= 11:
+        return OutcomeTier.EXCEPTIONAL
+    else:
+        return OutcomeTier.PERFECT
+
+
+def _is_botch(rolls: list[DieRoll]) -> bool:
+    """A botch occurs when ALL dice show 1."""
+    return len(rolls) > 0 and all(r.result == 1 for r in rolls)
+
+
+def _resolve_challenge(
+    effect_die: Optional[DieType],
+    challenge_die: DieType,
+    success: bool,
+) -> ChallengeResult:
+    """Compare effect die to challenge die and determine outcome."""
+    if not success:
+        # Failure: challenge die steps up
+        new_die = challenge_die.step_up()
+        return ChallengeResult(
+            targeted_die=challenge_die,
+            effect_die=effect_die,
+            outcome="stepped_up" if new_die != challenge_die else "unchanged",
+            new_challenge_rating=new_die.value,
+        )
+
+    if effect_die is None:
+        return ChallengeResult(
+            targeted_die=challenge_die,
+            effect_die=None,
+            outcome="unchanged",
+            new_challenge_rating=challenge_die.value,
+        )
+
+    # Compare effect die to challenge die
+    effect_order = list(DieType)
+    challenge_order = list(DieType)
+
+    effect_idx = effect_order.index(effect_die)
+    challenge_idx = challenge_order.index(challenge_die)
+
+    if effect_idx > challenge_idx:
+        # Effect die is larger → remove challenge die
+        return ChallengeResult(
+            targeted_die=challenge_die,
+            effect_die=effect_die,
+            outcome="removed",
+            new_challenge_rating=None,
+        )
+    else:
+        # Effect die is equal or smaller → step down challenge die
+        new_die = challenge_die.step_down()
+        return ChallengeResult(
+            targeted_die=challenge_die,
+            effect_die=effect_die,
+            outcome="stepped_down" if new_die != challenge_die else "unchanged",
+            new_challenge_rating=new_die.value,
+        )
+
+
+def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
+    """Resolve a simplified pipeline roll (1-2 dice)."""
+    rolls = [_roll_die(die, source) for die, source in request.dice]
+    highest = max(r.result for r in rolls)
+    tier = _determine_tier(highest)
+    hitches = [r for r in rolls if r.result == 1]
+    botch = _is_botch(rolls)
+    razmerit_earned = len(hitches)  # 1 razmerit per hitch
+
+    # Challenge pool resolution
+    challenge_result = None
+    opposition_roll = None
+
+    if request.opposition and request.opposition.type == "challenge" and request.opposition.challenge_die:
+        opp_die = _roll_die(request.opposition.challenge_die, "challenge")
+        opposition_roll = opp_die
+
+        # The player's highest must beat the challenge roll's result
+        # The DIFFERENCE determines the tier (and thus the effect die)
+        diff = highest - opp_die.result
+
+        if diff <= 0:
+            # Player failed to beat the challenge
+            success = False
+            tier = OutcomeTier.FAIL
+        else:
+            success = True
+            if diff <= 2:
+                tier = OutcomeTier.MARGINAL
+            elif diff <= 5:
+                tier = OutcomeTier.SUCCESS
+            elif diff <= 8:
+                tier = OutcomeTier.EXCEPTIONAL
+            else:
+                tier = OutcomeTier.PERFECT
+
+        challenge_result = _resolve_challenge(
+            effect_die=tier.effect_die,
+            challenge_die=request.opposition.challenge_die,
+            success=success,
+        )
+
+        # Only earn razmerit from hitches, even when challenging
+        razmerit_earned = len(hitches)
+
+    return SimplifiedResult(
+        rolls=rolls,
+        highest=highest,
+        tier=tier,
+        effect_die=tier.effect_die,
+        hitches=hitches,
+        botch=botch,
+        opposition_roll=opposition_roll,
+        challenge_result=challenge_result,
+        razmerit_earned=razmerit_earned,
+    )
+
+
+def _resolve_pool(request: DicePoolRequest) -> PoolResult:
+    """Resolve a dice pool pipeline roll (3+ dice, Cortex Prime)."""
+    rolls = [_roll_die(die, source) for die, source in request.dice]
+    hitches = [r for r in rolls if r.result == 1]
+    botch = _is_botch(rolls)
+    razmerit_earned = len(hitches)
+
+    # Sort by result descending; keep two highest
+    sorted_rolls = sorted(rolls, key=lambda r: r.result, reverse=True)
+    kept = sorted_rolls[:2]
+    total = sum(r.result for r in kept)
+    unused = sorted_rolls[2:]
+
+    # Effect die: choose from unused dice, preferring largest die type
+    if unused:
+        # Pick the largest die type from unused as effect die
+        effect_roll = max(unused, key=lambda r: r.die.max_value)
+        effect_die = effect_roll.die
+        effect_die_value = effect_roll.result
+    else:
+        effect_die = DieType.D4  # default
+        effect_die_value = None
+
+    # Opposition
+    opposition_rolls: list[DieRoll] = []
+    opposition_total: Optional[int] = None
+    challenge_result = None
+
+    if request.opposition:
+        if request.opposition.type == "gmc":
+            opp_rolls = [_roll_die(die, source) for die, source in request.opposition.dice]
+            opposition_rolls = opp_rolls
+            opp_sorted = sorted(opp_rolls, key=lambda r: r.result, reverse=True)
+            if len(opp_sorted) >= 2:
+                opposition_total = sum(r.result for r in opp_sorted[:2])
+            elif opp_sorted:
+                opposition_total = opp_sorted[0].result
+
+        elif request.opposition.type == "challenge" and request.opposition.challenge_die:
+            opp_die = _roll_die(request.opposition.challenge_die, "challenge")
+            opposition_rolls = [opp_die]
+            opposition_total = opp_die.result
+
+            success = total > opposition_total
+            challenge_result = _resolve_challenge(
+                effect_die=effect_die,
+                challenge_die=request.opposition.challenge_die,
+                success=success,
+            )
+
+        elif request.opposition.type == "static_difficulty" and request.opposition.static_difficulty is not None:
+            opposition_total = request.opposition.static_difficulty
+
+    return PoolResult(
+        rolls=rolls,
+        kept=kept,
+        total=total,
+        effect_die=effect_die,
+        effect_die_value=effect_die_value,
+        unused=unused,
+        hitches=hitches,
+        botch=botch,
+        opposition_rolls=opposition_rolls,
+        opposition_total=opposition_total,
+        challenge_result=challenge_result,
+        razmerit_earned=razmerit_earned,
+    )
+
+
+def resolve(request: DicePoolRequest) -> RollResult:
+    """Route to the correct pipeline based on pool size.
+
+    Pool size is determined AFTER all modifiers (SFX, razmerit spends).
+    The caller must assemble the final dice list before calling resolve().
+    """
+    pool_size = len(request.dice)
+
+    if pool_size <= 2:
+        return _resolve_simplified(request)
+    else:
+        return _resolve_pool(request)
