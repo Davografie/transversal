@@ -69,10 +69,10 @@
             <span
               v-for="(idx, i) in selection.total" :key="'t'+i"
               class="sel-slot total-slot"
-              :class="{ empty: idx === null }"
+              :class="{ empty: idx === null, selected: selectedSlot?.type === 'total' && selectedSlot?.index === i }"
               @dragover.prevent
               @drop="onSlotDrop('total', i, $event)"
-              @click="clearSlot('total', i)"
+              @click="idx !== null ? clearSlot('total', i) : selectSlot('total', i)"
             >
               {{ idx !== null ? result.rolls[idx].result : '' }}
             </span>
@@ -83,10 +83,10 @@
             <span
               v-for="(idx, i) in selection.effect" :key="'e'+i"
               class="sel-slot effect-slot"
-              :class="{ empty: idx === null, filled: idx !== null }"
+              :class="{ empty: idx === null, filled: idx !== null, selected: selectedSlot?.type === 'effect' && selectedSlot?.index === i }"
               @dragover.prevent
               @drop="onSlotDrop('effect', i, $event)"
-              @click="clearSlot('effect', i)"
+              @click="idx !== null ? clearSlot('effect', i) : selectSlot('effect', i)"
             >
               <DieIcon v-if="idx !== null" :die="result.rolls[idx].die" class="effect-die-icon" />
               <span v-else class="empty-text"></span>
@@ -286,9 +286,9 @@ function toggleDie(idx) {
 
   // If die is already placed, remove it
   const tIdx = selection.total.indexOf(idx)
-  if (tIdx !== -1) { selection.total[tIdx] = null; return }
+  if (tIdx !== -1) { selection.total[tIdx] = null; selectedSlot.value = null; return }
   const eIdx = selection.effect.indexOf(idx)
-  if (eIdx !== -1) { selection.effect[eIdx] = null; return }
+  if (eIdx !== -1) { selection.effect[eIdx] = null; selectedSlot.value = null; return }
 
   // If a slot is selected, place die there
   if (selectedSlot.value) {
@@ -312,6 +312,18 @@ function toggleDie(idx) {
 function clearSlot(type, i) {
   if (type === 'total') selection.total[i] = null
   else selection.effect[i] = null
+}
+
+// ── Slot selection ─────────────────────────────────
+
+const selectedSlot = ref(null)  // { type: 'total'|'effect', index: number }
+
+function selectSlot(type, i) {
+  if (selectedSlot.value?.type === type && selectedSlot.value?.index === i) {
+    selectedSlot.value = null
+  } else {
+    selectedSlot.value = { type, index: i }
+  }
 }
 
 // ── Drag-and-drop ──────────────────────────────────
