@@ -457,5 +457,6 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 @media (max-width: 720px) {
   .edit-panel { right: 8px; left: 8px; width: auto; max-height: 70vh; }
   .gm-panel.has-editor, .gm-toggle.has-editor { display: none; }
+  .gm-close-panel { right: 12px; }
 }
 </style>
