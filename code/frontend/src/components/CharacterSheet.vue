@@ -5,7 +5,10 @@
     <div v-else-if="error" class="error">{{ error }}</div>
     <template v-else-if="entity">
       <div class="header">
-        <h2>{{ entity.name }}</h2>
+        <div class="header-top">
+          <h2>{{ entity.name }}</h2>
+          <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
+        </div>
         <div class="meta">
           <span class="location">{{ entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ entity.currentUniverse }}</span>
@@ -112,9 +115,10 @@ const props = defineProps({
   universe: { type: String, default: 'earth' },
   phase: { type: String, default: 'adding' },
   embedded: { type: Boolean, default: false },
+  gmMode: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled'])
+const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'openSettings'])
 
 function displayName(name) {
   return name
@@ -424,6 +428,33 @@ watch(() => props.universe, fetchEntity)
 }
 .set-body {
   padding-left: 4px;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sheet-settings-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.sheet-settings-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .header {

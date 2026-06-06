@@ -1,6 +1,6 @@
 <template>
-  <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
-  <button v-if="playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
+  <div v-if="gmMode" class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
+  <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
     <!-- Fresh login: no identity yet -->
@@ -139,6 +139,8 @@
         :universe="universe"
         :phase="phase"
         embedded
+        :gm-mode="gmMode"
+        @open-settings="openSettings"
         @add-to-pool="(d) => diceRef?.addFromSheet(d)"
         @remove-from-pool="(s) => diceRef?.removeBySource(s)"
         @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"

@@ -148,7 +148,7 @@ const effectsEnabled = ref(localStorage.getItem('effectsEnabled') !== 'false')
 watch(effectsEnabled, (v) => { localStorage.setItem('effectsEnabled', v ? 'true' : 'false') })
 
 const overlayPresets = [
-  { value: null, icon: '🌫', label: 'None' },
+  { value: null, icon: '◌', label: 'None' },
   { value: 'mist', icon: '🌫', label: 'Mist' },
   { value: 'fire', icon: '🔥', label: 'Fire' },
   { value: 'rain', icon: '🌧', label: 'Rain' },
