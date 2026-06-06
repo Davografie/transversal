@@ -4,7 +4,7 @@
       v-for="d in dieTypes"
       :key="d"
       class="die-btn"
-      :class="{ active: isSelected(d) }"
+      :class="{ active: selected.includes(d) }"
       @click="toggle(d)"
     >
       <DieIcon :die="d" :label="d" />
@@ -13,38 +13,32 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import DieIcon from '@/components/DieIcon.vue'
 
 const props = defineProps({
-  modelValue: { type: [String, Array], default: '' },
-  multiple: { type: Boolean, default: false },
+  modelValue: { type: Array, default: () => [] },
   dieTypes: { type: Array, default: () => ['d4', 'd6', 'd8', 'd10', 'd12'] },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'add-die'])
 
-function isSelected(d) {
-  if (props.multiple) return Array.isArray(props.modelValue) && props.modelValue.includes(d)
-  return props.modelValue === d
-}
+const selected = computed(() =>
+  Array.isArray(props.modelValue) ? props.modelValue : []
+)
 
 function toggle(d) {
-  if (props.multiple) {
-    const current = Array.isArray(props.modelValue) ? [...props.modelValue] : []
-    const idx = current.indexOf(d)
-    if (idx >= 0) current.splice(idx, 1)
-    else current.push(d)
-    emit('update:modelValue', current)
-  } else {
-    emit('update:modelValue', props.modelValue === d ? '' : d)
-  }
+  const current = [...selected.value]
+  const idx = current.indexOf(d)
+  if (idx >= 0) current.splice(idx, 1)
+  else current.push(d)
+  emit('update:modelValue', current)
+  emit('add-die', d)
 }
 </script>
 
 <style scoped>
-.die-picker {
-  display: flex; gap: 4px; flex-wrap: wrap;
-}
+.die-picker { display: flex; gap: 4px; flex-wrap: wrap; }
 .die-btn {
   width: 40px; height: 44px; padding: 2px;
   background: transparent; border: 2px solid rgba(255,255,255,0.08);

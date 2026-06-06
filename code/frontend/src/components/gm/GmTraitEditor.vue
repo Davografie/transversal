@@ -22,7 +22,7 @@
         <DiePicker v-model="rating" />
         <label>Statement</label>
         <input v-model="statement" placeholder="Distinction statement…" />
-        <button @click="emitAdd" :disabled="adding || !rating">Add</button>
+        <button @click="emitAdd" :disabled="adding || !rating.length">Add</button>
       </div>
     </div>
   </div>
@@ -41,24 +41,23 @@ const props = defineProps({
 const emit = defineEmits(['add-trait', 'remove-trait'])
 
 const newTraitId = ref('')
-const rating = ref('')
+const rating = ref([])
 const statement = ref('')
 
 function onTraitSelected() {
   const t = props.availableTraits.find(t => t.id === newTraitId.value)
-  if (t) rating.value = t.defaultDieType.toLowerCase()
+  if (t) rating.value = [t.defaultDieType.toLowerCase()]
 }
 
 function emitAdd() {
   const t = props.availableTraits.find(t => t.id === newTraitId.value)
   emit('add-trait', {
-    traitId: newTraitId.value,
-    traitsetId: t?.traitsetId || '',
-    dieType: rating.value.toUpperCase(),
-    rating: rating.value,
+    trait_id: newTraitId.value,
+    traitset_id: t?.traitsetId || '',
+    dice: rating.value.map(d => d.toUpperCase()),
     statement: statement.value,
   })
-  newTraitId.value = ''; rating.value = ''; statement.value = ''
+  newTraitId.value = ''; rating.value = []; statement.value = ''
 }
 </script>
 
