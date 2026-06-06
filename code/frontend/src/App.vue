@@ -128,21 +128,22 @@
     :gm-mode="gmMode"
     @moved="onMoved"
   />
-  <CharacterSheet
-    v-if="dicePanelOpen"
-    ref="sheetRef"
-    class="embedded-sheet"
-    :entity-id="entityId"
-    :universe="universe"
-    :phase="phase"
-    embedded
-    @add-to-pool="(d) => diceRef?.addFromSheet(d)"
-    @remove-from-pool="(s) => diceRef?.removeBySource(s)"
-    @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
-    @split-die="(d) => diceRef?.splitDie(d)"
-    @sfx-toggled="onSfxToggled"
-  />
-  <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" />
+  <div class="dice-panel-wrapper" :class="{ open: dicePanelOpen }">
+    <CharacterSheet
+      v-if="dicePanelOpen"
+      ref="sheetRef"
+      :entity-id="entityId"
+      :universe="universe"
+      :phase="phase"
+      embedded
+      @add-to-pool="(d) => diceRef?.addFromSheet(d)"
+      @remove-from-pool="(s) => diceRef?.removeBySource(s)"
+      @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
+      @split-die="(d) => diceRef?.splitDie(d)"
+      @sfx-toggled="onSfxToggled"
+    />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="v => dicePanelOpen = v" />
+  </div>
   <GmPanel v-if="gmMode" :universe="universe" :current-location-id="currentLocationId" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" />
 </template>
 
@@ -496,7 +497,7 @@ const diceRef = useTemplateRef('diceRef')
 const sheetRef = useTemplateRef('sheetRef')
 const switchInputRef = useTemplateRef('switchInputRef')
 
-const dicePanelOpen = computed(() => diceRef.value?.panelOpen ?? false)
+const dicePanelOpen = ref(false)
 
 function onRolled() {
   sheetRef.value?.resetSfxCounts()

@@ -1,14 +1,6 @@
 <template>
   <div v-if="panelOpen" class="dice-backdrop" @click="dismissPanel" @touchstart="dismissPanel" />
-  <div class="dice-roller panel" :class="{ open: panelOpen }" :style="swipeTranslate ? { transform: `translateX(-50%) translateY(calc(${panelOpen ? '-16px + ' : '100% - 48px + '}${swipeTranslate}px))` } : {}">
-    <div
-      class="phase-bar drag-handle"
-      @mousedown="onDragHandleStart"
-      @touchstart="onDragHandleStart"
-    >
-      <span class="phase-label">{{ phase }} {{ isPicking() ? `· ${keepCount}t ${effectCount}e` : '' }}</span>
-    </div>
-
+  <div class="dice-roller panel" :class="{ open: panelOpen }">
     <div class="dice-pool" v-if="isAdding()">
       <div
         v-for="(die, i) in pool"
@@ -114,6 +106,14 @@
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
+
+    <div
+      class="phase-bar drag-handle"
+      @mousedown="onDragHandleStart"
+      @touchstart="onDragHandleStart"
+    >
+      <span class="phase-label">{{ phase }} {{ isPicking() ? `· ${keepCount}t ${effectCount}e` : '' }}</span>
+    </div>
   </div>
 </template>
 
@@ -129,13 +129,14 @@ const props = defineProps({
   effectCount: { type: Number, default: 1 }
 })
 
-const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked'])
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen'])
 
 const { loading, error, roll: apiRoll } = useApi()
 const pool = reactive([])
 const result = ref(null)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
 const panelOpen = ref(false)
+watch(panelOpen, (v) => emit('panelOpen', v))
 
 // ── Touch / pointer drag ────────────────────────────
 
@@ -552,30 +553,24 @@ onUnmounted(() => {
 }
 
 .dice-roller {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%) translateY(calc(100% - 48px));
-  width: min(400px, calc(100vw - 32px));
+  position: relative;
+  width: 100%;
   z-index: 10;
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  transition: transform 0.3s ease;
-}
-
-.dice-roller:hover,
-.dice-roller.open {
-  transform: translateX(-50%) translateY(-16px);
 }
 
 .phase-bar {
-  text-align: center; margin-bottom: 4px;
+  text-align: center; margin-top: 4px;
 }
 .drag-handle {
   cursor: grab; padding: 10px 0; border-top: 2px solid rgba(255,255,255,0.1);
   min-height: 44px; display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  user-select: none;
+  flex-shrink: 0;
 }
 .phase-label {
   font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
