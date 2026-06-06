@@ -43,7 +43,6 @@
             </div> <!-- .set-body -->
           </div>
         </div>
-      </div>
       <div v-else class="empty">No traits configured</div>
     </template>
     <div v-else class="empty">No entity loaded</div>
