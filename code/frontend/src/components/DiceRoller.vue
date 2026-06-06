@@ -110,6 +110,8 @@
     <div
       class="phase-bar drag-handle"
       @click.stop="panelOpen = !panelOpen"
+      @touchstart="onHandleTouchStart"
+      @touchend="onHandleTouchEnd"
     ></div>
   </div>
 </template>
@@ -137,6 +139,18 @@ watch(panelOpen, (v) => emit('panelOpen', v))
 
 function dismissPanel() {
   panelOpen.value = false
+}
+
+let handleTouchY = 0
+function onHandleTouchStart(e) {
+  handleTouchY = e.touches[0].clientY
+}
+function onHandleTouchEnd(e) {
+  const dy = e.changedTouches[0].clientY - handleTouchY
+  // Swipe down to close
+  if (dy > 40 && panelOpen.value) {
+    panelOpen.value = false
+  }
 }
 
 // ── Phases ──────────────────────────────────────────
