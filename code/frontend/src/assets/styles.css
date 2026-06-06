@@ -317,6 +317,20 @@ input:focus, select:focus {
   font-size: 12px;
   color: var(--danger);
 }
+.new-char-toggle {
+  font-size: 12px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px dashed rgba(255,255,255,0.15);
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.new-char-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .char-list {
   display: flex;
   flex-wrap: wrap;

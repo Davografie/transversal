@@ -114,10 +114,13 @@
 
         <div class="settings-section">
           <label class="settings-label">New character</label>
-          <div class="switch-row">
-            <input v-model="newCharName" placeholder="Character name…" @keyup.enter="createCharacter" />
-            <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar">+</button>
-          </div>
+          <template v-if="showNewChar">
+            <div class="switch-row">
+              <input v-model="newCharName" placeholder="Character name…" @keyup.enter="createCharacter" />
+              <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar">+</button>
+            </div>
+          </template>
+          <button v-else class="new-char-toggle" @click="showNewChar = true">+ New character</button>
           <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
         </div>
       </template>
@@ -224,12 +227,15 @@ function onMoved(data) {
   sheetRef.value?.closeSheet()
   fetchLocationBg()
 }
-const entityId = ref('kael-1')
+const entityId = ref(localStorage.getItem('entityId') || 'kael-1')
 const editZones = ref(false)
 
 // When switching entities, update location
 watch(entityId, () => {
-  if (entityId.value) initLocation()
+  if (entityId.value) {
+    localStorage.setItem('entityId', entityId.value)
+    initLocation()
+  }
 })
 const keepCount = ref(2)
 const effectCount = ref(1)
@@ -261,6 +267,7 @@ const playerEntities = ref([])
 const newCharName = ref('')
 const creatingChar = ref(false)
 const createCharError = ref('')
+const showNewChar = ref(false)
 
 // Name search
 const nameSuggestions = ref([])
@@ -619,6 +626,7 @@ function openSettings() {
   switchError.value = ''
   newCharName.value = ''
   createCharError.value = ''
+  showNewChar.value = false
   fetchPlayerEntities()
   showLoginOverlay.value = true
 }
