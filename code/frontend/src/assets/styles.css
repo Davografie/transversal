@@ -400,22 +400,19 @@ input:focus, select:focus {
   position: fixed;
   bottom: 0;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(calc(100% - 56px));
   z-index: 9;
   width: min(400px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  max-height: 56px;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
+  transition: transform 0.3s ease;
 }
 
 .dice-panel-wrapper:hover,
 .dice-panel-wrapper.open {
-  max-height: 90vh;
-  overflow: visible;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* Embedded character sheet — top of wrapper */
@@ -423,18 +420,11 @@ input:focus, select:focus {
   max-height: 35vh;
   overflow-y: auto;
   flex-shrink: 0;
-}
-
-/* Sheet fade transition */
-.sheet-fade-enter-active {
   transition: opacity 0.25s ease;
 }
-.sheet-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-.sheet-fade-enter-from,
-.sheet-fade-leave-to {
+.embedded-sheet.sheet-hidden {
   opacity: 0;
+  pointer-events: none;
 }
 
 @keyframes fadeIn {

@@ -129,10 +129,11 @@
     @moved="onMoved"
   />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave" @touchstart="onWrapperTouchStart" @touchmove="onWrapperTouchMove" @touchend="onWrapperTouchEnd">
-    <Transition name="sheet-fade">
       <CharacterSheet
-        v-if="sheetVisible && !gmMode"
+        v-show="sheetVisible && !gmMode"
         ref="sheetRef"
+        class="embedded-sheet"
+        :class="{ 'sheet-hidden': !sheetVisible }"
         :entity-id="entityId"
         :universe="universe"
         :phase="phase"
@@ -143,7 +144,6 @@
         @split-die="(d) => diceRef?.splitDie(d)"
         @sfx-toggled="onSfxToggled"
       />
-    </Transition>
     <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
   </div>
   <GmPanel v-if="gmMode" :universe="universe" :current-location-id="currentLocationId" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" />
