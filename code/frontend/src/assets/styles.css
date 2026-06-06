@@ -400,19 +400,22 @@ input:focus, select:focus {
   position: fixed;
   bottom: 0;
   left: 50%;
-  transform: translateX(-50%) translateY(calc(100% - 56px));
+  transform: translateX(-50%);
   z-index: 9;
   width: min(400px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  transition: transform 0.3s ease;
+  max-height: 56px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
 }
 
 .dice-panel-wrapper:hover,
 .dice-panel-wrapper.open {
-  transform: translateX(-50%) translateY(0);
+  max-height: 90vh;
+  overflow: visible;
 }
 
 /* Embedded character sheet — top of wrapper */
