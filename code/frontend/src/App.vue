@@ -128,6 +128,7 @@
     :gm-mode="gmMode"
     @moved="onMoved"
   />
+  <div v-if="wrapperOpen" class="panel-backdrop" @click="closePanel" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <CharacterSheet
         v-show="sheetVisible && !gmMode"

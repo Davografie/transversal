@@ -1,5 +1,4 @@
 <template>
-  <div v-if="panelOpen" class="dice-backdrop" @click="dismissPanel" @touchstart="dismissPanel" />
   <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd">
     <div class="dice-pool" v-if="isAdding()">
       <div
@@ -129,10 +128,6 @@ const result = ref(null)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
 const panelOpen = ref(false)
 watch(panelOpen, (v) => emit('panelOpen', v))
-
-function dismissPanel() {
-  panelOpen.value = false
-}
 
 let rollerTouchY = 0
 function onRollerTouchStart(e) {
@@ -508,11 +503,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.dice-backdrop {
-  position: fixed; inset: 0; z-index: 9;
-  background: transparent;
-}
-
 .dice-roller {
   position: relative;
   width: 100%;
