@@ -41,34 +41,38 @@
 
     <!-- Zone dots -->
     <template v-for="(z, i) in zones" :key="'z-' + z.name">
-    <button
+    <MapDot
       v-if="showElements"
-      class="map-dot zone-dot fade-in"
-      :class="{ expanded: (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name, draggable: editZones }"
-      :style="parallaxedStyle(z.x, z.y)"
-      @mousedown="(e) => onZoneDragStart(e, z, i)"
-      @touchstart="(e) => onZoneDragStart(e, z, i)"
-      @click.stop="onDotClick('zone', z)"
-    >
-      <div class="dot-overlay" v-if="childImage(z.name)" :style="{ backgroundImage: 'url(' + childImage(z.name) + ')' }" @click.stop="onExpandedClick('zone', z)" />
-      <span v-else class="dot-label" @click.stop="onExpandedClick('zone', z)">{{ z.name }}</span>
-    </button>
+      type="zone"
+      :x="parallaxX(z.x)" :y="parallaxY(z.y)"
+      :image="childImage(z.name)"
+      :label="z.name"
+      :expanded="(activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name"
+      :draggable="editZones"
+      :title="z.name"
+      @click="onDotClick('zone', z)"
+      @overlay-click="onExpandedClick('zone', z)"
+      @drag-start="(e) => onZoneDragStart(e, z, i)"
+    />
     </template>
 
     <!-- Occupant dots (non-self only, always expanded) -->
     <template v-for="(o, i) in occupants.filter(x => x.id !== entityId)" :key="'o-' + o.id">
-    <button
+    <MapDot
       v-if="!travelAnim.active && showElements"
-      class="map-dot occ-dot fade-in"
-      :class="['occ-' + o.type, { expanded: true, draggable: canDragOccupant(o), lerping: lerpActive }]"
-      :style="parallaxedStyle(o.map_x ?? occupantX(index, o), o.map_y ?? occupantY(index, o))"
+      type="occupant"
+      :variant="o.type"
+      :x="parallaxX(o.map_x ?? occupantX(i, o))" :y="parallaxY(o.map_y ?? occupantY(i, o))"
+      :image="o.image"
+      :initials="occupantInitials(o.name)"
+      :expanded="true"
+      :draggable="canDragOccupant(o)"
+      :lerping="lerpActive"
       :title="canDragOccupant(o) ? 'Drag to reposition' : o.name"
-      @mousedown="(e) => onOccupantDragStart(e, o, i)"
-      @touchstart="(e) => onOccupantDragStart(e, o, i)"
-    >
-      <div v-if="o.image" class="dot-overlay occ-img-overlay" :style="{ backgroundImage: 'url(' + o.image + ')' }" @click.stop="onExpandedClick('occupant', o)" />
-      <span v-else class="dot-initials" @click.stop="onExpandedClick('occupant', o)">{{ occupantInitials(o.name) }}</span>
-    </button>
+      @click="onDotClick('occupant', o)"
+      @overlay-click="onExpandedClick('occupant', o)"
+      @drag-start="(e) => onOccupantDragStart(e, o, i)"
+    />
     <!-- Pool dice badge near occupant dot -->
     <span
       v-if="!travelAnim.active && showElements && poolDiceCount(o.id) > 0"
@@ -79,33 +83,35 @@
 
     <!-- Navigation dots -->
     <template v-for="nd in navDots" :key="'nav-' + nd.key">
-    <button
+    <MapDot
       v-if="showElements"
-      class="map-dot nav-dot fade-in"
-      :class="'nav-' + nd.type + ((activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key ? ' expanded' : '') + (editZones ? ' draggable' : '')"
-      :style="parallaxedStyle(nd.x, nd.y)"
-      @mousedown="(e) => onNavDragStart(e, nd)"
-      @touchstart="(e) => onNavDragStart(e, nd)"
-      @click.stop="onDotClick('nav', nd)"
-    >
-      <div v-if="nd.image" class="dot-overlay" :style="{ backgroundImage: 'url(' + nd.image + ')' }" @click.stop="onExpandedClick('nav', nd)" />
-      <span v-else class="dot-label" @click.stop="onExpandedClick('nav', nd)">{{ nd.name }}</span>
-    </button>
+      type="nav"
+      :variant="nd.type"
+      :x="parallaxX(nd.x)" :y="parallaxY(nd.y)"
+      :image="nd.image"
+      :label="nd.name"
+      :expanded="(activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key"
+      :draggable="editZones"
+      :title="nd.name"
+      @click="onDotClick('nav', nd)"
+      @overlay-click="onExpandedClick('nav', nd)"
+      @drag-start="(e) => onNavDragStart(e, nd)"
+    />
     </template>
 
     <!-- Self character dot (no parallax — 1:1 with touch) -->
-    <button
+    <MapDot
       v-if="!travelAnim.active && showElements && showSelf"
-      class="map-dot occ-dot fade-in self"
-      :class="['occ-character', { expanded: true }]"
-      :style="selfStyle"
+      type="self"
+      variant="character"
+      :x="selfX" :y="selfY"
+      :image="selfImage"
+      :initials="selfInitials"
+      :expanded="true"
+      :draggable="true"
       title="Drag to explore"
-      @mousedown="(e) => onSelfDragStart(e)"
-      @touchstart="(e) => onSelfDragStart(e)"
-    >
-      <div v-if="selfImage" class="dot-overlay occ-img-overlay" :style="{ backgroundImage: 'url(' + selfImage + ')' }" />
-      <span v-else class="dot-initials">{{ selfInitials }}</span>
-    </button>
+      @drag-start="(e) => onSelfDragStart(e)"
+    />
 
     <!-- Travel expansion animation -->
     <div
@@ -125,6 +131,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import MapDot from './MapDot.vue'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -303,10 +310,8 @@ async function setOverlay(value) {
 }
 
 const selfOccupant = computed(() => occupants.value.find(o => o.id === props.entityId) || { map_x: 50, map_y: 50, name: '', image: null })
-const selfStyle = computed(() => {
-  const s = selfOccupant.value
-  return { left: (s.map_x ?? 50).toFixed(1) + '%', top: (s.map_y ?? 50).toFixed(1) + '%' }
-})
+const selfX = computed(() => selfOccupant.value.map_x ?? 50)
+const selfY = computed(() => selfOccupant.value.map_y ?? 50)
 const selfImage = computed(() => selfOccupant.value.image || null)
 const selfInitials = computed(() => occupantInitials(selfOccupant.value.name || 'You'))
 
@@ -357,6 +362,9 @@ function toViewportPos(imgX, imgY) {
 function parallaxedStyle(imgX, imgY) {
   return toViewportPos(imgX, imgY)
 }
+
+function parallaxX(imgX) { return parseFloat(toViewportPos(imgX, 0).left) || imgX }
+function parallaxY(imgY) { return parseFloat(toViewportPos(0, imgY).top) || imgY }
 
 function occupantX(index, occupant) {
   if (zones.value.length > 0) {
