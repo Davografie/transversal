@@ -1,6 +1,6 @@
 <template>
   <div v-if="panelOpen" class="dice-backdrop" @click="dismissPanel" @touchstart="dismissPanel" />
-  <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd" @click.self="panelOpen = !panelOpen">
+  <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd">
     <div class="dice-pool" v-if="isAdding()">
       <div
         v-for="(die, i) in pool"
