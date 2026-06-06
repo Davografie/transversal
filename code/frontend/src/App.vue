@@ -553,6 +553,7 @@ function openPanel() {
 function closePanel() {
   hoverOpen.value = false
   sheetVisible.value = false
+  if (diceRef.value) diceRef.value.panelOpen = false
   if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
 }
 
