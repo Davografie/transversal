@@ -398,14 +398,15 @@ input:focus, select:focus {
 /* Dice panel wrapper: fixed at bottom, reveals on hover/swipe */
 .dice-panel-wrapper {
   position: fixed;
-  bottom: 12px;
+  bottom: 0;
   left: 50%;
-  transform: translateX(-50%) translateY(calc(100% - 48px));
+  transform: translateX(-50%) translateY(calc(100% - 56px));
   z-index: 9;
   width: min(400px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-bottom: 12px;
   transition: transform 0.3s ease;
 }
 

@@ -378,7 +378,7 @@ watch(() => props.universe, fetchEntity)
 .sheet-embedded {
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius);
   padding: 12px 16px;
 }
 
