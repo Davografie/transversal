@@ -509,10 +509,12 @@ const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
 // Touch/swipe state
 let touchStartY = 0
 let touchMoved = false
+let touchShouldClose = false
 
 function onWrapperTouchStart(e) {
   touchStartY = e.touches[0].clientY
   touchMoved = false
+  touchShouldClose = false
 }
 
 function onWrapperTouchMove(e) {
@@ -524,14 +526,17 @@ function onWrapperTouchMove(e) {
     openPanel()
     touchMoved = true
   }
-  // Swipe down to close
+  // Mark for close on touchend (don't close during active touch)
   if (dy > 40 && wrapperOpen.value) {
-    closePanel()
-    touchMoved = true
+    touchShouldClose = true
   }
 }
 
 function onWrapperTouchEnd() {
+  if (touchShouldClose) {
+    closePanel()
+    return
+  }
   // If it was a tap (not a swipe), toggle
   if (!touchMoved && wrapperEl.value) {
     wrapperOpen.value ? closePanel() : openPanel()
