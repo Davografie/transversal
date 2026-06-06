@@ -236,7 +236,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import CharacterSheet from './CharacterSheet.vue'
 
-const { loading: listLoading, error, graphql } = useApi()
+const { error, graphql } = useApi()
 const loading = ref(false)
 
 const props = defineProps({

@@ -546,7 +546,6 @@ function onNextBeat() {
 
 function onStartSession() {
   // Placeholder — could call session creation API
-  console.log('GM: session started')
 }
 
 function onEndSession() {
