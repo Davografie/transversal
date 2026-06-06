@@ -395,9 +395,10 @@ input:focus, select:focus {
   color: var(--text) !important;
 }
 
-/* Dice panel wrapper: fixed at bottom, reveals on hover/swipe */
+/* Dice panel wrapper: full viewport height, content at bottom */
 .dice-panel-wrapper {
   position: fixed;
+  top: 0;
   bottom: 0;
   left: 50%;
   transform: translateX(-50%) translateY(calc(100% - 56px));
@@ -405,9 +406,15 @@ input:focus, select:focus {
   width: min(400px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   gap: 8px;
   padding-bottom: 12px;
+  pointer-events: none;
   transition: transform 0.3s ease;
+}
+
+.dice-panel-wrapper > * {
+  pointer-events: auto;
 }
 
 .dice-panel-wrapper:hover,
