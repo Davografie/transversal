@@ -111,6 +111,15 @@
             >{{ e.name || e.id }}</button>
           </div>
         </div>
+
+        <div class="settings-section">
+          <label class="settings-label">New character</label>
+          <div class="switch-row">
+            <input v-model="newCharName" placeholder="Character name…" @keyup.enter="createCharacter" />
+            <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar">+</button>
+          </div>
+          <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
+        </div>
       </template>
 
       <p v-if="switchError" class="switch-error">{{ switchError }}</p>
@@ -247,6 +256,10 @@ const charPending = ref(null)
 const charStatus = ref('')
 const pendingPlayerEntities = ref([])
 const playerEntities = ref([])
+
+const newCharName = ref('')
+const creatingChar = ref(false)
+const createCharError = ref('')
 
 // Name search
 const nameSuggestions = ref([])
@@ -601,6 +614,8 @@ function openSettings() {
   charStatus.value = ''
   charPending.value = null
   switchError.value = ''
+  newCharName.value = ''
+  createCharError.value = ''
   fetchPlayerEntities()
   showLoginOverlay.value = true
 }
@@ -711,6 +726,35 @@ function confirmSwitch() {
 function selectCharacter(e) {
   charPending.value = e
   charStatus.value = `Assume the form of ${e.name || e.id}?`
+}
+
+async function createCharacter() {
+  const name = newCharName.value.trim()
+  if (!name || creatingChar.value) return
+  creatingChar.value = true
+  createCharError.value = ''
+  try {
+    const r = await fetch('/api/v1/graphql', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type } }`,
+        variables: { input: { name, type: 'CHARACTER', universe: universe.value } }
+      })
+    })
+    const json = await r.json()
+    const eid = json.data?.createEntity?.id
+    if (eid) {
+      await fetch(`/api/v1/players/${playerId.value}/claim/${eid}`, { method: 'POST' })
+      newCharName.value = ''
+      fetchPlayerEntities()
+    } else {
+      createCharError.value = 'Failed to create character'
+    }
+  } catch (e) {
+    createCharError.value = e.message
+  } finally {
+    creatingChar.value = false
+  }
 }
 
 async function loadPlayerRole() {
