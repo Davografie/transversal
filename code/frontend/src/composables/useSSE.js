@@ -26,7 +26,8 @@ export function useSSE(sessionId, entityId) {
 
     const eventTypes = [
       'location_changed', 'trait_updated', 'razmerit_changed',
-      'roll_result', 'pool_updated', 'sfx_triggered', 'beat_end', 'scene_change'
+      'roll_result', 'pool_updated', 'sfx_triggered', 'beat_end', 'scene_change',
+      'entity_updated', 'entity_moved'
     ]
 
     for (const type of eventTypes) {

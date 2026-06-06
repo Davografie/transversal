@@ -103,6 +103,14 @@ aliases:
 - [x] Search-driven login (debounced partial-match suggestions, "New transverser" create option, narrative Transversal-themed messages)
 - [x] Player JSON persistence (`/app/data/players.json`, Docker volume, survives restarts)
 - [x] Effects toggle per-device (✨/🌑 in localStorage, only on locations with effects)
+- [x] CSS overlay presets (mist, fire, rain, snow, fog) with backdrop-filters
+- [x] Canvas particle system (fire embers, snow flakes, rain streaks) per overlay preset
+- [x] Overlay preset switcher on LocationViewer (propagates via SSE)
+- [x] SSE cross-device position sync (entity_moved event, lerp animation on remote updates)
+- [x] Responsive bubble sizing (clamp + viewport units)
+- [x] Portal-style location bubbles (inset box-shadow, no border, background-attachment: fixed)
+- [x] All occupants always expanded (portraits always visible)
+- [x] Two-phase tap restored (pointer-events gating on collapsed overlays)
 - [ ] End-to-end playtest of a full scene
 
 ## Phase 5: Polish & Launch
@@ -138,6 +146,9 @@ aliases:
 | Image-relative coordinate system | All dot positions stored as image percentages; background pans to character position; dots move in lockstep with image — no parallax layers needed | 2026-06-05 |
 | Seamless portal travel | Pre-fetch destination nav data for exact arrival position; opaque portal curtain hides background switch; position lock prevents cross-frame animation | 2026-06-05 |
 | WebP media conversion | All uploads auto-converted to WebP (Pillow, quality 85); 88% size reduction on existing 232MB library | 2026-06-05 |
+| Unified overlay system | CSS backdrop-filters + canvas particle system activate simultaneously per preset; fire=glow+embers, rain=darken+streaks, etc. | 2026-06-06 |
+| SSE position sync | entity_moved events broadcast map_x/map_y changes to all connected clients; receiving end applies lerp animation for smooth remote updates | 2026-06-06 |
+| Portal-style bubbles | Inset box-shadow with no border creates organic "window into another location" feel rather than UI widget | 2026-06-06 |
 | Player / Architect role split | Two roles, two UI surfaces. Architect sees GmPanel + location management tools; players see minimal UI. Role stored server-side, synced on login — not just a localStorage toggle. | 2026-06-06 |
 | JSON file player persistence | Simple file-backed store with Docker volume. Survives restarts without adding an ArangoDB collection. Every mutation triggers synchronous save. | 2026-06-06 |
 | Search-driven login with debounced suggestions | Players type their name; partial-match results appear as you type. "New transverser" option visible when no exact match exists — creation is discoverable without a separate button. | 2026-06-06 |

@@ -66,3 +66,4 @@ services:
 volumes:
   arango_data:
   redis_data:
+  api_data:

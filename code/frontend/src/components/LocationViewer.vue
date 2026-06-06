@@ -55,17 +55,16 @@
     </button>
     </template>
 
-    <!-- Occupant dots (non-self only) -->
+    <!-- Occupant dots (non-self only, always expanded) -->
     <template v-for="(o, i) in occupants.filter(x => x.id !== entityId)" :key="'o-' + o.id">
     <button
       v-if="!travelAnim.active && showElements"
       class="map-dot occ-dot fade-in"
-      :class="['occ-' + o.type, { expanded: (activeElement?.type === 'occupant' && activeElement?.id === o.id) || hoveredDot === 'occupant-' + o.id, draggable: canDragOccupant(o) }]"
+      :class="['occ-' + o.type, { expanded: true, draggable: canDragOccupant(o), lerping: lerpActive }]"
       :style="parallaxedStyle(o.map_x ?? occupantX(index, o), o.map_y ?? occupantY(index, o))"
       :title="canDragOccupant(o) ? 'Drag to reposition' : o.name"
       @mousedown="(e) => onOccupantDragStart(e, o, i)"
       @touchstart="(e) => onOccupantDragStart(e, o, i)"
-      @click.stop="onDotClick('occupant', o)"
     >
       <div v-if="o.image" class="dot-overlay occ-img-overlay" :style="{ backgroundImage: 'url(' + o.image + ')' }" @click.stop="onExpandedClick('occupant', o)" />
       <span v-else class="dot-initials" @click.stop="onExpandedClick('occupant', o)">{{ occupantInitials(o.name) }}</span>
@@ -978,7 +977,15 @@ watch(() => props.locationId, () => {
   if (!travelAnim.value.active) fetchNav()
 })
 
-defineExpose({ fetchNav })
+const lerpActive = ref(false)
+
+async function fetchNavWithLerp() {
+  lerpActive.value = true
+  await fetchNav()
+  setTimeout(() => { lerpActive.value = false }, 1600)
+}
+
+defineExpose({ fetchNav, fetchNavWithLerp })
 
 onMounted(fetchNav)
 </script>
@@ -1084,6 +1091,11 @@ onMounted(fetchNav)
 .occ-dot.occ-gmc { background: rgba(232,136,48,0.8); box-shadow: 0 0 6px rgba(232,136,48,0.4); }
 .occ-dot.self { z-index: 20 !important; }
 
+/* Non-self dots lerp only on SSE-triggered position updates */
+.occ-dot:not(.self).lerping {
+  transition: left 1.5s ease-out, top 1.5s ease-out, width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease;
+}
+
 /* Navigation dots */
 .nav-dot {
   width: 16px; height: 16px;
@@ -1091,29 +1103,30 @@ onMounted(fetchNav)
 .nav-dot.nav-parent { background: rgba(200,170,60,0.8); box-shadow: 0 0 6px rgba(200,170,60,0.4); }
 .nav-dot.nav-portal { background: rgba(160,80,200,0.8); box-shadow: 0 0 6px rgba(160,80,200,0.4); }
 .nav-dot.expanded {
-  width: 240px !important; height: 240px !important;
-  margin-left: -120px; margin-top: -120px;
+  width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
+  margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
   background: rgba(10,10,20,0.85);
   backdrop-filter: blur(8px);
-  border: 2px solid rgba(255,255,255,0.2);
+  border: none;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
   z-index: 10;
   overflow: hidden;
 }
 
 /* Expanded state — smooth transition from dot to circle */
 .map-dot.expanded {
-  width: 240px !important; height: 240px !important;
-  margin-left: -120px; margin-top: -120px;
+  width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
+  margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
   background: rgba(10,10,20,0.85);
   backdrop-filter: blur(8px);
-  border: 2px solid rgba(255,255,255,0.2);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  border: none;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
   z-index: 10;
   overflow: hidden;
 }
 .occ-dot.expanded {
-  width: 96px !important; height: 96px !important;
-  margin-left: -48px; margin-top: -48px;
+  width: clamp(60px, 5.5vw, 88px) !important; height: clamp(60px, 5.5vw, 88px) !important;
+  margin-left: calc(clamp(60px, 5.5vw, 88px) / -2); margin-top: calc(clamp(60px, 5.5vw, 88px) / -2);
 }
 
 /* Inner overlay — fills the expanded dot, hidden when collapsed */
@@ -1125,8 +1138,9 @@ onMounted(fetchNav)
   opacity: 0;
   transition: opacity 0.2s ease;
   cursor: pointer;
+  pointer-events: none;
 }
-.map-dot.expanded .dot-overlay { opacity: 1; }
+.map-dot.expanded .dot-overlay { opacity: 1; pointer-events: auto; }
 
 .zone-dot .dot-overlay,
 .nav-dot .dot-overlay {
@@ -1284,7 +1298,7 @@ onMounted(fetchNav)
   position: fixed; inset: 0; z-index: 50;
   background-size: cover;
   background-position: center;
-  clip-path: circle(120px at var(--travel-x, 50%) var(--travel-y, 50%));
+  clip-path: circle(clamp(40px, 5vw, 120px) at var(--travel-x, 50%) var(--travel-y, 50%));
   animation: portal-expand 1.2s ease-out forwards;
   pointer-events: none;
   opacity: 1;
@@ -1292,7 +1306,7 @@ onMounted(fetchNav)
 
 @keyframes portal-expand {
   0% {
-    clip-path: circle(120px at var(--travel-x, 50%) var(--travel-y, 50%));
+    clip-path: circle(clamp(40px, 5vw, 120px) at var(--travel-x, 50%) var(--travel-y, 50%));
   }
   100% {
     clip-path: circle(150vmax at var(--travel-x, 50%) var(--travel-y, 50%));

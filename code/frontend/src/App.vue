@@ -478,6 +478,12 @@ watch(lastEvent, (evt) => {
       break
     case 'entity_updated':
       if (eid === currentLocationId.value) fetchLocationBg()
+      locationRef.value?.fetchNavWithLerp()
+      break
+    case 'entity_moved':
+      if (evt.data?.current_location === currentLocationId.value) {
+        locationRef.value?.fetchNavWithLerp()
+      }
       break
     case 'scene_change':
       if (evt.data?.to_location) locationName.value = evt.data.to_location

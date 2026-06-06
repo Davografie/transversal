@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
+from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
 from transversal.services.entity_manager import EntityManager
 
@@ -173,5 +174,18 @@ async def update_map_position(entity_id: str, body: MapPosition):
     entity.map_x = body.map_x
     entity.map_y = body.map_y
     repo.update_entity(entity)
+
+    # Broadcast position to all active SSE subscribers
+    for session_id in list(event_bus._queues.keys()):
+        event_bus.publish(StreamEvent(
+            session_id=session_id,
+            event="entity_moved",
+            data={
+                "entity_id": entity_id,
+                "map_x": entity.map_x,
+                "map_y": entity.map_y,
+                "current_location": entity.current_location,
+            },
+        ))
 
     return {"status": "ok", "map_x": entity.map_x, "map_y": entity.map_y}
