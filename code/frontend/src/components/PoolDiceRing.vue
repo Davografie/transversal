@@ -1,40 +1,47 @@
 <template>
-  <template v-if="dice.length > 0 || (phase === 'resolved' && resolved)">
+  <div
+    v-if="dice.length > 0 || (phase === 'resolved' && resolved)"
+    class="pool-dice-container"
+    :style="{ left: cx.toFixed(1) + '%', top: cy.toFixed(1) + '%' }"
+  >
+    <!-- Adding / Picking: radial die icons -->
     <span
       v-for="(d, i) in positionedDice"
       :key="i"
-      class="pool-die-ring-item"
-      :style="{ left: d.x.toFixed(1) + '%', top: d.y.toFixed(1) + '%' }"
+      class="pool-die-item"
+      :style="{ transform: 'translate(' + d.tx.toFixed(0) + 'px, ' + d.ty.toFixed(0) + 'px)' }"
     >
-      <span class="die-icon-wrap">
-        <DieIcon
-          v-if="phase === 'adding'"
-          :die="typeof d.die === 'string' ? d.die : d.die.die || d.die"
-          :result="null"
-        />
-        <DieIcon
-          v-else-if="phase === 'picking'"
-          :die="d.die.die || d.die"
-          :result="d.die.result"
-          :class="{ 'kept-die': d.die.kept, 'unused-die': !d.die.kept }"
-        />
-      </span>
+      <DieIcon
+        v-if="phase === 'adding'"
+        :die="typeof d.die === 'string' ? d.die : d.die.die || d.die"
+        :result="null"
+      />
+      <DieIcon
+        v-else-if="phase === 'picking'"
+        :die="d.die.die || d.die"
+        :result="d.die.result"
+        :class="{ 'kept-die': d.die.kept, 'unused-die': !d.die.kept }"
+      />
     </span>
-    <!-- Resolved: total + effect die(s) -->
+
+    <!-- Resolved: total badge above, effect dice below -->
     <template v-if="phase === 'resolved' && resolved">
-      <span class="pool-die-ring-item resolved-total" :style="{ left: resolvedTotalX.toFixed(1) + '%', top: resolvedTotalY.toFixed(1) + '%' }">
+      <span
+        class="pool-die-item resolved-total"
+        :style="{ transform: 'translate(0px, ' + (-radiusPx - 6) + 'px)' }"
+      >
         <span class="total-label">{{ resolved.total }}</span>
       </span>
       <span
         v-for="(ed, i) in positionedEffectDice"
         :key="'eff-' + i"
-        class="pool-die-ring-item"
-        :style="{ left: ed.x.toFixed(1) + '%', top: ed.y.toFixed(1) + '%' }"
+        class="pool-die-item"
+        :style="{ transform: 'translate(' + ed.tx.toFixed(0) + 'px, ' + ed.ty.toFixed(0) + 'px)' }"
       >
-        <span class="die-icon-wrap"><DieIcon :die="ed.die" :result="ed.result" class="effect-die" /></span>
+        <DieIcon :die="ed.die" :result="ed.result" class="effect-die" />
       </span>
     </template>
-  </template>
+  </div>
 </template>
 
 <script setup>
@@ -49,13 +56,14 @@ const props = defineProps({
   resolved: { type: Object, default: null },
 })
 
-const RADIUS = 8  // percentage units from dot center
+// Radius in pixels from dot center — keeps dice equidistant regardless of viewport shape
+const radiusPx = 44
 
-function radialPosition(index, total, radius, cx, cy, startAngle) {
+function radialOffset(index, total, radius, startAngle) {
   const angle = (2 * Math.PI / total) * index + startAngle
   return {
-    x: cx + radius * Math.cos(angle),
-    y: cy + radius * Math.sin(angle),
+    tx: radius * Math.cos(angle),
+    ty: radius * Math.sin(angle),
   }
 }
 
@@ -63,14 +71,10 @@ const positionedDice = computed(() => {
   const n = props.dice.length
   if (n === 0) return []
   return props.dice.map((d, i) => {
-    const pos = radialPosition(i, n, RADIUS, props.cx, props.cy, -Math.PI / 2)
-    return { ...pos, die: d }
+    const off = radialOffset(i, n, radiusPx, -Math.PI / 2)
+    return { ...off, die: d }
   })
 })
-
-// Resolved phase: total at top, effect dice at bottom
-const resolvedTotalX = computed(() => props.cx)
-const resolvedTotalY = computed(() => props.cy - RADIUS)
 
 const positionedEffectDice = computed(() => {
   const effectDice = props.resolved?.effect_dice || []
@@ -80,23 +84,26 @@ const positionedEffectDice = computed(() => {
   const n = effectDice.length
   if (n === 0) return []
   return effectDice.map((ed, i) => {
-    const pos = radialPosition(i, n, RADIUS, props.cx, props.cy + RADIUS, Math.PI / 2)
-    return { ...pos, die: ed.die, result: ed.result }
+    const off = radialOffset(i, n, radiusPx, Math.PI / 2)
+    return { ...off, die: ed.die, result: ed.result }
   })
 })
 </script>
 
 <style>
-.pool-die-ring-item {
+.pool-dice-container {
   position: absolute;
   z-index: 22;
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
-.die-icon-wrap {
-  display: block;
-  transform: scale(0.6);
-  transform-origin: center;
+.pool-die-item {
+  position: absolute;
+  pointer-events: none;
+  /* DieIcon is 36×40 — neg margin centers it on the transform origin */
+  margin-left: -18px;
+  margin-top: -20px;
+  transform-origin: 0 0;
 }
 .resolved-total {
   z-index: 23;
@@ -104,19 +111,22 @@ const positionedEffectDice = computed(() => {
   color: #fff;
   font-size: 0.75rem;
   font-weight: 800;
-  min-width: 20px;
-  height: 20px;
-  line-height: 20px;
+  min-width: 22px;
+  height: 22px;
+  line-height: 22px;
   text-align: center;
-  border-radius: 10px;
-  padding: 0 5px;
+  border-radius: 11px;
+  padding: 0 6px;
   box-shadow: 0 0 6px rgba(0,0,0,0.5);
+  margin-left: -11px;
+  margin-top: -11px;
+  transform-origin: 0 0;
 }
 .kept-die {
-  filter: brightness(1.2);
+  filter: brightness(1.25);
 }
 .unused-die {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 .effect-die {
   filter: drop-shadow(0 0 3px rgba(255,255,255,0.4));
