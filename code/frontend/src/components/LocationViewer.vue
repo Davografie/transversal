@@ -1215,13 +1215,13 @@ onMounted(fetchNav)
 /* ── Visual overlay layer ────────────────────────── */
 
 .overlay-layer {
-  position: absolute; inset: 0; z-index: 1;
+  position: absolute; inset: 0; z-index: 30;
   pointer-events: none;
   opacity: 0.6;
 }
 
 .particle-canvas {
-  position: absolute; inset: 0; z-index: 2;
+  position: absolute; inset: 0; z-index: 31;
   pointer-events: none;
   width: 100%; height: 100%;
 }
