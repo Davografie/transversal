@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from transversal.domain import (
+    ContestResult,
     DieType,
     DicePoolRequest,
     EffectAction,
@@ -151,7 +152,14 @@ class EffectsEngine:
     def _trigger_matches(self, sfx: SFX, event: GameEvent) -> bool:
         """Check if an SFX's trigger matches the event.
 
-        Simple string matching for now. Can be extended to pattern matching.
+        Supports:
+          - Direct match: trigger == event.type
+          - on_complication: fires when roll_result has hitches
+          - on_botch: fires when all dice show 1
+          - on_location_change: fires for event type "location_changed"
+          - on_trait_change: fires for event type "trait_updated"
+          - on_contest_loss / on_contest_win: fires from contest context
+          - on_success / on_failure: fires from roll context
         """
         trigger = sfx.trigger
 
@@ -168,6 +176,33 @@ class EffectsEngine:
         # on_botch
         if trigger == "on_botch" and event.roll_result and getattr(event.roll_result, 'botch', False):
             return True
+
+        # on_location_change
+        if trigger == "on_location_change" and event.type == "location_changed":
+            return True
+
+        # on_trait_change
+        if trigger == "on_trait_change" and event.type == "trait_updated":
+            return True
+
+        # on_contest_loss / on_contest_win (from context)
+        if trigger in ("on_contest_loss", "on_contest_win"):
+            contest_winner = event.context.get("contest_winner")
+            if trigger == "on_contest_loss":
+                # Entity lost: opponent won or tie (defender wins ties)
+                return contest_winner in ("opponent", "tie_defender")
+            elif trigger == "on_contest_win":
+                return contest_winner == "player"
+
+        # on_success / on_failure (from roll context)
+        if trigger in ("on_success", "on_failure") and event.roll_result:
+            tier = getattr(event.roll_result, 'tier', None)
+            if tier:
+                from transversal.domain import OutcomeTier
+                if trigger == "on_success" and tier != OutcomeTier.FAIL:
+                    return True
+                if trigger == "on_failure" and tier == OutcomeTier.FAIL:
+                    return True
 
         return False
 
@@ -236,3 +271,83 @@ def _beats_for_timing(timing: EffectTiming) -> int:
 def _noop_applier(action: EffectAction, entity_id: str, universe: str, context: dict) -> None:
     """Default no-op applier for testing."""
     pass
+
+
+def contest_to_events(
+    contest: "ContestResult",
+    player_id: str,
+    opponent_id: str,
+    universe: str,
+) -> list[GameEvent]:
+    """Create GameEvents from a ContestResult so automated SFX can fire.
+
+    Returns events for both sides — the engine processes them separately.
+    Events emitted:
+      - on_roll (for each side, with their roll_result)
+      - on_contest_win / on_contest_loss (per side, via context)
+      - on_complication (if any hitches)
+      - on_botch (if all dice show 1)
+    """
+    events: list[GameEvent] = []
+
+    # Determine who won from each side's perspective
+    if contest.winner == "player":
+        player_winner = "player"
+        opponent_winner = "opponent"
+    elif contest.winner == "opponent":
+        player_winner = "opponent"
+        opponent_winner = "player"
+    else:
+        # tie_defender — player lost, opponent won (defender wins ties)
+        player_winner = "opponent"
+        opponent_winner = "player"
+
+    # Player event
+    events.append(GameEvent(
+        type="on_roll",
+        entity_id=player_id,
+        universe=universe,
+        roll_result=contest.player_result,
+        context={"contest_winner": player_winner, "opponent_id": opponent_id},
+    ))
+
+    # Opponent event
+    events.append(GameEvent(
+        type="on_roll",
+        entity_id=opponent_id,
+        universe=universe,
+        roll_result=contest.opponent_result,
+        context={"contest_winner": opponent_winner, "opponent_id": player_id},
+    ))
+
+    return events
+
+
+def fire_contest_sfx(
+    engine: EffectsEngine,
+    contest: "ContestResult",
+    player_id: str,
+    opponent_id: str,
+    universe: str,
+    player_sfx_ids: list[str],
+    opponent_sfx_ids: list[str],
+    player_razmerit: int,
+    opponent_razmerit: int,
+) -> list[EffectAction]:
+    """Process a contest result through the effects engine for both sides.
+
+    Returns all immediately-applied effects (deferred are queued internally).
+    """
+    events = contest_to_events(contest, player_id, opponent_id, universe)
+    applied: list[EffectAction] = []
+
+    for event in events:
+        if event.entity_id == player_id:
+            sfx_ids = player_sfx_ids
+            raz = player_razmerit
+        else:
+            sfx_ids = opponent_sfx_ids
+            raz = opponent_razmerit
+        applied.extend(engine.process_event(event, sfx_ids, raz))
+
+    return applied

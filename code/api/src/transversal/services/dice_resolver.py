@@ -14,6 +14,8 @@ from typing import Optional
 
 from transversal.domain import (
     ChallengeResult,
+    ContestResult,
+    ContestWinner,
     DicePoolRequest,
     DieRoll,
     DieType,
@@ -108,41 +110,47 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     botch = _is_botch(rolls)
     razmerit_earned = len(hitches)  # 1 razmerit per hitch
 
-    # Challenge pool resolution
-    challenge_result = None
+    # Opposition roll (GMC or challenge)
     opposition_roll = None
+    opposition_rolls: list[DieRoll] = []
+    challenge_result = None
 
-    if request.opposition and request.opposition.type == "challenge" and request.opposition.challenge_die:
-        opp_die = _roll_die(request.opposition.challenge_die, "challenge")
-        opposition_roll = opp_die
+    if request.opposition:
+        if request.opposition.type == "gmc":
+            # Simplified GMC contest: roll GMC's dice, take highest
+            opp_rolls = [_roll_die(die, source) for die, source in request.opposition.dice]
+            opposition_rolls = opp_rolls
+            if opp_rolls:
+                opposition_roll = max(opp_rolls, key=lambda r: r.result)
 
-        # The player's highest must beat the challenge roll's result
-        # The DIFFERENCE determines the tier (and thus the effect die)
-        diff = highest - opp_die.result
+        elif request.opposition.type == "challenge" and request.opposition.challenge_die:
+            opp_die = _roll_die(request.opposition.challenge_die, "challenge")
+            opposition_roll = opp_die
+            opposition_rolls = [opp_die]
 
-        if diff <= 0:
-            # Player failed to beat the challenge
-            success = False
-            tier = OutcomeTier.FAIL
-        else:
-            success = True
-            if diff <= 2:
-                tier = OutcomeTier.MARGINAL
-            elif diff <= 5:
-                tier = OutcomeTier.SUCCESS
-            elif diff <= 8:
-                tier = OutcomeTier.EXCEPTIONAL
+            # The player's highest must beat the challenge roll's result
+            diff = highest - opp_die.result
+
+            if diff <= 0:
+                success = False
+                tier = OutcomeTier.FAIL
             else:
-                tier = OutcomeTier.PERFECT
+                success = True
+                if diff <= 2:
+                    tier = OutcomeTier.MARGINAL
+                elif diff <= 5:
+                    tier = OutcomeTier.SUCCESS
+                elif diff <= 8:
+                    tier = OutcomeTier.EXCEPTIONAL
+                else:
+                    tier = OutcomeTier.PERFECT
 
-        challenge_result = _resolve_challenge(
-            effect_die=tier.effect_die,
-            challenge_die=request.opposition.challenge_die,
-            success=success,
-        )
-
-        # Only earn razmerit from hitches, even when challenging
-        razmerit_earned = len(hitches)
+            challenge_result = _resolve_challenge(
+                effect_die=tier.effect_die,
+                challenge_die=request.opposition.challenge_die,
+                success=success,
+            )
+            razmerit_earned = len(hitches)
 
     return SimplifiedResult(
         rolls=rolls,
@@ -238,3 +246,117 @@ def resolve(request: DicePoolRequest) -> RollResult:
         return _resolve_simplified(request)
     else:
         return _resolve_pool(request)
+
+
+# ── Contest Resolution ──────────────────────────────────
+
+
+def _resolve_contest_winner(
+    player_tier: OutcomeTier,
+    opponent_tier: OutcomeTier,
+    player_highest: int,
+    opponent_highest: int,
+) -> ContestWinner:
+    """Determine the winner of a simplified contest.
+
+    Priority:
+      1. Higher outcome tier wins
+      2. Same tier → higher die value wins
+      3. Same tier + same value → defender (opponent) wins
+    """
+    tier_order = list(OutcomeTier)
+    player_tier_idx = tier_order.index(player_tier)
+    opponent_tier_idx = tier_order.index(opponent_tier)
+
+    if player_tier_idx > opponent_tier_idx:
+        return ContestWinner.PLAYER
+    elif opponent_tier_idx > player_tier_idx:
+        return ContestWinner.OPPONENT
+    elif player_highest > opponent_highest:
+        return ContestWinner.PLAYER
+    elif opponent_highest > player_highest:
+        return ContestWinner.OPPONENT
+    else:
+        return ContestWinner.TIE_DEFENDER
+
+
+def _resolve_contest_winner_pool(
+    player_total: int,
+    opponent_total: int,
+) -> ContestWinner:
+    """Determine the winner of a dice pool contest.
+
+    Higher total wins. Tie goes to defender (opponent).
+    """
+    if player_total > opponent_total:
+        return ContestWinner.PLAYER
+    elif opponent_total > player_total:
+        return ContestWinner.OPPONENT
+    else:
+        return ContestWinner.TIE_DEFENDER
+
+
+def resolve_contest(
+    player: DicePoolRequest,
+    opponent: DicePoolRequest,
+) -> ContestResult:
+    """Resolve a head-to-head contest between two sides.
+
+    Each side is resolved through their own pipeline (determined by their
+    pool size).  The resolver then compares the two results and declares
+    a winner per Cortex Prime rules:
+
+      - Simplified vs Simplified: compare outcome tiers
+      - Pool vs Pool: compare totals
+      - Mixed: the pool side uses its total; the simplified side's
+        highest die is treated as a single-die total for comparison
+
+    Ties always go to the defender (opponent).
+    """
+    player_result = resolve(player)
+    opponent_result = resolve(opponent)
+
+    # Determine which pipelines were used
+    player_is_pool = isinstance(player_result, PoolResult)
+    opponent_is_pool = isinstance(opponent_result, PoolResult)
+
+    if player_is_pool and opponent_is_pool:
+        # Both pool → compare totals
+        winner = _resolve_contest_winner_pool(
+            player_result.total,
+            opponent_result.total,
+        )
+        pipeline = "pool"
+
+    elif not player_is_pool and not opponent_is_pool:
+        # Both simplified → compare tiers + values
+        winner = _resolve_contest_winner(
+            player_result.tier,
+            opponent_result.tier,
+            player_result.highest,
+            opponent_result.highest,
+        )
+        pipeline = "simplified"
+
+    elif player_is_pool:
+        # Player is pool, opponent is simplified
+        # Compare player's total to opponent's highest die
+        opp_total = opponent_result.highest
+        winner = _resolve_contest_winner_pool(player_result.total, opp_total)
+        pipeline = "mixed"
+
+    else:
+        # Player is simplified, opponent is pool
+        player_total = player_result.highest
+        winner = _resolve_contest_winner_pool(
+            player_total,
+            opponent_result.total,
+        )
+        pipeline = "mixed"
+
+    return ContestResult(
+        pipeline=pipeline,
+        winner=winner,
+        player_result=player_result,
+        opponent_result=opponent_result,
+    )

@@ -157,6 +157,47 @@ class PoolResult(BaseModel):
 RollResult = SimplifiedResult | PoolResult
 
 
+class ContestWinner(str, Enum):
+    PLAYER = "player"
+    OPPONENT = "opponent"
+    TIE_DEFENDER = "tie_defender"
+
+
+class ContestResult(BaseModel):
+    """Result of a head-to-head contest between two sides.
+
+    Both sides roll their pools independently (they may use different
+    pipelines) and the resolver compares totals/tiers to declare a winner.
+    Effect dies are available for both sides — the winner's effect die
+    determines the magnitude of their success; the loser's may still
+    matter for certain SFX or narrative mechanics.
+    """
+    pipeline: str  # "simplified" or "pool" — which pipeline the contest used
+    winner: ContestWinner
+    player_result: SimplifiedResult | PoolResult
+    opponent_result: SimplifiedResult | PoolResult
+    pushed: bool = False
+    push_cost: int = 1
+
+
+# ── Per-Location Dice Pool Tracking ───────────────────
+
+class PoolAssembly(BaseModel):
+    """A dice pool being assembled for a contest at a specific location.
+
+    Tracks which dice an entity has added to their pool for the current
+    beat at a given location.  Pools are location-scoped so a player can
+    build pools in different scenes independently.
+    """
+    entity_id: str
+    location_id: str
+    universe: str
+    dice: list[tuple[DieType, str]] = Field(default_factory=list)
+    opposition_entity_id: Optional[str] = None
+    pushed_this_beat: bool = False
+    razmerit_spent: int = 0
+
+
 # ── Registry: Traits ──────────────────────────────────
 
 class SubTraitRef(BaseModel):
