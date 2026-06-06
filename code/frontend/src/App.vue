@@ -35,13 +35,122 @@
       </div>
     </div>
   </div>
-  <div v-if="!playerId" class="name-entry panel">
-    <h3>Who are you?</h3>
-    <p class="name-hint">Your name is your recovery key — use the same name on any device.</p>
-    <input v-model="playerName" placeholder="Your name" @keyup.enter="submitPlayerName" autofocus :disabled="checking" />
-    <button @click="submitPlayerName" :disabled="checking || !playerName.trim()">{{ checking ? 'Checking…' : 'Enter' }}</button>
-    <p v-if="nameStatus" class="name-status" :class="{ 'name-found': nameFound, 'name-new': !nameFound }">{{ nameStatus }}</p>
-    <button v-if="nameStatus" class="continue-btn" @click="confirmPlayer">{{ nameFound ? 'Continue' : 'Begin' }}</button>
+  <button v-if="playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
+  <!-- Login / Settings overlay -->
+  <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
+    <!-- Fresh login: no identity yet -->
+    <template v-if="!playerId">
+      <h3>Who are you?</h3>
+      <p class="name-hint">Your name is your recovery key — use the same name on any device.</p>
+      <div class="search-wrapper">
+        <input
+          v-model="playerName"
+          placeholder="Your name"
+          @keyup.enter="onNameEnter"
+          autofocus
+          :disabled="checking"
+        />
+        <!-- Search results dropdown -->
+        <div v-if="nameSuggestions.length || showLoginCreate" class="name-suggestions">
+          <button
+            v-for="s in nameSuggestions" :key="s.id"
+            class="suggestion-item"
+            @mousedown.prevent
+            @click="selectSuggestion(s)"
+          >{{ s.name }}</button>
+          <button
+            v-if="showLoginCreate"
+            class="suggestion-item suggestion-create"
+            @mousedown.prevent
+            @click="onNameEnter"
+          >New transverser: <strong>{{ playerName.trim() }}</strong></button>
+        </div>
+      </div>
+      <button @click="onNameEnter" :disabled="checking || !playerName.trim()">{{ checking ? 'Searching…' : 'Search' }}</button>
+      <p v-if="nameStatus" class="name-status" :class="{ 'name-found': nameFound, 'name-new': !nameFound }">{{ nameStatus }}</p>
+      <button v-if="nameStatus" class="continue-btn" @click="confirmPlayer">{{ nameFound ? 'Continue' : 'Begin' }}</button>
+    </template>
+    <!-- Settings: already logged in -->
+    <template v-else>
+      <p class="name-hint settings-hint">Player settings</p>
+
+      <!-- Name: business-card style, click to edit -->
+      <div class="search-wrapper settings-name-wrapper">
+        <div
+          v-if="!switchEditing"
+          class="settings-name-static"
+          @click="startSwitchEdit"
+        >{{ switchName || playerName }}</div>
+        <input
+          v-else
+          ref="switchInputRef"
+          v-model="switchName"
+          class="settings-name-input"
+          placeholder="Your name"
+          @keyup.enter="onSwitchEnter"
+          @blur="onSwitchBlur"
+          :disabled="switching"
+        />
+        <div v-if="switchEditing && (switchSuggestions.length || showSwitchCreate)" class="name-suggestions">
+          <button
+            v-for="s in switchSuggestions" :key="s.id"
+            class="suggestion-item"
+            @mousedown.prevent
+            @click="selectSwitchSuggestion(s)"
+          >{{ s.name }}</button>
+          <button
+            v-if="showSwitchCreate"
+            class="suggestion-item suggestion-create"
+            @mousedown.prevent
+            @click="onSwitchEnter"
+          >New transverser: <strong>{{ switchName.trim() }}</strong></button>
+        </div>
+      </div>
+
+      <!-- Switch confirmation -->
+      <p v-if="switchStatus" class="name-status" :class="{ 'name-found': switchFound, 'name-new': !switchFound }">{{ switchStatus }}</p>
+      <div v-if="switchStatus && pendingPlayerEntities.length" class="settings-section">
+        <label class="settings-label">Characters</label>
+        <div class="char-list">
+          <button
+            v-for="e in pendingPlayerEntities" :key="e.id"
+            class="char-item"
+          >{{ e.name || e.id }}</button>
+        </div>
+      </div>
+      <button v-if="switchStatus" class="continue-btn" @click="confirmSwitch">
+        {{ switchFound ? 'Continue' : 'Begin' }}
+      </button>
+
+      <!-- Character confirmation (separate from switch) -->
+      <p v-if="charStatus" class="name-status name-found">{{ charStatus }}</p>
+      <button v-if="charStatus" class="continue-btn" @click="confirmChar">Continue</button>
+
+      <!-- Mode + Characters (hidden during confirmation) -->
+      <template v-if="!switchStatus && !charStatus">
+        <div class="settings-section">
+          <label class="settings-label">Mode</label>
+          <div class="mode-toggle">
+            <button :class="{ active: !gmMode }" @click="gmMode = false">🎭 Player</button>
+            <button :class="{ active: gmMode }" @click="gmMode = true">🏛 Architect</button>
+          </div>
+        </div>
+
+        <div v-if="playerEntities.length" class="settings-section">
+          <label class="settings-label">Your characters</label>
+          <div class="char-list">
+            <button
+              v-for="e in playerEntities" :key="e.id"
+              :class="{ active: entityId === e.id }"
+              @click="selectCharacter(e)"
+            >{{ e.name || e.id }}</button>
+          </div>
+        </div>
+      </template>
+
+      <p v-if="switchError" class="switch-error">{{ switchError }}</p>
+      <button class="cancel-btn" @click="showLoginOverlay = false">Back to game</button>
+    </template>
   </div>
   <LocationViewer
     :location-id="currentLocationId"
@@ -49,17 +158,18 @@
     :universe="universe"
     :background-image="locationBgImage"
     :entity-id="entityId"
-    :edit-zones="editZones"
+    v-model:edit-zones="editZones"
     :overlay="locationOverlay"
+    :gm-mode="gmMode"
     @moved="onMoved"
   />
   <CharacterSheet ref="sheetRef" :entity-id="entityId" :universe="universe" :phase="phase" @add-to-pool="(d) => diceRef?.addFromSheet(d)" @remove-from-pool="(s) => diceRef?.removeBySource(s)" @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)" @split-die="(d) => diceRef?.splitDie(d)" @sfx-toggled="onSfxToggled" />
   <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" />
-  <GmPanel :universe="universe" v-model:edit-zones="editZones" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" />
+  <GmPanel v-if="gmMode" :universe="universe" :current-location-id="currentLocationId" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" />
 </template>
 
 <script setup>
-import { ref, useTemplateRef, watch } from 'vue'
+import { ref, useTemplateRef, watch, computed, nextTick } from 'vue'
 import LocationViewer from './components/LocationViewer.vue'
 import DieIcon from './components/DieIcon.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
@@ -136,11 +246,127 @@ const phase = ref('adding')
 // Player identity
 const playerId = ref(localStorage.getItem('playerId') || '')
 const playerName = ref(localStorage.getItem('playerName') || '')
-const showNameEntry = ref(false)
+const showLoginOverlay = ref(!playerId.value)
 const checking = ref(false)
 const nameStatus = ref('')
 const nameFound = ref(false)
 const pendingPlayer = ref(null)
+
+// Settings panel
+const gmMode = ref(localStorage.getItem('architectMode') === 'true')
+const switchName = ref('')
+const switchEditing = ref(false)
+const switching = ref(false)
+const switchError = ref('')
+const switchPending = ref(null)
+const switchStatus = ref('')
+const switchFound = ref(false)
+const charPending = ref(null)
+const charStatus = ref('')
+const pendingPlayerEntities = ref([])
+const playerEntities = ref([])
+
+// Name search
+const nameSuggestions = ref([])
+const switchSuggestions = ref([])
+const loginHasExactMatch = ref(false)
+const switchHasExactMatch = ref(false)
+let nameDebounce = null
+let switchDebounce = null
+
+const showLoginCreate = computed(() => playerName.value.trim() && !loginHasExactMatch.value)
+const showSwitchCreate = computed(() => switchName.value.trim() && !switchHasExactMatch.value)
+
+async function searchPlayers(q) {
+  if (!q || q.length < 1) { nameSuggestions.value = []; return }
+  try {
+    const r = await fetch(`/api/v1/players?q=${encodeURIComponent(q)}`)
+    const data = await r.json()
+    nameSuggestions.value = data
+  } catch (e) {
+    nameSuggestions.value = []
+  }
+}
+
+// Watch playerName for live search suggestions in login flow
+watch(playerName, (val) => {
+  if (playerId.value) return  // only in login flow
+  if (nameDebounce) clearTimeout(nameDebounce)
+  const q = val.trim()
+  nameDebounce = setTimeout(async () => {
+    await searchPlayers(q)
+    const exact = nameSuggestions.value.some(s => s.name.toLowerCase() === q.toLowerCase())
+    loginHasExactMatch.value = exact
+    if (exact) nameSuggestions.value = []
+  }, 150)
+})
+
+async function onNameEnter() {
+  if (nameDebounce) clearTimeout(nameDebounce)
+  const name = playerName.value.trim()
+  if (!name) return
+  checking.value = true
+  nameSuggestions.value = []
+  try {
+    await searchPlayers(name)
+    const p = await findOrCreatePlayer(name)
+    if (p) {
+      pendingPlayer.value = p
+      localStorage.setItem('playerName', name)
+      if (p.found) {
+        nameStatus.value = `You've transversed before, ${name}.`
+        nameFound.value = true
+      } else {
+        nameStatus.value = `New transverser detected. Welcome, ${name}.`
+        nameFound.value = false
+      }
+    }
+  } finally {
+    checking.value = false
+  }
+}
+
+function selectSuggestion(s) {
+  playerName.value = s.name
+  nameSuggestions.value = []
+  localStorage.setItem('playerName', s.name)
+  pendingPlayer.value = { id: s.id, name: s.name, found: true }
+  nameStatus.value = `You've transversed before, ${s.name}.`
+  nameFound.value = true
+}
+
+async function searchSwitchPlayers(q) {
+  if (!q || q.length < 1) { switchSuggestions.value = []; return }
+  try {
+    const r = await fetch(`/api/v1/players?q=${encodeURIComponent(q)}`)
+    switchSuggestions.value = await r.json()
+  } catch { switchSuggestions.value = [] }
+}
+
+// Watch switchName for live suggestions in settings panel
+watch(switchName, (val) => {
+  if (switchDebounce) clearTimeout(switchDebounce)
+  const q = val.trim()
+  switchError.value = ''
+  switchDebounce = setTimeout(async () => {
+    await searchSwitchPlayers(q)
+    const exact = switchSuggestions.value.some(s => s.name.toLowerCase() === q.toLowerCase())
+    switchHasExactMatch.value = exact
+    if (exact) switchSuggestions.value = []
+  }, 150)
+})
+
+function selectSwitchSuggestion(s) {
+  switchName.value = s.name
+  switchSuggestions.value = []
+  switchPending.value = { id: s.id, name: s.name, found: true }
+  switchStatus.value = `You've transversed before, ${s.name}.`
+  switchFound.value = true
+  switchError.value = ''
+  pendingPlayerEntities.value = []
+  fetchEntitiesFor(s.id).then(e => { pendingPlayerEntities.value = e })
+  switchEditing.value = false
+}
 
 async function findOrCreatePlayer(name) {
   try {
@@ -151,8 +377,8 @@ async function findOrCreatePlayer(name) {
 
 async function ensurePlayer() {
   if (playerId.value) {
-    // Already have ID — claim current entity
     fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+    loadPlayerRole()
     return
   }
 
@@ -168,34 +394,19 @@ async function ensurePlayer() {
   }
 
   // No name or ID — show entry
-  showNameEntry.value = true
-}
-
-async function submitPlayerName() {
-  const name = playerName.value.trim()
-  if (!name) return
-  checking.value = true
-  const p = await findOrCreatePlayer(name)
-  checking.value = false
-  if (!p) return
-  pendingPlayer.value = p
-  localStorage.setItem('playerName', name)
-  if (p.found) {
-    nameStatus.value = `Welcome back, ${name}!`
-    nameFound.value = true
-  } else {
-    nameStatus.value = `New traveler — welcome, ${name}!`
-    nameFound.value = false
-  }
+  showLoginOverlay.value = true
 }
 
 function confirmPlayer() {
   if (!pendingPlayer.value) return
   playerId.value = pendingPlayer.value.id
   localStorage.setItem('playerId', pendingPlayer.value.id)
+  localStorage.setItem('playerName', playerName.value.trim())
   nameStatus.value = ''
   pendingPlayer.value = null
+  showLoginOverlay.value = false
   fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+  loadPlayerRole()
 }
 ensurePlayer()
 
@@ -307,6 +518,7 @@ function onPhaseChange(p) {
 }
 const diceRef = useTemplateRef('diceRef')
 const sheetRef = useTemplateRef('sheetRef')
+const switchInputRef = useTemplateRef('switchInputRef')
 
 function onRolled() {
   sheetRef.value?.resetSfxCounts()
@@ -338,10 +550,165 @@ function onStartSession() {
 }
 
 function onEndSession() {
-  // Placeholder — could trigger effects engine tick_session
-  // For now just clear remote state
   remotePools.value = {}
   remoteResults.value = {}
-  console.log('GM: session ended')
 }
+
+
+// ── Settings panel ────────────────────────────
+
+function openSettings() {
+  console.log('openSettings: playerName =', playerName.value, 'playerId =', playerId.value)
+  switchName.value = playerName.value
+  switchEditing.value = false
+  switchSuggestions.value = []
+  switchStatus.value = ''
+  switchPending.value = null
+  pendingPlayerEntities.value = []
+  charStatus.value = ''
+  charPending.value = null
+  switchError.value = ''
+  fetchPlayerEntities()
+  showLoginOverlay.value = true
+}
+
+function dismissOverlay() {
+  if (playerId.value) {
+    switchEditing.value = false
+    switchStatus.value = ''
+    switchPending.value = null
+    pendingPlayerEntities.value = []
+    charStatus.value = ''
+    charPending.value = null
+    showLoginOverlay.value = false
+  }
+}
+
+async function startSwitchEdit() {
+  switchEditing.value = true
+  await nextTick()
+  switchInputRef.value?.focus()
+}
+
+function onSwitchBlur() {
+  console.log('onSwitchBlur: switchStatus =', switchStatus.value, 'switching =', switching.value, 'playerName =', playerName.value)
+  if (!switchStatus.value && !switching.value) {
+    console.log('onSwitchBlur: reverting switchName to', playerName.value)
+    switchEditing.value = false
+    switchName.value = playerName.value
+    switchSuggestions.value = []
+  }
+}
+
+async function fetchPlayerEntities() {
+  if (!playerId.value) return
+  playerEntities.value = await fetchEntitiesFor(playerId.value)
+}
+
+async function fetchEntitiesFor(pid) {
+  try {
+    const r = await fetch(`/api/v1/players/${pid}`)
+    const p = await r.json()
+    if (p && p.entity_ids) {
+      const results = []
+      for (const eid of p.entity_ids) {
+        try {
+          const r2 = await fetch('/api/v1/graphql', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { id name type } }`, variables: { id: eid } })
+          })
+          const json = await r2.json()
+          if (json.data?.entity) results.push(json.data.entity)
+        } catch {}
+      }
+      return results
+    }
+  } catch {}
+  return []
+}
+
+async function onSwitchEnter() {
+  if (switchDebounce) clearTimeout(switchDebounce)
+  const name = switchName.value.trim()
+  if (!name) return
+  switching.value = true
+  switchSuggestions.value = []
+  switchError.value = ''
+  try {
+    await searchSwitchPlayers(name)
+    const p = await findOrCreatePlayer(name)
+    if (!p) { switchError.value = 'Could not reach server'; return }
+    switchPending.value = p
+    if (p.found) {
+      switchStatus.value = `You've transversed before, ${name}.`
+      switchFound.value = true
+    } else {
+      switchStatus.value = `New transverser detected. Welcome, ${name}.`
+      switchFound.value = false
+    }
+    pendingPlayerEntities.value = []
+    if (p.found) fetchEntitiesFor(p.id).then(e => { pendingPlayerEntities.value = e })
+    switchEditing.value = false
+  } catch (e) {
+    switchError.value = e.message
+  } finally {
+    switching.value = false
+  }
+}
+
+function confirmSwitch() {
+  if (!switchPending.value) { console.log('confirmSwitch: no pending'); return }
+  const p = switchPending.value
+  console.log('confirmSwitch:', p.name, '→ playerName, playerId:', p.id)
+  playerId.value = p.id
+  playerName.value = p.name
+  localStorage.setItem('playerId', p.id)
+  localStorage.setItem('playerName', p.name)
+  switchStatus.value = ''
+  switchPending.value = null
+  pendingPlayerEntities.value = []
+  switchName.value = ''
+  showLoginOverlay.value = false
+  playerEntities.value = []
+  fetch(`/api/v1/players/${p.id}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+  initLocation()
+  loadPlayerRole()
+}
+
+function selectCharacter(e) {
+  charPending.value = e
+  charStatus.value = `Assume the form of ${e.name || e.id}?`
+}
+
+async function loadPlayerRole() {
+  if (!playerId.value) return
+  try {
+    const r = await fetch(`/api/v1/players/${playerId.value}`)
+    const p = await r.json()
+    if (p && p.role) {
+      const isArchitect = p.role === 'architect'
+      gmMode.value = isArchitect
+      localStorage.setItem('architectMode', isArchitect ? 'true' : 'false')
+    }
+  } catch {}
+}
+
+function confirmChar() {
+  if (!charPending.value) return
+  entityId.value = charPending.value.id
+  charStatus.value = ''
+  charPending.value = null
+  showLoginOverlay.value = false
+}
+
+watch(gmMode, (v) => {
+  const role = v ? 'architect' : 'player'
+  localStorage.setItem('architectMode', v ? 'true' : 'false')
+  if (playerId.value) {
+    fetch(`/api/v1/players/${playerId.value}/role`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role })
+    }).catch(() => {})
+  }
+})
 </script>

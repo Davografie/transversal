@@ -1,17 +1,17 @@
 <template>
   <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" :style="bgStyle" @click="onBgClick">
     <!-- Visual overlay layer (CSS effects) -->
-    <div v-if="optimisticOverlay" class="overlay-layer" :class="optimisticOverlay" />
+    <div v-if="effectsEnabled && optimisticOverlay" class="overlay-layer" :class="optimisticOverlay" />
 
     <!-- Canvas particle layer -->
-    <canvas ref="particleCanvas" class="particle-canvas" />
+    <canvas v-if="effectsEnabled" ref="particleCanvas" class="particle-canvas" />
 
-    <!-- Location label -->
-    <div class="loc-label fade-in" v-if="showElements">{{ displayName }}</div>
-    <div class="uni-label fade-in" v-if="showElements">{{ displayUniverse }}</div>
+    <!-- Location label (architect only) -->
+    <div class="loc-label fade-in" v-if="showElements && gmMode">{{ displayName }}</div>
+    <div class="uni-label fade-in" v-if="showElements && gmMode">{{ displayUniverse }}</div>
 
-    <!-- Overlay preset switcher -->
-    <div class="overlay-switcher fade-in" v-if="showElements">
+    <!-- Overlay preset switcher (architect only) -->
+    <div class="overlay-switcher fade-in" v-if="showElements && gmMode">
       <button
         v-for="o in overlayPresets"
         :key="o.value"
@@ -20,6 +20,23 @@
         :title="o.label"
         @click="setOverlay(o.value)"
       >{{ o.icon }}</button>
+      <span class="overlay-sep"></span>
+      <button
+        class="overlay-btn arrange-btn"
+        :class="{ active: editZones }"
+        title="Arrange map elements"
+        @click="$emit('update:editZones', !editZones)"
+      >🖉</button>
+    </div>
+
+    <!-- Effects toggle (players only, only when location has an effect) -->
+    <div class="overlay-switcher fade-in" v-if="showElements && !gmMode && optimisticOverlay">
+      <button
+        class="overlay-btn"
+        :class="{ active: effectsEnabled }"
+        :title="effectsEnabled ? 'Disable effects' : 'Enable effects'"
+        @click="effectsEnabled = !effectsEnabled"
+      >{{ effectsEnabled ? '✨' : '🌑' }}</button>
     </div>
 
     <!-- Zone dots -->
@@ -112,9 +129,10 @@ const props = defineProps({
   entityId: { type: String, required: true },
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
+  gmMode: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['moved'])
+const emit = defineEmits(['moved', 'update:editZones'])
 
 const currentImage = ref('')
 const nav = ref({})
@@ -125,6 +143,9 @@ const activeElement = ref(null)  // { type: 'zone'|'occupant', name?, id? } — 
 const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })
 const showElements = ref(true)  // toggled off during portal for fade-in remount
 const showSelf = ref(true)     // delayed after travel for dramatic arrival
+
+const effectsEnabled = ref(localStorage.getItem('effectsEnabled') !== 'false')
+watch(effectsEnabled, (v) => { localStorage.setItem('effectsEnabled', v ? 'true' : 'false') })
 
 const overlayPresets = [
   { value: null, icon: '🌫', label: 'None' },
@@ -1023,6 +1044,13 @@ onMounted(fetchNav)
   border-color: var(--accent);
 }
 .overlay-btn:hover { background: rgba(255,255,255,0.1); }
+
+.overlay-sep {
+  width: 1px; height: 20px; align-self: center;
+  background: rgba(255,255,255,0.12); margin: 0 4px;
+}
+
+.arrange-btn { font-size: 12px; }
 
 /* ── Map dots ────────────────────────────────────── */
 
