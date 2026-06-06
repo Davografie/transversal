@@ -109,8 +109,6 @@
 
     <div
       class="phase-bar drag-handle"
-      @mousedown="onDragHandleStart"
-      @touchstart="onDragHandleStart"
       @click.stop="panelOpen = !panelOpen"
     >
       <span class="phase-label">{{ phase }} {{ isPicking() ? `· ${keepCount}t ${effectCount}e` : '' }}</span>
@@ -138,50 +136,6 @@ const result = ref(null)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
 const panelOpen = ref(false)
 watch(panelOpen, (v) => emit('panelOpen', v))
-
-// ── Touch / pointer drag ────────────────────────────
-
-const touchStartY = ref(0)
-const touchDelta = ref(0)
-const swipeTranslate = ref(0)
-
-function onDragHandleStart(e) {
-  e.preventDefault()
-  const y = e.touches ? e.touches[0].clientY : e.clientY
-  touchStartY.value = y
-  touchDelta.value = 0
-  swipeTranslate.value = 0
-  document.addEventListener('touchmove', onDocMove, { passive: false })
-  document.addEventListener('touchend', onDocEnd)
-  document.addEventListener('mousemove', onDocMove)
-  document.addEventListener('mouseup', onDocEnd)
-}
-
-function onDocMove(e) {
-  e.preventDefault()
-  const y = e.touches ? e.touches[0].clientY : e.clientY
-  const dy = y - touchStartY.value
-  touchDelta.value = dy
-  if (!panelOpen.value) {
-    swipeTranslate.value = Math.min(0, dy)
-  } else {
-    swipeTranslate.value = Math.max(0, dy)
-  }
-}
-
-function onDocEnd() {
-  document.removeEventListener('touchmove', onDocMove)
-  document.removeEventListener('touchend', onDocEnd)
-  document.removeEventListener('mousemove', onDocMove)
-  document.removeEventListener('mouseup', onDocEnd)
-  if (touchDelta.value < -40) {
-    panelOpen.value = true
-  } else if (touchDelta.value > 40) {
-    panelOpen.value = false
-  }
-  swipeTranslate.value = 0
-  touchDelta.value = 0
-}
 
 function dismissPanel() {
   panelOpen.value = false

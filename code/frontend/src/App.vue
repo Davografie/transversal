@@ -128,7 +128,7 @@
     :gm-mode="gmMode"
     @moved="onMoved"
   />
-  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave" @transitionend="onWrapperTransitionEnd">
+  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave" @touchstart="onWrapperTouchStart" @touchmove="onWrapperTouchMove" @touchend="onWrapperTouchEnd">
     <Transition name="sheet-fade">
       <CharacterSheet
         v-if="sheetVisible && !gmMode"
@@ -506,35 +506,62 @@ let sheetTimer = null
 const wrapperEl = useTemplateRef('wrapperEl')
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
 
-function onPanelOpen(v) {
-  // Dice panel opened by add-die or swipe — show sheet after slide-up
-  if (v) {
-    hoverOpen.value = true
-    // sheetVisible will be set by onWrapperTransitionEnd when slide completes
-  } else {
-    hoverOpen.value = false
-    sheetVisible.value = false
+// Touch/swipe state
+let touchStartY = 0
+let touchMoved = false
+
+function onWrapperTouchStart(e) {
+  touchStartY = e.touches[0].clientY
+  touchMoved = false
+}
+
+function onWrapperTouchMove(e) {
+  if (!e.touches.length) return
+  const dy = e.touches[0].clientY - touchStartY
+  if (Math.abs(dy) > 10) touchMoved = true
+  // Swipe up to open
+  if (dy < -40 && !wrapperOpen.value) {
+    openPanel()
+    touchMoved = true
+  }
+  // Swipe down to close
+  if (dy > 40 && wrapperOpen.value) {
+    closePanel()
+    touchMoved = true
   }
 }
 
-function onWrapperTransitionEnd(e) {
-  // Only react to transform transitions on the wrapper itself
-  if (e.target !== wrapperEl.value || e.propertyName !== 'transform') return
-  if (wrapperOpen.value) {
-    // Slide-up complete — show the sheet
-    sheetVisible.value = true
+function onWrapperTouchEnd() {
+  // If it was a tap (not a swipe), toggle
+  if (!touchMoved && wrapperEl.value) {
+    wrapperOpen.value ? closePanel() : openPanel()
   }
 }
 
-function onWrapperEnter() {
+function openPanel() {
   hoverOpen.value = true
-  // sheetVisible set by transitionend
+  if (sheetTimer) clearTimeout(sheetTimer)
+  // Sheet appears after slide-up transition completes
+  sheetTimer = setTimeout(() => { sheetVisible.value = true }, 300)
 }
 
-function onWrapperLeave() {
+function closePanel() {
   hoverOpen.value = false
   sheetVisible.value = false
   if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
+}
+
+function onPanelOpen(v) {
+  if (v) openPanel()
+  else closePanel()
+}
+
+function onWrapperEnter() {
+  openPanel()
+}
+
+function onWrapperLeave() {
+  closePanel()
 }
 
 function onRolled() {
