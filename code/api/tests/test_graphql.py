@@ -97,14 +97,12 @@ class TestGraphQLMutations:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-hacking"
                     traitsetId: "ts-earth-skills"
-                    dieType: D10
-                    rating: "d10"
-                }) { id dieType rating ego }
+                    dice: [D10]
+                }) { id dice ego }
             }
         """, {"eid": eid})
         ts = result["addTraitSetting"]
-        assert ts["dieType"] == "D10"
-        assert ts["rating"] == "d10"
+        assert ts["dice"] == ["D10"]
         assert ts["ego"] == False
 
     def test_add_ego_trait(self, client):
@@ -125,15 +123,14 @@ class TestGraphQLMutations:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-intelligence"
                     traitsetId: "ts-earth-attributes"
-                    dieType: D8
-                    rating: "d8"
+                    dice: [D8]
                     ego: true
                     statement: "Overly analytical"
-                }) { dieType ego statement }
+                }) { dice ego statement }
             }
         """, {"eid": eid})
         ts = result["addTraitSetting"]
-        assert ts["dieType"] == "D8"
+        assert ts["dice"] == ["D8"]
         assert ts["ego"] == True
         assert ts["statement"] == "Overly analytical"
 
@@ -155,19 +152,18 @@ class TestGraphQLMutations:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-hacking"
                     traitsetId: "ts-earth-skills"
-                    dieType: D6
-                    rating: "d6"
-                }) { id dieType }
+                    dice: [D6]
+                }) { id dice }
             }
         """, {"eid": eid})
         tsid = ts["addTraitSetting"]["id"]
 
         stepped = _gql(client, """
             mutation($id: ID!) {
-                stepUpTrait(traitSettingId: $id) { dieType }
+                stepUpTrait(traitSettingId: $id) { dice }
             }
         """, {"id": tsid})
-        assert stepped["stepUpTrait"]["dieType"] == "D8"
+        assert stepped["stepUpTrait"]["dice"] == ["D8"]
 
     def test_razmerit_flow(self, client):
         entity = _gql(client, """
@@ -249,8 +245,7 @@ class TestCharacterView:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-hacking"
                     traitsetId: "ts-earth-skills"
-                    dieType: D10
-                    rating: "d10"
+                    dice: [D10]
                 }) { id }
             }
         """, {"eid": eid})
@@ -261,8 +256,7 @@ class TestCharacterView:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-intelligence"
                     traitsetId: "ts-earth-attributes"
-                    dieType: D8
-                    rating: "d8"
+                    dice: [D8]
                     ego: true
                     statement: "Can't leave a puzzle alone"
                 }) { id }
@@ -275,7 +269,7 @@ class TestCharacterView:
                 character(id: $id) {
                     entity { name razmerit }
                     projections { universe }
-                    traitSettings { dieType ego traitId }
+                    traitSettings { dice ego traitId }
                 }
             }
         """, {"id": eid})

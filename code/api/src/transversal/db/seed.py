@@ -267,7 +267,7 @@ def seed_default_character(em) -> None:
         if trait:
             _add_ts_if_missing(f"kael-1:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                die_type=die, rating=die.value, sfx_ids=sfx_ids)
+                dice=[die], sfx_ids=sfx_ids)
             # Ensure sfx_ids is set on existing settings
             if sfx_ids:
                 ts = em.repo.get_traitsetting(f"kael-1:{trait.id}")
@@ -283,20 +283,25 @@ def seed_default_character(em) -> None:
                          transversal_type="consciousness")
 
     # Add Three Realms cultivation traits
-    for trait_name, die in [("qi_reserves", DieType.D6), ("dao_comprehension", DieType.D4),
-                             ("sword_intent", DieType.D6), ("footwork", DieType.D4)]:
+    realm_trait_configs = [
+        ("qi_reserves", [DieType.D4, DieType.D4, DieType.D4, DieType.D4], RatingType.RESOURCE),
+        ("dao_comprehension", [DieType.D4], RatingType.STATIC),
+        ("sword_intent", [DieType.D6], RatingType.STATIC),
+        ("footwork", [DieType.D4], RatingType.STATIC),
+    ]
+    for trait_name, dice, rtype in realm_trait_configs:
         trait = em.repo.get_trait_by_name(trait_name, "three_realms")
         if trait:
             _add_ts_if_missing(f"kael-1:3r:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                die_type=die, rating="4d4" if trait_name == "qi_reserves" else die.value)
+                dice=dice, rating_type=rtype)
 
     # Add ego distinction — follows Kael across universes
     trait = em.repo.get_trait_by_name("answered_antonovs_call", "earth")
     if trait:
         _add_ts_if_missing("kael-1:ego:antonov",
             trait_id=trait.id, traitset_id=trait.traitset_id,
-            die_type=DieType.D8, rating="d8", ego=True,
+            dice=[DieType.D8], ego=True,
             statement="He reached out. I answered.",
             sfx_ids=["sfx-hinder"])
         # Always ensure sfx_ids is set (update even if already exists)
@@ -330,7 +335,7 @@ def seed_elena(em) -> None:
         if trait:
             _add_ts(f"elena-1:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                die_type=die, rating=die.value)
+                dice=[die])
 
     for attr_name, die in [("intelligence", DieType.D10), ("willpower", DieType.D8),
                             ("agility", DieType.D6), ("strength", DieType.D4)]:
@@ -338,7 +343,7 @@ def seed_elena(em) -> None:
         if trait:
             _add_ts(f"elena-1:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                die_type=die, rating=die.value)
+                dice=[die])
 
 
 def seed_locations(em) -> None:
@@ -427,6 +432,31 @@ def seed_locations(em) -> None:
         if loc and not loc.zones:
             loc.zones = list(zones)
             repo.update_entity(loc)
+    # ── Seed challenge traits on locations ────────────
+
+    from transversal.domain import ChallengePolarity
+
+    _challenge_traits = [
+        ("loc-krasnoyarsk", "regime_alert", "ts-earth-distinctions",
+         [DieType.D6, DieType.D6, DieType.D8], ChallengePolarity.NEGATIVE),
+        ("loc-sect", "sect_suspicion", "ts-earth-distinctions",
+         [DieType.D6], ChallengePolarity.NEGATIVE),
+    ]
+    for loc_id, name, tsid, dice, polarity in _challenge_traits:
+        ts_key = f"{loc_id}:challenge:{name}"
+        if not repo.get_traitsetting(ts_key):
+            ts = TraitSetting(
+                id=ts_key, entity_id=loc_id,
+                trait_id="trait-earth-hacking",  # placeholder — will need proper challenge trait registry
+                traitset_id=tsid,
+                rating_type=RatingType.CHALLENGE,
+                dice=list(dice),
+                polarity=polarity,
+            )
+            try:
+                repo.create_traitsetting(ts)
+            except Exception:
+                pass
 
 
 def seed_universes(em) -> None:

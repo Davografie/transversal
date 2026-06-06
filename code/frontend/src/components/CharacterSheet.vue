@@ -23,13 +23,14 @@
         <div v-if="traitSets.length" class="trait-sets">
           <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
             <h4>{{ ts.name }}</h4>
-            <div v-for="t in ts.traits" :key="t.name" class="trait-row" :class="{ ego: t.ego }" @click="phase === 'adding' && $emit('addToPool', { die: t.dieType.toLowerCase(), source: t.name, label: displayName(t.name), tsId: t.id })">
+            <div v-for="t in ts.traits" :key="t.name" class="trait-row" :class="{ ego: t.ego }" @click="onTraitClick(t)">
               <div class="trait-left">
-                <span class="trait-name" :class="{ disabled: phase !== 'adding' }">{{ displayName(t.name) }}</span>
+                <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                 <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
               </div>
               <div class="trait-right">
-                <span class="trait-die" :class="`die-${t.dieType.toLowerCase()}`">{{ t.rating }}</span>
+                <span class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
+                <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
                 <button
                   v-for="sfxId in t.sfxIds"
                   :key="sfxId"
@@ -70,7 +71,7 @@ function displayName(name) {
     .join(' ')
 }
 
-const { loading, error, graphql, triggerSfx } = useApi()
+const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
 const open = ref(false)
 const entity = ref(null)
 const traitSets = ref([])
@@ -83,6 +84,60 @@ const SFX_PHASES = {
 }
 const poolSources = ref(new Set())
 
+// Track resource trait dice that have been spent into the pool
+// { tsId: dieType } — cleared when the die is removed from the pool
+const spentResources = ref({})
+
+async function onTraitClick(t) {
+  if (props.phase !== 'adding') return
+
+  let dieType = (t.dieType || 'd6').toLowerCase()
+
+  if (t.ratingType === 'RESOURCE') {
+    const dice = t.dice || []
+
+    if (spentResources.value[t.id]) {
+      // Toggle OFF: recover the die
+      dieType = spentResources.value[t.id]
+      delete spentResources.value[t.id]
+      recoverResourceDie(t.id, dieType).catch(() => {
+        spentResources.value[t.id] = dieType  // rollback
+      })
+    } else {
+      // Toggle ON: spend a die (first available type)
+      if (dice.length === 0) return  // depleted
+      dieType = dice[0].toLowerCase()
+      spentResources.value[t.id] = dieType
+      spendResourceDie(t.id, dieType).catch(() => {
+        delete spentResources.value[t.id]  // rollback
+      })
+    }
+    fetchEntity()
+  }
+
+  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id })
+}
+
+function resolvedDieType(t) {
+  // Return the die type for CSS class (determines color)
+  if (t.dice && t.dice.length > 0) return t.dice[0].toLowerCase()
+  return (t.dieType || 'd6').toLowerCase()
+}
+
+function resourceDisplay(t) {
+  // Show available dice for resource traits, rating string for static traits
+  if (t.ratingType === 'RESOURCE') {
+    if (t.dice && t.dice.length === 0) return 'depleted'
+    return t.rating || 'empty'
+  }
+  return t.rating || (t.dice ? t.dice.join(', ') : '')
+}
+
+function isResourceDepleted(t) {
+  if (t.ratingType !== 'RESOURCE') return false
+  return (!t.dice || t.dice.length === 0) && !spentResources.value[t.id]
+}
+
 function sfxAllowedInPhase(sfxId) {
   const allowed = SFX_PHASES[sfxId] || ['adding']
   return allowed.includes(props.phase)
@@ -91,6 +146,31 @@ function sfxAllowedInPhase(sfxId) {
 // Pool state tracking — called by DiceRoller via App
 function setPoolSources(sources) {
   poolSources.value = new Set(sources)
+
+  // Auto-recover resource dice that were removed from the pool
+  // (e.g. via chip click in DiceRoller).  Only during adding phase —
+  // once dice are rolled they stay spent.
+  if (props.phase !== 'adding') return
+  for (const tsId of Object.keys(spentResources.value)) {
+    const dieType = spentResources.value[tsId]
+    // Check if this trait's die is still in the pool
+    let found = false
+    for (const ts of traitSets.value) {
+      for (const t of ts.traits) {
+        if (t.id === tsId && poolSources.value.has(displayName(t.name))) {
+          found = true
+          break
+        }
+      }
+      if (found) break
+    }
+    if (!found) {
+      // Die was removed — recover it
+      recoverResourceDie(tsId, dieType)
+      delete spentResources.value[tsId]
+      fetchEntity()
+    }
+  }
 }
 
 function closeSheet() {
@@ -112,6 +192,7 @@ function sfxUsed(sfxId) {
 
 function resetSfxCounts() {
   sfxActivations.value = {}
+  spentResources.value = {}
 }
 
 const QUERY = `
@@ -132,6 +213,8 @@ const QUERY = `
         statement
         sfxIds
         universe
+        dice
+        polarity
       }
     }
   }
@@ -363,6 +446,14 @@ watch(() => props.universe, fetchEntity)
 .die-d8  { color: #d44040; }
 .die-d10 { color: #4088d4; }
 .die-d12 { color: #40b860; }
+
+.polarity-badge {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+.polarity-negative { color: #d44040; }
+.polarity-positive { color: #40b860; }
 
 .loading, .error, .empty {
   font-size: 13px;

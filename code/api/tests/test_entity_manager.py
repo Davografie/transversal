@@ -9,7 +9,7 @@ from transversal.domain import (
     Entity,
     EntityType,
     Projection,
-    RatingType,
+
     Trait,
     TraitSet,
     TraitSetting,
@@ -102,8 +102,11 @@ class InMemoryRepository(EntityRepository):
         return [TraitSetting.model_validate(d) for d in self._traitsettings.values()
                 if d["entity_id"] == eid and d["traitset_id"] == tsid]
     def update_traitsetting(self, ts: TraitSetting) -> TraitSetting:
-        self._traitsettings[ts.id] = ts.model_dump()
+        self._store(self._traitsettings, ts.id, ts.model_dump())
         return ts
+    def get_traitsetting(self, ts_id: str) -> TraitSetting | None:
+        d = self._traitsettings.get(ts_id)
+        return TraitSetting.model_validate(d) if d else None
     def delete_traitsetting(self, tsid: str) -> bool:
         return self._traitsettings.pop(tsid, None) is not None
 
@@ -195,30 +198,28 @@ class TestTraitSettings:
             id=f"{kael.id}:hacking",
             entity_id=kael.id, trait_id=hacking_trait.id,
             traitset_id="ts-earth-skills",
-            die_type=DieType.D10, rating_type=RatingType.STATIC, rating="d10",
+            dice=[DieType.D10],
         )
         em.add_traitsetting(ts)
         settings = em.get_traitsettings(kael.id)
         assert len(settings) == 1
-        assert settings[0].die_type == DieType.D10
+        assert settings[0].dice == [DieType.D10]
 
     def test_step_up(self, em, kael, hacking_trait):
         ts = TraitSetting(
             id=f"{kael.id}:hacking", entity_id=kael.id, trait_id=hacking_trait.id,
             traitset_id="ts-earth-skills",
-            die_type=DieType.D10, rating_type=RatingType.STATIC, rating="d10",
+            dice=[DieType.D10],
         )
         em.add_traitsetting(ts)
         updated = em.step_up_trait(ts)
-        assert updated.die_type == DieType.D12
+        assert updated.dice == [DieType.D12]
 
     def test_filter_by_traitset(self, em, kael, hacking_trait):
         ts1 = TraitSetting(id=f"{kael.id}:hacking", entity_id=kael.id, trait_id=hacking_trait.id,
-                           traitset_id="ts-earth-skills", die_type=DieType.D10,
-                           rating_type=RatingType.STATIC, rating="d10")
+                           traitset_id="ts-earth-skills", dice=[DieType.D10])
         ts2 = TraitSetting(id=f"{kael.id}:stealth", entity_id=kael.id, trait_id="trait-earth-stealth",
-                           traitset_id="ts-earth-skills", die_type=DieType.D6,
-                           rating_type=RatingType.STATIC, rating="d6")
+                           traitset_id="ts-earth-skills", dice=[DieType.D6])
         em.add_traitsetting(ts1)
         em.add_traitsetting(ts2)
         result = em.get_traitsettings_by_set(kael.id, "ts-earth-skills")
@@ -226,14 +227,13 @@ class TestTraitSettings:
 
     def test_character_view(self, em, kael, hacking_trait):
         ts = TraitSetting(id=f"{kael.id}:hacking", entity_id=kael.id, trait_id=hacking_trait.id,
-                          traitset_id="ts-earth-skills", die_type=DieType.D10,
-                          rating_type=RatingType.STATIC, rating="d10")
+                          traitset_id="ts-earth-skills", dice=[DieType.D10])
         em.add_traitsetting(ts)
         cv = em.get_character(kael.id)
         assert cv.entity.name == "Kael Drift"
         assert "earth" in cv.projections
         assert len(cv.trait_settings) == 1
-        assert cv.trait_settings[0].die_type == DieType.D10
+        assert cv.trait_settings[0].dice == [DieType.D10]
 
 
 class TestRazmerit:
@@ -275,11 +275,11 @@ class TestEgoTraits:
 
         em.add_traitsetting(TraitSetting(
             id=f"{kael.id}:hacking", entity_id=kael.id, trait_id="trait-earth-hacking",
-            traitset_id="ts-earth-skills", die_type=DieType.D10, rating="d10",
+            traitset_id="ts-earth-skills", dice=[DieType.D10],
         ))
         em.add_traitsetting(TraitSetting(
             id=f"{kael.id}:curious", entity_id=kael.id, trait_id="trait-ego-curious",
-            traitset_id="ts-earth-distinctions", die_type=DieType.D8, rating="d8",
+            traitset_id="ts-earth-distinctions", dice=[DieType.D8],
             ego=True,
         ))
 

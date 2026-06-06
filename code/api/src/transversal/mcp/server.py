@@ -59,8 +59,8 @@ def create_npc(args: dict) -> dict:
         ts = TraitSetting(
             id=f"{entity.id}:distinction",
             entity_id=entity.id, trait_id="npc-distinction",
-            traitset_id="ts-npc", die_type=DieType.D8,
-            rating="d8", ego=True, statement=distinction,
+            traitset_id="ts-npc", dice=[DieType.D8],
+            ego=True, statement=distinction,
         )
         _em().add_traitsetting(ts)
 

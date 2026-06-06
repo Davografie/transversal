@@ -93,7 +93,7 @@ def _register_core_handlers(em, raz):
                     em.step_down_trait(ts)
                 elif a.action == "set":
                     from transversal.domain import DieType
-                    ts.die_type = DieType(a.result) if a.result else ts.die_type
+                    ts.dice = [DieType(a.result)] if a.result else ts.dice
                     em.update_traitsetting(ts)
                 break
 

@@ -26,6 +26,7 @@ from transversal.domain import (
     RatingType,
     TraitSetting,
     TransversalType,
+    dice_list_to_rating,
 )
 from transversal.domain.validation import validate_entity
 
@@ -176,33 +177,37 @@ class EntityManager:
         return self.repo.update_traitsetting(ts)
 
     def step_up_trait(self, ts: TraitSetting, session_id: Optional[str] = None) -> TraitSetting:
-        old = ts.die_type.value
-        ts.die_type = ts.die_type.step_up()
-        if ts.rating_type == RatingType.STATIC:
-            ts.rating = ts.die_type.value
+        if not ts.dice:
+            raise ValueError(f"Cannot step up trait '{ts.trait_id}': no dice in pool")
+        old_rating = dice_list_to_rating(ts.dice)
+        die = ts.dice[0]
+        stepped = die.step_up()
+        ts.dice[0] = stepped
         result = self.repo.update_traitsetting(ts)
-        change_log.record(ts.entity_id, f"traitsetting.{ts.id}.die_type", old, ts.die_type.value, session_id or "")
+        change_log.record(ts.entity_id, f"traitsetting.{ts.id}.dice", old_rating, dice_list_to_rating(ts.dice), session_id or "")
 
         _publish_to_sessions(StreamEvent(
             event="trait_updated",
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
-                  "old_rating": old, "new_rating": ts.die_type.value},
+                  "old_rating": old_rating, "new_rating": dice_list_to_rating(ts.dice)},
         ))
 
         return result
 
     def step_down_trait(self, ts: TraitSetting, session_id: Optional[str] = None) -> TraitSetting:
-        old = ts.die_type.value
-        ts.die_type = ts.die_type.step_down()
-        if ts.rating_type == RatingType.STATIC:
-            ts.rating = ts.die_type.value
+        if not ts.dice:
+            raise ValueError(f"Cannot step down trait '{ts.trait_id}': no dice in pool")
+        old_rating = dice_list_to_rating(ts.dice)
+        die = ts.dice[0]
+        stepped = die.step_down()
+        ts.dice[0] = stepped
         result = self.repo.update_traitsetting(ts)
-        change_log.record(ts.entity_id, f"traitsetting.{ts.id}.die_type", old, ts.die_type.value, session_id or "")
+        change_log.record(ts.entity_id, f"traitsetting.{ts.id}.dice", old_rating, dice_list_to_rating(ts.dice), session_id or "")
 
         _publish_to_sessions(StreamEvent(
             event="trait_updated",
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
-                  "old_rating": old, "new_rating": ts.die_type.value},
+                  "old_rating": old_rating, "new_rating": dice_list_to_rating(ts.dice)},
         ))
 
         return result

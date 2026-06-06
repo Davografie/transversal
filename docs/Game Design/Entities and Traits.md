@@ -25,7 +25,7 @@ Seven ArangoDB collections power the entity system:
 | `projections` | document | Per-universe body grouping (entity_id, universe, body type) |
 | `traits` | document | **Registry** — what traits exist per universe (shared definitions) |
 | `traitsets` | document | **Registry** — named groupings of traits (attributes, skills, cultivation) |
-| `traitsettings` | **edge** | **Per-entity** — entity → trait, carries rating, type, statement, SFX unlocks |
+| `traitsettings` | **edge** | **Per-entity** — entity → trait, carries dice: [DieType], type, statement, SFX unlocks |
 | `sfxs` | document | SFX registry — trigger, timing, cost, effects |
 | `relationships` | **edge** | Entity-to-entity connections (located_at, owns, allegiance) |
 
@@ -123,23 +123,20 @@ current_location: "Valley of Ascension"
 - id: "kael-1:hacking"
   entity_id: "kael-1"
   trait_id: "trait-earth-hacking"       # → Earth hacking trait
-  die_type: d10
+  dice: [d10]
   rating_type: static
-  rating: "d10"
 
 - id: "kael-1:qi-reserves"
   entity_id: "kael-1"
   trait_id: "trait-3r-qi-reserves"      # → Three Realms qi trait
-  die_type: d6
+  dice: [d4, d4, d4, d4]
   rating_type: resource
-  rating: "4d4"
 
 - id: "kael-1:curious"
   entity_id: "kael-1"
   trait_id: "trait-earth-curious"
-  die_type: d8
+  dice: [d8]
   rating_type: static
-  rating: "d8"
   ego: true                              # persists across all universes
   statement: "Can't leave a mystery alone"
 ```

@@ -50,8 +50,7 @@ class TestFullCharacterFlow:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-hacking"
                     traitsetId: "ts-earth-skills"
-                    dieType: D10
-                    rating: "d10"
+                    dice: [D10]
                 }) { id }
             }
         """, {"eid": eid})
@@ -62,8 +61,7 @@ class TestFullCharacterFlow:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-intelligence"
                     traitsetId: "ts-earth-attributes"
-                    dieType: D8
-                    rating: "d8"
+                    dice: [D8]
                     ego: true
                     statement: "Can't leave a mystery alone"
                 }) { id ego }
@@ -85,10 +83,9 @@ class TestFullCharacterFlow:
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-3r-qi-reserves"
                     traitsetId: "ts-3r-cultivation"
-                    dieType: D6
+                    dice: [D4, D4, D4, D4, D4, D4]
                     ratingType: RESOURCE
-                    rating: "6d4"
-                }) { id dieType }
+                }) { id dice }
             }
         """, {"eid": eid})
 
@@ -98,7 +95,7 @@ class TestFullCharacterFlow:
                 character(id: $id) {
                     entity { name razmerit currentUniverse }
                     projections { universe transversalType }
-                    traitSettings { dieType ego traitId }
+                    traitSettings { dice ego traitId }
                 }
             }
         """, {"id": eid})

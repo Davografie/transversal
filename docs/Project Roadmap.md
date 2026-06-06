@@ -91,7 +91,13 @@ aliases:
 - [x] Best Total / Best Effect auto-assign for dice picking
 - [x] Self-character always popped with proximity-based dot expansion
 - [x] Character arrival positioning at source location dot
-- [x] Delayed character fade-in after travel
+- [x] Character arrival pop animation (scale+brightness)
+- [x] Image-relative coordinate system (dots bound to image, not viewport)
+- [x] Seamless portal travel (pre-fetch destination, opaque curtain, instant reveal)
+- [x] Background panning with aspect-ratio-aware single-axis scrolling
+- [x] Media auto-conversion to WebP (88% size reduction)
+- [x] Touch drag-and-drop for dice picking
+- [x] Character sheet auto-closes on location change
 - [ ] End-to-end playtest of a full scene
 
 ## Phase 5: Polish & Launch
@@ -124,6 +130,9 @@ aliases:
 | Dot-based navigation UI | Zones, occupants, and nav destinations rendered as interactive dots on the background image; two-phase tap-to-pop interaction | 2026-06-05 |
 | Portal expansion travel animation | Clip-path circle expanding from zone dot to full viewport creates immersive location transitions | 2026-06-05 |
 | Nav dot positioning per location | Parent/portal dot positions stored on the location entity; persist across drag-and-drop editing | 2026-06-05 |
+| Image-relative coordinate system | All dot positions stored as image percentages; background pans to character position; dots move in lockstep with image — no parallax layers needed | 2026-06-05 |
+| Seamless portal travel | Pre-fetch destination nav data for exact arrival position; opaque portal curtain hides background switch; position lock prevents cross-frame animation | 2026-06-05 |
+| WebP media conversion | All uploads auto-converted to WebP (Pillow, quality 85); 88% size reduction on existing 232MB library | 2026-06-05 |
 
 ## Next
 

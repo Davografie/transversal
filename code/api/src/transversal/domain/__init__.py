@@ -49,6 +49,19 @@ class RatingType(str, Enum):
     EMPTY = "empty"
 
 
+class ChallengePolarity(str, Enum):
+    """For CHALLENGE-type traits: whether the pool represents danger or progress.
+
+    NEGATIVE — doom pool: GM spends dice to strengthen opposition.
+        Failures and hitches add dice or step existing dice up.
+
+    POSITIVE — progress clock: players roll against the pool to reduce it.
+        Successes remove or step down dice.  When empty, the project completes.
+    """
+    NEGATIVE = "negative"
+    POSITIVE = "positive"
+
+
 class OutcomeTier(str, Enum):
     FAIL = "fail"
     MARGINAL = "marginal"
@@ -183,6 +196,28 @@ class TraitSet(BaseModel):
     location_restricted: bool = False
 
 
+# ── Dice helpers ──────────────────────────────────────
+
+def dice_list_to_rating(dice: list[DieType]) -> str:
+    """Convert a dice array to a human-readable rating string.
+
+    [D4, D4, D4, D4] → "4d4"
+    [D4, D4, D6, D6] → "2d4 + 2d6"
+    [D8]             → "d8"
+    []               → "empty"
+    """
+    if not dice:
+        return "empty"
+    counts: dict[DieType, int] = {}
+    for d in dice:
+        counts[d] = counts.get(d, 0) + 1
+    parts: list[str] = []
+    for die in sorted(counts.keys(), key=lambda d: d.max_value):
+        n = counts[die]
+        parts.append(die.value if n == 1 else f"{n}{die.value}")
+    return " + ".join(parts)
+
+
 # ── Per-Entity: Trait Settings ─────────────────────────
 
 class TraitSetting(BaseModel):
@@ -190,14 +225,22 @@ class TraitSetting(BaseModel):
 
     Stored as an edge in the `traitsettings` collection.
     _from → entity, _to → trait (registry).
+
+    The ``dice`` array is the single source of truth for what dice this
+    trait contributes.  For a static d8 trait it is ``[D8]``.  For a
+    resource pool of 4d4 it is ``[D4, D4, D4, D4]``.  Spending removes a
+    die from the array; recovery appends one.
+
+    ``rating_type`` determines behaviour (STATIC / RESOURCE / CHALLENGE /
+    EMPTY) and is never inferred from the dice.
     """
     id: str
     entity_id: str
     trait_id: str
     traitset_id: str
-    die_type: DieType
     rating_type: RatingType = RatingType.STATIC
-    rating: str = ""           # e.g. "d8", "4d4+7d6"
+    dice: list[DieType] = Field(default_factory=list)
+    polarity: Optional[ChallengePolarity] = None  # meaningful only for CHALLENGE traits
     statement: str = ""        # distinction statement or flavor
     negative: bool = False     # true = negative trait (opponent uses it)
     ego: bool = False          # true = persists across all universes/projections

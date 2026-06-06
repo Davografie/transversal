@@ -99,9 +99,10 @@ type TraitSetting {
   entityId: ID!
   traitId: ID!
   traitsetId: ID!
-  dieType: DieType!
-  ratingType: RatingType!
-  rating: String!          # e.g. "d8", "4d4+7d6"
+  dice: [DieType!]!        # the actual dice, e.g. [D8] or [D4, D4, D4, D4]
+  ratingType: RatingType!  # STATIC | RESOURCE | CHALLENGE | EMPTY
+  dieType: DieType!        # computed: first die in dice, or D6 if empty
+  rating: String!          # computed: human-readable, e.g. "d8" or "4d4"
   statement: String
   negative: Boolean!
   ego: Boolean!            # true = persists across all universes
@@ -200,9 +201,8 @@ input UpdateEntityInput {
 input TraitSettingInput {
   traitId: ID!
   traitsetId: ID!
-  dieType: DieType!
+  dice: [DieType!]!
   ratingType: RatingType
-  rating: String
   statement: String
   negative: Boolean
   ego: Boolean
@@ -210,9 +210,8 @@ input TraitSettingInput {
 }
 
 input TraitSettingUpdateInput {
-  dieType: DieType
+  dice: [DieType!]
   ratingType: RatingType
-  rating: String
   statement: String
   negative: Boolean
   ego: Boolean
@@ -382,6 +381,26 @@ Accepts multipart file upload (PNG, JPG, GIF, WebP, SVG). Files are renamed to `
 Response: `{ "filename": "loc-sect_a1b2c3d4.png", "path": "/media/loc-sect_a1b2c3d4.png", "size": 12345 }`
 
 Uploaded files are served at `GET /media/{filename}` via StaticFiles.
+
+### Resource Pool
+
+**`POST /api/v1/resource-pool/{traitsetting_id}/spend`**
+
+Spend dice from a resource trait's pool.  Removes one die of the given
+type from the trait's `dice` array and persists.
+
+Request: `{"die": "d4", "count": 1}`
+
+Response: `{"traitsetting_id": "...", "die_type": "d4", "rating": "3d4", "dice": ["d4","d4","d4"], "total": 3}`
+
+**`POST /api/v1/resource-pool/{traitsetting_id}/recover`**
+
+Recover spent dice back to the pool.  Appends one die of the given type
+to the trait's `dice` array and persists.
+
+Request: `{"die": "d4", "count": 1}`
+
+Response: same shape as spend.
 
 ### Player Identity
 

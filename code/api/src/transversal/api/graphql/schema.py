@@ -23,6 +23,7 @@ from transversal.api.graphql.types import (
 from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
 from transversal.domain import TraitSetting as DomainTraitSetting
+from transversal.domain import dice_list_to_rating
 from transversal.services.entity_manager import EntityManager
 from transversal.services.razmerit import RazmeritService
 
@@ -51,8 +52,9 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
 def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
     return TraitSetting(
         id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
-        traitset_id=s.traitset_id, die_type=s.die_type,
-        rating_type=s.rating_type, rating=s.rating,
+        traitset_id=s.traitset_id,
+        rating_type=s.rating_type, dice=s.dice,
+        polarity=s.polarity,
         statement=s.statement, negative=s.negative,
         ego=s.ego, sfx_ids=s.sfx_ids,
     )
@@ -142,9 +144,9 @@ class Mutation:
             entity_id=str(entity_id),
             trait_id=str(input.trait_id),
             traitset_id=str(input.traitset_id),
-            die_type=input.die_type,
+            dice=input.dice,
             rating_type=input.rating_type,
-            rating=input.rating,
+            polarity=input.polarity,
             statement=input.statement,
             negative=input.negative,
             ego=input.ego,
@@ -239,12 +241,12 @@ class Mutation:
         ts = _em(info).repo.get_traitsetting(str(id))
         if ts is None:
             raise ValueError(f"TraitSetting '{id}' not found")
-        if input.die_type is not None:
-            ts.die_type = input.die_type
+        if input.dice is not None:
+            ts.dice = input.dice
         if input.rating_type is not None:
             ts.rating_type = input.rating_type
-        if input.rating is not None:
-            ts.rating = input.rating
+        if input.polarity is not None:
+            ts.polarity = input.polarity
         if input.statement is not None:
             ts.statement = input.statement
         if input.negative is not None:

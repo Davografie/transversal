@@ -8,6 +8,7 @@ from transversal.domain import (
     RatingType as DomainRatingType,
     EntityType as DomainEntityType,
     TransversalType as DomainTransversalType,
+    ChallengePolarity as DomainChallengePolarity,
 )
 
 
@@ -17,6 +18,7 @@ DieType = strawberry.enum(DomainDieType)
 RatingType = strawberry.enum(DomainRatingType)
 EntityType = strawberry.enum(DomainEntityType)
 TransversalTypeEnum = strawberry.enum(DomainTransversalType)
+ChallengePolarity = strawberry.enum(DomainChallengePolarity)
 
 
 # ── Trait Registry ───────────────────────────────────
@@ -49,13 +51,26 @@ class TraitSetting:
     entity_id: strawberry.ID
     trait_id: strawberry.ID
     traitset_id: strawberry.ID
-    die_type: DieType
     rating_type: RatingType
-    rating: str
+    dice: list[DieType]
+    polarity: Optional[ChallengePolarity] = None
     statement: str
     negative: bool
     ego: bool
     sfx_ids: list[strawberry.ID]
+
+    @strawberry.field
+    def die_type(self) -> DieType:
+        """Derive die_type from the first die in dice, or D6 if empty."""
+        if self.dice:
+            return self.dice[0]
+        return DieType.D6
+
+    @strawberry.field
+    def rating(self) -> str:
+        """Human-readable rating string derived from dice."""
+        from transversal.domain import dice_list_to_rating
+        return dice_list_to_rating(self.dice)
 
     @strawberry.field
     def name(self, info: strawberry.Info) -> str:
@@ -83,9 +98,9 @@ class TraitSetting:
 class TraitSettingInput:
     trait_id: strawberry.ID
     traitset_id: strawberry.ID
-    die_type: DieType
+    dice: list[DieType] = strawberry.field(default_factory=list)
     rating_type: RatingType = RatingType.STATIC
-    rating: str = ""
+    polarity: Optional[ChallengePolarity] = None
     statement: str = ""
     negative: bool = False
     ego: bool = False
@@ -94,9 +109,9 @@ class TraitSettingInput:
 
 @strawberry.input
 class TraitSettingUpdateInput:
-    die_type: Optional[DieType] = None
+    dice: Optional[list[DieType]] = None
     rating_type: Optional[RatingType] = None
-    rating: Optional[str] = None
+    polarity: Optional[ChallengePolarity] = None
     statement: Optional[str] = None
     negative: Optional[bool] = None
     ego: Optional[bool] = None
@@ -160,8 +175,9 @@ class Entity:
         return [
             TraitSetting(
                 id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
-                traitset_id=s.traitset_id, die_type=s.die_type,
-                rating_type=s.rating_type, rating=s.rating,
+                traitset_id=s.traitset_id,
+                rating_type=s.rating_type, dice=s.dice,
+                polarity=s.polarity,
                 statement=s.statement, negative=s.negative,
                 ego=s.ego, sfx_ids=s.sfx_ids,
             )

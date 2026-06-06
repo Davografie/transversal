@@ -64,5 +64,43 @@ export function useApi() {
     }
   }
 
-  return { loading, error, graphql, roll, triggerSfx }
+  async function spendResourceDie(tsId, die, count = 1) {
+    error.value = null
+    try {
+      const r = await fetch(`${API_BASE}/resource-pool/${tsId}/spend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ die, count })
+      })
+      if (!r.ok) {
+        const msg = await r.text()
+        throw new Error(msg)
+      }
+      return await r.json()
+    } catch (e) {
+      error.value = e.message
+      return null
+    }
+  }
+
+  async function recoverResourceDie(tsId, die, count = 1) {
+    error.value = null
+    try {
+      const r = await fetch(`${API_BASE}/resource-pool/${tsId}/recover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ die, count })
+      })
+      if (!r.ok) {
+        const msg = await r.text()
+        throw new Error(msg)
+      }
+      return await r.json()
+    } catch (e) {
+      error.value = e.message
+      return null
+    }
+  }
+
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie }
 }

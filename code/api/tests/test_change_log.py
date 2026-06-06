@@ -106,7 +106,7 @@ class TestChangeLogIntegration:
     def test_step_up_records_change(self):
         from tests.test_entity_manager import InMemoryRepository
         from transversal.services.entity_manager import EntityManager
-        from transversal.domain import EntityType, DieType, RatingType, TraitSetting
+        from transversal.domain import EntityType, DieType, TraitSetting
 
         repo = InMemoryRepository()
         em = EntityManager(repository=repo)
@@ -114,8 +114,7 @@ class TestChangeLogIntegration:
 
         ts = TraitSetting(
             id=f"{kael.id}:hacking", entity_id=kael.id, trait_id="t-hack",
-            traitset_id="ts-skills", die_type=DieType.D6,
-            rating_type=RatingType.STATIC, rating="d6",
+            traitset_id="ts-skills", dice=[DieType.D6],
         )
         em.add_traitsetting(ts)
 
