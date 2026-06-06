@@ -424,6 +424,18 @@ input:focus, select:focus {
   flex-shrink: 0;
 }
 
+/* Sheet fade transition */
+.sheet-fade-enter-active {
+  transition: opacity 0.25s ease;
+}
+.sheet-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.sheet-fade-enter-from,
+.sheet-fade-leave-to {
+  opacity: 0;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }

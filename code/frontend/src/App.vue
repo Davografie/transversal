@@ -128,21 +128,23 @@
     :gm-mode="gmMode"
     @moved="onMoved"
   />
-  <div class="dice-panel-wrapper" :class="{ open: dicePanelOpen }">
-    <CharacterSheet
-      v-if="dicePanelOpen"
-      ref="sheetRef"
-      :entity-id="entityId"
-      :universe="universe"
-      :phase="phase"
-      embedded
-      @add-to-pool="(d) => diceRef?.addFromSheet(d)"
-      @remove-from-pool="(s) => diceRef?.removeBySource(s)"
-      @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
-      @split-die="(d) => diceRef?.splitDie(d)"
-      @sfx-toggled="onSfxToggled"
-    />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="v => dicePanelOpen = v" />
+  <div class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+    <Transition name="sheet-fade">
+      <CharacterSheet
+        v-if="sheetVisible"
+        ref="sheetRef"
+        :entity-id="entityId"
+        :universe="universe"
+        :phase="phase"
+        embedded
+        @add-to-pool="(d) => diceRef?.addFromSheet(d)"
+        @remove-from-pool="(s) => diceRef?.removeBySource(s)"
+        @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
+        @split-die="(d) => diceRef?.splitDie(d)"
+        @sfx-toggled="onSfxToggled"
+      />
+    </Transition>
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
   </div>
   <GmPanel v-if="gmMode" :universe="universe" :current-location-id="currentLocationId" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" />
 </template>
@@ -497,7 +499,27 @@ const diceRef = useTemplateRef('diceRef')
 const sheetRef = useTemplateRef('sheetRef')
 const switchInputRef = useTemplateRef('switchInputRef')
 
-const dicePanelOpen = ref(false)
+const hoverOpen = ref(false)
+const sheetVisible = ref(false)
+let sheetTimer = null
+
+const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
+
+function onPanelOpen(v) {
+  sheetVisible.value = v
+}
+
+function onWrapperEnter() {
+  hoverOpen.value = true
+  // Sheet appears after dice pool slide-up transition (300ms CSS)
+  sheetTimer = setTimeout(() => { sheetVisible.value = true }, 300)
+}
+
+function onWrapperLeave() {
+  hoverOpen.value = false
+  sheetVisible.value = false
+  if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
+}
 
 function onRolled() {
   sheetRef.value?.resetSfxCounts()
