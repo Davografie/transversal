@@ -79,11 +79,11 @@
   </div>
 
   <!-- Secondary panels -->
-  <div v-if="inspectedEntity && !editing" class="edit-panel">
+   <div v-if="inspectedEntity && !editing" class="edit-panel">
     <div class="form-actions top-actions">
       <button class="sheet-edit-btn" @click="switchToEdit">Edit</button>
     </div>
-    <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded />
+    <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded @add-to-pool="(d) => emit('add-to-pool', d)" />
   </div>
 
   <div v-if="editing && selected" class="edit-panel">
@@ -141,7 +141,7 @@ const props = defineProps({
   currentLocationId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['next-beat', 'start-session', 'end-session'])
+const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool'])
 
 const open = ref(false)
 const mode = ref('play')

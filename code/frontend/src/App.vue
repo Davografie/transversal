@@ -169,7 +169,7 @@
       />
     <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
   </div>
-  <GmPanel v-if="gmMode" :universe="universe" :current-location-id="currentLocationId" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" />
+  <GmPanel v-if="gmMode" :universe="universe" :current-location-id="currentLocationId" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" @add-to-pool="(d) => diceRef?.addFromSheet(d)" />
 </template>
 
 <script setup>
