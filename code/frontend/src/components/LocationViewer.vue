@@ -978,6 +978,8 @@ watch(() => props.locationId, () => {
   if (!travelAnim.value.active) fetchNav()
 })
 
+defineExpose({ fetchNav })
+
 onMounted(fetchNav)
 </script>
 

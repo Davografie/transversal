@@ -114,6 +114,8 @@ class EntityManager:
 
     def update(self, entity: Entity) -> Entity:
         validate_entity(entity)
+        old = self.repo.get_entity(entity.id)
+        old_location = old.current_location if old else None
         result = self.repo.update_entity(entity)
 
         _publish_to_sessions(StreamEvent(
@@ -123,6 +125,14 @@ class EntityManager:
                   "current_universe": entity.current_universe,
                   "current_location": entity.current_location},
         ))
+
+        if entity.current_location != old_location:
+            _publish_to_sessions(StreamEvent(
+                event="location_changed",
+                data={"entity_id": entity.id, "from": old_location or "",
+                      "to": entity.current_location or "",
+                      "universe": entity.current_universe},
+            ))
 
         return result
 

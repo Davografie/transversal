@@ -127,6 +127,7 @@
     </template>
   </div>
   <LocationViewer
+    ref="locationRef"
     :location-id="currentLocationId"
     :location-name="locationName"
     :universe="universe"
@@ -466,6 +467,7 @@ watch(lastEvent, (evt) => {
       break
     case 'location_changed':
       if (eid === entityId.value && evt.data?.to) locationName.value = evt.data.to
+      locationRef.value?.fetchNav()
       break
     case 'entity_updated':
       if (eid === currentLocationId.value) fetchLocationBg()
@@ -513,6 +515,7 @@ function onPhaseChange(p) {
 }
 const diceRef = useTemplateRef('diceRef')
 const sheetRef = useTemplateRef('sheetRef')
+const locationRef = useTemplateRef('locationRef')
 const switchInputRef = useTemplateRef('switchInputRef')
 
 const hoverOpen = ref(false)
