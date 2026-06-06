@@ -128,10 +128,10 @@
     :gm-mode="gmMode"
     @moved="onMoved"
   />
-  <div class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave" @transitionend="onWrapperTransitionEnd">
     <Transition name="sheet-fade">
       <CharacterSheet
-        v-if="sheetVisible"
+        v-if="sheetVisible && !gmMode"
         ref="sheetRef"
         :entity-id="entityId"
         :universe="universe"
@@ -503,16 +503,32 @@ const hoverOpen = ref(false)
 const sheetVisible = ref(false)
 let sheetTimer = null
 
+const wrapperEl = useTemplateRef('wrapperEl')
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
 
 function onPanelOpen(v) {
-  sheetVisible.value = v
+  // Dice panel opened by add-die or swipe — show sheet after slide-up
+  if (v) {
+    hoverOpen.value = true
+    // sheetVisible will be set by onWrapperTransitionEnd when slide completes
+  } else {
+    hoverOpen.value = false
+    sheetVisible.value = false
+  }
+}
+
+function onWrapperTransitionEnd(e) {
+  // Only react to transform transitions on the wrapper itself
+  if (e.target !== wrapperEl.value || e.propertyName !== 'transform') return
+  if (wrapperOpen.value) {
+    // Slide-up complete — show the sheet
+    sheetVisible.value = true
+  }
 }
 
 function onWrapperEnter() {
   hoverOpen.value = true
-  // Sheet appears after dice pool slide-up transition (300ms CSS)
-  sheetTimer = setTimeout(() => { sheetVisible.value = true }, 300)
+  // sheetVisible set by transitionend
 }
 
 function onWrapperLeave() {

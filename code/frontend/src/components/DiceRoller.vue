@@ -111,6 +111,7 @@
       class="phase-bar drag-handle"
       @mousedown="onDragHandleStart"
       @touchstart="onDragHandleStart"
+      @click.stop="panelOpen = !panelOpen"
     >
       <span class="phase-label">{{ phase }} {{ isPicking() ? `· ${keepCount}t ${effectCount}e` : '' }}</span>
     </div>
