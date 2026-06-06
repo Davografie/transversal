@@ -154,10 +154,10 @@ The frontend is a Vue3 PWA served by Vite in development.
 
 | Component | Transport | Function |
 |-----------|-----------|----------|
-| `LocationViewer` | REST + SSE | Full-screen background image with interactive dots: **zone dots** (green), **occupant dots** (blue=PC, orange=GMC), **nav dots** (gold=parent, purple=portal). Two-phase interaction: tap to pop, tap to navigate. All positions are **image-relative** — dots move in lockstep with panning background, giving a physically-bound feel. Background pans based on character position; sizing adapts to image vs viewport aspect ratio (single-axis panning for landscape/portrait images). **Portal travel**: pre-fetches destination nav data for exact arrival position, clip-path circle expands from zone dot, portal stays opaque until background+position ready, then lifts instantly. Character gets `arrivePop` scale+brightness animation on arrival. Self character rendered outside parallax for 1:1 touch during drag. "Arrange Map" expands all dots for GM drag-and-drop. |
+| `LocationViewer` | REST + SSE | Full-screen background image with interactive dots: **zone dots** (green), **occupant dots** (blue=PC, orange=GMC), **nav dots** (gold=parent, purple=portal). Two-phase interaction: tap to pop, tap to navigate. All positions are **image-relative** — dots move in lockstep with panning background. Background pans based on character position. **Portal travel**: pre-fetches destination nav data, clip-path circle expands from zone dot, portal stays opaque until ready. Self character rendered outside parallax for 1:1 touch during drag. **Role-gated UI**: location label, universe label, overlay effect presets, and arrange-map toggle are only visible in Architect mode. **Players** see only an ✨/🌑 effects toggle (for performance) when the location has an overlay, persisted per-device in localStorage. |
 | `CharacterSheet` | GraphQL | Slide-out panel showing entity traits grouped by trait set. Filters by current universe (morph traits) and always shows ego traits. Clicking a trait toggles it in the dice pool. SFX buttons appear next to traits. |
 | `DiceRoller` | REST `POST /roll` | Retractable bottom panel. Desktop: hover reveals. Touch: swipe up/down on drag handle (40px threshold), tap outside to dismiss. Four-phase lifecycle (adding/rolling/picking/resolved). Picking phase: drag-and-drop (mouse + touch with ghost clone) die-to-slot assignment; clicking Total:/Effect: labels auto-assigns Best Total or Best Effect. Resolved phase: large total number + effect die icon. |
-| `GmPanel` | GraphQL + REST | Slide-in panel from the upper-right. Entity list with type filters, create/edit/delete entities, trait assignment (add/remove trait settings), background image file upload (auto-renames and persists to database), universe/location dropdowns populated from existing entities, and "Arrange Map" toggle for drag-and-drop zone/nav-dot repositioning. |
+| `GmPanel` | GraphQL + REST | Slide-in panel from the upper-right. Only visible in Architect mode (`gmMode === true`). Entity list with type filters, create/edit/delete entities, trait assignment, background image file upload, universe/location dropdowns, and session management shortcuts (Next Beat, Start/End Session). Split into Play and Prep modes with searchable location tree showing occupants. |
 | `DieIcon` | — | SVG dice renderer (d4–d12), color-coded. Shows result value with white text and dark stroke for legibility on transparent backgrounds. |
 
 ### State Management
@@ -180,7 +180,7 @@ Session management groups players into shared game sessions. The SSE bus broadca
 | Feature | Implementation |
 |---------|---------------|
 | **Sessions** | In-memory store (`SessionManager`). Create, join, leave. Each session tracks entity→player mapping. |
-| **Player identity** | Server-generated player IDs, stored in `localStorage`. Name-based recovery. |
+| **Player identity** | Server-generated player IDs, stored in `localStorage`. Name-based recovery with search-driven input (debounced partial-match suggestions, "New transverser" create option). Each player has a **role** — `"player"` or `"architect"` — stored on the server and synced on login/switch. Role controls UI visibility (GmPanel, location labels, overlay tools). Players persisted to `/app/data/players.json` with Docker volume for restart survival. Settings panel (↩ button) provides business-card-style name display, Player/Architect mode toggle, switch-player with live suggestions, and character selection with confirmation. |
 | **Shared state** | Razmerit, trait updates, entity updates, dice pools, and roll results broadcast via SSE. |
 | **Entity switcher** | Top-center pill buttons (Kael / Elena). Remote pools and results appear as chips beneath each character name. |
 
@@ -220,6 +220,7 @@ services:
 volumes:
   arango_data:    # persistent DB
   redis_data:     # persistent cache
+  api_data:       # persistent player data (players.json)
   # media/ is a bind mount from project root → /app/media in api and frontend containers
 ```
 
@@ -251,6 +252,9 @@ volumes:
 | Seed data as CLI command | Clean separation of concerns; no startup overhead on restarts |
 | Universe as entity type | First-class data with names, images; dropdowns show human-readable names |
 | Media upload with auto-persist | Instant feedback — upload a background image, it saves and appears immediately |
+| Player / Architect role split | Two roles with different UI surfaces. Architect sees GmPanel, location labels, overlay switcher, and arrange tools. Players see a minimal UI with only an effects toggle. Role stored server-side on Player model, synced on login. |
+| Effects toggle per-device | Players on lower-powered devices can disable CSS/particle effects for performance. Stored in `localStorage`, only shown on locations that have effects. |
+| JSON file player persistence | Simple file-backed store (`players.json`) with Docker volume. Survives restarts without ArangoDB dependency. Every mutation triggers synchronous `_save()`. |
 
 ## Next
 

@@ -98,6 +98,11 @@ aliases:
 - [x] Media auto-conversion to WebP (88% size reduction)
 - [x] Touch drag-and-drop for dice picking
 - [x] Character sheet auto-closes on location change
+- [x] Player / Architect role split (server-side role, GmPanel gated, architect-only top-left UI)
+- [x] Player settings panel (↩ button — business-card name display, mode toggle, switch-player with live search, character selection with confirmation)
+- [x] Search-driven login (debounced partial-match suggestions, "New transverser" create option, narrative Transversal-themed messages)
+- [x] Player JSON persistence (`/app/data/players.json`, Docker volume, survives restarts)
+- [x] Effects toggle per-device (✨/🌑 in localStorage, only on locations with effects)
 - [ ] End-to-end playtest of a full scene
 
 ## Phase 5: Polish & Launch
@@ -133,6 +138,10 @@ aliases:
 | Image-relative coordinate system | All dot positions stored as image percentages; background pans to character position; dots move in lockstep with image — no parallax layers needed | 2026-06-05 |
 | Seamless portal travel | Pre-fetch destination nav data for exact arrival position; opaque portal curtain hides background switch; position lock prevents cross-frame animation | 2026-06-05 |
 | WebP media conversion | All uploads auto-converted to WebP (Pillow, quality 85); 88% size reduction on existing 232MB library | 2026-06-05 |
+| Player / Architect role split | Two roles, two UI surfaces. Architect sees GmPanel + location management tools; players see minimal UI. Role stored server-side, synced on login — not just a localStorage toggle. | 2026-06-06 |
+| JSON file player persistence | Simple file-backed store with Docker volume. Survives restarts without adding an ArangoDB collection. Every mutation triggers synchronous save. | 2026-06-06 |
+| Search-driven login with debounced suggestions | Players type their name; partial-match results appear as you type. "New transverser" option visible when no exact match exists — creation is discoverable without a separate button. | 2026-06-06 |
+| Effects toggle per-device in localStorage | Performance escape hatch for lower-powered devices. Only shown on locations that actually have effects set. No server round-trip needed. | 2026-06-06 |
 
 ## Next
 

@@ -406,6 +406,43 @@ Response: same shape as spend.
 
 **`POST /api/v1/players`** — find or create player by name. Returns player ID for localStorage.
 
+Request: `{"name": "Kael"}`
+
+Response:
+```json
+{
+  "id": "player-a1b2c3",
+  "name": "Kael",
+  "entity_ids": ["kael-1"],
+  "role": "player",
+  "found": true
+}
+```
+
+**`GET /api/v1/players`** — list all players, or search by partial name.
+
+`GET /api/v1/players?q=dav` → returns all players whose names contain "dav" (case-insensitive).
+
+Response: `[{"id": "...", "name": "dave", "entity_ids": [...], "role": "player"}, ...]`
+
+**`GET /api/v1/players/{player_id}`** — get a single player by ID.
+
+**`PATCH /api/v1/players/{player_id}/role`** — set player role.
+
+Request: `{"role": "architect"}`
+
+Response: `{"player_id": "...", "role": "architect", "updated": true}`
+
+Valid roles: `"player"`, `"architect"`. The role controls which UI elements are visible (architect sees location labels, overlay switcher, arrange tools, and the GmPanel).
+
+**`POST /api/v1/players/{player_id}/claim/{entity_id}`** — claim an entity (adds to player's entity_ids).
+
+**`POST /api/v1/players/{player_id}/release/{entity_id}`** — release an entity.
+
+### Player Persistence
+
+Players are stored in a JSON file at `/app/data/players.json` (configurable via `PLAYERS_FILE` env var). The API container mounts an `api_data` Docker volume at `/app/data` for persistence across restarts. Every mutation (create, claim, release, set_role) triggers a synchronous `_save()`.
+
 ---
 
 ## SSE Stream
