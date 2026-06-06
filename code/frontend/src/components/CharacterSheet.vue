@@ -17,10 +17,10 @@
       <div v-if="traitSets.length" class="trait-sets">
         <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
           <h4 @click="toggleSet(ts.name)" class="set-header">
-            <span class="set-caret">{{ expandedSets.has(ts.name) ? '▾' : '▸' }}</span>
+            <span class="set-caret">{{ expandedSet === ts.name ? '▾' : '▸' }}</span>
             {{ ts.name }}
           </h4>
-          <div v-show="expandedSets.has(ts.name)" class="set-body">
+          <div v-show="expandedSet === ts.name" class="set-body">
             <div v-for="t in ts.traits" :key="t.name" class="trait-row" :class="{ ego: t.ego }" @click="onTraitClick(t)">
               <div class="trait-left">
                 <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
@@ -40,6 +40,7 @@
                 >{{ sfxId.replace('sfx-', '') }}</button>
               </div>
             </div>
+            </div> <!-- .set-body -->
           </div>
         </div>
       </div>
@@ -69,7 +70,11 @@
         </div>
         <div v-if="traitSets.length" class="trait-sets">
           <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
-            <h4>{{ ts.name }}</h4>
+            <h4 @click="toggleSet(ts.name)" class="set-header">
+              <span class="set-caret">{{ expandedSet === ts.name ? '▾' : '▸' }}</span>
+              {{ ts.name }}
+            </h4>
+            <div v-show="expandedSet === ts.name" class="set-body">
             <div v-for="t in ts.traits" :key="t.name" class="trait-row" :class="{ ego: t.ego }" @click="onTraitClick(t)">
               <div class="trait-left">
                 <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
@@ -89,6 +94,7 @@
                 >{{ sfxId.replace('sfx-', '') }}</button>
               </div>
             </div>
+            </div> <!-- .set-body -->
           </div>
         </div>
         <div v-else class="empty">No traits configured</div>
@@ -123,14 +129,11 @@ const open = ref(false)
 const entity = ref(null)
 const traitSets = ref([])
 
-// Accordion state — all collapsed by default
-const expandedSets = ref(new Set())
+// Accordion state — one set expanded at a time
+const expandedSet = ref(null)
 
 function toggleSet(name) {
-  const s = new Set(expandedSets.value)
-  if (s.has(name)) s.delete(name)
-  else s.add(name)
-  expandedSets.value = s
+  expandedSet.value = expandedSet.value === name ? null : name
 }
 
 // SFX usage tracking — reset per dice pool cycle
