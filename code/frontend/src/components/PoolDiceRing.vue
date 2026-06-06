@@ -11,15 +11,17 @@
       class="pool-die-item"
       :style="{ transform: 'translate(' + d.tx.toFixed(0) + 'px, ' + d.ty.toFixed(0) + 'px)' }"
     >
+      <!-- Adding: d is a die-type string like "d8" -->
       <DieIcon
         v-if="phase === 'adding'"
-        :die="typeof d.die === 'string' ? d.die : d.die.die || d.die"
+        :die="d.die"
         :result="null"
       />
+      <!-- Picking: d is { die, result, source, kept? } -->
       <DieIcon
         v-else-if="phase === 'picking'"
         :die="d.die.die || d.die"
-        :result="d.die.result"
+        :result="d.die.result != null ? d.die.result : d.result"
         :class="{ 'kept-die': d.die.kept, 'unused-die': !d.die.kept }"
       />
     </span>

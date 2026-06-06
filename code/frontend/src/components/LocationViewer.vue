@@ -75,7 +75,7 @@
     />
     <!-- Pool dice ring around occupant dot -->
     <PoolDiceRing
-      v-if="!travelAnim.active && showElements && poolDiceFor(o.id).length > 0"
+      v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || (poolPhaseFor(o.id) === 'resolved' && remoteResults[o.id]))"
       :dice="poolDiceFor(o.id)"
       :phase="poolPhaseFor(o.id)"
       :cx="parallaxX(o.map_x ?? occupantX(i, o))"
@@ -116,7 +116,7 @@
       @drag-start="(e) => onSelfDragStart(e)"
     />
     <PoolDiceRing
-      v-if="!travelAnim.active && showElements && poolDiceFor(entityId).length > 0"
+      v-if="!travelAnim.active && showElements && (poolDiceFor(entityId).length > 0 || (poolPhaseFor(entityId) === 'resolved' && remoteResults[entityId]))"
       :dice="poolDiceFor(entityId)"
       :phase="poolPhaseFor(entityId)"
       :cx="selfX"
