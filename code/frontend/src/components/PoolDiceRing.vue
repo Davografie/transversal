@@ -17,12 +17,11 @@
         :die="d.die"
         :result="null"
       />
-      <!-- Picking: d is { die, result, source, kept? } -->
+      <!-- Picking: d is { die, result, source } — no kept/unused dimming for remote view -->
       <DieIcon
         v-else-if="phase === 'picking'"
         :die="d.die.die || d.die"
         :result="d.die.result != null ? d.die.result : d.result"
-        :class="{ 'kept-die': d.die.kept, 'unused-die': !d.die.kept }"
       />
     </span>
 
