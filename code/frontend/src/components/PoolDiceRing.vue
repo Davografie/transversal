@@ -108,20 +108,15 @@ const positionedEffectDice = computed(() => {
 }
 .resolved-total {
   z-index: 23;
-  background: rgba(30,30,30,0.85);
   color: #fff;
-  font-size: 1rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  min-width: 28px;
-  height: 28px;
-  line-height: 28px;
-  margin-left: -14px;
-  margin-top: -14px;
   text-align: center;
-  border-radius: 14px;
-  padding: 0 6px;
-  box-shadow: 0 0 6px rgba(0,0,0,0.5);
-  transform-origin: 0 0;
+  text-shadow:
+    0 0 4px rgba(0,0,0,0.9),
+    0 0 8px rgba(0,0,0,0.7),
+    0 1px 2px rgba(0,0,0,0.8);
+  pointer-events: none;
 }
 .kept-die {
   filter: brightness(1.25);
