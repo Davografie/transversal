@@ -314,6 +314,23 @@ Supports `reverse: true` in context for deactivating SFXs and refunding costs.
 
 ### Location Navigation
 
+**`GET /api/v1/locations/tree`**
+
+Returns the full location hierarchy as a nested tree from super edges.
+
+```json
+[
+  {
+    "id": "loc-40642106",
+    "name": "Valley of Ascension",
+    "universe": "three_realms",
+    "children": [
+      { "id": "loc-40646134", "name": "Verdant Dominion", "universe": "three_realms", "children": [...] }
+    ]
+  }
+]
+```
+
 **`GET /api/v1/locations/{location_id}/navigate`**
 
 Returns parent (up), children (down), transversal destinations (lateral), zones, and occupants.
