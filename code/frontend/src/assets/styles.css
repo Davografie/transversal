@@ -415,10 +415,6 @@ input:focus, select:focus {
 
 /* Embedded character sheet — top of wrapper */
 .embedded-sheet {
-  background: var(--bg-panel);
-  backdrop-filter: blur(12px);
-  border-radius: var(--radius) var(--radius) 0 0;
-  padding: 12px 16px;
   max-height: 35vh;
   overflow-y: auto;
   flex-shrink: 0;
