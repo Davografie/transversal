@@ -150,7 +150,7 @@
 </template>
 
 <script setup>
-import { ref, useTemplateRef, watch, computed, nextTick } from 'vue'
+import { ref, useTemplateRef, watch, computed, nextTick, onMounted } from 'vue'
 import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
@@ -545,8 +545,9 @@ function onWrapperTouchEnd() {
 
 function openPanel() {
   hoverOpen.value = true
+  // Clear inline transform so .open class translateY(0) takes over
+  if (wrapperEl.value) wrapperEl.value.style.transform = ''
   if (sheetTimer) clearTimeout(sheetTimer)
-  // Sheet appears after slide-up transition completes
   sheetTimer = setTimeout(() => { sheetVisible.value = true }, 300)
 }
 
@@ -555,6 +556,14 @@ function closePanel() {
   sheetVisible.value = false
   if (diceRef.value) diceRef.value.panelOpen = false
   if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
+  // Set peek position after DOM updates
+  nextTick(() => syncClosedPosition())
+}
+
+function syncClosedPosition() {
+  if (!wrapperEl.value) return
+  const h = wrapperEl.value.offsetHeight
+  wrapperEl.value.style.transform = `translateX(-50%) translateY(${h - 56}px)`
 }
 
 function onPanelOpen(v) {
@@ -569,6 +578,15 @@ function onWrapperEnter() {
 function onWrapperLeave() {
   closePanel()
 }
+
+onMounted(() => {
+  syncClosedPosition()
+})
+
+// Re-sync closed position when sheet visibility changes while wrapper is closed
+watch(sheetVisible, () => {
+  if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+})
 
 function onRolled() {
   sheetRef.value?.resetSfxCounts()
