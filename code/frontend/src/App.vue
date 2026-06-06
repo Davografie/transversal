@@ -146,6 +146,7 @@
     :overlay="locationOverlay"
     :gm-mode="gmMode"
     :remote-pools="remotePools"
+    :remote-results="remoteResults"
     @moved="onMoved"
   />
   <div v-if="wrapperOpen" class="panel-backdrop" @click="closePanel" />

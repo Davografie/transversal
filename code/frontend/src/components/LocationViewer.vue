@@ -73,12 +73,15 @@
       @overlay-click="onExpandedClick('occupant', o)"
       @drag-start="(e) => onOccupantDragStart(e, o, i)"
     />
-    <!-- Pool dice badge near occupant dot -->
-    <span
-      v-if="!travelAnim.active && showElements && poolDiceCount(o.id) > 0"
-      class="pool-badge fade-in"
-      :style="parallaxedStyle(poolBadgeX(o), poolBadgeY(o))"
-    >{{ poolDiceCount(o.id) }}</span>
+    <!-- Pool dice ring around occupant dot -->
+    <PoolDiceRing
+      v-if="!travelAnim.active && showElements && poolDiceFor(o.id).length > 0"
+      :dice="poolDiceFor(o.id)"
+      :phase="poolPhaseFor(o.id)"
+      :cx="parallaxX(o.map_x ?? occupantX(i, o))"
+      :cy="parallaxY(o.map_y ?? occupantY(i, o))"
+      :resolved="remoteResults[o.id] || null"
+    />
     </template>
 
     <!-- Navigation dots -->
@@ -112,6 +115,14 @@
       title="Drag to explore"
       @drag-start="(e) => onSelfDragStart(e)"
     />
+    <PoolDiceRing
+      v-if="!travelAnim.active && showElements && poolDiceFor(entityId).length > 0"
+      :dice="poolDiceFor(entityId)"
+      :phase="poolPhaseFor(entityId)"
+      :cx="selfX"
+      :cy="selfY"
+      :resolved="remoteResults[entityId] || null"
+    />
 
     <!-- Travel expansion animation -->
     <div
@@ -132,6 +143,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import MapDot from './MapDot.vue'
+import PoolDiceRing from './PoolDiceRing.vue'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -143,6 +155,7 @@ const props = defineProps({
   overlay: { type: String, default: null },
   gmMode: { type: Boolean, default: false },
   remotePools: { type: Object, default: () => ({}) },  // entity_id → { dice: [...], player_id, phase }
+  remoteResults: { type: Object, default: () => ({}) },  // entity_id → { total, effect_die, rolls, ... }
 })
 
 const emit = defineEmits(['moved', 'update:editZones'])
@@ -587,9 +600,17 @@ function occupantInitials(name) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
-const poolDiceCount = (eid) => (props.remotePools[eid]?.dice || []).length
-const poolBadgeX = (o) => (o.map_x ?? 50) + (o.type === 'gmc' ? -4 : 4)
-const poolBadgeY = (o) => (o.map_y ?? 50) - 6
+const poolDiceFor = (eid) => {
+  const pool = props.remotePools[eid]
+  if (!pool) return []
+  // In adding phase, dice are die type strings
+  if (pool.phase === 'adding') return (pool.dice || []).map(d => typeof d === 'string' ? d : d.die || d)
+  // In picking/resolved, dice are result objects
+  const results = props.remoteResults[eid]
+  if (pool.phase === 'picking' && results?.rolls) return results.rolls
+  return []
+}
+const poolPhaseFor = (eid) => props.remotePools[eid]?.phase || 'adding'
 
 // ── Occupant drag ──────────────────────────────────
 
