@@ -510,23 +510,24 @@ const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
 let touchStartY = 0
 let touchMoved = false
 let touchShouldClose = false
+let touchOnHandle = false
 
 function onWrapperTouchStart(e) {
   touchStartY = e.touches[0].clientY
   touchMoved = false
   touchShouldClose = false
+  // Only consider it a "handle tap" if touch starts on the drag handle area
+  touchOnHandle = e.target.closest('.drag-handle') !== null
 }
 
 function onWrapperTouchMove(e) {
   if (!e.touches.length) return
   const dy = e.touches[0].clientY - touchStartY
   if (Math.abs(dy) > 10) touchMoved = true
-  // Swipe up to open
   if (dy < -40 && !wrapperOpen.value) {
     openPanel()
     touchMoved = true
   }
-  // Mark for close on touchend (don't close during active touch)
   if (dy > 40 && wrapperOpen.value) {
     touchShouldClose = true
   }
@@ -537,8 +538,8 @@ function onWrapperTouchEnd() {
     closePanel()
     return
   }
-  // If it was a tap (not a swipe), toggle
-  if (!touchMoved && wrapperEl.value) {
+  // Only toggle on tap if it was on the drag handle and wasn't a swipe
+  if (!touchMoved && touchOnHandle && wrapperEl.value) {
     wrapperOpen.value ? closePanel() : openPanel()
   }
 }
