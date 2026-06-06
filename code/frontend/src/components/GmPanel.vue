@@ -116,7 +116,7 @@
 
         <!-- Inspected entity panel (Play mode) -->
         <div v-if="inspectedEntity && !editing" class="edit-panel">
-          <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded />
+          <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded :gm-mode="true" />
         </div>
 
         <!-- Edit panel (shared across modes) -->
