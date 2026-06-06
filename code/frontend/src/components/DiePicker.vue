@@ -13,7 +13,7 @@
 </template>
 
 <script setup>
-import DieIcon from '../DieIcon.vue'
+import DieIcon from '@/components/DieIcon.vue'
 
 const props = defineProps({
   modelValue: { type: [String, Array], default: '' },

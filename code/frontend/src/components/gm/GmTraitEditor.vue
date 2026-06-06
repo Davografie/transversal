@@ -30,7 +30,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import DiePicker from '../DiePicker.vue'
+import DiePicker from '@/components/DiePicker.vue'
 
 const props = defineProps({
   traits: { type: Array, default: () => [] },

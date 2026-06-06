@@ -126,12 +126,12 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useApi } from '../composables/useApi.js'
-import CharacterSheet from './CharacterSheet.vue'
-import GmSceneSummary from './gm/GmSceneSummary.vue'
-import GmLocationTree from './gm/GmLocationTree.vue'
-import GmEntityForm from './gm/GmEntityForm.vue'
-import GmTraitEditor from './gm/GmTraitEditor.vue'
+import { useApi } from '@/composables/useApi.js'
+import CharacterSheet from '@/components/CharacterSheet.vue'
+import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
+import GmLocationTree from '@/components/gm/GmLocationTree.vue'
+import GmEntityForm from '@/components/gm/GmEntityForm.vue'
+import GmTraitEditor from '@/components/gm/GmTraitEditor.vue'
 
 const { error, graphql } = useApi()
 const loading = ref(false)
