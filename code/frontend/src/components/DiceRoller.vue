@@ -1,6 +1,6 @@
 <template>
   <div v-if="panelOpen" class="dice-backdrop" @click="dismissPanel" @touchstart="dismissPanel" />
-  <div class="dice-roller panel" :class="{ open: panelOpen }">
+  <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart="onHandleTouchStart" @touchend="onHandleTouchEnd" @click.self="panelOpen = !panelOpen">
     <div class="dice-pool" v-if="isAdding()">
       <div
         v-for="(die, i) in pool"
@@ -106,13 +106,6 @@
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
-
-    <div
-      class="phase-bar drag-handle"
-      @click.stop="panelOpen = !panelOpen"
-      @touchstart="onHandleTouchStart"
-      @touchend="onHandleTouchEnd"
-    ></div>
   </div>
 </template>
 
