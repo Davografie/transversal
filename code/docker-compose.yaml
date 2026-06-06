@@ -27,6 +27,7 @@ services:
       - ./api/src:/app/src
       - ./api/tests:/app/tests
       - ../media:/app/media
+      - api_data:/app/data
 
   arango:
     image: arangodb:3.12
