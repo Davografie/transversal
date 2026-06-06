@@ -80,9 +80,19 @@
                   v-for="node in flatTree"
                   :key="node.kind + '-' + node.id"
                   class="entity-row tree-row"
-                  :class="{ selected: selectedId === node.id, occupant: node.kind === 'occupant' }"
+                  :class="{ selected: selectedId === node.id, occupant: node.kind === 'occupant', 'drag-over': dragOverId === node.id }"
                   :style="{ paddingLeft: (12 + node.depth * 20) + 'px' }"
-                  @click="node.kind === 'location' ? toggleEntity({ id: node.id, type: 'LOCATION' }, true) : toggleEntity(node.entity)"
+                  :data-node-id="node.id"
+                  :data-node-kind="node.kind"
+                  :draggable="node.kind === 'occupant'"
+                  @dragstart="onDragStart($event, node)"
+                  @dragover.prevent="onDragOver($event, node)"
+                  @dragleave="onDragLeave(node)"
+                  @drop.prevent="onDrop($event, node)"
+                  @touchstart="onTouchStart($event, node)"
+                  @touchmove="onTouchMove"
+                  @touchend="onTouchEnd"
+                  @click="preventNextClick ? preventNextClick = false : (node.kind === 'location' ? toggleEntity({ id: node.id, type: 'LOCATION' }, true) : toggleEntity(node.entity))"
                 >
                   <span v-if="node.hasChildren" class="tree-toggle" @click.stop="toggleTreeNode(node.id)">
                     {{ (expandedNodes[node.id] || node.depth === 0 || !!filterQuery) ? '▾' : '▸' }}
@@ -232,7 +242,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import CharacterSheet from './CharacterSheet.vue'
 
@@ -250,6 +260,135 @@ const open = ref(false)
 const mode = ref('play')
 const viewSceneSummary = ref(true)
 const inspectedEntity = ref(null)
+const dragOverId = ref(null)
+
+// ── Drag-and-drop to move occupants between locations ──
+
+// Touch drag state
+const touchDrag = ref(null)  // { entityId, ghost, startX, startY, engaged }
+const preventNextClick = ref(false)
+
+function onDragStart(e, node) {
+  if (node.kind !== 'occupant') return
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', node.id)
+}
+
+function onDragOver(e, node) {
+  if (node.kind !== 'location') return
+  dragOverId.value = node.id
+}
+
+function onDragLeave(node) {
+  if (dragOverId.value === node.id) dragOverId.value = null
+}
+
+async function doMoveEntity(entityId, targetLocationId) {
+  await graphql(
+    `mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation } }`,
+    { input: { id: entityId, currentLocation: targetLocationId } }
+  )
+  fetchEntities()
+}
+
+async function onDrop(e, node) {
+  dragOverId.value = null
+  if (node.kind !== 'location') return
+  const entityId = e.dataTransfer.getData('text/plain')
+  if (!entityId) return
+  doMoveEntity(entityId, node.id)
+}
+
+// ── Touch drag-and-drop ──────────────────────────
+
+function onTouchStart(e, node) {
+  if (node.kind !== 'occupant') return
+  const touch = e.touches[0]
+  const el = e.currentTarget
+  touchDrag.value = { entityId: node.id, el, startX: touch.clientX, startY: touch.clientY, engaged: false, ghost: null }
+  // Long press timer
+  touchDrag.value._timer = setTimeout(() => engageTouchDrag(touch), 400)
+}
+
+function engageTouchDrag(touch) {
+  if (!touchDrag.value) return
+  touchDrag.value.engaged = true
+  const el = touchDrag.value.el
+  const ghost = el.cloneNode(true)
+  ghost.style.position = 'fixed'
+  ghost.style.left = (touch.clientX - 20) + 'px'
+  ghost.style.top = (touch.clientY - 14) + 'px'
+  ghost.style.zIndex = '100'
+  ghost.style.pointerEvents = 'none'
+  ghost.style.opacity = '0.8'
+  ghost.style.width = el.offsetWidth + 'px'
+  document.body.appendChild(ghost)
+  touchDrag.value.ghost = ghost
+}
+
+function onTouchMove(e) {
+  if (!touchDrag.value || !touchDrag.value.engaged) {
+    // If moved too far before engaging, cancel
+    if (touchDrag.value && !touchDrag.value.engaged) {
+      const t = e.touches[0]
+      if (Math.abs(t.clientX - touchDrag.value.startX) > 5 || Math.abs(t.clientY - touchDrag.value.startY) > 5) {
+        cancelTouchDrag()
+      }
+    }
+    return
+  }
+  const touch = e.touches[0]
+  const ghost = touchDrag.value.ghost
+  if (ghost) {
+    ghost.style.left = (touch.clientX - 20) + 'px'
+    ghost.style.top = (touch.clientY - 14) + 'px'
+  }
+  // Find drop target via elementFromPoint
+  const target = document.elementFromPoint(touch.clientX, touch.clientY)
+  const row = target?.closest('.tree-row')
+  if (row) {
+    // Extract node id from the v-for key or data attribute — easiest: check class
+    // We need the location id. Since we iterate flatTree, we can scan.
+    // Simpler: just highlight based on the element under the touch
+    const nodeId = findTreeNodeId(row)
+    dragOverId.value = nodeId
+  } else {
+    dragOverId.value = null
+  }
+}
+
+function findTreeNodeId(el) {
+  // Only return location node IDs (drop targets)
+  if (el.dataset.nodeKind !== 'location') return null
+  return el.dataset.nodeId || null
+}
+
+function onTouchEnd(e) {
+  if (!touchDrag.value) return
+  clearTimeout(touchDrag.value._timer)
+  if (touchDrag.value.engaged) {
+    preventNextClick.value = true
+    setTimeout(() => { preventNextClick.value = false }, 100)
+    const touch = e.changedTouches[0]
+    const target = document.elementFromPoint(touch.clientX, touch.clientY)
+    const row = target?.closest('.tree-row')
+    const nodeId = row ? findTreeNodeId(row) : null
+    if (nodeId) {
+      doMoveEntity(touchDrag.value.entityId, nodeId)
+    }
+    if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
+  }
+  dragOverId.value = null
+  touchDrag.value = null
+}
+
+function cancelTouchDrag() {
+  if (!touchDrag.value) return
+  clearTimeout(touchDrag.value._timer)
+  if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
+  dragOverId.value = null
+  touchDrag.value = null
+}
 
 function closeSecondary() {
   editing.value = false
@@ -595,7 +734,25 @@ watch(open, (val) => {
   if (val) { mode.value = 'play'; fetchEntities(); fetchLocationTree() }
 })
 
-onMounted(() => { fetchEntities(); fetchLocationTree() })
+onMounted(() => {
+  fetchEntities()
+  fetchLocationTree()
+  document.addEventListener('touchmove', onDocTouchMove, { passive: false })
+  document.addEventListener('touchend', onDocTouchEnd)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('touchmove', onDocTouchMove)
+  document.removeEventListener('touchend', onDocTouchEnd)
+})
+
+function onDocTouchMove(e) {
+  onTouchMove(e)
+}
+
+function onDocTouchEnd(e) {
+  onTouchEnd(e)
+}
 </script>
 
 <style scoped>
@@ -753,8 +910,14 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 .tree-toggle:hover { color: var(--text); }
 .tree-toggle.leaf { visibility: hidden; }
 .tree-toggle.occupant { font-size: 8px; color: var(--text-dim); }
-.tree-row.occupant { font-size: 12px; background: rgba(255,255,255,0.02); }
+.tree-row.occupant { font-size: 12px; background: rgba(255,255,255,0.02); cursor: grab; touch-action: none; }
 .tree-row.occupant:hover { background: rgba(255,255,255,0.05); }
+.tree-row.occupant:active { cursor: grabbing; }
+
+.tree-row.drag-over {
+  background: rgba(64,136,212,0.15);
+  border: 1px dashed var(--accent);
+}
 
 .tree-enter-active,
 .tree-leave-active {
