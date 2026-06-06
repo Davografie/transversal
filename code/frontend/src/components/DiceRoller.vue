@@ -1,6 +1,6 @@
 <template>
   <div v-if="panelOpen" class="dice-backdrop" @click="dismissPanel" @touchstart="dismissPanel" />
-  <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart.stop="onRollerTouchStart" @touchmove.stop @touchend.stop="onRollerTouchEnd" @click.self="panelOpen = !panelOpen">
+  <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd" @click.self="panelOpen = !panelOpen">
     <div class="dice-pool" v-if="isAdding()">
       <div
         v-for="(die, i) in pool"
@@ -141,7 +141,9 @@ function onRollerTouchStart(e) {
 function onRollerTouchEnd(e) {
   const dy = e.changedTouches[0].clientY - rollerTouchY
   if (dy > 40 && panelOpen.value) {
-    panelOpen.value = false
+    panelOpen.value = false        // swipe down → close
+  } else if (dy < -40 && !panelOpen.value) {
+    panelOpen.value = true         // swipe up → open
   }
 }
 

@@ -128,7 +128,7 @@
     :gm-mode="gmMode"
     @moved="onMoved"
   />
-  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave" @touchstart="onWrapperTouchStart" @touchmove="onWrapperTouchMove" @touchend="onWrapperTouchEnd">
+  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <CharacterSheet
         v-show="sheetVisible && !gmMode"
         ref="sheetRef"
@@ -505,30 +505,6 @@ let sheetTimer = null
 
 const wrapperEl = useTemplateRef('wrapperEl')
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
-
-// Touch/swipe state
-let touchStartY = 0
-let touchMoved = false
-
-function onWrapperTouchStart(e) {
-  touchStartY = e.touches[0].clientY
-  touchMoved = false
-}
-
-function onWrapperTouchMove(e) {
-  if (!e.touches.length) return
-  const dy = e.touches[0].clientY - touchStartY
-  if (Math.abs(dy) > 10) touchMoved = true
-  // Swipe up to open from closed state
-  if (dy < -40 && !wrapperOpen.value) {
-    openPanel()
-    touchMoved = true
-  }
-}
-
-function onWrapperTouchEnd() {
-  // No tap toggle — drag handle handles its own taps
-}
 
 function openPanel() {
   hoverOpen.value = true
