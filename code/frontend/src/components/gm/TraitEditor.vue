@@ -78,8 +78,8 @@ function onDiePicked(die) {
 function emitAdd() {
   const t = props.availableTraits.find(t => t.id === newTraitId.value)
   emit('add-trait', {
-    trait_id: newTraitId.value,
-    traitset_id: t?.traitsetId || '',
+    traitId: newTraitId.value,
+    traitsetId: t?.traitsetId || '',
     dice: rating.value.map(d => d.toUpperCase()),
     statement: statement.value,
   })
