@@ -16,24 +16,29 @@
       </div>
       <div v-if="traitSets.length" class="trait-sets">
         <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
-          <h4>{{ ts.name }}</h4>
-          <div v-for="t in ts.traits" :key="t.name" class="trait-row" :class="{ ego: t.ego }" @click="onTraitClick(t)">
-            <div class="trait-left">
-              <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
-              <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
-            </div>
-            <div class="trait-right">
-              <span class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
-              <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
-              <button
-                v-for="sfxId in t.sfxIds"
-                :key="sfxId"
-                class="sfx-btn"
-                :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
-                :disabled="sfxUsed(sfxId) && !sfxActive(sfxId)"
-                @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
-                :title="sfxActive(sfxId) ? `Deactivate ${sfxId}` : `Activate ${sfxId}`"
-              >{{ sfxId.replace('sfx-', '') }}</button>
+          <h4 @click="toggleSet(ts.name)" class="set-header">
+            <span class="set-caret">{{ expandedSets.has(ts.name) ? '▾' : '▸' }}</span>
+            {{ ts.name }}
+          </h4>
+          <div v-show="expandedSets.has(ts.name)" class="set-body">
+            <div v-for="t in ts.traits" :key="t.name" class="trait-row" :class="{ ego: t.ego }" @click="onTraitClick(t)">
+              <div class="trait-left">
+                <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
+                <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
+              </div>
+              <div class="trait-right">
+                <span class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
+                <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
+                <button
+                  v-for="sfxId in t.sfxIds"
+                  :key="sfxId"
+                  class="sfx-btn"
+                  :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
+                  :disabled="sfxUsed(sfxId) && !sfxActive(sfxId)"
+                  @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
+                  :title="sfxActive(sfxId) ? `Deactivate ${sfxId}` : `Activate ${sfxId}`"
+                >{{ sfxId.replace('sfx-', '') }}</button>
+              </div>
             </div>
           </div>
         </div>
@@ -117,6 +122,16 @@ const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDi
 const open = ref(false)
 const entity = ref(null)
 const traitSets = ref([])
+
+// Accordion state — all collapsed by default
+const expandedSets = ref(new Set())
+
+function toggleSet(name) {
+  const s = new Set(expandedSets.value)
+  if (s.has(name)) s.delete(name)
+  else s.add(name)
+  expandedSets.value = s
+}
 
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})
@@ -380,6 +395,30 @@ watch(() => props.universe, fetchEntity)
   backdrop-filter: blur(12px);
   border-radius: var(--radius);
   padding: 12px 16px;
+}
+
+.set-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0 4px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  transition: color 0.15s;
+}
+.set-header:hover {
+  color: var(--text);
+}
+.set-caret {
+  font-size: 10px;
+  width: 12px;
+}
+.set-body {
+  padding-left: 4px;
 }
 
 .header {

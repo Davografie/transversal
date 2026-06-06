@@ -110,9 +110,7 @@
     <div
       class="phase-bar drag-handle"
       @click.stop="panelOpen = !panelOpen"
-    >
-      <span class="phase-label">{{ phase }} {{ isPicking() ? `· ${keepCount}t ${effectCount}e` : '' }}</span>
-    </div>
+    ></div>
   </div>
 </template>
 

@@ -416,8 +416,6 @@ input:focus, select:focus {
 
 /* Embedded character sheet — top of wrapper */
 .embedded-sheet {
-  max-height: 35vh;
-  overflow-y: auto;
   flex-shrink: 0;
   transition: opacity 0.25s ease;
 }
