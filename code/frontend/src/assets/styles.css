@@ -347,6 +347,31 @@ input:focus, select:focus {
   border-color: var(--accent);
   color: #fff;
 }
+.char-add-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.char-name-input {
+  width: 80px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.char-create-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--success);
+  color: #0a0a0f;
+}
 /* Name search suggestions */
 .search-wrapper {
   position: relative;
