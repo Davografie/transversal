@@ -271,7 +271,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -524,6 +524,15 @@ function clearResult() {
   selection.total = []
   selection.effect = []
   setPhase(Phase.ADDING)
+}
+
+function clearPool() {
+  pool.splice(0, pool.length)
+  result.value = null
+  selection.total = []
+  selection.effect = []
+  setPhase(Phase.ADDING)
+  notifyPool()
 }
 
 onMounted(() => {

@@ -50,11 +50,12 @@
     :background-image="locationBgImage"
     :entity-id="entityId"
     :edit-zones="editZones"
+    :overlay="locationOverlay"
     @moved="onMoved"
   />
   <CharacterSheet ref="sheetRef" :entity-id="entityId" :universe="universe" :phase="phase" @add-to-pool="(d) => diceRef?.addFromSheet(d)" @remove-from-pool="(s) => diceRef?.removeBySource(s)" @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)" @split-die="(d) => diceRef?.splitDie(d)" @sfx-toggled="onSfxToggled" />
   <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" />
-  <GmPanel :universe="universe" v-model:edit-zones="editZones" />
+  <GmPanel :universe="universe" v-model:edit-zones="editZones" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" />
 </template>
 
 <script setup>
@@ -71,6 +72,7 @@ const universe = ref('earth')
 const currentLocationId = ref('loc-krasnoyarsk')
 const locationName = ref('Krasnoyarsk-45')
 const locationBgImage = ref('')
+const locationOverlay = ref(null)
 
 // Fetch entity location on mount so refreshes show the real location
 async function initLocation() {
@@ -104,11 +106,12 @@ async function fetchLocationBg() {
   try {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { backgroundImage } }`, variables: { id: currentLocationId.value } })
+      body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { backgroundImage overlay } }`, variables: { id: currentLocationId.value } })
     })
     const json = await r.json()
     locationBgImage.value = json.data?.entity?.backgroundImage || ''
-  } catch { locationBgImage.value = '' }
+    locationOverlay.value = json.data?.entity?.overlay || null
+  } catch { locationBgImage.value = ''; locationOverlay.value = null }
 }
 
 function onMoved(data) {
@@ -313,5 +316,32 @@ function onSfxToggled(e) {
   if (e.sfxId === 'sfx-spray-n-pray') {
     effectCount.value = e.active ? 2 : 1
   }
+}
+
+// ── GM shortcuts ─────────────────────────────────
+
+function onNextBeat() {
+  // Clear local pool
+  diceRef.value?.clearPool()
+  // Clear remote pools and results
+  remotePools.value = {}
+  remoteResults.value = {}
+  // Broadcast empty pool to session
+  if (sessionId.value !== 'session-default') {
+    publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, dice: [], phase: 'adding' })
+  }
+}
+
+function onStartSession() {
+  // Placeholder — could call session creation API
+  console.log('GM: session started')
+}
+
+function onEndSession() {
+  // Placeholder — could trigger effects engine tick_session
+  // For now just clear remote state
+  remotePools.value = {}
+  remoteResults.value = {}
+  console.log('GM: session ended')
 }
 </script>

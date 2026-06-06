@@ -41,7 +41,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         id=e.id, type=e.type, name=e.name, razmerit=e.razmerit,
         current_universe=e.current_universe, current_location=e.current_location,
         hidden=e.hidden, known_to=e.known_to,
-        background_image=e.background_image,
+        background_image=e.background_image, overlay=e.overlay,
         zones=[Zone(name=z.name, background_image=z.background_image, x=z.x, y=z.y) for z in e.zones],
         map_x=e.map_x, map_y=e.map_y,
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
@@ -223,6 +223,8 @@ class Mutation:
             e.background_image = input.background_image
         if input.owned_by is not None:
             e.owned_by = input.owned_by
+        if input.overlay is not None:
+            e.overlay = input.overlay if input.overlay != "" else None
         if input.nav_positions is not None:
             e.nav_positions = json.loads(input.nav_positions)
         updated = _em(info).update(e)

@@ -345,6 +345,56 @@ class EntityRepository:
 
     # ── Location Navigation ────────────────────────────
 
+    def location_tree(self) -> list[dict]:
+        """Return the full location hierarchy as a nested tree.
+
+        Root locations have no parent (no outbound 'super' edge).
+        Children are nested under their parent.
+        """
+        # Get all LOCATION entities
+        location_query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'location'
+            RETURN {{ id: e._key, name: e.name, current_universe: e.current_universe }}
+        """
+        locations = {doc["id"]: doc for doc in self.db.aql.execute(location_query)}
+
+        # Get all super relationships
+        rel_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'super'
+            RETURN {{ child: PARSE_IDENTIFIER(r._from).key, parent: PARSE_IDENTIFIER(r._to).key }}
+        """
+        # child → parent mapping
+        parent_of: dict[str, str] = {}
+        children_of: dict[str, list[str]] = {}
+        for rel in self.db.aql.execute(rel_query):
+            parent_of[rel["child"]] = rel["parent"]
+            children_of.setdefault(rel["parent"], []).append(rel["child"])
+
+        def build_node(loc_id: str) -> dict:
+            loc = locations.get(loc_id, {"id": loc_id, "name": loc_id, "current_universe": ""})
+            children = children_of.get(loc_id, [])
+            return {
+                "id": loc["id"],
+                "name": loc["name"],
+                "universe": loc.get("current_universe", ""),
+                "children": [build_node(c) for c in sorted(children)],
+            }
+
+        # Root locations: locations with no parent
+        roots = [lid for lid in locations if lid not in parent_of]
+
+        # Also include locations not in the locations dict (edge references)
+        for child_id in parent_of:
+            if child_id not in locations:
+                locations[child_id] = {"id": child_id, "name": child_id, "current_universe": ""}
+        for parent_id in children_of:
+            if parent_id not in locations:
+                locations[parent_id] = {"id": parent_id, "name": parent_id, "current_universe": ""}
+
+        return [build_node(r) for r in sorted(roots)]
+
     def navigate_from(self, location_id: str) -> dict:
         """Return navigation options from a location.
 

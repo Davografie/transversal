@@ -16,6 +16,12 @@ def _em():
     return EntityManager(repository=_repo())
 
 
+@router.get("/locations/tree")
+async def location_tree():
+    """Return the full location hierarchy as a nested tree."""
+    return _repo().location_tree()
+
+
 @router.get("/locations/{location_id}/navigate")
 async def navigate(location_id: str):
     """Return navigation options from a location.

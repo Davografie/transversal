@@ -292,6 +292,8 @@ class Entity(BaseModel):
     # Map positioning (percentage, per-location)
     map_x: Optional[float] = None
     map_y: Optional[float] = None
+    # Visual overlay preset
+    overlay: Optional[str] = None  # null, "mist", "fire", "rain", "snow", "sparkles", "fog"
     # Navigation dot positions
     nav_positions: dict = Field(default_factory=dict)  # e.g. {"parent": {"x": 90, "y": 15}}
     # Faction (conspyramid)
