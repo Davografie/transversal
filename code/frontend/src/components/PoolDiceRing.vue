@@ -110,17 +110,17 @@ const positionedEffectDice = computed(() => {
   z-index: 23;
   background: rgba(30,30,30,0.85);
   color: #fff;
-  font-size: 0.75rem;
+  font-size: 1rem;
   font-weight: 800;
-  min-width: 22px;
-  height: 22px;
-  line-height: 22px;
+  min-width: 28px;
+  height: 28px;
+  line-height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
   text-align: center;
-  border-radius: 11px;
+  border-radius: 14px;
   padding: 0 6px;
   box-shadow: 0 0 6px rgba(0,0,0,0.5);
-  margin-left: -11px;
-  margin-top: -11px;
   transform-origin: 0 0;
 }
 .kept-die {
