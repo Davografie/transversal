@@ -1,9 +1,13 @@
 <template>
+  <button class="gm-toggle" @click="open = !open">
+    {{ open ? '×' : '🛠' }}
+  </button>
+  <button
+    v-if="editing || creating || inspectedEntity"
+    class="gm-close-panel"
+    @click="closeSecondary"
+  >×</button>
   <div class="gm-panel panel" :class="{ open, 'has-editor': editing || creating || inspectedEntity }">
-    <button class="toggle" @click="open = !open">
-      {{ open ? '×' : '🛠' }}
-    </button>
-
     <div v-if="open" class="gm-content">
       <div v-if="loading" class="loading">Loading…</div>
       <div v-else-if="error" class="error">{{ error }}</div>
@@ -71,23 +75,25 @@
               <button class="create-btn" @click="startCreate">+ New Entity</button>
 
               <!-- Location tree -->
-              <div
-                v-for="node in flatTree"
-                :key="node.kind + '-' + node.id"
-                class="entity-row tree-row"
-                :class="{ selected: selectedId === node.id, occupant: node.kind === 'occupant' }"
-                :style="{ paddingLeft: (12 + node.depth * 20) + 'px' }"
-                @click="node.kind === 'location' ? toggleEntity({ id: node.id, type: 'LOCATION' }, true) : toggleEntity(node.entity)"
-              >
-                <span v-if="node.hasChildren" class="tree-toggle" @click.stop="toggleTreeNode(node.id)">
-                  {{ (expandedNodes[node.id] || node.depth === 0 || !!filterQuery) ? '▾' : '▸' }}
-                </span>
-                <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant' }"></span>
-                <span v-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
-                <span v-else class="entity-type-badge" :class="'type-' + node.entityType">{{ node.entityType === 'CHARACTER' ? 'PC' : node.entityType === 'GMC' ? 'GMC' : node.entityType }}</span>
-                <span class="entity-name">{{ node.name }}</span>
-                <span class="entity-universe" v-if="node.kind === 'location' && node.universe !== universe">{{ node.universe }}</span>
-              </div>
+              <TransitionGroup name="tree">
+                <div
+                  v-for="node in flatTree"
+                  :key="node.kind + '-' + node.id"
+                  class="entity-row tree-row"
+                  :class="{ selected: selectedId === node.id, occupant: node.kind === 'occupant' }"
+                  :style="{ paddingLeft: (12 + node.depth * 20) + 'px' }"
+                  @click="node.kind === 'location' ? toggleEntity({ id: node.id, type: 'LOCATION' }, true) : toggleEntity(node.entity)"
+                >
+                  <span v-if="node.hasChildren" class="tree-toggle" @click.stop="toggleTreeNode(node.id)">
+                    {{ (expandedNodes[node.id] || node.depth === 0 || !!filterQuery) ? '▾' : '▸' }}
+                  </span>
+                  <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant' }"></span>
+                  <span v-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
+                  <span v-else class="entity-type-badge" :class="'type-' + node.entityType">{{ node.entityType === 'CHARACTER' ? 'PC' : node.entityType === 'GMC' ? 'GMC' : node.entityType }}</span>
+                  <span class="entity-name">{{ node.name }}</span>
+                  <span class="entity-universe" v-if="node.kind === 'location' && node.universe !== universe">{{ node.universe }}</span>
+                </div>
+              </TransitionGroup>
 
               <!-- Factions -->
               <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
@@ -109,23 +115,8 @@
         </template>
 
         <!-- Inspected entity panel (Play mode) -->
-        <div v-if="inspectedEntity && !editing" class="edit-panel inspect-panel">
-          <button @click="inspectedEntity = null">← Back</button>
-          <h3>{{ inspectedEntity.name }}</h3>
-          <div class="inspect-meta">
-            <span class="entity-type-badge" :class="'type-' + inspectedEntity.type">{{ inspectedEntity.type === 'GMC' ? 'GMC' : 'PC' }}</span>
-            <span v-if="inspectedEntity.currentUniverse !== universe" class="entity-universe">{{ inspectedEntity.currentUniverse }}</span>
-          </div>
-          <div class="inspect-raz">⚡ {{ inspectedEntity.razmerit }} razmerit</div>
-
-          <div v-if="inspectedEntity.traitSettings?.length" class="trait-list">
-            <div v-for="ts in inspectedEntity.traitSettings" :key="ts.id" class="trait-row">
-              <span class="trait-name">{{ ts.name }}</span>
-              <span class="trait-die" :class="'die-' + ts.dieType.toLowerCase()">{{ ts.dieType }}</span>
-              <span v-if="ts.ego" class="trait-ego">ego</span>
-            </div>
-          </div>
-          <div v-else class="empty">No traits</div>
+        <div v-if="inspectedEntity && !editing" class="edit-panel">
+          <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded />
         </div>
 
         <!-- Edit panel (shared across modes) -->
@@ -214,7 +205,7 @@
         </div>
 
         <!-- Create panel (shared across modes) -->
-        <div v-if="creating" class="edit-panel">
+        <div v-show="creating" class="edit-panel">
           <button @click="creating = false">← Back</button>
           <label>Name</label>
           <input v-model="createForm.name" autofocus />
@@ -243,8 +234,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi.js'
+import CharacterSheet from './CharacterSheet.vue'
 
-const { loading, error, graphql } = useApi()
+const { loading: listLoading, error, graphql } = useApi()
+const loading = ref(false)
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -258,22 +251,23 @@ const mode = ref('play')
 const viewSceneSummary = ref(true)
 const inspectedEntity = ref(null)
 
+function closeSecondary() {
+  editing.value = false
+  creating.value = false
+  selected.value = null
+  selectedId.value = null
+  inspectedEntity.value = null
+}
+
 function inspectEntity(id) {
   if (inspectedEntity.value?.id === id) {
     inspectedEntity.value = null
   } else {
-    const e = entities.value.find(en => en.id === id)
-    if (e) {
-      inspectedEntity.value = { ...e }
-      if (e.type === 'CHARACTER' || e.type === 'GMC') loadTraitsForEntity(e)
-    }
-  }
-}
-
-async function loadTraitsForEntity(e) {
-  const data = await graphql(`query($id: ID!) { entity(id: $id) { traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`, { id: e.id })
-  if (data?.entity?.traitSettings) {
-    inspectedEntity.value = { ...inspectedEntity.value, traitSettings: data.entity.traitSettings }
+    editing.value = false
+    creating.value = false
+    selected.value = null
+    selectedId.value = null
+    inspectedEntity.value = { id }
   }
 }
 const sessionActive = ref(false)
@@ -421,8 +415,10 @@ const ENTITY_QUERY = `
 `
 
 async function fetchEntities() {
+  loading.value = true
   const data = await graphql(ALL_ENTITIES, { type: null })
   if (data?.entities) entities.value = data.entities
+  loading.value = false
 }
 
 function toggleEntity(e, expandIfLocation = false) {
@@ -603,24 +599,41 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 </script>
 
 <style scoped>
+.gm-toggle {
+  position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 21;
+  width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; padding: 0;
+  background: var(--bg-panel); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.gm-close-panel {
+  position: fixed; top: 50%; right: 340px; transform: translateY(-50%); z-index: 22;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; padding: 0;
+  background: var(--bg-panel); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.15);
+  animation: fadeIn 0.15s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 .gm-panel {
-  position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 20;
-  width: 48px; max-width: 48px; height: 48px; padding: 8px;
-  transition: width 0.3s ease, max-width 0.3s ease, height 0.3s ease, padding 0.3s ease;
+  position: fixed; top: 50%; right: 38px; transform: translateY(-50%); z-index: 20;
+  width: 0; max-width: 0; max-height: 0; padding: 0;
+  border-radius: 12px;
+  transition: width 0.3s ease, max-width 0.3s ease, max-height 0.3s ease, padding 0.3s ease;
   overflow: hidden;
 }
 .gm-panel.open {
-  width: 320px; max-width: calc(100vw - 80px); height: auto; max-height: 90vh;
-  overflow-y: auto; padding: 16px;
+  width: 320px; max-width: calc(100vw - 100px); max-height: 90vh; height: auto;
+  overflow: visible; padding: 16px;
 }
+
 .gm-panel.open.has-editor { overflow: visible; }
 
-.toggle {
-  position: absolute; top: 6px; right: 6px; width: 36px; height: 36px;
-  border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-size: 20px; padding: 0; z-index: 1; background: var(--bg-panel);
-}
-.gm-content { margin-top: 24px; }
+.gm-content { overflow-y: auto; max-height: calc(90vh - 32px); }
 
 /* ── Mode tabs ─────────────────────────────────── */
 
@@ -670,12 +683,6 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 }
 .scene-row:hover { background: rgba(255,255,255,0.08); }
 .scene-raz { font-size: 11px; color: var(--accent); font-weight: 600; margin-left: auto; }
-
-/* ── Inspect panel ────────────────────────────── */
-
-.inspect-panel h3 { font-size: 16px; margin: 0; }
-.inspect-meta { display: flex; align-items: center; gap: 8px; }
-.inspect-raz { font-size: 13px; color: var(--accent); }
 
 /* ── Entities layout ───────────────────────────── */
 
@@ -749,6 +756,19 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 .tree-row.occupant { font-size: 12px; background: rgba(255,255,255,0.02); }
 .tree-row.occupant:hover { background: rgba(255,255,255,0.05); }
 
+.tree-enter-active,
+.tree-leave-active {
+  transition: all 0.2s ease;
+}
+.tree-enter-from,
+.tree-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.tree-move {
+  transition: transform 0.2s ease;
+}
+
 /* ── Factions ──────────────────────────────────── */
 
 .factions-heading {
@@ -760,7 +780,7 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 /* ── Edit panel ────────────────────────────────── */
 
 .edit-panel {
-  position: fixed; top: 50%; transform: translateY(-50%); right: 352px;
+  position: fixed; top: 50%; transform: translateY(-50%); right: 322px;
   width: 360px; max-height: 90vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 8px; padding: 16px;
   background: var(--bg-panel); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);

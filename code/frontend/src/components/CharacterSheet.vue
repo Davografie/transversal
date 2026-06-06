@@ -1,13 +1,56 @@
 <template>
-  <div class="character-sheet panel" :class="{ open }">
+  <!-- Embedded: just content, parent handles container -->
+  <template v-if="embedded">
+    <div v-if="loading" class="loading">Loading…</div>
+    <div v-else-if="error" class="error">{{ error }}</div>
+    <template v-else-if="entity">
+      <div class="header">
+        <h2>{{ entity.name }}</h2>
+        <div class="meta">
+          <span class="location">{{ entity.currentLocation || 'Unknown' }}</span>
+          <span class="universe">{{ entity.currentUniverse }}</span>
+        </div>
+        <div class="razmerit">
+          <span class="razmerit-value">{{ entity.razmerit }}</span> razmerit
+        </div>
+      </div>
+      <div v-if="traitSets.length" class="trait-sets">
+        <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
+          <h4>{{ ts.name }}</h4>
+          <div v-for="t in ts.traits" :key="t.name" class="trait-row" :class="{ ego: t.ego }" @click="onTraitClick(t)">
+            <div class="trait-left">
+              <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
+              <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
+            </div>
+            <div class="trait-right">
+              <span class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
+              <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
+              <button
+                v-for="sfxId in t.sfxIds"
+                :key="sfxId"
+                class="sfx-btn"
+                :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
+                :disabled="sfxUsed(sfxId) && !sfxActive(sfxId)"
+                @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
+                :title="sfxActive(sfxId) ? `Deactivate ${sfxId}` : `Activate ${sfxId}`"
+              >{{ sfxId.replace('sfx-', '') }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty">No traits configured</div>
+    </template>
+    <div v-else class="empty">No entity loaded</div>
+  </template>
+
+  <!-- Standalone: full panel with toggle -->
+  <div v-else class="character-sheet panel" :class="{ open }">
     <button class="toggle" @click="open = !open">
       {{ open ? '×' : '☰' }}
     </button>
-
     <div v-if="open" class="sheet-content">
       <div v-if="loading" class="loading">Loading…</div>
       <div v-else-if="error" class="error">{{ error }}</div>
-
       <template v-else-if="entity">
         <div class="header">
           <h2>{{ entity.name }}</h2>
@@ -19,7 +62,6 @@
             <span class="razmerit-value">{{ entity.razmerit }}</span> razmerit
           </div>
         </div>
-
         <div v-if="traitSets.length" class="trait-sets">
           <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
             <h4>{{ ts.name }}</h4>
@@ -46,7 +88,6 @@
         </div>
         <div v-else class="empty">No traits configured</div>
       </template>
-
       <div v-else class="empty">No entity loaded</div>
     </div>
   </div>
@@ -59,7 +100,8 @@ import { useApi } from '../composables/useApi.js'
 const props = defineProps({
   entityId: { type: String, required: true },
   universe: { type: String, default: 'earth' },
-  phase: { type: String, default: 'adding' }
+  phase: { type: String, default: 'adding' },
+  embedded: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled'])
