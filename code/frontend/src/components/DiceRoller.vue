@@ -271,7 +271,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
