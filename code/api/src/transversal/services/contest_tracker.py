@@ -187,3 +187,52 @@ def get_contest_tracker() -> ContestTracker:
     if _contest_tracker is None:
         _contest_tracker = ContestTracker()
     return _contest_tracker
+
+
+# ── SSE Broadcasting ──────────────────────────────────
+
+def _pool_to_dict(pa: PoolAssembly) -> dict:
+    """Serialize a PoolAssembly for SSE broadcast."""
+    return {
+        "entity_id": pa.entity_id,
+        "location_id": pa.location_id,
+        "universe": pa.universe,
+        "dice": [{"die": d.value, "source": s} for d, s in pa.dice],
+        "opposition_entity_id": pa.opposition_entity_id,
+        "pushed_this_beat": pa.pushed_this_beat,
+        "razmerit_spent": pa.razmerit_spent,
+    }
+
+
+def broadcast_pool_change(location_id: str, entity_id: str) -> None:
+    """Publish a pool_updated SSE event to all active sessions.
+
+    Call this after any mutation to the contest tracker so clients can
+    update their pool-dice display near character avatars.
+
+    Payload format matches the frontend's existing pool_updated handler:
+      { player_id, entity_id, dice, phase, location_id }
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    tracker = get_contest_tracker()
+    pa = tracker.get(location_id, entity_id)
+
+    if pa and pa.dice:
+        dice = [d.value for d, _ in pa.dice]
+    else:
+        dice = []
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="pool_updated",
+            session_id=s.id,
+            data={
+                "player_id": entity_id,
+                "entity_id": entity_id,
+                "dice": dice,
+                "phase": "adding",
+                "location_id": location_id,
+            },
+        ))

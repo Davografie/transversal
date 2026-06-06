@@ -69,6 +69,12 @@
       <div v-if="o.image" class="dot-overlay occ-img-overlay" :style="{ backgroundImage: 'url(' + o.image + ')' }" @click.stop="onExpandedClick('occupant', o)" />
       <span v-else class="dot-initials" @click.stop="onExpandedClick('occupant', o)">{{ occupantInitials(o.name) }}</span>
     </button>
+    <!-- Pool dice badge near occupant dot -->
+    <span
+      v-if="!travelAnim.active && showElements && poolDiceCount(o.id) > 0"
+      class="pool-badge fade-in"
+      :style="parallaxedStyle(poolBadgeX(o), poolBadgeY(o))"
+    >{{ poolDiceCount(o.id) }}</span>
     </template>
 
     <!-- Navigation dots -->
@@ -129,6 +135,7 @@ const props = defineProps({
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
   gmMode: { type: Boolean, default: false },
+  remotePools: { type: Object, default: () => ({}) },  // entity_id → { dice: [...], player_id, phase }
 })
 
 const emit = defineEmits(['moved', 'update:editZones'])
@@ -572,6 +579,10 @@ function occupantInitials(name) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
+const poolDiceCount = (eid) => (props.remotePools[eid]?.dice || []).length
+const poolBadgeX = (o) => (o.map_x ?? 50) + (o.type === 'gmc' ? -4 : 4)
+const poolBadgeY = (o) => (o.map_y ?? 50) - 6
+
 // ── Occupant drag ──────────────────────────────────
 
 const occDragging = ref(null)  // { index }
@@ -710,7 +721,28 @@ async function fetchNav() {
     if (self) {
       activeElement.value = { type: 'occupant', id: self.id }
     }
+
+    // Fetch pool dice at this location (background, don't block nav)
+    fetchPools()
   } catch { /* silent */ }
+}
+
+async function fetchPools() {
+  try {
+    const r = await fetch(`/api/v1/locations/${props.locationId}/pools`)
+    const data = await r.json()
+    // Merge pool data into remotePools format
+    const pools = data.pools || {}
+    for (const [eid, pool] of Object.entries(pools)) {
+      if (pool.dice && pool.dice.length) {
+        props.remotePools[eid] = {
+          dice: pool.dice.map(d => d.die),
+          player_id: eid,
+          phase: 'adding',
+        }
+      }
+    }
+  } catch { /* pools endpoint might not exist yet — silent */ }
 }
 
 // ── Navigation ─────────────────────────────────────
@@ -1089,7 +1121,36 @@ onMounted(fetchNav)
 }
 .occ-dot.occ-character { background: rgba(64,136,212,0.8); box-shadow: 0 0 6px rgba(64,136,212,0.4); }
 .occ-dot.occ-gmc { background: rgba(232,136,48,0.8); box-shadow: 0 0 6px rgba(232,136,48,0.4); }
-.occ-dot.self { z-index: 20 !important; }
+
+.pool-badge {
+  position: absolute;
+  z-index: 22;
+  background: rgba(30,30,30,0.85);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.occ-dot.self {
+  z-index: 20 !important;
+  border: 2px solid rgba(255,255,255,0.5) !important;
+  box-shadow: 0 0 16px rgba(100,180,255,0.7), 0 0 32px rgba(100,180,255,0.35), 0 0 64px rgba(100,180,255,0.18) !important;
+  animation: selfPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes selfPulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(100,180,255,0.7), 0 0 32px rgba(100,180,255,0.35), 0 0 64px rgba(100,180,255,0.18); }
+  50% { box-shadow: 0 0 24px rgba(100,180,255,0.9), 0 0 48px rgba(100,180,255,0.5), 0 0 80px rgba(100,180,255,0.25); }
+}
 
 /* Non-self dots lerp only on SSE-triggered position updates */
 .occ-dot:not(.self).lerping {

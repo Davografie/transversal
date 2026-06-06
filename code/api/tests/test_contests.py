@@ -134,7 +134,8 @@ class TestResolveContestSimplified:
         assert len(result.opponent_result.rolls) == 2
 
     def test_effect_die_present_for_both(self):
-        """Both winner and loser get an effect die."""
+        """Both winner and loser typically get an effect die.
+        Exception: a botch (FAIL tier) has effect_die=None."""
         player = DicePoolRequest(
             entity_id="kael", universe="earth",
             dice=[(DieType.D10, "shooting")],
@@ -144,15 +145,19 @@ class TestResolveContestSimplified:
             dice=[(DieType.D6, "agility")],
         )
         result = resolve_contest(player, opponent)
-        # Both sides have effect dice derived from their outcome tier
+        # Player has d10 — effect die is always present (even on fail, d10 can't roll 1-2)
         assert result.player_result.effect_die is not None
-        assert result.opponent_result.effect_die is not None
+        # Opponent has d6 — effect die may be None on botch (rolls 1 = FAIL tier)
+        # This is correct: a botched side has no effect die
+        if not result.opponent_result.botch:
+            assert result.opponent_result.effect_die is not None
         # Winner's effect die matters for outcome magnitude
         if result.winner == ContestWinner.PLAYER:
             winner_effect = result.player_result.effect_die
         else:
             winner_effect = result.opponent_result.effect_die
-        assert winner_effect in (DieType.D4, DieType.D6, DieType.D8, DieType.D10)
+        if winner_effect is not None:
+            assert winner_effect in (DieType.D4, DieType.D6, DieType.D8, DieType.D10)
 
     def test_marie_jay_example(self):
         """Marie has d4,d6,d12; Jay has d10,d4,d4 — both should resolve

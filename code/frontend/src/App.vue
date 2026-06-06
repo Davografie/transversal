@@ -109,10 +109,16 @@
               :class="{ active: entityId === e.id }"
               @click="selectCharacter(e)"
             >{{ e.name || e.id }}</button>
+            <template v-if="showNewChar">
+              <input v-model="newCharName" placeholder="Name…" @keyup.enter="createCharacter" class="char-name-input" />
+              <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar" class="char-create-btn">✓</button>
+            </template>
+            <button v-else class="char-add-btn" @click="showNewChar = true">+</button>
           </div>
+          <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
         </div>
 
-        <div class="settings-section">
+        <div v-if="!playerEntities.length" class="settings-section">
           <label class="settings-label">New character</label>
           <template v-if="showNewChar">
             <div class="switch-row">
@@ -139,6 +145,7 @@
     v-model:edit-zones="editZones"
     :overlay="locationOverlay"
     :gm-mode="gmMode"
+    :remote-pools="remotePools"
     @moved="onMoved"
   />
   <div v-if="wrapperOpen" class="panel-backdrop" @click="closePanel" />
@@ -763,6 +770,7 @@ async function createCharacter() {
     if (eid) {
       await fetch(`/api/v1/players/${playerId.value}/claim/${eid}`, { method: 'POST' })
       newCharName.value = ''
+      showNewChar.value = false
       fetchPlayerEntities()
     } else {
       createCharError.value = 'Failed to create character'
