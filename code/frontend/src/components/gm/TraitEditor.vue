@@ -13,13 +13,22 @@
     <div class="add-trait">
       <select v-model="newTraitId" @change="onTraitSelected">
         <option value="">-- Add trait --</option>
-        <option v-for="t in availableTraits" :key="t.id" :value="t.id">
-          {{ t.name }}
-        </option>
+        <option v-for="t in availableTraits" :key="t.id" :value="t.id">{{ t.name }}</option>
       </select>
       <div v-if="newTraitId" class="add-trait-detail">
         <label>Rating</label>
-        <DiePicker v-model="rating" />
+        <div class="rating-row">
+          <button
+            v-for="(d, i) in rating"
+            :key="i"
+            class="die-chip"
+            @click="pickIndex = i; showPicker = true"
+          >{{ d }}</button>
+          <button class="die-chip add-chip" @click="pickIndex = rating.length; showPicker = true">+</button>
+        </div>
+        <div v-if="showPicker" class="picker-popup">
+          <DiePicker v-model="selectedDie" @update:model-value="onDiePicked" />
+        </div>
         <label>Statement</label>
         <input v-model="statement" placeholder="Distinction statement…" />
         <button @click="emitAdd" :disabled="adding || !rating.length">Add</button>
@@ -43,10 +52,27 @@ const emit = defineEmits(['add-trait', 'remove-trait'])
 const newTraitId = ref('')
 const rating = ref([])
 const statement = ref('')
+const showPicker = ref(false)
+const pickIndex = ref(0)
+const selectedDie = ref('')
 
 function onTraitSelected() {
   const t = props.availableTraits.find(t => t.id === newTraitId.value)
   if (t) rating.value = [t.defaultDieType.toLowerCase()]
+}
+
+function onDiePicked(die) {
+  if (!die) {
+    // Remove die at pickIndex
+    rating.value.splice(pickIndex.value, 1)
+  } else if (pickIndex.value >= rating.value.length) {
+    // Adding new die
+    rating.value.push(die)
+  } else {
+    // Replacing existing die
+    rating.value.splice(pickIndex.value, 1, die)
+  }
+  showPicker.value = false
 }
 
 function emitAdd() {
@@ -57,7 +83,7 @@ function emitAdd() {
     dice: rating.value.map(d => d.toUpperCase()),
     statement: statement.value,
   })
-  newTraitId.value = ''; rating.value = []; statement.value = ''
+  newTraitId.value = ''; rating.value = []; statement.value = ''; showPicker.value = false
 }
 </script>
 
@@ -89,6 +115,26 @@ function emitAdd() {
 .add-trait-detail label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .add-trait-detail input { font-size: 12px; padding: 6px 10px; }
 .add-trait-detail button { font-size: 12px; padding: 6px; }
+
+.rating-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.die-chip {
+  font-size: 14px; font-weight: 700; padding: 4px 10px;
+  border-radius: 6px; border: 2px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06); color: var(--text);
+  cursor: pointer; transition: border-color 0.15s;
+}
+.die-chip:hover { border-color: var(--accent); }
+.add-chip {
+  color: var(--accent); border-color: var(--accent-dim);
+  font-size: 16px; font-weight: 400; padding: 4px 8px;
+}
+.add-chip:hover { border-color: var(--accent); background: rgba(64,136,212,0.1); }
+
+.picker-popup {
+  margin-top: 4px; padding: 8px;
+  background: rgba(0,0,0,0.3); border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
 
 .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 </style>

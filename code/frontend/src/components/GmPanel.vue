@@ -97,7 +97,7 @@
 
     <button class="save-btn" @click="saveEntity" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
 
-    <GmTraitEditor :traits="selected.traitSettings" :available-traits="availableTraits" :adding="addingTrait"
+    <TraitEditor :traits="selected.traitSettings" :available-traits="availableTraits" :adding="addingTrait"
       @add-trait="onAddTrait" @remove-trait="removeTrait" />
   </div>
 
@@ -131,7 +131,7 @@ import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
-import GmTraitEditor from '@/components/gm/GmTraitEditor.vue'
+import TraitEditor from '@/components/gm/TraitEditor.vue'
 
 const { error, graphql } = useApi()
 const loading = ref(false)
