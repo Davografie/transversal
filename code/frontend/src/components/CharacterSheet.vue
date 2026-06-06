@@ -1,6 +1,6 @@
 <template>
-  <!-- Embedded: just content, parent handles container -->
-  <template v-if="embedded">
+  <!-- Embedded: single root for attribute inheritance -->
+  <div v-if="embedded" class="sheet-embedded">
     <div v-if="loading" class="loading">Loading…</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <template v-else-if="entity">
@@ -41,7 +41,7 @@
       <div v-else class="empty">No traits configured</div>
     </template>
     <div v-else class="empty">No entity loaded</div>
-  </template>
+  </div>
 
   <!-- Standalone: full panel with toggle -->
   <div v-else class="character-sheet panel" :class="{ open }">
