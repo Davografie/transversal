@@ -1,40 +1,5 @@
 <template>
   <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
-  <div class="entity-switcher">
-    <div v-for="c in characters" :key="c" class="entity-pill">
-      <button
-        :class="{ active: entityId === c }"
-        @click="entityId = c"
-      >{{ c === 'kael-1' ? 'Kael' : 'Elena' }}</button>
-      <!-- Adding: show dice types -->
-      <div v-if="remotePools[c] && remotePools[c].phase === 'adding'" class="entity-pool">
-        <span v-for="(d, i) in remotePools[c].dice" :key="i" class="pool-chip">{{ d }}</span>
-      </div>
-      <!-- Picking/rolling: show raw rolled values as die icons -->
-      <div v-if="remotePools[c] && (remotePools[c].phase === 'picking' || remotePools[c].phase === 'rolling')" class="entity-pool">
-        <template v-if="remoteResults[c] && remoteResults[c].pipeline === 'pool' && remoteResults[c].rolls.length">
-          <DieIcon v-for="(r, i) in remoteResults[c].rolls" :key="i" :die="r.die" :result="r.result" :is-hitch="r.result === 1" class="entity-die" />
-        </template>
-        <template v-else>
-          <span v-for="(d, i) in remotePools[c].dice" :key="i" class="pool-chip">{{ d }}</span>
-        </template>
-      </div>
-      <!-- Resolved: total + effect -->
-      <div v-if="remoteResults[c] && remotePools[c]?.phase === 'resolved'" class="entity-result">
-        <div class="result-pill">
-          <template v-if="remoteResults[c].pipeline === 'simplified'">
-            <span class="result-pill-total">{{ remoteResults[c].total }}</span>
-            <span class="result-pill-tier">{{ remoteResults[c].tier }}</span>
-          </template>
-          <template v-else>
-            <span class="result-pill-total">{{ remoteResults[c].total }}</span>
-            <DieIcon v-if="remoteResults[c].effect_die" :die="remoteResults[c].effect_die" class="result-pill-die" />
-          </template>
-          <span v-if="remoteResults[c].botch" class="result-pill-botch">!</span>
-        </div>
-      </div>
-    </div>
-  </div>
   <button v-if="playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
@@ -171,7 +136,6 @@
 <script setup>
 import { ref, useTemplateRef, watch, computed, nextTick } from 'vue'
 import LocationViewer from './components/LocationViewer.vue'
-import DieIcon from './components/DieIcon.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
 import GmPanel from './components/GmPanel.vue'
@@ -232,7 +196,6 @@ function onMoved(data) {
   fetchLocationBg()
 }
 const entityId = ref('kael-1')
-const characters = ['kael-1', 'elena-1']
 const editZones = ref(false)
 
 // When switching entities, update location
