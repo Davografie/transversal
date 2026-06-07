@@ -48,7 +48,8 @@ The Transversal backend manages the multiverse — locations, characters, factio
 │  │  ┌──────────────────▼───────────────────────┐  │  │
 │  │  │           Service Layer                   │  │  │
 │  │  │  EntityManager / DiceResolver /           │  │  │
-│  │  │  EffectsEngine / RazmeritService          │  │  │
+│  │  │  EffectsEngine / RazmeritService /          │  │  │
+│  │  │  ContestTracker / ResourcePool               │  │  │
 │  │  └──────────────────┬───────────────────────┘  │  │
 │  └─────────────────────┼──────────────────────────┘  │
 │                        │                             │
@@ -86,13 +87,16 @@ Implements both resolution pipelines described in [[Dice Mechanics]]. Responsibi
 - Resolve challenge pools (effect die vs challenge die)
 - Compute outcome tiers (fail/marginal/success/exceptional/perfect) with effect dice
 - For pool pipeline: return all rolls for manual keep-two selection
+- Resolve head-to-head contests via `resolve_contest()` — compare two pools,
+  declare winner per Cortex Prime tie-breaking rules (higher tier/total wins, ties to defender)
 
 ### Effects Engine
 
 Manages SFX definitions, trigger matching, and effect execution. Responsibilities:
 
 - Register SFX definitions with declarative effects
-- Match triggers (on_roll, on_complication, on_botch, on_activate, on_location_change) to SFX
+- Match triggers (on_roll, on_complication, on_botch, on_activate, on_location_change,
+  on_trait_change, on_contest_win, on_contest_loss, on_success, on_failure) to SFX
 - Execute immediate effects and schedule deferred effects
 - Support reverse/deactivation of SFXs
 - Tick system: advance beats, scenes, sessions to fire scheduled effects
@@ -104,6 +108,64 @@ Handles hyper-dimensional currency transactions. Responsibilities:
 - Atomic earn/spend/transfer operations
 - Balance validation (no negative razmerit)
 - Transaction logging for undo support
+
+### Dice Resolver — Contests
+
+Beyond the stateless `resolve()` for single-pool tests, the resolver now supports
+head-to-head contests via `resolve_contest(player, opponent)`.  Two pools go in;
+both sides are rolled independently (each using their own pipeline), and a winner
+is declared per Cortex Prime rules:
+
+- **Simplified vs Simplified**: compare outcome tiers, then highest die values.
+  Ties go to the defender (opponent).
+- **Pool vs Pool**: compare totals (sum of two highest). Ties to defender.
+- **Mixed pipelines**: the pool side's total is compared to the simplified side's
+  highest die.
+
+The resolver returns a `ContestResult` with both sides' full roll data, the winner,
+and push metadata.
+
+### Contest Tracker
+
+Per-location, session-scoped dice pool assembly tracker. Responsibilities:
+
+- Maintain `PoolAssembly` objects keyed by `(location_id, entity_id)`
+- Add/remove dice, designate opposition, track SFX push state (one per beat)
+- Resolve contests via the dice resolver when both sides have dice
+- Broadcast `pool_updated` SSE events on every mutation so all players see
+  dice appearing around occupant dots on the background
+- Clear pools at beat or scene boundaries
+- Pools survive location switches — build at one scene, return later, dice persist
+
+The `PoolDiceRing` frontend component reads `pool_updated` events and renders
+die icons radially around character avatars, with phase-aware display:
+adding → die types, picking → rolled results, resolved → total + effect dice.
+
+### Effects Engine — Automated SFX
+
+The effects engine now supports automated triggers that fire during gameplay
+without manual activation:
+
+| Trigger | Fires when |
+|---------|------------|
+| `on_location_change` | Entity moves to a new location |
+| `on_trait_change` | Any trait value changes |
+| `on_contest_win` | Entity wins a contest |
+| `on_contest_loss` | Entity loses or ties a contest |
+| `on_success` | A roll achieves any tier above FAIL |
+| `on_failure` | A roll results in FAIL tier |
+
+The `fire_contest_sfx()` function takes a `ContestResult` and processes both
+sides through the engine with their available SFXs.  The `contest_to_events()`
+helper converts a contest result into `GameEvent` objects for the pipeline.
+
+### SFX Push Mechanic
+
+After a failed or tied contest, a player may spend 1 razmerit to **push** —
+reassemble their dice pool (same or different traits) and reroll against the
+same opposition.  Only one push per beat is enforced by the `ContestTracker`.
+The new result replaces the original.  The razmerit cost is handled by the
+effects engine; the tracker checks availability and marks the push consumed.
 
 ## Data Model
 
@@ -227,12 +289,13 @@ volumes:
 ## Data Flow: A Turn Example
 
 1. **Player action**: "Kael hacks the terminal on Krasnoyarsk-45"
-2. **UI** builds dice pool from character sheet traits
-3. **Dice Resolver** rolls the pool, returns results (successes, hitches, botches)
-4. **Effects System** checks for triggered SFX (e.g., "Hinder" on a distinction), applies modifications
-5. **Razmerit Service** adjusts currency
-6. **SSE bus** broadcasts roll results, trait changes, and razmerit updates to all session members
-7. **UI** animates the roll, displays outcome, updates character sheet if traits changed
+2. **UI** builds dice pool from character sheet traits, adds dice via `ContestTracker`
+3. **SSE** broadcasts `pool_updated` — other players see dice ring appear around Kael's dot
+4. **Dice Resolver** rolls the pool (or resolves a contest if opposition is set), returns results (successes, hitches, botches, winner)
+5. **Effects System** checks for triggered SFX (e.g., "Hinder" on a distinction, `on_contest_win` for the victor), applies modifications
+6. **Razmerit Service** adjusts currency (SFX costs, complication earnings)
+7. **SSE bus** broadcasts roll results, trait changes, and razmerit updates to all session members
+8. **UI** animates the roll, displays outcome, updates character sheet if traits changed. Pool dice ring updates to resolved phase (total + effect dice).
 
 ## Design Principles
 

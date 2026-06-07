@@ -419,6 +419,52 @@ Request: `{"die": "d4", "count": 1}`
 
 Response: same shape as spend.
 
+### Contest Pool Assembly
+
+Per-location contest dice pools. Players assemble dice at a location; other
+players see them via SSE (`pool_updated`) and the radial `PoolDiceRing` UI.
+Pools persist across location switches — build at one scene, navigate away,
+return, and your dice are still there.
+
+**`GET /api/v1/locations/{location_id}/pools`**
+
+Return all pool assemblies at a location. Used on navigation to hydrate
+existing pools for the radial display.
+
+Response: `{"location_id": "...", "pools": {"entity-1": {...}, "entity-2": {...}}}`
+
+**`GET /api/v1/locations/{location_id}/pools/{entity_id}`**
+
+Return one entity's pool.
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/add-die`**
+
+Add a die to an entity's pool. Broadcasts `pool_updated` via SSE.
+
+Request: `{"die": "d8", "source": "shooting", "universe": "earth"}`
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/remove-die`**
+
+Remove a die by index.
+
+Request: `{"index": 0}`
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/set-opposition`**
+
+Designate an opponent — creates the other side of a contest.
+
+Request: `{"opponent_id": "guard-1", "universe": "earth"}`
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/clear`**
+
+Reset an entity's pool (end of beat). Broadcasts empty `pool_updated`.
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/resolve`**
+
+Resolve a contest between the entity and its designated opponent.
+Both sides must have dice. Returns `{"winner": "player"|"opponent"|"tie_defender", "pipeline": "...", "pushed": false}`.
+Broadcasts `roll_result` via SSE. Returns 409 if pools aren't ready.
+
 ### Player Identity
 
 **`POST /api/v1/players`** — find or create player by name. Returns player ID for localStorage.
@@ -478,7 +524,7 @@ The stream delivers state-change events as `text/event-stream`. The client opens
 | `entity_updated` | `{"entity_id": "...", "name": "...", "background_image": "...", "current_universe": "...", "current_location": "..."}` | Entity metadata changed (name, background image, etc.) |
 | `entity_created` | `{"entity_id": "...", "name": "...", "type": "..."}` | New entity created in session |
 | `roll_result` | Full roll response (see `POST /roll`) | A dice roll completes |
-| `pool_updated` | `{"player_id": "...", "entity_id": "...", "dice": [...], "phase": "..."}` | Dice pool contents change |
+| `pool_updated` | `{"player_id": "...", "entity_id": "...", "dice": [...], "phase": "...", "location_id": "..."}` | Dice pool changes. Dice are `[{die, label}]` objects in adding phase, die-type strings from backend. |
 | `scene_change` | `{"to_location": "..."}` | The scene changes; UI transitions |
 | `error` | `{"code": "...", "message": "..."}` | An error occurred server-side |
 
