@@ -149,7 +149,7 @@
     :remote-results="remoteResults"
     @moved="onMoved"
   />
-  <div v-if="wrapperOpen" class="panel-backdrop" @click="closePanel" />
+  <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="closePanel" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <CharacterSheet
         v-show="sheetVisible && !gmMode"
@@ -570,15 +570,18 @@ function syncClosedPosition() {
 }
 
 function onPanelOpen(v) {
+  if (gmMode.value) return
   if (v) openPanel()
   else closePanel()
 }
 
 function onWrapperEnter() {
+  if (gmMode.value) return
   openPanel()
 }
 
 function onWrapperLeave() {
+  if (gmMode.value) return
   closePanel()
 }
 
