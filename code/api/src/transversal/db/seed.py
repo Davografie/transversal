@@ -24,12 +24,12 @@ def seed_trait_registry(repo: EntityRepository) -> None:
     # ── Earth Traitsets ───────────────────────────────
 
     earth_traitsets = [
-        TraitSet(id="ts-earth-attributes", name="attributes", universe="earth",
-                 entity_types=[EntityType.CHARACTER, EntityType.GMC]),
-        TraitSet(id="ts-earth-skills", name="skills", universe="earth",
-                 entity_types=[EntityType.CHARACTER, EntityType.GMC]),
-        TraitSet(id="ts-earth-distinctions", name="distinctions", universe="earth",
-                 entity_types=[EntityType.CHARACTER, EntityType.GMC]),
+        TraitSet(id="ts-earth-distinctions", name="distinctions", universes=["earth"],
+                 entity_types=[EntityType.CHARACTER, EntityType.GMC], order=1, limit=1),
+        TraitSet(id="ts-earth-attributes", name="attributes", universes=["earth"],
+                 entity_types=[EntityType.CHARACTER, EntityType.GMC], order=2, limit=1),
+        TraitSet(id="ts-earth-skills", name="skills", universes=["earth"],
+                 entity_types=[EntityType.CHARACTER, EntityType.GMC], order=3, limit=1),
     ]
     for ts in earth_traitsets:
         if not repo.get_traitset_by_id(ts.id):
@@ -38,31 +38,31 @@ def seed_trait_registry(repo: EntityRepository) -> None:
     # ── Earth Traits ───────────────────────────────────
 
     earth_traits = [
-        Trait(id="trait-earth-strength", name="strength", universe="earth",
+        Trait(id="trait-earth-strength", name="strength", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
-        Trait(id="trait-earth-agility", name="agility", universe="earth",
+        Trait(id="trait-earth-agility", name="agility", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
-        Trait(id="trait-earth-intelligence", name="intelligence", universe="earth",
+        Trait(id="trait-earth-intelligence", name="intelligence", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
-        Trait(id="trait-earth-willpower", name="willpower", universe="earth",
+        Trait(id="trait-earth-willpower", name="willpower", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
 
-        Trait(id="trait-earth-hacking", name="hacking", universe="earth",
+        Trait(id="trait-earth-hacking", name="hacking", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-shooting", name="shooting", universe="earth",
+        Trait(id="trait-earth-shooting", name="shooting", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-persuasion", name="persuasion", universe="earth",
+        Trait(id="trait-earth-persuasion", name="persuasion", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-stealth", name="stealth", universe="earth",
+        Trait(id="trait-earth-stealth", name="stealth", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-investigation", name="investigation", universe="earth",
+        Trait(id="trait-earth-investigation", name="investigation", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-survival", name="survival", universe="earth",
+        Trait(id="trait-earth-survival", name="survival", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
 
         # Distinctions
         Trait(id="trait-earth-antonov-call", name="answered_antonovs_call",
-              universe="earth", traitset_id="ts-earth-distinctions",
+              universes=["earth"], traitset_id="ts-earth-distinctions",
               default_die_type=DieType.D8),
     ]
     for t in earth_traits:
@@ -72,12 +72,12 @@ def seed_trait_registry(repo: EntityRepository) -> None:
     # ── Three Realms Traitsets ────────────────────────
 
     realm_traitsets = [
-        TraitSet(id="ts-3r-cultivation", name="cultivation", universe="three_realms",
-                 entity_types=[EntityType.CHARACTER, EntityType.GMC]),
-        TraitSet(id="ts-3r-combat", name="combat", universe="three_realms",
-                 entity_types=[EntityType.CHARACTER, EntityType.GMC]),
-        TraitSet(id="ts-3r-distinctions", name="distinctions", universe="three_realms",
-                 entity_types=[EntityType.CHARACTER, EntityType.GMC]),
+        TraitSet(id="ts-3r-distinctions", name="distinctions", universes=["three_realms"],
+                 entity_types=[EntityType.CHARACTER, EntityType.GMC], order=1, limit=1),
+        TraitSet(id="ts-3r-cultivation", name="cultivation", universes=["three_realms"],
+                 entity_types=[EntityType.CHARACTER, EntityType.GMC], order=2, limit=1),
+        TraitSet(id="ts-3r-combat", name="combat", universes=["three_realms"],
+                 entity_types=[EntityType.CHARACTER, EntityType.GMC], order=3, limit=1),
     ]
     for ts in realm_traitsets:
         if not repo.get_traitset_by_id(ts.id):
@@ -86,24 +86,24 @@ def seed_trait_registry(repo: EntityRepository) -> None:
     # ── Three Realms Traits ───────────────────────────
 
     realm_traits = [
-        Trait(id="trait-3r-qi-reserves", name="qi_reserves", universe="three_realms",
+        Trait(id="trait-3r-qi-reserves", name="qi_reserves", universes=["three_realms"],
               traitset_id="ts-3r-cultivation",
               default_die_type=DieType.D6, default_rating_type=RatingType.RESOURCE,
               location_restricted=True),
-        Trait(id="trait-3r-dao-comprehension", name="dao_comprehension", universe="three_realms",
+        Trait(id="trait-3r-dao-comprehension", name="dao_comprehension", universes=["three_realms"],
               traitset_id="ts-3r-cultivation",
               default_die_type=DieType.D4, location_restricted=True),
-        Trait(id="trait-3r-alchemy", name="alchemy", universe="three_realms",
+        Trait(id="trait-3r-alchemy", name="alchemy", universes=["three_realms"],
               traitset_id="ts-3r-cultivation",
               default_die_type=DieType.D6, location_restricted=True),
 
-        Trait(id="trait-3r-sword-intent", name="sword_intent", universe="three_realms",
+        Trait(id="trait-3r-sword-intent", name="sword_intent", universes=["three_realms"],
               traitset_id="ts-3r-combat",
               default_die_type=DieType.D6, location_restricted=True),
-        Trait(id="trait-3r-footwork", name="footwork", universe="three_realms",
+        Trait(id="trait-3r-footwork", name="footwork", universes=["three_realms"],
               traitset_id="ts-3r-combat",
               default_die_type=DieType.D6, location_restricted=True),
-        Trait(id="trait-3r-qi-strike", name="qi_strike", universe="three_realms",
+        Trait(id="trait-3r-qi-strike", name="qi_strike", universes=["three_realms"],
               traitset_id="ts-3r-combat",
               default_die_type=DieType.D6, location_restricted=True),
     ]

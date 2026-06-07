@@ -197,13 +197,62 @@ class EntityRepository:
     def get_traitsets_by_universe(self, universe: str) -> list[TraitSet]:
         query = f"""
             FOR ts IN {TRAITSETS}
-            FILTER ts.universe == @u
+            FILTER @u IN ts.universes
+            SORT ts.order ASC, ts.name ASC
             RETURN ts
         """
         return [
             TraitSet.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars={"u": universe})
         ]
+
+    def get_all_traitsets(self) -> list[TraitSet]:
+        query = f"FOR ts IN {TRAITSETS} SORT ts.order ASC, ts.name ASC RETURN ts"
+        return [
+            TraitSet.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
+        ]
+
+    def update_traitset(self, traitset: TraitSet) -> TraitSet:
+        doc = traitset.model_dump()
+        doc["_key"] = traitset.id
+        existing = self._traitsets.get(traitset.id)
+        if existing:
+            doc["_rev"] = existing["_rev"]
+            self._traitsets.replace(doc)
+        return traitset
+
+    def delete_traitset(self, traitset_id: str) -> dict:
+        """Cascade delete: traitset → traits → trait settings."""
+        trait_keys = [
+            r for r in self.db.aql.execute(
+                f"FOR t IN {TRAITS} FILTER t.traitset_id == @tsid RETURN t._key",
+                bind_vars={"tsid": traitset_id}
+            )
+        ]
+        ts_removed = 0
+        if trait_keys:
+            ts_removed = len(list(self.db.aql.execute(
+                f"FOR ts IN {TRAITSETTINGS} FILTER ts.trait_id IN @tids REMOVE ts IN {TRAITSETTINGS} RETURN OLD._key",
+                bind_vars={"tids": trait_keys}
+            )))
+        for tkey in trait_keys:
+            try: self._traits.delete(tkey)
+            except Exception: pass
+        try: self._traitsets.delete(traitset_id)
+        except Exception: pass
+        return {"deleted": True, "traits_removed": len(trait_keys), "settings_removed": ts_removed}
+
+    def reorder_traitsets(self, ordered_ids: list[str]) -> None:
+        for i, tsid in enumerate(ordered_ids):
+            doc = self._traitsets.get(tsid)
+            if doc:
+                ts = TraitSet.model_validate({**doc, "id": doc["_key"]})
+                ts.order = i + 1
+                upd = ts.model_dump()
+                upd["_key"] = ts.id
+                upd["_rev"] = doc["_rev"]
+                self._traitsets.replace(upd)
 
     # ── TraitSettings (edge) ──────────────────────────
 

@@ -70,6 +70,8 @@
                 <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
               </div>
 
+              <button class="create-btn" style="margin-top:8px" @click="configTraits = true">Manage Traits</button>
+
               <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
             </div>
           </div>
@@ -83,7 +85,7 @@
     <div class="form-actions top-actions">
       <button class="sheet-edit-btn" @click="switchToEdit">Edit</button>
     </div>
-    <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded @add-to-pool="(d) => emit('add-to-pool', d)" />
+    <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded :gm-mode="true" @add-to-pool="(d) => emit('add-to-pool', d)" />
   </div>
 
   <div v-if="editing && selected" class="edit-panel">
@@ -121,6 +123,75 @@
     <label>Razmerit</label>
     <input v-model.number="createForm.razmerit" type="number" />
     <button class="save-btn" @click="createEntity" :disabled="saving">{{ saving ? 'Creating…' : 'Create' }}</button>
+  </div>
+
+  <!-- Traits config panels (level 0–3, cascading left) -->
+  <div v-if="configTraits" class="edit-panel" :style="{ right: (370 + 0 * 370) + 'px' }">
+    <div class="form-actions top-actions">
+      <h4 style="margin:0">Traitsets</h4>
+      <button class="danger-btn" @click="closeTraitsConfig">×</button>
+    </div>
+    <input v-model="traitSearch" class="filter-input" placeholder="Search…" style="margin-bottom:8px" />
+    <div v-if="traitsLoading" class="loading">Loading…</div>
+    <div v-else class="tm-list">
+      <div v-for="ts in filteredTraitsets" :key="ts.id" class="entity-row"
+        :class="{ selected: activeTraitsetId === ts.id }"
+        @click="selectTraitset(ts)">
+        <span class="entity-name">{{ ts.name }}</span>
+        <span style="font-size:10px;color:var(--text-dim)">{{ traitCount(ts.id) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="configTraits && activeTraitset" class="edit-panel" :style="{ right: (370 + 1 * 370) + 'px' }">
+    <div class="form-actions top-actions">
+      <button @click="activeTraitset=null;activeTrait=null">←</button>
+      <h4 style="margin:0;flex:1">{{ activeTraitset.name }}</h4>
+    </div>
+    <div class="tm-list">
+      <div v-for="t in filteredConfigTraits" :key="t.id" class="entity-row"
+        :class="{ selected: activeTraitId === t.id }"
+        @click="selectConfigTrait(t)">
+        <span class="entity-name">{{ t.name }}</span>
+        <span :class="'die-' + (t.defaultDieType||'d6').toLowerCase()" style="font-weight:700;font-size:11px">{{ t.defaultDieType||'d6' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="configTraits && activeTrait" class="edit-panel" :style="{ right: (370 + 2 * 370) + 'px' }">
+    <div class="form-actions top-actions">
+      <button @click="activeTrait=null;activeSfx=null">←</button>
+      <h4 style="margin:0;flex:1">{{ activeTrait.name }}</h4>
+    </div>
+    <div class="tm-list">
+      <div v-for="s in configSfxs" :key="s.id" class="entity-row"
+        :class="{ selected: activeSfxId === s.id }"
+        @click="selectConfigSfx(s)">
+        <span class="entity-name">{{ s.name }}</span>
+        <span style="font-size:10px;color:var(--text-dim)">{{ s.trigger||'—' }}</span>
+      </div>
+      <div v-if="configSfxs.length === 0" class="empty">No linked SFXs</div>
+    </div>
+  </div>
+
+  <div v-if="configTraits && activeSfx" class="edit-panel" :style="{ right: (370 + 3 * 370) + 'px' }">
+    <div class="form-actions top-actions">
+      <button @click="activeSfx=null">←</button>
+      <h4 style="margin:0;flex:1">{{ activeSfx.name }}</h4>
+    </div>
+    <label>Name</label>
+    <input v-model="sfxForm.name" />
+    <label>Trigger</label>
+    <select v-model="sfxForm.trigger">
+      <option value="">--</option>
+      <option value="on_roll">On Roll</option>
+      <option value="on_effect">On Effect</option>
+      <option value="passive">Passive</option>
+      <option value="manual">Manual</option>
+    </select>
+    <label>Description</label>
+    <textarea v-model="sfxForm.description" rows="3"></textarea>
+    <button class="save-btn" @click="saveConfigSfx" :disabled="sfxSaving">{{ sfxSaving ? 'Saving…' : 'Save' }}</button>
   </div>
 </template>
 
@@ -165,6 +236,22 @@ const editing = ref(false)
 const creating = ref(false)
 const saving = ref(false)
 const addingTrait = ref(false)
+const sfxSaving = ref(false)
+
+// ── Traits config state ──
+const configTraits = ref(false)
+const traitSearch = ref('')
+const traitsLoading = ref(false)
+const activeTraitset = ref(null)
+const activeTraitsetId = ref(null)
+const activeTrait = ref(null)
+const activeTraitId = ref(null)
+const activeSfx = ref(null)
+const activeSfxId = ref(null)
+const sfxForm = ref({ name: '', trigger: '', description: '' })
+const traitsets = ref([])
+const allTraitsData = ref([])
+const allSfxsData = ref([])
 
 function nextBeat() { emit('next-beat') }
 function startSession() { sessionActive.value = true; emit('start-session') }
@@ -344,6 +431,75 @@ async function fetchLocationTree() { try { const r = await fetch('/api/v1/locati
 function inspectEntity(id) {
   if (inspectedEntity.value?.id === id) { inspectedEntity.value = null }
   else { editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = { id } }
+}
+
+// ── Traits config ──────────────────────────────────
+
+watch(configTraits, async (val) => {
+  if (val && traitsets.value.length === 0) await fetchTraitsConfig()
+})
+
+async function fetchTraitsConfig() {
+  traitsLoading.value = true
+  const [ts, tr, sf] = await Promise.all([
+    graphql(`query { traitsets { id name traitsetKey } }`),
+    graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name defaultDieType traitsetId } }`, { u: props.universe }),
+    graphql(`query { sfxs { id name description trigger } }`),
+  ])
+  if (ts?.traitsets) traitsets.value = ts.traitsets
+  if (tr?.traitsByUniverse) allTraitsData.value = tr.traitsByUniverse
+  if (sf?.sfxs) allSfxsData.value = sf.sfxs
+  traitsLoading.value = false
+}
+
+function closeTraitsConfig() {
+  configTraits.value = false
+  activeTraitset.value = null; activeTraitsetId.value = null
+  activeTrait.value = null; activeTraitId.value = null
+  activeSfx.value = null; activeSfxId.value = null
+  traitSearch.value = ''
+}
+
+const filteredTraitsets = computed(() => {
+  const q = traitSearch.value.toLowerCase()
+  if (!q) return traitsets.value
+  return traitsets.value.filter(ts =>
+    ts.name.toLowerCase().includes(q) ||
+    allTraitsData.value.some(t => t.traitsetId === ts.id && t.name.toLowerCase().includes(q)) ||
+    allSfxsData.value.some(s => s.name.toLowerCase().includes(q))
+  )
+})
+
+const filteredConfigTraits = computed(() => {
+  if (!activeTraitset.value) return []
+  const q = traitSearch.value.toLowerCase()
+  let list = allTraitsData.value.filter(t => t.traitsetId === activeTraitsetId.value)
+  if (q) list = list.filter(t => t.name.toLowerCase().includes(q))
+  return list
+})
+
+const configSfxs = computed(() => {
+  // Show all SFXs; linkage by trait.sfxIds would be ideal but not yet in query
+  const q = traitSearch.value.toLowerCase()
+  if (q) return allSfxsData.value.filter(s => s.name.toLowerCase().includes(q))
+  return allSfxsData.value
+})
+
+function traitCount(tsId) { return allTraitsData.value.filter(t => t.traitsetId === tsId).length }
+
+function selectTraitset(ts) { activeTraitset.value = ts; activeTraitsetId.value = ts.id; activeTrait.value = null; activeTraitId.value = null; activeSfx.value = null; activeSfxId.value = null }
+function selectConfigTrait(t) { activeTrait.value = t; activeTraitId.value = t.id; activeSfx.value = null; activeSfxId.value = null }
+function selectConfigSfx(s) { activeSfx.value = s; activeSfxId.value = s.id; sfxForm.value = { name: s.name, trigger: s.trigger || '', description: s.description || '' } }
+
+async function saveConfigSfx() {
+  if (!activeSfx.value) return
+  sfxSaving.value = true
+  await graphql(
+    `mutation($input: SfxInput!) { updateSfx(input: $input) { id } }`,
+    { input: { id: activeSfx.value.id, name: sfxForm.value.name, trigger: sfxForm.value.trigger || null, description: sfxForm.value.description || null } }
+  )
+  sfxSaving.value = false
+  fetchTraitsConfig()
 }
 
 // ── Lifecycle ──────────────────────────────────────

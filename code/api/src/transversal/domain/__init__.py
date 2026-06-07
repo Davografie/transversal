@@ -214,7 +214,7 @@ class Trait(BaseModel):
     """
     id: str
     name: str
-    universe: str
+    universes: list[str] = Field(default_factory=list)
     traitset_id: str
     default_die_type: DieType = DieType.D6
     default_rating_type: RatingType = RatingType.STATIC
@@ -231,9 +231,11 @@ class TraitSet(BaseModel):
     """
     id: str
     name: str
-    universe: str
+    universes: list[str] = Field(default_factory=list)
     description: str = ""
     entity_types: list[EntityType] = Field(default_factory=list)
+    order: int = 0
+    limit: int = 1
     location_restricted: bool = False
 
 
