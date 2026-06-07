@@ -199,7 +199,7 @@ const filterLocationIds = computed(() => {
 function collectDescendants(node, ids) { ids.add(node.id); if (node.children) for (const c of node.children) collectDescendants(c, ids) }
 
 watch([() => props.currentLocationId, allTreeNodesFlat], ([newId, nodes]) => {
-  if (newId && !filterQuery.value && nodes.length) {
+  if (newId && nodes.length) {
     const loc = nodes.find(n => n.id === newId)
     if (loc) { filterQuery.value = loc.name; filterLocationId.value = newId }
   }
@@ -322,7 +322,7 @@ function flattenTree(nodes, occupants, depth = 0, query = '') {
     if (query && !nodeOrDescendantsMatch(node, occupants, query)) continue
     const hasChildren = (node.children && node.children.length > 0) || (occupants[node.id] && occupants[node.id].length > 0)
     result.push({ id: node.id, name: node.name, universe: node.universe, depth, hasChildren, kind: 'location' })
-    const expanded = depth === 0 || !!query || expandedNodes.value[node.id]
+    const expanded = (expandedNodes.value[node.id] !== undefined ? expandedNodes.value[node.id] : depth === 0) || !!query
     if (expanded && occupants[node.id]) { for (const e of occupants[node.id]) { if (query && !e.name.toLowerCase().includes(query)) continue; result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
     if (expanded && node.children && node.children.length) result.push(...flattenTree(node.children, occupants, depth + 1, query))
   }

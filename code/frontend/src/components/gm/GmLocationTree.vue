@@ -19,7 +19,7 @@
       @click="onClick(node)"
     >
       <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id)">
-        {{ expandedIds[node.id] || node.depth === 0 ? '▾' : '▸' }}
+        {{ expandedIds[node.id] ?? (node.depth === 0) ? '▾' : '▸' }}
       </span>
       <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant' }"></span>
       <span v-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
