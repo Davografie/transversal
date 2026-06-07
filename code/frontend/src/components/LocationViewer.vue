@@ -603,7 +603,7 @@ function occupantInitials(name) {
 const poolDiceFor = (eid) => {
   const pool = props.remotePools[eid]
   if (!pool) return []
-  // In adding phase, dice are die type strings
+  // In adding phase, dice are strings or { die, label } objects
   if (pool.phase === 'adding') return (pool.dice || []).map(d => typeof d === 'string' ? d : d.die || d)
   // In picking/resolved, dice are result objects
   const results = props.remoteResults[eid]

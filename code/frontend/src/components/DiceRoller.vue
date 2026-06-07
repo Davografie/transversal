@@ -176,7 +176,7 @@ function setUniverse(u) {
 }
 
 function notifyPool() {
-  emit('poolChange', pool.map(d => d.label || d.source || d.die).filter(Boolean))
+  emit('poolChange', pool.map(d => ({ die: d.die, label: d.label || d.source || d.die })).filter(d => d.label))
 }
 
 function addDie(die) {

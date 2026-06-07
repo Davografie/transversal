@@ -28,11 +28,9 @@
     <!-- Resolved: total badge above, effect dice below -->
     <template v-if="phase === 'resolved' && resolved">
       <span
-        class="pool-die-item resolved-total"
-        :style="{ transform: 'translate(0px, ' + (-radiusPx - 6) + 'px)' }"
-      >
-        <span class="total-label">{{ resolved.total }}</span>
-      </span>
+        class="resolved-total"
+        :style="{ transform: 'translate(-50%, ' + (-radiusPx - 16) + 'px)' }"
+      >{{ resolved.total }}</span>
       <span
         v-for="(ed, i) in positionedEffectDice"
         :key="'eff-' + i"
@@ -107,16 +105,17 @@ const positionedEffectDice = computed(() => {
   transform-origin: 0 0;
 }
 .resolved-total {
+  position: absolute;
   z-index: 23;
   color: #fff;
   font-size: 1.5rem;
   font-weight: 800;
-  text-align: center;
   text-shadow:
     0 0 4px rgba(0,0,0,0.9),
     0 0 8px rgba(0,0,0,0.7),
     0 1px 2px rgba(0,0,0,0.8);
   pointer-events: none;
+  white-space: nowrap;
 }
 .kept-die {
   filter: brightness(1.25);

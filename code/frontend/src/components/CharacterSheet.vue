@@ -211,7 +211,8 @@ function sfxAllowedInPhase(sfxId) {
 
 // Pool state tracking — called by DiceRoller via App
 function setPoolSources(sources) {
-  poolSources.value = new Set(sources)
+  // sources is now [{ die, label }, ...] — extract labels for the Set
+  poolSources.value = new Set(sources.map(s => s.label || s))
 
   // Auto-recover resource dice that were removed from the pool
   // (e.g. via chip click in DiceRoller).  Only during adding phase —
