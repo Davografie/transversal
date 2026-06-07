@@ -576,12 +576,10 @@ function onPanelOpen(v) {
 }
 
 function onWrapperEnter() {
-  if (gmMode.value) return
   openPanel()
 }
 
 function onWrapperLeave() {
-  if (gmMode.value) return
   closePanel()
 }
 
