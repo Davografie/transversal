@@ -30,8 +30,17 @@
 import { reactive, ref, watch } from 'vue'
 import ChipInput from './ChipInput.vue'
 
-const universeOptions = ['earth', 'three_realms']
-const entityTypeOptions = ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET']
+const universeOptions = [
+  { label: 'Earth', value: 'earth' },
+  { label: 'Three Realms', value: 'three_realms' },
+]
+const entityTypeOptions = [
+  { label: 'Character', value: 'CHARACTER' },
+  { label: 'Location', value: 'LOCATION' },
+  { label: 'GMC', value: 'GMC' },
+  { label: 'Faction', value: 'FACTION' },
+  { label: 'Asset', value: 'ASSET' },
+]
 
 const props = defineProps({
   traitset: { type: Object, default: null },
