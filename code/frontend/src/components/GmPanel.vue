@@ -212,6 +212,7 @@ const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit 
 async function fetchEntities() { loading.value = true; const data = await graphql(ALL_ENTITIES, { type: null }); if (data?.entities) entities.value = data.entities; loading.value = false }
 
 function toggleEntity(e) {
+  cascadeCloseTo(1)
   if (editing.value && selectedId.value === e.id) { editing.value = false; selected.value = null; selectedId.value = null }
   else { selectEntity(e) }
 }
@@ -235,7 +236,7 @@ async function deleteSelected() {
   await graphql(`mutation($id: ID!) { deleteEntity(id: $id) }`, { id: selected.value.id })
   selected.value = null; selectedId.value = null; editing.value = false; await fetchEntities()
 }
-async function startCreate() { creating.value = true; editing.value = false; selected.value = null; createForm.value = { name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 } }
+async function startCreate() { cascadeCloseTo(1); creating.value = true; editing.value = false; selected.value = null; createForm.value = { name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 } }
 async function createEntity() {
   saving.value = true
   await graphql(`mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type razmerit currentUniverse currentLocation } }`, { input: { name: createForm.value.name, type: createForm.value.type, universe: createForm.value.universe, location: createForm.value.location || null, razmerit: createForm.value.razmerit } })
@@ -276,8 +277,8 @@ async function uploadBgImage(e) {
 
 // ── Navigation ─────────────────────────────────────
 function closeSecondary() { if (configTraits.value) { closeTraitsConfig(); return; } editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null }
-function switchToSheet() { if (!selected.value) return; inspectedEntity.value = { id: selected.value.id }; editing.value = false; selected.value = null; selectedId.value = null }
-function switchToEdit() { if (!inspectedEntity.value) return; const id = inspectedEntity.value.id; inspectedEntity.value = null; selectEntity({ id }) }
+function switchToSheet() { if (!selected.value) return; cascadeCloseTo(1); inspectedEntity.value = { id: selected.value.id }; editing.value = false; selected.value = null; selectedId.value = null }
+function switchToEdit() { if (!inspectedEntity.value) return; cascadeCloseTo(1); const id = inspectedEntity.value.id; inspectedEntity.value = null; selectEntity({ id }) }
 
 // ── Location tree ──────────────────────────────────
 const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
@@ -319,6 +320,7 @@ async function fetchLocationTree() { try { const r = await fetch('/api/v1/locati
 
 // ── Inspection ─────────────────────────────────────
 function inspectEntity(id) {
+  cascadeCloseTo(1)
   if (inspectedEntity.value?.id === id) { inspectedEntity.value = null }
   else { editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = { id } }
 }
@@ -362,7 +364,11 @@ const allPanels = computed(() => {
 })
 
 function onPanelClose(level) {
-  // Cascade: close deepest first, then work up with delay
+  cascadeCloseTo(level)
+}
+
+function cascadeCloseTo(level) {
+  // Close panels from deepest up to (and including) level
   const total = allPanels.value.length - 1
   let i = total
   function step() {
@@ -447,16 +453,18 @@ function closeTraitsConfig() {
 }
 
 function onTraitConfigSelect(item) {
-  // Figure out what type of item was selected by its fields
   if (item.traitsetId !== undefined) {
-    // It's a trait
+    // It's a trait → need levels 0-2 open, close deeper
+    cascadeCloseTo(2)
     activeTrait.value = item; activeTraitId.value = item.id
     activeSfx.value = null; activeSfxId.value = null
   } else if (item.trigger !== undefined || item.description !== undefined) {
-    // It's an SFX
+    // It's an SFX → need levels 0-3 open, close deeper
+    cascadeCloseTo(3)
     activeSfx.value = item; activeSfxId.value = item.id
   } else {
-    // It's a traitset
+    // It's a traitset → need levels 0-1 open, close deeper
+    cascadeCloseTo(1)
     activeTraitset.value = item; activeTraitsetId.value = item.id
     activeTrait.value = null; activeTraitId.value = null
     activeSfx.value = null; activeSfxId.value = null
