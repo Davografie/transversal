@@ -164,7 +164,7 @@ class EntityRepository:
     def get_traits_by_universe(self, universe: str) -> list[Trait]:
         query = f"""
             FOR t IN {TRAITS}
-            FILTER t.universe == @u
+            FILTER @u IN t.universes
             RETURN t
         """
         return [
@@ -175,7 +175,7 @@ class EntityRepository:
     def get_trait_by_name(self, name: str, universe: str) -> Optional[Trait]:
         query = f"""
             FOR t IN {TRAITS}
-            FILTER t.name == @name AND t.universe == @u
+            FILTER t.name == @name AND @u IN t.universes
             RETURN t
         """
         cursor = self.db.aql.execute(query, bind_vars={"name": name, "u": universe})
@@ -340,7 +340,7 @@ class EntityRepository:
         query = f"""
             LET universe_traits = (
                 FOR t IN {TRAITS}
-                FILTER t.universe == @universe
+                FILTER @universe IN t.universes
                 RETURN t._key
             )
             FOR ts IN {TRAITSETTINGS}

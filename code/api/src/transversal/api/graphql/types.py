@@ -93,7 +93,7 @@ class TraitSetting:
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
         trait = em.repo.get_trait(self.trait_id)
-        return trait.universe if trait else ""
+        return trait.universes[0] if trait and trait.universes else ""
 
 
 @strawberry.input
