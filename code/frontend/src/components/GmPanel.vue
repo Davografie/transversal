@@ -125,8 +125,8 @@
     <button class="save-btn" @click="createEntity" :disabled="saving">{{ saving ? 'Creating…' : 'Create' }}</button>
   </div>
 
-  <!-- Traits config — GmPanelStack cascade -->
-  <GmPanelStack v-if="configTraits" :panels="traitConfigPanels" @close="closeTraitConfigLevel" @select="onTraitConfigSelect" @save="onTraitConfigSave" />
+  <!-- Traits config — PanelStack cascade -->
+  <PanelStack v-if="configTraits" :panels="traitConfigPanels" @close="closeTraitConfigLevel" @select="onTraitConfigSelect" @save="onTraitConfigSave" />
 </template>
 
 <script setup>
@@ -137,7 +137,7 @@ import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import TraitEditor from '@/components/gm/TraitEditor.vue'
-import GmPanelStack from '@/components/gm/GmPanelStack.vue'
+import PanelStack from '@/components/gm/PanelStack.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
 import GmTraitsPanel from '@/components/gm/GmTraitsPanel.vue'
 import GmSfxsPanel from '@/components/gm/GmSfxsPanel.vue'
@@ -391,7 +391,7 @@ async function fetchTraitsConfig() {
   traitsLoading.value = false
 }
 
-// ── GmPanelStack for traits config ──────────────────
+// ── PanelStack for traits config ────────────────────
 
 const traitConfigPanels = computed(() => {
   const panels = []
