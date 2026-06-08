@@ -324,7 +324,7 @@ async function uploadBgImage(e) {
 }
 
 // ── Navigation ─────────────────────────────────────
-function closeSecondary() { if (configTraits.value) { closeTraitsConfig(); return }; editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null }
+function closeSecondary() { if (configTraits.value) { closeTraitsConfig(); return; } editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null }
 function switchToSheet() { if (!selected.value) return; inspectedEntity.value = { id: selected.value.id }; editing.value = false; selected.value = null; selectedId.value = null }
 function switchToEdit() { if (!inspectedEntity.value) return; const id = inspectedEntity.value.id; inspectedEntity.value = null; selectEntity({ id }) }
 
