@@ -102,7 +102,7 @@ const props = defineProps({
   currentLocationId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool'])
+const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool', 'select', 'save'])
 
 const open = ref(false)
 const mode = ref('play')

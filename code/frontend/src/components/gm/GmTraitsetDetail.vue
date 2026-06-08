@@ -9,7 +9,6 @@
       <ChipInput v-model="form.entityTypes" :options="entityTypeOptions" placeholder="Add type…" />
       <label>Limit</label>
       <input v-model.number="form.limit" type="number" min="1" />
-      <button class="save-btn" @click="save" :disabled="saving">{{ saving ? 'Saving…' : 'Save Traitset' }}</button>
     </div>
 
     <h4 class="ps-section-title">Traits</h4>
@@ -53,26 +52,34 @@ const saving = ref(false)
 
 const form = reactive({
   name: '',
-  universes: '',
-  entityTypes: '',
+  universes: [],
+  entityTypes: [],
   limit: 1,
 })
 
 watch(() => props.traitset, (ts) => {
   if (ts) {
     form.name = ts.name || ''
-    form.universes = (ts.universes || []).join(', ')
-    form.entityTypes = (ts.entity_types || []).join(', ')
+    form.universes = [...(ts.universes || [])]
+    form.entityTypes = [...(ts.entity_types || [])]
     form.limit = ts.limit || 1
   }
 }, { immediate: true })
 
+// Auto-save on any form change (debounced)
+let saveTimer = null
+watch([() => form.name, () => form.universes, () => form.entityTypes, () => form.limit], () => {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => save(), 600)
+})
+
 function save() {
+  if (!props.traitset?.id) return
   emit('save', {
-    id: props.traitset?.id,
+    id: props.traitset.id,
     name: form.name,
-    universes: form.universes.split(',').map(s => s.trim()).filter(Boolean),
-    entityTypes: form.entityTypes.split(',').map(s => s.trim()).filter(Boolean),
+    universes: form.universes,
+    entityTypes: form.entityTypes,
     limit: form.limit,
   })
 }
