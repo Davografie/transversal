@@ -24,8 +24,12 @@ defineEmits(['close'])
 
 <style scoped>
 .panel-stack {
-  position: fixed; top: 50%; right: 54px; transform: translateY(-50%); z-index: 25;
-  display: flex; flex-direction: row-reverse; align-items: center; gap: 32px;
+  position: fixed; top: 50%; right: 36px; transform: translateY(-50%); z-index: 25;
+  display: flex; flex-direction: row-reverse; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.panel-stack > * {
+  pointer-events: auto;
 }
 
 @media (max-width: 720px) {
