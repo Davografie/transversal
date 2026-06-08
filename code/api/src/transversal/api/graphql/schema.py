@@ -103,7 +103,7 @@ class Query:
         traits = _em(info).repo.get_traits_by_universe(universe)
         return [
             TraitRef(
-                id=t.id, name=t.name, universe=t.universe,
+                id=t.id, name=t.name, universes=t.universes,
                 traitset_id=t.traitset_id, default_die_type=t.default_die_type,
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
@@ -116,7 +116,7 @@ class Query:
     def traitsets_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitSetRef]:
         tss = _em(info).repo.get_traitsets_by_universe(universe)
         return [
-            TraitSetRef(id=ts.id, name=ts.name, universe=ts.universe,
+            TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
                         entity_types=ts.entity_types)
             for ts in tss
         ]
