@@ -212,7 +212,7 @@ const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit 
 async function fetchEntities() { loading.value = true; const data = await graphql(ALL_ENTITIES, { type: null }); if (data?.entities) entities.value = data.entities; loading.value = false }
 
 function toggleEntity(e) {
-  cascadeCloseTo(1)
+  cascadeCloseTo(1, false)
   if (editing.value && selectedId.value === e.id) { editing.value = false; selected.value = null; selectedId.value = null }
   else { selectEntity(e) }
 }
@@ -236,7 +236,7 @@ async function deleteSelected() {
   await graphql(`mutation($id: ID!) { deleteEntity(id: $id) }`, { id: selected.value.id })
   selected.value = null; selectedId.value = null; editing.value = false; await fetchEntities()
 }
-async function startCreate() { cascadeCloseTo(1); creating.value = true; editing.value = false; selected.value = null; createForm.value = { name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 } }
+async function startCreate() { cascadeCloseTo(1, false); creating.value = true; editing.value = false; selected.value = null; createForm.value = { name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 } }
 async function createEntity() {
   saving.value = true
   await graphql(`mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type razmerit currentUniverse currentLocation } }`, { input: { name: createForm.value.name, type: createForm.value.type, universe: createForm.value.universe, location: createForm.value.location || null, razmerit: createForm.value.razmerit } })
@@ -277,8 +277,8 @@ async function uploadBgImage(e) {
 
 // ── Navigation ─────────────────────────────────────
 function closeSecondary() { if (configTraits.value) { closeTraitsConfig(); return; } editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null }
-function switchToSheet() { if (!selected.value) return; cascadeCloseTo(1); inspectedEntity.value = { id: selected.value.id }; editing.value = false; selected.value = null; selectedId.value = null }
-function switchToEdit() { if (!inspectedEntity.value) return; cascadeCloseTo(1); const id = inspectedEntity.value.id; inspectedEntity.value = null; selectEntity({ id }) }
+function switchToSheet() { if (!selected.value) return; cascadeCloseTo(1, false); inspectedEntity.value = { id: selected.value.id }; editing.value = false; selected.value = null; selectedId.value = null }
+function switchToEdit() { if (!inspectedEntity.value) return; cascadeCloseTo(1, false); const id = inspectedEntity.value.id; inspectedEntity.value = null; selectEntity({ id }) }
 
 // ── Location tree ──────────────────────────────────
 const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
@@ -320,7 +320,7 @@ async function fetchLocationTree() { try { const r = await fetch('/api/v1/locati
 
 // ── Inspection ─────────────────────────────────────
 function inspectEntity(id) {
-  cascadeCloseTo(1)
+  cascadeCloseTo(1, false)
   if (inspectedEntity.value?.id === id) { inspectedEntity.value = null }
   else { editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = { id } }
 }
@@ -367,12 +367,12 @@ function onPanelClose(level) {
   cascadeCloseTo(level)
 }
 
-function cascadeCloseTo(level) {
-  // Close panels from deepest up to (and including) level
+function cascadeCloseTo(level, inclusive = true) {
+  // inclusive=true: close level and deeper (close button). false: only deeper (opening new panel)
   const total = allPanels.value.length - 1
   let i = total
   function step() {
-    if (i < level) return
+    if (i < level || (!inclusive && i === level)) return
     if (i === 0) { open.value = false; return }
     if (configTraits.value) closeTraitConfigLevel(i - 1)
     else closeSecondary()
@@ -455,16 +455,16 @@ function closeTraitsConfig() {
 function onTraitConfigSelect(item) {
   if (item.traitsetId !== undefined) {
     // It's a trait → need levels 0-2 open, close deeper
-    cascadeCloseTo(2)
+    cascadeCloseTo(2, false)
     activeTrait.value = item; activeTraitId.value = item.id
     activeSfx.value = null; activeSfxId.value = null
   } else if (item.trigger !== undefined || item.description !== undefined) {
     // It's an SFX → need levels 0-3 open, close deeper
-    cascadeCloseTo(3)
+    cascadeCloseTo(3, false)
     activeSfx.value = item; activeSfxId.value = item.id
   } else {
     // It's a traitset → need levels 0-1 open, close deeper
-    cascadeCloseTo(1)
+    cascadeCloseTo(1, false)
     activeTraitset.value = item; activeTraitsetId.value = item.id
     activeTrait.value = null; activeTraitId.value = null
     activeSfx.value = null; activeSfxId.value = null
