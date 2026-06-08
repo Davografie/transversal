@@ -28,6 +28,10 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue'
+import ChipInput from './ChipInput.vue'
+
+const universeOptions = ['earth', 'three_realms']
+const entityTypeOptions = ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET']
 
 const props = defineProps({
   traitset: { type: Object, default: null },

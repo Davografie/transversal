@@ -8,7 +8,7 @@
       ref="inputEl"
       v-model="text"
       class="chip-text"
-      :placeholder="modelValue.length ? '' : placeholder"
+      :placeholder="placeholder"
       @keydown.enter.prevent="addCurrent"
       @keydown.backspace="onBackspace"
       @focus="open = true"
@@ -93,9 +93,9 @@ function onBlur() {
 .chip-x { font-size: 12px; padding: 0 2px; background: none; border: none; color: var(--accent); cursor: pointer; }
 .chip-x:hover { color: #fff; }
 .chip-text {
-  flex: 1; min-width: 60px; font-size: 12px;
+  flex: 1; min-width: 80px; font-size: 12px;
   background: none; border: none; outline: none; color: var(--text);
-  padding: 2px;
+  padding: 4px 6px;
 }
 .chip-dropdown {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 30;
