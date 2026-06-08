@@ -483,13 +483,12 @@ function onTraitConfigSelect(item) {
 }
 
 function onTraitConfigSave(form) {
-  // If it has an id and entityTypes, it's a traitset save
+  // Traitset save — use snake_case params for Strawberry
   if (form.id && form.entityTypes !== undefined) {
-    sfxSaving.value = true
     graphql(
-      `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit) { id } }`,
-      { id: form.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
-    ).finally(() => { sfxSaving.value = false; fetchTraitsConfig() })
+      `mutation($id: ID!, $name: String, $universes: [String!], $entity_types: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entity_types: $entity_types, limit: $limit) { id } }`,
+      { id: form.id, name: form.name, universes: form.universes, entity_types: form.entityTypes, limit: form.limit }
+    )
     return
   }
   // Otherwise SFX save
