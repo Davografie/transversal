@@ -125,74 +125,8 @@
     <button class="save-btn" @click="createEntity" :disabled="saving">{{ saving ? 'Creating…' : 'Create' }}</button>
   </div>
 
-  <!-- Traits config panels (level 0–3, cascading left) -->
-  <div v-if="configTraits" class="edit-panel" :style="{ right: (370 + 0 * 370) + 'px' }">
-    <div class="form-actions top-actions">
-      <h4 style="margin:0">Traitsets</h4>
-      <button class="danger-btn" @click="closeTraitsConfig">×</button>
-    </div>
-    <input v-model="traitSearch" class="filter-input" placeholder="Search…" style="margin-bottom:8px" />
-    <div v-if="traitsLoading" class="loading">Loading…</div>
-    <div v-else class="tm-list">
-      <div v-for="ts in filteredTraitsets" :key="ts.id" class="entity-row"
-        :class="{ selected: activeTraitsetId === ts.id }"
-        @click="selectTraitset(ts)">
-        <span class="entity-name">{{ ts.name }}</span>
-        <span style="font-size:10px;color:var(--text-dim)">{{ traitCount(ts.id) }}</span>
-      </div>
-    </div>
-  </div>
-
-  <div v-if="configTraits && activeTraitset" class="edit-panel" :style="{ right: (370 + 1 * 370) + 'px' }">
-    <div class="form-actions top-actions">
-      <button @click="activeTraitset=null;activeTrait=null">←</button>
-      <h4 style="margin:0;flex:1">{{ activeTraitset.name }}</h4>
-    </div>
-    <div class="tm-list">
-      <div v-for="t in filteredConfigTraits" :key="t.id" class="entity-row"
-        :class="{ selected: activeTraitId === t.id }"
-        @click="selectConfigTrait(t)">
-        <span class="entity-name">{{ t.name }}</span>
-        <span :class="'die-' + (t.defaultDieType||'d6').toLowerCase()" style="font-weight:700;font-size:11px">{{ t.defaultDieType||'d6' }}</span>
-      </div>
-    </div>
-  </div>
-
-  <div v-if="configTraits && activeTrait" class="edit-panel" :style="{ right: (370 + 2 * 370) + 'px' }">
-    <div class="form-actions top-actions">
-      <button @click="activeTrait=null;activeSfx=null">←</button>
-      <h4 style="margin:0;flex:1">{{ activeTrait.name }}</h4>
-    </div>
-    <div class="tm-list">
-      <div v-for="s in configSfxs" :key="s.id" class="entity-row"
-        :class="{ selected: activeSfxId === s.id }"
-        @click="selectConfigSfx(s)">
-        <span class="entity-name">{{ s.name }}</span>
-        <span style="font-size:10px;color:var(--text-dim)">{{ s.trigger||'—' }}</span>
-      </div>
-      <div v-if="configSfxs.length === 0" class="empty">No linked SFXs</div>
-    </div>
-  </div>
-
-  <div v-if="configTraits && activeSfx" class="edit-panel" :style="{ right: (370 + 3 * 370) + 'px' }">
-    <div class="form-actions top-actions">
-      <button @click="activeSfx=null">←</button>
-      <h4 style="margin:0;flex:1">{{ activeSfx.name }}</h4>
-    </div>
-    <label>Name</label>
-    <input v-model="sfxForm.name" />
-    <label>Trigger</label>
-    <select v-model="sfxForm.trigger">
-      <option value="">--</option>
-      <option value="on_roll">On Roll</option>
-      <option value="on_effect">On Effect</option>
-      <option value="passive">Passive</option>
-      <option value="manual">Manual</option>
-    </select>
-    <label>Description</label>
-    <textarea v-model="sfxForm.description" rows="3"></textarea>
-    <button class="save-btn" @click="saveConfigSfx" :disabled="sfxSaving">{{ sfxSaving ? 'Saving…' : 'Save' }}</button>
-  </div>
+  <!-- Traits config — GmPanelStack cascade -->
+  <GmPanelStack v-if="configTraits" :panels="traitConfigPanels" @close="closeTraitConfigLevel" @select="onTraitConfigSelect" @save="onTraitConfigSave" />
 </template>
 
 <script setup>
@@ -203,6 +137,11 @@ import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import TraitEditor from '@/components/gm/TraitEditor.vue'
+import GmPanelStack from '@/components/gm/GmPanelStack.vue'
+import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
+import GmTraitsPanel from '@/components/gm/GmTraitsPanel.vue'
+import GmSfxsPanel from '@/components/gm/GmSfxsPanel.vue'
+import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 
 const { error, graphql } = useApi()
 const loading = ref(false)
@@ -452,6 +391,68 @@ async function fetchTraitsConfig() {
   traitsLoading.value = false
 }
 
+// ── GmPanelStack for traits config ──────────────────
+
+const traitConfigPanels = computed(() => {
+  const panels = []
+  // Level 0: traitsets list
+  panels.push({
+    id: 'traitsets',
+    component: GmTraitsetsPanel,
+    title: 'Traitsets',
+    props: {
+      traitsets: traitsets.value,
+      allTraits: allTraitsData.value,
+      allSfxs: allSfxsData.value,
+      loading: traitsLoading.value,
+      selectedId: activeTraitsetId.value,
+    },
+  })
+  // Level 1: traits in selected traitset
+  if (activeTraitset.value) {
+    panels.push({
+      id: 'traits',
+      component: GmTraitsPanel,
+      title: activeTraitset.value.name,
+      props: {
+        traits: allTraitsData.value.filter(t => t.traitsetId === activeTraitsetId.value),
+        selectedId: activeTraitId.value,
+      },
+    })
+  }
+  // Level 2: SFXs
+  if (activeTrait.value) {
+    panels.push({
+      id: 'sfxs',
+      component: GmSfxsPanel,
+      title: activeTrait.value.name,
+      props: {
+        sfxs: allSfxsData.value,
+        selectedId: activeSfxId.value,
+      },
+    })
+  }
+  // Level 3: SFX editor
+  if (activeSfx.value) {
+    panels.push({
+      id: 'sfx-edit',
+      component: GmSfxEditPanel,
+      title: activeSfx.value.name,
+      hideBack: false,
+      props: { sfx: activeSfx.value },
+    })
+  }
+  return panels
+})
+
+function closeTraitConfigLevel(level) {
+  // level is the index of the panel to close and all deeper
+  if (level <= 0) { closeTraitsConfig(); return }
+  if (level <= 1) { activeTraitset.value = null; activeTraitsetId.value = null; activeTrait.value = null; activeTraitId.value = null; activeSfx.value = null; activeSfxId.value = null; return }
+  if (level <= 2) { activeTrait.value = null; activeTraitId.value = null; activeSfx.value = null; activeSfxId.value = null; return }
+  activeSfx.value = null; activeSfxId.value = null
+}
+
 function closeTraitsConfig() {
   configTraits.value = false
   activeTraitset.value = null; activeTraitsetId.value = null
@@ -460,46 +461,30 @@ function closeTraitsConfig() {
   traitSearch.value = ''
 }
 
-const filteredTraitsets = computed(() => {
-  const q = traitSearch.value.toLowerCase()
-  if (!q) return traitsets.value
-  return traitsets.value.filter(ts =>
-    ts.name.toLowerCase().includes(q) ||
-    allTraitsData.value.some(t => t.traitsetId === ts.id && t.name.toLowerCase().includes(q)) ||
-    allSfxsData.value.some(s => s.name.toLowerCase().includes(q))
-  )
-})
+function onTraitConfigSelect(item) {
+  // Figure out what type of item was selected by its fields
+  if (item.traitsetId !== undefined) {
+    // It's a trait
+    activeTrait.value = item; activeTraitId.value = item.id
+    activeSfx.value = null; activeSfxId.value = null
+  } else if (item.trigger !== undefined || item.description !== undefined) {
+    // It's an SFX
+    activeSfx.value = item; activeSfxId.value = item.id
+  } else {
+    // It's a traitset
+    activeTraitset.value = item; activeTraitsetId.value = item.id
+    activeTrait.value = null; activeTraitId.value = null
+    activeSfx.value = null; activeSfxId.value = null
+  }
+}
 
-const filteredConfigTraits = computed(() => {
-  if (!activeTraitset.value) return []
-  const q = traitSearch.value.toLowerCase()
-  let list = allTraitsData.value.filter(t => t.traitsetId === activeTraitsetId.value)
-  if (q) list = list.filter(t => t.name.toLowerCase().includes(q))
-  return list
-})
-
-const configSfxs = computed(() => {
-  // Show all SFXs; linkage by trait.sfxIds would be ideal but not yet in query
-  const q = traitSearch.value.toLowerCase()
-  if (q) return allSfxsData.value.filter(s => s.name.toLowerCase().includes(q))
-  return allSfxsData.value
-})
-
-function traitCount(tsId) { return allTraitsData.value.filter(t => t.traitsetId === tsId).length }
-
-function selectTraitset(ts) { activeTraitset.value = ts; activeTraitsetId.value = ts.id; activeTrait.value = null; activeTraitId.value = null; activeSfx.value = null; activeSfxId.value = null }
-function selectConfigTrait(t) { activeTrait.value = t; activeTraitId.value = t.id; activeSfx.value = null; activeSfxId.value = null }
-function selectConfigSfx(s) { activeSfx.value = s; activeSfxId.value = s.id; sfxForm.value = { name: s.name, trigger: s.trigger || '', description: s.description || '' } }
-
-async function saveConfigSfx() {
+function onTraitConfigSave(form) {
   if (!activeSfx.value) return
   sfxSaving.value = true
-  await graphql(
+  graphql(
     `mutation($input: SfxInput!) { updateSfx(input: $input) { id } }`,
-    { input: { id: activeSfx.value.id, name: sfxForm.value.name, trigger: sfxForm.value.trigger || null, description: sfxForm.value.description || null } }
-  )
-  sfxSaving.value = false
-  fetchTraitsConfig()
+    { input: { id: activeSfx.value.id, name: form.name, trigger: form.trigger || null, description: form.description || null } }
+  ).finally(() => { sfxSaving.value = false; fetchTraitsConfig() })
 }
 
 // ── Lifecycle ──────────────────────────────────────
