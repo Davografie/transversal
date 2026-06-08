@@ -78,6 +78,7 @@ async def get_context(request: Request) -> dict:
     return {
         "entity_manager": _get_em(),
         "razmerit_service": _get_raz(),
+        "effects_engine": _get_engine(),
     }
 
 

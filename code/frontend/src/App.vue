@@ -149,7 +149,7 @@
     :remote-results="remoteResults"
     @moved="onMoved"
   />
-  <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="closePanel" />
+  <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <CharacterSheet
         v-show="sheetVisible && !gmMode"
@@ -580,6 +580,7 @@ function onWrapperEnter() {
 }
 
 function onWrapperLeave() {
+  if (phase.value === 'picking') return  // don't close during drag-and-drop
   closePanel()
 }
 

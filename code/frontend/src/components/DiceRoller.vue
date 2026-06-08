@@ -135,8 +135,8 @@ function onRollerTouchStart(e) {
 }
 function onRollerTouchEnd(e) {
   const dy = e.changedTouches[0].clientY - rollerTouchY
-  if (dy > 40 && panelOpen.value) {
-    panelOpen.value = false        // swipe down → close
+  if (dy > 40 && panelOpen.value && phase.value !== Phase.PICKING) {
+    panelOpen.value = false        // swipe down → close (disabled during picking)
   } else if (dy < -40 && !panelOpen.value) {
     panelOpen.value = true         // swipe up → open
   }

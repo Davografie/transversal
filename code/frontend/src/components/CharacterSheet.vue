@@ -7,11 +7,12 @@
       <div class="header">
         <div class="header-top">
           <h2>{{ entity.name }}</h2>
+          <img v-if="entity.backgroundImage" :src="entity.backgroundImage" class="sheet-portrait" />
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
-        <div class="meta">
-          <span class="location">{{ entity.currentLocation || 'Unknown' }}</span>
-          <span class="universe">{{ entity.currentUniverse }}</span>
+        <div v-if="gmMode" class="meta">
+          <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
+          <span class="universe">{{ universeName || entity.currentUniverse }}</span>
         </div>
         <div class="razmerit">
           <span class="razmerit-value">{{ entity.razmerit }}</span> razmerit
@@ -63,8 +64,8 @@
         <div class="header">
           <h2>{{ entity.name }}</h2>
           <div class="meta">
-            <span class="location">{{ entity.currentLocation || 'Unknown' }}</span>
-            <span class="universe">{{ entity.currentUniverse }}</span>
+            <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
+            <span class="universe">{{ universeName || entity.currentUniverse }}</span>
           </div>
           <div class="razmerit">
             <span class="razmerit-value">{{ entity.razmerit }}</span> razmerit
@@ -132,14 +133,19 @@ const open = ref(false)
 const entity = ref(null)
 const traitSets = ref([])
 
+// Resolved human-readable names
+const locationName = ref('')
+const universeName = ref('')
+
 // Accordion state — user controls which sets are expanded
-const expandedSets = ref(new Set())
+const expandedSets = ref(new Set(JSON.parse(localStorage.getItem('expandedSets') || '[]')))
 
 function toggleSet(name) {
   const s = new Set(expandedSets.value)
   if (s.has(name)) s.delete(name)
   else s.add(name)
   expandedSets.value = s
+  localStorage.setItem('expandedSets', JSON.stringify([...s]))
 }
 
 // SFX usage tracking — reset per dice pool cycle
@@ -269,6 +275,7 @@ const QUERY = `
       razmerit
       currentUniverse
       currentLocation
+      backgroundImage
       traitSettings {
         id
         name
@@ -291,17 +298,39 @@ async function fetchEntity() {
   const data = await graphql(QUERY, { id: props.entityId })
   if (data?.entity) {
     entity.value = data.entity
+    resolveNames(data.entity)
 
     // Group trait settings by traitset, filter by universe
     const sets = {}
     for (const ts of data.entity.traitSettings || []) {
-      // Show if ego, or if trait's universe matches selected universe
       if (!ts.ego && ts.universe !== props.universe) continue
       const key = ts.traitsetName || 'Other'
       if (!sets[key]) sets[key] = []
       sets[key].push(ts)
     }
     traitSets.value = Object.entries(sets).map(([name, traits]) => ({ name, traits }))
+  }
+}
+
+async function resolveNames(e) {
+  if (e.currentLocation) {
+    try {
+      const r = await fetch(`/api/v1/locations/${e.currentLocation}/navigate`)
+      const nav = await r.json()
+      locationName.value = nav.location?.name || e.currentLocation
+    } catch { locationName.value = e.currentLocation }
+  }
+  if (e.currentUniverse) {
+    try {
+      const r = await fetch('/api/v1/graphql', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: `{ entities(type: UNIVERSE) { id name currentUniverse } }` })
+      })
+      const json = await r.json()
+      const universes = json.data?.entities || []
+      const match = universes.find(u => u.currentUniverse === e.currentUniverse || u.id === e.currentUniverse)
+      universeName.value = match?.name || e.currentUniverse
+    } catch { universeName.value = e.currentUniverse }
   }
 }
 
@@ -433,8 +462,21 @@ watch(() => props.universe, fetchEntity)
 
 .header-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 8px;
+}
+.sheet-portrait {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+  order: 1;
+}
+.header-top h2 {
+  flex: 1;
 }
 .sheet-settings-btn {
   width: 28px;
