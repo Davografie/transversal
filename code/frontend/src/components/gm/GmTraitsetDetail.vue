@@ -3,10 +3,10 @@
     <div class="ps-form">
       <label>Name</label>
       <input v-model="form.name" />
-      <label>Universes (comma-separated)</label>
-      <input v-model="form.universes" placeholder="earth, three_realms" />
-      <label>Entity Types (comma-separated)</label>
-      <input v-model="form.entityTypes" placeholder="CHARACTER, GMC" />
+      <label>Universes</label>
+      <ChipInput v-model="form.universes" :options="universeOptions" placeholder="Add universe…" />
+      <label>Entity Types</label>
+      <ChipInput v-model="form.entityTypes" :options="entityTypeOptions" placeholder="Add type…" />
       <label>Limit</label>
       <input v-model.number="form.limit" type="number" min="1" />
       <button class="save-btn" @click="save" :disabled="saving">{{ saving ? 'Saving…' : 'Save Traitset' }}</button>
