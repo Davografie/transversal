@@ -368,11 +368,21 @@ function onPanelClose(level) {
 }
 
 function cascadeCloseTo(level, inclusive = true) {
-  // inclusive=true: close level and deeper (close button). false: only deeper (opening new panel)
+  // inclusive=true: close level and deeper with animation (close button)
+  // inclusive=false: close only deeper, sync (opening new panel)
   const total = allPanels.value.length - 1
+  if (!inclusive) {
+    // Synchronous: just nuke deeper levels immediately
+    for (let i = total; i > level; i--) {
+      if (configTraits.value) closeTraitConfigLevel(i - 1)
+      else closeSecondary()
+    }
+    return
+  }
+  // Animated cascade for close button
   let i = total
   function step() {
-    if (i < level || (!inclusive && i === level)) return
+    if (i < level) return
     if (i === 0) { open.value = false; return }
     if (configTraits.value) closeTraitConfigLevel(i - 1)
     else closeSecondary()
