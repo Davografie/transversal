@@ -90,7 +90,7 @@ import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import TraitEditor from '@/components/gm/TraitEditor.vue'
 import PanelStack from '@/components/gm/PanelStack.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
-import GmTraitsPanel from '@/components/gm/GmTraitsPanel.vue'
+import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 import GmSfxsPanel from '@/components/gm/GmSfxsPanel.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 
@@ -409,13 +409,14 @@ const traitConfigPanels = computed(() => {
       selectedId: activeTraitsetId.value,
     },
   })
-  // Level 1: traits in selected traitset
+  // Level 1: traitset detail (form + traits)
   if (activeTraitset.value) {
     panels.push({
-      id: 'traits',
-      component: GmTraitsPanel,
+      id: 'traitset-detail',
+      component: GmTraitsetDetail,
       title: activeTraitset.value.name,
       props: {
+        traitset: activeTraitset.value,
         traits: allTraitsData.value.filter(t => t.traitsetId === activeTraitsetId.value),
         selectedId: activeTraitId.value,
       },
@@ -482,6 +483,16 @@ function onTraitConfigSelect(item) {
 }
 
 function onTraitConfigSave(form) {
+  // If it has an id and entityTypes, it's a traitset save
+  if (form.id && form.entityTypes !== undefined) {
+    sfxSaving.value = true
+    graphql(
+      `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit) { id } }`,
+      { id: form.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
+    ).finally(() => { sfxSaving.value = false; fetchTraitsConfig() })
+    return
+  }
+  // Otherwise SFX save
   if (!activeSfx.value) return
   sfxSaving.value = true
   graphql(

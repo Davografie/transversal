@@ -8,7 +8,7 @@
     >
       <slot v-if="!panel.component && (panel.id === 'inspect' || panel.id === 'edit' || panel.id === 'create')" name="entity" />
       <slot v-else-if="!panel.component && panel.id === 'gm'" name="gm" />
-      <component v-else :is="panel.component" v-bind="panel.props || {}" @select="$emit('select', $event)" @save="$emit('save', $event)" @add-trait="$emit('add-trait', $event)" />
+      <component v-else :is="panel.component" v-bind="panel.props || {}" @select="$emit('select', $event)" @save="$emit('save', $event)" @select-trait="$emit('select', $event)" @add-trait="$emit('add-trait', $event)" />
     </Panel>
   </div>
 </template>
