@@ -6,7 +6,7 @@
       :class="{ 'stack-active': i === panels.length - 1 }"
       @close="$emit('close', i)"
     >
-      <slot v-if="!panel.component && panel.id === 'entity'" name="entity" />
+      <slot v-if="!panel.component && (panel.id === 'inspect' || panel.id === 'edit' || panel.id === 'create')" name="entity" />
       <slot v-else-if="!panel.component && panel.id === 'gm'" name="gm" />
       <component v-else :is="panel.component" v-bind="panel.props || {}" @select="$emit('select', $event)" @save="$emit('save', $event)" @add-trait="$emit('add-trait', $event)" />
     </Panel>
