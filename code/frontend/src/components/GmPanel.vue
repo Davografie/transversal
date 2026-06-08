@@ -3,81 +3,57 @@
     {{ open ? '×' : '🛠' }}
   </button>
 
+  <!-- Unified panel system — PanelStack handles all -->
+  <PanelStack :panels="allPanels" @close="onPanelClose" @select="onTraitConfigSelect" @save="onTraitConfigSave">
+    <!-- Level 0: GM panel -->
+    <template #gm v-if="open">
+      <div class="gm-content">
+        <div v-if="loading" class="loading">Loading…</div>
+        <div v-else-if="error" class="error">{{ error }}</div>
 
-  <div class="gm-panel panel" :class="{ open, 'has-editor': editing || creating || inspectedEntity }">
-    <div v-if="open" class="gm-content">
-      <div v-if="loading" class="loading">Loading…</div>
-      <div v-else-if="error" class="error">{{ error }}</div>
-
-      <template v-else>
-        <div class="mode-tabs">
-          <button :class="{ active: mode === 'play' }" @click="mode = 'play'">Play</button>
-          <button :class="{ active: mode === 'prep' }" @click="mode = 'prep'">Prep</button>
-        </div>
-
-        <!-- ===== PLAY MODE ===== -->
-        <template v-if="mode === 'play'">
-          <div class="gm-shortcuts">
-            <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
-            <button class="shortcut-btn scene-btn" @click="viewSceneSummary = !viewSceneSummary">◈ Scene</button>
-            <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
-            <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
+        <template v-else>
+          <div class="mode-tabs">
+            <button :class="{ active: mode === 'play' }" @click="mode = 'play'">Play</button>
+            <button :class="{ active: mode === 'prep' }" @click="mode = 'prep'">Prep</button>
           </div>
 
-          <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntities" @inspect="inspectEntity" />
-        </template>
+          <template v-if="mode === 'play'">
+            <div class="gm-shortcuts">
+              <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
+              <button class="shortcut-btn scene-btn" @click="viewSceneSummary = !viewSceneSummary">◈ Scene</button>
+              <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
+              <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
+            </div>
+            <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntities" @inspect="inspectEntity" />
+          </template>
 
-        <!-- ===== PREP MODE ===== -->
-        <template v-if="mode === 'prep'">
-          <div class="entities-layout">
-            <div class="entity-list-col">
-              <div class="filter-bar">
-                <div class="filter-input-wrap">
-                  <input v-model="filterQuery" class="filter-input" placeholder="Filter…"
-                    @focus="showSuggestions = true" @blur="hideSuggestions"
-                    @keyup.escape="filterQuery = ''; filterLocationId = ''" />
-                  <button v-if="filterQuery" class="filter-clear-inline" @click="filterQuery = ''; filterLocationId = ''">✕</button>
-                  <div v-if="showSuggestions && suggestions.length" class="filter-suggestions">
-                    <div v-for="s in suggestions" :key="s.id" class="suggestion-row" @mousedown.prevent="selectSuggestion(s)">
-                      <span class="entity-type-badge" :class="'type-' + s.type">{{ s.type }}</span>
-                      <span>{{ s.name }}</span>
-                    </div>
+          <template v-if="mode === 'prep'">
+            <div class="filter-bar">
+              <div class="filter-input-wrap">
+                <input v-model="filterQuery" class="filter-input" placeholder="Filter…" @focus="showSuggestions = true" @blur="hideSuggestions" @keyup.escape="filterQuery = ''; filterLocationId = ''" />
+                <button v-if="filterQuery" class="filter-clear-inline" @click="filterQuery = ''; filterLocationId = ''">✕</button>
+                <div v-if="showSuggestions && suggestions.length" class="filter-suggestions">
+                  <div v-for="s in suggestions" :key="s.id" class="suggestion-row" @mousedown.prevent="selectSuggestion(s)">
+                    <span class="entity-type-badge" :class="'type-' + s.type">{{ s.type }}</span><span>{{ s.name }}</span>
                   </div>
                 </div>
               </div>
-
-              <button class="create-btn" @click="startCreate">+ New Entity</button>
-
-              <GmLocationTree
-                :flat-tree="flatTree"
-                :expanded-ids="expandedNodes"
-                :selected-id="selectedId"
-                :universe="universe"
-                @select-location="onSelectLocation"
-                @select-occupant="onSelectOccupant"
-                @toggle-expand="toggleTreeNode"
-                @move-entity="onMoveEntity"
-              />
-
-              <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
-              <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
-                <span class="entity-type-badge type-FACTION">FAC</span>
-                <span class="entity-name">{{ e.name }}</span>
-                <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
-              </div>
-
-              <button class="create-btn" style="margin-top:8px" @click="configTraits = true">Manage Traits</button>
-
-              <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
             </div>
-          </div>
+            <button class="create-btn" @click="startCreate">+ New Entity</button>
+            <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :universe="universe" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
+            <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
+            <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
+              <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
+              <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
+            </div>
+            <button class="create-btn" style="margin-top:8px" @click="configTraits = true">Manage Traits</button>
+            <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
+          </template>
         </template>
-      </template>
-    </div>
-  </div>
+      </div>
+    </template>
 
-  <!-- Unified secondary panels — PanelStack handles all -->
-  <PanelStack :panels="secondaryPanels" @close="onSecondaryClose" @select="onTraitConfigSelect" @save="onTraitConfigSave">
+    <!-- Level 1+: entity panels -->
     <template #entity v-if="editing || creating || inspectedEntity">
       <template v-if="inspectedEntity && !editing">
         <div class="form-actions top-actions">
@@ -370,9 +346,11 @@ async function fetchTraitsConfig() {
 
 // ── Unified secondary panels ────────────────────────
 
-const secondaryPanels = computed(() => {
+const allPanels = computed(() => {
   const panels = []
-  // Entity secondary panels (level 0) — content comes from #entity slot
+  // Level 0: GM panel (when open)
+  if (open.value) panels.push({ id: 'gm', hideClose: true })
+  // Level 1+: secondary panels
   if (inspectedEntity.value && !editing.value) {
     panels.push({ id: 'inspect' })
   } else if (editing.value && selected.value) {
@@ -380,13 +358,14 @@ const secondaryPanels = computed(() => {
   } else if (creating.value) {
     panels.push({ id: 'create' })
   } else if (configTraits.value) {
-    return traitConfigPanels.value
+    return panels.concat(traitConfigPanels.value)
   }
   return panels
 })
 
-function onSecondaryClose(level) {
-  if (configTraits.value) { closeTraitConfigLevel(level); return }
+function onPanelClose(level) {
+  if (level === 0) { open.value = false; return }
+  if (configTraits.value) { closeTraitConfigLevel(level - 1); return }
   closeSecondary()
 }
 
@@ -500,18 +479,6 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
   background: var(--bg-panel); backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.1);
 }
-.gm-panel {
-  position: fixed; top: 50%; right: 38px; transform: translateY(-50%); z-index: 20;
-  width: 0; max-width: 0; max-height: 0; padding: 0;
-  border-radius: 12px;
-  transition: width 0.3s ease, max-width 0.3s ease, max-height 0.3s ease, padding 0.3s ease;
-  overflow: hidden;
-}
-.gm-panel.open {
-  width: 320px; max-width: calc(100vw - 100px); max-height: 90vh; height: auto;
-  overflow: visible; padding: 16px;
-}
-.gm-panel.open.has-editor { overflow: visible; }
 .gm-content { overflow-y: auto; max-height: calc(90vh - 32px); }
 
 /* ── Mode tabs ─────────────────────────────────── */
@@ -573,6 +540,6 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 .error { color: var(--danger); }
 
 @media (max-width: 720px) {
-  .gm-panel.has-editor, .gm-toggle.has-editor { display: none; }
+  .gm-toggle.has-editor { display: none; }
 }
 </style>
