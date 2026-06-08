@@ -2,11 +2,7 @@
   <button class="gm-toggle" :class="{ 'has-editor': editing || creating || inspectedEntity }" @click="open = !open">
     {{ open ? '×' : '🛠' }}
   </button>
-  <button
-    v-if="editing || creating || inspectedEntity || configTraits"
-    class="gm-close-panel"
-    @click="closeSecondary"
-  >×</button>
+
 
   <div class="gm-panel panel" :class="{ open, 'has-editor': editing || creating || inspectedEntity }">
     <div v-if="open" class="gm-content">
@@ -80,53 +76,34 @@
     </div>
   </div>
 
-  <!-- Secondary panels -->
-   <div v-if="inspectedEntity && !editing" class="edit-panel">
-    <div class="form-actions top-actions">
-      <button class="sheet-edit-btn" @click="switchToEdit">Edit</button>
-    </div>
-    <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded :gm-mode="true" @add-to-pool="(d) => emit('add-to-pool', d)" />
-  </div>
-
-  <div v-if="editing && selected" class="edit-panel">
-    <div class="form-actions top-actions">
-      <button class="sheet-edit-btn" @click="switchToSheet">Sheet</button>
-      <button class="danger-btn" @click="deleteSelected">Delete</button>
-    </div>
-
-    <GmEntityForm v-model="form" :universes="universes" :location-entities="locationEntities"
-      :allow-type-change="false" @upload-bg="uploadBgImage" />
-
-    <button class="save-btn" @click="saveEntity" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
-
-    <TraitEditor :traits="selected.traitSettings" :available-traits="availableTraits" :adding="addingTrait"
-      @add-trait="onAddTrait" @remove-trait="removeTrait" />
-  </div>
-
-  <div v-if="creating" class="edit-panel">
-    <button @click="creating = false">← Back</button>
-    <label>Name</label>
-    <input v-model="createForm.name" autofocus />
-    <label>Type</label>
-    <select v-model="createForm.type">
-      <option v-for="t in entityTypes" :key="t" :value="t">{{ t }}</option>
-    </select>
-    <label>Universe</label>
-    <select v-model="createForm.universe">
-      <option v-for="u in universes" :key="u.key" :value="u.key">{{ u.name }}</option>
-    </select>
-    <label>Location (optional)</label>
-    <select v-model="createForm.location">
-      <option value="">-- None --</option>
-      <option v-for="l in filteredLocations" :key="l.id" :value="l.id">{{ l.name }}</option>
-    </select>
-    <label>Razmerit</label>
-    <input v-model.number="createForm.razmerit" type="number" />
-    <button class="save-btn" @click="createEntity" :disabled="saving">{{ saving ? 'Creating…' : 'Create' }}</button>
-  </div>
-
-  <!-- Traits config — PanelStack cascade -->
-  <PanelStack v-if="configTraits" :panels="traitConfigPanels" @close="closeTraitConfigLevel" @select="onTraitConfigSelect" @save="onTraitConfigSave" />
+  <!-- Unified secondary panels — PanelStack handles all -->
+  <PanelStack :panels="secondaryPanels" @close="onSecondaryClose" @select="onTraitConfigSelect" @save="onTraitConfigSave">
+    <template #entity v-if="editing || creating || inspectedEntity">
+      <template v-if="inspectedEntity && !editing">
+        <div class="form-actions top-actions">
+          <button class="sheet-edit-btn" @click="switchToEdit">Edit</button>
+        </div>
+        <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded :gm-mode="true" @add-to-pool="(d) => emit('add-to-pool', d)" />
+      </template>
+      <template v-if="editing && selected">
+        <div class="form-actions top-actions">
+          <button class="sheet-edit-btn" @click="switchToSheet">Sheet</button>
+          <button class="danger-btn" @click="deleteSelected">Delete</button>
+        </div>
+        <GmEntityForm v-model="form" :universes="universes" :location-entities="locationEntities" :allow-type-change="false" @upload-bg="uploadBgImage" />
+        <button class="save-btn" @click="saveEntity" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
+        <TraitEditor :traits="selected.traitSettings" :available-traits="availableTraits" :adding="addingTrait" @add-trait="onAddTrait" @remove-trait="removeTrait" />
+      </template>
+      <template v-if="creating">
+        <label>Name</label><input v-model="createForm.name" autofocus />
+        <label>Type</label><select v-model="createForm.type"><option v-for="t in entityTypes" :key="t" :value="t">{{ t }}</option></select>
+        <label>Universe</label><select v-model="createForm.universe"><option v-for="u in universes" :key="u.key" :value="u.key">{{ u.name }}</option></select>
+        <label>Location</label><select v-model="createForm.location"><option value="">-- None --</option><option v-for="l in filteredLocations" :key="l.id" :value="l.id">{{ l.name }}</option></select>
+        <label>Razmerit</label><input v-model.number="createForm.razmerit" type="number" />
+        <button class="save-btn" @click="createEntity" :disabled="saving">{{ saving ? 'Creating…' : 'Create' }}</button>
+      </template>
+    </template>
+  </PanelStack>
 </template>
 
 <script setup>
@@ -391,6 +368,28 @@ async function fetchTraitsConfig() {
   traitsLoading.value = false
 }
 
+// ── Unified secondary panels ────────────────────────
+
+const secondaryPanels = computed(() => {
+  const panels = []
+  // Entity secondary panels (level 0) — content comes from #entity slot
+  if (inspectedEntity.value && !editing.value) {
+    panels.push({ id: 'inspect' })
+  } else if (editing.value && selected.value) {
+    panels.push({ id: 'edit' })
+  } else if (creating.value) {
+    panels.push({ id: 'create' })
+  } else if (configTraits.value) {
+    return traitConfigPanels.value
+  }
+  return panels
+})
+
+function onSecondaryClose(level) {
+  if (configTraits.value) { closeTraitConfigLevel(level); return }
+  closeSecondary()
+}
+
 // ── PanelStack for traits config ────────────────────
 
 const traitConfigPanels = computed(() => {
@@ -501,17 +500,6 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
   background: var(--bg-panel); backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.1);
 }
-.gm-close-panel {
-  position: fixed; top: 50%; right: 358px; transform: translateY(-50%); z-index: 22;
-  width: 36px; height: 36px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; padding: 0;
-  background: var(--bg-panel); backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.15);
-  animation: fadeIn 0.15s ease;
-}
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
 .gm-panel {
   position: fixed; top: 50%; right: 38px; transform: translateY(-50%); z-index: 20;
   width: 0; max-width: 0; max-height: 0; padding: 0;
@@ -573,31 +561,18 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 .entity-universe { font-size: 10px; color: var(--text-dim); }
 .factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
 
-/* ── Edit panel ─────────────────────────────────── */
-.edit-panel {
-  position: fixed; top: 50%; transform: translateY(-50%); right: 370px;
-  width: 360px; max-height: 90vh; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 8px; padding: 16px;
-  background: var(--bg-panel); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
-  animation: slideInLeft 0.2s ease;
-}
-@keyframes slideInLeft { from { opacity: 0; transform: translateY(-50%) translateX(12px); } to { opacity: 1; transform: translateY(-50%) translateX(0); } }
-.edit-panel label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.edit-panel input, .edit-panel select { font-size: 13px; padding: 6px 10px; }
-
 .form-actions { display: flex; gap: 6px; }
 .top-actions { justify-content: space-between; margin-bottom: 4px; }
 .danger-btn { background: var(--danger) !important; color: #fff !important; }
 .sheet-edit-btn { background: var(--accent); color: #fff; }
 .save-btn { background: var(--success) !important; color: #0a0a0f !important; font-weight: 600; margin-top: 4px; }
+.panel-body label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-top: 8px; }
+.panel-body input, .panel-body select { font-size: 13px; padding: 6px 10px; width: 100%; box-sizing: border-box; }
 
 .loading, .error, .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 .error { color: var(--danger); }
 
 @media (max-width: 720px) {
-  .edit-panel { right: 8px; left: 8px; width: auto; max-height: 70vh; }
   .gm-panel.has-editor, .gm-toggle.has-editor { display: none; }
-  .gm-close-panel { right: 12px; }
 }
 </style>

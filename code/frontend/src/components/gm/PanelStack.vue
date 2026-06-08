@@ -6,7 +6,8 @@
       :class="{ 'stack-active': i === panels.length - 1 }"
       @close="$emit('close', i)"
     >
-      <component :is="panel.component" v-bind="panel.props || {}" />
+      <slot v-if="!panel.component" name="entity" />
+      <component v-else :is="panel.component" v-bind="panel.props || {}" @select="$emit('select', $event)" @save="$emit('save', $event)" @add-trait="$emit('add-trait', $event)" />
     </Panel>
   </div>
 </template>
@@ -23,7 +24,7 @@ defineEmits(['close'])
 <style scoped>
 .panel-stack {
   position: fixed; top: 50%; right: 370px; transform: translateY(-50%); z-index: 25;
-  display: flex; flex-direction: row-reverse; align-items: center; gap: 24px;
+  display: flex; flex-direction: row-reverse; align-items: center; gap: 32px;
 }
 
 @media (max-width: 720px) {
