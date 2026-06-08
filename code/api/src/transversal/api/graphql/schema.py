@@ -99,6 +99,15 @@ class Query:
         return [_entity_to_gql(e) for e in results]
 
     @strawberry.field
+    def traitsets(self, info: strawberry.Info) -> list[TraitSetRef]:
+        tss = _em(info).repo.get_all_traitsets()
+        return [
+            TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
+                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit)
+            for ts in tss
+        ]
+
+    @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:
         traits = _em(info).repo.get_traits_by_universe(universe)
         return [
@@ -117,7 +126,7 @@ class Query:
         tss = _em(info).repo.get_traitsets_by_universe(universe)
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
-                        entity_types=ts.entity_types)
+                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit)
             for ts in tss
         ]
 
@@ -259,6 +268,47 @@ class Mutation:
             ts.sfx_ids = [str(s) for s in input.sfx_ids]
         updated = _em(info).update_traitsetting(ts)
         return _ts_to_gql(updated)
+
+    # ── Traitset CRUD ────────────────────────────────────
+
+    @strawberry.mutation
+    def create_traitset(self, info: strawberry.Info, id: str, name: str, universes: list[str],
+                        entity_types: Optional[list[EntityType]] = None, description: str = "",
+                        order: int = 0, limit: int = 1) -> TraitSetRef:
+        from transversal.domain import TraitSet as DomainTraitSet
+        ts = DomainTraitSet(id=id, name=name, universes=universes,
+                            entity_types=entity_types or [], description=description,
+                            order=order, limit=limit)
+        created = _em(info).repo.create_traitset(ts)
+        return TraitSetRef(id=created.id, name=created.name, universes=created.universes,
+                           entity_types=created.entity_types, order=created.order, limit=created.limit)
+
+    @strawberry.mutation
+    def update_traitset(self, info: strawberry.Info, id: strawberry.ID, name: Optional[str] = None,
+                        universes: Optional[list[str]] = None, entity_types: Optional[list[EntityType]] = None,
+                        description: Optional[str] = None, order: Optional[int] = None,
+                        limit: Optional[int] = None) -> TraitSetRef:
+        existing = _em(info).repo.get_traitset_by_id(str(id))
+        if not existing: raise ValueError(f"TraitSet '{id}' not found")
+        if name is not None: existing.name = name
+        if universes is not None: existing.universes = universes
+        if entity_types is not None: existing.entity_types = entity_types
+        if description is not None: existing.description = description
+        if order is not None: existing.order = order
+        if limit is not None: existing.limit = limit
+        updated = _em(info).repo.update_traitset(existing)
+        return TraitSetRef(id=updated.id, name=updated.name, universes=updated.universes,
+                           entity_types=updated.entity_types, order=updated.order, limit=updated.limit)
+
+    @strawberry.mutation
+    def delete_traitset(self, info: strawberry.Info, id: strawberry.ID) -> str:
+        result = _em(info).repo.delete_traitset(str(id))
+        return f"Deleted traitset and {result['traits_removed']} traits, {result['settings_removed']} settings"
+
+    @strawberry.mutation
+    def reorder_traitsets(self, info: strawberry.Info, ids: list[strawberry.ID]) -> bool:
+        _em(info).repo.reorder_traitsets([str(i) for i in ids])
+        return True
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

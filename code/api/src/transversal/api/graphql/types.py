@@ -27,7 +27,7 @@ ChallengePolarity = strawberry.enum(DomainChallengePolarity)
 class TraitRef:
     id: strawberry.ID
     name: str
-    universe: str
+    universes: list[str]
     traitset_id: strawberry.ID
     default_die_type: DieType
     default_rating_type: RatingType
@@ -39,8 +39,10 @@ class TraitRef:
 class TraitSetRef:
     id: strawberry.ID
     name: str
-    universe: str
+    universes: list[str]
     entity_types: list[EntityType]
+    order: int = 0
+    limit: int = 1
 
 
 # ── Trait Setting (edge) ─────────────────────────────
