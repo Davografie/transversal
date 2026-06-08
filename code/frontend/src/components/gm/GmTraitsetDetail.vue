@@ -27,7 +27,10 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue'
+import { useApi } from '@/composables/useApi.js'
 import ChipInput from './ChipInput.vue'
+
+const { graphql } = useApi()
 
 const universeOptions = [
   { label: 'Earth', value: 'earth' },
@@ -47,7 +50,7 @@ const props = defineProps({
   selectedId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['save', 'select-trait', 'add-trait', 'close'])
+const emit = defineEmits(['select-trait', 'add-trait', 'close'])
 const saving = ref(false)
 
 const form = reactive({
@@ -75,14 +78,10 @@ watch([() => form.name, () => form.universes, () => form.entityTypes, () => form
 
 function save() {
   if (!props.traitset?.id) return
-  console.log('GmTraitsetDetail save emitting', form.universes, form.entityTypes)
-  emit('save', {
-    id: props.traitset.id,
-    name: form.name,
-    universes: form.universes,
-    entityTypes: form.entityTypes,
-    limit: form.limit,
-  })
+  graphql(
+    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit) { id } }`,
+    { id: props.traitset.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
+  )
 }
 </script>
 

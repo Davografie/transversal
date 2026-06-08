@@ -483,25 +483,7 @@ function onTraitConfigSelect(item) {
 }
 
 function onTraitConfigSave(form) {
-  console.log('onTraitConfigSave called with', form)
-  // Traitset save — update local data so L1 reflects changes
-  if (form.id && form.entityTypes !== undefined) {
-    graphql(
-      `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit) { id } }`,
-      { id: form.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
-    )
-    // Update local traitset and activeTraitset
-    const idx = traitsets.value.findIndex(ts => ts.id === form.id)
-    if (idx >= 0) {
-      const updated = { ...traitsets.value[idx], name: form.name, universes: form.universes, entity_types: form.entityTypes, limit: form.limit }
-      traitsets.value[idx] = updated
-    }
-    if (activeTraitset.value?.id === form.id) {
-      activeTraitset.value = { ...activeTraitset.value, name: form.name, universes: form.universes, entity_types: form.entityTypes, limit: form.limit }
-    }
-    return
-  }
-  // SFX save
+  // SFX save only — traitset saves are handled directly by GmTraitsetDetail
   if (!activeSfx.value) return
   sfxSaving.value = true
   graphql(
