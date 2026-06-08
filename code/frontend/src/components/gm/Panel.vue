@@ -11,7 +11,7 @@
 defineProps({
   hideClose: { type: Boolean, default: false },
 })
-defineEmits(['close'])
+defineEmits(['close', 'select', 'save'])
 </script>
 
 <style scoped>

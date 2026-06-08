@@ -483,6 +483,7 @@ function onTraitConfigSelect(item) {
 }
 
 function onTraitConfigSave(form) {
+  console.log('onTraitConfigSave called with', form)
   // Traitset save — update local data so L1 reflects changes
   if (form.id && form.entityTypes !== undefined) {
     graphql(

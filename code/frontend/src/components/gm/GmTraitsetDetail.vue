@@ -75,6 +75,7 @@ watch([() => form.name, () => form.universes, () => form.entityTypes, () => form
 
 function save() {
   if (!props.traitset?.id) return
+  console.log('GmTraitsetDetail save emitting', form.universes, form.entityTypes)
   emit('save', {
     id: props.traitset.id,
     name: form.name,
