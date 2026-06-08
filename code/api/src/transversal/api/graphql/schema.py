@@ -11,6 +11,7 @@ from transversal.api.graphql.types import (
     EntityType,
     Projection,
     RazmeritResult,
+    SfxRef,
     TraitRef,
     TraitSetRef,
     TraitSetting,
@@ -106,6 +107,14 @@ class Query:
                         entity_types=ts.entity_types, order=ts.order, limit=ts.limit)
             for ts in tss
         ]
+
+    @strawberry.field
+    def sfxs(self, info: strawberry.Info) -> list[SfxRef]:
+        from transversal.services.effects_engine import EffectsEngine
+        engine = info.context.get("effects_engine")
+        if engine:
+            return [SfxRef(id=s.id, name=s.name, description=s.description, trigger=s.trigger) for s in engine.get_all()]
+        return []
 
     @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:

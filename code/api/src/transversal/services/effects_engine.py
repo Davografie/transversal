@@ -86,6 +86,9 @@ class EffectsEngine:
     def get(self, sfx_id: str) -> Optional[SFX]:
         return self._sfx_registry.get(sfx_id)
 
+    def get_all(self) -> list[SFX]:
+        return list(self._sfx_registry.values())
+
     # ── Trigger ──────────────────────────────────────
 
     def process_event(

@@ -45,6 +45,16 @@ class TraitSetRef:
     limit: int = 1
 
 
+# ── SFX Registry ──────────────────────────────────────
+
+@strawberry.type
+class SfxRef:
+    id: strawberry.ID
+    name: str
+    description: str = ""
+    trigger: str = ""
+
+
 # ── Trait Setting (edge) ─────────────────────────────
 
 @strawberry.type

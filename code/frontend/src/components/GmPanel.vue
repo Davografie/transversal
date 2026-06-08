@@ -3,7 +3,7 @@
     {{ open ? '×' : '🛠' }}
   </button>
   <button
-    v-if="editing || creating || inspectedEntity"
+    v-if="editing || creating || inspectedEntity || configTraits"
     class="gm-close-panel"
     @click="closeSecondary"
   >×</button>
@@ -324,7 +324,7 @@ async function uploadBgImage(e) {
 }
 
 // ── Navigation ─────────────────────────────────────
-function closeSecondary() { editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null }
+function closeSecondary() { if (configTraits.value) { closeTraitsConfig(); return }; editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null }
 function switchToSheet() { if (!selected.value) return; inspectedEntity.value = { id: selected.value.id }; editing.value = false; selected.value = null; selectedId.value = null }
 function switchToEdit() { if (!inspectedEntity.value) return; const id = inspectedEntity.value.id; inspectedEntity.value = null; selectEntity({ id }) }
 
@@ -381,7 +381,7 @@ watch(configTraits, async (val) => {
 async function fetchTraitsConfig() {
   traitsLoading.value = true
   const [ts, tr, sf] = await Promise.all([
-    graphql(`query { traitsets { id name traitsetKey } }`),
+    graphql(`query { traitsets { id name } }`),
     graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name defaultDieType traitsetId } }`, { u: props.universe }),
     graphql(`query { sfxs { id name description trigger } }`),
   ])
