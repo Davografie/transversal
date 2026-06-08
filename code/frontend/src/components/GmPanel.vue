@@ -362,9 +362,18 @@ const allPanels = computed(() => {
 })
 
 function onPanelClose(level) {
-  if (level === 0) { open.value = false; return }
-  if (configTraits.value) { closeTraitConfigLevel(level - 1); return }
-  closeSecondary()
+  // Cascade: close deepest first, then work up with delay
+  const total = allPanels.value.length - 1
+  let i = total
+  function step() {
+    if (i < level) return
+    if (i === 0) { open.value = false; return }
+    if (configTraits.value) closeTraitConfigLevel(i - 1)
+    else closeSecondary()
+    i--
+    setTimeout(step, 80)
+  }
+  step()
 }
 
 // ── PanelStack for traits config ────────────────────
