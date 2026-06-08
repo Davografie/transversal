@@ -419,6 +419,10 @@ const traitConfigPanels = computed(() => {
         traitset: activeTraitset.value,
         traits: allTraitsData.value.filter(t => t.traitsetId === activeTraitsetId.value),
         selectedId: activeTraitId.value,
+        onSave: (form) => graphql(
+          `mutation($id: ID!, $name: String, $universes: [String!], $entity_types: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entity_types: $entity_types, limit: $limit) { id } }`,
+          { id: form.id, name: form.name, universes: form.universes, entity_types: form.entityTypes, limit: form.limit }
+        ),
       },
     })
   }
@@ -483,15 +487,7 @@ function onTraitConfigSelect(item) {
 }
 
 function onTraitConfigSave(form) {
-  // Traitset save — use snake_case params for Strawberry
-  if (form.id && form.entityTypes !== undefined) {
-    graphql(
-      `mutation($id: ID!, $name: String, $universes: [String!], $entity_types: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entity_types: $entity_types, limit: $limit) { id } }`,
-      { id: form.id, name: form.name, universes: form.universes, entity_types: form.entityTypes, limit: form.limit }
-    )
-    return
-  }
-  // Otherwise SFX save
+  // SFX save only — traitset saves are handled by GmTraitsetDetail via onSave prop
   if (!activeSfx.value) return
   sfxSaving.value = true
   graphql(

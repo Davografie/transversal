@@ -45,9 +45,10 @@ const props = defineProps({
   traitset: { type: Object, default: null },
   traits: { type: Array, default: () => [] },
   selectedId: { type: String, default: '' },
+  onSave: { type: Function, default: null },
 })
 
-const emit = defineEmits(['save', 'select-trait', 'add-trait', 'close'])
+const emit = defineEmits(['select-trait', 'add-trait', 'close'])
 const saving = ref(false)
 
 const form = reactive({
@@ -74,8 +75,8 @@ watch([() => form.name, () => form.universes, () => form.entityTypes, () => form
 })
 
 function save() {
-  if (!props.traitset?.id) return
-  emit('save', {
+  if (!props.traitset?.id || !props.onSave) return
+  props.onSave({
     id: props.traitset.id,
     name: form.name,
     universes: form.universes,
