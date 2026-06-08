@@ -486,8 +486,8 @@ function onTraitConfigSave(form) {
   // Traitset save — update local data so L1 reflects changes
   if (form.id && form.entityTypes !== undefined) {
     graphql(
-      `mutation($id: ID!, $name: String, $universes: [String!], $entity_types: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entity_types: $entity_types, limit: $limit) { id } }`,
-      { id: form.id, name: form.name, universes: form.universes, entity_types: form.entityTypes, limit: form.limit }
+      `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit) { id } }`,
+      { id: form.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
     )
     // Update local traitset and activeTraitset
     const idx = traitsets.value.findIndex(ts => ts.id === form.id)
