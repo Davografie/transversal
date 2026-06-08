@@ -334,7 +334,7 @@ watch(configTraits, async (val) => {
 async function fetchTraitsConfig() {
   traitsLoading.value = true
   const [ts, tr, sf] = await Promise.all([
-    graphql(`query { traitsets { id name } }`),
+    graphql(`query { traitsets { id name universes entityTypes order limit } }`),
     graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name defaultDieType traitsetId } }`, { u: props.universe }),
     graphql(`query { sfxs { id name description trigger } }`),
   ])

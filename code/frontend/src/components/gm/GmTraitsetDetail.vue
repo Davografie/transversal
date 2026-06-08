@@ -64,14 +64,14 @@ watch(() => props.traitset, (ts) => {
   if (ts) {
     form.name = ts.name || ''
     form.universes = [...(ts.universes || [])]
-    form.entityTypes = [...(ts.entity_types || [])]
+    form.entityTypes = [...(ts.entityTypes || [])]
     form.limit = ts.limit || 1
   }
 }, { immediate: true })
 
 // Auto-save on any form change (debounced)
 let saveTimer = null
-watch([() => form.name, () => form.universes, () => form.entityTypes, () => form.limit], () => {
+  watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit], () => {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => save(), 600)
 })
