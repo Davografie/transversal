@@ -24,7 +24,7 @@ defineEmits(['close'])
 
 <style scoped>
 .panel-stack {
-  position: fixed; top: 50%; right: 370px; transform: translateY(-50%); z-index: 25;
+  position: fixed; top: 50%; right: 54px; transform: translateY(-50%); z-index: 25;
   display: flex; flex-direction: row-reverse; align-items: center; gap: 32px;
 }
 

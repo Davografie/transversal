@@ -1,7 +1,5 @@
 <template>
-  <button class="gm-toggle" :class="{ 'has-editor': editing || creating || inspectedEntity }" @click="open = !open">
-    {{ open ? '×' : '🛠' }}
-  </button>
+  <button v-if="!open" class="gm-toggle" @click="open = true">🛠</button>
 
   <!-- Unified panel system — PanelStack handles all -->
   <PanelStack :panels="allPanels" @close="onPanelClose" @select="onTraitConfigSelect" @save="onTraitConfigSave">
@@ -539,7 +537,5 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 .loading, .error, .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 .error { color: var(--danger); }
 
-@media (max-width: 720px) {
-  .gm-toggle.has-editor { display: none; }
-}
+
 </style>
