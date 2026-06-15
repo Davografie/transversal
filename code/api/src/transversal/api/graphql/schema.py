@@ -11,12 +11,16 @@ from transversal.api.graphql.types import (
     EntityType,
     Projection,
     RazmeritResult,
+    SfxInput,
     SfxRef,
+    SfxUpdateInput,
+    TraitInput,
     TraitRef,
     TraitSetRef,
     TraitSetting,
     TraitSettingInput,
     TraitSettingUpdateInput,
+    TraitUpdateInput,
     TransversalTypeEnum,
     UpdateEntityInput,
     Zone,
@@ -110,6 +114,11 @@ class Query:
 
     @strawberry.field
     def sfxs(self, info: strawberry.Info) -> list[SfxRef]:
+        # Prefer DB-persisted SFXs; fall back to in-memory engine
+        repo = _em(info).repo
+        db_sfxs = repo.get_all_sfxs()
+        if db_sfxs:
+            return [SfxRef(id=s.id, name=s.name, description=s.description, trigger=s.trigger) for s in db_sfxs]
         from transversal.services.effects_engine import EffectsEngine
         engine = info.context.get("effects_engine")
         if engine:
@@ -318,6 +327,107 @@ class Mutation:
     def reorder_traitsets(self, info: strawberry.Info, ids: list[strawberry.ID]) -> bool:
         _em(info).repo.reorder_traitsets([str(i) for i in ids])
         return True
+
+    # ── Trait CRUD ────────────────────────────────────────
+
+    @strawberry.mutation
+    def create_trait(self, info: strawberry.Info, input: TraitInput) -> TraitRef:
+        from transversal.domain import Trait as DomainTrait
+        t = DomainTrait(
+            id=input.id, name=input.name, universes=input.universes,
+            traitset_id=str(input.traitset_id),
+            default_die_type=input.default_die_type,
+            default_rating_type=input.default_rating_type,
+            possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
+            location_restricted=input.location_restricted,
+        )
+        created = _em(info).repo.create_trait(t)
+        return TraitRef(
+            id=created.id, name=created.name, universes=created.universes,
+            traitset_id=created.traitset_id,
+            default_die_type=created.default_die_type,
+            default_rating_type=created.default_rating_type,
+            possible_sfx_ids=created.possible_sfx_ids,
+            location_restricted=created.location_restricted,
+        )
+
+    @strawberry.mutation
+    def update_trait(self, info: strawberry.Info, id: strawberry.ID, input: TraitUpdateInput) -> TraitRef:
+        existing = _em(info).repo.get_trait(str(id))
+        if not existing:
+            raise ValueError(f"Trait '{id}' not found")
+        if input.name is not None:
+            existing.name = input.name
+        if input.universes is not None:
+            existing.universes = input.universes
+        if input.traitset_id is not None:
+            existing.traitset_id = str(input.traitset_id)
+        if input.default_die_type is not None:
+            existing.default_die_type = input.default_die_type
+        if input.default_rating_type is not None:
+            existing.default_rating_type = input.default_rating_type
+        if input.possible_sfx_ids is not None:
+            existing.possible_sfx_ids = [str(s) for s in input.possible_sfx_ids]
+        if input.location_restricted is not None:
+            existing.location_restricted = input.location_restricted
+        updated = _em(info).repo.update_trait(existing)
+        return TraitRef(
+            id=updated.id, name=updated.name, universes=updated.universes,
+            traitset_id=updated.traitset_id,
+            default_die_type=updated.default_die_type,
+            default_rating_type=updated.default_rating_type,
+            possible_sfx_ids=updated.possible_sfx_ids,
+            location_restricted=updated.location_restricted,
+        )
+
+    @strawberry.mutation
+    def delete_trait(self, info: strawberry.Info, id: strawberry.ID) -> bool:
+        return _em(info).repo.delete_trait(str(id))
+
+    # ── SFX CRUD ──────────────────────────────────────────
+
+    @strawberry.mutation
+    def create_sfx(self, info: strawberry.Info, input: SfxInput) -> SfxRef:
+        from transversal.domain import SFX as DomainSFX, EffectTiming
+        s = DomainSFX(
+            id=input.id, name=input.name, description=input.description,
+            trigger=input.trigger,
+            timing=EffectTiming(input.timing) if input.timing else EffectTiming.IMMEDIATE,
+            cost=input.cost,
+        )
+        created = _em(info).repo.create_sfx(s)
+        # Also register with the in-memory engine
+        engine = info.context.get("effects_engine")
+        if engine:
+            engine.register(created)
+        return SfxRef(id=created.id, name=created.name, description=created.description, trigger=created.trigger)
+
+    @strawberry.mutation
+    def update_sfx(self, info: strawberry.Info, input: SfxUpdateInput) -> SfxRef:
+        from transversal.domain import EffectTiming
+        existing = _em(info).repo.get_sfx(str(input.id))
+        if not existing:
+            raise ValueError(f"SFX '{input.id}' not found")
+        if input.name is not None:
+            existing.name = input.name
+        if input.description is not None:
+            existing.description = input.description
+        if input.trigger is not None:
+            existing.trigger = input.trigger
+        if input.timing is not None:
+            existing.timing = EffectTiming(input.timing)
+        if input.cost is not None:
+            existing.cost = input.cost
+        updated = _em(info).repo.update_sfx(existing)
+        # Also update in-memory engine
+        engine = info.context.get("effects_engine")
+        if engine:
+            engine.register(updated)
+        return SfxRef(id=updated.id, name=updated.name, description=updated.description, trigger=updated.trigger)
+
+    @strawberry.mutation
+    def delete_sfx(self, info: strawberry.Info, id: strawberry.ID) -> bool:
+        return _em(info).repo.delete_sfx(str(id))
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

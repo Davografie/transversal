@@ -39,18 +39,18 @@ class TestGraphQLQueries:
             query { traitsByUniverse(universe: "earth") { id name } }
         """)
         names = {t["name"] for t in result["traitsByUniverse"]}
-        assert "hacking" in names
-        assert "agility" in names
-        assert "qi_reserves" not in names  # Three Realms only
+        assert "Hacking" in names
+        assert "Agility" in names
+        assert "Qi Reserves" not in names  # Three Realms only
 
     def test_traits_by_universe_three_realms(self, client):
         result = _gql(client, """
             query { traitsByUniverse(universe: "three_realms") { id name locationRestricted } }
         """)
         names = {t["name"] for t in result["traitsByUniverse"]}
-        assert "qi_reserves" in names
-        assert "sword_intent" in names
-        assert "hacking" not in names
+        assert "Qi Reserves" in names
+        assert "Sword Intent" in names
+        assert "Hacking" not in names
 
     def test_traitsets_by_universe(self, client):
         result = _gql(client, """

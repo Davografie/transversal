@@ -50,6 +50,9 @@
       :expanded="(activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name"
       :draggable="editZones"
       :title="z.name"
+      :arrival-x="zoneCache(z.name)?.arriveX"
+      :arrival-y="zoneCache(z.name)?.arriveY"
+      :dest-aspect="zoneCache(z.name)?.destAspect"
       @click="onDotClick('zone', z)"
       @overlay-click="onExpandedClick('zone', z)"
       @drag-start="(e) => onZoneDragStart(e, z, i)"
@@ -96,6 +99,9 @@
       :expanded="(activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key"
       :draggable="editZones"
       :title="nd.name"
+      :arrival-x="destNavCache[nd.target.id]?.arriveX"
+      :arrival-y="destNavCache[nd.target.id]?.arriveY"
+      :dest-aspect="destNavCache[nd.target.id]?.destAspect"
       @click="onDotClick('nav', nd)"
       @overlay-click="onExpandedClick('nav', nd)"
       @drag-start="(e) => onNavDragStart(e, nd)"
@@ -745,6 +751,9 @@ async function fetchNav() {
     occupants.value = data.occupants || []
     loadNavPositions()
 
+    // Lazy pre-fetch destination nav data in background (doesn't block render)
+    preloadDestNavCache()
+
     // Auto-pop the player's own character
     const self = occupants.value.find(o => o.id === props.entityId)
     if (self) {
@@ -794,6 +803,17 @@ function childImage(zoneName) {
   const children = nav.value.children || []
   const child = children.find(c => c.name === zoneName)
   return child?.background_image || null
+}
+
+function childId(zoneName) {
+  const children = nav.value.children || []
+  const child = children.find(c => c.name === zoneName)
+  return child?._key || null
+}
+
+function zoneCache(zoneName) {
+  const cid = childId(zoneName)
+  return cid ? destNavCache.value[cid] : null
 }
 
 // ── Nav dot drag ───────────────────────────────────
@@ -1039,6 +1059,73 @@ watch(() => props.locationId, () => {
 })
 
 const lerpActive = ref(false)
+const destNavCache = ref({})  // { [locationId]: { arriveX, arriveY, destAspect } } lazy-populated
+
+// ── Lazy pre-fetch destination nav data for dot overlay positioning ──
+
+async function preloadDestNavCache() {
+  const currentId = props.locationId
+  const destinations = []
+
+  // Children
+  for (const child of (nav.value.children || [])) {
+    destinations.push({ id: child._key, name: child.name, kind: 'child' })
+  }
+  // Parent
+  if (nav.value.parent) {
+    destinations.push({ id: nav.value.parent._key, name: nav.value.parent.name, kind: 'parent' })
+  }
+  // Portal
+  for (const t of (nav.value.transversal || [])) {
+    destinations.push({ id: t._key, name: t.name, kind: 'portal' })
+  }
+
+  for (const dest of destinations) {
+    if (destNavCache.value[dest.id]) continue  // already cached
+    try {
+      const r = await fetch(`/api/v1/locations/${dest.id}/navigate`)
+      const data = await r.json()
+      const loc = data.location
+      let arriveX = null, arriveY = null
+
+      if (dest.kind === 'child') {
+        // Child's parent dot points back to us
+        const parentPos = loc?.nav_positions?.parent
+        if (parentPos) { arriveX = parentPos.x; arriveY = parentPos.y }
+      } else if (dest.kind === 'parent') {
+        // Parent: find which zone on parent points back to us (our name matches a zone name)
+        for (const z of (loc?.zones || [])) {
+          const destChildren = data.children || []
+          if (destChildren.some(c => c.name === z.name && c._key === currentId)) {
+            arriveX = z.x; arriveY = z.y; break
+          }
+        }
+      } else if (dest.kind === 'portal') {
+        // Portal: use portal dot position on destination
+        const portalPos = loc?.nav_positions?.portal
+        if (portalPos) { arriveX = portalPos.x; arriveY = portalPos.y }
+      }
+
+      // Fallback: use default positions
+      if (arriveX == null) arriveX = dest.kind === 'parent' ? 90 : 50
+      if (arriveY == null) arriveY = dest.kind === 'parent' ? 15 : 50
+
+      // Get destination image aspect
+      let destAspect = null
+      const bgImg = loc?.background_image
+      if (bgImg) {
+        destAspect = await new Promise((resolve) => {
+          const img = new Image()
+          img.onload = () => resolve(img.width / img.height)
+          img.onerror = () => resolve(null)
+          img.src = bgImg
+        })
+      }
+
+      destNavCache.value = { ...destNavCache.value, [dest.id]: { arriveX, arriveY, destAspect } }
+    } catch { /* skip failed pre-fetches */ }
+  }
+}
 
 async function fetchNavWithLerp() {
   lerpActive.value = true

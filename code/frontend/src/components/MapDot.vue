@@ -12,7 +12,7 @@
       v-if="image && overlayVisible"
       class="dot-overlay"
       :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self' }"
-      :style="{ backgroundImage: 'url(' + image + ')' }"
+      :style="{ backgroundImage: 'url(' + image + ')', ...(overlayBgStyle || {}) }"
       @click.stop="onOverlayClick"
     />
     <span
@@ -42,6 +42,9 @@ const props = defineProps({
   draggable: { type: Boolean, default: false },
   lerping: { type: Boolean, default: false },
   title: { type: String, default: '' },
+  arrivalX: { type: Number, default: null },
+  arrivalY: { type: Number, default: null },
+  destAspect: { type: Number, default: null },
 })
 
 const emit = defineEmits(['click', 'overlay-click', 'drag-start'])
@@ -62,6 +65,21 @@ const dotStyle = computed(() => ({
 }))
 
 const overlayVisible = computed(() => props.expanded || props.type === 'self' || props.type === 'occupant')
+
+const overlayBgStyle = computed(() => {
+  if (props.arrivalX == null || props.arrivalY == null || props.destAspect == null) return null
+  const vw = window.innerWidth, vh = window.innerHeight
+  const viewAspect = vw / vh
+  const imgAspect = props.destAspect
+  if (imgAspect > viewAspect) {
+    // Landscape: pan horizontally to arrival point
+    return { backgroundPosition: `${props.arrivalX}% 50%` }
+  } else if (imgAspect < viewAspect) {
+    // Portrait: pan vertically to arrival point
+    return { backgroundPosition: `50% ${props.arrivalY}%` }
+  }
+  return null
+})
 
 function onClick() { emit('click', { type: props.type, x: props.x, y: props.y }) }
 function onOverlayClick() { emit('overlay-click', { type: props.type, x: props.x, y: props.y }) }

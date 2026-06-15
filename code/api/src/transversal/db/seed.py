@@ -38,35 +38,39 @@ def seed_trait_registry(repo: EntityRepository) -> None:
     # ── Earth Traits ───────────────────────────────────
 
     earth_traits = [
-        Trait(id="trait-earth-strength", name="strength", universes=["earth"],
+        Trait(id="trait-earth-strength", name="Strength", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
-        Trait(id="trait-earth-agility", name="agility", universes=["earth"],
+        Trait(id="trait-earth-agility", name="Agility", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
-        Trait(id="trait-earth-intelligence", name="intelligence", universes=["earth"],
+        Trait(id="trait-earth-intelligence", name="Intelligence", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
-        Trait(id="trait-earth-willpower", name="willpower", universes=["earth"],
+        Trait(id="trait-earth-willpower", name="Willpower", universes=["earth"],
               traitset_id="ts-earth-attributes", default_die_type=DieType.D6),
 
-        Trait(id="trait-earth-hacking", name="hacking", universes=["earth"],
+        Trait(id="trait-earth-hacking", name="Hacking", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-shooting", name="shooting", universes=["earth"],
+        Trait(id="trait-earth-shooting", name="Shooting", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-persuasion", name="persuasion", universes=["earth"],
+        Trait(id="trait-earth-persuasion", name="Persuasion", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-stealth", name="stealth", universes=["earth"],
+        Trait(id="trait-earth-stealth", name="Stealth", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-investigation", name="investigation", universes=["earth"],
+        Trait(id="trait-earth-investigation", name="Investigation", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
-        Trait(id="trait-earth-survival", name="survival", universes=["earth"],
+        Trait(id="trait-earth-survival", name="Survival", universes=["earth"],
               traitset_id="ts-earth-skills", default_die_type=DieType.D6),
 
         # Distinctions
-        Trait(id="trait-earth-antonov-call", name="answered_antonovs_call",
+        Trait(id="trait-earth-antonov-call", name="Answered Antonov's Call",
               universes=["earth"], traitset_id="ts-earth-distinctions",
               default_die_type=DieType.D8),
     ]
     for t in earth_traits:
-        if not repo.get_trait(t.id):
+        existing = repo.get_trait(t.id)
+        if existing:
+            existing.name = t.name
+            repo.update_trait(existing)
+        else:
             repo.create_trait(t)
 
     # ── Three Realms Traitsets ────────────────────────
@@ -86,29 +90,33 @@ def seed_trait_registry(repo: EntityRepository) -> None:
     # ── Three Realms Traits ───────────────────────────
 
     realm_traits = [
-        Trait(id="trait-3r-qi-reserves", name="qi_reserves", universes=["three_realms"],
+        Trait(id="trait-3r-qi-reserves", name="Qi Reserves", universes=["three_realms"],
               traitset_id="ts-3r-cultivation",
               default_die_type=DieType.D6, default_rating_type=RatingType.RESOURCE,
               location_restricted=True),
-        Trait(id="trait-3r-dao-comprehension", name="dao_comprehension", universes=["three_realms"],
+        Trait(id="trait-3r-dao-comprehension", name="Dao Comprehension", universes=["three_realms"],
               traitset_id="ts-3r-cultivation",
               default_die_type=DieType.D4, location_restricted=True),
-        Trait(id="trait-3r-alchemy", name="alchemy", universes=["three_realms"],
+        Trait(id="trait-3r-alchemy", name="Alchemy", universes=["three_realms"],
               traitset_id="ts-3r-cultivation",
               default_die_type=DieType.D6, location_restricted=True),
 
-        Trait(id="trait-3r-sword-intent", name="sword_intent", universes=["three_realms"],
+        Trait(id="trait-3r-sword-intent", name="Sword Intent", universes=["three_realms"],
               traitset_id="ts-3r-combat",
               default_die_type=DieType.D6, location_restricted=True),
-        Trait(id="trait-3r-footwork", name="footwork", universes=["three_realms"],
+        Trait(id="trait-3r-footwork", name="Footwork", universes=["three_realms"],
               traitset_id="ts-3r-combat",
               default_die_type=DieType.D6, location_restricted=True),
-        Trait(id="trait-3r-qi-strike", name="qi_strike", universes=["three_realms"],
+        Trait(id="trait-3r-qi-strike", name="Qi Strike", universes=["three_realms"],
               traitset_id="ts-3r-combat",
               default_die_type=DieType.D6, location_restricted=True),
     ]
     for t in realm_traits:
-        if not repo.get_trait(t.id):
+        existing = repo.get_trait(t.id)
+        if existing:
+            existing.name = t.name
+            repo.update_trait(existing)
+        else:
             repo.create_trait(t)
 
 
@@ -207,6 +215,11 @@ def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
         ),
     ]
 
+    # Persist to database
+    for s in sfxs:
+        if not repo.get_sfx(s.id):
+            repo.create_sfx(s)
+
     # Load into effects engine
     if engine is None:
         from transversal.main import _get_engine
@@ -257,10 +270,10 @@ def seed_default_character(em) -> None:
 
     # Add Earth skills (with SFX unlocks)
     skill_configs = [
-        ("hacking", DieType.D10, []),
-        ("shooting", DieType.D6, ["sfx-spray-n-pray"]),
-        ("persuasion", DieType.D8, []),
-        ("stealth", DieType.D6, []),
+        ("Hacking", DieType.D10, []),
+        ("Shooting", DieType.D6, ["sfx-spray-n-pray"]),
+        ("Persuasion", DieType.D8, []),
+        ("Stealth", DieType.D6, []),
     ]
     for skill_name, die, sfx_ids in skill_configs:
         trait = em.repo.get_trait_by_name(skill_name, "earth")
@@ -284,10 +297,10 @@ def seed_default_character(em) -> None:
 
     # Add Three Realms cultivation traits
     realm_trait_configs = [
-        ("qi_reserves", [DieType.D4, DieType.D4, DieType.D4, DieType.D4], RatingType.RESOURCE),
-        ("dao_comprehension", [DieType.D4], RatingType.STATIC),
-        ("sword_intent", [DieType.D6], RatingType.STATIC),
-        ("footwork", [DieType.D4], RatingType.STATIC),
+        ("Qi Reserves", [DieType.D4, DieType.D4, DieType.D4, DieType.D4], RatingType.RESOURCE),
+        ("Dao Comprehension", [DieType.D4], RatingType.STATIC),
+        ("Sword Intent", [DieType.D6], RatingType.STATIC),
+        ("Footwork", [DieType.D4], RatingType.STATIC),
     ]
     for trait_name, dice, rtype in realm_trait_configs:
         trait = em.repo.get_trait_by_name(trait_name, "three_realms")
@@ -297,7 +310,7 @@ def seed_default_character(em) -> None:
                 dice=dice, rating_type=rtype)
 
     # Add ego distinction — follows Kael across universes
-    trait = em.repo.get_trait_by_name("answered_antonovs_call", "earth")
+    trait = em.repo.get_trait_by_name("Answered Antonov's Call", "earth")
     if trait:
         _add_ts_if_missing("kael-1:ego:antonov",
             trait_id=trait.id, traitset_id=trait.traitset_id,
@@ -329,16 +342,16 @@ def seed_elena(em) -> None:
             except Exception:
                 pass
 
-    for skill_name, die in [("investigation", DieType.D10), ("persuasion", DieType.D8),
-                             ("survival", DieType.D6), ("stealth", DieType.D4)]:
+    for skill_name, die in [("Investigation", DieType.D10), ("Persuasion", DieType.D8),
+                             ("Survival", DieType.D6), ("Stealth", DieType.D4)]:
         trait = em.repo.get_trait_by_name(skill_name, "earth")
         if trait:
             _add_ts(f"elena-1:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
                 dice=[die])
 
-    for attr_name, die in [("intelligence", DieType.D10), ("willpower", DieType.D8),
-                            ("agility", DieType.D6), ("strength", DieType.D4)]:
+    for attr_name, die in [("Intelligence", DieType.D10), ("Willpower", DieType.D8),
+                            ("Agility", DieType.D6), ("Strength", DieType.D4)]:
         trait = em.repo.get_trait_by_name(attr_name, "earth")
         if trait:
             _add_ts(f"elena-1:{trait.id}",

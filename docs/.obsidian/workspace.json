@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Technical/System Architecture.md",
+                "file": "Project Roadmap.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "System Architecture"
+              "title": "Project Roadmap"
             }
           }
         ]
@@ -185,9 +185,9 @@
   },
   "active": "1670f5d60cd7c736",
   "lastOpenFiles": [
+    "Technical/System Architecture.md",
     "Game Design/Inspired Mechanics.md",
     "Game Design/Core Mechanics.md",
-    "Technical/System Architecture.md",
     "Project Roadmap.md",
     "Game Design/SFX and Effects.md",
     "Technical/API Contract.md",

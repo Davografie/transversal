@@ -91,6 +91,13 @@ async def on_startup():
 
     _register_core_handlers(_get_em(), _get_raz())
 
+    # Load SFXs from database into the in-memory effects engine
+    repo = _get_repo()
+    engine = _get_engine()
+    db_sfxs = repo.get_all_sfxs()
+    for s in db_sfxs:
+        engine.register(s)
+
     # Ensure a default session exists for SSE connectivity
     from transversal.services.session_manager import session_manager
     if not session_manager.list_active():

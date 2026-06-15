@@ -6,26 +6,34 @@
       <label>Trigger</label>
       <select v-model="form.trigger">
         <option value="">--</option>
+        <option value="on_activate">On Activate</option>
         <option value="on_roll">On Roll</option>
-        <option value="on_effect">On Effect</option>
-        <option value="passive">Passive</option>
-        <option value="manual">Manual</option>
+        <option value="on_complication">On Complication</option>
+        <option value="on_botch">On Botch</option>
+        <option value="on_success">On Success</option>
+        <option value="on_failure">On Failure</option>
+        <option value="on_location_change">On Location Change</option>
+        <option value="on_trait_change">On Trait Change</option>
       </select>
       <label>Description</label>
       <textarea v-model="form.description" rows="3"></textarea>
-      <button class="save-btn" @click="$emit('save', form)" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
+      <button class="save-btn" @click="onSave" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { reactive, ref } from 'vue'
+import { useApi } from '@/composables/useApi.js'
+
+const { graphql } = useApi()
 
 const props = defineProps({
   sfx: { type: Object, default: null },
+  onRefresh: { type: Function, default: null },
+  onPatch: { type: Function, default: null },
 })
 
-const emit = defineEmits(['save', 'close'])
 const saving = ref(false)
 
 const form = reactive({
@@ -33,6 +41,24 @@ const form = reactive({
   trigger: props.sfx?.trigger || '',
   description: props.sfx?.description || '',
 })
+
+async function onSave() {
+  if (!props.sfx?.id) return
+  saving.value = true
+  try {
+    await graphql(
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id } }`,
+      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger || null, description: form.description || null } }
+    )
+    if (props.onPatch) props.onPatch('sfxs', props.sfx.id, {
+      name: form.name,
+      trigger: form.trigger || null,
+      description: form.description || null,
+    })
+  } finally {
+    saving.value = false
+  }
+}
 </script>
 
 <style scoped>

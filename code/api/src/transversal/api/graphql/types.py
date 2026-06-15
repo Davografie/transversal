@@ -55,6 +55,49 @@ class SfxRef:
     trigger: str = ""
 
 
+@strawberry.input
+class SfxInput:
+    id: str
+    name: str
+    description: str = ""
+    trigger: str = ""
+    timing: str = "immediate"
+    cost: int = 0
+
+
+@strawberry.input
+class SfxUpdateInput:
+    id: strawberry.ID
+    name: Optional[str] = None
+    description: Optional[str] = None
+    trigger: Optional[str] = None
+    timing: Optional[str] = None
+    cost: Optional[int] = None
+
+
+@strawberry.input
+class TraitInput:
+    id: str
+    name: str
+    universes: list[str] = strawberry.field(default_factory=list)
+    traitset_id: strawberry.ID
+    default_die_type: DieType = DieType.D6
+    default_rating_type: RatingType = RatingType.STATIC
+    possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+    location_restricted: bool = False
+
+
+@strawberry.input
+class TraitUpdateInput:
+    name: Optional[str] = None
+    universes: Optional[list[str]] = None
+    traitset_id: Optional[strawberry.ID] = None
+    default_die_type: Optional[DieType] = None
+    default_rating_type: Optional[RatingType] = None
+    possible_sfx_ids: Optional[list[strawberry.ID]] = None
+    location_restricted: Optional[bool] = None
+
+
 # ── Trait Setting (edge) ─────────────────────────────
 
 @strawberry.type
@@ -104,6 +147,20 @@ class TraitSetting:
         em = info.context["entity_manager"]
         trait = em.repo.get_trait(self.trait_id)
         return trait.universes[0] if trait and trait.universes else ""
+
+    @strawberry.field
+    def traitset_order(self, info: strawberry.Info) -> int:
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        ts = em.repo.get_traitset_by_id(self.traitset_id)
+        return ts.order if ts else 0
+
+    @strawberry.field
+    def traitset_limit(self, info: strawberry.Info) -> int:
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        ts = em.repo.get_traitset_by_id(self.traitset_id)
+        return ts.limit if ts else 1
 
 
 @strawberry.input

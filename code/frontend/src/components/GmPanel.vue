@@ -57,7 +57,7 @@
         <div class="form-actions top-actions">
           <button class="sheet-edit-btn" @click="switchToEdit">Edit</button>
         </div>
-        <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded :gm-mode="true" @add-to-pool="(d) => emit('add-to-pool', d)" />
+        <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded :gm-mode="true" :external-pool-sources="poolSources" @add-to-pool="(d) => emit('add-to-pool', d)" />
       </template>
       <template v-if="editing && selected">
         <div class="form-actions top-actions">
@@ -100,6 +100,7 @@ const loading = ref(false)
 const props = defineProps({
   universe: { type: String, default: 'earth' },
   currentLocationId: { type: String, default: '' },
+  poolSources: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool', 'select', 'save'])
@@ -495,6 +496,7 @@ function onTraitConfigSave(form) {
 // ── Lifecycle ──────────────────────────────────────
 watch(open, (val) => { if (val) { mode.value = 'play'; fetchEntities(); fetchLocationTree() } })
 onMounted(() => { fetchEntities(); fetchLocationTree() })
+
 </script>
 
 <style scoped>

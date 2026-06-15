@@ -182,6 +182,56 @@ class EntityRepository:
         docs = list(cursor)
         return Trait.model_validate({**docs[0], "id": docs[0]["_key"]}) if docs else None
 
+    def update_trait(self, trait: Trait) -> Trait:
+        doc = trait.model_dump()
+        doc["_key"] = trait.id
+        self._traits.replace(doc)
+        return trait
+
+    def delete_trait(self, trait_id: str) -> bool:
+        """Delete a trait and cascade-remove any trait settings referencing it."""
+        ts_removed = len(list(self.db.aql.execute(
+            f"FOR ts IN {TRAITSETTINGS} FILTER ts.trait_id == @tid REMOVE ts IN {TRAITSETTINGS} RETURN OLD._key",
+            bind_vars={"tid": trait_id}
+        )))
+        try:
+            self._traits.delete(trait_id)
+            return True
+        except Exception:
+            return False
+
+    # ── SFX Registry ────────────────────────────────────
+
+    def create_sfx(self, sfx: SFX) -> SFX:
+        doc = sfx.model_dump()
+        doc["_key"] = sfx.id
+        self._sfxs.insert(doc)
+        return sfx
+
+    def get_sfx(self, sfx_id: str) -> Optional[SFX]:
+        doc = self._sfxs.get(sfx_id)
+        return SFX.model_validate({**doc, "id": doc["_key"]}) if doc else None
+
+    def get_all_sfxs(self) -> list[SFX]:
+        query = f"FOR s IN {SFXS} RETURN s"
+        return [
+            SFX.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
+        ]
+
+    def update_sfx(self, sfx: SFX) -> SFX:
+        doc = sfx.model_dump()
+        doc["_key"] = sfx.id
+        self._sfxs.replace(doc)
+        return sfx
+
+    def delete_sfx(self, sfx_id: str) -> bool:
+        try:
+            self._sfxs.delete(sfx_id)
+            return True
+        except Exception:
+            return False
+
     # ── TraitSet Registry ─────────────────────────────
 
     def create_traitset(self, traitset: TraitSet) -> TraitSet:

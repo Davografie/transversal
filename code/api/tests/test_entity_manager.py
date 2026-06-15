@@ -77,15 +77,15 @@ class InMemoryRepository(EntityRepository):
         return Trait.model_validate(d) if d else None
     def get_trait_by_name(self, name, universe):
         for d in self._traits.values():
-            if d["name"] == name and d["universe"] == universe:
+            if d["name"] == name and universe in d["universes"]:
                 return Trait.model_validate(d)
         return None
 
     def get_traits_by_universe(self, universe: str) -> list[Trait]:
-        return [Trait.model_validate(d) for d in self._traits.values() if d["universe"] == universe]
+        return [Trait.model_validate(d) for d in self._traits.values() if universe in d["universes"]]
 
     def get_traitsets_by_universe(self, universe: str) -> list[TraitSet]:
-        return [TraitSet.model_validate(d) for d in self._traitsets.values() if d["universe"] == universe]
+        return [TraitSet.model_validate(d) for d in self._traitsets.values() if universe in d["universes"]]
 
     # traitsets
     def create_traitset(self, ts: TraitSet) -> TraitSet:
@@ -112,7 +112,7 @@ class InMemoryRepository(EntityRepository):
 
     # effective traits
     def get_effective_traitsettings(self, eid: str, universe: str) -> list[TraitSetting]:
-        universe_trait_ids = {tid for tid, d in self._traits.items() if d["universe"] == universe}
+        universe_trait_ids = {tid for tid, d in self._traits.items() if universe in d["universes"]}
         return [
             TraitSetting.model_validate(d)
             for d in self._traitsettings.values()
@@ -265,11 +265,11 @@ class TestRazmerit:
 class TestEgoTraits:
     def test_ego_persists_across_universes(self, em, repo, kael):
         # Earth trait
-        earth_t = Trait(id="trait-earth-hacking", name="hacking", universe="earth",
+        earth_t = Trait(id="trait-earth-hacking", name="hacking", universes=["earth"],
                         traitset_id="ts-earth-skills")
         repo.create_trait(earth_t)
         # Ego trait (curiosity — personality, not universe-specific)
-        ego_t = Trait(id="trait-ego-curious", name="curious", universe="earth",
+        ego_t = Trait(id="trait-ego-curious", name="curious", universes=["earth"],
                       traitset_id="ts-earth-distinctions")
         repo.create_trait(ego_t)
 
