@@ -23,6 +23,8 @@ def _convert_to_webp(data: bytes, source_ext: str) -> bytes:
         return data  # GIFs might be animated — skip for now
 
     img = Image.open(io.BytesIO(data))
+    if getattr(img, 'is_animated', False):
+        return data  # animated WebP/GIF/APNG — pass through unchanged
     # RGBA → RGB for WebP (no alpha unless needed)
     if img.mode in ("RGBA", "LA", "P"):
         img = img.convert("RGBA")

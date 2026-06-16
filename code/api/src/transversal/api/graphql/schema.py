@@ -62,6 +62,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         polarity=s.polarity,
         statement=s.statement, negative=s.negative,
         ego=s.ego, sfx_ids=s.sfx_ids,
+        known_to=s.known_to,
     )
 
 
@@ -284,6 +285,8 @@ class Mutation:
             ts.ego = input.ego
         if input.sfx_ids is not None:
             ts.sfx_ids = [str(s) for s in input.sfx_ids]
+        if input.known_to is not None:
+            ts.known_to = [str(k) for k in input.known_to]
         updated = _em(info).update_traitsetting(ts)
         return _ts_to_gql(updated)
 

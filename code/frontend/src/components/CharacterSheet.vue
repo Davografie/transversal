@@ -29,7 +29,7 @@
           </h4>
           <div v-show="expandedSets.has(ts.name)" class="set-body">
             <template v-for="t in ts.traits" :key="t.name">
-              <div class="trait-row" :class="{ ego: t.ego, 'in-pool': isInPool(t), 'limit-reached': inPoolCount(ts) >= ts.limit && !isInPool(t) }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
+              <div v-if="isKnown(t)" class="trait-row" :class="{ ego: t.ego, 'in-pool': isInPool(t), 'limit-reached': inPoolCount(ts) >= ts.limit && !isInPool(t) }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
@@ -46,6 +46,14 @@
                     @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
                     :title="sfxActive(sfxId) ? `Deactivate ${sfxId}` : `Activate ${sfxId}`"
                   >{{ sfxId.replace('sfx-', '') }}</button>
+                </div>
+              </div>
+              <div v-else class="trait-row unknown-trait">
+                <div class="trait-left">
+                  <span class="trait-name unknown">???</span>
+                </div>
+                <div class="trait-right">
+                  <span class="trait-die unknown-die">?</span>
                 </div>
               </div>
               <!-- Inline trait edit panel -->
@@ -81,6 +89,8 @@ const props = defineProps({
   embedded: { type: Boolean, default: false },
   gmMode: { type: Boolean, default: false },
   externalPoolSources: { type: Array, default: null },
+  overrideEntityId: { type: String, default: null },
+  viewerEntityId: { type: String, default: null },
 })
 
 const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'openSettings'])
@@ -186,6 +196,12 @@ function isInPool(t) {
   return poolSources.value.includes(displayName(t.name))
 }
 
+function isKnown(t) {
+  if (!props.overrideEntityId || !props.viewerEntityId) return true
+  if (props.overrideEntityId === props.entityId) return true
+  return (t.knownTo || []).includes(props.viewerEntityId)
+}
+
 function inPoolCount(ts) {
   return ts.traits.filter(t => isInPool(t)).length
 }
@@ -267,13 +283,15 @@ const QUERY = `
         polarity
         traitsetOrder
         traitsetLimit
+        knownTo
       }
     }
   }
 `
 
 async function fetchEntity() {
-  const data = await graphql(QUERY, { id: props.entityId })
+  const id = props.overrideEntityId || props.entityId
+  const data = await graphql(QUERY, { id })
   if (data?.entity) {
     entity.value = data.entity
     resolveNames(data.entity)
@@ -426,6 +444,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 onMounted(fetchEntity)
 watch(() => props.entityId, fetchEntity)
 watch(() => props.universe, fetchEntity)
+watch(() => props.overrideEntityId, fetchEntity)
 
 // Sync external pool sources (for GM panel)
 watch(() => props.externalPoolSources, (sources) => {
@@ -489,6 +508,20 @@ watch(() => props.externalPoolSources, (sources) => {
   opacity: 0.3;
   cursor: default;
   pointer-events: none;
+}
+
+.unknown-trait {
+  cursor: default;
+  opacity: 0.4;
+}
+.trait-name.unknown {
+  font-style: italic;
+  letter-spacing: 2px;
+}
+.unknown-die {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-dim);
 }
 
 .trait-edit {

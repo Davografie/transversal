@@ -113,6 +113,7 @@ class TraitSetting:
     negative: bool
     ego: bool
     sfx_ids: list[strawberry.ID]
+    known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
 
     @strawberry.field
     def die_type(self) -> DieType:
@@ -185,6 +186,7 @@ class TraitSettingUpdateInput:
     negative: Optional[bool] = None
     ego: Optional[bool] = None
     sfx_ids: Optional[list[strawberry.ID]] = None
+    known_to: Optional[list[strawberry.ID]] = None
 
 
 # ── Projection ───────────────────────────────────────
@@ -250,6 +252,7 @@ class Entity:
                 polarity=s.polarity,
                 statement=s.statement, negative=s.negative,
                 ego=s.ego, sfx_ids=s.sfx_ids,
+                known_to=s.known_to,
             )
             for s in settings
         ]

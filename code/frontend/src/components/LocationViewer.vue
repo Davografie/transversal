@@ -1553,12 +1553,13 @@ onMounted(fetchNav)
 .ring-implode {
   border: 4px solid rgba(100,180,255,0.6);
   animation: implodeRing 0.9s cubic-bezier(0.4, 0, 1, 1) both;
+  box-shadow: 0 0 20px white;
 }
 .ring-implode-1 { animation-delay: 0s; }
 .ring-implode-2 { animation-delay: 0.15s; }
 
 @keyframes implodeRing {
-  0%   { width: 300px; height: 300px; margin-left: -150px; margin-top: -150px; opacity: 0.4; }
+  0%   { width: 600px; height: 600px; margin-left: -300px; margin-top: -300px; opacity: 0.4; }
   70%  { opacity: 0.8; }
   100% { width: 8px; height: 8px; margin-left: -4px; margin-top: -4px; opacity: 1; }
 }

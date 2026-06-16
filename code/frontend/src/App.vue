@@ -151,12 +151,21 @@
   />
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+      <div v-if="wrapperOpen && peers.length" class="peers-bar">
+        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: viewingEntityId === p.id || (!viewingEntityId && entityId === p.id) }" @click.stop="viewingEntityId = viewingEntityId === p.id ? null : p.id" :title="p.name">
+          <img v-if="p.backgroundImage" :src="p.backgroundImage" class="peer-img" />
+          <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
+          <span class="peer-label">{{ p.name }}</span>
+        </button>
+      </div>
       <CharacterSheet
         v-show="sheetVisible && !gmMode"
         ref="sheetRef"
         class="embedded-sheet"
         :class="{ 'sheet-hidden': !sheetVisible }"
         :entity-id="entityId"
+        :override-entity-id="viewingEntityId"
+        :viewer-entity-id="entityId"
         :universe="universe"
         :phase="phase"
         embedded
@@ -181,7 +190,9 @@ import DiceRoller from './components/DiceRoller.vue'
 import GmPanel from './components/GmPanel.vue'
 import { useSSE } from './composables/useSSE.js'
 import { useSessions } from './composables/useSessions.js'
+import { useApi } from './composables/useApi.js'
 
+const { graphql } = useApi()
 const universe = ref('earth')
 const currentLocationId = ref('loc-krasnoyarsk')
 const locationName = ref('Krasnoyarsk-45')
@@ -210,6 +221,7 @@ async function initLocation() {
         locationName.value = 'err: ' + e.message
       }
       fetchLocationBg()
+      fetchPeers()
     }
   } catch (e) {
     locationName.value = 'err: ' + e.message
@@ -228,11 +240,28 @@ async function fetchLocationBg() {
   } catch { locationBgImage.value = ''; locationOverlay.value = null }
 }
 
+async function fetchPeers() {
+  const data = await graphql(`query {
+    entities { id type name backgroundImage currentLocation }
+  }`)
+  if (data?.entities) {
+    const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
+    peers.value = data.entities
+      .filter(e => e.currentLocation === currentLocationId.value)
+      .sort((a, b) => {
+        if (a.id === entityId.value) return -1
+        if (b.id === entityId.value) return 1
+        return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
+      })
+  }
+}
+
 function onMoved(data) {
   locationName.value = data.location
   if (data.universe) universe.value = data.universe
   currentLocationId.value = data.location_id || data.location
   fetchLocationBg()
+  fetchPeers()
 }
 const entityId = ref(localStorage.getItem('entityId') || 'kael-1')
 const editZones = ref(false)
@@ -541,8 +570,11 @@ const switchInputRef = useTemplateRef('switchInputRef')
 const hoverOpen = ref(false)
 const sheetVisible = ref(false)
 let sheetTimer = null
+let closeTimer = null
 
 const currentPoolSources = ref([])
+const peers = ref([])
+const viewingEntityId = ref(null)
 
 const wrapperEl = useTemplateRef('wrapperEl')
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
@@ -560,6 +592,7 @@ function closePanel() {
   sheetVisible.value = false
   if (diceRef.value) diceRef.value.panelOpen = false
   if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
+  if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
   // Set peek position after DOM updates
   nextTick(() => syncClosedPosition())
 }
@@ -577,12 +610,16 @@ function onPanelOpen(v) {
 }
 
 function onWrapperEnter() {
+  if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
   openPanel()
 }
 
 function onWrapperLeave() {
   if (phase.value === 'picking') return  // don't close during drag-and-drop
-  closePanel()
+  closeTimer = setTimeout(() => {
+    closeTimer = null
+    closePanel()
+  }, 1000)
 }
 
 onMounted(() => {
@@ -818,3 +855,53 @@ watch(gmMode, (v) => {
   }
 })
 </script>
+
+<style scoped>
+.peers-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 8px;
+  scrollbar-width: none;
+}
+.peers-bar::-webkit-scrollbar { display: none; }
+.peer-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 3px 10px 3px 4px;
+  border-radius: 16px;
+  background: var(--bg-panel);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.peer-chip:hover { border-color: rgba(255,255,255,0.2); }
+.peer-chip.active {
+  border-color: var(--accent);
+  background: var(--bg-panel);
+}
+.peer-img, .peer-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.peer-avatar {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.peer-label {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.peer-chip.active .peer-label { color: var(--text); }
+</style>
