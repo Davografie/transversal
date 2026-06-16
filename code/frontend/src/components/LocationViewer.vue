@@ -108,6 +108,16 @@
     />
     </template>
 
+    <!-- Arrival animation rings -->
+    <div
+      v-for="r in arrivalRings"
+      :key="r.key"
+      v-if="!travelAnim.active && showElements && showSelf"
+      class="arrival-ring"
+      :class="r.class"
+      :style="{ left: selfX + '%', top: selfY + '%' }"
+    />
+
     <!-- Self character dot (no parallax — 1:1 with touch) -->
     <MapDot
       v-if="!travelAnim.active && showElements && showSelf"
@@ -334,6 +344,18 @@ const selfX = computed(() => selfOccupant.value.map_x ?? 50)
 const selfY = computed(() => selfOccupant.value.map_y ?? 50)
 const selfImage = computed(() => selfOccupant.value.image || null)
 const selfInitials = computed(() => occupantInitials(selfOccupant.value.name || 'You'))
+
+const arrivalRings = [
+  // Phase 1 — Reverse ripple (energy coalescing inward)
+  { key: 'implode-1', class: 'ring-implode ring-implode-1' },
+  { key: 'implode-2', class: 'ring-implode ring-implode-2' },
+  // Phase 2 — Portal flash
+  { key: 'flash', class: 'ring-flash' },
+  // Phase 3 — Triple burst outward
+  { key: 'burst-1', class: 'ring-burst ring-burst-1' },
+  { key: 'burst-2', class: 'ring-burst ring-burst-2' },
+  { key: 'burst-3', class: 'ring-burst ring-burst-3' },
+]
 
 function onSelfDragStart(e) {
   const idx = occupants.value.findIndex(o => o.id === props.entityId)
@@ -1515,6 +1537,59 @@ onMounted(fetchNav)
     transform: scale(1);
     filter: brightness(1);
   }
+}
+
+/* ── Arrival rings ────────────────────────────────── */
+
+.arrival-ring {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 19;
+}
+
+/* Phase 1 — Reverse ripple (energy drawn inward) */
+.ring-implode {
+  border: 3px solid rgba(100,180,255,0.6);
+  animation: implodeRing 0.6s cubic-bezier(0.4, 0, 1, 1) both;
+}
+.ring-implode-1 { animation-delay: 0s; }
+.ring-implode-2 { animation-delay: 0.1s; }
+
+@keyframes implodeRing {
+  0%   { width: 200px; height: 200px; margin-left: -100px; margin-top: -100px; opacity: 0.3; }
+  80%  { opacity: 0.7; }
+  100% { width: 8px; height: 8px; margin-left: -4px; margin-top: -4px; opacity: 1; }
+}
+
+/* Phase 2 — Portal flash */
+.ring-flash {
+  width: 40px; height: 40px;
+  margin-left: -20px; margin-top: -20px;
+  background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(200,220,255,0.6) 30%, transparent 70%);
+  animation: portalFlash 0.3s ease-out both;
+  animation-delay: 0.45s;
+}
+
+@keyframes portalFlash {
+  0%   { width: 8px; height: 8px; margin-left: -4px; margin-top: -4px; opacity: 0; }
+  30%  { width: 60px; height: 60px; margin-left: -30px; margin-top: -30px; opacity: 1; }
+  100% { width: 90px; height: 90px; margin-left: -45px; margin-top: -45px; opacity: 0; }
+}
+
+/* Phase 3 — Triple burst outward */
+.ring-burst {
+  border: 2px solid rgba(100,180,255,0.7);
+  animation: burstRing 1s ease-out both;
+}
+.ring-burst-1 { animation-delay: 0.5s; }
+.ring-burst-2 { animation-delay: 0.65s; }
+.ring-burst-3 { animation-delay: 0.8s; }
+
+@keyframes burstRing {
+  0%   { width: 20px; height: 20px; margin-left: -10px; margin-top: -10px; opacity: 1; }
+  100% { width: 240px; height: 240px; margin-left: -120px; margin-top: -120px; opacity: 0; }
 }
 
 @keyframes fadeIn {
