@@ -1543,7 +1543,6 @@ onMounted(fetchNav)
 
 .arrival-ring {
   position: absolute;
-  transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
   z-index: 19;
