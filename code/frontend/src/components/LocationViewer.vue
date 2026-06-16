@@ -364,9 +364,9 @@ function onSelfDragStart(e) {
 }
 
 function parallaxOffset() {
-  const focus = dragFocus.value
-  const mx = focus ? focus.x : (self?.map_x ?? 50)
-  const my = focus ? focus.y : (self?.map_y ?? 50)
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
   return { x: mx, y: my }
 }
 
@@ -471,7 +471,6 @@ function getPosFromEvent(e) {
 function onZoneDragStart(e, zone, index) {
   if (!props.editZones) return
   e.preventDefault()
-  dragFocus.value = { x: zone.x, y: zone.y }
   const pos = getPosFromEvent(e)
   dragging.value = { index, startX: pos.x, startY: pos.y, origX: zone.x, origY: zone.y }
   document.addEventListener('mousemove', onDragMove)
@@ -496,7 +495,6 @@ async function onDragEnd() {
   document.removeEventListener('mouseup', onDragEnd)
   document.removeEventListener('touchmove', onDragMove)
   document.removeEventListener('touchend', onDragEnd)
-  dragFocus.value = null
   if (!dragging.value) return
   dragging.value = null
 
@@ -563,9 +561,9 @@ const imageAspect = ref(null)  // width/height ratio of current image, or null i
 const bgStyle = computed(() => {
   if (!currentImage.value) return ''
 
-  const focus = dragFocus.value
-  const mx = focus ? focus.x : (self?.map_x ?? 50)
-  const my = focus ? focus.y : (self?.map_y ?? 50)
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
   const vw = window.innerWidth
   const vh = window.innerHeight
   const viewAspect = vw / vh
@@ -653,9 +651,6 @@ const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g.
 function onOccupantDragStart(e, occupant, index) {
   if (!canDragOccupant(occupant)) return
   e.preventDefault()
-  if (occupant.id !== props.entityId) {
-    dragFocus.value = { x: occupant.map_x ?? 50, y: occupant.map_y ?? 50 }
-  }
   const el = viewerEl.value
   if (!el) return
   const rect = el.getBoundingClientRect()
@@ -722,7 +717,6 @@ async function onOccDragEnd() {
   document.removeEventListener('mouseup', onOccDragEnd)
   document.removeEventListener('touchmove', onOccDragMove)
   document.removeEventListener('touchend', onOccDragEnd)
-  dragFocus.value = null
   hoveredDot.value = ''
   if (!occDragging.value) return
   const occ = occupants.value[occDragging.value.index]
@@ -851,7 +845,6 @@ function zoneCache(zoneName) {
 function onNavDragStart(e, nd) {
   if (!props.editZones) return
   e.preventDefault()
-  dragFocus.value = { x: nd.x, y: nd.y }
   const el = viewerEl.value
   if (!el) return
   const rect = el.getBoundingClientRect()
@@ -877,7 +870,6 @@ function onNavDragStart(e, nd) {
     document.removeEventListener('mouseup', onEnd)
     document.removeEventListener('touchmove', onMove)
     document.removeEventListener('touchend', onEnd)
-    dragFocus.value = null
     // Persist to database
     try {
       await fetch('/api/v1/graphql', {
@@ -1091,7 +1083,6 @@ watch(() => props.locationId, () => {
 })
 
 const lerpActive = ref(false)
-const dragFocus = ref(null)  // { x, y } — override pan anchor during drag
 const destNavCache = ref({})  // { [locationId]: { arriveX, arriveY, destAspect } } lazy-populated
 
 // ── Lazy pre-fetch destination nav data for dot overlay positioning ──
