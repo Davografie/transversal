@@ -1516,9 +1516,10 @@ onMounted(fetchNav)
 .fade-in {
   animation: fadeIn 0.4s ease both;
 }
-/* Self character gets a pop animation on arrival */
+/* Self character pops in after implosion completes */
 .self.fade-in {
   animation: arrivePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: 0.9s;
 }
 
 @keyframes arrivePop {
@@ -1568,7 +1569,7 @@ onMounted(fetchNav)
   margin-left: -20px; margin-top: -20px;
   background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(200,220,255,0.6) 30%, transparent 70%);
   animation: portalFlash 0.3s ease-out both;
-  animation-delay: 0.45s;
+  animation-delay: 0.85s;
 }
 
 @keyframes portalFlash {
@@ -1582,9 +1583,9 @@ onMounted(fetchNav)
   border: 2px solid rgba(100,180,255,0.7);
   animation: burstRing 1s ease-out both;
 }
-.ring-burst-1 { animation-delay: 0.5s; }
-.ring-burst-2 { animation-delay: 0.65s; }
-.ring-burst-3 { animation-delay: 0.8s; }
+.ring-burst-1 { animation-delay: 0.9s; }
+.ring-burst-2 { animation-delay: 1.05s; }
+.ring-burst-3 { animation-delay: 1.2s; }
 
 @keyframes burstRing {
   0%   { width: 20px; height: 20px; margin-left: -10px; margin-top: -10px; opacity: 1; }
