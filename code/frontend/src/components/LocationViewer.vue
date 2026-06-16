@@ -113,6 +113,7 @@
       v-if="!travelAnim.active && showElements && showSelf"
       type="self"
       variant="character"
+      class="fade-in"
       :x="selfX" :y="selfY"
       :image="selfImage"
       :initials="selfInitials"
