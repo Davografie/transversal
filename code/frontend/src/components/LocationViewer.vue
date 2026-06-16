@@ -1550,15 +1550,15 @@ onMounted(fetchNav)
 
 /* Phase 1 — Reverse ripple (energy drawn inward) */
 .ring-implode {
-  border: 3px solid rgba(100,180,255,0.6);
-  animation: implodeRing 0.6s cubic-bezier(0.4, 0, 1, 1) both;
+  border: 4px solid rgba(100,180,255,0.6);
+  animation: implodeRing 0.9s cubic-bezier(0.4, 0, 1, 1) both;
 }
 .ring-implode-1 { animation-delay: 0s; }
-.ring-implode-2 { animation-delay: 0.1s; }
+.ring-implode-2 { animation-delay: 0.15s; }
 
 @keyframes implodeRing {
-  0%   { width: 200px; height: 200px; margin-left: -100px; margin-top: -100px; opacity: 0.3; }
-  80%  { opacity: 0.7; }
+  0%   { width: 300px; height: 300px; margin-left: -150px; margin-top: -150px; opacity: 0.4; }
+  70%  { opacity: 0.8; }
   100% { width: 8px; height: 8px; margin-left: -4px; margin-top: -4px; opacity: 1; }
 }
 
