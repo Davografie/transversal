@@ -504,7 +504,7 @@ Valid roles: `"player"`, `"architect"`. The role controls which UI elements are 
 
 ### Player Persistence
 
-Players are stored in a JSON file at `/app/data/players.json` (configurable via `PLAYERS_FILE` env var). The API container mounts an `api_data` Docker volume at `/app/data` for persistence across restarts. Every mutation (create, claim, release, set_role) triggers a synchronous `_save()`.
+Players are stored in the ArangoDB `players` collection. Player→entity ownership is tracked via `relationships` edges (type: `agency`, `_from`: `players/{id}`, `_to`: `entities/{id}`). See [[Data Model#players]] and [[Data Model#relationships]].
 
 ---
 

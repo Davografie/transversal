@@ -44,6 +44,22 @@ class TraitSetRef:
     order: int = 0
     limit: int = 1
 
+    @strawberry.field
+    def traits(self, info: strawberry.Info) -> list["TraitRef"]:
+        from transversal.services.entity_manager import EntityManager
+        em: EntityManager = info.context["entity_manager"]
+        traits = em.repo.get_traits_by_traitset(self.id)
+        return [
+            TraitRef(
+                id=t.id, name=t.name, universes=t.universes,
+                traitset_id=t.traitset_id, default_die_type=t.default_die_type,
+                default_rating_type=t.default_rating_type,
+                possible_sfx_ids=t.possible_sfx_ids,
+                location_restricted=t.location_restricted,
+            )
+            for t in traits
+        ]
+
 
 # ── SFX Registry ──────────────────────────────────────
 

@@ -87,6 +87,8 @@ class EntityType(str, Enum):
     ASSET = "asset"
     GMC = "gmc"
     UNIVERSE = "universe"
+    SUBTRAIT = "subtrait"
+    RELATION = "relation"
 
 
 class TransversalType(str, Enum):
@@ -222,6 +224,8 @@ class Trait(BaseModel):
     possible_subtrait_ids: list[str] = Field(default_factory=list)
     possible_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False
+    explanation: str = ""
+    random_weight: int = 0
 
 
 class TraitSet(BaseModel):
@@ -237,6 +241,8 @@ class TraitSet(BaseModel):
     order: int = 0
     limit: int = 1
     location_restricted: bool = False
+    default_rating_type: RatingType = RatingType.STATIC
+    default_die_type: DieType = DieType.D4
 
 
 # ── Dice helpers ──────────────────────────────────────

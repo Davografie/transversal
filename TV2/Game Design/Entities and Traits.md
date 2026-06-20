@@ -17,38 +17,13 @@ The Transversal backend manages the multiverse through **entities** spread acros
 
 ## Data Model Overview
 
-Seven ArangoDB collections power the entity system:
+Transversal's data model uses eight ArangoDB collections in a property graph — entities, traits, settings, and SFXs live in separate collections connected by edges. The full schema, field definitions, edge patterns, enums, and ID conventions are documented in [[Data Model]].
 
-| Collection | Type | Stores |
-|-----------|------|--------|
-| `entities` | document | Name, type, razmerit, current universe/location, visibility |
-| `projections` | document | Per-universe body grouping (entity_id, universe, body type) |
-| `traits` | document | **Registry** — what traits exist per universe (shared definitions) |
-| `traitsets` | document | **Registry** — named groupings of traits (attributes, skills, cultivation) |
-| `traitsettings` | **edge** | **Per-entity** — entity → trait, carries dice: [DieType], type, statement, SFX unlocks |
-| `sfxs` | document | SFX registry — trigger, timing, cost, effects |
-| `relationships` | **edge** | Entity-to-entity connections (located_at, owns, allegiance) |
-
-The graph path: `entity → traitsetting → trait → traitset → sfx`. This means "find all entities with qi_reserves d8+" is a graph traversal, not a nested array scan.
+The graph path: `entity → traitsetting → trait → traitset → sfx`. "Find all entities with qi_reserves d8+" is a graph traversal, not a nested array scan.
 
 ## Entity Model
 
-Every significant thing in Transversal is an entity. Each entity has:
-
-- **Type**: character, location, faction, asset, or GMC
-- **Razmerit**: Global hyper-dimensional material balance — follows the entity across universes
-- **Current universe and location**: Where the entity is right now
-- **Visibility**: `hidden` flag and `known_to` list (for conspyramid faction nodes)
-
-Entities carry **metadata only**. Traits live in separate collections — the entity is the hub that trait settings connect to.
-
-```yaml
-type: character
-name: "Kael Drift"
-razmerit: 3
-current_universe: earth
-current_location: "Krasnoyarsk-45"
-```
+Every significant thing in Transversal is an entity. Each entity carries **metadata only** — traits live in separate collections connected by edges. See [[Data Model#entities]] for the full entity schema.
 
 ## Universe Laws
 
@@ -211,13 +186,7 @@ Kael's hacking stays on Earth. His curiosity follows him everywhere.
 
 ## Projections
 
-A **projection** is a per-universe body record — not a container for traits, but a marker that the entity has a presence in that universe.
-
-| Field | Meaning |
-|-------|---------|
-| `entity_id` | Which entity this projection belongs to |
-| `universe` | Which universe |
-| `transversal_type` | native, consciousness, or inapposite |
+A **projection** is a per-universe body record — not a container for traits, but a marker that the entity has a presence in that universe. See [[Data Model#projections]] for the field schema.
 
 Projections are separate documents in the `projections` collection. An entity has one projection per universe they've visited. Creating a new projection (via consciousness transversal to a new universe) creates a projection document and a set of baseline trait settings from that universe's registry.
 
@@ -243,13 +212,7 @@ See [[Inspired Mechanics]] for razmerit spend/earn rates and the effects system 
 
 ## Relationships Between Entities
 
-Entities connect through the `relationships` edge collection:
-
-- **located_at**: Entity → Location (where something is)
-- **owns**: Entity → Asset (who possesses what)
-- **allegiance**: Entity → Faction (who belongs to whom)
-- **contains**: Location → Location (zone hierarchy)
-- **conspyramid_node**: Faction → Entity (faction node structure)
+Entities connect through the `relationships` edge collection. See [[Data Model#relationships]] for the edge schema and [[Data Model#Relationship Types]] for the type enum.
 
 Relationships can carry their own trait settings — a relationship edge can have traits attached (e.g., "debt: 4d6 razmerit owed").
 

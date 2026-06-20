@@ -169,44 +169,7 @@ effects engine; the tracker checks availability and marks the push consumed.
 
 ## Data Model
 
-### Collections
-
-| Collection | Type | Purpose |
-|-----------|------|---------|
-| `entities` | Document | Core entity metadata (name, type, razmerit, universe, location, background_image, zones, map_x/y) |
-| `projections` | Document | Per-universe body grouping |
-| `traits` | Document | Trait registry per universe |
-| `traitsets` | Document | Trait grouping registry |
-| `traitsettings` | Edge | Entity → trait, carries dice array + rating type + statement |
-| `sfxs` | Document | SFX definitions |
-| `relationships` | Edge | Entity → entity (super, transversal) |
-| `players` | Document | Player identity for session persistence |
-
-### Entity Types
-
-| Type | Description |
-|------|-------------|
-| `CHARACTER` | Player character |
-| `LOCATION` | Place in a universe |
-| `FACTION` | Organization or group |
-| `ASSET` | Ownable item or resource |
-| `GMC` | GM character / NPC |
-| `UNIVERSE` | Universe metadata entity |
-
-### Zone Model
-
-Zones are sub-areas within a location, rendered as interactive hotspots on the background image.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | String | Display name (matches child location name for navigation) |
-| `x` | Float | Percentage position (0–100) on background image |
-| `y` | Float | Percentage position (0–100) on background image |
-| `background_image` | String? | Optional zone-specific image |
-
-### Map Positioning
-
-Entities at a location have optional `map_x`/`map_y` percentage coordinates for positioning on the background. Characters always see their own marker and can drag it. GMs in edit mode can drag all occupants.
+The complete data model — collection schemas, field definitions, edge patterns, enums, ID conventions, and indexes — is documented in [[Data Model]].
 
 ## Frontend
 
@@ -242,7 +205,7 @@ Session management groups players into shared game sessions. The SSE bus broadca
 | Feature | Implementation |
 |---------|---------------|
 | **Sessions** | In-memory store (`SessionManager`). Create, join, leave. Each session tracks entity→player mapping. |
-| **Player identity** | Server-generated player IDs, stored in `localStorage`. Name-based recovery with search-driven input (debounced partial-match suggestions, "New transverser" create option). Each player has a **role** — `"player"` or `"architect"` — stored on the server and synced on login/switch. Role controls UI visibility (GmPanel, location labels, overlay tools). Players persisted to `/app/data/players.json` with Docker volume for restart survival. Settings panel (↩ button) provides business-card-style name display, Player/Architect mode toggle, switch-player with live suggestions, and character selection with confirmation. |
+| **Player identity** | Server-generated player IDs, stored in `localStorage`. Name-based recovery with search-driven input (debounced partial-match suggestions, "New transverser" create option). Each player has a **role** — `"player"` or `"architect"` — stored in the ArangoDB `players` collection. Player→entity ownership via `relationships` edges (type: `agency`). Role controls UI visibility (GmPanel, location labels, overlay tools). Settings panel (↩ button) provides business-card-style name display, Player/Architect mode toggle, switch-player with live suggestions, and character selection with confirmation. |
 | **Shared state** | Razmerit, trait updates, entity updates, dice pools, and roll results broadcast via SSE. |
 | **Entity switcher** | Top-center pill buttons (Kael / Elena). Remote pools and results appear as chips beneath each character name. |
 
@@ -282,7 +245,7 @@ services:
 volumes:
   arango_data:    # persistent DB
   redis_data:     # persistent cache
-  api_data:       # persistent player data (players.json)
+  api_data:       # persistent data (seed migration, backups)
   # media/ is a bind mount from project root → /app/media in api and frontend containers
 ```
 
@@ -317,7 +280,7 @@ volumes:
 | Media upload with auto-persist | Instant feedback — upload a background image, it saves and appears immediately |
 | Player / Architect role split | Two roles with different UI surfaces. Architect sees GmPanel, location labels, overlay switcher, and arrange tools. Players see a minimal UI with only an effects toggle. Role stored server-side on Player model, synced on login. |
 | Effects toggle per-device | Players on lower-powered devices can disable CSS/particle effects for performance. Stored in `localStorage`, only shown on locations that have effects. |
-| JSON file player persistence | Simple file-backed store (`players.json`) with Docker volume. Survives restarts without ArangoDB dependency. Every mutation triggers synchronous `_save()`. |
+| Player persistence in ArangoDB | Players stored in `players` collection. Player→entity ownership via `relationships` edges (type: `agency`). Survives restarts via persistent Docker volume. |
 
 ## Next
 

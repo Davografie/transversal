@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 from transversal.db.arango import (
     ENTITIES,
+    PLAYERS,
     PROJECTIONS,
     RELATIONSHIPS,
     SFXS,
@@ -49,6 +50,7 @@ class EntityRepository:
         self._traitsettings = self.db.collection(TRAITSETTINGS)
         self._sfxs = self.db.collection(SFXS)
         self._relationships = self.db.collection(RELATIONSHIPS)
+        self._players = self.db.collection(PLAYERS)
 
     # ── Entity CRUD ───────────────────────────────────
 
@@ -181,6 +183,18 @@ class EntityRepository:
         cursor = self.db.aql.execute(query, bind_vars={"name": name, "u": universe})
         docs = list(cursor)
         return Trait.model_validate({**docs[0], "id": docs[0]["_key"]}) if docs else None
+
+    def get_traits_by_traitset(self, traitset_id: str) -> list[Trait]:
+        query = f"""
+            FOR t IN {TRAITS}
+            FILTER t.traitset_id == @tsid
+            SORT t.name ASC
+            RETURN t
+        """
+        return [
+            Trait.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"tsid": traitset_id})
+        ]
 
     def update_trait(self, trait: Trait) -> Trait:
         doc = trait.model_dump()
@@ -441,6 +455,99 @@ class EntityRepository:
             "type": rel_type,
         }
         return self._relationships.insert(edge)
+
+    # ── Players ──────────────────────────────────────
+
+    def create_player(self, player_id: str, name: str, role: str = "player") -> dict:
+        doc = {"_key": player_id, "name": name, "role": role}
+        self._players.insert(doc)
+        return doc
+
+    def get_player(self, player_id: str) -> dict | None:
+        return self._players.get(player_id)
+
+    def find_player_by_name(self, name: str) -> dict | None:
+        query = f"""
+            FOR p IN {PLAYERS}
+            FILTER LOWER(p.name) == @name
+            LIMIT 1
+            RETURN p
+        """
+        cursor = self.db.aql.execute(query, bind_vars={"name": name.lower().strip()})
+        results = list(cursor)
+        return results[0] if results else None
+
+    def search_players(self, query_str: str) -> list[dict]:
+        q = query_str.lower().strip()
+        if not q:
+            return []
+        aql = f"""
+            FOR p IN {PLAYERS}
+            FILTER CONTAINS(LOWER(p.name), @q)
+            SORT p.name
+            RETURN p
+        """
+        return list(self.db.aql.execute(aql, bind_vars={"q": q}))
+
+    def list_players(self) -> list[dict]:
+        return list(self._players.all())
+
+    def update_player(self, player_id: str, updates: dict) -> bool:
+        player = self._players.get(player_id)
+        if player:
+            player.update(updates)
+            self._players.update(player)
+            return True
+        return False
+
+    def delete_player(self, player_id: str) -> bool:
+        # Cascade-delete agency edges
+        self.db.aql.execute(
+            f"FOR r IN {RELATIONSHIPS} FILTER r._from == @pref AND r.type == 'agency' REMOVE r IN {RELATIONSHIPS}",
+            bind_vars={"pref": f"{PLAYERS}/{player_id}"}
+        )
+        try:
+            self._players.delete(player_id)
+            return True
+        except Exception:
+            return False
+
+    def claim_entity(self, player_id: str, entity_id: str) -> bool:
+        if not self._players.has(player_id):
+            return False
+        edge_key = f"edge:{player_id}:{entity_id}:agency"
+        if not self._relationships.has(edge_key):
+            self._relationships.insert({
+                "_key": edge_key,
+                "_from": f"{PLAYERS}/{player_id}",
+                "_to": f"{ENTITIES}/{entity_id}",
+                "type": "agency",
+            })
+        return True
+
+    def release_entity(self, player_id: str, entity_id: str) -> bool:
+        edge_key = f"edge:{player_id}:{entity_id}:agency"
+        try:
+            self._relationships.delete(edge_key)
+            return True
+        except Exception:
+            return False
+
+    def get_player_entities(self, player_id: str) -> list[str]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @pref AND r.type == 'agency'
+            RETURN PARSE_IDENTIFIER(r._to).key
+        """
+        return list(self.db.aql.execute(query, bind_vars={"pref": f"{PLAYERS}/{player_id}"}))
+
+    def get_entity_players(self, entity_id: str) -> list[str]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._to == @eref AND r.type == 'agency'
+            RETURN PARSE_IDENTIFIER(r._from).key
+        """
+        return list(self.db.aql.execute(query, bind_vars={"eref": f"{ENTITIES}/{entity_id}"}))
 
     # ── Location Navigation ────────────────────────────
 

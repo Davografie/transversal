@@ -101,7 +101,7 @@ aliases:
 - [x] Player / Architect role split (server-side role, GmPanel gated, architect-only top-left UI)
 - [x] Player settings panel (↩ button — business-card name display, mode toggle, switch-player with live search, character selection with confirmation)
 - [x] Search-driven login (debounced partial-match suggestions, "New transverser" create option, narrative Transversal-themed messages)
-- [x] Player JSON persistence (`/app/data/players.json`, Docker volume, survives restarts)
+- [x] Player ArangoDB persistence (`players` collection + `agency` relationships edges, survives restarts)
 - [x] Effects toggle per-device (✨/🌑 in localStorage, only on locations with effects)
 - [x] CSS overlay presets (mist, fire, rain, snow, fog) with backdrop-filters
 - [x] Canvas particle system (fire embers, snow flakes, rain streaks) per overlay preset

@@ -23,7 +23,7 @@
       >
         <span class="drag-handle">⠿</span>
         <span class="entity-name">{{ ts.name }}</span>
-        <span style="font-size:10px;color:var(--text-dim)">{{ traitCount(ts.id) }}</span>
+        <span style="font-size:10px;color:var(--text-dim)">{{ (ts.traits?.length) || 0 }}</span>
       </div>
       <div v-if="filtered.length === 0" class="empty">No traitsets found</div>
     </div>
@@ -38,8 +38,6 @@ const { graphql } = useApi()
 
 const props = defineProps({
   traitsets: { type: Array, default: () => [] },
-  allTraits: { type: Array, default: () => [] },
-  allSfxs: { type: Array, default: () => [] },
   selectedId: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   onRefresh: { type: Function, default: null },
@@ -60,14 +58,9 @@ const filtered = computed(() => {
   if (!q) return list
   return list.filter(ts =>
     ts.name.toLowerCase().includes(q) ||
-    props.allTraits.some(t => t.traitsetId === ts.id && t.name.toLowerCase().includes(q)) ||
-    props.allSfxs.some(s => s.name.toLowerCase().includes(q))
+    (ts.traits || []).some(t => t.name.toLowerCase().includes(q))
   )
 })
-
-function traitCount(tsId) {
-  return props.allTraits.filter(t => t.traitsetId === tsId).length
-}
 
 function onDragStart(i, e) {
   dragIndex.value = i

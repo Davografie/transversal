@@ -141,7 +141,6 @@ const activeSfx = ref(null)
 const activeSfxId = ref(null)
 const sfxForm = ref({ name: '', trigger: '', description: '' })
 const traitsets = ref([])
-const allTraitsData = ref([])
 const allSfxsData = ref([])
 
 function nextBeat() { emit('next-beat') }
@@ -334,15 +333,48 @@ watch(configTraits, async (val) => {
 
 async function fetchTraitsConfig() {
   traitsLoading.value = true
-  const [ts, tr, sf] = await Promise.all([
-    graphql(`query { traitsets { id name universes entityTypes order limit } }`),
-    graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name defaultDieType traitsetId } }`, { u: props.universe }),
+  const [ts, sf] = await Promise.all([
+    graphql(`query { traitsets { id name universes entityTypes order limit traits { id name defaultDieType } } }`),
     graphql(`query { sfxs { id name description trigger } }`),
   ])
   if (ts?.traitsets) traitsets.value = ts.traitsets
-  if (tr?.traitsByUniverse) allTraitsData.value = tr.traitsByUniverse
   if (sf?.sfxs) allSfxsData.value = sf.sfxs
   traitsLoading.value = false
+}
+
+// ── Targeted data patching ──
+
+function patchData(collection, id, changes) {
+  let arr, activeRef
+  if (collection === 'traitsets') {
+    arr = traitsets; activeRef = activeTraitset
+  } else if (collection === 'traits') {
+    // Traits are nested within traitsets[].traits
+    for (const ts of traitsets.value) {
+      const idx = (ts.traits || []).findIndex(t => t.id === id)
+      if (idx >= 0) {
+        Object.assign(ts.traits[idx], changes)
+        ts.traits[idx]._flash = (ts.traits[idx]._flash || 0) + 1
+        setTimeout(() => { if (ts.traits[idx]._flash) ts.traits[idx]._flash = 0 }, 600)
+        break
+      }
+    }
+    activeRef = activeTrait
+  } else if (collection === 'sfxs') {
+    arr = allSfxsData; activeRef = activeSfx
+  }
+  if (arr) {
+    const idx = arr.value.findIndex(item => item.id === id)
+    if (idx >= 0) {
+      Object.assign(arr.value[idx], changes)
+      const item = arr.value[idx]
+      item._flash = (item._flash || 0) + 1
+      setTimeout(() => { if (item._flash) item._flash = 0 }, 600)
+    }
+  }
+  if (activeRef?.value?.id === id) {
+    Object.assign(activeRef.value, changes)
+  }
 }
 
 // ── Unified secondary panels ────────────────────────
@@ -404,10 +436,10 @@ const traitConfigPanels = computed(() => {
     title: 'Traitsets',
     props: {
       traitsets: traitsets.value,
-      allTraits: allTraitsData.value,
-      allSfxs: allSfxsData.value,
       loading: traitsLoading.value,
       selectedId: activeTraitsetId.value,
+      onRefresh: fetchTraitsConfig,
+      onPatch: patchData,
     },
   })
   // Level 1: traitset detail (form + traits)
@@ -418,20 +450,25 @@ const traitConfigPanels = computed(() => {
       title: activeTraitset.value.name,
       props: {
         traitset: activeTraitset.value,
-        traits: allTraitsData.value.filter(t => t.traitsetId === activeTraitsetId.value),
+        traits: activeTraitset.value.traits || [],
         selectedId: activeTraitId.value,
+        onRefresh: fetchTraitsConfig,
+        onPatch: patchData,
       },
     })
   }
-  // Level 2: SFXs
+  // Level 2: trait edit
   if (activeTrait.value) {
     panels.push({
-      id: 'sfxs',
-      component: GmSfxsPanel,
+      id: 'trait-edit',
+      component: GmTraitEditPanel,
       title: activeTrait.value.name,
       props: {
+        trait: activeTrait.value,
         sfxs: allSfxsData.value,
         selectedId: activeSfxId.value,
+        onRefresh: fetchTraitsConfig,
+        onPatch: patchData,
       },
     })
   }
@@ -442,7 +479,7 @@ const traitConfigPanels = computed(() => {
       component: GmSfxEditPanel,
       title: activeSfx.value.name,
       hideBack: false,
-      props: { sfx: activeSfx.value },
+      props: { sfx: activeSfx.value, onRefresh: fetchTraitsConfig, onPatch: patchData },
     })
   }
   return panels
