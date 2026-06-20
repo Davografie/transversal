@@ -179,7 +179,7 @@
       />
     <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { const labels = s.map(d => d.label || '').filter(Boolean); currentPoolSources = labels; sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
   </div>
-  <GmPanel v-if="gmMode" :universe="universe" :current-location-id="currentLocationId" :pool-sources="currentPoolSources" @next-beat="onNextBeat" @start-session="onStartSession" @end-session="onEndSession" @add-to-pool="(d) => diceRef?.addFromSheet(d)" />
+  <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
 </template>
 
 <script setup>
@@ -188,11 +188,28 @@ import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
 import GmPanel from './components/GmPanel.vue'
+import PanelStack from './components/gm/PanelStack.vue'
 import { useSSE } from './composables/useSSE.js'
 import { useSessions } from './composables/useSessions.js'
 import { useApi } from './composables/useApi.js'
 
 const { graphql } = useApi()
+
+// ── GM panel root spec for PanelStack ──
+const gmRootPanel = computed(() => ({
+  component: GmPanel,
+  props: {
+    universe: universe.value,
+    currentLocationId: currentLocationId.value,
+  },
+  listeners: {
+    'next-beat': () => onNextBeat(),
+    'start-session': () => onStartSession(),
+    'end-session': () => onEndSession(),
+    'add-to-pool': (d) => diceRef?.addFromSheet(d),
+  },
+}))
+
 const universe = ref('earth')
 const currentLocationId = ref('loc-krasnoyarsk')
 const locationName = ref('Krasnoyarsk-45')

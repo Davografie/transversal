@@ -1,98 +1,61 @@
 <template>
-  <button v-if="!open" class="gm-toggle" @click="open = true">🛠</button>
+  <div class="gm-content">
+    <div class="mode-tabs">
+      <button :class="{ active: mode === 'play' }" @click="mode = 'play'">Play</button>
+      <button :class="{ active: mode === 'prep' }" @click="mode = 'prep'">Prep</button>
+    </div>
 
-  <!-- Unified panel system — PanelStack handles all -->
-  <PanelStack :panels="allPanels" @close="onPanelClose" @select="onTraitConfigSelect" @save="onTraitConfigSave">
-    <!-- Level 0: GM panel -->
-    <template #gm v-if="open">
-      <div class="gm-content">
-        <div v-if="loading" class="loading">Loading…</div>
-        <div v-else-if="error" class="error">{{ error }}</div>
-
-        <template v-else>
-          <div class="mode-tabs">
-            <button :class="{ active: mode === 'play' }" @click="mode = 'play'">Play</button>
-            <button :class="{ active: mode === 'prep' }" @click="mode = 'prep'">Prep</button>
-          </div>
-
-          <template v-if="mode === 'play'">
-            <div class="gm-shortcuts">
-              <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
-              <button class="shortcut-btn scene-btn" @click="viewSceneSummary = !viewSceneSummary">◈ Scene</button>
-              <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
-              <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
-            </div>
-            <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntities" @inspect="inspectEntity" />
-          </template>
-
-          <template v-if="mode === 'prep'">
-            <div class="filter-bar">
-              <div class="filter-input-wrap">
-                <input v-model="filterQuery" class="filter-input" placeholder="Filter…" @focus="showSuggestions = true" @blur="hideSuggestions" @keyup.escape="filterQuery = ''; filterLocationId = ''" />
-                <button v-if="filterQuery" class="filter-clear-inline" @click="filterQuery = ''; filterLocationId = ''">✕</button>
-                <div v-if="showSuggestions && suggestions.length" class="filter-suggestions">
-                  <div v-for="s in suggestions" :key="s.id" class="suggestion-row" @mousedown.prevent="selectSuggestion(s)">
-                    <span class="entity-type-badge" :class="'type-' + s.type">{{ s.type }}</span><span>{{ s.name }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <button class="create-btn" @click="startCreate">+ New Entity</button>
-            <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :universe="universe" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
-            <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
-            <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
-              <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
-              <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
-            </div>
-            <button class="create-btn" style="margin-top:8px" @click="configTraits = true">Manage Traits</button>
-            <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
-          </template>
-        </template>
+    <template v-if="mode === 'play'">
+      <div class="gm-shortcuts">
+        <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
+        <button class="shortcut-btn scene-btn" @click="viewSceneSummary = !viewSceneSummary">◈ Scene</button>
+        <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
+        <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
       </div>
+      <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntities" @inspect="inspectEntity" />
     </template>
 
-    <!-- Level 1+: entity panels -->
-    <template #entity v-if="editing || creating || inspectedEntity">
-      <template v-if="inspectedEntity && !editing">
-        <div class="form-actions top-actions">
-          <button class="sheet-edit-btn" @click="switchToEdit">Edit</button>
+    <template v-if="mode === 'prep'">
+      <div class="filter-bar">
+        <div class="chip-bar">
+          <span v-for="(f, i) in activeFilters" :key="i" class="filter-chip">
+            <span class="chip-label">{{ f.label }}</span>
+            <button class="chip-remove" @click="activeFilters.splice(i, 1)">×</button>
+          </span>
         </div>
-        <CharacterSheet :entity-id="inspectedEntity.id" :universe="universe" embedded :gm-mode="true" :external-pool-sources="poolSources" @add-to-pool="(d) => emit('add-to-pool', d)" />
-      </template>
-      <template v-if="editing && selected">
-        <div class="form-actions top-actions">
-          <button class="sheet-edit-btn" @click="switchToSheet">Sheet</button>
-          <button class="danger-btn" @click="deleteSelected">Delete</button>
+        <div class="filter-input-wrap">
+          <input v-model="filterInput" class="filter-input" placeholder="Filter…" @focus="showSuggestions = true" @blur="hideSuggestions" @keyup.escape="filterInput = ''" />
+          <button v-if="filterInput" class="filter-clear-inline" @click="filterInput = ''">✕</button>
+          <div v-if="showSuggestions && suggestions.length" class="filter-suggestions">
+            <div v-for="s in suggestions" :key="s.id" class="suggestion-row" @mousedown.prevent="selectSuggestion(s)">
+              <span class="entity-type-badge" :class="'type-' + (s.entityType || s.type || '')">{{ s.entityType || s.type || '' }}</span><span>{{ s.name }}</span>
+              <span class="suggestion-hint">{{ s.hint }}</span>
+            </div>
+          </div>
         </div>
-        <GmEntityForm v-model="form" :universes="universes" :location-entities="locationEntities" :allow-type-change="false" @upload-bg="uploadBgImage" />
-        <button class="save-btn" @click="saveEntity" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
-        <TraitEditor :traits="selected.traitSettings" :available-traits="availableTraits" :adding="addingTrait" @add-trait="onAddTrait" @remove-trait="removeTrait" />
-      </template>
-      <template v-if="creating">
-        <label>Name</label><input v-model="createForm.name" autofocus />
-        <label>Type</label><select v-model="createForm.type"><option v-for="t in entityTypes" :key="t" :value="t">{{ t }}</option></select>
-        <label>Universe</label><select v-model="createForm.universe"><option v-for="u in universes" :key="u.key" :value="u.key">{{ u.name }}</option></select>
-        <label>Location</label><select v-model="createForm.location"><option value="">-- None --</option><option v-for="l in filteredLocations" :key="l.id" :value="l.id">{{ l.name }}</option></select>
-        <label>Razmerit</label><input v-model.number="createForm.razmerit" type="number" />
-        <button class="save-btn" @click="createEntity" :disabled="saving">{{ saving ? 'Creating…' : 'Create' }}</button>
-      </template>
+      </div>
+      <button class="create-btn" @click="startCreate">+ New Entity</button>
+      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :universe="universe" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
+      <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
+      <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
+        <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
+        <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
+      </div>
+      <button class="create-btn" style="margin-top:8px" @click="openTraitsConfig">Manage Traits</button>
+      <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
-  </PanelStack>
+  </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
-import GmEntityForm from '@/components/gm/GmEntityForm.vue'
-import TraitEditor from '@/components/gm/TraitEditor.vue'
-import PanelStack from '@/components/gm/PanelStack.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
-import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
-import GmSfxsPanel from '@/components/gm/GmSfxsPanel.vue'
-import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
+import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
+import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 
 const { error, graphql } = useApi()
 const loading = ref(false)
@@ -100,25 +63,21 @@ const loading = ref(false)
 const props = defineProps({
   universe: { type: String, default: 'earth' },
   currentLocationId: { type: String, default: '' },
-  poolSources: { type: Array, default: () => [] },
+  open: { type: Function, default: null },
 })
 
-const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool', 'select', 'save'])
+const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool'])
 
-const open = ref(false)
 const mode = ref('play')
 const viewSceneSummary = ref(true)
 const sessionActive = ref(false)
-const inspectedEntity = ref(null)
 
 const filterLocationId = ref('')
-const filterQuery = ref('')
+const activeFilters = ref([])
+const filterInput = ref('')
 const showSuggestions = ref(false)
-
 const locationTree = ref([])
 const expandedNodes = ref({})
-
-const entityTypes = ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET']
 
 const entities = ref([])
 const selected = ref(null)
@@ -127,82 +86,88 @@ const editing = ref(false)
 const creating = ref(false)
 const saving = ref(false)
 const addingTrait = ref(false)
-const sfxSaving = ref(false)
+const inspectedEntity = ref(null)
 
-// ── Traits config state ──
-const configTraits = ref(false)
-const traitSearch = ref('')
-const traitsLoading = ref(false)
-const activeTraitset = ref(null)
-const activeTraitsetId = ref(null)
-const activeTrait = ref(null)
-const activeTraitId = ref(null)
-const activeSfx = ref(null)
-const activeSfxId = ref(null)
-const sfxForm = ref({ name: '', trigger: '', description: '' })
 const traitsets = ref([])
 const allSfxsData = ref([])
+const traitsLoading = ref(false)
 
 function nextBeat() { emit('next-beat') }
 function startSession() { sessionActive.value = true; emit('start-session') }
 function endSession() { sessionActive.value = false; emit('end-session') }
 
+// ── Filter helpers ──────────────────────────────────
+function entityMatchesFilters(e) {
+  for (const f of activeFilters.value) {
+    if (f.type === 'universe' && e.currentUniverse !== f.value) return false
+    if (f.type === 'entityType' && e.type !== f.value) return false
+    if (f.type === 'name' && !fuzzyMatch(e.name, f.value)) return false
+  }
+  return true
+}
+function traitsetMatchesFilters(ts) {
+  for (const f of activeFilters.value) {
+    if (f.type === 'universe' && !(ts.universes || []).includes(f.value)) return false
+    if (f.type === 'entityType' && (ts.entityTypes || []).length > 0 && !(ts.entityTypes || []).includes(f.value)) return false
+    if (f.type === 'name' && !fuzzyMatch(ts.name, f.value)) return false
+  }
+  return true
+}
+
 // ── Autocomplete ────────────────────────────────────
 const suggestions = computed(() => {
-  const q = filterQuery.value.trim().toLowerCase()
+  const q = filterInput.value.trim().toLowerCase()
   if (!q) return []
-  return entities.value.filter(e => e.name.toLowerCase().includes(q)).slice(0, 8)
+  const results = []
+  const seen = new Set()
+  // Universe suggestions
+  for (const u of universes.value) {
+    if ((u.key && fuzzyMatch(u.key, q)) || (u.name && fuzzyMatch(u.name, q))) {
+      if (!seen.has('uni:' + u.key)) {
+        seen.add('uni:' + u.key)
+        results.push({ id: 'uni:' + u.key, name: u.name || u.key, entityType: 'UNIVERSE', hint: 'universe', filterType: 'universe', filterValue: u.key, filterLabel: u.name || u.key })
+      }
+    }
+  }
+  // Entity type suggestions
+  const types = ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET']
+  for (const t of types) {
+    if (fuzzyMatch(t, q)) {
+      results.push({ id: 'type:' + t, name: t.charAt(0) + t.slice(1).toLowerCase(), entityType: t, hint: 'type', filterType: 'entityType', filterValue: t, filterLabel: t.charAt(0) + t.slice(1).toLowerCase() })
+    }
+  }
+  // Entity name suggestions (filtered by active filters)
+  for (const e of entities.value.filter(entityMatchesFilters)) {
+    if (fuzzyMatch(e.name, q) && !seen.has('ent:' + e.id)) {
+      seen.add('ent:' + e.id)
+      results.push({ id: 'ent:' + e.id, name: e.name, entityType: e.type, hint: 'name', filterType: 'name', filterValue: e.name, filterLabel: e.name })
+    }
+  }
+  return results.slice(0, 10)
 })
 function selectSuggestion(s) {
-  filterQuery.value = s.name
-  filterLocationId.value = s.type === 'LOCATION' ? s.id : ''
-  showSuggestions.value = false
+  if (s.filterType && s.filterValue) {
+    // Don't add duplicate filters
+    const exists = activeFilters.value.find(f => f.type === s.filterType && f.value === s.filterValue)
+    if (!exists) {
+      activeFilters.value.push({ type: s.filterType, value: s.filterValue, label: s.filterLabel || s.filterValue })
+    }
+  }
+  filterInput.value = ''
 }
 function hideSuggestions() { setTimeout(() => { showSuggestions.value = false }, 150) }
 
-// ── Filter resolution ──────────────────────────────
-const allTreeNodesFlat = computed(() => {
-  const r = []
-  function walk(n) { for (const x of n) { r.push(x); if (x.children) walk(x.children) } }
-  walk(locationTree.value)
-  return r
-})
-const filterLocationIds = computed(() => {
-  const ids = new Set(); const lid = filterLocationId.value
-  if (!lid) return ids
-  function find(n) { for (const x of n) { if (x.id === lid) { collectDescendants(x, ids); return true } if (x.children && find(x.children)) return true } return false }
-  find(locationTree.value); return ids
-})
-function collectDescendants(node, ids) { ids.add(node.id); if (node.children) for (const c of node.children) collectDescendants(c, ids) }
-
-watch([() => props.currentLocationId, allTreeNodesFlat], ([newId, nodes]) => {
-  if (newId && nodes.length) {
-    const loc = nodes.find(n => n.id === newId)
-    if (loc) { filterQuery.value = loc.name; filterLocationId.value = newId }
-  }
-}, { immediate: true })
-watch(filterQuery, (q) => {
-  const t = q.trim(); if (!t) { filterLocationId.value = ''; return }
-  const m = allTreeNodesFlat.value.find(n => n.name.toLowerCase() === t.toLowerCase())
-  filterLocationId.value = m ? m.id : ''
-})
-
 // ── Filtered data ──────────────────────────────────
-const filteredFactions = computed(() => {
-  let list = entities.value.filter(e => e.type === 'FACTION')
-  const lid = filterLocationId.value
-  if (lid && filterLocationIds.value.size > 0) list = list.filter(e => e.currentLocation && filterLocationIds.value.has(e.currentLocation))
-  else if (filterQuery.value.trim()) list = list.filter(e => e.name.toLowerCase().includes(filterQuery.value.trim().toLowerCase()))
-  return list
-})
-const sceneEntities = computed(() => entities.value.filter(e => e.type === 'CHARACTER' || e.type === 'GMC'))
+const filteredEntities = computed(() => entities.value.filter(entityMatchesFilters))
+const filteredFactions = computed(() => filteredEntities.value.filter(e => e.type === 'FACTION'))
+const sceneEntities = computed(() => filteredEntities.value.filter(e => e.type === 'CHARACTER' || e.type === 'GMC'))
+const locationEntities = computed(() => filteredEntities.value.filter(e => e.type === 'LOCATION'))
 const universes = computed(() => entities.value.filter(e => e.type === 'UNIVERSE').map(u => ({ key: u.currentUniverse, name: u.name })))
-const locationEntities = computed(() => entities.value.filter(e => e.type === 'LOCATION'))
-const filteredLocations = computed(() => creating.value ? locationEntities.value.filter(l => l.currentUniverse === createForm.value.universe) : locationEntities.value)
 
 // ── Forms ──────────────────────────────────────────
 const form = ref({})
-const createForm = ref({ name: '', type: 'CHARACTER', universe: 'earth', location: '', razmerit: 0 })
+const parentId = ref(null)
+const createForm = ref({ name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 })
 const availableTraits = ref([])
 
 // ── API ────────────────────────────────────────────
@@ -211,36 +176,138 @@ const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit 
 
 async function fetchEntities() { loading.value = true; const data = await graphql(ALL_ENTITIES, { type: null }); if (data?.entities) entities.value = data.entities; loading.value = false }
 
+async function fetchTraitsConfig() {
+  traitsLoading.value = true
+  const [ts, sf] = await Promise.all([
+    graphql(`query { traitsets { id name universes entityTypes order limit traits { id name defaultDieType traitsetId universes possibleSfxIds } } }`),
+    graphql(`query { sfxs { id name description trigger } }`),
+  ])
+  if (ts?.traitsets) traitsets.value = ts.traitsets
+  if (sf?.sfxs) allSfxsData.value = sf.sfxs
+  traitsLoading.value = false
+}
+
+// ── Entity management ──────────────────────────────
 function toggleEntity(e) {
-  cascadeCloseTo(1, false)
   if (editing.value && selectedId.value === e.id) { editing.value = false; selected.value = null; selectedId.value = null }
   else { selectEntity(e) }
 }
-function onSelectLocation(id) { toggleEntity({ id }, true) }
+function onSelectLocation(id) { toggleEntity({ id }) }
 function onSelectOccupant(e) { toggleEntity(e) }
 
 async function selectEntity(e) {
+  const alreadyEditing = editing.value && selectedId.value === e.id
   const data = await graphql(ENTITY_QUERY, { id: e.id })
   if (data?.entity) {
     selected.value = data.entity; selectedId.value = e.id; editing.value = true
     form.value = { name: data.entity.name, type: data.entity.type, current_universe: data.entity.currentUniverse, current_location: data.entity.currentLocation || '', razmerit: data.entity.razmerit, background_image: data.entity.backgroundImage || '', overlay: data.entity.overlay || null, hidden: data.entity.hidden }
+    parentId.value = null; form.value._originalParentId = null
+    if (data.entity.type === 'LOCATION') {
+      try {
+        const r = await fetch(`/api/v1/locations/${e.id}/navigate`)
+        const nav = await r.json()
+        parentId.value = nav.parent?._key || null
+        form.value._originalParentId = parentId.value
+      } catch { parentId.value = null; form.value._originalParentId = null }
+    }
+    await loadAvailableTraits()
+    if (!alreadyEditing) openEntityEdit()
   }
+}
+
+function openEntityEdit() {
+  if (!props.open || !selected.value) return
+  creating.value = false
+  props.open({
+    component: GmEntityEditPanel,
+    title: selected.value.name || 'Edit Entity',
+    props: {
+      form: form.value,
+      universes: universes.value,
+      locationEntities: locationEntities.value,
+      parentId: parentId.value,
+      entityId: selectedId.value,
+      traitSettings: selected.value.traitSettings || [],
+      availableTraits: availableTraits.value,
+      addingTrait: addingTrait.value,
+    },
+    listeners: {
+      'update:form': (v) => { form.value = v },
+      'update:parent-id': (v) => { parentId.value = v },
+      'upload-bg': uploadBgImage,
+      'add-trait': onAddTrait,
+      'remove-trait': removeTrait,
+      'switch-to-sheet': switchToSheet,
+      'delete': deleteSelected,
+    },
+  })
 }
 async function saveEntity() {
   saving.value = true
-  await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id name razmerit currentUniverse currentLocation hidden backgroundImage } }`, { input: { id: selected.value.id, name: form.value.name, razmerit: form.value.razmerit, currentUniverse: form.value.current_universe, currentLocation: form.value.current_location || null, hidden: form.value.hidden, backgroundImage: form.value.background_image || null, overlay: form.value.overlay } })
-  saving.value = false; await selectEntity(selected.value); await fetchEntities()
+  const result = await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id name razmerit currentUniverse currentLocation hidden backgroundImage } }`, { input: { id: selected.value.id, name: form.value.name, razmerit: form.value.razmerit, currentUniverse: form.value.current_universe, currentLocation: form.value.current_location || null, hidden: form.value.hidden, backgroundImage: form.value.background_image || null, overlay: form.value.overlay } })
+  // Update selected entity directly — don't call selectEntity() which would re-trigger the watcher loop
+  if (result?.updateEntity) {
+    const ue = result.updateEntity
+    if (selected.value) {
+      selected.value.name = ue.name
+      selected.value.razmerit = ue.razmerit
+      selected.value.currentUniverse = ue.currentUniverse
+      selected.value.currentLocation = ue.currentLocation
+      selected.value.hidden = ue.hidden
+      selected.value.backgroundImage = ue.backgroundImage
+    }
+  }
+  if (selected.value && selected.value.type === 'LOCATION') {
+    const newParent = parentId.value || null
+    const oldParent = form.value._originalParentId
+    if (newParent !== oldParent) {
+      if (oldParent) { try { await fetch(`/api/v1/locations/${selected.value.id}/edges/${oldParent}?type=super`, { method: 'DELETE' }) } catch {} }
+      if (newParent) { try { await fetch(`/api/v1/locations/${selected.value.id}/edges/${newParent}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'super' }) }) } catch {} }
+      form.value._originalParentId = newParent
+    }
+    await fetchLocationTree()
+  }
+  saving.value = false
+  await fetchEntities()
 }
+let entitySaveTimer = null
+watch([() => form.value, () => parentId.value], () => {
+  if (!editing.value || !selected.value) return
+  clearTimeout(entitySaveTimer)
+  entitySaveTimer = setTimeout(() => saveEntity(), 600)
+}, { deep: true })
+
 async function deleteSelected() {
   if (!confirm(`Delete ${selected.value.name}?`)) return
   await graphql(`mutation($id: ID!) { deleteEntity(id: $id) }`, { id: selected.value.id })
   selected.value = null; selectedId.value = null; editing.value = false; await fetchEntities()
 }
-async function startCreate() { cascadeCloseTo(1, false); creating.value = true; editing.value = false; selected.value = null; createForm.value = { name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 } }
-async function createEntity() {
+async function startCreate() {
+  creating.value = true; editing.value = false; selected.value = null
+  if (props.open) {
+    props.open({
+      component: GmEntityCreatePanel,
+      title: 'New Entity',
+      props: { universes: universes.value, locationEntities: locationEntities.value, saving: saving.value },
+      listeners: { 'create': createEntity },
+    })
+  }
+}
+async function createEntity(formData) {
+  const f = formData || createForm.value
   saving.value = true
-  await graphql(`mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type razmerit currentUniverse currentLocation } }`, { input: { name: createForm.value.name, type: createForm.value.type, universe: createForm.value.universe, location: createForm.value.location || null, razmerit: createForm.value.razmerit } })
+  await graphql(`mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type razmerit currentUniverse currentLocation } }`, { input: { name: f.name, type: f.type, universe: f.universe, location: f.location || null, razmerit: f.razmerit || 0 } })
   saving.value = false; creating.value = false; await fetchEntities()
+}
+
+function switchToSheet() {
+  if (!props.open || !selected.value) return
+  editing.value = false
+  props.open({
+    component: CharacterSheet,
+    title: selected.value.name || 'Character Sheet',
+    props: { entityId: selected.value.id, universe: props.universe, embedded: true, gmMode: true },
+  })
 }
 
 // ── Traits ─────────────────────────────────────────
@@ -250,7 +317,6 @@ async function loadAvailableTraits() {
   if (data?.traitsByUniverse) availableTraits.value = data.traitsByUniverse
 }
 watch(() => selected.value?.currentUniverse, () => { if (selected.value) loadAvailableTraits() })
-
 async function onAddTrait(input) {
   addingTrait.value = true
   await graphql(`mutation($eid: ID!, $input: TraitSettingInput!) { addTraitSetting(entityId: $eid, input: $input) { id } }`, { eid: selected.value.id, input })
@@ -275,81 +341,129 @@ async function uploadBgImage(e) {
   } catch (err) { error.value = err.message }
 }
 
-// ── Navigation ─────────────────────────────────────
-function closeSecondary() { if (configTraits.value) { closeTraitsConfig(); return; } editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null }
-function switchToSheet() { if (!selected.value) return; cascadeCloseTo(1, false); inspectedEntity.value = { id: selected.value.id }; editing.value = false; selected.value = null; selectedId.value = null }
-function switchToEdit() { if (!inspectedEntity.value) return; cascadeCloseTo(1, false); const id = inspectedEntity.value.id; inspectedEntity.value = null; selectEntity({ id }) }
-
 // ── Location tree ──────────────────────────────────
 const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
 const occupantsByLocation = computed(() => {
   const map = {}
-  for (const e of entities.value) { if ((e.type === 'CHARACTER' || e.type === 'GMC' || e.type === 'ASSET') && e.currentLocation) { if (!map[e.currentLocation]) map[e.currentLocation] = []; map[e.currentLocation].push(e) } }
+  const src = filteredEntities.value
+  for (const e of src) { if ((e.type === 'CHARACTER' || e.type === 'GMC' || e.type === 'ASSET') && e.currentLocation) { if (!map[e.currentLocation]) map[e.currentLocation] = []; map[e.currentLocation].push(e) } }
   for (const key of Object.keys(map)) map[key].sort((a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9))
   return map
 })
-function nodeOrDescendantsMatch(node, occupants, q) {
-  if (node.name.toLowerCase().includes(q)) return true
-  if (occupants[node.id]) { for (const e of occupants[node.id]) { if (e.name.toLowerCase().includes(q)) return true } }
-  if (node.children) { for (const c of node.children) { if (nodeOrDescendantsMatch(c, occupants, q)) return true } }
+const filtersActive = computed(() => activeFilters.value.length > 0)
+// Prune locations only when an entity-type filter narrows which types to show.
+// Universe filters already handled above; name filters should only filter occupants, not locations.
+const hasTypeFilter = computed(() => activeFilters.value.some(f => f.type === 'entityType'))
+// Auto-expand when any occupant-affecting filter (type or name) is active, so the
+// user can see matching entities without manually expanding every node.
+const hasOccupantFilter = computed(() => activeFilters.value.some(f => f.type === 'entityType' || f.type === 'name'))
+// Set of location IDs that have at least one occupant (direct or descendant)
+const populatedLocations = computed(() => {
+  const occ = occupantsByLocation.value
+  const set = new Set(Object.keys(occ))
+  // Walk the location tree and mark ancestors of occupied locations
+  function markAncestors(nodes, targetSet) {
+    for (const n of nodes) {
+      let hasOccupiedDescendant = false
+      if (n.children) hasOccupiedDescendant = markAncestors(n.children, targetSet)
+      if (targetSet.has(n.id) || hasOccupiedDescendant) {
+        set.add(n.id)
+        return true
+      }
+    }
+    return false
+  }
+  markAncestors(locationTree.value, set)
+  return set
+})
+function fuzzyMatch(value, q) {
+  if (!value || !q) return false
+  const raw = value.toLowerCase()
+  const ql = q.toLowerCase()
+  if (raw.includes(ql)) return true
+  // Normalize underscores → spaces to match user-friendly input
+  const normalized = raw.replace(/_/g, ' ')
+  if (normalized.includes(ql)) return true
+  // Also try the reverse: spaces → underscores in query
+  const qNormalized = ql.replace(/ /g, '_')
+  if (raw.includes(qNormalized)) return true
   return false
 }
-function flattenTree(nodes, occupants, depth = 0, query = '') {
+// Extract universe keys from active universe filters
+const activeUniverseFilters = computed(() => {
+  const keys = new Set()
+  for (const f of activeFilters.value) {
+    if (f.type === 'universe') keys.add(f.value)
+  }
+  return keys
+})
+
+function flattenTree(nodes, occupants, depth = 0) {
   const result = []
   for (const node of nodes) {
-    if (query && !nodeOrDescendantsMatch(node, occupants, query)) continue
+    // If universe filters are active, only show locations in those universes
+    if (activeUniverseFilters.value.size > 0 && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
+    // When occupant-affecting filters are active, prune locations that have no matching occupants
+    if (hasOccupantFilter.value && !populatedLocations.value.has(node.id)) continue
     const hasChildren = (node.children && node.children.length > 0) || (occupants[node.id] && occupants[node.id].length > 0)
-    result.push({ id: node.id, name: node.name, universe: node.universe, depth, hasChildren, kind: 'location' })
-    const expanded = (expandedNodes.value[node.id] !== undefined ? expandedNodes.value[node.id] : depth === 0) || !!query
-    if (expanded && occupants[node.id]) { for (const e of occupants[node.id]) { if (query && !e.name.toLowerCase().includes(query)) continue; result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
-    if (expanded && node.children && node.children.length) result.push(...flattenTree(node.children, occupants, depth + 1, query))
+    let expanded
+    if (expandedNodes.value[node.id] !== undefined) {
+      expanded = expandedNodes.value[node.id]  // user explicitly toggled
+    } else if (hasOccupantFilter.value) {
+      expanded = populatedLocations.value.has(node.id)  // auto-expand path to matching occupants
+    } else {
+      expanded = depth === 0  // default: expand only root level
+    }
+    result.push({ id: node.id, name: node.name, universe: node.universe, depth, hasChildren, kind: 'location', expanded })
+    if (expanded && occupants[node.id]) { for (const e of occupants[node.id]) { result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
+    if (expanded && node.children && node.children.length) result.push(...flattenTree(node.children, occupants, depth + 1))
   }
   return result
 }
 const flatTree = computed(() => {
   let roots = locationTree.value
-  const q = (!filterLocationId.value && filterQuery.value.trim()) ? filterQuery.value.trim().toLowerCase() : ''
   if (filterLocationId.value) {
     function findNode(nodes) { for (const n of nodes) { if (n.id === filterLocationId.value) return [n]; if (n.children) { const f = findNode(n.children); if (f) return f } } return null }
     roots = findNode(locationTree.value) || []
   }
-  return flattenTree(roots, occupantsByLocation.value, 0, q)
+  return flattenTree(roots, occupantsByLocation.value, 0)
 })
 function toggleTreeNode(id) { expandedNodes.value = { ...expandedNodes.value, [id]: !expandedNodes.value[id] } }
 async function fetchLocationTree() { try { const r = await fetch('/api/v1/locations/tree'); locationTree.value = await r.json() } catch { locationTree.value = [] } }
 
 // ── Inspection ─────────────────────────────────────
 function inspectEntity(id) {
-  cascadeCloseTo(1, false)
-  if (inspectedEntity.value?.id === id) { inspectedEntity.value = null }
-  else { editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = { id } }
+  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
+  if (props.open) {
+    props.open({
+      component: CharacterSheet,
+      title: 'Character Sheet',
+      props: { entityId: id, universe: props.universe, embedded: true, gmMode: true },
+    })
+  }
 }
 
-// ── Traits config ──────────────────────────────────
-
-watch(configTraits, async (val) => {
-  if (val && traitsets.value.length === 0) await fetchTraitsConfig()
-})
-
-async function fetchTraitsConfig() {
-  traitsLoading.value = true
-  const [ts, sf] = await Promise.all([
-    graphql(`query { traitsets { id name universes entityTypes order limit traits { id name defaultDieType } } }`),
-    graphql(`query { sfxs { id name description trigger } }`),
-  ])
-  if (ts?.traitsets) traitsets.value = ts.traitsets
-  if (sf?.sfxs) allSfxsData.value = sf.sfxs
-  traitsLoading.value = false
+// ── Traits config (via open) ───────────────────────
+async function openTraitsConfig() {
+  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null
+  if (traitsets.value.length === 0) await fetchTraitsConfig()
+  // Filter traitsets by active chips
+  const filtered = traitsets.value.filter(ts => traitsetMatchesFilters(ts))
+  if (props.open) {
+    props.open({
+      component: GmTraitsetsPanel,
+      title: 'Traitsets',
+      props: { traitsets: filtered, allSfxs: allSfxsData.value, loading: traitsLoading.value, onRefresh: fetchTraitsConfig },
+    })
+  }
 }
 
-// ── Targeted data patching ──
-
+// ── Patch helper ──
 function patchData(collection, id, changes) {
-  let arr, activeRef
+  let arr
   if (collection === 'traitsets') {
-    arr = traitsets; activeRef = activeTraitset
+    arr = traitsets
   } else if (collection === 'traits') {
-    // Traits are nested within traitsets[].traits
     for (const ts of traitsets.value) {
       const idx = (ts.traits || []).findIndex(t => t.id === id)
       if (idx >= 0) {
@@ -359,215 +473,47 @@ function patchData(collection, id, changes) {
         break
       }
     }
-    activeRef = activeTrait
+    return
   } else if (collection === 'sfxs') {
-    arr = allSfxsData; activeRef = activeSfx
+    arr = allSfxsData
   }
   if (arr) {
     const idx = arr.value.findIndex(item => item.id === id)
     if (idx >= 0) {
       Object.assign(arr.value[idx], changes)
-      const item = arr.value[idx]
-      item._flash = (item._flash || 0) + 1
-      setTimeout(() => { if (item._flash) item._flash = 0 }, 600)
+      arr.value[idx]._flash = (arr.value[idx]._flash || 0) + 1
+      setTimeout(() => { if (arr.value[idx]._flash) arr.value[idx]._flash = 0 }, 600)
     }
   }
-  if (activeRef?.value?.id === id) {
-    Object.assign(activeRef.value, changes)
-  }
-}
-
-// ── Unified secondary panels ────────────────────────
-
-const allPanels = computed(() => {
-  const panels = []
-  // Level 0: GM panel (when open)
-  if (open.value) panels.push({ id: 'gm', hideClose: true })
-  // Level 1+: secondary panels
-  if (inspectedEntity.value && !editing.value) {
-    panels.push({ id: 'inspect' })
-  } else if (editing.value && selected.value) {
-    panels.push({ id: 'edit' })
-  } else if (creating.value) {
-    panels.push({ id: 'create' })
-  } else if (configTraits.value) {
-    return panels.concat(traitConfigPanels.value)
-  }
-  return panels
-})
-
-function onPanelClose(level) {
-  cascadeCloseTo(level)
-}
-
-function cascadeCloseTo(level, inclusive = true) {
-  // inclusive=true: close level and deeper with animation (close button)
-  // inclusive=false: close only deeper, sync (opening new panel)
-  const total = allPanels.value.length - 1
-  if (!inclusive) {
-    // Synchronous: just nuke deeper levels immediately
-    for (let i = total; i > level; i--) {
-      if (configTraits.value) closeTraitConfigLevel(i - 1)
-      else closeSecondary()
-    }
-    return
-  }
-  // Animated cascade for close button
-  let i = total
-  function step() {
-    if (i < level) return
-    if (i === 0) { open.value = false; return }
-    if (configTraits.value) closeTraitConfigLevel(i - 1)
-    else closeSecondary()
-    i--
-    setTimeout(step, 80)
-  }
-  step()
-}
-
-// ── PanelStack for traits config ────────────────────
-
-const traitConfigPanels = computed(() => {
-  const panels = []
-  // Level 0: traitsets list
-  panels.push({
-    id: 'traitsets',
-    component: GmTraitsetsPanel,
-    title: 'Traitsets',
-    props: {
-      traitsets: traitsets.value,
-      loading: traitsLoading.value,
-      selectedId: activeTraitsetId.value,
-      onRefresh: fetchTraitsConfig,
-      onPatch: patchData,
-    },
-  })
-  // Level 1: traitset detail (form + traits)
-  if (activeTraitset.value) {
-    panels.push({
-      id: 'traitset-detail',
-      component: GmTraitsetDetail,
-      title: activeTraitset.value.name,
-      props: {
-        traitset: activeTraitset.value,
-        traits: activeTraitset.value.traits || [],
-        selectedId: activeTraitId.value,
-        onRefresh: fetchTraitsConfig,
-        onPatch: patchData,
-      },
-    })
-  }
-  // Level 2: trait edit
-  if (activeTrait.value) {
-    panels.push({
-      id: 'trait-edit',
-      component: GmTraitEditPanel,
-      title: activeTrait.value.name,
-      props: {
-        trait: activeTrait.value,
-        sfxs: allSfxsData.value,
-        selectedId: activeSfxId.value,
-        onRefresh: fetchTraitsConfig,
-        onPatch: patchData,
-      },
-    })
-  }
-  // Level 3: SFX editor
-  if (activeSfx.value) {
-    panels.push({
-      id: 'sfx-edit',
-      component: GmSfxEditPanel,
-      title: activeSfx.value.name,
-      hideBack: false,
-      props: { sfx: activeSfx.value, onRefresh: fetchTraitsConfig, onPatch: patchData },
-    })
-  }
-  return panels
-})
-
-function closeTraitConfigLevel(level) {
-  // level is the index of the panel to close and all deeper
-  if (level <= 0) { closeTraitsConfig(); return }
-  if (level <= 1) { activeTraitset.value = null; activeTraitsetId.value = null; activeTrait.value = null; activeTraitId.value = null; activeSfx.value = null; activeSfxId.value = null; return }
-  if (level <= 2) { activeTrait.value = null; activeTraitId.value = null; activeSfx.value = null; activeSfxId.value = null; return }
-  activeSfx.value = null; activeSfxId.value = null
-}
-
-function closeTraitsConfig() {
-  configTraits.value = false
-  activeTraitset.value = null; activeTraitsetId.value = null
-  activeTrait.value = null; activeTraitId.value = null
-  activeSfx.value = null; activeSfxId.value = null
-  traitSearch.value = ''
-}
-
-function onTraitConfigSelect(item) {
-  if (item.traitsetId !== undefined) {
-    // It's a trait → need levels 0-2 open, close deeper
-    cascadeCloseTo(2, false)
-    activeTrait.value = item; activeTraitId.value = item.id
-    activeSfx.value = null; activeSfxId.value = null
-  } else if (item.trigger !== undefined || item.description !== undefined) {
-    // It's an SFX → need levels 0-3 open, close deeper
-    cascadeCloseTo(3, false)
-    activeSfx.value = item; activeSfxId.value = item.id
-  } else {
-    // It's a traitset → need levels 0-1 open, close deeper
-    cascadeCloseTo(1, false)
-    activeTraitset.value = item; activeTraitsetId.value = item.id
-    activeTrait.value = null; activeTraitId.value = null
-    activeSfx.value = null; activeSfxId.value = null
-  }
-}
-
-function onTraitConfigSave(form) {
-  // SFX save only — traitset saves are handled directly by GmTraitsetDetail
-  if (!activeSfx.value) return
-  sfxSaving.value = true
-  graphql(
-    `mutation($input: SfxInput!) { updateSfx(input: $input) { id } }`,
-    { input: { id: activeSfx.value.id, name: form.name, trigger: form.trigger || null, description: form.description || null } }
-  ).finally(() => { sfxSaving.value = false; fetchTraitsConfig() })
 }
 
 // ── Lifecycle ──────────────────────────────────────
-watch(open, (val) => { if (val) { mode.value = 'play'; fetchEntities(); fetchLocationTree() } })
 onMounted(() => { fetchEntities(); fetchLocationTree() })
-
 </script>
 
 <style scoped>
-.gm-toggle {
-  position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 21;
-  width: 42px; height: 42px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; padding: 0;
-  background: var(--bg-panel); backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.1);
-}
-.gm-content { overflow-y: auto; max-height: calc(90vh - 32px); }
 
-/* ── Mode tabs ─────────────────────────────────── */
+
 .mode-tabs { display: flex; gap: 0; margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
 .mode-tabs button { flex: 1; font-size: 12px; padding: 6px 0; border: none; background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
 .mode-tabs button.active { background: var(--accent); color: #fff; }
 .mode-tabs button:hover:not(.active) { background: rgba(255,255,255,0.08); }
 
-/* ── Shortcuts ──────────────────────────────────── */
 .gm-shortcuts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-.shortcut-btn { flex: 1; min-width: 0; font-size: 11px; padding: 8px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.shortcut-btn { flex: 1; font-size: 11px; padding: 8px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
 .shortcut-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
 .beat-btn { border-color: rgba(64,136,212,0.3); } .beat-btn:hover { border-color: var(--accent); background: rgba(64,136,212,0.12); }
 .scene-btn { border-color: rgba(64,184,96,0.3); } .scene-btn:hover { border-color: #40b860; background: rgba(64,184,96,0.12); }
 .session-btn { border-color: rgba(232,136,48,0.3); } .session-btn:hover { border-color: #e88830; background: rgba(232,136,48,0.12); }
 .session-btn.active { border-color: #d44040; color: #d44040; } .session-btn.active:hover { background: rgba(212,64,64,0.12); }
 
-/* ── Entities layout ───────────────────────────── */
-.entities-layout { position: relative; }
-.entity-list-col { overflow-y: auto; max-height: calc(90vh - 180px); }
-
-/* ── Filter ─────────────────────────────────────── */
 .filter-bar { margin-bottom: 8px; }
+.chip-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.filter-chip { display: flex; align-items: center; gap: 2px; font-size: 11px; padding: 3px 8px; background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); border-radius: 10px; color: var(--text); }
+.chip-label { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-remove { font-size: 14px; padding: 0 2px; background: none; border: none; color: var(--text-dim); cursor: pointer; line-height: 1; }
+.chip-remove:hover { color: var(--danger); }
+.suggestion-hint { font-size: 9px; color: var(--text-dim); text-transform: uppercase; margin-left: auto; }
 .filter-input-wrap { position: relative; }
 .filter-input { width: 100%; font-size: 12px; padding: 6px 28px 6px 8px; box-sizing: border-box; }
 .filter-clear-inline { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 2px 6px; background: none; color: var(--text-dim); border: none; cursor: pointer; }
@@ -576,15 +522,18 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 .suggestion-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
 .suggestion-row:hover { background: rgba(255,255,255,0.06); }
 
-/* ── Create button ──────────────────────────────── */
 .create-btn { width: 100%; font-size: 12px; padding: 8px; margin-bottom: 8px; background: var(--accent-dim); color: var(--text); }
 .create-btn:hover { background: var(--accent); }
 
-/* ── Entity rows ────────────────────────────────── */
 .entity-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px; margin-bottom: 4px; background: rgba(255,255,255,0.04); border-radius: 6px; cursor: pointer; transition: background 0.15s; font-size: 13px; }
 .entity-row:hover { background: rgba(255,255,255,0.08); }
 .entity-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
 .entity-type-badge { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+.type-character, .type-pc { background: #4088d4; color: #fff; }
+.type-location { background: #40b860; color: #0a0a0f; }
+.type-gmc { background: #e88830; color: #0a0a0f; }
+.type-faction { background: #d44040; color: #fff; }
+.type-asset { background: #888; color: #fff; }
 .type-CHARACTER, .type-PC { background: #4088d4; color: #fff; }
 .type-LOCATION { background: #40b860; color: #0a0a0f; }
 .type-GMC { background: #e88830; color: #0a0a0f; }
@@ -604,6 +553,4 @@ onMounted(() => { fetchEntities(); fetchLocationTree() })
 
 .loading, .error, .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 .error { color: var(--danger); }
-
-
 </style>

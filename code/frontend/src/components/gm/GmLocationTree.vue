@@ -19,7 +19,7 @@
       @click="onClick(node)"
     >
       <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id)">
-        {{ expandedIds[node.id] ?? (node.depth === 0) ? '▾' : '▸' }}
+        {{ node.expanded ? '▾' : '▸' }}
       </span>
       <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant' }"></span>
       <span v-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
@@ -145,6 +145,10 @@ function cancelTouchDrag() {
 .entity-type-badge {
   font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; font-weight: 600;
 }
+.type-character, .type-pc { background: #4088d4; color: #fff; }
+.type-location { background: #40b860; color: #0a0a0f; }
+.type-gmc { background: #e88830; color: #0a0a0f; }
+.type-asset { background: #888; color: #fff; }
 .type-CHARACTER, .type-PC { background: #4088d4; color: #fff; }
 .type-LOCATION { background: #40b860; color: #0a0a0f; }
 .type-GMC { background: #e88830; color: #0a0a0f; }

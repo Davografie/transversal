@@ -14,7 +14,7 @@
           'patch-flash': ts._flash,
         }"
         draggable="true"
-        @click="$emit('select', ts)"
+        @click="onClick(ts)"
         @dragstart="onDragStart(i, $event)"
         @dragover.prevent="onDragOver(i)"
         @dragleave="onDragLeave"
@@ -25,7 +25,7 @@
         <span class="entity-name">{{ ts.name }}</span>
         <span style="font-size:10px;color:var(--text-dim)">{{ (ts.traits?.length) || 0 }}</span>
       </div>
-      <div v-if="filtered.length === 0" class="empty">No traitsets found</div>
+      <div v-if="filtered.length === 0 && !showCreate" class="empty">No traitsets found</div>
     </div>
   </div>
 </template>
@@ -33,6 +33,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 
 const { graphql } = useApi()
 
@@ -41,13 +42,13 @@ const props = defineProps({
   selectedId: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   onRefresh: { type: Function, default: null },
+  open: { type: Function, default: null },
 })
 
-defineEmits(['select', 'close'])
 const search = ref('')
+const showCreate = ref(false)
 
 // ── Drag-and-drop reorder ────────────────────────────
-
 const dragIndex = ref(-1)
 const dragOverIndex = ref(-1)
 let localOrder = null
@@ -62,48 +63,44 @@ const filtered = computed(() => {
   )
 })
 
+function onClick(ts) {
+  if (dragIndex.value >= 0) return  // E7: don't open during drag
+  if (props.open) {
+    props.open({
+      component: GmTraitsetDetail,
+      title: ts.name,
+      props: {
+        traitset: ts,
+        traits: ts.traits || [],
+        allSfxs: props.allSfxs,
+        onRefresh: props.onRefresh,
+        onPatch: props.onPatch,
+      },
+    })
+  }
+}
+
 function onDragStart(i, e) {
   dragIndex.value = i
   e.dataTransfer.effectAllowed = 'move'
   e.dataTransfer.setData('text/plain', '')
 }
-
-function onDragOver(i) {
-  dragOverIndex.value = i
-}
-
-function onDragLeave() {
-  dragOverIndex.value = -1
-}
-
+function onDragOver(i) { dragOverIndex.value = i }
+function onDragLeave() { dragOverIndex.value = -1 }
 function onDrop(i) {
   if (dragIndex.value < 0 || dragIndex.value === i) return
-
   const list = [...filtered.value]
   const [moved] = list.splice(dragIndex.value, 1)
   list.splice(i, 0, moved)
-
-  // Optimistic local update
   localOrder = list
-
-  // Persist to backend
   const ids = list.map(ts => ts.id)
-  graphql(
-    `mutation($ids: [ID!]!) { reorderTraitsets(ids: $ids) }`,
-    { ids }
-  ).then(() => {
+  graphql(`mutation($ids: [ID!]!) { reorderTraitsets(ids: $ids) }`, { ids }).then(() => {
     if (props.onRefresh) props.onRefresh()
     localOrder = null
   })
-
-  dragOverIndex.value = -1
-  dragIndex.value = -1
+  dragOverIndex.value = -1; dragIndex.value = -1
 }
-
-function onDragEnd() {
-  dragIndex.value = -1
-  dragOverIndex.value = -1
-}
+function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 </script>
 
 <style scoped>
@@ -113,25 +110,14 @@ function onDragEnd() {
   border-radius: 6px; cursor: pointer;
   background: rgba(255,255,255,0.03);
   transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-  font-size: 13px;
-  user-select: none;
+  font-size: 13px; user-select: none;
 }
 .entity-row:hover { background: rgba(255,255,255,0.06); }
 .entity-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
 .entity-row.dragging { opacity: 0.4; }
-.entity-row.drag-over {
-  background: rgba(64,136,212,0.12);
-  box-shadow: 0 0 0 1px var(--accent-dim) inset;
-  transform: scale(1.02);
-}
-
-.drag-handle {
-  font-size: 12px; color: var(--text-dim); cursor: grab;
-  opacity: 0.4; transition: opacity 0.15s;
-  padding: 0 2px;
-}
+.entity-row.drag-over { background: rgba(64,136,212,0.12); box-shadow: 0 0 0 1px var(--accent-dim) inset; transform: scale(1.02); }
+.drag-handle { font-size: 12px; color: var(--text-dim); cursor: grab; opacity: 0.4; transition: opacity 0.15s; padding: 0 2px; }
 .entity-row:hover .drag-handle { opacity: 0.7; }
-
 .entity-name { flex: 1; font-weight: 500; }
 .loading, .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 </style>

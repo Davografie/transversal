@@ -13,11 +13,21 @@
       <option v-for="u in universes" :key="u.key" :value="u.key">{{ u.name }}</option>
     </select>
 
-    <label>Location</label>
-    <select v-model="local.current_location" @change="emitUpdate">
-      <option value="">-- None --</option>
-      <option v-for="l in locationEntities" :key="l.id" :value="l.id">{{ l.name }}</option>
-    </select>
+    <template v-if="local.type !== 'LOCATION'">
+      <label>Location</label>
+      <select v-model="local.current_location" @change="emitUpdate">
+        <option value="">-- None --</option>
+        <option v-for="l in locationEntities" :key="l.id" :value="l.id">{{ l.name }}</option>
+      </select>
+    </template>
+
+    <template v-if="local.type === 'LOCATION'">
+      <label>Parent Location</label>
+      <select :value="parentId" @change="$emit('update:parentId', $event.target.value || null)">
+        <option :value="null">-- None (top-level) --</option>
+        <option v-for="l in parentOptions" :key="l.id" :value="l.id">{{ l.name }}</option>
+      </select>
+    </template>
 
     <label>Razmerit</label>
     <input v-model.number="local.razmerit" type="number" @input="emitUpdate" />
@@ -47,17 +57,24 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
   universes: { type: Array, default: () => [] },
   locationEntities: { type: Array, default: () => [] },
+  parentId: { type: String, default: null },
+  entityId: { type: String, default: null },
   allowTypeChange: { type: Boolean, default: false },
   entityTypes: { type: Array, default: () => ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
 })
 
-const emit = defineEmits(['update:modelValue', 'upload-bg'])
+const emit = defineEmits(['update:modelValue', 'update:parentId', 'upload-bg'])
+
+// Filter out the entity being edited from parent location options
+const parentOptions = computed(() =>
+  props.locationEntities.filter(l => l.id !== props.entityId)
+)
 
 const local = ref({ ...props.modelValue })
 
