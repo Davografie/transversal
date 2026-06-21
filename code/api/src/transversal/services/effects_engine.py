@@ -19,6 +19,7 @@ from transversal.domain import (
     DieType,
     DicePoolRequest,
     EffectAction,
+    EffectPolarity,
     EffectTiming,
     RollResult,
     SFX,
@@ -118,34 +119,37 @@ class EffectsEngine:
             if not self._trigger_matches(sfx, event):
                 continue
 
-            # Cost check
-            if sfx.cost > razmerit_balance:
+            # Cost check: sum razmerit costs from negative-polarity spend effects
+            total_razmerit_cost = 0
+            for e in sfx.effects:
+                if (e.polarity == EffectPolarity.NEGATIVE
+                        and e.type == "transfer_razmerit"
+                        and e.action == "spend"):
+                    total_razmerit_cost += int(e.result or "0")
+            if total_razmerit_cost > razmerit_balance:
                 continue
 
-            # Deduct cost via registry
-            spend_action = EffectAction(
-                type="transfer_razmerit",
-                action="spend",
-                target=event.entity_id,
-                result=str(sfx.cost),
-            )
-            _effects_applier.effect_registry.apply(spend_action, event.entity_id, event.universe, {})
-
-            # Execute effects
+            # Execute each effect with its own timing
             for effect in sfx.effects:
-                if sfx.timing == EffectTiming.IMMEDIATE:
-                    _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
-                    applied.append(effect)
+                action = EffectAction(
+                    type=effect.type,
+                    action=effect.action,
+                    target=effect.target,
+                    result=effect.result,
+                )
+                if effect.timing == EffectTiming.IMMEDIATE:
+                    _effects_applier.effect_registry.apply(action, event.entity_id, event.universe, event.context)
+                    applied.append(action)
                 else:
                     self._schedule.append(
                         ScheduledEffect(
                             sfx_name=sfx.name,
                             entity_id=event.entity_id,
                             universe=event.universe,
-                            timing=sfx.timing,
-                            beats_remaining=_beats_for_timing(sfx.timing),
+                            timing=effect.timing,
+                            beats_remaining=_beats_for_timing(effect.timing),
                             condition=event.context.get("condition"),
-                            effects=[effect],
+                            effects=[action],
                             context=event.context,
                         )
                     )
@@ -168,6 +172,10 @@ class EffectsEngine:
 
         # Direct match
         if trigger == event.type:
+            return True
+
+        # on_activate legacy alias for "manual" trigger
+        if trigger == "on_activate" and event.type == "manual":
             return True
 
         # on_complication also fires for hitches within other events

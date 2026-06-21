@@ -7,10 +7,13 @@ from typing import Optional
 from transversal.api.graphql.types import (
     CharacterView,
     CreateEntityInput,
+    EffectActionMeta as GqlEffectActionMeta,
+    EffectFieldDef as GqlEffectFieldDef,
     Entity,
     EntityType,
     Projection,
     RazmeritResult,
+    SfxEffect as GqlSfxEffect,
     SfxInput,
     SfxRef,
     SfxUpdateInput,
@@ -119,11 +122,24 @@ class Query:
         repo = _em(info).repo
         db_sfxs = repo.get_all_sfxs()
         if db_sfxs:
-            return [SfxRef(id=s.id, name=s.name, description=s.description, trigger=s.trigger) for s in db_sfxs]
+            return [
+                SfxRef(
+                    id=s.id, name=s.name, description=s.description,
+                    trigger=s.trigger, limit=s.limit,
+                    effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in s.effects],
+                )
+                for s in db_sfxs
+            ]
         from transversal.services.effects_engine import EffectsEngine
         engine = info.context.get("effects_engine")
         if engine:
-            return [SfxRef(id=s.id, name=s.name, description=s.description, trigger=s.trigger) for s in engine.get_all()]
+            return [
+                SfxRef(
+                    id=s.id, name=s.name, description=s.description,
+                    trigger=s.trigger, limit=s.limit,
+                    effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in s.effects],
+                ) for s in engine.get_all()
+            ]
         return []
 
     @strawberry.field
@@ -147,6 +163,19 @@ class Query:
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
                         entity_types=ts.entity_types, order=ts.order, limit=ts.limit)
             for ts in tss
+        ]
+
+    @strawberry.field
+    def effect_actions(self, info: strawberry.Info) -> list[GqlEffectActionMeta]:
+        from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
+        return [
+            GqlEffectActionMeta(
+                action_id=m.action_id, label=m.label, description=m.description,
+                category=m.category, effect_type=m.effect_type, effect_action=m.effect_action,
+                valid_timings=m.valid_timings,
+                fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.fields],
+                implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
+            ) for m in EFFECT_ACTION_REGISTRY
         ]
 
 
@@ -395,23 +424,33 @@ class Mutation:
 
     @strawberry.mutation
     def create_sfx(self, info: strawberry.Info, input: SfxInput) -> SfxRef:
-        from transversal.domain import SFX as DomainSFX, EffectTiming
+        from transversal.domain import SFX as DomainSFX, SfxEffect as DomainSfxEffect
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
-            trigger=input.trigger,
-            timing=EffectTiming(input.timing) if input.timing else EffectTiming.IMMEDIATE,
-            cost=input.cost,
+            trigger=input.trigger, limit=input.limit,
+            effects=[
+                DomainSfxEffect(
+                    polarity=e.polarity, timing=e.timing,
+                    type=e.type, action=e.action,
+                    target=e.target, result=e.result,
+                )
+                for e in input.effects
+            ],
         )
         created = _em(info).repo.create_sfx(s)
         # Also register with the in-memory engine
         engine = info.context.get("effects_engine")
         if engine:
             engine.register(created)
-        return SfxRef(id=created.id, name=created.name, description=created.description, trigger=created.trigger)
+        return SfxRef(
+            id=created.id, name=created.name, description=created.description,
+            trigger=created.trigger, limit=created.limit,
+            effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in created.effects],
+        )
 
     @strawberry.mutation
     def update_sfx(self, info: strawberry.Info, input: SfxUpdateInput) -> SfxRef:
-        from transversal.domain import EffectTiming
+        from transversal.domain import SfxEffect as DomainSfxEffect
         existing = _em(info).repo.get_sfx(str(input.id))
         if not existing:
             raise ValueError(f"SFX '{input.id}' not found")
@@ -419,18 +458,29 @@ class Mutation:
             existing.name = input.name
         if input.description is not None:
             existing.description = input.description
+        if input.limit is not None:
+            existing.limit = input.limit
         if input.trigger is not None:
             existing.trigger = input.trigger
-        if input.timing is not None:
-            existing.timing = EffectTiming(input.timing)
-        if input.cost is not None:
-            existing.cost = input.cost
+        if input.effects is not None:
+            existing.effects = [
+                DomainSfxEffect(
+                    polarity=e.polarity, timing=e.timing,
+                    type=e.type, action=e.action,
+                    target=e.target, result=e.result,
+                )
+                for e in input.effects
+            ]
         updated = _em(info).repo.update_sfx(existing)
         # Also update in-memory engine
         engine = info.context.get("effects_engine")
         if engine:
             engine.register(updated)
-        return SfxRef(id=updated.id, name=updated.name, description=updated.description, trigger=updated.trigger)
+        return SfxRef(
+            id=updated.id, name=updated.name, description=updated.description,
+            trigger=updated.trigger, limit=updated.limit,
+            effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in updated.effects],
+        )
 
     @strawberry.mutation
     def delete_sfx(self, info: strawberry.Info, id: strawberry.ID) -> bool:

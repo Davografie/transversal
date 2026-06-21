@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
@@ -57,8 +57,7 @@ import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 
-const { error, graphql } = useApi()
-const loading = ref(false)
+const { graphql } = useApi()
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -86,12 +85,15 @@ const editing = ref(false)
 const creating = ref(false)
 const saving = ref(false)
 const addingTrait = ref(false)
-const inspectedEntity = ref(null)
 
 const traitsets = ref([])
 const allSfxsData = ref([])
 const traitsLoading = ref(false)
 
+// ⚠ Pass computed refs (not .value) as props so sub-panels see live updates.
+// Panel.vue uses shallowRef so these refs survive without being unwrapped.
+// Without this, onRefresh → fetchTraitsConfig updates GmPanel's data but
+// the already-open GmTraitsetsPanel still shows the stale snapshot.
 // Reactive computed — passed as ref through props so sub-panels see updates
 const filteredTraitsets = computed(() => traitsets.value.filter(ts => traitsetMatchesFilters(ts)))
 
@@ -156,6 +158,9 @@ function selectSuggestion(s) {
       activeFilters.value.push({ type: s.filterType, value: s.filterValue, label: s.filterLabel || s.filterValue })
     }
   }
+  // ⚠ Do NOT set showSuggestions=false here. After selection, filterInput is
+  // cleared to '', which makes suggestions=[], hiding the dropdown naturally.
+  // If we set showSuggestions=false, the user must re-focus to type another filter.
   filterInput.value = ''
 }
 function hideSuggestions() { setTimeout(() => { showSuggestions.value = false }, 150) }
@@ -177,7 +182,7 @@ const availableTraits = ref([])
 const ALL_ENTITIES = `query($type: EntityType) { entities(type: $type) { id type name razmerit currentUniverse currentLocation hidden backgroundImage traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
 const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden backgroundImage traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
 
-async function fetchEntities() { loading.value = true; const data = await graphql(ALL_ENTITIES, { type: null }); if (data?.entities) entities.value = data.entities; loading.value = false }
+async function fetchEntities() { const data = await graphql(ALL_ENTITIES, { type: null }); if (data?.entities) entities.value = data.entities }
 
 async function fetchTraitsConfig() {
   traitsLoading.value = true
@@ -198,6 +203,9 @@ function toggleEntity(e) {
 function onSelectLocation(id) { toggleEntity({ id }) }
 function onSelectOccupant(e) { toggleEntity(e) }
 
+// ⚠ When already editing the same entity, skip openEntityEdit() to avoid
+// re-opening the panel (visible flicker). Callers like onAddTrait/removeTrait
+// call selectEntity() to refresh data — they don't want the panel to re-open.
 async function selectEntity(e) {
   const alreadyEditing = editing.value && selectedId.value === e.id
   const data = await graphql(ENTITY_QUERY, { id: e.id })
@@ -245,6 +253,9 @@ function openEntityEdit() {
     },
   })
 }
+// ⚠ Must update selected.value directly — must NOT call selectEntity() here.
+// selectEntity() sets form.value (new object), which triggers the watcher below,
+// which calls saveEntity() again → infinite re-open loop.
 async function saveEntity() {
   saving.value = true
   const result = await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id name razmerit currentUniverse currentLocation hidden backgroundImage } }`, { input: { id: selected.value.id, name: form.value.name, razmerit: form.value.razmerit, currentUniverse: form.value.current_universe, currentLocation: form.value.current_location || null, hidden: form.value.hidden, backgroundImage: form.value.background_image || null, overlay: form.value.overlay } })
@@ -341,7 +352,7 @@ async function uploadBgImage(e) {
     const r = await fetch(`/api/v1/media/upload?entity_id=${encodeURIComponent(selected.value?.id || '')}`, { method: 'POST', body: fd })
     const data = await r.json()
     if (data.path) { form.value.background_image = data.path; await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id backgroundImage } }`, { input: { id: selected.value.id, backgroundImage: data.path } }) }
-  } catch (err) { error.value = err.message }
+  } catch (err) { console.error('uploadBgImage:', err) }
 }
 
 // ── Location tree ──────────────────────────────────
@@ -353,12 +364,7 @@ const occupantsByLocation = computed(() => {
   for (const key of Object.keys(map)) map[key].sort((a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9))
   return map
 })
-const filtersActive = computed(() => activeFilters.value.length > 0)
-// Prune locations only when an entity-type filter narrows which types to show.
-// Universe filters already handled above; name filters should only filter occupants, not locations.
-const hasTypeFilter = computed(() => activeFilters.value.some(f => f.type === 'entityType'))
-// Auto-expand when any occupant-affecting filter (type or name) is active, so the
-// user can see matching entities without manually expanding every node.
+// Auto-expand + prune when occupant-affecting filters (type or name) are active
 const hasOccupantFilter = computed(() => activeFilters.value.some(f => f.type === 'entityType' || f.type === 'name'))
 // Set of location IDs that have at least one occupant (direct or descendant)
 const populatedLocations = computed(() => {
@@ -379,6 +385,10 @@ const populatedLocations = computed(() => {
   markAncestors(locationTree.value, set)
   return set
 })
+// ⚠ Both value AND q must be lowercased. The autocomplete stores the entity's
+// original-cased name as the filter value, but users type lowercase queries.
+// Originally only `value` was lowercased — this broke name filters on entities
+// with uppercase letters (e.g. "Kael Drift").
 function fuzzyMatch(value, q) {
   if (!value || !q) return false
   const raw = value.toLowerCase()
@@ -448,7 +458,7 @@ function inspectEntity(id) {
 
 // ── Traits config (via open) ───────────────────────
 async function openTraitsConfig() {
-  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null
+  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
   if (traitsets.value.length === 0 || allSfxsData.value.length === 0) await fetchTraitsConfig()
   // Pass raw refs as props so sub-panels see updates reactively
   if (props.open) {

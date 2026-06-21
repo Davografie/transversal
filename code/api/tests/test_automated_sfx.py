@@ -15,11 +15,12 @@ from transversal.domain import (
     ContestWinner,
     DieRoll,
     DieType,
-    EffectAction,
+    EffectPolarity,
     EffectTiming,
     OutcomeTier,
     PoolResult,
     SFX,
+    SfxEffect,
     SimplifiedResult,
 )
 from transversal.services.effects_engine import (
@@ -38,35 +39,35 @@ class TestNewTriggers:
     def test_on_location_change_matches(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-anchor", name="Dimensional Anchor",
-                  trigger="on_location_change", cost=0)
+                  trigger="on_location_change")
         event = GameEvent(type="location_changed", entity_id="e1", universe="earth")
         assert engine._trigger_matches(sfx, event)
 
     def test_on_location_change_no_match_on_other_event(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-anchor", name="Dimensional Anchor",
-                  trigger="on_location_change", cost=0)
+                  trigger="on_location_change")
         event = GameEvent(type="on_roll", entity_id="e1", universe="earth")
         assert not engine._trigger_matches(sfx, event)
 
     def test_on_trait_change_matches(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-trait", name="Trait Watcher",
-                  trigger="on_trait_change", cost=0)
+                  trigger="on_trait_change")
         event = GameEvent(type="trait_updated", entity_id="e1", universe="earth")
         assert engine._trigger_matches(sfx, event)
 
     def test_on_trait_change_no_match_on_other(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-trait", name="Trait Watcher",
-                  trigger="on_trait_change", cost=0)
+                  trigger="on_trait_change")
         event = GameEvent(type="on_roll", entity_id="e1", universe="earth")
         assert not engine._trigger_matches(sfx, event)
 
     def test_on_contest_loss_matches_when_opponent_wins(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-loss", name="Sore Loser",
-                  trigger="on_contest_loss", cost=1)
+                  trigger="on_contest_loss")
         event = GameEvent(type="on_roll", entity_id="e1", universe="earth",
                           context={"contest_winner": "opponent"})
         assert engine._trigger_matches(sfx, event)
@@ -75,7 +76,7 @@ class TestNewTriggers:
         """Tie defender means the entity lost (defender wins ties)."""
         engine = EffectsEngine()
         sfx = SFX(id="sfx-loss", name="Sore Loser",
-                  trigger="on_contest_loss", cost=1)
+                  trigger="on_contest_loss")
         event = GameEvent(type="on_roll", entity_id="e1", universe="earth",
                           context={"contest_winner": "tie_defender"})
         assert engine._trigger_matches(sfx, event)
@@ -83,7 +84,7 @@ class TestNewTriggers:
     def test_on_contest_loss_no_match_when_player_wins(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-loss", name="Sore Loser",
-                  trigger="on_contest_loss", cost=1)
+                  trigger="on_contest_loss")
         event = GameEvent(type="on_roll", entity_id="e1", universe="earth",
                           context={"contest_winner": "player"})
         assert not engine._trigger_matches(sfx, event)
@@ -91,7 +92,7 @@ class TestNewTriggers:
     def test_on_contest_win_matches(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-win", name="Victory Lap",
-                  trigger="on_contest_win", cost=0)
+                  trigger="on_contest_win")
         event = GameEvent(type="on_roll", entity_id="e1", universe="earth",
                           context={"contest_winner": "player"})
         assert engine._trigger_matches(sfx, event)
@@ -99,7 +100,7 @@ class TestNewTriggers:
     def test_on_success_matches(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-success", name="Thrive on Success",
-                  trigger="on_success", cost=0)
+                  trigger="on_success")
         event = GameEvent(
             type="on_roll", entity_id="e1", universe="earth",
             roll_result=SimplifiedResult(
@@ -114,7 +115,7 @@ class TestNewTriggers:
     def test_on_failure_matches(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-fail", name="Learn from Failure",
-                  trigger="on_failure", cost=0)
+                  trigger="on_failure")
         event = GameEvent(
             type="on_roll", entity_id="e1", universe="earth",
             roll_result=SimplifiedResult(
@@ -129,7 +130,7 @@ class TestNewTriggers:
     def test_on_failure_no_match_on_success(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-fail", name="Learn from Failure",
-                  trigger="on_failure", cost=0)
+                  trigger="on_failure")
         event = GameEvent(
             type="on_roll", entity_id="e1", universe="earth",
             roll_result=SimplifiedResult(
@@ -301,13 +302,13 @@ class TestFireContestSFX:
         # Register a win SFX for player and a loss SFX for opponent
         engine.register(SFX(
             id="sfx-win", name="Victory Lap", trigger="on_contest_win",
-            timing=EffectTiming.IMMEDIATE, cost=0,
-            effects=[EffectAction(type="modify_roll", action="step_up_die", target="next")],
+            effects=[SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                              type="modify_roll", action="step_up_die", target="next")],
         ))
         engine.register(SFX(
             id="sfx-loss", name="Vengeful", trigger="on_contest_loss",
-            timing=EffectTiming.END_OF_BEAT, cost=0,
-            effects=[EffectAction(type="modify_trait", action="step_up", target="rage")],
+            effects=[SfxEffect(polarity=EffectPolarity.NEUTRAL, timing=EffectTiming.END_OF_BEAT,
+                              type="modify_trait", action="step_up", target="rage")],
         ))
 
         contest = ContestResult(
@@ -382,8 +383,10 @@ class TestFireContestSFX:
         engine = EffectsEngine()
         engine.register(SFX(
             id="sfx-costly", name="Costly", trigger="on_contest_win",
-            timing=EffectTiming.IMMEDIATE, cost=3,
-            effects=[EffectAction(type="modify_roll", action="step_up_die", target="next")],
+            effects=[SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                              type="transfer_razmerit", action="spend", target="self", result="3"),
+                     SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                              type="modify_roll", action="step_up_die", target="next")],
         ))
         contest = ContestResult(
             pipeline="simplified",

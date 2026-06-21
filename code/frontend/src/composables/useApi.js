@@ -52,7 +52,7 @@ export function useApi() {
       const r = await fetch(`${API_BASE}/effects/trigger`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity_id: entityId, sfx_name: sfxName, universe, trigger: 'on_activate', context })
+        body: JSON.stringify({ entity_id: entityId, sfx_name: sfxName, universe, trigger: 'manual', context })
       })
       if (!r.ok) throw new Error(await r.text())
       return await r.json()

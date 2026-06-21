@@ -1,6 +1,10 @@
 <template>
   <div class="panel-wrapper" :class="{ nested }">
     <button v-if="closable" class="panel-close" @click="$emit('close')">×</button>
+    <!-- ⚠ v-show is on .panel (this panel's content) NOT on .panel-wrapper.
+         If it were on the wrapper, nested child Panels would also be hidden.
+         We want shallow panels to hide their content while their deeper
+         children remain visible beside them. -->
     <div class="panel" v-show="!minVisibleDepth || depth >= minVisibleDepth">
       <header v-if="title" class="panel-header">
         <slot name="header">
@@ -11,7 +15,9 @@
         <slot :open="openChild" :close="closeChild" />
       </div>
     </div>
-    <!-- Self-reference: nested child panel -->
+    <!-- Self-reference: nested child panel
+         ⚠ :close passes a function that sets THIS panel's child=null (not the nested Panel's own child).
+         This is what allows a deep component to close the panel it lives in. -->
     <Panel
       v-if="child"
       nested
@@ -41,20 +47,33 @@ const props = defineProps({
 
 defineEmits(['close'])
 
+// ⚠ shallowRef — must NOT be ref() because Vue deeply unwraps nested refs inside
+// reactive objects. If child.props contains computed refs (e.g. filteredTraitsets),
+// ref() would unwrap them to plain values, breaking reactivity for sub-panels.
 const child = shallowRef(null)
 
 // ── Depth tracking for viewport-aware visibility ──
+// Each Panel registers its depth on mount. PanelStack sums these to compute
+// how many panels are open, then hides shallow panels that overflow the viewport.
+// Must use provide/inject (not props) because depth changes trigger re-renders
+// on PanelStack only, not on every intermediate Panel.
 const registerDepth = inject('registerDepth', null)
 const unregisterDepth = inject('unregisterDepth', null)
 
 onMounted(() => { if (registerDepth) registerDepth(props.depth) })
 onUnmounted(() => { if (unregisterDepth) unregisterDepth(props.depth) })
 
+// Opens a child Panel. The spec.component is markRaw'd to prevent Vue from
+// making the component definition reactive (triggers "Component made reactive" warning).
+// Setting child=null then reassigning on nextTick ensures the leave transition
+// (if any) plays before the new panel enters.
 function openChild(spec) {
   child.value = null
   nextTick(() => { child.value = { ...spec, component: markRaw(spec.component) } })
 }
 
+// Closes the current child Panel. Exposed via slot so child components
+// can close themselves (e.g. after delete).
 function closeChild() {
   child.value = null
 }

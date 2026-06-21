@@ -1,7 +1,7 @@
 <template>
   <button v-if="!show" class="gm-toggle" @click="show = true">🛠</button>
 
-  <div v-if="show" ref="stackEl" class="panel-stack">
+  <div v-if="show" class="panel-stack">
     <Panel :title="rootPanel?.title" :min-visible-depth="minVisibleDepth" closable @close="show = false">
       <template v-if="rootPanel" #default="{ open, close }">
         <component :is="rootPanel.component" :open="open" :close="close" v-bind="rootPanel.props || {}" v-on="rootPanel.listeners || {}" />
@@ -14,14 +14,17 @@
 import { ref, computed, provide, reactive, onMounted, onUnmounted } from 'vue'
 import Panel from './Panel.vue'
 
-const props = defineProps({
+defineProps({
   rootPanel: { type: Object, default: null },
 })
 
 const show = ref(false)
-const stackEl = ref(null)
 
 // ── Depth tracking ──────────────────────────────────
+// Panels register/unregister their depth on mount/unmount via provide/inject.
+// Using reactive Map so the totalPanels computed reacts to changes.
+// We track per-depth counts (not just total) so we can later implement
+// per-depth visibility policies if needed.
 const depthCounts = reactive(new Map())
 function registerDepth(depth) {
   depthCounts.set(depth, (depthCounts.get(depth) || 0) + 1)
@@ -35,6 +38,11 @@ provide('registerDepth', registerDepth)
 provide('unregisterDepth', unregisterDepth)
 
 // ── Viewport-aware panel limit ──────────────────────
+// Hides shallow panels when the stack is wider than the viewport.
+// PANEL_EST_WIDTH = max-width (380px) + gap (8px)
+// maxVisiblePanels = how many panels fit in (viewport - right margin)
+// minVisibleDepth = panels below this depth get v-show=false
+// Example: viewport 1247px, 4 panels open → minVisibleDepth=1 → depth-0 hidden
 const PANEL_EST_WIDTH = 388  // max panel width + gap
 const viewportWidth = ref(window.innerWidth)
 

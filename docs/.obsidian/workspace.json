@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Technical/Data Model.md",
+                "file": "Project Roadmap.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Data Model"
+              "title": "Project Roadmap"
             }
           }
         ]
@@ -165,12 +165,12 @@
               "title": "Outline of Project Roadmap"
             }
           }
-        ]
+        ],
+        "currentTab": 4
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -185,16 +185,17 @@
   },
   "active": "1670f5d60cd7c736",
   "lastOpenFiles": [
-    "Technical/System Architecture.md",
+    "Transversal Hub.md",
+    "self-referential-panel-plan.md",
+    "Game Design/SFX and Effects.md",
     "Technical/Data Model.md",
+    "Technical/System Architecture.md",
     "Project Roadmap.md",
     "Technical/API Contract.md",
     "Game Design/Inspired Mechanics.md",
     "Game Design/Core Mechanics.md",
-    "Game Design/SFX and Effects.md",
     "Game Design/Setting and Narrative.md",
     "Game Design/Entities and Traits.md",
-    "Game Design/Dice Mechanics.md",
-    "Transversal Hub.md"
+    "Game Design/Dice Mechanics.md"
   ]
 }

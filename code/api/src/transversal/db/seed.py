@@ -3,12 +3,13 @@
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
     DieType,
-    EffectAction,
+    EffectPolarity,
     EffectTiming,
     Entity,
     EntityType,
     RatingType,
     SFX,
+    SfxEffect,
     Trait,
     TraitSet,
     Zone,
@@ -123,94 +124,123 @@ def seed_trait_registry(repo: EntityRepository) -> None:
 def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
     """Create the SFX registry entries. Idempotent.
 
+    Deletes any old-format SFXs first, then creates the new model.
+
     Args:
         repo: EntityRepository for DB access.
         engine: Optional EffectsEngine instance. If None, imports from main's singleton.
     """
 
+    # ── Delete old SFXs (idempotent re-seed) ──────────
+    old_ids = [
+        "sfx-law-bridge", "sfx-overcharge", "sfx-lucky-break",
+        "sfx-catastrophe-insurance", "sfx-dimensional-anchor",
+        "sfx-spray-n-pray", "sfx-hinder",
+    ]
+    for old_id in old_ids:
+        try:
+            repo.delete_sfx(old_id)
+        except Exception:
+            pass  # already gone
+
+    # ── New SFX definitions ───────────────────────────
     sfxs = [
         SFX(
             id="sfx-law-bridge",
             name="Law Bridge",
             description="Temporarily attune to the Three Realms, enabling cultivation traits",
-            trigger="on_activate",
-            timing=EffectTiming.END_OF_SCENE,
-            cost=1,
+            limit="Must be in contact with the Jian of Still Waters",
+            trigger="manual",
             effects=[
-                EffectAction(type="spoof_location", action="enable", target="wielder",
-                            result="three_realms:d8"),
+                SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                         type="transfer_razmerit", action="spend", target="self", result="1"),
+                SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.END_OF_SCENE,
+                         type="spoof_location", action="enable", target="wielder",
+                         result="three_realms"),
             ],
         ),
         SFX(
             id="sfx-overcharge",
             name="Overcharge",
             description="Push beyond normal limits — step up primary trait, then step down after resolution",
+            limit="",
             trigger="on_roll",
-            timing=EffectTiming.IMMEDIATE,
-            cost=1,
             effects=[
-                EffectAction(type="modify_roll", action="step_up_die", target="highest_trait_die"),
-                EffectAction(type="modify_trait", action="step_down", target="primary",
-                            result="after_resolution"),
+                SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                         type="transfer_razmerit", action="spend", target="self", result="1"),
+                SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                         type="modify_roll", action="step_up_die", target="highest_trait_die"),
+                SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                         type="modify_trait", action="step_down", target="primary",
+                         result="after_resolution"),
             ],
         ),
         SFX(
             id="sfx-lucky-break",
             name="Lucky Break",
             description="When you roll a hitch, spend razmerit to reroll that die",
+            limit="",
             trigger="on_complication",
-            timing=EffectTiming.IMMEDIATE,
-            cost=1,
             effects=[
-                EffectAction(type="modify_roll", action="reroll_die", target="the_hitch_die"),
+                SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                         type="transfer_razmerit", action="spend", target="self", result="1"),
+                SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                         type="modify_roll", action="reroll_die", target="the_hitch_die"),
             ],
         ),
         SFX(
             id="sfx-catastrophe-insurance",
             name="Catastrophe Insurance",
             description="When everything goes wrong, burn razmerit to contain the damage",
+            limit="",
             trigger="on_botch",
-            timing=EffectTiming.IMMEDIATE,
-            cost=2,
             effects=[
-                EffectAction(type="modify_outcome", action="convert_complication",
-                            target="botch_to_hitch"),
+                SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                         type="transfer_razmerit", action="spend", target="self", result="2"),
+                SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                         type="modify_outcome", action="convert_complication",
+                         target="botch_to_hitch"),
             ],
         ),
         SFX(
             id="sfx-dimensional-anchor",
             name="Dimensional Anchor",
             description="Create a temporary anchor point when entering a new dimension",
+            limit="",
             trigger="on_location_change",
-            timing=EffectTiming.END_OF_SCENE,
-            cost=0,
             effects=[
-                EffectAction(type="create_entity", action="create_asset",
-                            target="anchor_point"),
+                SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.END_OF_SCENE,
+                         type="create_entity", action="create_asset",
+                         target="anchor_point"),
             ],
         ),
         SFX(
             id="sfx-spray-n-pray",
             name="Spray 'n' Pray",
             description="Split a shooting die into two smaller dice, gain an extra effect die option",
-            trigger="on_activate",
-            timing=EffectTiming.IMMEDIATE,
-            cost=1,
+            limit="Must be wielding a firearm",
+            trigger="manual",
             effects=[
-                EffectAction(type="modify_roll", action="split_die",
-                            target="{source_trait}"),
+                SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                         type="transfer_razmerit", action="spend", target="self", result="1"),
+                SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                         type="modify_roll", action="split_die",
+                         target="{source_trait}"),
             ],
         ),
         SFX(
             id="sfx-hinder",
             name="Hinder",
             description="Use distinction as d4 for this roll, gain 1 razmerit",
-            trigger="on_activate",
-            timing=EffectTiming.IMMEDIATE,
-            cost=0,
+            limit="When this trait has a detrimental effect on the current situation",
+            trigger="manual",
             effects=[
-                EffectAction(type="transfer_razmerit", action="earn",
-                            target="self", result="1"),
+                SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+                         type="modify_roll", action="play_as_rating",
+                         target="{source_trait}", result="d4"),
+                SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                         type="transfer_razmerit", action="earn",
+                         target="self", result="1"),
             ],
         ),
     ]
@@ -498,4 +528,3 @@ def seed_all(em) -> None:
     seed_default_character(em)
     seed_elena(em)
     seed_locations(em)
-

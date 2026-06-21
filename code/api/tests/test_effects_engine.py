@@ -3,8 +3,10 @@
 from transversal.domain import (
     DieType,
     EffectAction,
+    EffectPolarity,
     EffectTiming,
     SFX,
+    SfxEffect,
 )
 from transversal.services.effects_applier import EffectRegistry
 from transversal.services.effects_engine import (
@@ -36,10 +38,28 @@ def _reset():
     _test_applied.clear()
 
 
+def _make_sfx(id, name, trigger, effects=None, limit=""):
+    """Helper to create the new SFX model."""
+    return SFX(
+        id=id, name=name, limit=limit, trigger=trigger,
+        effects=effects or [],
+    )
+
+
+def _make_effect(polarity="neutral", timing="immediate", type="modify_roll",
+                 action="step_up_die", target="primary", result=None):
+    """Helper to create a SfxEffect."""
+    return SfxEffect(
+        polarity=EffectPolarity(polarity),
+        timing=EffectTiming(timing),
+        type=type, action=action, target=target, result=result,
+    )
+
+
 class TestRegistry:
     def test_register_and_get(self):
         engine = EffectsEngine()
-        sfx = SFX(id="sfx-test", name="Test", trigger="on_activate", cost=1)
+        sfx = _make_sfx("sfx-test", "Test", "manual")
         engine.register(sfx)
         assert engine.get("sfx-test") is not None
         assert engine.get("sfx-test").name == "Test"
@@ -47,8 +67,8 @@ class TestRegistry:
     def test_register_many(self):
         engine = EffectsEngine()
         sfxs = [
-            SFX(id="sfx-a", name="A", trigger="on_activate", cost=0),
-            SFX(id="sfx-b", name="B", trigger="on_activate", cost=1),
+            _make_sfx("sfx-a", "A", "manual"),
+            _make_sfx("sfx-b", "B", "manual"),
         ]
         engine.register_many(sfxs)
         assert engine.get("sfx-a") is not None
@@ -62,19 +82,25 @@ class TestRegistry:
 class TestTriggerMatching:
     def test_direct_match(self):
         engine = EffectsEngine()
-        sfx = SFX(id="sfx-test", name="Test", trigger="on_activate", cost=0)
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        sfx = _make_sfx("sfx-test", "Test", "manual")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
+        assert engine._trigger_matches(sfx, event)
+
+    def test_legacy_on_activate_matches_manual(self):
+        engine = EffectsEngine()
+        sfx = _make_sfx("sfx-test", "Test", "on_activate")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         assert engine._trigger_matches(sfx, event)
 
     def test_no_match(self):
         engine = EffectsEngine()
-        sfx = SFX(id="sfx-test", name="Test", trigger="on_success", cost=0)
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        sfx = _make_sfx("sfx-test", "Test", "on_success")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         assert not engine._trigger_matches(sfx, event)
 
     def test_complication_trigger_on_roll_with_hitches(self):
         engine = EffectsEngine()
-        sfx = SFX(id="sfx-lucky", name="Lucky Break", trigger="on_complication", cost=1)
+        sfx = _make_sfx("sfx-lucky", "Lucky Break", "on_complication")
         from transversal.domain import DieRoll, SimplifiedResult
         event = GameEvent(
             type="on_roll", entity_id="e1", universe="earth",
@@ -89,7 +115,7 @@ class TestTriggerMatching:
 
     def test_botch_trigger(self):
         engine = EffectsEngine()
-        sfx = SFX(id="sfx-insurance", name="Catastrophe Insurance", trigger="on_botch", cost=2)
+        sfx = _make_sfx("sfx-insurance", "Catastrophe Insurance", "on_botch")
         from transversal.domain import DieRoll, SimplifiedResult
         event = GameEvent(
             type="on_roll", entity_id="e1", universe="earth",
@@ -107,55 +133,56 @@ class TestProcessEvent:
     def test_immediate_effect_fires(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-test", name="Test", trigger="on_activate", timing=EffectTiming.IMMEDIATE,
-            cost=0,
-            effects=[EffectAction(type="modify_roll", action="step_up_die", target="primary")],
+        engine.register(_make_sfx(
+            "sfx-test", "Test", "manual",
+            effects=[_make_effect("positive", "immediate", "modify_roll", "step_up_die", "primary")],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         result = engine.process_event(event, available_sfx_ids=["sfx-test"], razmerit_balance=10)
 
         assert len(result) == 1
         assert result[0].action == "step_up_die"
-        # Tracking handler should have been called (cost spend + effect)
         assert len(_test_applied) >= 1
 
     def test_cost_deducted(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-costly", name="Costly", trigger="on_activate", timing=EffectTiming.IMMEDIATE,
-            cost=3,
-            effects=[EffectAction(type="modify_roll", action="step_up_die", target="primary")],
+        engine.register(_make_sfx(
+            "sfx-costly", "Costly", "manual",
+            effects=[
+                _make_effect("negative", "immediate", "transfer_razmerit", "spend", "self", "3"),
+                _make_effect("positive", "immediate", "modify_roll", "step_up_die", "primary"),
+            ],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         engine.process_event(event, available_sfx_ids=["sfx-costly"], razmerit_balance=10)
 
-        # Check that transfer_razmerit action was applied
-        spend_actions = [a for a in _test_applied if a.type == "transfer_razmerit"]
+        spend_actions = [a for a in _test_applied if a.type == "transfer_razmerit" and a.action == "spend"]
         assert len(spend_actions) == 1
         assert spend_actions[0].result == "3"
 
     def test_insufficient_razmerit_skips(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-costly", name="Costly", trigger="on_activate", timing=EffectTiming.IMMEDIATE,
-            cost=5,
-            effects=[EffectAction(type="modify_roll", action="step_up_die", target="primary")],
+        engine.register(_make_sfx(
+            "sfx-costly", "Costly", "manual",
+            effects=[
+                _make_effect("negative", "immediate", "transfer_razmerit", "spend", "self", "5"),
+                _make_effect("positive", "immediate", "modify_roll", "step_up_die", "primary"),
+            ],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         result = engine.process_event(event, available_sfx_ids=["sfx-costly"], razmerit_balance=2)
 
-        assert len(result) == 0  # skipped due to cost
+        assert len(result) == 0  # skipped due to insufficient razmerit
 
     def test_unavailable_sfx_skipped(self):
         engine = EffectsEngine()
-        engine.register(SFX(id="sfx-test", name="Test", trigger="on_activate", cost=0))
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        engine.register(_make_sfx("sfx-test", "Test", "manual"))
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         result = engine.process_event(event, available_sfx_ids=[], razmerit_balance=10)
         assert len(result) == 0
 
@@ -164,13 +191,12 @@ class TestScheduling:
     def test_deferred_effect_queued(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-buff", name="Buff", trigger="on_activate", timing=EffectTiming.END_OF_SCENE,
-            cost=0,
-            effects=[EffectAction(type="modify_trait", action="step_down", target="qi_reserves")],
+        engine.register(_make_sfx(
+            "sfx-buff", "Buff", "manual",
+            effects=[_make_effect("negative", "end_of_scene", "modify_trait", "step_down", "qi_reserves")],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         result = engine.process_event(event, available_sfx_ids=["sfx-buff"], razmerit_balance=10)
 
         assert len(result) == 0  # not immediate
@@ -179,17 +205,15 @@ class TestScheduling:
     def test_tick_beat_fires_end_of_beat(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-beat", name="BeatEffect", trigger="on_activate", timing=EffectTiming.END_OF_BEAT,
-            cost=0,
-            effects=[EffectAction(type="modify_trait", action="step_down", target="target")],
+        engine.register(_make_sfx(
+            "sfx-beat", "BeatEffect", "manual",
+            effects=[_make_effect("negative", "end_of_beat", "modify_trait", "step_down", "target")],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         engine.process_event(event, available_sfx_ids=["sfx-beat"], razmerit_balance=10)
         assert engine.scheduled_count == 1
 
-        # Count non-spend actions
         before = len([a for a in _test_applied if a.type != "transfer_razmerit"])
         fired_scheduled = engine.tick_beat()
         assert len(fired_scheduled) == 1
@@ -200,13 +224,12 @@ class TestScheduling:
     def test_after_beats_counts_down(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-delayed", name="Delayed", trigger="on_activate", timing=EffectTiming.AFTER_BEATS,
-            cost=0,
-            effects=[EffectAction(type="modify_trait", action="step_down", target="target")],
+        engine.register(_make_sfx(
+            "sfx-delayed", "Delayed", "manual",
+            effects=[_make_effect("negative", "after_beats", "modify_trait", "step_down", "target")],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         engine.process_event(event, available_sfx_ids=["sfx-delayed"], razmerit_balance=10)
 
         # Tick 2 beats — shouldn't fire yet (default 3)
@@ -221,13 +244,12 @@ class TestScheduling:
     def test_tick_scene(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-scene", name="SceneEffect", trigger="on_activate", timing=EffectTiming.END_OF_SCENE,
-            cost=0,
-            effects=[EffectAction(type="modify_trait", action="step_down", target="target")],
+        engine.register(_make_sfx(
+            "sfx-scene", "SceneEffect", "manual",
+            effects=[_make_effect("negative", "end_of_scene", "modify_trait", "step_down", "target")],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         engine.process_event(event, available_sfx_ids=["sfx-scene"], razmerit_balance=10)
         engine.tick_beat()  # should NOT fire scene effects
 
@@ -237,14 +259,34 @@ class TestScheduling:
     def test_tick_session(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-session", name="SessionEffect", trigger="on_activate",
-            timing=EffectTiming.END_OF_SESSION, cost=0,
-            effects=[EffectAction(type="modify_trait", action="step_down", target="target")],
+        engine.register(_make_sfx(
+            "sfx-session", "SessionEffect", "manual",
+            effects=[_make_effect("negative", "end_of_session", "modify_trait", "step_down", "target")],
         ))
 
-        event = GameEvent(type="on_activate", entity_id="e1", universe="earth")
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
         engine.process_event(event, available_sfx_ids=["sfx-session"], razmerit_balance=10)
 
         engine.tick_session()
         assert engine.scheduled_count == 0
+
+    def test_mixed_timing_effects(self):
+        """An SFX can have both immediate and deferred effects."""
+        _reset()
+        engine = EffectsEngine()
+        engine.register(_make_sfx(
+            "sfx-mixed", "Mixed", "manual",
+            effects=[
+                _make_effect("negative", "immediate", "transfer_razmerit", "spend", "self", "1"),
+                _make_effect("positive", "immediate", "modify_roll", "step_up_die", "highest_trait_die"),
+                _make_effect("negative", "end_of_beat", "modify_trait", "step_down", "primary", "after_resolution"),
+            ],
+        ))
+
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
+        result = engine.process_event(event, available_sfx_ids=["sfx-mixed"], razmerit_balance=5)
+
+        # Two effects fire immediately (spend + step_up_die)
+        assert len(result) == 2
+        # One effect is deferred
+        assert engine.scheduled_count == 1

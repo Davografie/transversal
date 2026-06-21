@@ -14,7 +14,7 @@ class TriggerRequest(BaseModel):
     entity_id: str
     sfx_name: str
     universe: str = "earth"
-    trigger: str = "on_activate"
+    trigger: str = "manual"
     context: dict = {}
 
 
@@ -44,19 +44,22 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
         sfx = engine.get(req.sfx_name)
         if sfx is None:
             return {"applied": False, "error": f"SFX '{req.sfx_name}' not found"}
-        # Reverse the cost: spend becomes earn, earn becomes spend
         from transversal.services.effects_applier import effect_registry
-        if sfx.cost > 0:
-            # Normal: cost was spent. Reverse: refund (earn)
-            effect_registry.apply(
-                EffectAction(type="transfer_razmerit", action="earn", target="self", result=str(sfx.cost)),
-                req.entity_id, req.universe, req.context)
-        # Reverse the SFX's own razmerit effects
+        from transversal.domain import EffectPolarity
         for effect in sfx.effects:
-            if effect.type == "transfer_razmerit" and effect.action == "earn":
-                # Normal: earned. Reverse: spend
+            # Reverse razmerit costs (spend → earn)
+            if (effect.polarity == EffectPolarity.NEGATIVE
+                    and effect.type == "transfer_razmerit"
+                    and effect.action == "spend"):
                 effect_registry.apply(
-                    EffectAction(type="transfer_razmerit", action="spend", target="self", result=effect.result or "1"),
+                    EffectAction(type="transfer_razmerit", action="earn",
+                                target="self", result=effect.result or "1"),
+                    req.entity_id, req.universe, req.context)
+            # Reverse razmerit earnings (earn → spend)
+            if effect.type == "transfer_razmerit" and effect.action == "earn":
+                effect_registry.apply(
+                    EffectAction(type="transfer_razmerit", action="spend",
+                                target="self", result=effect.result or "1"),
                     req.entity_id, req.universe, req.context)
         return {"applied": True, "effects_applied": 1, "effects": [{"type": "reverse", "action": "reverse"}]}
 

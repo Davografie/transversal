@@ -63,7 +63,16 @@
                   <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
                 </div>
                 <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
+                <div v-if="t.possibleSfxIds?.length" class="edit-sfx">
+                  <span class="edit-sfx-label">SFX</span>
+                  <button v-for="sfxId in t.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
+                    {{ sfxId.replace('sfx-', '') }}
+                  </button>
+                </div>
                 <input v-if="t.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" />
+                <div class="edit-danger-zone">
+                  <button class="edit-delete-btn" @click="deleteTrait(t)">Delete Trait</button>
+                </div>
                 <button class="edit-close" @click="cancelEdit" title="Close">×</button>
               </div>
             </template>
@@ -157,6 +166,7 @@ const editStatement = ref('')
 const showDiePicker = ref(false)
 const pickIdx = ref(0)
 const pickedDie = ref('')
+const editSfxIds = ref([])
 let longPressTimer = null
 
 // ── Add trait picker ────────────────────────────
@@ -362,6 +372,7 @@ const QUERY = `
         traitsetOrder
         traitsetLimit
         knownTo
+        possibleSfxIds
       }
     }
   }
@@ -464,6 +475,7 @@ function startEdit(t) {
   editingTraitId.value = t.id
   editDice.value = (t.dice && t.dice.length ? [...t.dice] : [t.dieType || 'd6']).map(d => d.toLowerCase())
   editStatement.value = t.statement || ''
+  editSfxIds.value = [...(t.sfxIds || [])]
   showDiePicker.value = false
 }
 
@@ -471,16 +483,30 @@ function cancelEdit() {
   editingTraitId.value = null
 }
 
+async function deleteTrait(t) {
+  await graphql(`mutation($id: ID!) { removeTraitSetting(id: $id) }`, { id: t.id })
+  editingTraitId.value = null
+  fetchEntity()
+}
+
 async function doSave() {
   if (!editingTraitId.value) return
-  await graphql(`mutation($id: ID!, $dice: [DieType!], $statement: String) {
-    updateTraitSetting(id: $id, input: { dice: $dice, statement: $statement }) { id }
+  await graphql(`mutation($id: ID!, $dice: [DieType!], $statement: String, $sfxIds: [ID!]) {
+    updateTraitSetting(id: $id, input: { dice: $dice, statement: $statement, sfxIds: $sfxIds }) { id }
   }`, {
     id: editingTraitId.value,
     dice: editDice.value.map(d => d.toUpperCase()),
     statement: editStatement.value || null,
+    sfxIds: editSfxIds.value,
   })
   fetchEntity()
+}
+
+function toggleSfx(sfxId) {
+  const idx = editSfxIds.value.indexOf(sfxId)
+  if (idx === -1) editSfxIds.value.push(sfxId)
+  else editSfxIds.value.splice(idx, 1)
+  doSave()
 }
 
 let statementDebounce = null
@@ -641,6 +667,40 @@ watch(() => props.externalPoolSources, (sources) => {
   border-color: var(--accent);
   background: rgba(64,136,212,0.1);
 }
+.edit-sfx {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+.edit-sfx-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+.sfx-chip {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sfx-chip:hover {
+  border-color: rgba(255,255,255,0.2);
+  color: var(--text);
+}
+.sfx-chip.assigned {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .edit-statement {
   font-size: 12px;
   padding: 5px 8px;
@@ -668,6 +728,25 @@ watch(() => props.externalPoolSources, (sources) => {
 .edit-close:hover {
   background: rgba(255,255,255,0.08);
   color: var(--text);
+}
+.edit-danger-zone {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(212,64,64,0.15);
+}
+.edit-delete-btn {
+  width: 100%;
+  font-size: 12px;
+  padding: 6px;
+  background: rgba(212,64,64,0.12);
+  color: var(--danger);
+  border: 1px solid rgba(212,64,64,0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.edit-delete-btn:hover {
+  background: rgba(212,64,64,0.25);
 }
 
 .add-trait-btn {

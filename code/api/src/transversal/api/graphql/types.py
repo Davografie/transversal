@@ -9,6 +9,8 @@ from transversal.domain import (
     EntityType as DomainEntityType,
     TransversalType as DomainTransversalType,
     ChallengePolarity as DomainChallengePolarity,
+    EffectPolarity as DomainEffectPolarity,
+    EffectTiming as DomainEffectTiming,
 )
 
 
@@ -19,6 +21,8 @@ RatingType = strawberry.enum(DomainRatingType)
 EntityType = strawberry.enum(DomainEntityType)
 TransversalTypeEnum = strawberry.enum(DomainTransversalType)
 ChallengePolarity = strawberry.enum(DomainChallengePolarity)
+EffectPolarity = strawberry.enum(DomainEffectPolarity)
+EffectTimingEnum = strawberry.enum(DomainEffectTiming)
 
 
 # ── Trait Registry ───────────────────────────────────
@@ -64,31 +68,86 @@ class TraitSetRef:
 # ── SFX Registry ──────────────────────────────────────
 
 @strawberry.type
+class SfxEffect:
+    """A single effect within an SFX, with timing and polarity."""
+    polarity: EffectPolarity
+    timing: EffectTimingEnum
+    type: str
+    action: str
+    target: str = ""
+    result: Optional[str] = None
+
+
+@strawberry.input
+class SfxEffectInput:
+    polarity: EffectPolarity = EffectPolarity.NEUTRAL
+    timing: EffectTimingEnum = EffectTimingEnum.IMMEDIATE
+    type: str = ""
+    action: str = ""
+    target: str = ""
+    result: Optional[str] = None
+
+
+@strawberry.type
 class SfxRef:
+    """SFX reference returned by queries."""
     id: strawberry.ID
     name: str
     description: str = ""
     trigger: str = ""
+    limit: str = ""
+    effects: list[SfxEffect] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
 class SfxInput:
+    """Input for creating a new SFX."""
     id: str
     name: str
     description: str = ""
     trigger: str = ""
-    timing: str = "immediate"
-    cost: int = 0
+    limit: str = ""
+    effects: list[SfxEffectInput] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
 class SfxUpdateInput:
+    """Input for updating an existing SFX."""
     id: strawberry.ID
     name: Optional[str] = None
     description: Optional[str] = None
     trigger: Optional[str] = None
-    timing: Optional[str] = None
-    cost: Optional[int] = None
+    limit: Optional[str] = None
+    effects: Optional[list[SfxEffectInput]] = None
+
+
+# ── Effects Registry (metadata for the UI) ────────────
+
+@strawberry.type
+class EffectFieldDef:
+    """A single input field required by an effect action."""
+    name: str
+    label: str
+    field_type: str
+    required: bool = True
+    default: Optional[str] = None
+    options: list[str] = strawberry.field(default_factory=list)
+
+
+@strawberry.type
+class EffectActionMeta:
+    """Metadata for one effect action the editor can create."""
+    action_id: str
+    label: str
+    description: str
+    category: str
+    effect_type: str
+    effect_action: str
+    valid_timings: list[str]
+    fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
+    implicit_target: Optional[str] = None
+    implicit_result: Optional[str] = None
+    implicit_timing: Optional[str] = None
 
 
 @strawberry.input
@@ -178,6 +237,13 @@ class TraitSetting:
         em = info.context["entity_manager"]
         ts = em.repo.get_traitset_by_id(self.traitset_id)
         return ts.limit if ts else 1
+
+    @strawberry.field
+    def possible_sfx_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        trait = em.repo.get_trait(self.trait_id)
+        return trait.possible_sfx_ids if trait else []
 
 
 @strawberry.input

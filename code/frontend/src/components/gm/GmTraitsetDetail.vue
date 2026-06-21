@@ -60,6 +60,9 @@ const props = defineProps({
   close: { type: Function, default: null },
 })
 
+// ⚠ Derive traitset/traits from reactive ref BY ID, not from a frozen snapshot.
+// When onRefresh updates data, the ref changes → computed re-evaluates → trait
+// list updates live. Previously passed as snapshots at open time — stale after delete.
 // Derive current traitset/traits reactively from the ref — stays current after onRefresh
 const traitset = computed(() => {
   const list = props.traitsetsRef?.value ?? []

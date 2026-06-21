@@ -353,6 +353,15 @@ class Entity(BaseModel):
 
 # ── SFX ───────────────────────────────────────────────
 
+class EffectPolarity(str, Enum):
+    """Whether an effect is detrimental, beneficial, or neutral."""
+    NEGATIVE = "negative"
+    NEUTRAL = "neutral"
+    POSITIVE = "positive"
+
+
+# Timing for deferred effects (shared by old EffectAction and new SfxEffect)
+
 class EffectTiming(str, Enum):
     IMMEDIATE = "immediate"
     END_OF_BEAT = "end_of_beat"
@@ -362,10 +371,24 @@ class EffectTiming(str, Enum):
     ON_CONDITION = "on_condition"
 
 
+# Legacy effect action — still used by the engine/applier dispatch layer.
+
 class EffectAction(BaseModel):
     type: str
     action: str
     target: str
+    result: Optional[str] = None
+
+
+# New per-effect model with polarity and timing.
+
+class SfxEffect(BaseModel):
+    """A single effect within an SFX, with its own timing and polarity."""
+    polarity: EffectPolarity = EffectPolarity.NEUTRAL
+    timing: EffectTiming = EffectTiming.IMMEDIATE
+    type: str
+    action: str
+    target: str = ""
     result: Optional[str] = None
 
 
@@ -377,10 +400,9 @@ class SFX(BaseModel):
     id: str
     name: str
     description: str = ""
+    limit: str = ""          # narrative condition / restriction (markdown)
     trigger: str
-    timing: EffectTiming = EffectTiming.IMMEDIATE
-    cost: int = 0
-    effects: list[EffectAction] = Field(default_factory=list)
+    effects: list[SfxEffect] = Field(default_factory=list)
 
 
 # ── Assembled Views (not stored, built by repo) ───────
