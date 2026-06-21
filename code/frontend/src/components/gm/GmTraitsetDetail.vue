@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import ChipInput from './ChipInput.vue'
 import GmTraitEditPanel from '@/components/gm/GmTraitEditPanel.vue'
@@ -50,19 +50,32 @@ const entityTypeOptions = [
 ]
 
 const props = defineProps({
-  traitset: { type: Object, default: null },
-  traits: { type: Array, default: () => [] },
+  traitsetsRef: { type: Object, default: null },   // reactive computed ref from GmPanel
+  traitsetId: { type: String, default: '' },
   selectedId: { type: String, default: '' },
   allSfxs: { type: Array, default: () => [] },
   onRefresh: { type: Function, default: null },
   onPatch: { type: Function, default: null },
   open: { type: Function, default: null },
+  close: { type: Function, default: null },
+})
+
+// Derive current traitset/traits reactively from the ref — stays current after onRefresh
+const traitset = computed(() => {
+  const list = props.traitsetsRef?.value ?? []
+  return list.find(ts => ts.id === props.traitsetId) || null
+})
+const traits = computed(() => traitset.value?.traits || [])
+
+// Close self if traitset was deleted (no longer in the list)
+watch(traitset, (ts) => {
+  if (!ts && props.close) props.close()
 })
 
 const saving = ref(false)
 const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1 })
 
-watch(() => props.traitset, (ts) => {
+watch(traitset, (ts) => {
   if (ts) {
     form.name = ts.name || ''
     form.universes = [...(ts.universes || [])]
@@ -78,12 +91,12 @@ watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], 
 })
 
 async function saveTraitset() {
-  if (!props.traitset?.id) return
+  if (!traitset.value?.id) return
   await graphql(
     `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit) { id } }`,
-    { id: props.traitset.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
+    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
   )
-  if (props.onPatch) props.onPatch('traitsets', props.traitset.id, {
+  if (props.onPatch) props.onPatch('traitsets', traitset.value.id, {
     name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit,
   })
 }
@@ -103,16 +116,16 @@ function onNewTrait() {
     props.open({
       component: GmTraitEditPanel,
       title: 'New Trait',
-      props: { trait: null, allSfxs: props.allSfxs, traitsetId: props.traitset?.id, onRefresh: props.onRefresh },
+      props: { trait: null, allSfxs: props.allSfxs, traitsetId: traitset.value?.id, onRefresh: props.onRefresh },
     })
   }
 }
 
 async function onDeleteTraitset() {
-  if (!props.traitset?.id) return
-  if (!confirm(`Delete the entire traitset "${props.traitset.name}"?\n\nThis will cascade-delete all ${props.traits.length} traits in this set and any trait settings referencing them.`)) return
+  if (!traitset.value?.id) return
+  if (!confirm(`Delete the entire traitset "${traitset.value.name}"?\n\nThis will cascade-delete all ${traits.value.length} traits in this set and any trait settings referencing them.`)) return
   saving.value = true
-  try { await graphql(`mutation($id: ID!) { deleteTraitset(id: $id) }`, { id: props.traitset.id }); if (props.onRefresh) await props.onRefresh() }
+  try { await graphql(`mutation($id: ID!) { deleteTraitset(id: $id) }`, { id: traitset.value.id }); if (props.onRefresh) await props.onRefresh(); if (props.close) props.close() }
   finally { saving.value = false }
 }
 </script>

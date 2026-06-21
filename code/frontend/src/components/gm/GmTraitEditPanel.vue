@@ -20,13 +20,15 @@
 
       <!-- SFX assignment -->
       <h4 class="ps-section-title">Available SFXs</h4>
-      <div v-if="allSfxs.length === 0" class="empty">No SFXs defined</div>
+      <div v-if="allSfxsEffective.length === 0" class="empty">No SFXs defined</div>
       <div v-else class="checkbox-list">
-        <label v-for="s in allSfxs" :key="s.id" class="checkbox-row" :class="{ checked: form.possibleSfxIds.includes(s.id) }">
-          <input type="checkbox" :value="s.id" v-model="form.possibleSfxIds" />
+        <div v-for="s in allSfxsEffective" :key="s.id" class="checkbox-row" :class="{ checked: form.possibleSfxIds.includes(s.id) }" @click="onSfxClick(s)">
+          <label class="checkbox-inner" @click.stop>
+            <input type="checkbox" :value="s.id" v-model="form.possibleSfxIds" />
+          </label>
           <span class="sfx-name">{{ s.name }}</span>
           <span class="sfx-trigger">{{ s.trigger || '' }}</span>
-        </label>
+        </div>
       </div>
       <button class="ps-add-btn" @click="onNewSfx">+ New SFX</button>
 
@@ -61,7 +63,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, onMounted, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import ChipInput from './ChipInput.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
@@ -76,9 +78,22 @@ const props = defineProps({
   onRefresh: { type: Function, default: null },
   onPatch: { type: Function, default: null },
   open: { type: Function, default: null },
+  close: { type: Function, default: null },
 })
 
 const saving = ref(false)
+
+// Self-fetch SFXs if the prop chain didn't deliver them
+const localSfxs = ref([])
+onMounted(async () => {
+  if (!props.allSfxs || props.allSfxs.length === 0) {
+    const data = await graphql(`{ sfxs { id name description trigger limit effects { polarity timing type action target result } } }`)
+    if (data?.sfxs) localSfxs.value = data.sfxs
+  }
+})
+const allSfxsEffective = computed(() =>
+  (props.allSfxs && props.allSfxs.length > 0) ? props.allSfxs : localSfxs.value
+)
 
 const universeOptions = [
   { label: 'Earth', value: 'earth' },
@@ -143,12 +158,36 @@ async function onCreate() {
 }
 
 // ── SFX navigation ──
+function onSfxClick(sfx) {
+  if (props.open) {
+    props.open({
+      component: GmSfxEditPanel,
+      title: sfx.name || 'Edit SFX',
+      props: { sfx: sfx, onRefresh: props.onRefresh, onPatch: props.onPatch },
+      listeners: {
+        'sfx-updated': (updated) => {
+          const idx = localSfxs.value.findIndex(s => s.id === updated.id)
+          if (idx >= 0) Object.assign(localSfxs.value[idx], updated)
+        },
+        'sfx-deleted': (id) => {
+          localSfxs.value = localSfxs.value.filter(s => s.id !== id)
+        },
+      },
+    })
+  }
+}
+
 function onNewSfx() {
   if (props.open) {
     props.open({
       component: GmSfxEditPanel,
       title: 'New SFX',
-      props: { sfx: null, onRefresh: props.onRefresh },
+      props: { sfx: null, onRefresh: props.onRefresh, onPatch: props.onPatch },
+      listeners: {
+        'sfx-created': (created) => {
+          localSfxs.value.push(created)
+        },
+      },
     })
   }
 }
@@ -156,9 +195,8 @@ function onNewSfx() {
 // ── Delete ──
 async function onDelete() {
   if (!props.trait?.id) return
-  if (!confirm(`Delete trait "${props.trait.name}"? This will also remove all trait settings referencing it.`)) return
   saving.value = true
-  try { await graphql(`mutation($id: ID!) { deleteTrait(id: $id) }`, { id: props.trait.id }); if (props.onRefresh) await props.onRefresh() }
+  try { await graphql(`mutation($id: ID!) { deleteTrait(id: $id) }`, { id: props.trait.id }); if (props.onRefresh) await props.onRefresh(); if (props.close) props.close() }
   finally { saving.value = false }
 }
 </script>
@@ -175,6 +213,7 @@ async function onDelete() {
 .checkbox-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; }
 .checkbox-row:hover { background: rgba(255,255,255,0.04); }
 .checkbox-row.checked { background: rgba(64,136,212,0.08); }
+.checkbox-inner { display: inline-flex; align-items: center; cursor: pointer; }
 .checkbox-row input { width: auto; margin: 0; }
 .sfx-name { flex: 1; }
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }

@@ -92,6 +92,9 @@ const traitsets = ref([])
 const allSfxsData = ref([])
 const traitsLoading = ref(false)
 
+// Reactive computed — passed as ref through props so sub-panels see updates
+const filteredTraitsets = computed(() => traitsets.value.filter(ts => traitsetMatchesFilters(ts)))
+
 function nextBeat() { emit('next-beat') }
 function startSession() { sessionActive.value = true; emit('start-session') }
 function endSession() { sessionActive.value = false; emit('end-session') }
@@ -180,7 +183,7 @@ async function fetchTraitsConfig() {
   traitsLoading.value = true
   const [ts, sf] = await Promise.all([
     graphql(`query { traitsets { id name universes entityTypes order limit traits { id name defaultDieType traitsetId universes possibleSfxIds } } }`),
-    graphql(`query { sfxs { id name description trigger } }`),
+    graphql(`query { sfxs { id name description trigger limit effects { polarity timing type action target result } } }`),
   ])
   if (ts?.traitsets) traitsets.value = ts.traitsets
   if (sf?.sfxs) allSfxsData.value = sf.sfxs
@@ -446,14 +449,13 @@ function inspectEntity(id) {
 // ── Traits config (via open) ───────────────────────
 async function openTraitsConfig() {
   editing.value = false; creating.value = false; selected.value = null; selectedId.value = null; inspectedEntity.value = null
-  if (traitsets.value.length === 0) await fetchTraitsConfig()
-  // Filter traitsets by active chips
-  const filtered = traitsets.value.filter(ts => traitsetMatchesFilters(ts))
+  if (traitsets.value.length === 0 || allSfxsData.value.length === 0) await fetchTraitsConfig()
+  // Pass raw refs as props so sub-panels see updates reactively
   if (props.open) {
     props.open({
       component: GmTraitsetsPanel,
       title: 'Traitsets',
-      props: { traitsets: filtered, allSfxs: allSfxsData.value, loading: traitsLoading.value, onRefresh: fetchTraitsConfig },
+      props: { traitsets: filteredTraitsets, allSfxs: allSfxsData, loading: traitsLoading, onRefresh: fetchTraitsConfig },
     })
   }
 }
@@ -483,6 +485,13 @@ function patchData(collection, id, changes) {
       Object.assign(arr.value[idx], changes)
       arr.value[idx]._flash = (arr.value[idx]._flash || 0) + 1
       setTimeout(() => { if (arr.value[idx]._flash) arr.value[idx]._flash = 0 }, 600)
+    } else if (changes.id) {
+      // New item — push it
+      arr.value.push({ ...changes, _flash: 1 })
+      setTimeout(() => {
+        const newIdx = arr.value.findIndex(item => item.id === id)
+        if (newIdx >= 0 && arr.value[newIdx]._flash) arr.value[newIdx]._flash = 0
+      }, 600)
     }
   }
 }

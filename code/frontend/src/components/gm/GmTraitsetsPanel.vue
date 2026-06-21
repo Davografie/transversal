@@ -1,7 +1,7 @@
 <template>
   <div>
     <input v-model="search" class="filter-input" placeholder="Search…" style="margin-bottom:8px" />
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading?.value" class="loading">Loading…</div>
     <div v-else class="ps-list">
       <div
         v-for="(ts, i) in filtered"
@@ -38,9 +38,10 @@ import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 const { graphql } = useApi()
 
 const props = defineProps({
-  traitsets: { type: Array, default: () => [] },
+  traitsets: { type: Object, default: null },   // computed ref from GmPanel
+  allSfxs: { type: Object, default: null },     // ref from GmPanel
+  loading: { type: Object, default: null },     // ref from GmPanel
   selectedId: { type: String, default: '' },
-  loading: { type: Boolean, default: false },
   onRefresh: { type: Function, default: null },
   open: { type: Function, default: null },
 })
@@ -55,7 +56,8 @@ let localOrder = null
 
 const filtered = computed(() => {
   const q = search.value.toLowerCase()
-  const list = localOrder || props.traitsets
+  const src = props.traitsets?.value ?? []
+  const list = localOrder || src
   if (!q) return list
   return list.filter(ts =>
     ts.name.toLowerCase().includes(q) ||
@@ -70,11 +72,10 @@ function onClick(ts) {
       component: GmTraitsetDetail,
       title: ts.name,
       props: {
-        traitset: ts,
-        traits: ts.traits || [],
-        allSfxs: props.allSfxs,
+        traitsetsRef: props.traitsets,      // reactive computed ref
+        traitsetId: ts.id,                   // look up by ID so data stays current
+        allSfxs: props.allSfxs?.value ?? [],
         onRefresh: props.onRefresh,
-        onPatch: props.onPatch,
       },
     })
   }

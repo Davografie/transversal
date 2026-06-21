@@ -2,16 +2,16 @@
   <button v-if="!show" class="gm-toggle" @click="show = true">🛠</button>
 
   <div v-if="show" ref="stackEl" class="panel-stack">
-    <Panel :title="rootPanel?.title" closable @close="show = false">
-      <template v-if="rootPanel" #default="{ open }">
-        <component :is="rootPanel.component" :open="open" v-bind="rootPanel.props || {}" v-on="rootPanel.listeners || {}" />
+    <Panel :title="rootPanel?.title" :min-visible-depth="minVisibleDepth" closable @close="show = false">
+      <template v-if="rootPanel" #default="{ open, close }">
+        <component :is="rootPanel.component" :open="open" :close="close" v-bind="rootPanel.props || {}" v-on="rootPanel.listeners || {}" />
       </template>
     </Panel>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, provide, reactive, onMounted, onUnmounted } from 'vue'
 import Panel from './Panel.vue'
 
 const props = defineProps({
@@ -21,24 +21,46 @@ const props = defineProps({
 const show = ref(false)
 const stackEl = ref(null)
 
-// ── Viewport-aware clipping ──
-function recalc() {
-  if (!stackEl.value) return
-  const rect = stackEl.value.getBoundingClientRect()
-  // keep for potential future use
+// ── Depth tracking ──────────────────────────────────
+const depthCounts = reactive(new Map())
+function registerDepth(depth) {
+  depthCounts.set(depth, (depthCounts.get(depth) || 0) + 1)
+}
+function unregisterDepth(depth) {
+  const n = depthCounts.get(depth) || 0
+  if (n <= 1) depthCounts.delete(depth)
+  else depthCounts.set(depth, n - 1)
+}
+provide('registerDepth', registerDepth)
+provide('unregisterDepth', unregisterDepth)
+
+// ── Viewport-aware panel limit ──────────────────────
+const PANEL_EST_WIDTH = 388  // max panel width + gap
+const viewportWidth = ref(window.innerWidth)
+
+const totalPanels = computed(() => {
+  let sum = 0
+  for (const [, n] of depthCounts) sum += n
+  return sum
+})
+const maxVisiblePanels = computed(() => Math.floor((viewportWidth.value - 36) / PANEL_EST_WIDTH))
+const minVisibleDepth = computed(() => Math.max(0, totalPanels.value - maxVisiblePanels.value))
+
+function onResize() {
+  viewportWidth.value = window.innerWidth
 }
 
 let resizeTimer = null
-function onResize() {
+function debouncedResize() {
   clearTimeout(resizeTimer)
-  resizeTimer = setTimeout(recalc, 50)
+  resizeTimer = setTimeout(onResize, 100)
 }
 
 onMounted(() => {
-  window.addEventListener('resize', onResize)
+  window.addEventListener('resize', debouncedResize)
 })
 onUnmounted(() => {
-  window.removeEventListener('resize', onResize)
+  window.removeEventListener('resize', debouncedResize)
 })
 </script>
 
@@ -53,12 +75,12 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.panel-stack {
-  position: fixed; top: 50%; right: 36px; transform: translateY(-50%); z-index: 25;
-  display: flex; flex-direction: row-reverse; align-items: center; gap: 8px;
-  pointer-events: none;
-  max-width: calc(100vw - 36px);
-}
+ .panel-stack {
+   position: fixed; top: 50%; right: 36px; transform: translateY(-50%); z-index: 25;
+   display: flex; flex-direction: row-reverse; align-items: center; gap: 8px;
+   pointer-events: none;
+   max-width: calc(100vw - 36px);
+ }
 .panel-stack > :deep(*) {
   flex-shrink: 0;
   pointer-events: auto;

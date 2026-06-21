@@ -152,14 +152,14 @@
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="wrapperOpen && peers.length" class="peers-bar">
-        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: viewingEntityId === p.id || (!viewingEntityId && entityId === p.id) }" @click.stop="viewingEntityId = viewingEntityId === p.id ? null : p.id" :title="p.name">
+        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: viewingEntityId === p.id || (!viewingEntityId && entityId === p.id) }" @click.stop="viewingEntityId = p.id === entityId ? null : (viewingEntityId === p.id ? null : p.id); forceSheet = true" :title="p.name">
           <img v-if="p.backgroundImage" :src="p.backgroundImage" class="peer-img" />
           <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
           <span class="peer-label">{{ p.name }}</span>
         </button>
       </div>
       <CharacterSheet
-        v-show="sheetVisible && !gmMode"
+        v-show="sheetVisible && !gmMode && (phase === 'adding' || forceSheet)"
         ref="sheetRef"
         class="embedded-sheet"
         :class="{ 'sheet-hidden': !sheetVisible }"
@@ -572,6 +572,7 @@ watch(lastEvent, (evt) => {
 
 function onPhaseChange(p) {
   phase.value = p
+  if (p !== 'adding') forceSheet.value = false
   if (p === 'adding') {
     keepCount.value = 2
     effectCount.value = 1
@@ -592,6 +593,7 @@ let closeTimer = null
 const currentPoolSources = ref([])
 const peers = ref([])
 const viewingEntityId = ref(null)
+const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
@@ -607,6 +609,7 @@ function openPanel() {
 function closePanel() {
   hoverOpen.value = false
   sheetVisible.value = false
+  forceSheet.value = false
   if (diceRef.value) diceRef.value.panelOpen = false
   if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
   if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }

@@ -1,49 +1,62 @@
 <template>
   <div class="panel-wrapper" :class="{ nested }">
     <button v-if="closable" class="panel-close" @click="$emit('close')">×</button>
-    <div class="panel">
+    <div class="panel" v-show="!minVisibleDepth || depth >= minVisibleDepth">
       <header v-if="title" class="panel-header">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
         </slot>
       </header>
       <div class="panel-body">
-        <slot :open="openChild" />
+        <slot :open="openChild" :close="closeChild" />
       </div>
     </div>
     <!-- Self-reference: nested child panel -->
-    <Transition name="panel-slide">
-      <Panel
-        v-if="child"
-        nested
-        :title="child.title"
-        closable
-        @close="child = null"
-      >
-        <template #default="{ open: childOpen }">
-          <component :is="child.component" :open="childOpen" v-bind="child.props || {}" v-on="child.listeners || {}" />
-        </template>
-      </Panel>
-    </Transition>
+    <Panel
+      v-if="child"
+      nested
+      :depth="depth + 1"
+      :min-visible-depth="minVisibleDepth"
+      :title="child.title"
+      closable
+      @close="child = null"
+    >
+      <template #default="{ open: childOpen }">
+        <component :is="child.component" v-bind="child.props || {}" :open="childOpen" :close="() => { child = null }" v-on="child.listeners || {}" @close="child = null" />
+      </template>
+    </Panel>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { shallowRef, nextTick, markRaw, inject, onMounted, onUnmounted } from 'vue'
 
-defineProps({
+const props = defineProps({
   title: { type: String, default: '' },
   closable: { type: Boolean, default: false },
   nested: { type: Boolean, default: false },
+  depth: { type: Number, default: 0 },
+  minVisibleDepth: { type: Number, default: 0 },
 })
 
 defineEmits(['close'])
 
-const child = ref(null)
+const child = shallowRef(null)
+
+// ── Depth tracking for viewport-aware visibility ──
+const registerDepth = inject('registerDepth', null)
+const unregisterDepth = inject('unregisterDepth', null)
+
+onMounted(() => { if (registerDepth) registerDepth(props.depth) })
+onUnmounted(() => { if (unregisterDepth) unregisterDepth(props.depth) })
 
 function openChild(spec) {
   child.value = null
-  nextTick(() => { child.value = spec })
+  nextTick(() => { child.value = { ...spec, component: markRaw(spec.component) } })
+}
+
+function closeChild() {
+  child.value = null
 }
 </script>
 
@@ -120,18 +133,3 @@ function openChild(spec) {
 }
 </style>
 
-<style>
-/* Panel slide transition — unscoped so Vue transition classes apply to root element */
-.panel-slide-enter-active,
-.panel-slide-leave-active {
-  transition: transform 0.25s ease, opacity 0.2s ease;
-}
-.panel-slide-enter-from {
-  transform: translateX(40px);
-  opacity: 0;
-}
-.panel-slide-leave-to {
-  transform: translateX(40px);
-  opacity: 0;
-}
-</style>
