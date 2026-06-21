@@ -18,7 +18,7 @@
           <span class="razmerit-value">{{ entity.razmerit }}</span> razmerit
         </div>
       </div>
-      <div v-if="traitSets.length" class="trait-sets">
+      <div v-if="traitSets.length && !showAddTrait" class="trait-sets">
         <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
           <h4 @click="toggleSet(ts.name)" class="set-header">
             <span class="set-caret">{{ expandedSets.has(ts.name) ? '▾' : '▸' }}</span>
@@ -70,7 +70,24 @@
             </div> <!-- .set-body -->
           </div>
         </div>
-      <div v-else class="empty">No traits configured</div>
+      <div v-else-if="!showAddTrait" class="empty">No traits configured</div>
+      <button v-if="!overrideEntityId && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
+      <!-- 2-phase trait picker -->
+      <div v-if="showAddTrait" class="trait-picker">
+        <template v-if="addPhase === 'sets'">
+          <h4>Pick a trait set</h4>
+          <button v-for="ts in availableTraitSets" :key="ts.id" class="picker-item" @click="selectSet(ts)">{{ ts.name }}</button>
+        </template>
+        <template v-if="addPhase === 'traits'">
+          <button class="picker-back" @click="addPhase = 'sets'">← {{ selectedTraitSet?.name }}</button>
+          <button v-for="t in filteredTraits" :key="t.id" class="picker-item" @click="addTrait(t)">
+            {{ t.name }}
+            <span class="picker-die">{{ t.defaultDieType }}</span>
+          </button>
+          <div v-if="!filteredTraits.length" class="empty">All traits in this set are already assigned</div>
+        </template>
+        <button class="picker-cancel" @click="showAddTrait = false">Cancel</button>
+      </div>
     </template>
     <div v-else class="empty">No entity loaded</div>
   </div>
@@ -78,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import DiePicker from './DiePicker.vue'
 
@@ -141,6 +158,66 @@ const showDiePicker = ref(false)
 const pickIdx = ref(0)
 const pickedDie = ref('')
 let longPressTimer = null
+
+// ── Add trait picker ────────────────────────────
+const showAddTrait = ref(false)
+const addPhase = ref('sets')
+const availableTraitSets = ref([])
+const availableTraits = ref([])
+const selectedTraitSet = ref(null)
+
+const filteredTraits = computed(() => {
+  if (!selectedTraitSet.value) return []
+  const assigned = new Set(
+    traitSets.value.flatMap(ts => ts.traits.map(t => t.traitId || t.id))
+  )
+  return availableTraits.value.filter(t =>
+    t.traitsetId === selectedTraitSet.value.id && !assigned.has(t.id)
+  )
+})
+
+async function openAddTrait() {
+  addPhase.value = 'sets'
+  selectedTraitSet.value = null
+  const [tsData, trData] = await Promise.all([
+    graphql(`query($u: String!) { traitsetsByUniverse(universe: $u) { id name order limit } }`, { u: props.universe }),
+    graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId defaultDieType defaultRatingType } }`, { u: props.universe }),
+  ])
+  if (tsData?.traitsetsByUniverse) {
+    availableTraitSets.value = tsData.traitsetsByUniverse.sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+  }
+  if (trData?.traitsByUniverse) {
+    availableTraits.value = trData.traitsByUniverse
+  }
+  showAddTrait.value = true
+}
+
+function selectSet(ts) {
+  selectedTraitSet.value = ts
+  addPhase.value = 'traits'
+}
+
+async function addTrait(trait) {
+  const result = await graphql(`mutation($eid: ID!, $input: TraitSettingInput!) {
+    addTraitSetting(entityId: $eid, input: $input) { id name traitsetName }
+  }`, {
+    eid: props.entityId,
+    input: {
+      traitId: trait.id,
+      traitsetId: selectedTraitSet.value.id,
+      dice: [(trait.defaultDieType || 'd6').toUpperCase()],
+      ratingType: (trait.defaultRatingType || 'STATIC').toUpperCase(),
+    },
+  })
+  if (!result?.addTraitSetting) {
+    console.error('addTrait failed:', error.value || 'unknown error')
+    return
+  }
+  showAddTrait.value = false
+  addPhase.value = 'sets'
+  selectedTraitSet.value = null
+  fetchEntity()
+}
 
 async function onTraitClick(t) {
   if (props.phase !== 'adding') return
@@ -251,7 +328,7 @@ function sfxActive(sfxId) {
 function sfxUsed(sfxId) {
   if (!sfxAllowedInPhase(sfxId)) return true
   if (sfxActive(sfxId)) return true
-  if (sfxId === 'sfx-spray-n-pray' && !poolSources.value.has('shooting')) return true
+  if (sfxId === 'sfx-spray-n-pray' && !poolSources.value.includes('shooting')) return true
   return false
 }
 
@@ -270,6 +347,7 @@ const QUERY = `
       backgroundImage
       traitSettings {
         id
+        traitId
         name
         traitsetName
         dieType
@@ -299,7 +377,6 @@ async function fetchEntity() {
     // Group trait settings by traitset, filter by universe
     const sets = {}
     for (const ts of data.entity.traitSettings || []) {
-      if (!ts.ego && ts.universe !== props.universe) continue
       const key = ts.traitsetName || 'Other'
       if (!sets[key]) sets[key] = []
       sets[key].push(ts)
@@ -591,6 +668,85 @@ watch(() => props.externalPoolSources, (sources) => {
 .edit-close:hover {
   background: rgba(255,255,255,0.08);
   color: var(--text);
+}
+
+.add-trait-btn {
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px dashed rgba(255,255,255,0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.add-trait-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.trait-picker {
+  margin-top: 8px;
+  padding: 8px 0;
+  max-height: calc(100vh - 320px);
+  overflow-y: auto;
+}
+.trait-picker h4 {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.picker-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.picker-item:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
+}
+.picker-die {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.picker-back {
+  font-size: 12px;
+  padding: 4px 0;
+  margin-bottom: 6px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.picker-cancel {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.picker-cancel:hover {
+  color: var(--text);
+  border-color: rgba(255,255,255,0.15);
 }
 
 .header-top {

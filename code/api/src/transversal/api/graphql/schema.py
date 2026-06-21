@@ -167,8 +167,12 @@ class Mutation:
 
     @strawberry.mutation
     def add_trait_setting(self, info: strawberry.Info, entity_id: strawberry.ID, input: TraitSettingInput) -> TraitSetting:
+        ts_id = f"{entity_id}:{input.trait_id}"
+        existing = _em(info).repo.get_traitsetting(ts_id)
+        if existing:
+            raise ValueError(f"TraitSetting '{ts_id}' already exists")
         ts = DomainTraitSetting(
-            id=f"{entity_id}:{input.trait_id}",
+            id=ts_id,
             entity_id=str(entity_id),
             trait_id=str(input.trait_id),
             traitset_id=str(input.traitset_id),
