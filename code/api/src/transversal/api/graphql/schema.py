@@ -151,6 +151,7 @@ class Query:
                 traitset_id=t.traitset_id, default_die_type=t.default_die_type,
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
+                default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
             )
             for t in traits
@@ -375,6 +376,7 @@ class Mutation:
             default_die_type=input.default_die_type,
             default_rating_type=input.default_rating_type,
             possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
+            default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
         )
         created = _em(info).repo.create_trait(t)
@@ -384,6 +386,7 @@ class Mutation:
             default_die_type=created.default_die_type,
             default_rating_type=created.default_rating_type,
             possible_sfx_ids=created.possible_sfx_ids,
+            default_sfx_ids=created.default_sfx_ids,
             location_restricted=created.location_restricted,
         )
 
@@ -404,6 +407,8 @@ class Mutation:
             existing.default_rating_type = input.default_rating_type
         if input.possible_sfx_ids is not None:
             existing.possible_sfx_ids = [str(s) for s in input.possible_sfx_ids]
+        if input.default_sfx_ids is not None:
+            existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.location_restricted is not None:
             existing.location_restricted = input.location_restricted
         updated = _em(info).repo.update_trait(existing)
@@ -413,6 +418,7 @@ class Mutation:
             default_die_type=updated.default_die_type,
             default_rating_type=updated.default_rating_type,
             possible_sfx_ids=updated.possible_sfx_ids,
+            default_sfx_ids=updated.default_sfx_ids,
             location_restricted=updated.location_restricted,
         )
 

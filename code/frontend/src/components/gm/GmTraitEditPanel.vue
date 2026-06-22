@@ -19,18 +19,20 @@
       </div>
 
       <!-- SFX assignment -->
-      <h4 class="ps-section-title">Available SFXs</h4>
-      <div v-if="allSfxsEffective.length === 0" class="empty">No SFXs defined</div>
-      <div v-else class="checkbox-list">
-        <div v-for="s in allSfxsEffective" :key="s.id" class="checkbox-row" :class="{ checked: form.possibleSfxIds.includes(s.id) }" @click="onSfxClick(s)">
+      <h4 class="ps-section-title">Possible SFXs</h4>
+      <div v-if="possibleSfxs.length === 0" class="empty">No SFXs assigned — add one below</div>
+      <div v-else class="sfx-list">
+        <div v-for="s in possibleSfxs" :key="s.id" class="sfx-row" @click="onSfxClick(s)">
           <label class="checkbox-inner" @click.stop>
-            <input type="checkbox" :value="s.id" v-model="form.possibleSfxIds" />
+            <input type="checkbox" :checked="form.defaultSfxIds.includes(s.id)"
+              @change="toggleDefaultSfx(s.id)" title="Default SFX for this trait" />
           </label>
           <span class="sfx-name">{{ s.name }}</span>
           <span class="sfx-trigger">{{ s.trigger || '' }}</span>
+          <button class="row-del-btn" @click.stop="removePossibleSfx(s.id)" title="Remove from trait">✕</button>
         </div>
       </div>
-      <button class="ps-add-btn" @click="onNewSfx">+ New SFX</button>
+      <button class="ps-add-btn" @click="openSfxPicker">+ Add SFX</button>
 
       <div class="danger-zone">
         <button class="danger-btn" @click="onDelete" :disabled="saving">{{ saving ? 'Deleting…' : 'Delete Trait' }}</button>
@@ -67,6 +69,7 @@ import { reactive, ref, watch, onMounted, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import ChipInput from './ChipInput.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
+import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 
 const { graphql } = useApi()
 
@@ -108,6 +111,7 @@ const form = reactive({
   defaultRatingType: 'STATIC',
   locationRestricted: false,
   possibleSfxIds: [],
+  defaultSfxIds: [],
 })
 
 watch(() => props.trait, (t) => {
@@ -118,11 +122,12 @@ watch(() => props.trait, (t) => {
     form.defaultRatingType = t.defaultRatingType || 'STATIC'
     form.locationRestricted = t.locationRestricted || false
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
+    form.defaultSfxIds = [...(t.defaultSfxIds || [])]
   }
 }, { immediate: true })
 
 let saveTimer = null
-watch([() => form.name, () => [...form.universes], () => form.defaultDieType, () => form.defaultRatingType, () => form.locationRestricted, () => [...form.possibleSfxIds]], () => {
+watch([() => form.name, () => [...form.universes], () => form.defaultDieType, () => form.defaultRatingType, () => form.locationRestricted, () => [...form.possibleSfxIds], () => [...form.defaultSfxIds]], () => {
   if (!props.trait) return
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => save(), 600)
@@ -132,13 +137,14 @@ async function save() {
   if (!props.trait?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: props.trait.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, possibleSfxIds: form.possibleSfxIds } }
-  )
-  if (props.onPatch) props.onPatch('traits', props.trait.id, {
-    name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
-    defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted,
-    possibleSfxIds: [...form.possibleSfxIds],
-  })
+    { id: props.trait.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
+    )
+    if (props.onPatch) props.onPatch('traits', props.trait.id, {
+      name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
+      defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted,
+      possibleSfxIds: [...form.possibleSfxIds],
+      defaultSfxIds: [...form.defaultSfxIds],
+    })
 }
 
 // ── Create mode ──
@@ -157,6 +163,49 @@ async function onCreate() {
   } finally { saving.value = false }
 }
 
+// ── Possible SFXs (filtered from all) ──
+const possibleSfxs = computed(() =>
+  allSfxsEffective.value.filter(s => form.possibleSfxIds.includes(s.id))
+)
+
+function removePossibleSfx(id) {
+  form.possibleSfxIds = form.possibleSfxIds.filter(sid => sid !== id)
+  form.defaultSfxIds = form.defaultSfxIds.filter(sid => sid !== id)
+}
+
+function toggleDefaultSfx(id) {
+  if (form.defaultSfxIds.includes(id)) {
+    form.defaultSfxIds = form.defaultSfxIds.filter(sid => sid !== id)
+  } else {
+    form.defaultSfxIds.push(id)
+  }
+}
+
+function openSfxPicker() {
+  if (props.open) {
+    props.open({
+      component: GmSfxPickerPanel,
+      title: 'Add SFX to Trait',
+      props: {
+        allSfxs: allSfxsEffective.value,
+        selectedIds: [...form.possibleSfxIds],
+        onRefresh: props.onRefresh,
+        onPatch: props.onPatch,
+      },
+      listeners: {
+        'add-sfx': (id) => {
+          if (!form.possibleSfxIds.includes(id)) {
+            form.possibleSfxIds.push(id)
+          }
+        },
+        'remove-sfx': (id) => {
+          form.possibleSfxIds = form.possibleSfxIds.filter(sid => sid !== id)
+        },
+      },
+    })
+  }
+}
+
 // ── SFX navigation ──
 function onSfxClick(sfx) {
   if (props.open) {
@@ -171,21 +220,6 @@ function onSfxClick(sfx) {
         },
         'sfx-deleted': (id) => {
           localSfxs.value = localSfxs.value.filter(s => s.id !== id)
-        },
-      },
-    })
-  }
-}
-
-function onNewSfx() {
-  if (props.open) {
-    props.open({
-      component: GmSfxEditPanel,
-      title: 'New SFX',
-      props: { sfx: null, onRefresh: props.onRefresh, onPatch: props.onPatch },
-      listeners: {
-        'sfx-created': (created) => {
-          localSfxs.value.push(created)
         },
       },
     })
@@ -209,14 +243,15 @@ async function onDelete() {
 .checkbox-label input { width: auto; }
 .ps-section-title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
 
-.checkbox-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
-.checkbox-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; }
-.checkbox-row:hover { background: rgba(255,255,255,0.04); }
-.checkbox-row.checked { background: rgba(64,136,212,0.08); }
-.checkbox-inner { display: inline-flex; align-items: center; cursor: pointer; }
-.checkbox-row input { width: auto; margin: 0; }
-.sfx-name { flex: 1; }
+.sfx-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.sfx-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; background: rgba(255,255,255,0.04); }
+.sfx-row:hover { background: rgba(255,255,255,0.08); }
+.sfx-name { flex: 1; font-weight: 500; }
+.checkbox-inner { display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+.checkbox-inner input { width: auto; margin: 0; cursor: pointer; }
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }
+.row-del-btn { font-size: 12px; padding: 2px 6px; background: none; color: var(--text-dim); border: none; cursor: pointer; border-radius: 3px; }
+.row-del-btn:hover { color: var(--danger); background: rgba(212,64,64,0.12); }
 
 .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 .ps-add-btn { font-size: 12px; padding: 6px; margin-top: 8px; background: var(--accent-dim); color: var(--text); border-radius: 6px; border: none; cursor: pointer; width: 100%; }

@@ -51,7 +51,8 @@ const totalPanels = computed(() => {
   for (const [, n] of depthCounts) sum += n
   return sum
 })
-const maxVisiblePanels = computed(() => Math.floor((viewportWidth.value - 36) / PANEL_EST_WIDTH))
+// Minimum 1 so the root panel is always visible, even on very narrow screens
+const maxVisiblePanels = computed(() => Math.max(1, Math.floor((viewportWidth.value - 36) / PANEL_EST_WIDTH)))
 const minVisibleDepth = computed(() => Math.max(0, totalPanels.value - maxVisiblePanels.value))
 
 function onResize() {
@@ -94,11 +95,4 @@ onUnmounted(() => {
   pointer-events: auto;
 }
 
-@media (max-width: 720px) {
-  .gm-toggle { right: 8px; }
-  .panel-stack {
-    right: 8px;
-    max-width: calc(100vw - 8px);
-  }
-}
 </style>

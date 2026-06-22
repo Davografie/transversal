@@ -114,12 +114,10 @@ function closeChild() {
 }
 .panel-close:hover { background: rgba(255,255,255,0.1); }
 
-/* Nested panel covers parent on mobile */
+/* Nested panel sits beside parent in the flex row */
 .nested {
-  position: absolute; inset: 0; z-index: 2;
-}
-.nested .panel {
-  border-radius: 0; border: none; max-width: none;
+  position: relative;
+  margin-left: 8px;
 }
 
 .panel-header {
@@ -138,17 +136,5 @@ function closeChild() {
   flex: 1; overflow-y: auto; padding: 10px;
 }
 
-/* Desktop: nested panels slide in beside parent */
-@media (min-width: 721px) {
-  .nested {
-    position: relative;
-    margin-left: 8px;
-  }
-  .nested .panel {
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 8px;
-    max-width: 380px;
-  }
-}
 </style>
 

@@ -36,6 +36,7 @@ class TraitRef:
     default_die_type: DieType
     default_rating_type: RatingType
     possible_sfx_ids: list[strawberry.ID]
+    default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
 
 
@@ -159,6 +160,7 @@ class TraitInput:
     default_die_type: DieType = DieType.D6
     default_rating_type: RatingType = RatingType.STATIC
     possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+    default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
 
 
@@ -170,6 +172,7 @@ class TraitUpdateInput:
     default_die_type: Optional[DieType] = None
     default_rating_type: Optional[RatingType] = None
     possible_sfx_ids: Optional[list[strawberry.ID]] = None
+    default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
 
 

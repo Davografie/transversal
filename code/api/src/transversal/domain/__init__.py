@@ -223,6 +223,7 @@ class Trait(BaseModel):
     required_trait_ids: list[str] = Field(default_factory=list)
     possible_subtrait_ids: list[str] = Field(default_factory=list)
     possible_sfx_ids: list[str] = Field(default_factory=list)
+    default_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False
     explanation: str = ""
     random_weight: int = 0
