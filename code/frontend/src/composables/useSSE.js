@@ -10,16 +10,23 @@ export function useSSE(sessionId, entityId) {
     disconnect()
     const sid = isRef(sessionId) ? sessionId.value : sessionId
     const eid = isRef(entityId) ? entityId.value : entityId
-    if (!sid || !eid || sid === 'session-default') return
+    console.log('[SSE] connect() called — sid:', sid, 'eid:', eid, 'isDefault:', sid === 'session-default')
+    if (!sid || !eid || sid === 'session-default') {
+      console.log('[SSE] connect() skipped — guard blocked (session-default or missing id)')
+      return
+    }
 
     const url = `/api/v1/stream?session_id=${sid}&entity_id=${eid}`
+    console.log('[SSE] creating EventSource →', url)
     source = new EventSource(url)
 
     source.onopen = () => {
+      console.log('[SSE] onopen — connected!')
       connected.value = true
       error.value = null
     }
     source.onerror = (e) => {
+      console.log('[SSE] onerror — connection failed. readyState:', source?.readyState)
       connected.value = false
       error.value = 'SSE connection failed'
     }

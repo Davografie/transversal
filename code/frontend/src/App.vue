@@ -468,15 +468,29 @@ function confirmPlayer() {
 ensurePlayer()
 
 // Session management
-const { sessions, currentSession, listSessions, joinSession, publishEvent } = useSessions()
+const { sessions, currentSession, listSessions, createSession, joinSession, publishEvent } = useSessions()
 const sessionId = ref('session-default')
 
 async function initSession() {
+  console.log('[initSession] listing sessions...')
   await listSessions()
+  console.log('[initSession] sessions found:', sessions.value.length, sessions.value.map(s => s.id))
   if (sessions.value.length > 0) {
     const s = sessions.value[0]
+    console.log('[initSession] joining session:', s.id, 'entity:', entityId.value, 'player:', playerId.value)
     sessionId.value = s.id
     await joinSession(s.id, entityId.value, playerId.value)
+    console.log('[initSession] joined, sessionId now:', sessionId.value)
+  } else {
+    console.log('[initSession] NO sessions found — creating default session')
+    const s = await createSession('Default Session', 'earth')
+    if (s) {
+      sessionId.value = s.id
+      await joinSession(s.id, entityId.value, playerId.value)
+      console.log('[initSession] created and joined session:', sessionId.value)
+    } else {
+      console.log('[initSession] FAILED to create session — SSE will not connect')
+    }
   }
 }
 initSession()
