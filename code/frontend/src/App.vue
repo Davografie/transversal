@@ -1,5 +1,5 @@
 <template>
-  <div v-if="gmMode" class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
+  <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
@@ -148,6 +148,7 @@
     :remote-pools="remotePools"
     :remote-results="remoteResults"
     @moved="onMoved"
+    @inspect-entity="(id) => { viewingEntityId = id; forceSheet = true; sheetVisible = true }"
   />
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">

@@ -130,6 +130,8 @@
       :expanded="true"
       :draggable="true"
       title="Drag to explore"
+      @click="onSelfClick()"
+      @overlay-click="onSelfClick()"
       @drag-start="(e) => onSelfDragStart(e)"
     />
     <PoolDiceRing
@@ -175,7 +177,7 @@ const props = defineProps({
   remoteResults: { type: Object, default: () => ({}) },  // entity_id → { total, effect_die, rolls, ... }
 })
 
-const emit = defineEmits(['moved', 'update:editZones'])
+const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity'])
 
 const currentImage = ref('')
 const nav = ref({})
@@ -362,6 +364,13 @@ function onSelfDragStart(e) {
   if (idx === -1) return
   onOccupantDragStart(e, occupants.value[idx], idx)
 }
+
+function onSelfClick() {
+  if (selfDragging) { selfDragging = false; return }
+  emit('inspectEntity', props.entityId)
+}
+
+let selfDragging = false
 
 function parallaxOffset() {
   const self = occupants.value.find(o => o.id === props.entityId)
@@ -691,6 +700,7 @@ function onOccDragMove(e) {
 
   // Track nearest target — all positions now image-relative
   if (occ && occ.id === props.entityId) {
+    selfDragging = true
     const px = occ.map_x, py = occ.map_y
     let nearest = null, nearestDist = 12
     for (const z of zones.value) {
@@ -913,6 +923,7 @@ function onDotClick(type, item) {
   activeElement.value = type === 'zone' ? { type: 'zone', name: item.name }
     : type === 'nav' ? { type: 'nav', key: item.key }
     : { type: 'occupant', id: item.id }
+  if (type === 'occupant') emit('inspectEntity', item.id)
 }
 
 async function travelWithAnimation(zone, child, imageUrl = null) {
@@ -1055,6 +1066,8 @@ function onExpandedClick(type, item) {
     const fakeZone = { x: item.x, y: item.y }
     const fakeChild = { _key: item.target.id, current_universe: item.target.universe }
     travelWithAnimation(fakeZone, fakeChild, item.image)
+  } else if (type === 'occupant') {
+    emit('inspectEntity', item.id)
   } else {
     activeElement.value = null
   }

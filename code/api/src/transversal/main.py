@@ -98,12 +98,8 @@ async def on_startup():
     for s in db_sfxs:
         engine.register(s)
 
-    # Ensure a default session exists for SSE connectivity
-    from transversal.services.session_manager import session_manager
-    if not session_manager.list_active():
-        s = session_manager.create(name="Default Session", gm_id="gm", universe="earth")
-        s = session_manager.join(s.id, "kael-1")
-        s = session_manager.join(s.id, "elena-1")
+    # Default session creation is disabled — IDs are no longer hardcoded.
+    # Sessions are created on-demand via the API by the frontend.
 
 
 # ── Routers ──────────────────────────────────────────
