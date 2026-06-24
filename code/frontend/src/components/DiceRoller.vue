@@ -383,39 +383,131 @@ function onSlotDrop(type, slotIndex, e) {
 
 // ── Auto-assign ────────────────────────────────────
 
+const dieRank = { d4: 1, d6: 2, d8: 3, d10: 4, d12: 5 }
+
+/** Generate all combinations of size k from array arr. */
+function* combinations(arr, k) {
+  if (k === 0) { yield []; return }
+  for (let i = 0; i <= arr.length - k; i++) {
+    for (const tail of combinations(arr.slice(i + 1), k - 1)) {
+      yield [arr[i], ...tail]
+    }
+  }
+}
+
+/** Score an effect combo: (die rank sum, negative sum of results) — higher is better.
+ *  Ties on die type go to the combo whose effect dice have lower results
+ *  (so higher results stay in the total). */
+function effectScore(effectIndices, rolls) {
+  let rankSum = 0, negResultSum = 0
+  for (const i of effectIndices) {
+    rankSum += dieRank[rolls[i].die] || 0
+    negResultSum -= rolls[i].result
+  }
+  return [rankSum, negResultSum]
+}
+
+/**
+ * Best Total: maximize total first, then maximize effect quality.
+ * Among all combos achieving the same max total, pick the one
+ * whose effect dice are largest (and within same type, the lower-rolling ones
+ * so better results stay in the total).
+ */
 function assignBestTotal() {
   if (!result.value || result.value.pipeline !== 'pool') return
   clearAllSlots()
   const r = result.value.rolls
   const valid = r.map((roll, i) => isHitch(i) ? -1 : i).filter(i => i !== -1)
-  const sorted = [...valid].sort((a, b) => r[b].result - r[a].result)
-  for (let i = 0; i < props.keepCount; i++) {
-    if (i < sorted.length) selection.total[i] = sorted[i]
+  const K = Math.min(props.keepCount, valid.length)
+  const E = Math.min(props.effectCount, valid.length - K)
+  if (K === 0) return
+
+  let bestTotal = -1
+  let bestEffScore = null
+  let bestTotalCombo = null
+  let bestEffCombo = null
+
+  for (const totalCombo of combinations(valid, K)) {
+    const total = totalCombo.reduce((s, i) => s + r[i].result, 0)
+    const used = new Set(totalCombo)
+    const remaining = valid.filter(i => !used.has(i))
+    if (E === 0) {
+      if (total > bestTotal) {
+        bestTotal = total; bestTotalCombo = totalCombo; bestEffCombo = []
+      }
+      continue
+    }
+    for (const effCombo of combinations(remaining, E)) {
+      const effSc = effectScore(effCombo, r)
+      const cmp = total !== bestTotal ? total - bestTotal
+        : bestEffScore ? (effSc[0] !== bestEffScore[0] ? effSc[0] - bestEffScore[0] : effSc[1] - bestEffScore[1])
+        : 1
+      if (cmp > 0 || bestTotal === -1) {
+        bestTotal = total
+        bestEffScore = effSc
+        bestTotalCombo = totalCombo
+        bestEffCombo = effCombo
+      }
+    }
   }
-  const used = new Set(selection.total.filter(i => i !== null))
-  const unused = valid.filter(i => !used.has(i))
-  const dieSize = { d4: 1, d6: 2, d8: 3, d10: 4, d12: 5 }
-  const byDie = [...unused].sort((a, b) => (dieSize[r[b].die] || 0) - (dieSize[r[a].die] || 0))
-  for (let i = 0; i < props.effectCount; i++) {
-    if (i < byDie.length) selection.effect[i] = byDie[i]
+
+  // Single-effect: re-sort by die type desc, result asc for the case
+  // where we already have best total, just need best single effect
+  if (E > 0 && bestTotalCombo) {
+    for (let i = 0; i < bestTotalCombo.length; i++) selection.total[i] = bestTotalCombo[i]
+    for (let i = 0; i < bestEffCombo.length; i++) selection.effect[i] = bestEffCombo[i]
+  } else if (bestTotalCombo) {
+    for (let i = 0; i < bestTotalCombo.length; i++) selection.total[i] = bestTotalCombo[i]
   }
 }
 
+/**
+ * Best Effect: maximize effect quality first, then maximize total.
+ * Prefers largest die types for effect; within same type, prefers
+ * the lower-rolling die so better results stay in the total.
+ */
 function assignBestEffect() {
   if (!result.value || result.value.pipeline !== 'pool') return
   clearAllSlots()
   const r = result.value.rolls
   const valid = r.map((roll, i) => isHitch(i) ? -1 : i).filter(i => i !== -1)
-  const dieSize = { d4: 1, d6: 2, d8: 3, d10: 4, d12: 5 }
-  const byDie = [...valid].sort((a, b) => (dieSize[r[b].die] || 0) - (dieSize[r[a].die] || 0))
-  for (let i = 0; i < props.effectCount; i++) {
-    if (i < byDie.length) selection.effect[i] = byDie[i]
+  const E = Math.min(props.effectCount, valid.length)
+  const K = Math.min(props.keepCount, valid.length - E)
+  if (E === 0) return
+
+  let bestEffScore = null
+  let bestTotal = -1
+  let bestEffCombo = null
+  let bestTotalCombo = null
+
+  for (const effCombo of combinations(valid, E)) {
+    const effSc = effectScore(effCombo, r)
+    const used = new Set(effCombo)
+    const remaining = valid.filter(i => !used.has(i))
+    if (K === 0) {
+      if (!bestEffScore || effSc[0] > bestEffScore[0] || (effSc[0] === bestEffScore[0] && effSc[1] > bestEffScore[1])) {
+        bestEffScore = effSc; bestEffCombo = effCombo; bestTotalCombo = []
+      }
+      continue
+    }
+    for (const totalCombo of combinations(remaining, K)) {
+      const total = totalCombo.reduce((s, i) => s + r[i].result, 0)
+      const cmp = !bestEffScore ? 1
+        : effSc[0] !== bestEffScore[0] ? effSc[0] - bestEffScore[0]
+        : effSc[1] !== bestEffScore[1] ? effSc[1] - bestEffScore[1]
+        : total - bestTotal
+      if (cmp > 0) {
+        bestEffScore = effSc
+        bestTotal = total
+        bestEffCombo = effCombo
+        bestTotalCombo = totalCombo
+      }
+    }
   }
-  const used = new Set(selection.effect.filter(i => i !== null))
-  const unused = valid.filter(i => !used.has(i))
-  const byResult = [...unused].sort((a, b) => r[b].result - r[a].result)
-  for (let i = 0; i < props.keepCount; i++) {
-    if (i < byResult.length) selection.total[i] = byResult[i]
+
+  if (bestEffCombo) {
+    for (let i = 0; i < bestEffCombo.length; i++) selection.effect[i] = bestEffCombo[i]
+    for (let i = 0; i < bestTotalCombo.length; i++) selection.total[i] = bestTotalCombo[i]
   }
 }
 
