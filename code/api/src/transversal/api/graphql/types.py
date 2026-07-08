@@ -25,6 +25,24 @@ EffectPolarity = strawberry.enum(DomainEffectPolarity)
 EffectTimingEnum = strawberry.enum(DomainEffectTiming)
 
 
+# ── Trait Display Name ───────────────────────────────
+
+@strawberry.type
+class TraitDisplayName:
+    """Dynamic display name for a trait, keyed by universe and rating."""
+    name: str
+    universe: str
+    ratings: list[list[DieType]]
+
+
+@strawberry.input
+class TraitDisplayNameInput:
+    """Input for a trait display name entry."""
+    name: str
+    universe: str = ""
+    ratings: list[list[DieType]] = strawberry.field(default_factory=list)
+
+
 # ── Trait Registry ───────────────────────────────────
 
 @strawberry.type
@@ -38,6 +56,7 @@ class TraitRef:
     possible_sfx_ids: list[strawberry.ID]
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
+    display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
 
 @strawberry.type
@@ -61,6 +80,11 @@ class TraitSetRef:
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
                 location_restricted=t.location_restricted,
+                display_names=[
+                    TraitDisplayName(name=dn.name, universe=dn.universe,
+                                     ratings=dn.ratings)
+                    for dn in t.display_names
+                ],
             )
             for t in traits
         ]
@@ -162,6 +186,7 @@ class TraitInput:
     possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
+    display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
@@ -174,6 +199,7 @@ class TraitUpdateInput:
     possible_sfx_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
+    display_names: Optional[list[TraitDisplayNameInput]] = None
 
 
 # ── Trait Setting (edge) ─────────────────────────────
@@ -208,10 +234,15 @@ class TraitSetting:
 
     @strawberry.field
     def name(self, info: strawberry.Info) -> str:
-        from transversal.services.entity_manager import EntityManager
+        """Resolved display name — dynamic per-universe/per-rating if configured."""
+        from transversal.domain import resolve_trait_display_name
         em = info.context["entity_manager"]
         trait = em.repo.get_trait(self.trait_id)
-        return trait.name if trait else ""
+        if not trait:
+            return ""
+        entity = em.repo.get_entity(self.entity_id)
+        universe = entity.current_universe if entity else ""
+        return resolve_trait_display_name(trait, self.dice, universe)
 
     @strawberry.field
     def traitset_name(self, info: strawberry.Info) -> str:

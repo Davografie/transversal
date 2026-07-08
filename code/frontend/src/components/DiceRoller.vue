@@ -17,19 +17,6 @@
       </button>
     </div>
 
-    <div class="controls" v-if="isAdding() || isPicking()">
-      <button v-if="isAdding()" @click="doRoll" :disabled="loading || pool.length === 0" class="roll-btn">
-        {{ loading ? 'Rolling…' : 'Roll' }}
-      </button>
-      <button v-if="isPicking()" @click="commitPicks" class="roll-btn commit-btn">
-        Done
-      </button>
-    </div>
-
-    <div class="controls" v-if="isResolved()">
-      <button @click="clearResult" class="roll-btn">New Pool</button>
-    </div>
-
     <div v-if="result" class="result panel">
       <!-- Simplified result -->
       <template v-if="result.pipeline === 'simplified'">
@@ -104,6 +91,19 @@
       </div>
     </div>
 
+    <div class="controls" v-if="isAdding() || isPicking()">
+      <button v-if="isAdding()" @click="doRoll" :disabled="loading || pool.length === 0" class="roll-btn">
+        {{ loading ? 'Rolling…' : 'Roll' }}
+      </button>
+      <button v-if="isPicking()" @click="commitPicks" class="roll-btn commit-btn">
+        Done
+      </button>
+    </div>
+
+    <div class="controls" v-if="isResolved()">
+      <button @click="clearResult" class="roll-btn">New Pool</button>
+    </div>
+
     <div v-if="error" class="error">{{ error }}</div>
   </div>
 </template>
@@ -176,7 +176,7 @@ function setUniverse(u) {
 }
 
 function notifyPool() {
-  emit('poolChange', pool.map(d => ({ die: d.die, label: d.label || d.source || d.die })).filter(d => d.label))
+  emit('poolChange', pool.map(d => ({ die: d.die, label: d.label || d.source || d.die, tsId: d.tsId })).filter(d => d.label))
 }
 
 function addDie(die) {
@@ -545,6 +545,7 @@ async function doRoll() {
   const dice = pool.map(d => [d.die, d.source])
   result.value = await apiRoll(props.entityId, props.universe, dice)
   pool.length = 0
+  notifyPool()
   if (result.value?.pipeline === 'pool') {
     setPhase(Phase.PICKING)
     ensureSlots()

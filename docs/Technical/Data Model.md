@@ -297,6 +297,30 @@ Sub-area within a location, embedded in `entities.zones`.
 | `y` | float | Percentage Y position on background image (0–100, default `50`) |
 | `background_image` | string? | Optional zone-specific image |
 
+
+### TraitDisplayName
+
+Dynamic display name for a trait.  When an entity's dice rating matches a
+``ratings`` entry in the matching ``universe``, this name replaces the trait's
+base ``name`` in the UI.  First match wins; fallback is the base name.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name (e.g. `Dao Sliver`, `Divine Consciousness`) |
+| `universe` | string | Universe key (e.g. `earth`, `three_realms`) or `*` for any |
+| `ratings` | DieType[][] | Dice-combination alternatives that trigger this name (order-independent) |
+### TraitDisplayName
+
+Dynamic display name for a trait.  When an entity's dice rating matches a
+``ratings`` entry in the matching ``universe``, this name replaces the trait's
+base ``name`` in the UI.  First match wins; fallback is the base name.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name (e.g. `Dao Sliver`, `Divine Consciousness`) |
+| `universe` | string | Universe key (e.g. `earth`, `three_realms`) or `*` for any |
+| `ratings` | DieType[][] | Dice-combination alternatives that trigger this name (order-independent) |
+
 ### Die Roll Models
 
 | Model | Purpose |

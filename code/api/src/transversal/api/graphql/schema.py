@@ -16,6 +16,7 @@ from transversal.api.graphql.types import (
     SfxEffect as GqlSfxEffect,
     SfxInput,
     SfxRef,
+    TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
     TraitInput,
     TraitRef,
@@ -31,6 +32,7 @@ from transversal.api.graphql.types import (
 from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
 from transversal.domain import TraitSetting as DomainTraitSetting
+from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import dice_list_to_rating
 from transversal.services.entity_manager import EntityManager
 from transversal.services.razmerit import RazmeritService
@@ -153,6 +155,11 @@ class Query:
                 possible_sfx_ids=t.possible_sfx_ids,
                 default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
+                display_names=[
+                    GqlTraitDisplayName(name=dn.name, universe=dn.universe,
+                                        ratings=dn.ratings)
+                    for dn in t.display_names
+                ],
             )
             for t in traits
         ]
@@ -378,6 +385,11 @@ class Mutation:
             possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
+            display_names=[
+                DomainTraitDisplayName(name=dn.name, universe=dn.universe,
+                                       ratings=dn.ratings)
+                for dn in input.display_names
+            ],
         )
         created = _em(info).repo.create_trait(t)
         return TraitRef(
@@ -388,6 +400,11 @@ class Mutation:
             possible_sfx_ids=created.possible_sfx_ids,
             default_sfx_ids=created.default_sfx_ids,
             location_restricted=created.location_restricted,
+            display_names=[
+                GqlTraitDisplayName(name=dn.name, universe=dn.universe,
+                                    ratings=dn.ratings)
+                for dn in created.display_names
+            ],
         )
 
     @strawberry.mutation
@@ -411,6 +428,12 @@ class Mutation:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.location_restricted is not None:
             existing.location_restricted = input.location_restricted
+        if input.display_names is not None:
+            existing.display_names = [
+                DomainTraitDisplayName(name=dn.name, universe=dn.universe,
+                                       ratings=dn.ratings)
+                for dn in input.display_names
+            ]
         updated = _em(info).repo.update_trait(existing)
         return TraitRef(
             id=updated.id, name=updated.name, universes=updated.universes,
@@ -420,6 +443,11 @@ class Mutation:
             possible_sfx_ids=updated.possible_sfx_ids,
             default_sfx_ids=updated.default_sfx_ids,
             location_restricted=updated.location_restricted,
+            display_names=[
+                GqlTraitDisplayName(name=dn.name, universe=dn.universe,
+                                    ratings=dn.ratings)
+                for dn in updated.display_names
+            ],
         )
 
     @strawberry.mutation

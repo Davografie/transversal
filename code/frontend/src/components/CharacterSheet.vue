@@ -93,7 +93,7 @@
             {{ t.name }}
             <span class="picker-die">{{ t.defaultDieType }}</span>
           </button>
-          <div v-if="!filteredTraits.length" class="empty">All traits in this set are already assigned</div>
+          <div v-if="!filteredTraits.length" class="empty">{{ emptySetMessage }}</div>
         </template>
         <button class="picker-cancel" @click="showAddTrait = false">Cancel</button>
       </div>
@@ -186,15 +186,29 @@ const filteredTraits = computed(() => {
   )
 })
 
+const totalInSet = computed(() => {
+  if (!selectedTraitSet.value) return 0
+  return availableTraits.value.filter(t => t.traitsetId === selectedTraitSet.value.id).length
+})
+
+const emptySetMessage = computed(() => {
+  if (!selectedTraitSet.value) return ''
+  if (totalInSet.value === 0) return 'No traits available in this set'
+  return 'All traits in this set are already assigned'
+})
+
 async function openAddTrait() {
   addPhase.value = 'sets'
   selectedTraitSet.value = null
   const [tsData, trData] = await Promise.all([
-    graphql(`query($u: String!) { traitsetsByUniverse(universe: $u) { id name order limit } }`, { u: props.universe }),
+    graphql(`query($u: String!) { traitsetsByUniverse(universe: $u) { id name order limit entityTypes } }`, { u: props.universe }),
     graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId defaultDieType defaultRatingType } }`, { u: props.universe }),
   ])
+  const etype = entity.value?.type || ''
   if (tsData?.traitsetsByUniverse) {
-    availableTraitSets.value = tsData.traitsetsByUniverse.sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+    availableTraitSets.value = tsData.traitsetsByUniverse
+      .filter(ts => !ts.entityTypes || ts.entityTypes.length === 0 || ts.entityTypes.includes(etype))
+      .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
   }
   if (trData?.traitsByUniverse) {
     availableTraits.value = trData.traitsByUniverse
@@ -280,7 +294,7 @@ function isResourceDepleted(t) {
 }
 
 function isInPool(t) {
-  return poolSources.value.includes(displayName(t.name))
+  return poolSources.value.includes(t.id)
 }
 
 function isKnown(t) {
@@ -300,8 +314,8 @@ function sfxAllowedInPhase(sfxId) {
 
 // Pool state tracking — called by DiceRoller via App
 function setPoolSources(sources) {
-  // sources is now [{ die, label }, ...] — extract labels
-  poolSources.value = sources.map(s => s.label || s).filter(Boolean)
+  // sources is now [{ die, label, tsId }, ...] — track by tsId
+  poolSources.value = sources.map(s => s.tsId).filter(Boolean)
 
   // Auto-recover resource dice that were removed from the pool
   // (e.g. via chip click in DiceRoller).  Only during adding phase —
@@ -313,7 +327,7 @@ function setPoolSources(sources) {
     let found = false
     for (const ts of traitSets.value) {
       for (const t of ts.traits) {
-        if (t.id === tsId && poolSources.value.includes(displayName(t.name))) {
+        if (t.id === tsId && poolSources.value.includes(t.id)) {
           found = true
           break
         }
@@ -350,6 +364,7 @@ function resetSfxCounts() {
 const QUERY = `
   query($id: ID!) {
     entity(id: $id) {
+      type
       name
       razmerit
       currentUniverse

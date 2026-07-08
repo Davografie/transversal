@@ -208,6 +208,30 @@ class SubTraitRef(BaseModel):
     name: str
     die_type: DieType
 
+class TraitDisplayName(BaseModel):
+    """Dynamic display name for a trait, keyed by universe and rating.
+
+    When an entity's dice rating matches one of the ``ratings`` entries in
+    the matching ``universe``, this display name is used instead of the
+    trait's base name.
+
+    ``ratings`` is a list of dice-combination alternatives.  Each entry is
+    itself a list of DieType values.  For example::
+
+        [
+          TraitDisplayName(name="dao sliver", universe="three_realms",
+                           ratings=[[DieType.D4]]),
+          TraitDisplayName(name="law of the dao", universe="three_realms",
+                           ratings=[[DieType.D12], [DieType.D10, DieType.D10]]),
+        ]
+
+    The first entry whose ``ratings`` list contains the entity's exact dice
+    set (in any order) wins.  If no display name matches, the trait's base
+    ``name`` is used.
+    """
+    name: str
+    universe: str
+    ratings: list[list[DieType]] = Field(default_factory=list)
 
 class Trait(BaseModel):
     """Registry entry — defines a trait that can exist in a universe.
@@ -227,6 +251,7 @@ class Trait(BaseModel):
     location_restricted: bool = False
     explanation: str = ""
     random_weight: int = 0
+    display_names: list[TraitDisplayName] = Field(default_factory=list)
 
 
 class TraitSet(BaseModel):
@@ -266,6 +291,31 @@ def dice_list_to_rating(dice: list[DieType]) -> str:
         n = counts[die]
         parts.append(die.value if n == 1 else f"{n}{die.value}")
     return " + ".join(parts)
+
+def resolve_trait_display_name(
+    trait: "Trait", dice: list[DieType], universe: str
+) -> str:
+    """Resolve the dynamic display name for a trait given an entity's dice
+    and current universe.
+
+    Returns the first matching ``TraitDisplayName.name`` whose ``universe``
+    matches (or is ``"*"``) and whose ``ratings`` contains the entity's
+    exact dice combination (order-independent).  If no match is found,
+    returns ``trait.name``.
+
+    When ``dice`` is empty, returns ``trait.name`` immediately.
+    """
+    if not trait.display_names or not dice:
+        return trait.name
+    sorted_dice = sorted(die.value for die in dice)
+    for dn in trait.display_names:
+        if dn.universe != universe and dn.universe != "*":
+            continue
+        for rating in dn.ratings:
+            if sorted(r.value for r in rating) == sorted_dice:
+                return dn.name
+    return trait.name
+
 
 
 # ── Per-Entity: Trait Settings ─────────────────────────

@@ -187,7 +187,7 @@ async function fetchEntities() { const data = await graphql(ALL_ENTITIES, { type
 async function fetchTraitsConfig() {
   traitsLoading.value = true
   const [ts, sf] = await Promise.all([
-    graphql(`query { traitsets { id name universes entityTypes order limit traits { id name defaultDieType traitsetId universes possibleSfxIds } } }`),
+    graphql(`query { traitsets { id name universes entityTypes order limit traits { id name defaultDieType traitsetId universes possibleSfxIds displayNames { name universe ratings } } } }`),
     graphql(`query { sfxs { id name description trigger limit effects { polarity timing type action target result } } }`),
   ])
   if (ts?.traitsets) traitsets.value = ts.traitsets
