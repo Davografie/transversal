@@ -99,6 +99,17 @@ class ComfyUIClient:
                         "type": images[0].get("type", "output"),
                         "node_id": node_id,
                     }
+            # Fallback: some nodes (WAS Image Save) report empty images
+            # but the prompt is complete — signal completion so caller can
+            # find the file by its known output path
+            if outputs:
+                return {
+                    "filename": "",
+                    "subfolder": "",
+                    "type": "output",
+                    "node_id": "",
+                    "completed": True,
+                }
             await asyncio.sleep(poll_interval)
 
         raise TimeoutError(f"ComfyUI generation timed out after {timeout_secs}s (prompt_id={prompt_id})")
@@ -129,7 +140,7 @@ class ComfyUIClient:
     async def free_memory(self) -> None:
         """POST /free to unload models from VRAM."""
         async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self.base_url}/free") as resp:
+            async with session.post(f"{self.base_url}/free", json={}) as resp:
                 pass  # best-effort
 
 

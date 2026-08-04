@@ -5,7 +5,7 @@ echo "=== Transversal2 Imagen Container ==="
 echo "Starting Ollama..."
 
 # Start Ollama in background
-ollama serve &
+OLLAMA_HOST=0.0.0.0 ollama serve &
 OLLAMA_PID=$!
 
 # Wait for Ollama to be ready
@@ -18,12 +18,17 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
-# Pull vision model if not present
-echo "Checking vision model..."
-if ! ollama list 2>/dev/null | grep -q "gemma3:12b"; then
-    echo "Pulling gemma3:12b (this may take a while)..."
-    ollama pull gemma3:12b
-fi
+# Pull vision model in background (don't block ComfyUI startup)
+(
+    echo "Checking vision model..."
+    if ! ollama list 2>/dev/null | grep -q "gemma3:12b"; then
+        echo "Pulling gemma3:12b in background (this may take a while)..."
+        ollama pull gemma3:12b
+        echo "gemma3:12b pull complete."
+    else
+        echo "gemma3:12b already present."
+    fi
+) &
 
 echo "=== Starting ComfyUI ==="
 # Start ComfyUI (blocking)

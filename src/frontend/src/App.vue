@@ -1,0 +1,1063 @@
+<template>
+  <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
+  <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
+  <!-- Login / Settings overlay -->
+  <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
+    <!-- Fresh login: no identity yet -->
+    <template v-if="!playerId">
+      <h3>Who are you?</h3>
+      <p class="name-hint">Your name is your recovery key — use the same name on any device.</p>
+      <div class="search-wrapper">
+        <input
+          v-model="playerName"
+          placeholder="Your name"
+          @keyup.enter="onNameEnter"
+          autofocus
+          :disabled="checking"
+        />
+        <!-- Search results dropdown -->
+        <div v-if="nameSuggestions.length || showLoginCreate" class="name-suggestions">
+          <button
+            v-for="s in nameSuggestions" :key="s.id"
+            class="suggestion-item"
+            @mousedown.prevent
+            @click="selectSuggestion(s)"
+          >{{ s.name }}</button>
+          <button
+            v-if="showLoginCreate"
+            class="suggestion-item suggestion-create"
+            @mousedown.prevent
+            @click="onNameEnter"
+          >New transverser: <strong>{{ playerName.trim() }}</strong></button>
+        </div>
+      </div>
+      <button @click="onNameEnter" :disabled="checking || !playerName.trim()">{{ checking ? 'Searching…' : 'Search' }}</button>
+      <p v-if="nameStatus" class="name-status" :class="{ 'name-found': nameFound, 'name-new': !nameFound }">{{ nameStatus }}</p>
+      <button v-if="nameStatus" class="continue-btn" @click="confirmPlayer">{{ nameFound ? 'Continue' : 'Begin' }}</button>
+    </template>
+    <!-- Settings: already logged in -->
+    <template v-else>
+      <p class="name-hint settings-hint">Player settings</p>
+
+      <!-- Name: business-card style, click to edit -->
+      <div class="search-wrapper settings-name-wrapper">
+        <div
+          v-if="!switchEditing"
+          class="settings-name-static"
+          @click="startSwitchEdit"
+        >{{ switchName || playerName }}</div>
+        <input
+          v-else
+          ref="switchInputRef"
+          v-model="switchName"
+          class="settings-name-input"
+          placeholder="Your name"
+          @keyup.enter="onSwitchEnter"
+          @blur="onSwitchBlur"
+          :disabled="switching"
+        />
+        <div v-if="switchEditing && (switchSuggestions.length || showSwitchCreate)" class="name-suggestions">
+          <button
+            v-for="s in switchSuggestions" :key="s.id"
+            class="suggestion-item"
+            @mousedown.prevent
+            @click="selectSwitchSuggestion(s)"
+          >{{ s.name }}</button>
+          <button
+            v-if="showSwitchCreate"
+            class="suggestion-item suggestion-create"
+            @mousedown.prevent
+            @click="onSwitchEnter"
+          >New transverser: <strong>{{ switchName.trim() }}</strong></button>
+        </div>
+      </div>
+
+      <!-- Switch confirmation -->
+      <p v-if="switchStatus" class="name-status" :class="{ 'name-found': switchFound, 'name-new': !switchFound }">{{ switchStatus }}</p>
+      <div v-if="switchStatus && pendingPlayerEntities.length" class="settings-section">
+        <label class="settings-label">Characters</label>
+        <div class="char-list">
+          <button
+            v-for="e in pendingPlayerEntities" :key="e.id"
+            class="char-item"
+          >{{ e.name || e.id }}</button>
+        </div>
+      </div>
+      <button v-if="switchStatus" class="continue-btn" @click="confirmSwitch">
+        {{ switchFound ? 'Continue' : 'Begin' }}
+      </button>
+
+      <!-- Character confirmation (separate from switch) -->
+      <p v-if="charStatus" class="name-status name-found">{{ charStatus }}</p>
+      <button v-if="charStatus" class="continue-btn" @click="confirmChar">Continue</button>
+
+      <!-- Mode + Characters (hidden during confirmation) -->
+      <template v-if="!switchStatus && !charStatus">
+        <div class="settings-section">
+          <label class="settings-label">Mode</label>
+          <div class="mode-toggle">
+            <button :class="{ active: !gmMode }" @click="gmMode = false">🎭 Player</button>
+            <button :class="{ active: gmMode }" @click="gmMode = true">🏛 Architect</button>
+          </div>
+        </div>
+
+        <div v-if="playerEntities.length" class="settings-section">
+          <label class="settings-label">Your characters</label>
+          <div class="char-list">
+            <button
+              v-for="e in playerEntities" :key="e.id"
+              :class="{ active: entityId === e.id }"
+              @click="selectCharacter(e)"
+            >{{ e.name || e.id }}</button>
+            <template v-if="showNewChar">
+              <input v-model="newCharName" placeholder="Name…" @keyup.enter="createCharacter" class="char-name-input" />
+              <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar" class="char-create-btn">✓</button>
+            </template>
+            <button v-else class="char-add-btn" @click="showNewChar = true">+</button>
+          </div>
+          <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
+        </div>
+
+        <div v-if="!playerEntities.length" class="settings-section">
+          <label class="settings-label">New character</label>
+          <template v-if="showNewChar">
+            <div class="switch-row">
+              <input v-model="newCharName" placeholder="Character name…" @keyup.enter="createCharacter" />
+              <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar">+</button>
+            </div>
+          </template>
+          <button v-else class="new-char-toggle" @click="showNewChar = true">+ New character</button>
+          <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
+        </div>
+      </template>
+
+      <p v-if="switchError" class="switch-error">{{ switchError }}</p>
+      <button class="cancel-btn" @click="showLoginOverlay = false">Back to game</button>
+    </template>
+  </div>
+  <LocationViewer
+    ref="locationRef"
+    :location-id="currentLocationId"
+    :location-name="locationName"
+    :universe="universe"
+    :background-image="locationBgImage"
+    :entity-id="entityId"
+    v-model:edit-zones="editZones"
+    :overlay="locationOverlay"
+    :gm-mode="gmMode"
+    :remote-pools="remotePools"
+    :remote-results="remoteResults"
+    @moved="onMoved"
+    @inspect-entity="(id) => { viewingEntityId = id; forceSheet = true; sheetVisible = true }"
+  />
+  <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
+  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+      <div v-if="wrapperOpen && peers.length" class="peers-bar">
+        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: viewingEntityId === p.id || (!viewingEntityId && entityId === p.id) }" @click.stop="viewingEntityId = p.id === entityId ? null : (viewingEntityId === p.id ? null : p.id); forceSheet = true" :title="p.name">
+          <img v-if="p.backgroundImage" :src="p.backgroundImage" class="peer-img" />
+          <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
+          <span class="peer-label">{{ p.name }}</span>
+        </button>
+      </div>
+      <CharacterSheet
+        v-show="sheetVisible && !gmMode && (phase === 'adding' || forceSheet)"
+        ref="sheetRef"
+        class="embedded-sheet"
+        :class="{ 'sheet-hidden': !sheetVisible }"
+        :entity-id="entityId"
+        :override-entity-id="viewingEntityId"
+        :viewer-entity-id="entityId"
+        :universe="universe"
+        :phase="phase"
+        embedded
+        :gm-mode="gmMode"
+        @open-settings="openSettings"
+        @add-to-pool="(d) => diceRef?.addFromSheet(d)"
+        @remove-from-pool="(s) => diceRef?.removeBySource(s)"
+        @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
+        @split-die="(d) => diceRef?.splitDie(d)"
+        @sfx-toggled="onSfxToggled"
+      />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { const labels = s.map(d => d.label || '').filter(Boolean); currentPoolSources = labels; sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
+  </div>
+  <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
+  <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
+</template>
+
+<script setup>
+import { ref, useTemplateRef, watch, computed, nextTick, onMounted } from 'vue'
+import LocationViewer from './components/LocationViewer.vue'
+import CharacterSheet from './components/CharacterSheet.vue'
+import DiceRoller from './components/DiceRoller.vue'
+import GmPanel from './components/GmPanel.vue'
+import PanelStack from './components/gm/PanelStack.vue'
+import { useSSE } from './composables/useSSE.js'
+import { useSessions } from './composables/useSessions.js'
+import { useToasts } from './composables/useToasts.js'
+import { useApi } from './composables/useApi.js'
+import ToastBar from './components/ToastBar.vue'
+
+const { graphql } = useApi()
+
+// ── Diagnostic logger (must be first — used throughout setup) ──
+const DIAG = {
+  marks: [],
+  mark(label, detail) {
+    const entry = { label, time: performance.now().toFixed(1), detail }
+    this.marks.push(entry)
+    console.log(`[diag] ${label}`, detail !== undefined ? detail : '')
+  },
+  dump() {
+    console.table(this.marks.map(m => ({ label: m.label, ms: m.time, detail: typeof m.detail === 'object' ? JSON.stringify(m.detail) : String(m.detail ?? '') })))
+  }
+}
+
+DIAG.mark('app-setup-start', { entityId: localStorage.getItem('entityId'), playerId: localStorage.getItem('playerId'), playerName: localStorage.getItem('playerName'), architectMode: localStorage.getItem('architectMode') })
+
+// ── GM panel root spec for PanelStack ──
+const gmRootPanel = computed(() => ({
+  component: GmPanel,
+  props: {
+    universe: universe.value,
+    currentLocationId: currentLocationId.value,
+  },
+  listeners: {
+    'next-beat': () => onNextBeat(),
+    'start-session': () => onStartSession(),
+    'end-session': () => onEndSession(),
+    'add-to-pool': (d) => diceRef?.addFromSheet(d),
+  },
+}))
+
+const universe = ref('earth')
+const currentLocationId = ref('loc-krasnoyarsk')
+const locationName = ref('Krasnoyarsk-45')
+const locationBgImage = ref('')
+const locationOverlay = ref(null)
+
+// Fetch entity location on mount so refreshes show the real location
+async function initLocation() {
+  DIAG.mark('initLocation-start', { entityId: entityId.value })
+  locationName.value = 'LOADING...'
+  try {
+    const r = await fetch('/api/v1/graphql', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { currentLocation currentUniverse } }`, variables: { id: entityId.value } })
+    })
+    const json = await r.json()
+    const data = json.data
+    if (data?.entity) {
+      currentLocationId.value = data.entity.currentLocation || 'loc-krasnoyarsk'
+      universe.value = data.entity.currentUniverse || 'earth'
+      DIAG.mark('initLocation-entity-fetched', { currentLocation: currentLocationId.value, universe: universe.value })
+      locationName.value = '...'
+      try {
+        const r2 = await fetch(`/api/v1/locations/${currentLocationId.value}/navigate`)
+        const nav = await r2.json()
+        locationName.value = nav.location?.name || currentLocationId.value
+      } catch (e) {
+        DIAG.mark('initLocation-navigate-err', { error: e.message })
+        locationName.value = 'err: ' + e.message
+      }
+      fetchLocationBg()
+      fetchPeers()
+    } else {
+      DIAG.mark('initLocation-no-entity', { graphqlResponse: json })
+      locationName.value = 'no entity'
+    }
+  } catch (e) {
+    DIAG.mark('initLocation-err', { error: e.message })
+    locationName.value = 'err: ' + e.message
+  }
+  DIAG.mark('initLocation-done', { locationName: locationName.value })
+}
+
+async function fetchLocationBg() {
+  try {
+    const r = await fetch('/api/v1/graphql', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { backgroundImage overlay } }`, variables: { id: currentLocationId.value } })
+    })
+    DIAG.mark('fetchLocationBg-fetched', { ok: r.ok, status: r.status })
+    const json = await r.json()
+    const hasBg = !!json.data?.entity?.backgroundImage
+    locationBgImage.value = json.data?.entity?.backgroundImage || ''
+    locationOverlay.value = json.data?.entity?.overlay || null
+    DIAG.mark('fetchLocationBg-done', { hasBackgroundImage: hasBg, imageLength: locationBgImage.value.length })
+  } catch (e) {
+    DIAG.mark('fetchLocationBg-err', { error: e.message })
+    locationBgImage.value = ''; locationOverlay.value = null
+  }
+}
+
+async function fetchPeers() {
+  DIAG.mark('fetchPeers-start', { currentLocationId: currentLocationId.value })
+  const data = await graphql(`query {
+    entities { id type name backgroundImage currentLocation }
+  }`)
+  if (data?.entities) {
+    const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
+    peers.value = data.entities
+      .filter(e => e.currentLocation === currentLocationId.value)
+      .sort((a, b) => {
+        if (a.id === entityId.value) return -1
+        if (b.id === entityId.value) return 1
+        return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
+      })
+    DIAG.mark('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
+  } else {
+    DIAG.mark('fetchPeers-no-data')
+  }
+}
+
+function onMoved(data) {
+  locationName.value = data.location
+  if (data.universe) universe.value = data.universe
+  currentLocationId.value = data.location_id || data.location
+  fetchLocationBg()
+  fetchPeers()
+}
+
+const entityId = ref(localStorage.getItem('entityId') || 'kael-1')
+const editZones = ref(false)
+
+// When switching entities, update location
+watch(entityId, () => {
+  if (entityId.value) {
+    localStorage.setItem('entityId', entityId.value)
+    initLocation()
+  }
+})
+const keepCount = ref(2)
+const effectCount = ref(1)
+const phase = ref('adding')
+
+// Player identity
+const playerId = ref(localStorage.getItem('playerId') || '')
+const playerName = ref(localStorage.getItem('playerName') || '')
+const showLoginOverlay = ref(!playerId.value)
+const checking = ref(false)
+const nameStatus = ref('')
+const nameFound = ref(false)
+const pendingPlayer = ref(null)
+
+// Settings panel
+const gmMode = ref(localStorage.getItem('architectMode') === 'true')
+const switchName = ref('')
+const switchEditing = ref(false)
+const switching = ref(false)
+const switchError = ref('')
+const switchPending = ref(null)
+const switchStatus = ref('')
+const switchFound = ref(false)
+const charPending = ref(null)
+const charStatus = ref('')
+const pendingPlayerEntities = ref([])
+const playerEntities = ref([])
+
+const newCharName = ref('')
+const creatingChar = ref(false)
+const createCharError = ref('')
+const showNewChar = ref(false)
+
+// Name search
+const nameSuggestions = ref([])
+const switchSuggestions = ref([])
+const loginHasExactMatch = ref(false)
+const switchHasExactMatch = ref(false)
+let nameDebounce = null
+let switchDebounce = null
+
+const showLoginCreate = computed(() => playerName.value.trim() && !loginHasExactMatch.value)
+const showSwitchCreate = computed(() => switchName.value.trim() && !switchHasExactMatch.value)
+
+async function searchPlayers(q) {
+  if (!q || q.length < 1) { nameSuggestions.value = []; return }
+  try {
+    const r = await fetch(`/api/v1/players?q=${encodeURIComponent(q)}`)
+    const data = await r.json()
+    nameSuggestions.value = data
+  } catch (e) {
+    nameSuggestions.value = []
+  }
+}
+
+// Watch playerName for live search suggestions in login flow
+watch(playerName, (val) => {
+  if (playerId.value) return  // only in login flow
+  if (nameDebounce) clearTimeout(nameDebounce)
+  const q = val.trim()
+  nameDebounce = setTimeout(async () => {
+    await searchPlayers(q)
+    const exact = nameSuggestions.value.some(s => s.name.toLowerCase() === q.toLowerCase())
+    loginHasExactMatch.value = exact
+    if (exact) nameSuggestions.value = []
+  }, 150)
+})
+
+async function onNameEnter() {
+  if (nameDebounce) clearTimeout(nameDebounce)
+  const name = playerName.value.trim()
+  if (!name) return
+  checking.value = true
+  nameSuggestions.value = []
+  try {
+    await searchPlayers(name)
+    const p = await findOrCreatePlayer(name)
+    if (p) {
+      pendingPlayer.value = p
+      localStorage.setItem('playerName', name)
+      if (p.found) {
+        nameStatus.value = `You've transversed before, ${name}.`
+        nameFound.value = true
+      } else {
+        nameStatus.value = `New transverser detected. Welcome, ${name}.`
+        nameFound.value = false
+      }
+    }
+  } finally {
+    checking.value = false
+  }
+}
+
+function selectSuggestion(s) {
+  playerName.value = s.name
+  nameSuggestions.value = []
+  localStorage.setItem('playerName', s.name)
+  pendingPlayer.value = { id: s.id, name: s.name, found: true }
+  nameStatus.value = `You've transversed before, ${s.name}.`
+  nameFound.value = true
+}
+
+async function searchSwitchPlayers(q) {
+  if (!q || q.length < 1) { switchSuggestions.value = []; return }
+  try {
+    const r = await fetch(`/api/v1/players?q=${encodeURIComponent(q)}`)
+    switchSuggestions.value = await r.json()
+  } catch { switchSuggestions.value = [] }
+}
+
+// Watch switchName for live suggestions in settings panel
+watch(switchName, (val) => {
+  if (switchDebounce) clearTimeout(switchDebounce)
+  const q = val.trim()
+  switchError.value = ''
+  switchDebounce = setTimeout(async () => {
+    await searchSwitchPlayers(q)
+    const exact = switchSuggestions.value.some(s => s.name.toLowerCase() === q.toLowerCase())
+    switchHasExactMatch.value = exact
+    if (exact) switchSuggestions.value = []
+  }, 150)
+})
+
+function selectSwitchSuggestion(s) {
+  switchName.value = s.name
+  switchSuggestions.value = []
+  switchPending.value = { id: s.id, name: s.name, found: true }
+  switchStatus.value = `You've transversed before, ${s.name}.`
+  switchFound.value = true
+  switchError.value = ''
+  pendingPlayerEntities.value = []
+  fetchEntitiesFor(s.id).then(e => { pendingPlayerEntities.value = e })
+  switchEditing.value = false
+}
+
+async function findOrCreatePlayer(name) {
+  try {
+    const r = await fetch('/api/v1/players', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+    return await r.json()
+  } catch { return null }
+}
+
+async function ensurePlayer() {
+  DIAG.mark('ensurePlayer-start', { playerId: playerId.value, playerName: playerName.value })
+  if (playerId.value) {
+    DIAG.mark('ensurePlayer-have-id', { playerId: playerId.value })
+    fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+    loadPlayerRole()
+    return
+  }
+
+  if (playerName.value) {
+    // Have name but no ID — try to recover
+    const p = await findOrCreatePlayer(playerName.value)
+    DIAG.mark('ensurePlayer-recover-result', { found: !!p, id: p?.id })
+    if (p) {
+      playerId.value = p.id
+      localStorage.setItem('playerId', p.id)
+      fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+      return
+    }
+  }
+
+  // No name or ID — show entry
+  DIAG.mark('ensurePlayer-no-identity', 'showing login overlay')
+  showLoginOverlay.value = true
+}
+
+function confirmPlayer() {
+  if (!pendingPlayer.value) return
+  playerId.value = pendingPlayer.value.id
+  localStorage.setItem('playerId', pendingPlayer.value.id)
+  localStorage.setItem('playerName', playerName.value.trim())
+  nameStatus.value = ''
+  pendingPlayer.value = null
+  showLoginOverlay.value = false
+  fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+  loadPlayerRole()
+}
+ensurePlayer()
+
+// Session management
+const { sessions, currentSession, listSessions, createSession, joinSession, publishEvent } = useSessions()
+const sessionId = ref('session-default')
+
+async function initSession() {
+  DIAG.mark('initSession-start')
+  await listSessions()
+  DIAG.mark('initSession-listed', { count: sessions.value.length, ids: sessions.value.map(s => s.id) })
+  if (sessions.value.length > 0) {
+    const s = sessions.value[0]
+    sessionId.value = s.id
+    await joinSession(s.id, entityId.value, playerId.value)
+    DIAG.mark('initSession-joined', { sessionId: sessionId.value })
+  } else {
+    const s = await createSession('Default Session', 'earth')
+    if (s) {
+      sessionId.value = s.id
+      await joinSession(s.id, entityId.value, playerId.value)
+      DIAG.mark('initSession-created', { sessionId: sessionId.value })
+    } else {
+      DIAG.mark('initSession-FAILED', { error: 'createSession returned null' })
+    }
+  }
+}
+DIAG.mark('initSession-called')
+initSession()
+DIAG.mark('initLocation-called')
+const peers = ref([])
+initLocation()
+
+const shareCount = ref(0)
+const lastSent = ref('')
+const lastEvtDebug = ref('')
+
+function sharePool(sources) {
+  if (sessionId.value === 'session-default') return
+  shareCount.value++
+  lastSent.value = JSON.stringify(sources)
+  publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, dice: sources, phase: phase.value })
+}
+
+function sharePhase() {
+  if (sessionId.value === 'session-default') return
+  lastSent.value = `phase:${phase.value}`
+  publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, dice: [], phase: phase.value })
+}
+function shareRoll(result) {
+  if (sessionId.value !== 'session-default') {
+    publishEvent(sessionId.value, 'roll_result', { player_id: playerId.value, entity_id: entityId.value, result, phase: 'resolved' })
+  }
+}
+
+// SSE — live state sync
+const { connected, lastEvent, error } = useSSE(sessionId, entityId)
+
+// Architect toast notifications
+const { toasts, addToast, dismissToast } = useToasts()
+const nameCache = ref({})  // entity_id → name
+
+function entName(eid) {
+  if (!eid) return 'someone'
+  if (nameCache.value[eid]) return nameCache.value[eid]
+  // Try peers list first (already fetched for current location)
+  const p = peers.value.find(e => e.id === eid)
+  if (p?.name) {
+    nameCache.value[eid] = p.name
+    return p.name
+  }
+  return eid.slice(0, 8)
+}
+// Refresh name cache whenever peers change
+watch(peers, (p) => {
+  for (const e of p) {
+    if (e.id && e.name) nameCache.value[e.id] = e.name
+  }
+}, { deep: true })
+
+const remotePools = ref({})  // entity_id → { dice: [...], player_id, phase }
+const remoteResults = ref({})  // entity_id → { result, rolls, kept, total, effect_die }
+
+const ssePulse = ref(false)
+watch(lastEvent, (evt) => {
+  if (!evt) return
+  ssePulse.value = true
+  setTimeout(() => { ssePulse.value = false }, 300)
+
+  const pid = evt.data?.player_id
+  const eid = evt.data?.entity_id
+  const foreign = pid !== playerId.value  // event from another player
+  const name = entName(eid)
+
+  switch (evt.type) {
+    case 'razmerit_changed':
+      // local patch handles display; SSE sync deferred
+      break
+    case 'trait_updated':
+      // local patch handles display; SSE sync deferred
+      if (gmMode.value && foreign) {
+        const tName = evt.data?.trait_name || evt.data?.name || 'a trait'
+        addToast(`${name} updated ${tName}`, 'trait')
+      }
+      break
+    case 'location_changed':
+      if (eid === entityId.value && evt.data?.to) locationName.value = evt.data.to
+      locationRef.value?.fetchNav()
+      if (gmMode.value && foreign && evt.data?.to) {
+        nameCache.value[eid] = evt.data.to_name || eid
+        addToast(`${name} moved to ${evt.data.to}`, 'move')
+      }
+      break
+    case 'entity_updated':
+      if (eid === currentLocationId.value) fetchLocationBg()
+      locationRef.value?.fetchNavWithLerp()
+      break
+    case 'entity_moved':
+      if (evt.data?.current_location === currentLocationId.value) {
+        locationRef.value?.fetchNavWithLerp()
+      }
+      if (gmMode.value && foreign) {
+        const loc = evt.data?.current_location
+        if (loc === currentLocationId.value) {
+          addToast(`${name} arrived here`, 'move')
+        } else {
+          addToast(`${name} left for ${loc || 'elsewhere'}`, 'move')
+        }
+      }
+      break
+    case 'scene_change':
+      if (evt.data?.to_location) locationName.value = evt.data.to_location
+      if (gmMode.value) {
+        addToast(`Scene: ${evt.data?.to_location || 'changed'}`, 'scene')
+      }
+      break
+    case 'pool_updated':
+      lastEvtDebug.value = `pid=${pid} eid=${eid} phase=${evt.data.phase} dice=${JSON.stringify(evt.data.dice)} mypid=${playerId.value}`
+      if (pid !== playerId.value && eid) {
+        const phase = evt.data.phase || 'adding'
+        remotePools.value = { ...remotePools.value, [eid]: { dice: evt.data.dice || [], player_id: pid, phase } }
+        if (phase === 'adding' && (!evt.data.dice || evt.data.dice.length === 0)) {
+          const { [eid]: _, ...rest } = remoteResults.value
+          remoteResults.value = rest
+        }
+      }
+      if (gmMode.value && foreign && eid) {
+        const phase = evt.data.phase || 'adding'
+        const dice = evt.data.dice || []
+        if (phase === 'adding') {
+          if (dice.length) {
+            addToast(`${name} added ${dice.length} die${dice.length > 1 ? '' : ''} to pool`, 'dice')
+          }
+        } else if (phase === 'rolled') {
+          // pool was submitted for rolling
+        } else if (phase === 'resolved') {
+          // already covered by roll_result
+        }
+      }
+      break
+    case 'roll_result':
+      if (pid !== playerId.value && eid) {
+        const res = evt.data.result
+        const existing = remoteResults.value[eid] || {}
+        remoteResults.value = { ...remoteResults.value, [eid]: {
+          ...existing,
+          total: res.total || res.highest || existing.total,
+          effect_die: res.effect_die || existing.effect_die,
+          tier: res.tier || existing.tier,
+          botch: res.botch ?? existing.botch,
+          pipeline: res.pipeline || existing.pipeline,
+          rolls: (res.rolls && res.rolls.length) ? res.rolls : (existing.rolls || []),
+        }}
+      }
+      if (gmMode.value && foreign && eid) {
+        const res = evt.data.result
+        const total = res.total ?? res.highest ?? '?'
+        const tier = res.tier ? ` (${res.tier})` : ''
+        const eff = res.effect_die ? ` · d${res.effect_die}` : ''
+        addToast(`${name} rolled ${total}${tier}${eff}`, 'roll')
+      }
+      break
+  }
+})
+
+function onPhaseChange(p) {
+  phase.value = p
+  if (p !== 'adding') forceSheet.value = false
+  if (p === 'adding') {
+    keepCount.value = 2
+    effectCount.value = 1
+    sheetRef.value?.resetSfxCounts()
+  }
+  sharePhase()
+}
+const diceRef = useTemplateRef('diceRef')
+const sheetRef = useTemplateRef('sheetRef')
+const locationRef = useTemplateRef('locationRef')
+const switchInputRef = useTemplateRef('switchInputRef')
+
+const hoverOpen = ref(false)
+const sheetVisible = ref(false)
+let sheetTimer = null
+let closeTimer = null
+
+const currentPoolSources = ref([])
+const viewingEntityId = ref(null)
+const forceSheet = ref(false)
+
+const wrapperEl = useTemplateRef('wrapperEl')
+const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
+
+function openPanel() {
+  hoverOpen.value = true
+  // Clear inline transform so .open class translateY(0) takes over
+  if (wrapperEl.value) wrapperEl.value.style.transform = ''
+  if (sheetTimer) clearTimeout(sheetTimer)
+  sheetTimer = setTimeout(() => { sheetVisible.value = true }, 300)
+}
+
+function closePanel() {
+  hoverOpen.value = false
+  sheetVisible.value = false
+  forceSheet.value = false
+  if (diceRef.value) diceRef.value.panelOpen = false
+  if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
+  if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+  // Set peek position after DOM updates
+  nextTick(() => syncClosedPosition())
+}
+
+function syncClosedPosition() {
+  if (!wrapperEl.value) return
+  const h = wrapperEl.value.offsetHeight
+  wrapperEl.value.style.transform = `translateX(-50%) translateY(${h - 56}px)`
+}
+
+function onPanelOpen(v) {
+  if (gmMode.value) return
+  if (v) openPanel()
+  else closePanel()
+}
+
+function onWrapperEnter() {
+  if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+  openPanel()
+}
+
+function onWrapperLeave() {
+  if (phase.value === 'picking') return  // don't close during drag-and-drop
+  closeTimer = setTimeout(() => {
+    closeTimer = null
+    closePanel()
+  }, 1000)
+}
+
+onMounted(() => {
+  syncClosedPosition()
+  DIAG.mark('onMounted', { showLoginOverlay: showLoginOverlay.value, playerId: playerId.value, entityId: entityId.value, sessionId: sessionId.value, gmMode: gmMode.value })
+  // Dump full diagnostic timeline after init settles
+  setTimeout(() => {
+    DIAG.mark('diag-dump', '--- DIAGNOSTIC SUMMARY ---')
+    console.log('%c[diag] STATE SNAPSHOT', 'font-weight:bold', {
+      showLoginOverlay: showLoginOverlay.value, playerId: playerId.value, entityId: entityId.value,
+      sessionId: sessionId.value, gmMode: gmMode.value, connected: connected.value,
+      locationName: locationName.value, bgImageLen: locationBgImage.value.length, peersCount: peers.value.length
+    })
+    DIAG.dump()
+  }, 3000)
+})
+
+// Re-sync closed position when sheet visibility changes while wrapper is closed
+watch(sheetVisible, () => {
+  if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+})
+
+function onRolled() {
+  sheetRef.value?.resetSfxCounts()
+}
+
+function onSfxToggled(e) {
+  if (e.sfxId === 'sfx-spray-n-pray') {
+    effectCount.value = e.active ? 2 : 1
+  }
+}
+
+// ── GM shortcuts ─────────────────────────────────
+
+function onNextBeat() {
+  // Clear local pool
+  diceRef.value?.clearPool()
+  // Clear remote pools and results
+  remotePools.value = {}
+  remoteResults.value = {}
+  // Broadcast empty pool to session
+  if (sessionId.value !== 'session-default') {
+    publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, dice: [], phase: 'adding' })
+  }
+}
+
+function onStartSession() {
+  // Placeholder — could call session creation API
+}
+
+function onEndSession() {
+  remotePools.value = {}
+  remoteResults.value = {}
+}
+
+
+// ── Settings panel ────────────────────────────
+
+function openSettings() {
+  console.log('openSettings: playerName =', playerName.value, 'playerId =', playerId.value)
+  switchName.value = playerName.value
+  switchEditing.value = false
+  switchSuggestions.value = []
+  switchStatus.value = ''
+  switchPending.value = null
+  pendingPlayerEntities.value = []
+  charStatus.value = ''
+  charPending.value = null
+  switchError.value = ''
+  newCharName.value = ''
+  createCharError.value = ''
+  showNewChar.value = false
+  fetchPlayerEntities()
+  showLoginOverlay.value = true
+}
+
+function dismissOverlay() {
+  if (playerId.value) {
+    switchEditing.value = false
+    switchStatus.value = ''
+    switchPending.value = null
+    pendingPlayerEntities.value = []
+    charStatus.value = ''
+    charPending.value = null
+    showLoginOverlay.value = false
+  }
+}
+
+async function startSwitchEdit() {
+  switchEditing.value = true
+  await nextTick()
+  switchInputRef.value?.focus()
+}
+
+function onSwitchBlur() {
+  console.log('onSwitchBlur: switchStatus =', switchStatus.value, 'switching =', switching.value, 'playerName =', playerName.value)
+  if (!switchStatus.value && !switching.value) {
+    console.log('onSwitchBlur: reverting switchName to', playerName.value)
+    switchEditing.value = false
+    switchName.value = playerName.value
+    switchSuggestions.value = []
+  }
+}
+
+async function fetchPlayerEntities() {
+  if (!playerId.value) return
+  playerEntities.value = await fetchEntitiesFor(playerId.value)
+}
+
+async function fetchEntitiesFor(pid) {
+  try {
+    const r = await fetch(`/api/v1/players/${pid}`)
+    const p = await r.json()
+    if (p && p.entity_ids) {
+      const results = []
+      for (const eid of p.entity_ids) {
+        try {
+          const r2 = await fetch('/api/v1/graphql', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { id name type } }`, variables: { id: eid } })
+          })
+          const json = await r2.json()
+          if (json.data?.entity) results.push(json.data.entity)
+        } catch {}
+      }
+      return results
+    }
+  } catch {}
+  return []
+}
+
+async function onSwitchEnter() {
+  if (switchDebounce) clearTimeout(switchDebounce)
+  const name = switchName.value.trim()
+  if (!name) return
+  switching.value = true
+  switchSuggestions.value = []
+  switchError.value = ''
+  try {
+    await searchSwitchPlayers(name)
+    const p = await findOrCreatePlayer(name)
+    if (!p) { switchError.value = 'Could not reach server'; return }
+    switchPending.value = p
+    if (p.found) {
+      switchStatus.value = `You've transversed before, ${name}.`
+      switchFound.value = true
+    } else {
+      switchStatus.value = `New transverser detected. Welcome, ${name}.`
+      switchFound.value = false
+    }
+    pendingPlayerEntities.value = []
+    if (p.found) fetchEntitiesFor(p.id).then(e => { pendingPlayerEntities.value = e })
+    switchEditing.value = false
+  } catch (e) {
+    switchError.value = e.message
+  } finally {
+    switching.value = false
+  }
+}
+
+function confirmSwitch() {
+  if (!switchPending.value) { console.log('confirmSwitch: no pending'); return }
+  const p = switchPending.value
+  console.log('confirmSwitch:', p.name, '→ playerName, playerId:', p.id)
+  playerId.value = p.id
+  playerName.value = p.name
+  localStorage.setItem('playerId', p.id)
+  localStorage.setItem('playerName', p.name)
+  switchStatus.value = ''
+  switchPending.value = null
+  pendingPlayerEntities.value = []
+  switchName.value = ''
+  showLoginOverlay.value = false
+  playerEntities.value = []
+  fetch(`/api/v1/players/${p.id}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+  initLocation()
+  loadPlayerRole()
+}
+
+function selectCharacter(e) {
+  charPending.value = e
+  charStatus.value = `Assume the form of ${e.name || e.id}?`
+}
+
+async function createCharacter() {
+  const name = newCharName.value.trim()
+  if (!name || creatingChar.value) return
+  creatingChar.value = true
+  createCharError.value = ''
+  try {
+    const r = await fetch('/api/v1/graphql', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type } }`,
+        variables: { input: { name, type: 'CHARACTER', universe: universe.value } }
+      })
+    })
+    const json = await r.json()
+    const eid = json.data?.createEntity?.id
+    if (eid) {
+      await fetch(`/api/v1/players/${playerId.value}/claim/${eid}`, { method: 'POST' })
+      newCharName.value = ''
+      showNewChar.value = false
+      fetchPlayerEntities()
+    } else {
+      createCharError.value = 'Failed to create character'
+    }
+  } catch (e) {
+    createCharError.value = e.message
+  } finally {
+    creatingChar.value = false
+  }
+}
+
+async function loadPlayerRole() {
+  if (!playerId.value) return
+  try {
+    const r = await fetch(`/api/v1/players/${playerId.value}`)
+    DIAG.mark('loadPlayerRole-fetched', { ok: r.ok, status: r.status })
+    const p = await r.json()
+    if (p && p.role) {
+      const isArchitect = p.role === 'architect'
+      gmMode.value = isArchitect
+      localStorage.setItem('architectMode', isArchitect ? 'true' : 'false')
+      DIAG.mark('loadPlayerRole-done', { role: p.role, isArchitect })
+    } else {
+      DIAG.mark('loadPlayerRole-no-role', { player: p })
+    }
+  } catch (e) {
+    DIAG.mark('loadPlayerRole-err', { error: e.message })
+  }
+}
+
+function confirmChar() {
+  if (!charPending.value) return
+  entityId.value = charPending.value.id
+  charStatus.value = ''
+  charPending.value = null
+  showLoginOverlay.value = false
+}
+
+watch(gmMode, (v) => {
+  const role = v ? 'architect' : 'player'
+  localStorage.setItem('architectMode', v ? 'true' : 'false')
+  if (playerId.value) {
+    fetch(`/api/v1/players/${playerId.value}/role`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role })
+    }).catch(() => {})
+  }
+})
+</script>
+
+<style scoped>
+.peers-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 8px;
+  scrollbar-width: none;
+}
+.peers-bar::-webkit-scrollbar { display: none; }
+.peer-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 3px 10px 3px 4px;
+  border-radius: 16px;
+  background: var(--bg-panel);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.peer-chip:hover { border-color: rgba(255,255,255,0.2); }
+.peer-chip.active {
+  border-color: var(--accent);
+  background: var(--bg-panel);
+}
+.peer-img, .peer-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.peer-avatar {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.peer-label {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.peer-chip.active .peer-label { color: var(--text); }
+</style>

@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 
 # ── System deps ──────────────────────────────────────
 RUN apt-get update && apt-get install -y \
-    python3 python3-pip python3-dev git wget curl zstd \
+    python3 python3-pip python3-dev git wget curl zstd ffmpeg \
     libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -71,6 +71,13 @@ RUN pip install -r requirements.txt
 # Upscale
 WORKDIR /app/ComfyUI/custom_nodes
 RUN git clone https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git ComfyUI_UltimateSDUpscale
+
+# mxToolkit (mxSlider nodes for WanVideo workflow)
+WORKDIR /app/ComfyUI/custom_nodes
+RUN git clone https://github.com/Smirnov75/ComfyUI-mxToolkit.git ComfyUI-mxToolkit
+
+# ComfyUI Essentials (BatchCount+, and other missing core nodes)
+RUN git clone https://github.com/cubiq/ComfyUI_essentials.git ComfyUI_essentials
 
 # White Rabbit nodes (frame rolling/unrolling for seamless loops)
 RUN git clone https://github.com/Artificial-Sweetener/comfyui-WhiteRabbit.git ComfyUI-WhiteRabbit

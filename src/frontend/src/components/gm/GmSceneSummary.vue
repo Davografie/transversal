@@ -1,0 +1,41 @@
+<template>
+  <div class="scene-summary">
+    <h3>Scene</h3>
+    <div v-if="entities.length === 0" class="empty">No characters or GMCs here</div>
+    <div v-for="e in entities" :key="e.id" class="scene-row" @click="$emit('inspect', e.id)">
+      <span class="entity-type-badge" :class="'type-' + e.type">{{ e.type === 'GMC' ? 'GMC' : 'PC' }}</span>
+      <span class="entity-name">{{ e.name }}</span>
+      <span class="scene-raz">⚡{{ e.razmerit }}</span>
+    </div>
+  </div>
+</template>
+
+<script setup>
+defineProps({ entities: { type: Array, default: () => [] } })
+defineEmits(['inspect'])
+</script>
+
+<style scoped>
+.scene-summary h3 {
+  font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.scene-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px; margin-bottom: 3px;
+  background: rgba(255,255,255,0.04); border-radius: 6px;
+  font-size: 13px; cursor: pointer; transition: background 0.15s;
+}
+.scene-row:hover { background: rgba(255,255,255,0.08); }
+.scene-raz { font-size: 11px; color: var(--accent); font-weight: 600; margin-left: auto; }
+
+.entity-type-badge {
+  font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; font-weight: 600;
+}
+.type-character, .type-pc { background: #4088d4; color: #fff; }
+.type-gmc { background: #e88830; color: #0a0a0f; }
+.type-CHARACTER, .type-PC { background: #4088d4; color: #fff; }
+.type-GMC { background: #e88830; color: #0a0a0f; }
+.entity-name { flex: 1; font-weight: 500; }
+.empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
+</style>

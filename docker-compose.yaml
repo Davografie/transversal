@@ -28,6 +28,7 @@ services:
     volumes:
       - ./src/api/src:/app/src
       - ./src/api/tests:/app/tests
+      - ./src/imagen/workflows:/app/workflows
       - ./media:/app/media
       - api_data:/app/data
 
@@ -75,6 +76,7 @@ services:
     volumes:
       - ${MODEL_FOLDER:-/dev/null}:/app/ComfyUI/models
       - ./media:/app/media
+      - ollama_data:/root/.ollama
     deploy:
       resources:
         reservations:
@@ -96,3 +98,5 @@ volumes:
   api_data:
     name: code_api_data
     external: true
+  ollama_data:
+    name: code_ollama_data

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import random
 import uuid
@@ -36,12 +37,13 @@ from transversal.imagen.models import (
 from transversal.imagen.ollama import OllamaClient
 from transversal.imagen.prompt_builder import build_imagen_prompt
 
+logger = logging.getLogger("transversal.imagen")
 
 # ── Paths ──────────────────────────────────────────────
 
 WORKFLOW_DIR = Path(os.getenv(
     "WORKFLOW_DIR",
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "..", "src", "imagen", "workflows"),
+    "/app/workflows",
 ))
 
 MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "/app/media"))
@@ -66,42 +68,51 @@ def _load_workflow(name: str) -> dict:
         return json.load(f)
 
 
-def _save_image_variants(image_data: bytes, base_path: Path, base_name: str) -> dict[str, Path]:
-    """Save original + 3 variant sizes. Returns dict of variant→path."""
+def _safe_filename(name: str) -> str:
+    """Convert entity/universe names to safe filename components."""
+    return "".join(c if c.isalnum() or c in "_-" else "_" for c in name).strip("_")
+
+
+def _save_image_variants(image_data: bytes, output_dir: Path, base_name: str) -> dict[str, str]:
+    """Save original + 3 variant sizes as webp. Returns dict of variant→filename.
+
+    Files named: {base_name}_{Size}.webp (e.g. ElenaAntonova_Earth_Large_a1b2.webp)
+    """
     img = Image.open(__import__("io").BytesIO(image_data))
     width, height = img.size
 
     variants = {
-        "original": (width, height),
-        "large": (min(width, 1024), int(min(width, 1024) / width * height) if width > height else int(min(height, 1024) / height * width)),
-        "small": (min(width, 240), int(min(width, 240) / width * height) if width > height else int(min(height, 240) / height * width)),
-        "mini": (min(width, 48), int(min(width, 48) / width * height) if width > height else int(min(height, 48) / height * width)),
+        "original": (width, height, "Original"),
+        "large": (min(width, 1024), int(min(width, 1024) / width * height) if width > height else int(min(height, 1024) / height * width), "Large"),
+        "small": (min(width, 240), int(min(width, 240) / width * height) if width > height else int(min(height, 240) / height * width), "Small"),
+        "mini": (min(width, 48), int(min(width, 48) / width * height) if width > height else int(min(height, 48) / height * width), "Mini"),
     }
 
-    # Ensure width is the larger dimension for resizing
-    for name, (w, h) in variants.items():
-        if name == "original":
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filenames: dict[str, str] = {}
+
+    for variant_key, (w, h, size_label) in variants.items():
+        if variant_key == "original":
             resized = img
         else:
             if width > height:
-                new_w = w
-                new_h = int((w / width) * height)
+                new_w, new_h = w, int((w / width) * height)
             else:
-                new_h = h
-                new_w = int((h / height) * width)
+                new_w, new_h = int((h / height) * width), h
             resized = img.resize((new_w, new_h), Image.LANCZOS)
 
-        # Strip EXIF
-        data = list(resized.getdata())
-        clean = Image.new(resized.mode, resized.size)
-        clean.putdata(data)
+        # Convert RGBA → RGB for webp, strip EXIF
+        if resized.mode in ("RGBA", "LA", "P"):
+            resized = resized.convert("RGBA")
+        else:
+            resized = resized.convert("RGB")
 
-        path = base_path / f"{base_name}_{name}.png"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        clean.save(path)
+        fname = f"{base_name}_{size_label}.webp"
+        path = output_dir / fname
+        resized.save(path, format="WEBP", quality=85)
+        filenames[variant_key] = fname
 
-    # Return paths relative to MEDIA_DIR for URL use
-    return {v: p for v, p in variants.items()}
+    return filenames
 
 
 class ImagenOrchestrator:
@@ -167,8 +178,11 @@ class ImagenOrchestrator:
             # Load workflow
             workflow = _load_workflow("imagen_flux.json")
 
-            # Prepare output path
-            image_id = uuid.uuid4().hex[:12]
+            # Build descriptive basename: ElenaAntonova_Earth_a1b2c3d4
+            short_hash = uuid.uuid4().hex[:8]
+            safe_name = _safe_filename(entity.name)
+            safe_universe = _safe_filename(universe)
+            base_name = f"{safe_name}_{safe_universe}_{short_hash}"
             output_subpath = f"{entity_id}/{universe}"
             output_full = IMAGEN_DIR / output_subpath
             output_full.mkdir(parents=True, exist_ok=True)
@@ -193,23 +207,29 @@ class ImagenOrchestrator:
             prompt_id = await self.comfyui.submit_workflow(wf)
             result = await self.comfyui.wait_for_result(prompt_id, timeout_secs=600)
 
-            # Download generated image
-            image_data = await self.comfyui.get_image(
-                result["filename"], result.get("subfolder", ""), result.get("type", "output")
-            )
+            # Get the generated image — either download from ComfyUI or read from disk
+            if result.get("filename"):
+                image_data = await self.comfyui.get_image(
+                    result["filename"], result.get("subfolder", ""), result.get("type", "output")
+                )
+            else:
+                # WAS Image Save node doesn't report filenames — find the output on disk
+                saved_files = sorted(output_full.glob("ComfyUI_*.png"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if not saved_files:
+                    raise FileNotFoundError(f"No output image found in {output_full}")
+                image_data = saved_files[0].read_bytes()
 
             # Free VRAM
             await self.comfyui.free_memory()
 
-        # 3. Save variants
+        # 3. Save variants (flat files in entity/universe dir)
         await self._report(entity_id, gen_type, GenerationStatus.SAVING, "Saving images...", 80)
 
-        base_path = IMAGEN_DIR / output_subpath / image_id
-        variants = _save_image_variants(image_data, base_path, "imagen")
+        variants = _save_image_variants(image_data, output_full, base_name)
 
         # 4. Record metadata
         entity_image = EntityImage(
-            id=image_id,
+            id=short_hash,
             entity_id=entity_id,
             universe=universe,
             image_type=ImageType.IMAGEN,
@@ -220,14 +240,14 @@ class ImagenOrchestrator:
             height=height,
             seed=seed,
             steps=steps,
-            filename=f"{output_subpath}/{image_id}",
-            extension="png",
+            filename=base_name,
+            extension="webp",
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         self.repo.create_entity_image(entity_image)
 
         await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
-                           f"/media/imagen/{output_subpath}/{image_id}_large.png", 100)
+                           f"/media/imagen/{output_subpath}/{variants['large']}", 100)
 
         return entity_image
 
@@ -239,13 +259,12 @@ class ImagenOrchestrator:
         universe: str,
         duration_seconds: float = 3.0,
         session_id: str = "",
+        existing_image_path: str = "",
     ) -> EntityImage:
         """Generate a video loop for an entity.
 
-        Pipeline:
-        1. Generate static image (Flux)
-        2. Ollama gemma3:12b vision → motion description
-        3. WanVideo image-to-video with interpolation/looping
+        Pipeline (fresh): Flux → gemma3 vision → WanVideo loop
+        Pipeline (existing): read image from disk → gemma3 vision → WanVideo loop
         """
         entity_id = entity.id
         gen_type = GenerationType.ANIMATE
@@ -271,53 +290,73 @@ class ImagenOrchestrator:
         animate_seed = random.randint(0, 2**32 - 1)
 
         async with self._gpu_lock:
-            # ── Step 1: Generate static image ──
-            await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Generating static image...", 15)
-
-            image_id = uuid.uuid4().hex[:12]
+            # ── Step 1: Get or generate static image ──
             output_subpath = f"{entity_id}/{universe}"
             output_full = IMAGEN_DIR / output_subpath
             output_full.mkdir(parents=True, exist_ok=True)
 
-            flux_wf = _load_workflow("imagen_flux.json")
-            flux_wf = inject_flux_params(
-                flux_wf,
-                prompt=prompt,
-                negative=negative,
-                width=width,
-                height=height,
-                steps=steps_flux,
-                seed=animate_seed,
-                lora1=lora1,
-                lora1_weight=lora1_weight,
-                lora2=lora2,
-                lora2_weight=lora2_weight,
-                output_path=str(output_full),
-            )
+            if existing_image_path:
+                # Use existing image — skip Flux generation
+                await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Using existing image...", 15)
+                img_path = IMAGEN_DIR / existing_image_path
+                if not img_path.exists():
+                    raise FileNotFoundError(f"Existing image not found: {img_path}")
+                static_image = img_path.read_bytes()
+                short_hash = uuid.uuid4().hex[:8]
+                safe_name = _safe_filename(entity.name)
+                safe_universe = _safe_filename(universe)
+                base_name = f"{safe_name}_{safe_universe}_anim_{short_hash}"
+                _save_image_variants(static_image, output_full, base_name)
+            else:
+                # Generate new Flux image from traits
+                await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Generating static image...", 15)
+                short_hash = uuid.uuid4().hex[:8]
+                safe_name = _safe_filename(entity.name)
+                safe_universe = _safe_filename(universe)
+                base_name = f"{safe_name}_{safe_universe}_{short_hash}"
 
-            flux_prompt_id = await self.comfyui.submit_workflow(flux_wf)
-            flux_result = await self.comfyui.wait_for_result(flux_prompt_id, timeout_secs=600)
-            static_image = await self.comfyui.get_image(
-                flux_result["filename"], flux_result.get("subfolder", ""), flux_result.get("type", "output")
-            )
+                flux_wf = _load_workflow("imagen_flux.json")
+                flux_wf = inject_flux_params(
+                    flux_wf,
+                    prompt=prompt,
+                    negative=negative,
+                    width=width,
+                    height=height,
+                    steps=steps_flux,
+                    seed=animate_seed,
+                    lora1=lora1,
+                    lora1_weight=lora1_weight,
+                    lora2=lora2,
+                    lora2_weight=lora2_weight,
+                    output_path=str(output_full),
+                )
 
-            # Save static image
-            static_path = IMAGEN_DIR / output_subpath / image_id
-            _save_image_variants(static_image, static_path, "imagen")
+                flux_prompt_id = await self.comfyui.submit_workflow(flux_wf)
+                flux_result = await self.comfyui.wait_for_result(flux_prompt_id, timeout_secs=600)
+                if flux_result.get("filename"):
+                    static_image = await self.comfyui.get_image(
+                        flux_result["filename"], flux_result.get("subfolder", ""), flux_result.get("type", "output")
+                    )
+                else:
+                    saved_files = sorted(output_full.glob("ComfyUI_*.png"), key=lambda p: p.stat().st_mtime, reverse=True)
+                    if not saved_files:
+                        raise FileNotFoundError(f"No output image found in {output_full}")
+                    static_image = saved_files[0].read_bytes()
 
-            # Free Flux from VRAM
-            await self.comfyui.free_memory()
+                _save_image_variants(static_image, output_full, base_name)
+                await self.comfyui.free_memory()
 
             # ── Step 2: Ollama vision ──
             await self._report(entity_id, gen_type, GenerationStatus.VISION, "Analysing image with gemma3:12b...", 40)
 
             # Copy image to ComfyUI input dir for WanVideo
-            input_filename = f"animate_{image_id}.png"
+            input_filename = f"animate_{short_hash}.png"
             input_path = COMFY_INPUT_DIR / input_filename
             input_path.parent.mkdir(parents=True, exist_ok=True)
             input_path.write_bytes(static_image)
 
             motion_description = await self.ollama.describe_motion(static_image)
+            logger.info(f"Gemma3 motion description: {motion_description}")
 
             await self.comfyui.free_memory()
 
@@ -398,18 +437,10 @@ class ImagenOrchestrator:
         else:
             base = IMAGEN_DIR / f"{img.entity_id}/{img.universe}"
 
-        # Remove all variants
-        for suffix in ["_original.png", "_large.png", "_small.png", "_mini.png", f".{img.extension}"]:
-            p = base / f"{image_id}{suffix}"
+        # Remove all variants (flat files by basename)
+        for suffix in ["_Original.webp", "_Large.webp", "_Small.webp", "_Mini.webp", f".{img.extension}"]:
+            p = base / f"{img.filename}{suffix}"
             if p.exists():
                 p.unlink()
-
-        # Remove directory if empty
-        try:
-            base.rmdir()
-            # Also try parent
-            base.parent.rmdir()
-        except OSError:
-            pass
 
         return self.repo.delete_entity_image(image_id)
