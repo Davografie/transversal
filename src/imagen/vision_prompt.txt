@@ -1,0 +1,7 @@
+Analyze the content of this video frame and write a concise, single-paragraph description of your predictions around what movement takes place throughout the video sequence that follows.
+
+Your description should include the details of the character and scene as a whole but only as they related to the movement that occurs in the scene. In addition, make note of the movements of the particles, blinking of the eyes if any, movement of the hair... this is a moment captured in time, and you are describing these few seconds encompassed by the image. Everything that can move, does move - even minute details of the scene.
+
+Do not describe "pauses". Don't minimize the motion with words like "slight" or "subtle". Do not use metaphorical language. Your description must be direct and deceisive. Use simple, common language. Be specific, and describe how each detail in the scene moves, but do not be verbose; each word in your description must have purpose. Use the present tense, as if your predictions are coming true as you type them.
+
+You will deliver one paragraph without any additional information and without any special characters that format this response, avoid "The image sequence depicts the character" and describe what happens, without saying "the video ....".

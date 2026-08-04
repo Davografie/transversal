@@ -1,0 +1,1096 @@
+{
+  "11": {
+    "inputs": {
+      "model_name": "wan/umt5-xxl-enc-fp8_e4m3fn.safetensors",
+      "precision": "fp32",
+      "load_device": "offload_device",
+      "quantization": "disabled"
+    },
+    "class_type": "LoadWanVideoT5TextEncoder",
+    "_meta": {
+      "title": "WanVideo T5 Text Encoder Loader"
+    }
+  },
+  "16": {
+    "inputs": {
+      "positive_prompt": [
+        "169",
+        0
+      ],
+      "negative_prompt": [
+        "110",
+        0
+      ],
+      "force_offload": true,
+      "use_disk_cache": false,
+      "device": "gpu",
+      "t5": [
+        "11",
+        0
+      ],
+      "model_to_offload": [
+        "22",
+        0
+      ]
+    },
+    "class_type": "WanVideoTextEncode",
+    "_meta": {
+      "title": "WanVideo TextEncode"
+    }
+  },
+  "22": {
+    "inputs": {
+      "model": "wan/wan2.2_ti2v_5B_fp16.safetensors",
+      "base_precision": "fp16",
+      "quantization": "disabled",
+      "load_device": "offload_device",
+      "attention_mode": "sageattn",
+      "rms_norm_function": "default",
+      "compile_args": [
+        "35",
+        0
+      ],
+      "lora": [
+        "98",
+        0
+      ]
+    },
+    "class_type": "WanVideoModelLoader",
+    "_meta": {
+      "title": "WanVideo Model Loader"
+    }
+  },
+  "27": {
+    "inputs": {
+      "steps": [
+        "217",
+        0
+      ],
+      "cfg": [
+        "478",
+        1
+      ],
+      "shift": [
+        "533",
+        1
+      ],
+      "seed": [
+        "512",
+        0
+      ],
+      "force_offload": true,
+      "scheduler": "flowmatch_pusa",
+      "riflex_freq_index": 0,
+      "denoise_strength": 1,
+      "batched_cfg": "",
+      "rope_function": "comfy",
+      "start_step": 0,
+      "end_step": -1,
+      "add_noise_to_samples": false,
+      "model": [
+        "22",
+        0
+      ],
+      "image_embeds": [
+        "187",
+        0
+      ],
+      "text_embeds": [
+        "16",
+        0
+      ],
+      "cache_args": [
+        "94",
+        0
+      ],
+      "slg_args": [
+        "91",
+        0
+      ],
+      "experimental_args": [
+        "90",
+        0
+      ]
+    },
+    "class_type": "WanVideoSampler",
+    "_meta": {
+      "title": "WanVideo Sampler"
+    }
+  },
+  "28": {
+    "inputs": {
+      "enable_vae_tiling": true,
+      "tile_x": 256,
+      "tile_y": 256,
+      "tile_stride_x": 32,
+      "tile_stride_y": 128,
+      "normalization": "default",
+      "vae": [
+        "38",
+        0
+      ],
+      "samples": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "WanVideoDecode",
+    "_meta": {
+      "title": "WanVideo Decode"
+    }
+  },
+  "35": {
+    "inputs": {
+      "backend": "inductor",
+      "fullgraph": false,
+      "mode": "default",
+      "dynamic": false,
+      "dynamo_cache_size_limit": 64,
+      "compile_transformer_blocks_only": true,
+      "dynamo_recompile_limit": 128,
+      "force_parameter_static_shapes": false,
+      "allow_unmerged_lora_compile": false
+    },
+    "class_type": "WanVideoTorchCompileSettings",
+    "_meta": {
+      "title": "WanVideo Torch Compile Settings"
+    }
+  },
+  "38": {
+    "inputs": {
+      "model_name": "wan/wan2.2_vae.safetensors",
+      "precision": "fp32",
+      "use_cpu_cache": false,
+      "verbose": false
+    },
+    "class_type": "WanVideoVAELoader",
+    "_meta": {
+      "title": "WanVideo VAE Loader"
+    }
+  },
+  "58": {
+    "inputs": {
+      "image": "TallStory.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "70": {
+    "inputs": {
+      "enable_vae_tiling": [
+        "219",
+        0
+      ],
+      "tile_x": 272,
+      "tile_y": 272,
+      "tile_stride_x": 144,
+      "tile_stride_y": 128,
+      "noise_aug_strength": 0,
+      "latent_strength": 1,
+      "vae": [
+        "38",
+        0
+      ],
+      "image": [
+        "245",
+        0
+      ]
+    },
+    "class_type": "WanVideoEncode",
+    "_meta": {
+      "title": "WanVideo Encode"
+    }
+  },
+  "78": {
+    "inputs": {
+      "width": [
+        "245",
+        1
+      ],
+      "height": [
+        "245",
+        2
+      ],
+      "num_frames": [
+        "188",
+        0
+      ],
+      "extra_latents": [
+        "70",
+        0
+      ]
+    },
+    "class_type": "WanVideoEmptyEmbeds",
+    "_meta": {
+      "title": "Encode First + Batch Shape"
+    }
+  },
+  "90": {
+    "inputs": {
+      "video_attention_split_steps": "",
+      "cfg_zero_star": true,
+      "use_zero_init": false,
+      "zero_star_steps": 0,
+      "use_fresca": false,
+      "fresca_scale_low": 1,
+      "fresca_scale_high": 1.25,
+      "fresca_freq_cutoff": 20,
+      "use_tcfg": true,
+      "raag_alpha": 0,
+      "bidirectional_sampling": false,
+      "temporal_score_rescaling": false,
+      "tsr_k": 0.95,
+      "tsr_sigma": 1
+    },
+    "class_type": "WanVideoExperimentalArgs",
+    "_meta": {
+      "title": "WanVideo Experimental Args"
+    }
+  },
+  "91": {
+    "inputs": {
+      "blocks": "7,8,9",
+      "start_percent": 0.1,
+      "end_percent": 0.7
+    },
+    "class_type": "WanVideoSLG",
+    "_meta": {
+      "title": "WanVideo SLG"
+    }
+  },
+  "94": {
+    "inputs": {
+      "easycache_thresh": 0.015,
+      "start_step": 8,
+      "end_step": -1,
+      "cache_device": "offload_device"
+    },
+    "class_type": "WanVideoEasyCache",
+    "_meta": {
+      "title": "WanVideo EasyCache"
+    }
+  },
+  "98": {
+    "inputs": {
+      "lora": "wan/livewallpaper_wan22_5b_TI2V_000005000.safetensors",
+      "strength": [
+        "562",
+        0
+      ],
+      "low_mem_load": true,
+      "merge_loras": false
+    },
+    "class_type": "WanVideoLoraSelect",
+    "_meta": {
+      "title": "WanVideo Lora Select"
+    }
+  },
+  "99": {
+    "inputs": {
+      "value": "An elderly man with a long white beard and weathered face stands beneath the wide-spreading branches of an ancient tree, holding a small bowl in his cupped hands. His conical straw hat \ntilts slightly forward as he leans on a gnarled wooden staff, which sways gently with his weight. The grasses around him ripple, displaying subtle waving motions due to a light breeze; \nindividual wildflowers bob and turn their faces toward the sky. Patches of sunlight filter through the leaves above, causing intermittent shimmering across his robe, creating shifting \ngradients of light and shadow on its folds. The man's eyes blink slowly, diverting gaze downward for brief intervals. Two tasseled cords hang from beneath the hat brim, and sway \nrhythmically as he shifts his weight. Dust motes swirl within the shafts of light and around the base of the tree, rising and falling in a slow, circular pattern."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "110": {
+    "inputs": {
+      "value": "worst quality, low quality, bright tones, interlaced, overexposed, aurora, static, blurry, subtitles, static, style, ambient occlusion, 3D, works, paintings, lightning, images, overall gray, JPEG artifacts, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn face, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, walking backwards"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "118": {
+    "inputs": {
+      "Xi": 3,
+      "Xf": 3,
+      "isfloatX": 1
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Duration Hint (Seconds)"
+    }
+  },
+  "168": {
+    "inputs": {
+      "Xi": 704,
+      "Xf": 704,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Working Size (longest side)"
+    }
+  },
+  "169": {
+    "inputs": {
+      "string_a": [
+        "170",
+        0
+      ],
+      "string_b": [
+        "99",
+        0
+      ],
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concat Pos Prompt"
+    }
+  },
+  "170": {
+    "inputs": {
+      "value": "l1v3w4llp4p3r"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "LoRA Activation Word(s)"
+    }
+  },
+  "176": {
+    "inputs": {
+      "Xi": 60,
+      "Xf": 60,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Sample Framerate to Target"
+    }
+  },
+  "187": {
+    "inputs": {
+      "latent_index": [
+        "189",
+        0
+      ],
+      "embeds": [
+        "78",
+        0
+      ],
+      "extra_latents": [
+        "70",
+        0
+      ]
+    },
+    "class_type": "WanVideoAddExtraLatent",
+    "_meta": {
+      "title": "Encode Last Frame"
+    }
+  },
+  "188": {
+    "inputs": {
+      "expression": "a * b",
+      "a": [
+        "118",
+        0
+      ],
+      "b": [
+        "369",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "Calculate Frames"
+    }
+  },
+  "189": {
+    "inputs": {
+      "expression": "(a / 4) - 1",
+      "a": [
+        "188",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "Calculate last frame"
+    }
+  },
+  "217": {
+    "inputs": {
+      "Xi": 30,
+      "Xf": 30,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Steps"
+    }
+  },
+  "219": {
+    "inputs": {
+      "value": false
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Use Tiled Encoder"
+    }
+  },
+  "221": {
+    "inputs": {
+      "Xi": 9,
+      "Xf": 9.5,
+      "isfloatX": 1
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "CFG"
+    }
+  },
+  "245": {
+    "inputs": {
+      "width": [
+        "168",
+        0
+      ],
+      "height": [
+        "168",
+        0
+      ],
+      "resize_mode": "AR Scale + Divisible Crop",
+      "divisible_by": 32,
+      "max_batch_size": 25,
+      "sinc_window": 3,
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "precision": "fp32",
+      "image": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "BatchResizeWithLanczos",
+    "_meta": {
+      "title": "Scale Input to Size"
+    }
+  },
+  "276": {
+    "inputs": {
+      "batch": [
+        "352",
+        0
+      ]
+    },
+    "class_type": "BatchCount+",
+    "_meta": {
+      "title": "Get Framecount"
+    }
+  },
+  "277": {
+    "inputs": {
+      "expression": "(a / 2)",
+      "a": [
+        "276",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "Get Num to Roll"
+    }
+  },
+  "278": {
+    "inputs": {
+      "offset": [
+        "277",
+        0
+      ],
+      "images": [
+        "352",
+        0
+      ]
+    },
+    "class_type": "RollFrames",
+    "_meta": {
+      "title": "🐇 Roll Frames"
+    }
+  },
+  "279": {
+    "inputs": {
+      "base_offset": [
+        "277",
+        0
+      ],
+      "m": [
+        "414",
+        0
+      ],
+      "images": [
+        "472",
+        0
+      ]
+    },
+    "class_type": "UnrollFrames",
+    "_meta": {
+      "title": "🐇 Unroll Frames"
+    }
+  },
+  "331": {
+    "inputs": {
+      "expression": "a + 0",
+      "a": [
+        "176",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "coerce to float"
+    }
+  },
+  "341": {
+    "inputs": {
+      "frame_rate": [
+        "407",
+        1
+      ],
+      "loop_count": 0,
+      "filename_prefix": "LoopVid",
+      "format": "image/webp",
+      "lossless": true,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "359",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Output"
+    }
+  },
+  "343": {
+    "inputs": {
+      "method": "mkl",
+      "strength": 1,
+      "multithread": true,
+      "image_ref": [
+        "245",
+        0
+      ],
+      "image_target": [
+        "462",
+        0
+      ]
+    },
+    "class_type": "ColorMatch",
+    "_meta": {
+      "title": "Color Match to Input Image"
+    }
+  },
+  "345": {
+    "inputs": {
+      "original_images": [
+        "347",
+        1
+      ],
+      "interpolated_frames": [
+        "469",
+        0
+      ]
+    },
+    "class_type": "AssembleLoopFrames",
+    "_meta": {
+      "title": "🐇 Assemble Loop Frames"
+    }
+  },
+  "347": {
+    "inputs": {
+      "images": [
+        "343",
+        0
+      ]
+    },
+    "class_type": "PrepareLoopFrames",
+    "_meta": {
+      "title": "🐇 Prepare Loop Frames"
+    }
+  },
+  "352": {
+    "inputs": {
+      "any_02": [
+        "345",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "or_upscale"
+    }
+  },
+  "358": {
+    "inputs": {
+      "any_01": [
+        "279",
+        0
+      ],
+      "any_02": [
+        "352",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "if_roll_clip"
+    }
+  },
+  "359": {
+    "inputs": {
+      "any_01": [
+        "471",
+        0
+      ],
+      "any_02": [
+        "358",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "if_target_framerate"
+    }
+  },
+  "369": {
+    "inputs": {
+      "Xi": 24,
+      "Xf": 24,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Model Framerate"
+    }
+  },
+  "372": {
+    "inputs": {
+      "expression": "a * b",
+      "a": [
+        "369",
+        0
+      ],
+      "b": [
+        "414",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "Get New Framerate"
+    }
+  },
+  "399": {
+    "inputs": {
+      "any_01": [
+        "401",
+        0
+      ],
+      "any_02": [
+        "402",
+        0
+      ],
+      "any_03": [
+        "369",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "Decide Framerate"
+    }
+  },
+  "401": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "176",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "Send Framerate Preference"
+    }
+  },
+  "402": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "372",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "send_mult_framerate"
+    }
+  },
+  "407": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "399",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "coerce to float"
+    }
+  },
+  "412": {
+    "inputs": {
+      "any_01": [
+        "402",
+        0
+      ],
+      "any_02": [
+        "369",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "decide fps_in"
+    }
+  },
+  "413": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "412",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "coerce to float"
+    }
+  },
+  "414": {
+    "inputs": {
+      "Xi": 3,
+      "Xf": 3,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Interpolation Multiplier"
+    }
+  },
+  "424": {
+    "inputs": {
+      "frame_rate": [
+        "447",
+        1
+      ],
+      "loop_count": 0,
+      "filename_prefix": "seam_interp_prev",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "345",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Seam Interp Preview"
+    }
+  },
+  "447": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "369",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "coerce to float"
+    }
+  },
+  "462": {
+    "inputs": {
+      "trim_start_frames": 2,
+      "trim_end_frames": 4,
+      "clip_frames": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "TrimBatchEnds",
+    "_meta": {
+      "title": "Cut Dirty Frames"
+    }
+  },
+  "469": {
+    "inputs": {
+      "ckpt_name": "rife47.pth",
+      "multiplier": 4,
+      "t_mode": "linear",
+      "t_gamma": 1,
+      "t_min": 0,
+      "t_max": 1,
+      "scale_factor": 1,
+      "ensemble": true,
+      "clear_cache_after_n_frames": 10,
+      "custom_t_list_csv": "",
+      "frames": [
+        "347",
+        0
+      ]
+    },
+    "class_type": "RIFE_VFI_Advanced",
+    "_meta": {
+      "title": "Interpolate Over Seam"
+    }
+  },
+  "471": {
+    "inputs": {
+      "ckpt_name": "rife47.pth",
+      "fps_in": [
+        "413",
+        1
+      ],
+      "fps_out": [
+        "331",
+        1
+      ],
+      "scale_factor": 1,
+      "ensemble": true,
+      "linearize": true,
+      "lf_guardrail": true,
+      "lf_sigma": 13.5,
+      "source_pair_match": true,
+      "match_a_cap": 0.02,
+      "match_b_cap": 0.00784313725490196,
+      "edge_band_lock": true,
+      "tau_low": 0.0058823529411764705,
+      "tau_high": 0.023529411764705882,
+      "band_radius": 4,
+      "band_soft_sigma": 2,
+      "clear_cache_after_n_frames": 5,
+      "frames": [
+        "358",
+        0
+      ]
+    },
+    "class_type": "RIFE_FPS_Resample",
+    "_meta": {
+      "title": "🐇 RIFE VFI FPS Resample"
+    }
+  },
+  "472": {
+    "inputs": {
+      "ckpt_name": "rife47.pth",
+      "multiplier": [
+        "414",
+        0
+      ],
+      "scale_factor": 1,
+      "ensemble": true,
+      "clear_cache_after_n_frames": 5,
+      "frames": [
+        "278",
+        0
+      ]
+    },
+    "class_type": "RIFE_VFI_Opt",
+    "_meta": {
+      "title": "Interpolate Rolled Clip"
+    }
+  },
+  "478": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "221",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "coerce to float"
+    }
+  },
+  "485": {
+    "inputs": {
+      "model_name": "RealESRGAN_x4plus_anime_6B.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Choose Upscale Model"
+    }
+  },
+  "489": {
+    "inputs": {
+      "Xi": 1280,
+      "Xf": 1280,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Upscale Target"
+    }
+  },
+  "490": {
+    "inputs": {
+      "Xi": 10,
+      "Xf": 10,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Upscale Batch Size"
+    }
+  },
+  "495": {
+    "inputs": {
+      "Xi": 512,
+      "Xf": 512,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Upscale Tile Size"
+    }
+  },
+  "512": {
+    "inputs": {
+      "seed": -1
+    },
+    "class_type": "Seed (rgthree)",
+    "_meta": {
+      "title": "Seed"
+    }
+  },
+  "515": {
+    "inputs": {
+      "Xi": 10,
+      "Xf": 10,
+      "isfloatX": 0
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "Schedule Shift"
+    }
+  },
+  "518": {
+    "inputs": {
+      "anything": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "519": {
+    "inputs": {
+      "anything": [
+        "345",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "521": {
+    "inputs": {},
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "522": {
+    "inputs": {
+      "anything": [
+        "279",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "523": {
+    "inputs": {
+      "anything": [
+        "471",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "528": {
+    "inputs": {
+      "anything": [
+        "359",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "533": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "515",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "coerce to float"
+    }
+  },
+  "537": {
+    "inputs": {
+      "anything": [
+        "359",
+        0
+      ]
+    },
+    "class_type": "easy clearCacheAll",
+    "_meta": {
+      "title": "Clear Cache All"
+    }
+  },
+  "562": {
+    "inputs": {
+      "Xi": 0,
+      "Xf": 0.95,
+      "isfloatX": 1
+    },
+    "class_type": "mxSlider",
+    "_meta": {
+      "title": "LoRA Strength"
+    }
+  }
+}

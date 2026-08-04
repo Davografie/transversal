@@ -1,0 +1,217 @@
+{
+  "3": {
+    "inputs": {
+      "noise_seed": 257762932021983,
+      "steps": 24,
+      "timestep_to_start_cfg": 1,
+      "true_gs": 3.5,
+      "image_to_image_strength": 0,
+      "denoise_strength": 1,
+      "model": [
+        "30",
+        0
+      ],
+      "conditioning": [
+        "5",
+        0
+      ],
+      "neg_conditioning": [
+        "19",
+        0
+      ],
+      "latent_image": [
+        "24",
+        4
+      ]
+    },
+    "class_type": "XlabsSampler",
+    "_meta": {
+      "title": "Xlabs Sampler"
+    }
+  },
+  "4": {
+    "inputs": {
+      "clip_name1": "flux/Long-ViT-L-14-BEST-GmP-smooth-ft.safetensors",
+      "clip_name2": "flux/flan_t5_xxl_full_FP8e4m3.safetensors",
+      "type": "flux",
+      "device": "default"
+    },
+    "class_type": "DualCLIPLoader",
+    "_meta": {
+      "title": "DualCLIPLoader"
+    }
+  },
+  "5": {
+    "inputs": {
+      "clip_l": [
+        "25",
+        0
+      ],
+      "t5xxl": [
+        "25",
+        0
+      ],
+      "guidance": 3.5,
+      "clip": [
+        "30",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncodeFlux",
+    "_meta": {
+      "title": "CLIPTextEncodeFlux"
+    }
+  },
+  "7": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "8": {
+    "inputs": {
+      "vae_name": "flux/ae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "19": {
+    "inputs": {
+      "clip_l": [
+        "26",
+        0
+      ],
+      "t5xxl": [
+        "26",
+        0
+      ],
+      "guidance": 4,
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncodeFlux",
+    "_meta": {
+      "title": "CLIPTextEncodeFlux"
+    }
+  },
+  "24": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "aspect_ratio": "custom",
+      "swap_dimensions": "Off",
+      "upscale_factor": 1,
+      "batch_size": 1
+    },
+    "class_type": "CR SDXL Aspect Ratio",
+    "_meta": {
+      "title": "\ud83d\udd33 CR SDXL Aspect Ratio"
+    }
+  },
+  "25": {
+    "inputs": {
+      "text": "concept art of a vertical spaceship, thrusters, hull, in outer space"
+    },
+    "class_type": "Text Multiline",
+    "_meta": {
+      "title": "positive"
+    }
+  },
+  "26": {
+    "inputs": {
+      "text": "spacestation"
+    },
+    "class_type": "Text Multiline",
+    "_meta": {
+      "title": "negative"
+    }
+  },
+  "27": {
+    "inputs": {
+      "unet_name": "fluxArtFusionFP16_v10Q8.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Unet Loader (GGUF)"
+    }
+  },
+  "28": {
+    "inputs": {
+      "output_path": "[time(%Y-%m-%d)]",
+      "filename_prefix": "ComfyUI",
+      "filename_delimiter": "_",
+      "filename_number_padding": 4,
+      "filename_number_start": "false",
+      "extension": "png",
+      "dpi": 300,
+      "quality": 100,
+      "optimize_image": "true",
+      "lossless_webp": "false",
+      "overwrite_mode": "false",
+      "show_history": "false",
+      "show_history_by_prefix": "true",
+      "embed_workflow": "false",
+      "show_previews": "false",
+      "images": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "Image Save",
+    "_meta": {
+      "title": "Image Save"
+    }
+  },
+  "29": {
+    "inputs": {
+      "lora_name": "flux/SydMead-v1.safetensors",
+      "strength_model": 0.5,
+      "strength_clip": 1,
+      "model": [
+        "27",
+        0
+      ],
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "Load LoRA (Model and CLIP)"
+    }
+  },
+  "30": {
+    "inputs": {
+      "lora_name": "flux/SpaceshipGenerator-v2.safetensors",
+      "strength_model": 0.3,
+      "strength_clip": 1,
+      "model": [
+        "29",
+        0
+      ],
+      "clip": [
+        "29",
+        1
+      ]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "Load LoRA (Model and CLIP)"
+    }
+  }
+}
