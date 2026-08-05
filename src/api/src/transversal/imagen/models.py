@@ -83,3 +83,4 @@ PRIMITIVE_NEGATIVE = "technology, electronics, metal armor, guns, robots, screen
 
 # Default negative
 DEFAULT_NEGATIVE = "cgi, watermark, signature, text, low quality, blurry, deformed, disfigured"
+

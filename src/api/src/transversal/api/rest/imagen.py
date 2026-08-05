@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import EntityImage, ImageType
@@ -259,23 +259,42 @@ async def list_images(entity_id: str, universe: str | None = None):
     repo = EntityRepository()
     images = repo.get_entity_images(entity_id, universe=universe)
 
+    # Resolve universe display names from universe entities
+    universe_names: dict[str, str] = {}
+    for doc in repo._entities.find({"type": "universe"}):
+        universe_names[doc.get("current_universe", doc["_key"])] = doc.get("name", doc["_key"])
+
     return ImageListResponse(
         entity_id=entity_id,
         images=[
             {
                 "id": img.id,
                 "universe": img.universe,
+                "universe_label": universe_names.get(img.universe, img.universe),
                 "image_type": img.image_type.value,
                 "prompt": img.prompt,
                 "width": img.width,
                 "height": img.height,
                 "created_at": img.created_at,
+                "roles": img.roles,
                 "path_large": f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}",
                 "path_animated": f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
             }
             for img in images
         ],
     )
+
+@router.patch("/imagen/{image_id}")
+async def update_image_roles(image_id: str, payload: dict = Body(...)):
+    """Update the roles assigned to an image (background, sheet, navdot)."""
+    from transversal.db.repository import EntityRepository
+    repo = EntityRepository()
+    roles = payload.get("roles", [])
+    updated = repo.update_entity_image(image_id, {"roles": roles})
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
+    return {"success": True, "roles": updated.roles}
+
 
 @router.delete("/imagen/{image_id}")
 async def delete_image(image_id: str):

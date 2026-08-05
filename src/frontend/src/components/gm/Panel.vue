@@ -27,8 +27,8 @@
       closable
       @close="child = null"
     >
-      <template #default="{ open: childOpen }">
-        <component :is="child.component" v-bind="child.props || {}" :open="childOpen" :close="() => { child = null }" v-on="child.listeners || {}" @close="child = null" />
+      <template #default="{ open: childOpen, close: childClose }">
+        <component :is="child.component" v-bind="child.props || {}" :open="childOpen" :close="childClose" v-on="child.listeners || {}" @close="child = null" />
       </template>
     </Panel>
   </div>

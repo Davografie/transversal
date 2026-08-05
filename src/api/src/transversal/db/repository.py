@@ -833,6 +833,13 @@ class EntityRepository:
         doc = self._entity_images.get(image_id)
         return EntityImage.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
+    def update_entity_image(self, image_id: str, updates: dict) -> EntityImage | None:
+        doc = self._entity_images.get(image_id)
+        if not doc:
+            return None
+        self._entity_images.update({**doc, **updates})
+        return self.get_entity_image(image_id)
+
     def delete_entity_image(self, image_id: str) -> bool:
         return self._entity_images.delete(image_id)
 

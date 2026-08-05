@@ -468,6 +468,7 @@ class CharacterView(BaseModel):
 # ── Entity Images ─────────────────────────────────────
 
 class ImageType(str, Enum):
+    UPLOADED = "uploaded"
     IMAGEN = "imagen"
     ANIMATED = "animated"
 
@@ -482,6 +483,7 @@ class EntityImage(BaseModel):
     entity_id: str
     universe: str
     image_type: ImageType
+    roles: list[str] = Field(default_factory=list)  # ["background", "sheet", "navdot"]
     prompt: str = ""
     negative_prompt: str = ""
     loras: list[str] = Field(default_factory=list)

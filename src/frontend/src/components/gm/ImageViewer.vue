@@ -11,6 +11,11 @@
     <div v-if="imageType !== 'animated' && !localJob" class="motion-hint">
       <input v-model="motionHint" type="text" placeholder="Motion hint (optional) — e.g. 'hair blowing in wind'" />
     </div>
+    <div class="role-assign">
+      <label class="role-check" title="Use as background"><input type="checkbox" :checked="hasRole('background')" @change="toggleRole('background')" /> BG</label>
+      <label class="role-check" title="Use as character sheet portrait"><input type="checkbox" :checked="hasRole('sheet')" @change="toggleRole('sheet')" /> Sheet</label>
+      <label class="role-check" title="Use as navigation dot"><input type="checkbox" :checked="hasRole('navdot')" @change="toggleRole('navdot')" /> Nav</label>
+    </div>
     <div class="image-meta">{{ alt }}</div>
     <div v-if="message" class="message">{{ message }}</div>
   </div>
@@ -34,6 +39,35 @@ const animating = ref(false)
 const deleting = ref(false)
 const message = ref('')
 const motionHint = ref('')
+const fetchedRoles = ref([])
+
+async function fetchRoles() {
+  if (!props.entityId || !props.imageId) return
+  try {
+    const r = await fetch(`/api/v1/imagen/${props.entityId}`)
+    if (r.ok) {
+      const data = await r.json()
+      const img = (data.images || []).find(i => i.id === props.imageId)
+      if (img) fetchedRoles.value = img.roles || []
+    }
+  } catch {}
+}
+onMounted(fetchRoles)
+
+function hasRole(r) { return fetchedRoles.value.includes(r) }
+async function toggleRole(r) {
+  const current = fetchedRoles.value
+  const next = current.includes(r) ? current.filter(x => x !== r) : [...current, r]
+  fetchedRoles.value = next
+  try {
+    await fetch(`/api/v1/imagen/${props.imageId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roles: next }),
+    })
+    emit('refresh')
+  } catch {}
+}
 
 // Independent job polling — Panel system props are static on open
 const localJob = ref(null)
@@ -119,4 +153,7 @@ async function onDelete() {
 .message { font-size: 11px; color: var(--accent); margin-top: 6px; }
 .motion-hint { margin-top: 8px; }
 .motion-hint input { width: 100%; box-sizing: border-box; font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text); }
+.role-assign { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+.role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 2px; }
+.role-check input { margin: 0; cursor: pointer; }
 </style>
