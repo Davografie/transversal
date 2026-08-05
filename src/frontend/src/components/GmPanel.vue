@@ -35,7 +35,7 @@
         </div>
       </div>
       <button class="create-btn" @click="startCreate">+ New Entity</button>
-      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :universe="universe" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
+      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :universe="universe" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
         <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
@@ -64,6 +64,7 @@ const props = defineProps({
   universe: { type: String, default: 'earth' },
   currentLocationId: { type: String, default: '' },
   open: { type: Function, default: null },
+  close: { type: Function, default: null },
 })
 
 const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool'])
@@ -111,8 +112,6 @@ const selectedId = ref(null)
 const editing = ref(false)
 const creating = ref(false)
 const saving = ref(false)
-const addingTrait = ref(false)
-
 const traitsets = ref([])
 const allSfxsData = ref([])
 const traitsLoading = ref(false)
@@ -201,10 +200,7 @@ const universes = computed(() => entities.value.filter(e => e.type === 'UNIVERSE
 
 // ── Forms ──────────────────────────────────────────
 const form = ref({})
-const parentId = ref(null)
 const createForm = ref({ name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 })
-const availableTraits = ref([])
-
 // ── API ────────────────────────────────────────────
 const ALL_ENTITIES = `query($type: EntityType) { entities(type: $type) { id type name razmerit currentUniverse currentLocation hidden backgroundImage traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
 const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden backgroundImage traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
@@ -224,34 +220,28 @@ async function fetchTraitsConfig() {
 
 // ── Entity management ──────────────────────────────
 function toggleEntity(e) {
-  if (editing.value && selectedId.value === e.id) { editing.value = false; selected.value = null; selectedId.value = null }
-  else { selectEntity(e) }
+  if (editing.value && selectedId.value === e.id) {
+    editing.value = false; selected.value = null; selectedId.value = null
+    if (props.close) props.close()
+  } else {
+    selectEntity(e)
+  }
 }
+function onSelectUniverse(id) { toggleEntity({ id }) }
 function onSelectLocation(id) { toggleEntity({ id }) }
 function onSelectOccupant(e) { toggleEntity(e) }
 
-// ⚠ When already editing the same entity, skip openEntityEdit() to avoid
-// re-opening the panel (visible flicker). Callers like onAddTrait/removeTrait
-// call selectEntity() to refresh data — they don't want the panel to re-open.
-async function selectEntity(e) {
-  const alreadyEditing = editing.value && selectedId.value === e.id
-  const data = await graphql(ENTITY_QUERY, { id: e.id })
-  if (data?.entity) {
-    selected.value = data.entity; selectedId.value = e.id; editing.value = true
-    form.value = { name: data.entity.name, type: data.entity.type, current_universe: data.entity.currentUniverse, current_location: data.entity.currentLocation || '', razmerit: data.entity.razmerit, background_image: data.entity.backgroundImage || '', overlay: data.entity.overlay || null, hidden: data.entity.hidden }
-    parentId.value = null; form.value._originalParentId = null
-    if (data.entity.type === 'LOCATION') {
-      try {
-        const r = await fetch(`/api/v1/locations/${e.id}/navigate`)
-        const nav = await r.json()
-        parentId.value = nav.parent?._key || null
-        form.value._originalParentId = parentId.value
-      } catch { parentId.value = null; form.value._originalParentId = null }
+  // ⚠ When already editing the same entity, skip openEntityEdit() to avoid
+  // re-opening the panel (visible flicker).
+  async function selectEntity(e) {
+    const alreadyEditing = editing.value && selectedId.value === e.id
+    const data = await graphql(ENTITY_QUERY, { id: e.id })
+    if (data?.entity) {
+      selected.value = data.entity; selectedId.value = e.id; editing.value = true
+      form.value = { name: data.entity.name, type: data.entity.type, current_universe: data.entity.currentUniverse, current_location: data.entity.currentLocation || '', razmerit: data.entity.razmerit, background_image: data.entity.backgroundImage || '', overlay: data.entity.overlay || null, hidden: data.entity.hidden }
+      if (!alreadyEditing) openEntityEdit()
     }
-    await loadAvailableTraits()
-    if (!alreadyEditing) openEntityEdit()
   }
-}
 
 function openEntityEdit() {
   if (!props.open || !selected.value) return
@@ -259,29 +249,21 @@ function openEntityEdit() {
   props.open({
     component: GmEntityEditPanel,
     title: selected.value.name || 'Edit Entity',
-    props: {
-      form: form.value,
-      universes: universes.value,
-      locationEntities: locationEntities.value,
-      parentId: parentId.value,
-      entityId: selectedId.value,
-      traitSettings: selected.value.traitSettings || [],
-      imagenJob: imagenJob.value,
-      animateJob: animateJob.value,
-      availableTraits: availableTraits.value,
-      addingTrait: addingTrait.value,
-    },
-    listeners: {
-      'update:form': (v) => { form.value = v },
-      'update:parent-id': (v) => { parentId.value = v },
-      'upload-bg': uploadBgImage,
-      'add-trait': onAddTrait,
-      'remove-trait': removeTrait,
-      'switch-to-sheet': switchToSheet,
-      'delete': deleteSelected,
-      'imagen': onImagen,
-      'image-open': onImageOpen,
-    },
+      props: {
+        form: form.value,
+        entityId: selectedId.value,
+        imagenJob: imagenJob.value,
+        animateJob: animateJob.value,
+      },
+      listeners: {
+        'update:form': (v) => { form.value = v },
+        'upload-bg': uploadBgImage,
+        'switch-to-sheet': switchToSheet,
+        'delete': deleteSelected,
+        'prune': deletePrune,
+        'imagen': onImagen,
+        'image-open': onImageOpen,
+      },
   })
 }
 // ⚠ Must update selected.value directly — must NOT call selectEntity() here.
@@ -302,30 +284,37 @@ async function saveEntity() {
       selected.value.backgroundImage = ue.backgroundImage
     }
   }
-  if (selected.value && selected.value.type === 'LOCATION') {
-    const newParent = parentId.value || null
-    const oldParent = form.value._originalParentId
-    if (newParent !== oldParent) {
-      if (oldParent) { try { await fetch(`/api/v1/locations/${selected.value.id}/edges/${oldParent}?type=super`, { method: 'DELETE' }) } catch {} }
-      if (newParent) { try { await fetch(`/api/v1/locations/${selected.value.id}/edges/${newParent}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'super' }) }) } catch {} }
-      form.value._originalParentId = newParent
-    }
-    await fetchLocationTree()
-  }
   saving.value = false
   await fetchEntities()
 }
 let entitySaveTimer = null
-watch([() => form.value, () => parentId.value], () => {
+watch(() => form.value, () => {
   if (!editing.value || !selected.value) return
   clearTimeout(entitySaveTimer)
   entitySaveTimer = setTimeout(() => saveEntity(), 600)
 }, { deep: true })
 
 async function deleteSelected() {
-  if (!confirm(`Delete ${selected.value.name}?`)) return
+  const name = selected.value.name
+  const isLoc = selected.value.type === 'LOCATION'
+  const msg = isLoc
+    ? `Delete location "${name}"?\n\nOccupants and sub-locations will be moved to the parent location.`
+    : `Delete "${name}"?`
+  if (!confirm(msg)) return
   await graphql(`mutation($id: ID!) { deleteEntity(id: $id) }`, { id: selected.value.id })
-  selected.value = null; selectedId.value = null; editing.value = false; await fetchEntities()
+  selected.value = null; selectedId.value = null; editing.value = false
+  if (isLoc) await fetchLocationTree()
+  await fetchEntities()
+}
+
+async function deletePrune() {
+  const name = selected.value.name
+  if (!confirm(`Prune location "${name}" and ALL its contents?\n\nThis will delete this location, all sub-locations, and all their occupants permanently.`)) return
+  await graphql(`mutation($id: ID!, $rmtree: Boolean!) { deleteEntity(id: $id, rmtree: $rmtree) }`, { id: selected.value.id, rmtree: true })
+  selected.value = null; selectedId.value = null; editing.value = false
+  if (props.close) props.close()
+  await fetchLocationTree()
+  await fetchEntities()
 }
 async function startCreate() {
   creating.value = true; editing.value = false; selected.value = null
@@ -355,23 +344,44 @@ function switchToSheet() {
   })
 }
 
-// ── Traits ─────────────────────────────────────────
-async function loadAvailableTraits() {
-  if (!selected.value) return
-  const data = await graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name defaultDieType traitsetId defaultRatingType } }`, { u: selected.value.currentUniverse })
-  if (data?.traitsByUniverse) availableTraits.value = data.traitsByUniverse
-}
-watch(() => selected.value?.currentUniverse, () => { if (selected.value) loadAvailableTraits() })
-async function onAddTrait(input) {
-  addingTrait.value = true
-  await graphql(`mutation($eid: ID!, $input: TraitSettingInput!) { addTraitSetting(entityId: $eid, input: $input) { id } }`, { eid: selected.value.id, input })
-  addingTrait.value = false; await selectEntity(selected.value)
-}
-async function removeTrait(tsId) { await graphql(`mutation($id: ID!) { removeTraitSetting(id: $id) }`, { id: tsId }); await selectEntity(selected.value) }
 
 // ── Drag-drop move ─────────────────────────────────
-async function onMoveEntity({ entityId, targetLocationId }) {
-  await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation } }`, { input: { id: entityId, currentLocation: targetLocationId } })
+async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
+  if (entityKind === 'occupant') {
+    // Occupant → Location: update currentLocation (existing behaviour)
+    await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation } }`, { input: { id: entityId, currentLocation: targetId } })
+  } else if (entityKind === 'location') {
+    // Location → Universe or Location: update universe and/or parent
+    if (targetUniverse) {
+      try { await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentUniverse } }`, { input: { id: entityId, currentUniverse: targetUniverse } }) } catch {}
+    }
+
+    // Swap parent super edge
+    try {
+      const r = await fetch(`/api/v1/locations/${entityId}/navigate`)
+      const nav = await r.json()
+      const oldParentId = nav.parent?._key || null
+
+      if (targetKind === 'universe') {
+        // Drop on universe: clear parent
+        if (oldParentId) {
+          await fetch(`/api/v1/locations/${entityId}/edges/${oldParentId}?type=super`, { method: 'DELETE' })
+        }
+      } else if (targetKind === 'location' && targetId !== oldParentId) {
+        // Drop on a different location: replace parent edge
+        if (oldParentId) {
+          await fetch(`/api/v1/locations/${entityId}/edges/${oldParentId}?type=super`, { method: 'DELETE' })
+        }
+        await fetch(`/api/v1/locations/${entityId}/edges/${targetId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'super' }),
+        })
+      }
+    } catch {}
+
+    await fetchLocationTree()
+  }
   fetchEntities()
 }
 
@@ -445,10 +455,15 @@ const activeUniverseFilters = computed(() => {
 function flattenTree(nodes, occupants, depth = 0) {
   const result = []
   for (const node of nodes) {
-    // If universe filters are active, only show locations in those universes
-    if (activeUniverseFilters.value.size > 0 && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
+    // Determine kind from node_type (backend) or fall back for occupant nodes
+    const kind = node.kind || (node.node_type === 'universe' ? 'universe' : 'location')
+    // If universe filters are active, filter at universe/root level
+    if (activeUniverseFilters.value.size > 0) {
+      if (kind === 'universe' && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
+      if (kind === 'location' && depth === 0 && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
+    }
     // When occupant-affecting filters are active, prune locations that have no matching occupants
-    if (hasOccupantFilter.value && !populatedLocations.value.has(node.id)) continue
+    if (hasOccupantFilter.value && kind === 'location' && !populatedLocations.value.has(node.id)) continue
     const hasChildren = (node.children && node.children.length > 0) || (occupants[node.id] && occupants[node.id].length > 0)
     let expanded
     if (expandedNodes.value[node.id] !== undefined) {
@@ -458,7 +473,7 @@ function flattenTree(nodes, occupants, depth = 0) {
     } else {
       expanded = depth === 0  // default: expand only root level
     }
-    result.push({ id: node.id, name: node.name, universe: node.universe, depth, hasChildren, kind: 'location', expanded })
+    result.push({ id: node.id, name: node.name, universe: node.universe, depth, hasChildren, kind, expanded })
     if (expanded && occupants[node.id]) { for (const e of occupants[node.id]) { result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
     if (expanded && node.children && node.children.length) result.push(...flattenTree(node.children, occupants, depth + 1))
   }

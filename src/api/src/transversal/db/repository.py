@@ -74,21 +74,126 @@ class EntityRepository:
         self._entities.replace(doc)
         return entity
 
-    def delete_entity(self, entity_id: str) -> bool:
-        # Clean up projections and traitsettings
-        for proj in self._projections.find({"entity_id": entity_id}):
-            self._projections.delete(proj["_key"])
-        query = f"""
-            FOR ts IN {TRAITSETTINGS}
-            FILTER ts.entity_id == @eid
-            REMOVE ts IN {TRAITSETTINGS}
+    def delete_entity(self, entity_id: str, rmtree: bool = False) -> bool:
+        """Delete an entity, optionally pruning a location subtree.
+
+        For non-location entities this is a simple delete with cascade
+        cleanup of projections, trait settings, and relationships.
+
+        For locations there are two modes:
+
+        * ``rmtree=False`` (default) — **reparent**: occupants and
+          sub-locations are moved to the deleted location's parent.
+        * ``rmtree=True`` — **prune**: the location, all descendant
+          sub-locations, and all of their occupants are deleted
+          recursively.
         """
-        self.db.aql.execute(query, bind_vars={"eid": entity_id})
+        entity = self.get_entity(entity_id)
+        if entity is None:
+            return False
+
+        if entity.type == EntityType.LOCATION:
+            return self._delete_location(entity_id, rmtree)
+        else:
+            return self._delete_simple(entity_id)
+
+    def _delete_simple(self, entity_id: str) -> bool:
+        """Delete a non-location entity with full cascade cleanup."""
+        self._cascade_cleanup(entity_id)
         try:
             self._entities.delete(entity_id)
             return True
         except Exception:
             return False
+
+    def _delete_location(self, location_id: str, rmtree: bool) -> bool:
+        """Delete a location, reparenting or pruning its subtree."""
+        eref = f"{ENTITIES}/{location_id}"
+
+        # Find parent (via outbound super edge, if any)
+        parent_ref = None
+        parent_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @eref AND r.type == 'super'
+            RETURN r._to
+        """
+        cursor = list(self.db.aql.execute(parent_query, bind_vars={"eref": eref}))
+        parent_ref = cursor[0] if cursor else None
+
+        if rmtree:
+            # ── Prune: recursively delete sub-locations and their occupants ──
+            descendant_query = f"""
+                FOR v IN 0..100 INBOUND @eref {RELATIONSHIPS}
+                FILTER v._key != @lid
+                RETURN v._key
+            """
+            descendants = [
+                d for d in self.db.aql.execute(
+                    descendant_query, bind_vars={"eref": eref, "lid": location_id}
+                )
+            ]
+            # Delete bottom-up to avoid dangling references
+            for desc_id in reversed(descendants):
+                desc_eref = f"{ENTITIES}/{desc_id}"
+                # Delete occupants of this sub-location
+                self.db.aql.execute(
+                    f"FOR e IN {ENTITIES} FILTER e.current_location == @lid AND e._key != @lid REMOVE e IN {ENTITIES}",
+                    bind_vars={"lid": desc_id},
+                )
+                # Cascade-cleanup the sub-location entity itself
+                self._cascade_cleanup(desc_id)
+                self._entities.delete(desc_id)
+            # Now delete occupants of the target location itself
+            self.db.aql.execute(
+                f"FOR e IN {ENTITIES} FILTER e.current_location == @lid AND e._key != @lid REMOVE e IN {ENTITIES}",
+                bind_vars={"lid": location_id},
+            )
+        else:
+            # ── Reparent: move occupants and sub-locations to parent ──
+            new_parent_id = parent_ref.split("/", 1)[1] if parent_ref else None
+            if new_parent_id:
+                # Move occupants
+                self.db.aql.execute(
+                    f"FOR e IN {ENTITIES} FILTER e.current_location == @lid UPDATE e WITH {{current_location: @pid}} IN {ENTITIES}",
+                    bind_vars={"lid": location_id, "pid": new_parent_id},
+                )
+                # Move sub-location super edges
+                self.db.aql.execute(
+                    f"""
+                    FOR r IN {RELATIONSHIPS}
+                    FILTER r._to == @eref AND r.type == 'super'
+                    UPDATE r WITH {{_to: @pref}} IN {RELATIONSHIPS}
+                    """,
+                    bind_vars={"eref": eref, "pref": parent_ref},
+                )
+            else:
+                # No parent: clear occupants' location, sub-locations become roots
+                self.db.aql.execute(
+                    f"FOR e IN {ENTITIES} FILTER e.current_location == @lid UPDATE e WITH {{current_location: null}} IN {ENTITIES}",
+                    bind_vars={"lid": location_id},
+                )
+
+        # Final cascade cleanup and delete
+        self._cascade_cleanup(location_id)
+        try:
+            self._entities.delete(location_id)
+            return True
+        except Exception:
+            return False
+
+    def _cascade_cleanup(self, entity_id: str) -> None:
+        """Remove projections, trait settings, and relationships for an entity."""
+        eref = f"{ENTITIES}/{entity_id}"
+        for proj in self._projections.find({"entity_id": entity_id}):
+            self._projections.delete(proj["_key"])
+        self.db.aql.execute(
+            f"FOR ts IN {TRAITSETTINGS} FILTER ts.entity_id == @eid REMOVE ts IN {TRAITSETTINGS}",
+            bind_vars={"eid": entity_id},
+        )
+        self.db.aql.execute(
+            f"FOR r IN {RELATIONSHIPS} FILTER r._from == @eref OR r._to == @eref REMOVE r IN {RELATIONSHIPS}",
+            bind_vars={"eref": eref},
+        )
 
     def list_entities_by_type(
         self, entity_type: EntityType, universe: Optional[str] = None
@@ -558,10 +663,22 @@ class EntityRepository:
     def location_tree(self) -> list[dict]:
         """Return the full location hierarchy as a nested tree.
 
-        Root locations have no parent (no outbound 'super' edge).
-        Children are nested under their parent.
+        Universes are the top-level nodes.  Locations are nested under their
+        universe (keyed on ``current_universe``), with their own ``super``
+        edges forming sub-hierarchies within each universe.
         """
-        # Get all LOCATION entities
+        # ── Get all UNIVERSE entities ─────────────────
+        universe_query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'universe'
+            RETURN {{ id: e._key, name: e.name, current_universe: e.current_universe }}
+        """
+        universes = {
+            doc["current_universe"]: doc
+            for doc in self.db.aql.execute(universe_query)
+        }
+
+        # ── Get all LOCATION entities ─────────────────
         location_query = f"""
             FOR e IN {ENTITIES}
             FILTER e.type == 'location'
@@ -569,33 +686,19 @@ class EntityRepository:
         """
         locations = {doc["id"]: doc for doc in self.db.aql.execute(location_query)}
 
-        # Get all super relationships
+        # ── Get all super relationships ───────────────
         rel_query = f"""
             FOR r IN {RELATIONSHIPS}
             FILTER r.type == 'super'
             RETURN {{ child: PARSE_IDENTIFIER(r._from).key, parent: PARSE_IDENTIFIER(r._to).key }}
         """
-        # child → parent mapping
         parent_of: dict[str, str] = {}
         children_of: dict[str, list[str]] = {}
         for rel in self.db.aql.execute(rel_query):
             parent_of[rel["child"]] = rel["parent"]
             children_of.setdefault(rel["parent"], []).append(rel["child"])
 
-        def build_node(loc_id: str) -> dict:
-            loc = locations.get(loc_id, {"id": loc_id, "name": loc_id, "current_universe": ""})
-            children = children_of.get(loc_id, [])
-            return {
-                "id": loc["id"],
-                "name": loc["name"],
-                "universe": loc.get("current_universe", ""),
-                "children": [build_node(c) for c in sorted(children)],
-            }
-
-        # Root locations: locations with no parent
-        roots = [lid for lid in locations if lid not in parent_of]
-
-        # Also include locations not in the locations dict (edge references)
+        # Fill gaps for edge-referenced entities not in the locations dict
         for child_id in parent_of:
             if child_id not in locations:
                 locations[child_id] = {"id": child_id, "name": child_id, "current_universe": ""}
@@ -603,7 +706,48 @@ class EntityRepository:
             if parent_id not in locations:
                 locations[parent_id] = {"id": parent_id, "name": parent_id, "current_universe": ""}
 
-        return [build_node(r) for r in sorted(roots)]
+        def build_node(loc_id: str) -> dict:
+            loc = locations.get(loc_id, {"id": loc_id, "name": loc_id, "current_universe": ""})
+            children = children_of.get(loc_id, [])
+            return {
+                "id": loc["id"],
+                "name": loc["name"],
+                "node_type": "location",
+                "universe": loc.get("current_universe", ""),
+                "children": [build_node(c) for c in sorted(children)],
+            }
+
+        # Root locations: locations with no parent super edge
+        roots = [lid for lid in locations if lid not in parent_of]
+
+        # Group root locations by their current_universe
+        uni_roots: dict[str, list[str]] = {}
+        orphans: list[str] = []  # locations with no matching universe
+        for lid in roots:
+            ukey = locations[lid].get("current_universe", "")
+            if ukey in universes:
+                uni_roots.setdefault(ukey, []).append(lid)
+            else:
+                orphans.append(lid)
+
+        # Build universe nodes
+        result: list[dict] = []
+        for ukey, uni in sorted(universes.items(), key=lambda kv: kv[1]["name"]):
+            loc_roots = uni_roots.get(ukey, [])
+            result.append({
+                "id": uni["id"],
+                "name": uni["name"],
+                "node_type": "universe",
+                "universe": ukey,
+                "children": [build_node(r) for r in sorted(loc_roots)],
+            })
+
+        # Orphan locations (no matching universe entity) still appear as
+        # top-level nodes so nothing is silently dropped.
+        for lid in sorted(orphans):
+            result.append(build_node(lid))
+
+        return result
 
     def navigate_from(self, location_id: str) -> dict:
         """Return navigation options from a location.

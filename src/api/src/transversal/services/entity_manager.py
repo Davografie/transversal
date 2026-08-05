@@ -136,8 +136,8 @@ class EntityManager:
 
         return result
 
-    def delete(self, entity_id: str) -> bool:
-        return self.repo.delete_entity(entity_id)
+    def delete(self, entity_id: str, rmtree: bool = False) -> bool:
+        return self.repo.delete_entity(entity_id, rmtree=rmtree)
 
     # ── Projections ───────────────────────────────────
 

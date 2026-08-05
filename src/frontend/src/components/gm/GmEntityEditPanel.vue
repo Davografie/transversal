@@ -9,23 +9,13 @@
         </button>
       </div>
       <button class="danger-btn" @click="$emit('delete')">Delete</button>
+      <button v-if="form.type === 'LOCATION'" class="prune-btn" @click="$emit('prune')">Prune</button>
     </div>
     <GmEntityForm
       :model-value="form"
-      :universes="universes"
-      :location-entities="locationEntities"
-      :parent-id="parentId"
       :entity-id="entityId"
       @update:model-value="onFormUpdate"
-      @update:parent-id="onParentUpdate"
       @upload-bg="$emit('upload-bg', $event)"
-    />
-    <TraitEditor
-      :traits="traitSettings"
-      :available-traits="availableTraits"
-      :adding="addingTrait"
-      @add-trait="(i) => $emit('add-trait', i)"
-      @remove-trait="(id) => $emit('remove-trait', id)"
     />
     <div class="image-gallery" v-if="images.length">
       <h4>Generated Images</h4>
@@ -42,24 +32,17 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
-import TraitEditor from '@/components/gm/TraitEditor.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 const props = defineProps({
   form: { type: Object, default: () => ({}) },
-  universes: { type: Array, default: () => [] },
-  locationEntities: { type: Array, default: () => [] },
-  parentId: { type: String, default: null },
   entityId: { type: String, default: null },
-  traitSettings: { type: Array, default: () => [] },
-  availableTraits: { type: Array, default: () => [] },
-  addingTrait: { type: Boolean, default: false },
   imagenJob: { type: Object, default: null },
   animateJob: { type: Object, default: null },
   open: { type: Function, default: null },
 })
 
-const emit = defineEmits(['update:form', 'update:parent-id', 'upload-bg', 'add-trait', 'remove-trait', 'switch-to-sheet', 'delete', 'imagen', 'image-open'])
+const emit = defineEmits(['update:form', 'upload-bg', 'switch-to-sheet', 'delete', 'prune', 'imagen', 'image-open'])
 
 const imagenStatus = computed(() => {
   const j = props.imagenJob
@@ -70,7 +53,6 @@ const imagenStatus = computed(() => {
 })
 
 function onFormUpdate(v) { emit('update:form', v) }
-function onParentUpdate(v) { emit('update:parent-id', v) }
 
 function openImage(img) {
   if (!props.open) return
@@ -116,6 +98,8 @@ defineExpose({ refresh: loadImages })
 .imagen-btn .btn-label { padding: 4px 8px; }
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 .danger-btn { background: var(--danger); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
+.prune-btn { background: #b03030; color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; margin-left: 4px; }
+.prune-btn:hover { background: #d04040; }
 
 .image-gallery { margin-top: 12px; }
 .image-gallery h4 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }

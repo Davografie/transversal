@@ -8,46 +8,33 @@
       <option v-for="t in entityTypes" :key="t" :value="t">{{ t }}</option>
     </select>
 
-    <label>Universe</label>
-    <select v-model="local.current_universe" @change="emitUpdate">
-      <option v-for="u in universes" :key="u.key" :value="u.key">{{ u.name }}</option>
-    </select>
+    <!-- Universe, Location, and Parent Location are managed by drag-and-drop in the tree view. -->
 
-    <template v-if="local.type !== 'LOCATION'">
-      <label>Location</label>
-      <select v-model="local.current_location" @change="emitUpdate">
-        <option value="">-- None --</option>
-        <option v-for="l in locationEntities" :key="l.id" :value="l.id">{{ l.name }}</option>
-      </select>
+    <!-- Razmerit: only CHARACTER, GMC, FACTION -->
+    <template v-if="showRazmerit">
+      <label>Razmerit</label>
+      <input v-model.number="local.razmerit" type="number" @input="emitUpdate" />
     </template>
 
-    <template v-if="local.type === 'LOCATION'">
-      <label>Parent Location</label>
-      <select :value="parentId" @change="$emit('update:parentId', $event.target.value || null)">
-        <option :value="null">-- None (top-level) --</option>
-        <option v-for="l in parentOptions" :key="l.id" :value="l.id">{{ l.name }}</option>
+    <!-- Background image + overlay: only LOCATION -->
+    <template v-if="isLocation">
+      <label>Background Image</label>
+      <div class="bg-image-row">
+        <input v-model="local.background_image" placeholder="/media/…" class="bg-url" @input="emitUpdate" />
+        <input type="file" accept="image/*" @change="$emit('upload-bg', $event)" class="bg-upload" />
+      </div>
+      <img v-if="local.background_image" :src="local.background_image" class="bg-preview" />
+
+      <label>Overlay Effect</label>
+      <select v-model="local.overlay" @change="emitUpdate">
+        <option :value="null">None</option>
+        <option value="mist">Mist</option>
+        <option value="fire">Fire</option>
+        <option value="rain">Rain</option>
+        <option value="snow">Snow</option>
+        <option value="fog">Fog</option>
       </select>
     </template>
-
-    <label>Razmerit</label>
-    <input v-model.number="local.razmerit" type="number" @input="emitUpdate" />
-
-    <label>Background Image</label>
-    <div class="bg-image-row">
-      <input v-model="local.background_image" placeholder="/media/…" class="bg-url" @input="emitUpdate" />
-      <input type="file" accept="image/*" @change="$emit('upload-bg', $event)" class="bg-upload" />
-    </div>
-    <img v-if="local.background_image" :src="local.background_image" class="bg-preview" />
-
-    <label>Overlay Effect</label>
-    <select v-model="local.overlay" @change="emitUpdate">
-      <option :value="null">None</option>
-      <option value="mist">Mist</option>
-      <option value="fire">Fire</option>
-      <option value="rain">Rain</option>
-      <option value="snow">Snow</option>
-      <option value="fog">Fog</option>
-    </select>
 
     <label>
       <input v-model="local.hidden" type="checkbox" @change="emitUpdate" />
@@ -61,20 +48,12 @@ import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
-  universes: { type: Array, default: () => [] },
-  locationEntities: { type: Array, default: () => [] },
-  parentId: { type: String, default: null },
   entityId: { type: String, default: null },
   allowTypeChange: { type: Boolean, default: false },
   entityTypes: { type: Array, default: () => ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
 })
 
-const emit = defineEmits(['update:modelValue', 'update:parentId', 'upload-bg'])
-
-// Filter out the entity being edited from parent location options
-const parentOptions = computed(() =>
-  props.locationEntities.filter(l => l.id !== props.entityId)
-)
+const emit = defineEmits(['update:modelValue', 'upload-bg'])
 
 const local = ref({ ...props.modelValue })
 
@@ -83,6 +62,11 @@ watch(() => props.modelValue, (v) => { local.value = { ...v } }, { deep: true })
 function emitUpdate() {
   emit('update:modelValue', { ...local.value })
 }
+
+// ── Field visibility by entity type ──────────────────
+const RAZMERIT_TYPES = new Set(['CHARACTER', 'GMC', 'FACTION'])
+const isLocation = computed(() => local.value.type === 'LOCATION')
+const showRazmerit = computed(() => RAZMERIT_TYPES.has(local.value.type))
 </script>
 
 <style scoped>

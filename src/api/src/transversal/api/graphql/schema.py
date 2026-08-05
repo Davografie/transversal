@@ -300,8 +300,8 @@ class Mutation:
         return _entity_to_gql(updated)
 
     @strawberry.mutation
-    def delete_entity(self, info: strawberry.Info, id: strawberry.ID) -> bool:
-        return _em(info).delete(str(id))
+    def delete_entity(self, info: strawberry.Info, id: strawberry.ID, rmtree: bool = False) -> bool:
+        return _em(info).delete(str(id), rmtree=rmtree)
 
     @strawberry.mutation
     def remove_trait_setting(self, info: strawberry.Info, id: strawberry.ID) -> bool:
