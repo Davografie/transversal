@@ -63,6 +63,17 @@ class OllamaClient:
         Uses the vision_prompt.txt as the system prompt.
         """
         system_prompt = _load_vision_prompt()
+        # Ensure image is PNG — ollama/gemma3 may not decode webp
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(image_data))
+            if img.format != "PNG":
+                buf = io.BytesIO()
+                img.convert("RGB").save(buf, format="PNG")
+                image_data = buf.getvalue()
+        except Exception:
+            pass  # fall through, try raw bytes
         image_b64 = base64.b64encode(image_data).decode("utf-8")
 
         payload = {
@@ -91,6 +102,19 @@ class OllamaClient:
                 if not response_text:
                     raise RuntimeError(f"Empty response from Ollama: {data}")
                 return self._clean_response(response_text)
+
+    async def unload_model(self) -> None:
+        """Unload the model from VRAM by setting keep_alive to 0."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/api/generate",
+                    json={"model": self.model, "keep_alive": 0},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    pass  # best-effort
+        except Exception:
+            pass
 
     async def health_check(self) -> bool:
         """Check if Ollama is running and the model is available."""

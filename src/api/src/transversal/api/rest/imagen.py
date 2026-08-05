@@ -30,6 +30,23 @@ from transversal.services.entity_manager import EntityManager, EntityNotFoundErr
 logger = logging.getLogger("transversal.imagen")
 router = APIRouter(prefix="/api/v1", tags=["imagen"])
 
+# ── Job tracker ────────────────────────────────────────
+# Keyed by entity_id. Persists across hot-reloads via module-level dict.
+# Each entry: {type, status, percent, message}
+active_jobs: dict[str, dict] = {}
+
+def _update_job(entity_id: str, gen_type: str, status: str, message: str = "", percent: int = 0):
+    """Update or remove a job entry. COMPLETE/FAILED removes after a short delay."""
+    if status in ("complete", "failed"):
+        active_jobs.pop(entity_id, None)
+    else:
+        active_jobs[entity_id] = {
+            "type": gen_type,
+            "status": status,
+            "percent": percent,
+            "message": message,
+        }
+
 
 def _get_orchestrator() -> ImagenOrchestrator:
     """Lazy singleton with SSE progress callback."""
@@ -38,6 +55,7 @@ def _get_orchestrator() -> ImagenOrchestrator:
     repo = EntityRepository()
 
     async def progress_cb(entity_id, gen_type, status, message, percent):
+        _update_job(entity_id, gen_type.value, status.value, message, percent)
         event_bus.publish(StreamEvent(
             event="imagen_progress",
             data={
@@ -72,6 +90,7 @@ def _run_imagen_bg(entity_id: str, universe: str):
             },
         ))
         logger.info(f"Imagen complete for {entity_id}: {image.filename}")
+        _update_job(entity_id, GenerationType.IMAGEN.value, GenerationStatus.COMPLETE.value)
     except Exception as e:
         logger.exception(f"Imagen failed for {entity_id}")
         event_bus.publish(StreamEvent(
@@ -84,6 +103,8 @@ def _run_imagen_bg(entity_id: str, universe: str):
                 "percent": 0,
             },
         ))
+        _cleanup_gpu(orchestrator)
+        _update_job(entity_id, GenerationType.IMAGEN.value, GenerationStatus.FAILED.value)
 
 
 def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_image_path: str = ""):
@@ -108,6 +129,7 @@ def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_ima
             },
         ))
         logger.info(f"Animate complete for {entity_id}: {image.filename}")
+        _update_job(entity_id, GenerationType.ANIMATE.value, GenerationStatus.COMPLETE.value)
     except Exception as e:
         logger.exception(f"Animate failed for {entity_id}")
         event_bus.publish(StreamEvent(
@@ -120,6 +142,22 @@ def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_ima
                 "percent": 0,
             },
         ))
+        _cleanup_gpu(orchestrator)
+        _update_job(entity_id, GenerationType.ANIMATE.value, GenerationStatus.FAILED.value)
+
+
+def _cleanup_gpu(orchestrator) -> None:
+    """Best-effort GPU memory cleanup after failure."""
+    try:
+        import asyncio
+        asyncio.run(orchestrator.comfyui.free_memory())
+    except Exception:
+        pass
+    try:
+        import asyncio
+        asyncio.run(orchestrator.ollama.unload_model())
+    except Exception:
+        pass
 
 
 @router.post("/imagen/{entity_id}")
@@ -186,6 +224,11 @@ async def generate_animation(
     return {"accepted": True, "entity_id": entity_id, "generation_type": "animate"}
 
 
+@router.get("/imagen/jobs")
+async def list_jobs():
+    """Return all active generation/animation jobs with their status."""
+    return {"jobs": active_jobs}
+
 @router.get("/imagen/{entity_id}", response_model=ImageListResponse)
 async def list_images(entity_id: str, universe: str | None = None):
     """List generated images for an entity, optionally filtered by universe."""
@@ -211,7 +254,6 @@ async def list_images(entity_id: str, universe: str | None = None):
             for img in images
         ],
     )
-
 
 @router.delete("/imagen/{image_id}")
 async def delete_image(image_id: str):

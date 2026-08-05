@@ -38,6 +38,9 @@ from transversal.imagen.ollama import OllamaClient
 from transversal.imagen.prompt_builder import build_imagen_prompt
 
 logger = logging.getLogger("transversal.imagen")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    logger.addHandler(logging.StreamHandler())
 
 # ── Paths ──────────────────────────────────────────────
 
@@ -277,8 +280,17 @@ class ImagenOrchestrator:
         negative = params["negative"]
         loras = params["loras"]
         steps_flux = params["steps"]
-        width = 704
-        height = 704
+        width = params["width"]
+        height = params["height"]
+        # Cap resolution for WanVideo VRAM budget (RTX 4090 24GB)
+        max_dim = 1024
+        if width > max_dim or height > max_dim:
+            scale = max_dim / max(width, height)
+            width = int(width * scale)
+            height = int(height * scale)
+            # Round to nearest multiple of 64 for the VAE
+            width = (width // 64) * 64
+            height = (height // 64) * 64
 
         # Animation negative prompt
         anim_negative = f"{negative}, worst quality, low quality, bright tones, interlaced, overexposed, static, blurry, subtitles, 3D, works, paintings, lightning, images, JPEG artifacts, ugly, incomplete, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background"
@@ -290,6 +302,7 @@ class ImagenOrchestrator:
         animate_seed = random.randint(0, 2**32 - 1)
 
         async with self._gpu_lock:
+          try:
             # ── Step 1: Get or generate static image ──
             output_subpath = f"{entity_id}/{universe}"
             output_full = IMAGEN_DIR / output_subpath
@@ -349,16 +362,15 @@ class ImagenOrchestrator:
             # ── Step 2: Ollama vision ──
             await self._report(entity_id, gen_type, GenerationStatus.VISION, "Analysing image with gemma3:12b...", 40)
 
-            # Copy image to ComfyUI input dir for WanVideo
+            # Upload image to ComfyUI input dir for WanVideo
             input_filename = f"animate_{short_hash}.png"
-            input_path = COMFY_INPUT_DIR / input_filename
-            input_path.parent.mkdir(parents=True, exist_ok=True)
-            input_path.write_bytes(static_image)
+            await self.comfyui.upload_image(static_image, input_filename)
 
             motion_description = await self.ollama.describe_motion(static_image)
             logger.info(f"Gemma3 motion description: {motion_description}")
 
             await self.comfyui.free_memory()
+            await self.ollama.unload_model()
 
             # ── Step 3: WanVideo generation ──
             await self._report(entity_id, gen_type, GenerationStatus.ANIMATING,
@@ -387,17 +399,20 @@ class ImagenOrchestrator:
                 wan_result["filename"], wan_result.get("subfolder", ""), wan_result.get("type", "output")
             )
 
+          finally:
             await self.comfyui.free_memory()
+            await self.ollama.unload_model()
 
         # 4. Save video
         await self._report(entity_id, gen_type, GenerationStatus.SAVING, "Saving animation...", 85)
 
+        image_id = short_hash
         video_path = ANIMATED_DIR / output_subpath
         video_path.mkdir(parents=True, exist_ok=True)
 
         # Determine extension
         ext = Path(wan_result["filename"]).suffix if "filename" in wan_result else ".webp"
-        video_file = video_path / f"{image_id}{ext}"
+        video_file = video_path / f"{base_name}{ext}"
         video_file.write_bytes(video_data)
 
         # 5. Record metadata
@@ -413,14 +428,14 @@ class ImagenOrchestrator:
             height=height,
             seed=animate_seed,
             steps=steps_flux,
-            filename=f"{output_subpath}/{image_id}",
+            filename=base_name,
             extension=ext.lstrip("."),
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         self.repo.create_entity_image(entity_image)
 
         await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
-                           f"/media/animated/{output_subpath}/{image_id}{ext}", 100)
+                           f"/media/animated/{output_subpath}/{base_name}{ext}", 100)
 
         return entity_image
 

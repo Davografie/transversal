@@ -16,6 +16,7 @@ import aiohttp
 
 
 COMFYUI_URL = os.getenv("COMFYUI_URL", "http://imagen:8188")
+LORA_SERVER_URL = os.getenv("LORA_SERVER_URL", "http://imagen:8191")
 
 
 # ── Synchronous helpers (for simple fire-and-forget) ──
@@ -90,15 +91,31 @@ class ComfyUIClient:
                 continue
 
             outputs = status.get("outputs", {})
+            best_media = None
+            best_node_id = None
             for node_id, node_output in outputs.items():
-                images = node_output.get("images", [])
-                if images:
+                # Some nodes (VHS_VideoCombine) report under "gifs" not "images"
+                media = node_output.get("images", []) or node_output.get("gifs", [])
+                if not media:
+                    continue
+                filename = media[0]["filename"]
+                # Prefer image outputs (webp/gif) over video previews (mp4)
+                if filename.endswith((".webp", ".gif", ".png")):
                     return {
-                        "filename": images[0]["filename"],
-                        "subfolder": images[0].get("subfolder", ""),
-                        "type": images[0].get("type", "output"),
+                        "filename": filename,
+                        "subfolder": media[0].get("subfolder", ""),
+                        "type": media[0].get("type", "output"),
                         "node_id": node_id,
                     }
+                best_media = media
+                best_node_id = node_id
+            if best_media:
+                return {
+                    "filename": best_media[0]["filename"],
+                    "subfolder": best_media[0].get("subfolder", ""),
+                    "type": best_media[0].get("type", "output"),
+                    "node_id": best_node_id,
+                }
             # Fallback: some nodes (WAS Image Save) report empty images
             # but the prompt is complete — signal completion so caller can
             # find the file by its known output path
@@ -136,6 +153,29 @@ class ComfyUIClient:
             async with session.post(f"{self.base_url}/interrupt") as resp:
                 if resp.status != 200:
                     raise RuntimeError(f"Failed to interrupt: {resp.status}")
+
+    async def upload_image(self, image_data: bytes, filename: str) -> str:
+        """Upload an image to ComfyUI's input directory. Returns the stored filename."""
+        form = aiohttp.FormData()
+        form.add_field("image", image_data, filename=filename, content_type="image/png")
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{self.base_url}/upload/image", data=form) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise RuntimeError(f"Failed to upload image: {resp.status} — {body}")
+                data = await resp.json()
+                return data.get("name", filename)
+
+    async def list_loras(self) -> list[dict]:
+        """List available Flux LoRA files from the imagEN container.
+
+        Returns [{"name": "FantasyPortraits-v3", "path": "FantasyPortraits-v3.safetensors"}, ...]
+        """
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{LORA_SERVER_URL}/loras") as resp:
+                if resp.status != 200:
+                    return []
+                return await resp.json()
 
     async def free_memory(self) -> None:
         """POST /free to unload models from VRAM."""
