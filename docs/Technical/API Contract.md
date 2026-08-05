@@ -546,8 +546,8 @@ docker compose run seed
 docker compose exec api python -m transversal seed
 ```
 
-The command is idempotent — it checks for existing records before inserting. See `code/api/src/transversal/__main__.py`.
+The command is idempotent — it checks for existing records before inserting. See `src/api/src/transversal/__main__.py`.
 
 ## MCP Server
 
-Available over stdio transport. Provides 5 tools for entity CRUD, dice resolution, and session management. See `code/api/src/transversal/mcp/server.py`.
+Available over stdio transport. Provides 5 tools for entity CRUD, dice resolution, and session management. See `src/api/src/transversal/mcp/server.py`.

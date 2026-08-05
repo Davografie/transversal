@@ -18,9 +18,9 @@ aliases:
 The Transversal backend uses **ArangoDB 3.12** — a graph + document database. The data model is a property graph: entities, traits, SFXs, and players live in separate collections connected by edges. This is the single source of truth for all collection schemas, field definitions, edge patterns, and ID conventions.
 
 > [!tip] Where's the code?
-> Pydantic models: `code/api/src/transversal/domain/__init__.py`
-> Database setup: `code/api/src/transversal/db/arango.py`
-> Repository: `code/api/src/transversal/db/repository.py`
+> Pydantic models: `src/api/src/transversal/domain/__init__.py`
+> Database setup: `src/api/src/transversal/db/arango.py`
+> Repository: `src/api/src/transversal/db/repository.py`
 
 ## Collections
 

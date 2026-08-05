@@ -5,7 +5,7 @@ A VTTRPG where players travel across a multiverse through a common backend appli
 ## Quick Start
 
 ```bash
-cd code
+cd src
 docker compose up -d
 ```
 
@@ -31,8 +31,8 @@ Then open:
 ## Project Layout
 
 ```
-code/
-├── docker-compose.yaml
+src/
+├── docker-compose.yaml (at repo root)
 ├── api/                          # FastAPI backend
 │   ├── Dockerfile
 │   ├── pyproject.toml
@@ -64,14 +64,14 @@ docs/                             # Obsidian-wiki documentation (10 docs, 2700+ 
 ## Running Tests
 
 ```bash
-cd code/api
+cd src/api
 pip install -e ".[dev]"
 PYTHONPATH=src python -m pytest tests/ -v
 ```
 
 Or inside the container:
 ```bash
-docker compose -f code/docker-compose.yaml exec api python -m pytest tests/ -v
+docker compose -f docker-compose.yaml exec api python -m pytest tests/ -v
 ```
 
 ## Key Conventions
