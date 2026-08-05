@@ -127,8 +127,6 @@ class ImagenOrchestrator:
     - Never two GPU consumers concurrently
     """
 
-    _gpu_lock = asyncio.Lock()
-
     def __init__(
         self,
         repository: EntityRepository | None = None,
@@ -136,6 +134,7 @@ class ImagenOrchestrator:
         ollama: OllamaClient | None = None,
         progress_callback: callable | None = None,
     ):
+        self._gpu_lock = asyncio.Lock()
         self.repo = repository or EntityRepository()
         self.comfyui = comfyui or ComfyUIClient()
         self.ollama = ollama or OllamaClient()
@@ -263,6 +262,7 @@ class ImagenOrchestrator:
         duration_seconds: float = 3.0,
         session_id: str = "",
         existing_image_path: str = "",
+        motion_hint: str = "",
     ) -> EntityImage:
         """Generate a video loop for an entity.
 
@@ -283,9 +283,9 @@ class ImagenOrchestrator:
         width = params["width"]
         height = params["height"]
         # Cap resolution for WanVideo VRAM budget (RTX 4090 24GB)
-        max_dim = 1024
-        if width > max_dim or height > max_dim:
-            scale = max_dim / max(width, height)
+        max_pixels = 1024 * 1024
+        if width * height > max_pixels:
+            scale = (max_pixels / (width * height)) ** 0.5
             width = int(width * scale)
             height = int(height * scale)
             # Round to nearest multiple of 64 for the VAE
@@ -366,7 +366,7 @@ class ImagenOrchestrator:
             input_filename = f"animate_{short_hash}.png"
             await self.comfyui.upload_image(static_image, input_filename)
 
-            motion_description = await self.ollama.describe_motion(static_image)
+            motion_description = await self.ollama.describe_motion(static_image, motion_hint)
             logger.info(f"Gemma3 motion description: {motion_description}")
 
             await self.comfyui.free_memory()

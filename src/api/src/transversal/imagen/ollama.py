@@ -55,14 +55,19 @@ class OllamaClient:
     async def describe_motion(
         self,
         image_data: bytes,
+        motion_hint: str = "",
         image_mime: str = "image/png",
         timeout_secs: int = 120,
     ) -> str:
         """Send an image to gemma3:12b and get a motion description back.
 
         Uses the vision_prompt.txt as the system prompt.
+        If motion_hint is provided, it's prepended to the user prompt.
         """
         system_prompt = _load_vision_prompt()
+        user_prompt = "Describe the motion in this image."
+        if motion_hint:
+            user_prompt = f"Hint: {motion_hint}\n\n{user_prompt}"
         # Ensure image is PNG — ollama/gemma3 may not decode webp
         try:
             from PIL import Image
@@ -79,7 +84,7 @@ class OllamaClient:
         payload = {
             "model": self.model,
             "system": system_prompt,
-            "prompt": "Describe the motion in this image.",
+            "prompt": user_prompt,
             "images": [image_b64],
             "stream": False,
             "options": {

@@ -40,6 +40,7 @@ class AnimateRequest(BaseModel):
     duration_seconds: float = 3.0
     lora_strength: float = 0.95
     image_id: str = ""  # if set, skip Flux gen — animate this existing image
+    motion_hint: str = ""  # user hint to guide gemma3 motion description
 
 
 class GenerationProgress(BaseModel):

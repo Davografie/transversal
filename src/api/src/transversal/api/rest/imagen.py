@@ -31,14 +31,27 @@ logger = logging.getLogger("transversal.imagen")
 router = APIRouter(prefix="/api/v1", tags=["imagen"])
 
 # ── Job tracker ────────────────────────────────────────
-# Keyed by entity_id. Persists across hot-reloads via module-level dict.
-# Each entry: {type, status, percent, message}
+# Keyed by entity_id. Each entry: {type, status, percent, message, queued_at}
 active_jobs: dict[str, dict] = {}
+_job_order: list[str] = []  # submission order for queue position
+
+def _queue_job(entity_id: str, gen_type: str):
+    """Register a job as queued before it starts processing."""
+    if entity_id not in active_jobs:
+        _job_order.append(entity_id)
+    active_jobs[entity_id] = {
+        "type": gen_type,
+        "status": "queued",
+        "percent": 0,
+        "message": "Waiting for GPU...",
+    }
 
 def _update_job(entity_id: str, gen_type: str, status: str, message: str = "", percent: int = 0):
-    """Update or remove a job entry. COMPLETE/FAILED removes after a short delay."""
+    """Update or remove a job entry. COMPLETE/FAILED removes."""
     if status in ("complete", "failed"):
         active_jobs.pop(entity_id, None)
+        if entity_id in _job_order:
+            _job_order.remove(entity_id)
     else:
         active_jobs[entity_id] = {
             "type": gen_type,
@@ -46,6 +59,11 @@ def _update_job(entity_id: str, gen_type: str, status: str, message: str = "", p
             "percent": percent,
             "message": message,
         }
+
+def _job_with_queue(entity_id: str, job: dict) -> dict:
+    """Attach queue_position to a job entry."""
+    pos = _job_order.index(entity_id) + 1 if entity_id in _job_order and job.get("status") == "queued" else 0
+    return {**job, "queue_position": pos}
 
 
 def _get_orchestrator() -> ImagenOrchestrator:
@@ -107,7 +125,7 @@ def _run_imagen_bg(entity_id: str, universe: str):
         _update_job(entity_id, GenerationType.IMAGEN.value, GenerationStatus.FAILED.value)
 
 
-def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_image_path: str = ""):
+def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_image_path: str = "", motion_hint: str = ""):
     """Background task: generate video loop and publish final SSE event."""
     orchestrator = _get_orchestrator()
     try:
@@ -117,6 +135,7 @@ def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_ima
             universe=universe,
             duration_seconds=duration,
             existing_image_path=existing_image_path,
+            motion_hint=motion_hint,
         ))
         event_bus.publish(StreamEvent(
             event="imagen_progress",
@@ -181,6 +200,7 @@ async def generate_image(
     universe = entity.current_universe
     logger.info(f"Enqueuing imagen for {entity_id} ({entity.name}) in {universe}")
 
+    _queue_job(entity_id, GenerationType.IMAGEN.value)
     background_tasks.add_task(_run_imagen_bg, entity_id, universe)
 
     return {"accepted": True, "entity_id": entity_id, "generation_type": "imagen"}
@@ -219,15 +239,17 @@ async def generate_animation(
 
     logger.info(f"Enqueuing animate for {entity_id} ({entity.name}) in {universe}")
 
-    background_tasks.add_task(_run_animate_bg, entity_id, universe, duration, existing_image_path)
+    _queue_job(entity_id, GenerationType.ANIMATE.value)
+    motion_hint = request.motion_hint if request else ""
+    background_tasks.add_task(_run_animate_bg, entity_id, universe, duration, existing_image_path, motion_hint)
 
     return {"accepted": True, "entity_id": entity_id, "generation_type": "animate"}
 
 
 @router.get("/imagen/jobs")
 async def list_jobs():
-    """Return all active generation/animation jobs with their status."""
-    return {"jobs": active_jobs}
+    """Return all active generation/animation jobs with status and queue position."""
+    return {"jobs": {eid: _job_with_queue(eid, j) for eid, j in active_jobs.items()}}
 
 @router.get("/imagen/{entity_id}", response_model=ImageListResponse)
 async def list_images(entity_id: str, universe: str | None = None):

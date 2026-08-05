@@ -89,13 +89,13 @@ function startJobPolling() {
 }
 function stopJobPolling() { clearInterval(_jobPollTimer) }
 
-const imagening = computed(() => {
+const imagenJob = computed(() => {
   const j = jobStatuses.value[selectedId.value]
-  return !!(j && j.type === 'imagen' && j.status !== 'complete' && j.status !== 'failed')
+  return (j && j.type === 'imagen') ? j : null
 })
-const animating = computed(() => {
+const animateJob = computed(() => {
   const j = jobStatuses.value[selectedId.value]
-  return !!(j && j.type === 'animate' && j.status !== 'complete' && j.status !== 'failed')
+  return (j && j.type === 'animate') ? j : null
 })
 
 const filterLocationId = ref('')
@@ -266,7 +266,8 @@ function openEntityEdit() {
       parentId: parentId.value,
       entityId: selectedId.value,
       traitSettings: selected.value.traitSettings || [],
-      imagening: imagening.value,
+      imagenJob: imagenJob.value,
+      animateJob: animateJob.value,
       availableTraits: availableTraits.value,
       addingTrait: addingTrait.value,
     },
@@ -537,10 +538,12 @@ function patchData(collection, id, changes) {
 }
 // ── Imagen / Animate ──────────────────────────────
 async function onImagen() {
-  if (!selectedId.value || imagening.value) return
+  if (!selectedId.value || imagenJob.value) return
+  jobStatuses.value = { ...jobStatuses.value, [selectedId.value]: { type: 'imagen', status: 'queued', queue_position: '⋯' } }
   try {
     await imagenEntity(selectedId.value)
   } catch (e) {
+    const s = { ...jobStatuses.value }; delete s[selectedId.value]; jobStatuses.value = s
     console.error('[GmPanel] imagen failed:', e)
   }
 }
