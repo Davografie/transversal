@@ -5,7 +5,7 @@ echo "=== Transversal2 Imagen Container ==="
 echo "Starting Ollama..."
 
 # Start Ollama in background
-OLLAMA_HOST=0.0.0.0 ollama serve &
+OLLAMA_HOST=0.0.0.0 OLLAMA_KEEP_ALIVE=60s ollama serve &
 OLLAMA_PID=$!
 
 # Wait for Ollama to be ready
@@ -29,6 +29,11 @@ done
         echo "gemma3:12b already present."
     fi
 ) &
+
+# Start LoRA file listing server in background
+echo "Starting LoRA server..."
+python3 /app/lora_server.py &
+LORA_PID=$!
 
 echo "=== Starting ComfyUI ==="
 # Start ComfyUI (blocking)

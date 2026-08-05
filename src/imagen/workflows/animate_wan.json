@@ -510,7 +510,7 @@
     },
     "class_type": "RollFrames",
     "_meta": {
-      "title": "🐇 Roll Frames"
+      "title": "\ud83d\udc07 Roll Frames"
     }
   },
   "279": {
@@ -530,7 +530,7 @@
     },
     "class_type": "UnrollFrames",
     "_meta": {
-      "title": "🐇 Unroll Frames"
+      "title": "\ud83d\udc07 Unroll Frames"
     }
   },
   "331": {
@@ -555,7 +555,7 @@
       "loop_count": 0,
       "filename_prefix": "LoopVid",
       "format": "image/webp",
-      "lossless": true,
+      "lossless": false,
       "pingpong": false,
       "save_output": true,
       "images": [
@@ -600,7 +600,7 @@
     },
     "class_type": "AssembleLoopFrames",
     "_meta": {
-      "title": "🐇 Assemble Loop Frames"
+      "title": "\ud83d\udc07 Assemble Loop Frames"
     }
   },
   "347": {
@@ -612,7 +612,7 @@
     },
     "class_type": "PrepareLoopFrames",
     "_meta": {
-      "title": "🐇 Prepare Loop Frames"
+      "title": "\ud83d\udc07 Prepare Loop Frames"
     }
   },
   "352": {
@@ -786,44 +786,6 @@
       "title": "Interpolation Multiplier"
     }
   },
-  "424": {
-    "inputs": {
-      "frame_rate": [
-        "447",
-        1
-      ],
-      "loop_count": 0,
-      "filename_prefix": "seam_interp_prev",
-      "format": "video/h264-mp4",
-      "pix_fmt": "yuv420p",
-      "crf": 19,
-      "save_metadata": true,
-      "trim_to_audio": false,
-      "pingpong": false,
-      "save_output": true,
-      "images": [
-        "345",
-        0
-      ]
-    },
-    "class_type": "VHS_VideoCombine",
-    "_meta": {
-      "title": "Seam Interp Preview"
-    }
-  },
-  "447": {
-    "inputs": {
-      "expression": "a",
-      "a": [
-        "369",
-        0
-      ]
-    },
-    "class_type": "MathExpression|pysssss",
-    "_meta": {
-      "title": "coerce to float"
-    }
-  },
   "462": {
     "inputs": {
       "trim_start_frames": 2,
@@ -892,7 +854,7 @@
     },
     "class_type": "RIFE_FPS_Resample",
     "_meta": {
-      "title": "🐇 RIFE VFI FPS Resample"
+      "title": "\ud83d\udc07 RIFE VFI FPS Resample"
     }
   },
   "472": {

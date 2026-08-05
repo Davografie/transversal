@@ -5,7 +5,7 @@ FROM nvidia/cuda:12.4.1-base-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# ── System deps ──────────────────────────────────────
+# ── System deps (rarely changed, cached first) ──────
 RUN apt-get update && apt-get install -y \
     python3 python3-pip python3-dev git wget curl zstd ffmpeg \
     libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
@@ -13,12 +13,15 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu129
 
-# ── ComfyUI ──────────────────────────────────────────
+# ── Ollama (large download, rarely changed) ──────────
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# ── ComfyUI base (rarely changed) ────────────────────
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git /app/ComfyUI
 WORKDIR /app/ComfyUI
 RUN pip install -r requirements.txt
 
-# Custom nodes
+# ── Custom nodes (frequently changed, at the bottom) ──
 WORKDIR /app/ComfyUI/custom_nodes
 
 # XLabs Flux
@@ -73,31 +76,44 @@ WORKDIR /app/ComfyUI/custom_nodes
 RUN git clone https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git ComfyUI_UltimateSDUpscale
 
 # mxToolkit (mxSlider nodes for WanVideo workflow)
-WORKDIR /app/ComfyUI/custom_nodes
 RUN git clone https://github.com/Smirnov75/ComfyUI-mxToolkit.git ComfyUI-mxToolkit
 
-# ComfyUI Essentials (BatchCount+, and other missing core nodes)
+# ComfyUI Essentials (BatchCount+ and other missing core nodes)
 RUN git clone https://github.com/cubiq/ComfyUI_essentials.git ComfyUI_essentials
 
-# White Rabbit nodes (frame rolling/unrolling for seamless loops)
-RUN git clone https://github.com/Artificial-Sweetener/comfyui-WhiteRabbit.git ComfyUI-WhiteRabbit
-WORKDIR /app/ComfyUI/custom_nodes/ComfyUI-WhiteRabbit
+# KJNodes (ColorMatch node for WanVideo workflow)
+RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git ComfyUI-KJNodes
+WORKDIR /app/ComfyUI/custom_nodes/ComfyUI-KJNodes
 RUN pip install -r requirements.txt
 
-WORKDIR /app/ComfyUI
+# White Rabbit nodes (frame rolling/unrolling for seamless loops)
+# Sourced from local copy — remote git clone is unreliable
+COPY whiterabbit-custom/ /app/ComfyUI/custom_nodes/ComfyUI-WhiteRabbit/
+WORKDIR /app/ComfyUI/custom_nodes/ComfyUI-WhiteRabbit
+RUN pip install torchlanc packaging
 
-# ── Ollama ───────────────────────────────────────────
-RUN curl -fsSL https://ollama.com/install.sh | sh
+# ── Late additions (after all custom nodes to preserve cache) ──
+# Easy Use (cleanGpuUsed and other utility nodes)
+WORKDIR /app/ComfyUI/custom_nodes
+RUN git clone https://github.com/yolain/ComfyUI-Easy-Use.git ComfyUI-Easy-Use
+WORKDIR /app/ComfyUI/custom_nodes/ComfyUI-Easy-Use
+RUN pip install -r requirements.txt
+
+# SageAttention (optimized attention for WanVideo)
+RUN pip install sageattention
+
+WORKDIR /app/ComfyUI
 
 # ── Copy workflows and config ────────────────────────
 COPY workflows/ /app/imagen/workflows/
 COPY vision_prompt.txt /app/imagen/vision_prompt.txt
+COPY lora_server.py /app/lora_server.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # ── Expose ports ─────────────────────────────────────
-# ComfyUI: 8188, Ollama: 11434
-EXPOSE 8188 11434
+# ComfyUI: 8188, Ollama: 11434, LoRA: 8191
+EXPOSE 8188 11434 8191
 
 ENV COMFYUI_MODEL_DIR=/app/ComfyUI/models
 VOLUME ["/app/ComfyUI/models", "/app/ComfyUI/input", "/app/ComfyUI/output", "/app/media"]
