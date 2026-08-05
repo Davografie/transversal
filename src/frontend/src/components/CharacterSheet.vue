@@ -530,10 +530,15 @@ function startEdit(t) {
 }
 
 function cancelEdit() {
-  clearInterval(deleteTimer)
-  deleteCountdown.value = 0
-  deletingTraitId.value = null
-  editingTraitId.value = null
+  if (deleteCountdown.value > 0) {
+    clearInterval(deleteTimer)
+    deleteCountdown.value = 0
+    const targetId = deletingTraitId.value
+    deletingTraitId.value = null
+    deleteTrait({ id: targetId })
+  } else {
+    editingTraitId.value = null
+  }
 }
 
 const deleteCountdown = ref(0)
