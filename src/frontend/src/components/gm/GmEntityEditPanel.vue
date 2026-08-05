@@ -4,7 +4,6 @@
       <div class="left-actions">
         <button class="sheet-edit-btn" @click="$emit('switch-to-sheet')">Sheet</button>
         <button class="imagen-btn" @click="$emit('imagen')" :disabled="imagening">🖼 Imagen</button>
-        <button class="animate-btn" @click="$emit('animate')" :disabled="animating">🎬 Animate</button>
       </div>
       <button class="danger-btn" @click="$emit('delete')">Delete</button>
     </div>
@@ -29,7 +28,7 @@
       <h4>Generated Images</h4>
       <div class="gallery-grid">
         <div v-for="img in images" :key="img.id" class="gallery-item" @click="openImage(img)">
-          <img :src="img.path_large" :alt="img.image_type" loading="lazy" />
+          <img :src="img.image_type === 'animated' ? img.path_animated : img.path_large" :alt="img.image_type" loading="lazy" />
           <span class="gallery-label">{{ img.image_type }} — {{ img.width }}×{{ img.height }}</span>
         </div>
       </div>
@@ -53,11 +52,10 @@ const props = defineProps({
   availableTraits: { type: Array, default: () => [] },
   addingTrait: { type: Boolean, default: false },
   imagening: { type: Boolean, default: false },
-  animating: { type: Boolean, default: false },
   open: { type: Function, default: null },
 })
 
-const emit = defineEmits(['update:form', 'update:parent-id', 'upload-bg', 'add-trait', 'remove-trait', 'switch-to-sheet', 'delete', 'imagen', 'animate', 'image-open'])
+const emit = defineEmits(['update:form', 'update:parent-id', 'upload-bg', 'add-trait', 'remove-trait', 'switch-to-sheet', 'delete', 'imagen', 'image-open'])
 
 function onFormUpdate(v) { emit('update:form', v) }
 function onParentUpdate(v) { emit('update:parent-id', v) }
@@ -68,10 +66,12 @@ function openImage(img) {
     component: ImageViewer,
     title: img.image_type + ' — ' + img.id,
     props: {
-      src: img.path_large,
+      src: img.path_animated || img.path_large,
+      animatedSrc: img.path_animated,
       alt: img.image_type + ' — ' + img.width + '×' + img.height,
       entityId: props.entityId,
       imageId: img.id,
+      imageType: img.image_type,
     },
     listeners: {
       'deleted': loadImages,
@@ -100,8 +100,6 @@ defineExpose({ refresh: loadImages })
 .sheet-edit-btn { background: var(--accent); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 .imagen-btn { background: #8b5cf6; color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 .imagen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.animate-btn { background: #f59e0b; color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
-.animate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .danger-btn { background: var(--danger); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 
 .image-gallery { margin-top: 12px; }

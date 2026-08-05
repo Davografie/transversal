@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
@@ -58,7 +58,7 @@ import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 
-const { graphql, imagenEntity, animateEntity } = useApi()
+const { graphql, imagenEntity } = useApi()
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -71,8 +71,32 @@ const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-p
 const mode = ref('play')
 const viewSceneSummary = ref(true)
 const sessionActive = ref(false)
-const imagening = ref(false)
-const animating = ref(false)
+
+// ── Job polling ────────────────────────────────────────
+const jobStatuses = ref({})  // {entity_id: {type, status, percent, message}}
+let _jobPollTimer = null
+
+async function pollJobs() {
+  try {
+    const r = await fetch('/api/v1/imagen/jobs')
+    if (r.ok) jobStatuses.value = (await r.json()).jobs || {}
+  } catch {}
+}
+
+function startJobPolling() {
+  pollJobs()
+  _jobPollTimer = setInterval(pollJobs, 2000)
+}
+function stopJobPolling() { clearInterval(_jobPollTimer) }
+
+const imagening = computed(() => {
+  const j = jobStatuses.value[selectedId.value]
+  return !!(j && j.type === 'imagen' && j.status !== 'complete' && j.status !== 'failed')
+})
+const animating = computed(() => {
+  const j = jobStatuses.value[selectedId.value]
+  return !!(j && j.type === 'animate' && j.status !== 'complete' && j.status !== 'failed')
+})
 
 const filterLocationId = ref('')
 const activeFilters = ref([])
@@ -243,7 +267,6 @@ function openEntityEdit() {
       entityId: selectedId.value,
       traitSettings: selected.value.traitSettings || [],
       imagening: imagening.value,
-      animating: animating.value,
       availableTraits: availableTraits.value,
       addingTrait: addingTrait.value,
     },
@@ -256,7 +279,6 @@ function openEntityEdit() {
       'switch-to-sheet': switchToSheet,
       'delete': deleteSelected,
       'imagen': onImagen,
-      'animate': onAnimate,
       'image-open': onImageOpen,
     },
   })
@@ -515,18 +537,11 @@ function patchData(collection, id, changes) {
 }
 // ── Imagen / Animate ──────────────────────────────
 async function onImagen() {
-  console.log('[GmPanel] onImagen called, selectedId:', selectedId.value, 'imagening:', imagening.value)
   if (!selectedId.value || imagening.value) return
-  imagening.value = true
   try {
-    const result = await imagenEntity(selectedId.value)
-    console.log('[GmPanel] imagen accepted:', result)
-    // Progress and completion come via SSE events (imagen_progress)
+    await imagenEntity(selectedId.value)
   } catch (e) {
     console.error('[GmPanel] imagen failed:', e)
-    imagening.value = false
-  } finally {
-    imagening.value = false
   }
 }
 
@@ -535,25 +550,14 @@ function onImageOpen(img) {
   props.open({
     component: ImageViewer,
     title: img.id,
-    props: { src: img.path_large, alt: img.image_type + ' — ' + img.width + '×' + img.height },
+      props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, imageType: img.image_type },
     listeners: {},
   })
 }
 
-async function onAnimate() {
-  if (!selectedId.value || animating.value) return
-  animating.value = true
-  try {
-    const result = await animateEntity(selectedId.value)
-    alert(result?.success ? 'Animation generated!' : (result?.message || 'Animation failed'))
-  } finally {
-    animating.value = false
-  }
-}
-
-
 // ── Lifecycle ──────────────────────────────────────
-onMounted(() => { fetchEntities(); fetchLocationTree() })
+onMounted(() => { fetchEntities(); fetchLocationTree(); startJobPolling() })
+onUnmounted(() => { stopJobPolling() })
 </script>
 
 <style scoped>

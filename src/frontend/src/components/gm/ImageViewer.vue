@@ -1,10 +1,10 @@
 <template>
   <div class="image-viewer">
     <div class="viewer-actions">
-      <button class="animate-btn" @click="onAnimate" :disabled="animating">🎬 Animate</button>
+      <button v-if="imageType !== 'animated'" class="animate-btn" @click="onAnimate" :disabled="animating">🎬 Animate</button>
       <button class="delete-btn" @click="onDelete" :disabled="deleting">🗑 Delete</button>
     </div>
-    <img :src="src" :alt="alt" />
+    <img :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" :alt="alt" />
     <div class="image-meta">{{ alt }}</div>
     <div v-if="message" class="message">{{ message }}</div>
   </div>
@@ -18,6 +18,8 @@ const props = defineProps({
   alt: { type: String, default: '' },
   entityId: { type: String, default: '' },
   imageId: { type: String, default: '' },
+  imageType: { type: String, default: '' },
+  animatedSrc: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close', 'deleted'])
