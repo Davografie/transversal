@@ -32,6 +32,21 @@ async def navigate(location_id: str):
     result = _repo().navigate_from(location_id)
     if result["location"] is None:
         raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
+
+    # Resolve navdot images from entity_images (role="navdot")
+    from transversal.db.repository import EntityRepository
+    from transversal.domain import ImageType
+    repo = EntityRepository()
+    for occ in result.get("occupants", []):
+        images = repo.get_entity_images(occ["id"])
+        for img in images:
+            if "navdot" in img.roles:
+                if img.image_type == ImageType.ANIMATED:
+                    occ["image"] = f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+                else:
+                    occ["image"] = f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+                break
+
     return result
 
 

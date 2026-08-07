@@ -83,19 +83,20 @@ class OllamaClient:
 
         payload = {
             "model": self.model,
-            "system": system_prompt,
-            "prompt": user_prompt,
-            "images": [image_b64],
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt, "images": [image_b64]},
+            ],
             "stream": False,
             "options": {
                 "temperature": 0.7,
-                "num_predict": 512,
+                "num_predict": 1024,
             },
         }
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self.base_url}/api/generate",
+                f"{self.base_url}/api/chat",
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=timeout_secs),
             ) as resp:
@@ -103,7 +104,7 @@ class OllamaClient:
                     body = await resp.text()
                     raise RuntimeError(f"Ollama returned {resp.status}: {body}")
                 data = await resp.json()
-                response_text = data.get("response", "")
+                response_text = data.get("message", {}).get("content", "")
                 if not response_text:
                     raise RuntimeError(f"Empty response from Ollama: {data}")
                 return self._clean_response(response_text)

@@ -17,6 +17,12 @@
       <label class="role-check" title="Use as character sheet portrait"><input type="checkbox" :checked="hasRole('sheet')" @change="toggleRole('sheet')" /> Sheet</label>
       <label class="role-check" title="Use as navigation dot"><input type="checkbox" :checked="hasRole('navdot')" @change="toggleRole('navdot')" /> Nav</label>
     </div>
+    <div class="universe-assign">
+      <label class="universe-label">Universe</label>
+      <select v-model="imageUniverse" class="universe-select" @change="onUniverseChange">
+        <option v-for="u in availableUniverses" :key="u.key" :value="u.key">{{ u.name }}</option>
+      </select>
+    </div>
     <div class="image-meta">{{ alt }}<span v-if="sizeBytes" class="meta-size"> · {{ formatBytes(sizeBytes) }}</span></div>
     <div v-if="message" class="message">{{ message }}</div>
 
@@ -68,7 +74,47 @@ async function fetchRoles() {
     }
   } catch {}
 }
-onMounted(fetchRoles)
+onMounted(() => { fetchRoles(); fetchUniverses(); fetchImageUniverse() })
+
+// Universe assignment
+const imageUniverse = ref('')
+const availableUniverses = ref([])
+
+async function fetchUniverses() {
+  try {
+    const r = await fetch('/api/v1/graphql', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: '{ entities(type: UNIVERSE) { id name currentUniverse } }' }),
+    })
+    if (r.ok) {
+      const data = await r.json()
+      availableUniverses.value = (data.data?.entities || []).map(e => ({ key: e.currentUniverse, name: e.name }))
+    }
+  } catch {}
+}
+
+async function fetchImageUniverse() {
+  if (!props.entityId || !props.imageId) return
+  try {
+    const r = await fetch(`/api/v1/imagen/${props.entityId}`)
+    if (r.ok) {
+      const data = await r.json()
+      const img = (data.images || []).find(i => i.id === props.imageId)
+      if (img) imageUniverse.value = img.universe || ''
+    }
+  } catch {}
+}
+
+async function onUniverseChange() {
+  try {
+    await fetch(`/api/v1/imagen/${props.imageId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ universe: imageUniverse.value }),
+    })
+    emit('refresh')
+  } catch {}
+}
 
 function hasRole(r) { return fetchedRoles.value.includes(r) }
 async function toggleRole(r) {
@@ -186,6 +232,10 @@ async function onDelete() {
 .section-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
 .role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 2px; }
 .role-check input { margin: 0; cursor: pointer; }
+
+.universe-assign { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 4px; }
+.universe-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
+.universe-select { font-size: 10px; padding: 2px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text); }
 
 .image-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
 .meta-size { color: var(--accent); }

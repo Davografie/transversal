@@ -341,15 +341,50 @@ async def list_images(entity_id: str, universe: str | None = None):
 
 @router.patch("/imagen/{image_id}")
 async def update_image_roles(image_id: str, payload: dict = Body(...)):
-    """Update the roles assigned to an image (background, sheet, navdot)."""
+    """Update the roles assigned to an image (background, sheet, navdot).
+
+    Per image, universe+role is unique — assigning a role removes it from
+    any other image for the same entity in the same universe.
+    """
     from transversal.db.repository import EntityRepository
     repo = EntityRepository()
     roles = payload.get("roles", [])
-    updated = repo.update_entity_image(image_id, {"roles": roles})
-    if not updated:
+
+    img = repo.get_entity_image(image_id)
+    if not img:
         raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
 
-    return {"success": True, "roles": roles}
+    old_roles = set(img.roles)
+    new_roles = set(roles)
+    added = new_roles - old_roles
+
+    # Remove newly-assigned roles from other images in same universe
+    if added:
+        siblings = repo.get_entity_images(img.entity_id, universe=img.universe)
+        for sib in siblings:
+            if sib.id == image_id:
+                continue
+            sib_roles = [r for r in sib.roles if r not in added]
+            if sib_roles != sib.roles:
+                repo.update_entity_image(sib.id, {"roles": sib_roles})
+
+    updates = {"roles": roles}
+    new_universe = payload.get("universe")
+    if new_universe and new_universe != img.universe:
+        updates["universe"] = new_universe
+
+        # Move files to new universe directory
+        import shutil
+        for base in ("/app/media/imagen", "/app/media/animated"):
+            old_dir = f"{base}/{img.entity_id}/{img.universe}"
+            new_dir = f"{base}/{img.entity_id}/{new_universe}"
+            if os.path.isdir(old_dir):
+                os.makedirs(os.path.dirname(new_dir), exist_ok=True)
+                shutil.move(old_dir, new_dir)
+
+    updated = repo.update_entity_image(image_id, updates)
+
+    return {"success": True, "roles": roles, "universe": updated.universe if updated else img.universe}
 
 
 @router.delete("/imagen/{image_id}")

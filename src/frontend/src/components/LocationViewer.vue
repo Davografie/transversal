@@ -615,13 +615,21 @@ const videoStyle = computed(() => {
   return { objectPosition: `${mx}% ${my}%` }
 })
 
-// Track image aspect ratio on load
+// Track image aspect ratio on load — uses video element for .webm/.mp4
 watch(currentImage, (url) => {
   if (!url) { imageAspect.value = null; return }
-  const img = new Image()
-  img.onload = () => { imageAspect.value = img.width / img.height }
-  img.onerror = () => { imageAspect.value = null }
-  img.src = url
+  if (/\.(webm|mp4)(\?|$)/i.test(url)) {
+    const vid = document.createElement('video')
+    vid.preload = 'metadata'
+    vid.onloadedmetadata = () => { imageAspect.value = vid.videoWidth / vid.videoHeight || null }
+    vid.onerror = () => { imageAspect.value = null }
+    vid.src = url
+  } else {
+    const img = new Image()
+    img.onload = () => { imageAspect.value = img.width / img.height }
+    img.onerror = () => { imageAspect.value = null }
+    img.src = url
+  }
 })
 
 // ── Occupant positioning ────────────────────────────
@@ -1019,6 +1027,10 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
       viewerEl.value.style.transition = 'none'
     }
     travelAnim.value.active = false
+    // Sync background if it changed during travel (watch skips while travelAnim is active)
+    if (props.backgroundImage && props.backgroundImage !== currentImage.value) {
+      currentImage.value = props.backgroundImage
+    }
     activeElement.value = null
 
     // Fade-in elements

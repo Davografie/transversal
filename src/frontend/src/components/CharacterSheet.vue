@@ -7,8 +7,8 @@
       <div class="header">
         <div class="header-top">
           <h2>{{ entity.name }}</h2>
-          <video v-if="entity.backgroundImage && isSheetVideo" :src="entity.backgroundImage" class="sheet-portrait-video" autoplay loop muted playsinline />
-          <img v-else-if="entity.backgroundImage" :src="entity.backgroundImage" class="sheet-portrait" />
+          <video v-if="entity.sheetPortrait && isSheetVideo" :src="entity.sheetPortrait" class="sheet-portrait-video" autoplay loop muted playsinline />
+          <img v-else-if="entity.sheetPortrait" :src="entity.sheetPortrait" class="sheet-portrait" />
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -138,7 +138,7 @@ const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDi
 const entity = ref(null)
 const traitSets = ref([])
 
-const isSheetVideo = computed(() => entity.value?.backgroundImage && /\.(webm|mp4)(\?|$)/i.test(entity.value.backgroundImage))
+const isSheetVideo = computed(() => entity.value?.sheetPortrait && /\.(webm|mp4)(\?|$)/i.test(entity.value.sheetPortrait))
 
 // Resolved human-readable names
 const locationName = ref('')
@@ -401,6 +401,7 @@ const QUERY = `
       currentUniverse
       currentLocation
       backgroundImage
+      sheetPortrait
       traitSettings {
         id
         traitId
@@ -426,7 +427,9 @@ const QUERY = `
 
 async function fetchEntity() {
   const id = props.overrideEntityId || props.entityId
+  console.log('[diag] CharacterSheet QUERY has sheetPortrait:', QUERY.includes('sheetPortrait'))
   const data = await graphql(QUERY, { id })
+  console.log('[diag] CharacterSheet response — sheetPortrait:', data?.entity?.sheetPortrait, 'backgroundImage:', data?.entity?.backgroundImage)
   if (data?.entity) {
     entity.value = data.entity
     resolveNames(data.entity)

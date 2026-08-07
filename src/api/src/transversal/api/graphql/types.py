@@ -336,6 +336,7 @@ class Entity:
     hidden: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     _background_image: strawberry.Private[Optional[str]] = None
+    _sheet_portrait: strawberry.Private[Optional[str]] = None
     zones: list[Zone] = strawberry.field(default_factory=list)
     map_x: Optional[float] = None
     map_y: Optional[float] = None
@@ -369,6 +370,21 @@ class Entity:
                 else:
                     return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
         return self._background_image
+
+    @strawberry.field
+    def sheet_portrait(self) -> Optional[str]:
+        from transversal.db.repository import EntityRepository
+        from transversal.domain import ImageType
+        repo = EntityRepository()
+        images = repo.get_entity_images(str(self.id))
+        for img in images:
+            if "sheet" in img.roles:
+                if img.image_type == ImageType.ANIMATED:
+                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+                else:
+                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+        # Fall back to background image
+        return self.background_image()
 
     @strawberry.field
     def trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
