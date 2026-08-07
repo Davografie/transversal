@@ -16,26 +16,6 @@
       <input v-model.number="local.razmerit" type="number" @input="emitUpdate" />
     </template>
 
-    <!-- Background image + overlay: only LOCATION -->
-    <template v-if="isLocation">
-      <label>Background Image</label>
-      <div class="bg-image-row">
-        <input v-model="local.background_image" placeholder="/media/…" class="bg-url" @input="emitUpdate" />
-        <input type="file" accept="image/*" @change="$emit('upload-bg', $event)" class="bg-upload" />
-      </div>
-      <img v-if="local.background_image" :src="local.background_image" class="bg-preview" />
-
-      <label>Overlay Effect</label>
-      <select v-model="local.overlay" @change="emitUpdate">
-        <option :value="null">None</option>
-        <option value="mist">Mist</option>
-        <option value="fire">Fire</option>
-        <option value="rain">Rain</option>
-        <option value="snow">Snow</option>
-        <option value="fog">Fog</option>
-      </select>
-    </template>
-
     <label>
       <input v-model="local.hidden" type="checkbox" @change="emitUpdate" />
       Hidden
@@ -53,7 +33,7 @@ const props = defineProps({
   entityTypes: { type: Array, default: () => ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
 })
 
-const emit = defineEmits(['update:modelValue', 'upload-bg'])
+const emit = defineEmits(['update:modelValue'])
 
 const local = ref({ ...props.modelValue })
 
@@ -65,7 +45,6 @@ function emitUpdate() {
 
 // ── Field visibility by entity type ──────────────────
 const RAZMERIT_TYPES = new Set(['CHARACTER', 'GMC', 'FACTION'])
-const isLocation = computed(() => local.value.type === 'LOCATION')
 const showRazmerit = computed(() => RAZMERIT_TYPES.has(local.value.type))
 </script>
 
@@ -76,13 +55,4 @@ const showRazmerit = computed(() => RAZMERIT_TYPES.has(local.value.type))
 }
 .entity-form input, .entity-form select { font-size: 13px; padding: 6px 10px; }
 
-.bg-image-row { display: flex; gap: 6px; }
-.bg-url { flex: 1; font-size: 12px !important; }
-.bg-upload {
-  font-size: 11px; padding: 4px 8px; cursor: pointer;
-  background: var(--accent-dim); color: var(--text); border-radius: 6px; border: none;
-  white-space: nowrap; max-width: 120px; overflow: hidden;
-}
-.bg-upload::file-selector-button { display: none; }
-.bg-preview { width: 100%; max-height: 120px; object-fit: cover; border-radius: 6px; margin-top: 4px; }
 </style>

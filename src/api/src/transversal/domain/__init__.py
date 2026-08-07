@@ -400,6 +400,8 @@ class Entity(BaseModel):
     node_ids: list[str] = Field(default_factory=list)
     # Asset
     owned_by: Optional[str] = None
+    # Universe — per-entity-type LoRA configuration
+    lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
 
 
 # ── SFX ───────────────────────────────────────────────

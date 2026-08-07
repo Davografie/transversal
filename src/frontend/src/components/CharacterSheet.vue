@@ -7,7 +7,8 @@
       <div class="header">
         <div class="header-top">
           <h2>{{ entity.name }}</h2>
-          <img v-if="entity.backgroundImage" :src="entity.backgroundImage" class="sheet-portrait" />
+          <video v-if="entity.backgroundImage && isSheetVideo" :src="entity.backgroundImage" class="sheet-portrait-video" autoplay loop muted playsinline />
+          <img v-else-if="entity.backgroundImage" :src="entity.backgroundImage" class="sheet-portrait" />
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -136,6 +137,8 @@ function displayName(name) {
 const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
 const entity = ref(null)
 const traitSets = ref([])
+
+const isSheetVideo = computed(() => entity.value?.backgroundImage && /\.(webm|mp4)(\?|$)/i.test(entity.value.backgroundImage))
 
 // Resolved human-readable names
 const locationName = ref('')
@@ -966,6 +969,15 @@ watch(() => props.externalPoolSources, (sources) => {
   gap: 8px;
 }
 .sheet-portrait {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+  order: 1;
+}
+.sheet-portrait-video {
   width: 40px;
   height: 40px;
   border-radius: 50%;

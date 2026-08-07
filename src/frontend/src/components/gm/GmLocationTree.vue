@@ -27,7 +27,6 @@
       <span v-else-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
       <span v-else class="entity-type-badge" :class="'type-' + node.entityType">{{ shortType(node.entityType) }}</span>
       <span class="entity-name">{{ node.name }}</span>
-      <span class="entity-universe" v-if="node.kind === 'location' && node.universe !== universe">{{ node.universe }}</span>
     </div>
   </TransitionGroup>
 </template>
@@ -39,7 +38,6 @@ const props = defineProps({
   flatTree: { type: Array, default: () => [] },
   expandedIds: { type: Object, default: () => ({}) },
   selectedId: { type: String, default: '' },
-  universe: { type: String, default: 'earth' },
 })
 
 const emit = defineEmits(['select-universe', 'select-location', 'select-occupant', 'toggle-expand', 'move-entity'])
@@ -170,7 +168,6 @@ function cancelTouchDrag() {
 .type-ASSET { background: #888; color: #fff; }
 .type-UNIVERSE { background: #c060d8; color: #fff; }
 .entity-name { flex: 1; font-weight: 500; }
-.entity-universe { font-size: 10px; color: var(--text-dim); }
 
 .tree-enter-active, .tree-leave-active { transition: all 0.2s ease; }
 .tree-enter-from, .tree-leave-to { opacity: 0; transform: translateY(-8px); }

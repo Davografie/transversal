@@ -39,6 +39,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Suppress noisy polling logs ──────────────────────
+
+import logging
+
+class _NoisyPathFilter(logging.Filter):
+    """Suppress access logs for paths that generate constant poll traffic."""
+    _quiet = {"/api/v1/imagen/jobs", "/health"}
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        for path in self._quiet:
+            if path in msg and "200" in msg:
+                return False
+        return True
+
+logging.getLogger("uvicorn.access").addFilter(_NoisyPathFilter())
+
 # ── Dependency injection (lazy — swapped in tests) ───
 
 _repo: EntityRepository | None = None

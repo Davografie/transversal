@@ -1,7 +1,7 @@
-"""Ollama HTTP client — calls gemma3:12b for computer vision tasks.
+"""Ollama HTTP client — calls gemma4:12b for computer vision tasks.
 
 Used in the animate pipeline: after generating a static image,
-gemma3:12b describes the motion that should occur in the video loop.
+gemma4:12b describes the motion that should occur in the video loop.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import aiohttp
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://imagen:11434")
-VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "gemma3:12b")
+VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "gemma4:12b")
 
 # System prompt template — loaded from vision_prompt.txt at startup
 _VISION_SYSTEM_PROMPT: str | None = None

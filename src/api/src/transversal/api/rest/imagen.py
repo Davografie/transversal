@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 
@@ -90,6 +91,9 @@ def _get_orchestrator() -> ImagenOrchestrator:
 
 def _run_imagen_bg(entity_id: str, universe: str):
     """Background task: generate image and publish final SSE event."""
+    if entity_id not in active_jobs:
+        logger.info(f"Imagen for {entity_id} was cancelled before starting — skipping")
+        return
     orchestrator = _get_orchestrator()
     try:
         logger.info(f"Starting imagen generation for {entity_id} in {universe}")
@@ -127,6 +131,9 @@ def _run_imagen_bg(entity_id: str, universe: str):
 
 def _run_animate_bg(entity_id: str, universe: str, duration: float, existing_image_path: str = "", motion_hint: str = ""):
     """Background task: generate video loop and publish final SSE event."""
+    if entity_id not in active_jobs:
+        logger.info(f"Animate for {entity_id} was cancelled before starting — skipping")
+        return
     orchestrator = _get_orchestrator()
     try:
         logger.info(f"Starting animate generation for {entity_id} in {universe}")
@@ -246,10 +253,47 @@ async def generate_animation(
     return {"accepted": True, "entity_id": entity_id, "generation_type": "animate"}
 
 
+@router.post("/imagen/{entity_id}/cancel")
+async def cancel_job(entity_id: str):
+    """Interrupt an active imagen/animate job for an entity."""
+    job = active_jobs.get(entity_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"No active job for entity '{entity_id}'")
+
+    orchestrator = _get_orchestrator()
+    try:
+        await orchestrator.comfyui.interrupt()
+        await orchestrator.comfyui.free_memory()
+    except Exception:
+        pass  # best-effort interrupt
+
+    _update_job(entity_id, job["type"], "failed", "Cancelled by user")
+    event_bus.publish(StreamEvent(
+        event="imagen_progress",
+        data={
+            "entity_id": entity_id,
+            "generation_type": job["type"],
+            "status": GenerationStatus.FAILED.value,
+            "message": "Cancelled by user",
+            "percent": 0,
+        },
+    ))
+    return {"cancelled": True, "entity_id": entity_id}
+
 @router.get("/imagen/jobs")
 async def list_jobs():
     """Return all active generation/animation jobs with status and queue position."""
     return {"jobs": {eid: _job_with_queue(eid, j) for eid, j in active_jobs.items()}}
+
+@router.get("/imagen/loras")
+async def list_loras():
+    """List available Flux LoRA files from the imagEN LoRA server."""
+    orchestrator = _get_orchestrator()
+    try:
+        loras = await orchestrator.comfyui.list_loras()
+        return {"loras": loras}
+    except Exception:
+        return {"loras": []}
 
 @router.get("/imagen/{entity_id}", response_model=ImageListResponse)
 async def list_images(entity_id: str, universe: str | None = None):
@@ -264,6 +308,16 @@ async def list_images(entity_id: str, universe: str | None = None):
     for doc in repo._entities.find({"type": "universe"}):
         universe_names[doc.get("current_universe", doc["_key"])] = doc.get("name", doc["_key"])
 
+    def _file_size(img: EntityImage) -> int:
+        try:
+            if img.image_type == ImageType.ANIMATED:
+                path = f"/app/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+            else:
+                path = f"/app/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+            return os.path.getsize(path)
+        except OSError:
+            return 0
+
     return ImageListResponse(
         entity_id=entity_id,
         images=[
@@ -276,6 +330,7 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "width": img.width,
                 "height": img.height,
                 "created_at": img.created_at,
+                "size_bytes": _file_size(img),
                 "roles": img.roles,
                 "path_large": f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}",
                 "path_animated": f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
@@ -293,7 +348,8 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
     updated = repo.update_entity_image(image_id, {"roles": roles})
     if not updated:
         raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
-    return {"success": True, "roles": updated.roles}
+
+    return {"success": True, "roles": roles}
 
 
 @router.delete("/imagen/{image_id}")

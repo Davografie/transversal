@@ -510,7 +510,7 @@
     },
     "class_type": "RollFrames",
     "_meta": {
-      "title": "\ud83d\udc07 Roll Frames"
+      "title": "🐇 Roll Frames"
     }
   },
   "279": {
@@ -530,7 +530,7 @@
     },
     "class_type": "UnrollFrames",
     "_meta": {
-      "title": "\ud83d\udc07 Unroll Frames"
+      "title": "🐇 Unroll Frames"
     }
   },
   "331": {
@@ -554,8 +554,11 @@
       ],
       "loop_count": 0,
       "filename_prefix": "LoopVid",
-      "format": "image/webp",
-      "lossless": false,
+      "format": "video/webm",
+      "pix_fmt": "yuv420p",
+      "crf": 20,
+      "save_metadata": false,
+      "trim_to_audio": false,
       "pingpong": false,
       "save_output": true,
       "images": [
@@ -600,7 +603,7 @@
     },
     "class_type": "AssembleLoopFrames",
     "_meta": {
-      "title": "\ud83d\udc07 Assemble Loop Frames"
+      "title": "🐇 Assemble Loop Frames"
     }
   },
   "347": {
@@ -612,7 +615,7 @@
     },
     "class_type": "PrepareLoopFrames",
     "_meta": {
-      "title": "\ud83d\udc07 Prepare Loop Frames"
+      "title": "🐇 Prepare Loop Frames"
     }
   },
   "352": {
@@ -854,7 +857,7 @@
     },
     "class_type": "RIFE_FPS_Resample",
     "_meta": {
-      "title": "\ud83d\udc07 RIFE VFI FPS Resample"
+      "title": "🐇 RIFE VFI FPS Resample"
     }
   },
   "472": {

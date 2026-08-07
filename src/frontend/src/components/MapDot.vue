@@ -8,8 +8,17 @@
     @touchstart="onDragStart"
     @click.stop="onClick"
   >
+    <video
+      v-if="image && overlayVisible && isVideoImage"
+      :src="image"
+      class="dot-overlay"
+      :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self' }"
+      style="object-fit: cover; width: 100%; height: 100%; border-radius: 50%;"
+      autoplay loop muted playsinline
+      @click.stop="onOverlayClick"
+    />
     <div
-      v-if="image && overlayVisible"
+      v-else-if="image && overlayVisible"
       class="dot-overlay"
       :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self' }"
       :style="{ backgroundImage: 'url(' + image + ')', ...(overlayBgStyle || {}) }"
@@ -48,6 +57,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['click', 'overlay-click', 'drag-start'])
+
+const isVideoImage = computed(() => props.image && /\.(webm|mp4)(\?|$)/i.test(props.image))
 
 const dotClasses = computed(() => [
   props.type === 'zone' ? 'zone-dot' : '',

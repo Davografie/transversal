@@ -1,23 +1,31 @@
 <template>
   <div class="image-viewer">
-    <div class="viewer-actions">
-      <button v-if="imageType !== 'animated'" class="animate-btn" @click="onAnimate" :disabled="animating || localJob != null">
-        <span class="btn-label">{{ statusInfo.label }}</span>
-        <span v-if="statusInfo.status" class="btn-status">{{ statusInfo.status }}</span>
-      </button>
-      <button class="delete-btn" @click="onDelete" :disabled="deleting">🗑 Delete</button>
-    </div>
-    <img :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" :alt="alt" />
-    <div v-if="imageType !== 'animated' && !localJob" class="motion-hint">
-      <input v-model="motionHint" type="text" placeholder="Motion hint (optional) — e.g. 'hair blowing in wind'" />
+    <video v-if="isVideo" :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" class="viewer-video" autoplay loop muted playsinline />
+    <img v-else :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" :alt="alt" />
+
+    <div class="animate-section" v-if="imageType !== 'animated'">
+      <div class="motion-hint-row">
+        <input v-if="!statusInfo.cancelling" v-model="motionHint" type="text" placeholder="Motion hint (optional) — e.g. 'hair blowing in wind'" />
+        <button class="animate-btn" :class="{ cancelling: statusInfo.cancelling }" @click="onAnimateClick">
+          <span class="btn-label">{{ statusInfo.label }}</span>
+          <span v-if="statusInfo.status" class="btn-status">{{ statusInfo.status }}</span>
+        </button>
+      </div>
     </div>
     <div class="role-assign">
       <label class="role-check" title="Use as background"><input type="checkbox" :checked="hasRole('background')" @change="toggleRole('background')" /> BG</label>
       <label class="role-check" title="Use as character sheet portrait"><input type="checkbox" :checked="hasRole('sheet')" @change="toggleRole('sheet')" /> Sheet</label>
       <label class="role-check" title="Use as navigation dot"><input type="checkbox" :checked="hasRole('navdot')" @change="toggleRole('navdot')" /> Nav</label>
     </div>
-    <div class="image-meta">{{ alt }}</div>
+    <div class="image-meta">{{ alt }}<span v-if="sizeBytes" class="meta-size"> · {{ formatBytes(sizeBytes) }}</span></div>
     <div v-if="message" class="message">{{ message }}</div>
+
+    <div class="danger-zone">
+      <h4>Danger Zone</h4>
+      <div class="danger-actions">
+        <button class="delete-btn" @click="onDelete" :disabled="deleting">🗑 Delete</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -36,6 +44,14 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'deleted', 'refresh'])
 const animating = ref(false)
+
+const activeSrc = computed(() => props.imageType === 'animated' && props.animatedSrc ? props.animatedSrc : props.src)
+const isVideo = computed(() => /\.(webm|mp4)(\?|$)/i.test(activeSrc.value))
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return ''
+  return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`
+}
 const deleting = ref(false)
 const message = ref('')
 const motionHint = ref('')
@@ -95,13 +111,17 @@ watch(localJob, (now, prev) => {
 
 const statusInfo = computed(() => {
   const j = localJob.value || props.animateJob
-  if (!j) return { label: '🎬 Animate', status: '' }
-  if (j.status === 'failed') return { label: '🎬 Animate', status: '!' }
-  if (j.status === 'queued') return { label: 'Animating in', status: j.queue_position || '⋯' }
-  return { label: 'Animating..', status: '⟳' }
+  if (!j) return { label: '🎬 Animate', status: '', cancelling: false }
+  if (j.status === 'failed') return { label: '🎬 Animate', status: '!', cancelling: false }
+  return { label: 'Cancel', status: '✕', cancelling: true }
 })
 
-async function onAnimate() {
+function onAnimateClick() {
+  if (statusInfo.value.cancelling) cancelAnimate()
+  else startAnimate()
+}
+
+async function startAnimate() {
   if (!props.entityId || animating.value) return
   animating.value = true
   message.value = 'Starting animation...'
@@ -117,6 +137,16 @@ async function onAnimate() {
     message.value = 'Request failed'
   } finally {
     animating.value = false
+  }
+}
+
+async function cancelAnimate() {
+  if (!props.entityId) return
+  try {
+    await fetch(`/api/v1/imagen/${props.entityId}/cancel`, { method: 'POST' })
+    message.value = 'Cancelled'
+  } catch {
+    message.value = 'Cancel failed'
   }
 }
 
@@ -141,19 +171,36 @@ async function onDelete() {
 
 <style scoped>
 .image-viewer { text-align: center; }
-.viewer-actions { display: flex; gap: 6px; justify-content: center; margin-bottom: 8px; }
-.animate-btn { background: #f59e0b; color: #fff; font-size: 11px; padding: 0; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; overflow: hidden; }
-.animate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.image-viewer img { max-width: 100%; max-height: 60vh; border-radius: 4px; }
+.viewer-video { max-width: 100%; max-height: 60vh; border-radius: 4px; }
+
+.animate-section { margin-top: 8px; }
+.motion-hint-row { display: flex; gap: 6px; align-items: center; }
+.motion-hint-row input { flex: 1; font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text); }
+.animate-btn { background: #f59e0b; color: #fff; font-size: 11px; padding: 0; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; overflow: hidden; white-space: nowrap; }
+.animate-btn.cancelling { background: #dc2626; }
 .animate-btn .btn-label { padding: 4px 8px; }
 .animate-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
-.delete-btn { background: var(--danger); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
-.delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.image-viewer img { max-width: 100%; max-height: 60vh; border-radius: 4px; }
-.image-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
-.message { font-size: 11px; color: var(--accent); margin-top: 6px; }
-.motion-hint { margin-top: 8px; }
-.motion-hint input { width: 100%; box-sizing: border-box; font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text); }
+
 .role-assign { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+.section-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
 .role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 2px; }
 .role-check input { margin: 0; cursor: pointer; }
+
+.image-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
+.meta-size { color: var(--accent); }
+.message { font-size: 11px; color: var(--accent); margin-top: 6px; }
+
+.danger-zone {
+  margin-top: 12px; padding: 10px;
+  border: 1px solid rgba(220,64,64,0.25); border-radius: 6px;
+  background: rgba(220,64,64,0.06); text-align: left;
+}
+.danger-zone h4 {
+  font-size: 10px; color: #e06060; text-transform: uppercase; letter-spacing: 1px;
+  margin: 0 0 8px 0;
+}
+.danger-actions { display: flex; gap: 6px; }
+.delete-btn { background: var(--danger); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
+.delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

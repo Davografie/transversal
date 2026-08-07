@@ -35,7 +35,7 @@
         </div>
       </div>
       <button class="create-btn" @click="startCreate">+ New Entity</button>
-      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :universe="universe" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
+      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
         <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
@@ -99,7 +99,6 @@ const animateJob = computed(() => {
   return (j && j.type === 'animate') ? j : null
 })
 
-const filterLocationId = ref('')
 const activeFilters = ref([])
 const filterInput = ref('')
 const showSuggestions = ref(false)
@@ -203,7 +202,7 @@ const form = ref({})
 const createForm = ref({ name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 })
 // ── API ────────────────────────────────────────────
 const ALL_ENTITIES = `query($type: EntityType) { entities(type: $type) { id type name razmerit currentUniverse currentLocation hidden backgroundImage traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
-const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden backgroundImage traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
+const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden backgroundImage loraConfig traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
 
 async function fetchEntities() { const data = await graphql(ALL_ENTITIES, { type: null }); if (data?.entities) entities.value = data.entities }
 
@@ -238,7 +237,7 @@ function onSelectOccupant(e) { toggleEntity(e) }
     const data = await graphql(ENTITY_QUERY, { id: e.id })
     if (data?.entity) {
       selected.value = data.entity; selectedId.value = e.id; editing.value = true
-      form.value = { name: data.entity.name, type: data.entity.type, current_universe: data.entity.currentUniverse, current_location: data.entity.currentLocation || '', razmerit: data.entity.razmerit, background_image: data.entity.backgroundImage || '', overlay: data.entity.overlay || null, hidden: data.entity.hidden }
+      form.value = { name: data.entity.name, type: data.entity.type, current_universe: data.entity.currentUniverse, current_location: data.entity.currentLocation || '', razmerit: data.entity.razmerit, background_image: data.entity.backgroundImage || '', overlay: data.entity.overlay || null, hidden: data.entity.hidden, lora_config: data.entity.loraConfig || '{}' }
       if (!alreadyEditing) openEntityEdit()
     }
   }
@@ -262,6 +261,7 @@ function openEntityEdit() {
         'delete': deleteSelected,
         'prune': deletePrune,
         'imagen': onImagen,
+        'cancel': onCancel,
         'image-open': onImageOpen,
       },
   })
@@ -271,7 +271,7 @@ function openEntityEdit() {
 // which calls saveEntity() again → infinite re-open loop.
 async function saveEntity() {
   saving.value = true
-  const result = await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id name razmerit currentUniverse currentLocation hidden backgroundImage } }`, { input: { id: selected.value.id, name: form.value.name, razmerit: form.value.razmerit, currentUniverse: form.value.current_universe, currentLocation: form.value.current_location || null, hidden: form.value.hidden, backgroundImage: form.value.background_image || null, overlay: form.value.overlay } })
+  const result = await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id name razmerit currentUniverse currentLocation hidden backgroundImage loraConfig } }`, { input: { id: selected.value.id, name: form.value.name, razmerit: form.value.razmerit, currentUniverse: form.value.current_universe, currentLocation: form.value.current_location || null, hidden: form.value.hidden, backgroundImage: form.value.background_image || null, overlay: form.value.overlay, loraConfig: form.value.lora_config } })
   // Update selected entity directly — don't call selectEntity() which would re-trigger the watcher loop
   if (result?.updateEntity) {
     const ue = result.updateEntity
@@ -295,21 +295,15 @@ watch(() => form.value, () => {
 }, { deep: true })
 
 async function deleteSelected() {
-  const name = selected.value.name
   const isLoc = selected.value.type === 'LOCATION'
-  const msg = isLoc
-    ? `Delete location "${name}"?\n\nOccupants and sub-locations will be moved to the parent location.`
-    : `Delete "${name}"?`
-  if (!confirm(msg)) return
   await graphql(`mutation($id: ID!) { deleteEntity(id: $id) }`, { id: selected.value.id })
   selected.value = null; selectedId.value = null; editing.value = false
+  if (props.close) props.close()
   if (isLoc) await fetchLocationTree()
   await fetchEntities()
 }
 
 async function deletePrune() {
-  const name = selected.value.name
-  if (!confirm(`Prune location "${name}" and ALL its contents?\n\nThis will delete this location, all sub-locations, and all their occupants permanently.`)) return
   await graphql(`mutation($id: ID!, $rmtree: Boolean!) { deleteEntity(id: $id, rmtree: $rmtree) }`, { id: selected.value.id, rmtree: true })
   selected.value = null; selectedId.value = null; editing.value = false
   if (props.close) props.close()
@@ -322,7 +316,7 @@ async function startCreate() {
     props.open({
       component: GmEntityCreatePanel,
       title: 'New Entity',
-      props: { universes: universes.value, locationEntities: locationEntities.value, saving: saving.value },
+      props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value },
       listeners: { 'create': createEntity },
     })
   }
@@ -398,11 +392,30 @@ async function uploadBgImage(e) {
 
 // ── Location tree ──────────────────────────────────
 const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
+const OCCUPANT_TYPES = new Set(['CHARACTER', 'GMC', 'ASSET'])
+function _sortOccupants(arr) { arr.sort((a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9)) }
+
 const occupantsByLocation = computed(() => {
   const map = {}
-  const src = filteredEntities.value
-  for (const e of src) { if ((e.type === 'CHARACTER' || e.type === 'GMC' || e.type === 'ASSET') && e.currentLocation) { if (!map[e.currentLocation]) map[e.currentLocation] = []; map[e.currentLocation].push(e) } }
-  for (const key of Object.keys(map)) map[key].sort((a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9))
+  for (const e of filteredEntities.value) {
+    if (OCCUPANT_TYPES.has(e.type) && e.currentLocation) {
+      if (!map[e.currentLocation]) map[e.currentLocation] = []
+      map[e.currentLocation].push(e)
+    }
+  }
+  for (const key of Object.keys(map)) _sortOccupants(map[key])
+  return map
+})
+// Occupants without a location — shown at the universe level
+const unplacedByUniverse = computed(() => {
+  const map = {}
+  for (const e of filteredEntities.value) {
+    if (OCCUPANT_TYPES.has(e.type) && !e.currentLocation && e.currentUniverse) {
+      if (!map[e.currentUniverse]) map[e.currentUniverse] = []
+      map[e.currentUniverse].push(e)
+    }
+  }
+  for (const key of Object.keys(map)) _sortOccupants(map[key])
   return map
 })
 // Auto-expand + prune when occupant-affecting filters (type or name) are active
@@ -475,17 +488,36 @@ function flattenTree(nodes, occupants, depth = 0) {
     }
     result.push({ id: node.id, name: node.name, universe: node.universe, depth, hasChildren, kind, expanded })
     if (expanded && occupants[node.id]) { for (const e of occupants[node.id]) { result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
+    // Unplaced occupants (no location) shown at universe level
+    if (expanded && kind === 'universe' && node.universe) {
+      const unplaced = unplacedByUniverse.value[node.universe]
+      if (unplaced) { for (const e of unplaced) { result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
+    }
     if (expanded && node.children && node.children.length) result.push(...flattenTree(node.children, occupants, depth + 1))
   }
   return result
 }
-const flatTree = computed(() => {
-  let roots = locationTree.value
-  if (filterLocationId.value) {
-    function findNode(nodes) { for (const n of nodes) { if (n.id === filterLocationId.value) return [n]; if (n.children) { const f = findNode(n.children); if (f) return f } } return null }
-    roots = findNode(locationTree.value) || []
+// Auto-expand ancestors of the current location so it's visible in the tree
+function _findAncestorIds(nodes, targetId, path) {
+  for (const n of nodes) {
+    path.push(n.id)
+    if (n.id === targetId) return true
+    if (n.children && _findAncestorIds(n.children, targetId, path)) return true
+    path.pop()
   }
-  return flattenTree(roots, occupantsByLocation.value, 0)
+  return false
+}
+watch([locationTree, () => props.currentLocationId], () => {
+  const path = []
+  if (props.currentLocationId && _findAncestorIds(locationTree.value, props.currentLocationId, path)) {
+    const next = { ...expandedNodes.value }
+    for (const id of path) next[id] = true
+    expandedNodes.value = next
+  }
+})
+
+const flatTree = computed(() => {
+  return flattenTree(locationTree.value, occupantsByLocation.value, 0)
 })
 function toggleTreeNode(id) { expandedNodes.value = { ...expandedNodes.value, [id]: !expandedNodes.value[id] } }
 async function fetchLocationTree() { try { const r = await fetch('/api/v1/locations/tree'); locationTree.value = await r.json() } catch { locationTree.value = [] } }
@@ -563,12 +595,21 @@ async function onImagen() {
   }
 }
 
+async function onCancel() {
+  if (!selectedId.value) return
+  try {
+    await fetch(`/api/v1/imagen/${selectedId.value}/cancel`, { method: 'POST' })
+  } catch (e) {
+    console.error('[GmPanel] cancel failed:', e)
+  }
+}
+
 function onImageOpen(img) {
   if (!props.open) return
   props.open({
     component: ImageViewer,
     title: img.id,
-      props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, imageType: img.image_type, roles: img.roles || [] },
+      props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
     listeners: {},
   })
 }

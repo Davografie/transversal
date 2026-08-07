@@ -335,7 +335,7 @@ class Entity:
     current_location: Optional[str] = None
     hidden: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
-    background_image: Optional[str] = None
+    _background_image: strawberry.Private[Optional[str]] = None
     zones: list[Zone] = strawberry.field(default_factory=list)
     map_x: Optional[float] = None
     map_y: Optional[float] = None
@@ -343,6 +343,7 @@ class Entity:
     nav_positions: str = "{}"
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
+    lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
 
     @strawberry.field
     def projections(self, info: strawberry.Info) -> list[Projection]:
@@ -354,6 +355,20 @@ class Entity:
                        transversal_type=p.transversal_type)
             for p in projs
         ]
+
+    @strawberry.field
+    def background_image(self) -> Optional[str]:
+        from transversal.db.repository import EntityRepository
+        from transversal.domain import ImageType
+        repo = EntityRepository()
+        images = repo.get_entity_images(str(self.id))
+        for img in images:
+            if "background" in img.roles:
+                if img.image_type == ImageType.ANIMATED:
+                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+                else:
+                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+        return self._background_image
 
     @strawberry.field
     def trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
@@ -396,6 +411,7 @@ class UpdateEntityInput:
     overlay: Optional[str] = None
     nav_positions: Optional[str] = None
     owned_by: Optional[str] = None
+    lora_config: Optional[str] = None
 
 
 # ── Razmerit ─────────────────────────────────────────

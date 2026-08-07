@@ -6,6 +6,7 @@ Assembles CharacterView from multiple collections.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -182,7 +183,7 @@ class EntityRepository:
             return False
 
     def _cascade_cleanup(self, entity_id: str) -> None:
-        """Remove projections, trait settings, and relationships for an entity."""
+        """Remove projections, trait settings, relationships, images, and media."""
         eref = f"{ENTITIES}/{entity_id}"
         for proj in self._projections.find({"entity_id": entity_id}):
             self._projections.delete(proj["_key"])
@@ -194,6 +195,23 @@ class EntityRepository:
             f"FOR r IN {RELATIONSHIPS} FILTER r._from == @eref OR r._to == @eref REMOVE r IN {RELATIONSHIPS}",
             bind_vars={"eref": eref},
         )
+        # Delete entity image records from DB
+        self.db.aql.execute(
+            f"FOR img IN {ENTITY_IMAGES} FILTER img.entity_id == @eid REMOVE img IN {ENTITY_IMAGES}",
+            bind_vars={"eid": entity_id},
+        )
+        # Delete media files from disk
+        import shutil, glob
+        media_root = "/app/media"
+        # Generated images directory
+        imagen_dir = f"{media_root}/imagen/{entity_id}"
+        shutil.rmtree(imagen_dir, ignore_errors=True)
+        # Uploaded background images (media/{entity_id}.*)
+        for path in glob.glob(f"{media_root}/{entity_id}.*"):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
     def list_entities_by_type(
         self, entity_type: EntityType, universe: Optional[str] = None

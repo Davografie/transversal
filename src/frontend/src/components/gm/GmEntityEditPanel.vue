@@ -1,47 +1,78 @@
 <template>
   <div>
-    <div class="form-actions top-actions">
-      <div class="left-actions">
-        <button class="sheet-edit-btn" @click="$emit('switch-to-sheet')">Sheet</button>
-        <button class="imagen-btn" @click="$emit('imagen')" :disabled="imagenJob != null">
-          <span class="btn-label">{{ imagenStatus.label }}</span>
-          <span v-if="imagenStatus.status" class="btn-status">{{ imagenStatus.status }}</span>
-        </button>
-      </div>
-    </div>
     <GmEntityForm
       :model-value="form"
       :entity-id="entityId"
       @update:model-value="onFormUpdate"
-      @upload-bg="$emit('upload-bg', $event)"
     />
-    <div class="image-gallery" v-if="images.length">
-      <h4>Generated Images</h4>
-      <div class="gallery-grid">
+    <div class="image-gallery">
+      <div class="gallery-header">
+        <h4>Images</h4>
+        <div class="gallery-actions">
+          <label class="upload-btn">
+            📤 Upload
+            <input type="file" accept="image/*" @change="$emit('upload-bg', $event)" hidden />
+          </label>
+          <button class="imagen-btn" :class="{ cancelling: imagenStatus.cancelling }" @click="onImagenClick">
+            <span class="btn-label">{{ imagenStatus.label }}</span>
+            <span v-if="imagenStatus.status" class="btn-status">{{ imagenStatus.status }}</span>
+          </button>
+        </div>
+      </div>
+      <div v-if="!images.length" class="gallery-empty">No images yet — upload or generate one.</div>
+      <div v-else class="gallery-grid">
         <div v-for="img in images" :key="img.id" class="gallery-item" @click="openImage(img)">
-          <img :src="img.image_type === 'animated' ? img.path_animated : img.path_large" :alt="img.image_type" loading="lazy" />
+          <video v-if="img.image_type === 'animated'" :src="img.path_animated" class="gallery-thumb-video" autoplay loop muted playsinline />
+          <img v-else :src="img.path_large" :alt="img.image_type" loading="lazy" />
           <span class="gallery-label">
-            {{ img.image_type }} — {{ img.width }}×{{ img.height }}
+            {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
             <span v-if="img.universe_label" class="universe-badge">{{ img.universe_label }}</span>
             <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
           </span>
         </div>
       </div>
     </div>
+    <div v-if="form.type === 'UNIVERSE'" class="lora-config-section">
+      <h4>LoRA Configuration</h4>
+      <p class="lora-hint">Select which LoRAs apply to each entity type during image generation in this universe.</p>
+      <div v-if="!availableLoras.length" class="lora-empty">No LoRAs available — check imagEN LoRA server.</div>
+      <div v-for="et in imagenEntityTypes" :key="et" class="lora-type-row">
+        <span class="lora-type-label">{{ et }}</span>
+        <div class="lora-selects">
+          <select class="lora-select" :value="loraAt(et, 0)" @change="setLora(et, 0, $event.target.value)">
+            <option value="">—</option>
+            <option v-for="lora in availableLoras" :key="lora.name" :value="lora.name">{{ lora.name }}</option>
+          </select>
+          <select class="lora-select" :value="loraAt(et, 1)" @change="setLora(et, 1, $event.target.value)">
+            <option value="">—</option>
+            <option v-for="lora in availableLoras" :key="lora.name" :value="lora.name">{{ lora.name }}</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div class="danger-zone">
       <h4>Danger Zone</h4>
       <div class="danger-actions">
-        <button class="danger-btn" @click="$emit('delete')">Delete</button>
-        <button v-if="form.type === 'LOCATION'" class="prune-btn" @click="$emit('prune')">Prune</button>
+        <button
+          class="danger-btn" :class="{ confirming: confirmingDelete }"
+          @click="onDeleteClick"
+        >{{ confirmingDelete ? 'Confirm?' : 'Delete' }}</button>
+        <button
+          v-if="form.type === 'LOCATION'"
+          class="prune-btn" :class="{ confirming: confirmingPrune }"
+          @click="onPruneClick"
+        >{{ confirmingPrune ? 'Confirm?' : 'Prune' }}</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, useAttrs } from 'vue'
+import { ref, computed, watch, useAttrs, onMounted, onUnmounted } from 'vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
+
+const CONFIRM_TIMEOUT = 3000
 
 const props = defineProps({
   form: { type: Object, default: () => ({}) },
@@ -51,15 +82,93 @@ const props = defineProps({
   open: { type: Function, default: null },
 })
 
-const emit = defineEmits(['update:form', 'upload-bg', 'switch-to-sheet', 'delete', 'prune', 'imagen', 'image-open'])
+const emit = defineEmits(['update:form', 'upload-bg', 'switch-to-sheet', 'delete', 'prune', 'imagen', 'cancel', 'image-open'])
+
+// Independent job polling — props are snapshots from the panel system
+const localImagenJob = ref(null)
+let _jobPollTimer = null
+
+async function pollOwnJob() {
+  if (!props.entityId) return
+  try {
+    const r = await fetch('/api/v1/imagen/jobs')
+    if (r.ok) {
+      const jobs = (await r.json()).jobs || {}
+      localImagenJob.value = jobs[props.entityId] || null
+    }
+  } catch {}
+}
 
 const imagenStatus = computed(() => {
-  const j = props.imagenJob
-  if (!j) return { label: '🖼 Imagen', status: '' }
-  if (j.status === 'failed') return { label: '🖼 Imagen', status: '!' }
-  if (j.status === 'queued') return { label: 'Imagening in', status: j.queue_position || '⋯' }
-  return { label: 'Imagening..', status: '⟳' }
+  const j = localImagenJob.value || props.imagenJob
+  if (!j) return { label: '🖼 Imagen', status: '', cancelling: false }
+  if (j.status === 'failed') return { label: '🖼 Imagen', status: '!', cancelling: false }
+  return { label: 'Cancel', status: '✕', cancelling: true }
 })
+
+function onImagenClick() {
+  if (imagenStatus.value.cancelling) emit('cancel')
+  else emit('imagen')
+}
+
+// Refresh gallery when a job completes
+watch(localImagenJob, (now, prev) => {
+  if (prev && !now) loadImages()
+})
+
+// ── Two-click confirmation (no dialogs) ────────────
+const _confirmTimer = ref(null)
+const confirmingDelete = ref(false)
+const confirmingPrune = ref(false)
+
+function onDeleteClick() {
+  if (confirmingDelete.value) { clearTimeout(_confirmTimer.value); confirmingDelete.value = false; emit('delete') }
+  else { confirmingDelete.value = true; _confirmTimer.value = setTimeout(() => { confirmingDelete.value = false }, CONFIRM_TIMEOUT) }
+}
+function onPruneClick() {
+  if (confirmingPrune.value) { clearTimeout(_confirmTimer.value); confirmingPrune.value = false; emit('prune') }
+  else { confirmingPrune.value = true; _confirmTimer.value = setTimeout(() => { confirmingPrune.value = false }, CONFIRM_TIMEOUT) }
+}
+onUnmounted(() => clearTimeout(_confirmTimer.value))
+
+function formatSize(bytes) {
+  if (!bytes || bytes === 0) return ''
+  return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`
+}
+
+// ── LoRA configuration (universe entities only) ─────
+const imagenEntityTypes = ['CHARACTER', 'GMC', 'LOCATION', 'FACTION', 'ASSET']
+const availableLoras = ref([])
+const loraConfig = ref({})
+
+async function fetchLoras() {
+  try {
+    const r = await fetch('/api/v1/imagen/loras')
+    if (r.ok) {
+      const d = await r.json()
+      availableLoras.value = (d.loras || []).map(l => typeof l === 'string' ? { name: l, path: l } : l)
+    }
+  } catch {}
+}
+
+watch(() => props.form?.lora_config, (v) => {
+  try { loraConfig.value = v ? JSON.parse(v) : {} } catch { loraConfig.value = {} }
+}, { immediate: true })
+
+function loraAt(entityType, idx) {
+  const list = loraConfig.value[entityType] || []
+  return list[idx] || ''
+}
+
+function setLora(entityType, idx, loraName) {
+  const list = [...(loraConfig.value[entityType] || [])]
+  while (list.length <= idx) list.push('')
+  list[idx] = loraName
+  // Compact: remove empty trailing entries
+  while (list.length && !list[list.length - 1]) list.pop()
+  loraConfig.value = { ...loraConfig.value, [entityType]: list }
+  emit('update:form', { ...props.form, lora_config: JSON.stringify(loraConfig.value) })
+}
 
 function onFormUpdate(v) { emit('update:form', v) }
 const openedImageId = ref(null)
@@ -85,6 +194,7 @@ function openImage(img) {
       imageType: img.image_type,
       roles: img.roles || [],
       animateJob: props.animateJob,
+      sizeBytes: img.size_bytes,
     },
     listeners: {
       'deleted': loadImages,
@@ -105,20 +215,21 @@ async function loadImages() {
 }
 
 watch(() => props.entityId, loadImages, { immediate: true })
+onMounted(() => { fetchLoras(); pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
+onUnmounted(() => { clearInterval(_jobPollTimer) })
 defineExpose({ refresh: loadImages })
 </script>
 
 <style scoped>
-.form-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.left-actions { display: flex; gap: 6px; align-items: center; }
-.sheet-edit-btn { background: var(--accent); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 .imagen-btn { background: #8b5cf6; color: #fff; font-size: 11px; padding: 0; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; overflow: hidden; }
-.imagen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.imagen-btn.cancelling { background: #dc2626; }
 .imagen-btn .btn-label { padding: 4px 8px; }
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 .danger-btn { background: var(--danger); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 .prune-btn { background: #b03030; color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; margin-left: 4px; }
 .prune-btn:hover { background: #d04040; }
+.danger-btn.confirming,
+.prune-btn.confirming { background: #fff; color: #b03030; font-weight: 600; animation: pulse-confirm 0.6s ease-in-out infinite alternate; }
 
 .danger-zone {
   margin-top: 12px; padding: 10px;
@@ -132,11 +243,47 @@ defineExpose({ refresh: loadImages })
 .danger-actions { display: flex; gap: 6px; }
 
 .image-gallery { margin-top: 12px; }
-.image-gallery h4 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.gallery-header h4 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
+.gallery-actions { display: flex; gap: 6px; align-items: center; }
+.upload-btn {
+  font-size: 11px; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center;
+  background: var(--accent-dim); color: var(--text); border-radius: 4px; border: none;
+}
+.gallery-empty { font-size: 10px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
 .gallery-item { display: block; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; cursor: pointer; }
 .gallery-item img { width: 100%; height: auto; display: block; }
+.gallery-thumb-video { width: 100%; height: auto; display: block; }
 .gallery-label { display: block; font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 4px; background: rgba(0,0,0,0.3); }
 .universe-badge { display: inline-block; font-size: 7px; background: rgba(139,92,246,0.3); color: #c4b5fd; padding: 0 3px; border-radius: 2px; margin-left: 3px; }
 .role-badge { display: inline-block; font-size: 7px; background: rgba(245,158,11,0.3); color: #fcd34d; padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }
+
+@keyframes pulse-confirm {
+  from { opacity: 0.85; }
+  to { opacity: 1; }
+}
+
+.lora-config-section {
+  margin-top: 12px; padding: 10px;
+  border: 1px solid rgba(139,92,246,0.25); border-radius: 6px;
+  background: rgba(139,92,246,0.06);
+}
+.lora-config-section h4 {
+  font-size: 10px; color: #c4b5fd; text-transform: uppercase; letter-spacing: 1px;
+  margin: 0 0 4px 0;
+}
+.lora-hint { font-size: 9px; color: var(--text-dim); margin: 0 0 8px 0; }
+.lora-empty { font-size: 10px; color: var(--text-dim); padding: 8px 0; }
+.lora-type-row { margin-bottom: 6px; }
+.lora-type-label {
+  display: block; font-size: 9px; color: var(--text-dim); margin-bottom: 2px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.lora-selects { display: flex; gap: 4px; }
+.lora-select {
+  font-size: 10px; padding: 3px 6px; border-radius: 3px; flex: 1; min-width: 0;
+  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
 </style>

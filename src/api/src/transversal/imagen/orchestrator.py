@@ -168,6 +168,8 @@ class ImagenOrchestrator:
         height = params["height"]
         seed = random.randint(0, 2**32 - 1)
 
+        logger.info(f"Imagen prompt for {entity_id} ({entity.name}):\n  prompt: {prompt[:200]}...\n  negative: {negative[:200]}...\n  loras: {loras}\n  steps={steps} size={width}x{height} seed={seed}")
+
         # 2. Prepare Loras
         lora1 = loras[0] if len(loras) > 0 else ""
         lora1_weight = 0.8 if lora1 else 0.0

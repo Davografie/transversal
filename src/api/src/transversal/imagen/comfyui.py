@@ -99,8 +99,8 @@ class ComfyUIClient:
                 if not media:
                     continue
                 filename = media[0]["filename"]
-                # Prefer image outputs (webp/gif) over video previews (mp4)
-                if filename.endswith((".webp", ".gif", ".png")):
+                # Prefer animated/video outputs (webm, webp, gif) over static
+                if filename.endswith((".webm", ".webp", ".gif", ".png")):
                     return {
                         "filename": filename,
                         "subfolder": media[0].get("subfolder", ""),

@@ -30,7 +30,6 @@ export default defineConfig({
     })
   ],
   server: {
-    hmr: false,
     proxy: {
       '/api': 'http://api:8080',
       '/media': 'http://api:8080'

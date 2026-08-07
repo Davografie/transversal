@@ -150,6 +150,20 @@ def build_imagen_prompt(
         entity, trait_settings, universe
     )
 
+    # Merge universe-level LoRA config for this entity type
+    try:
+        universe_docs = list(repository._entities.find({"type": "universe", "current_universe": universe}))
+        if universe_docs:
+            universe_entity = Entity.model_validate({**universe_docs[0], "id": universe_docs[0]["_key"]})
+            if universe_entity.lora_config:
+                entity_type_key = entity.type.value.upper()
+                universe_loras = universe_entity.lora_config.get(entity_type_key, [])
+                for lora_name in universe_loras:
+                    if lora_name not in loras:
+                        loras.append(lora_name)
+    except Exception:
+        pass  # Don't fail imagen if universe lookup fails
+
     width = 832
     height = 1216
 

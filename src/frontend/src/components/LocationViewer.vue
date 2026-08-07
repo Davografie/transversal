@@ -1,5 +1,7 @@
 <template>
   <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" :style="bgStyle" @click="onBgClick">
+    <!-- Video background for animated/webm formats -->
+    <video v-if="isVideoBg" ref="videoBgEl" :src="currentImage" class="video-bg" :style="videoStyle" autoplay loop muted playsinline />
     <!-- Visual overlay layer (CSS effects) -->
     <div v-if="effectsEnabled && optimisticOverlay" class="overlay-layer" :class="optimisticOverlay" />
 
@@ -180,6 +182,8 @@ const props = defineProps({
 const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity'])
 
 const currentImage = ref('')
+const videoBgEl = ref(null)
+const isVideoBg = computed(() => /\.(webm|mp4)(\?|$)/i.test(currentImage.value))
 const nav = ref({})
 const zones = ref([])
 const occupants = ref([])
@@ -570,6 +574,7 @@ const imageAspect = ref(null)  // width/height ratio of current image, or null i
 
 const bgStyle = computed(() => {
   if (!currentImage.value) return ''
+  if (isVideoBg.value) return ''  // video element handles the visual
 
   const self = occupants.value.find(o => o.id === props.entityId)
   const mx = self?.map_x ?? 50
@@ -600,6 +605,14 @@ const bgStyle = computed(() => {
     backgroundSize: '180%',
     backgroundPosition: `${mx}% ${my}%`,
   }
+})
+
+const videoStyle = computed(() => {
+  if (!isVideoBg.value || !currentImage.value) return {}
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
+  return { objectPosition: `${mx}% ${my}%` }
 })
 
 // Track image aspect ratio on load
@@ -1194,6 +1207,13 @@ onMounted(() => {
 /* No background fade during portal travel — portal handles the transition */
 .location-viewer.portal-active {
   transition: none;
+}
+
+.video-bg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0; pointer-events: none;
 }
 
 .loc-label {
