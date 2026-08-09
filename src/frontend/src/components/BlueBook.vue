@@ -173,7 +173,8 @@ async function fetch() {
     const data = await graphql(QUERY_FEED, { eid: props.entityId })
     const inc = data?.incoming || []
     const jrn = data?.journal || []
-    entries.value = [...inc, ...jrn].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    const seen = new Set()
+    entries.value = [...inc, ...jrn].filter(m => seen.has(m.id) ? false : (seen.add(m.id), true)).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     for (const m of inc) {
       if (!senderNames.value[m.senderEntityId]) fetchEntityInfo(m.senderEntityId)
     }
