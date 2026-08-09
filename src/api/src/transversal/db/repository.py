@@ -635,6 +635,10 @@ class EntityRepository:
         import uuid
         from datetime import datetime, timezone
 
+        # Journal entries are self-referential — the character writes to themselves
+        if kind == "journal":
+            recipient_entity_id = sender_entity_id
+
         msg_id = str(uuid.uuid4())
         created_at = datetime.now(timezone.utc).isoformat()
         doc = {
@@ -697,6 +701,19 @@ class EntityRepository:
             RETURN m
         """
         results = self.db.aql.execute(query, bind_vars=bind_vars)
+        return [self._doc_to_message(m) for m in results]
+
+    def get_journal(self, entity_id: str) -> list["Message"]:
+        """Get an entity's personal journal entries (self-referential, kind=journal)."""
+        query = f"""
+            FOR m IN {MESSAGES}
+            FILTER m.sender_entity_id == @eid
+                AND m.recipient_entity_id == @eid
+                AND m.kind == 'journal'
+            SORT m.created_at DESC
+            RETURN m
+        """
+        results = self.db.aql.execute(query, bind_vars={"eid": entity_id})
         return [self._doc_to_message(m) for m in results]
 
     # ── Players ──────────────────────────────────────

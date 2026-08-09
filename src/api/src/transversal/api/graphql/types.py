@@ -476,3 +476,11 @@ class SendMessageInput:
     kind: MessageKind = MessageKind.LETTER
     title: str = ""
     body: str
+
+
+@strawberry.input
+class JournalEntryInput:
+    """Input for adding a personal journal entry (self-referential, GM-visible)."""
+    entity_id: strawberry.ID
+    title: str = ""
+    body: str

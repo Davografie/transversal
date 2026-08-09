@@ -11,6 +11,7 @@ from transversal.api.graphql.types import (
     EffectFieldDef as GqlEffectFieldDef,
     Entity,
     EntityType,
+    JournalEntryInput,
     Message,
     MessageKind,
     Projection,
@@ -241,6 +242,15 @@ class Query:
         repo = _em(info).repo
         messages = repo.get_recent_messages(since=since, kind=kind.value if kind else "")
         return [_message_to_gql(m, repo) for m in messages]
+
+    @strawberry.field
+    def journal(
+        self, info: strawberry.Info, entity_id: strawberry.ID
+    ) -> list[Message]:
+        """Get an entity's personal journal (self-referential entries, GM-visible)."""
+        repo = _em(info).repo
+        entries = repo.get_journal(str(entity_id))
+        return [_message_to_gql(m, repo) for m in entries]
 
 
 # ── Mutations ────────────────────────────────────────
@@ -610,6 +620,44 @@ class Mutation:
                     "body": msg.body,
                     "created_at": msg.created_at,
                     "relationship_description": gql_msg.relationship_description,
+                },
+            ))
+
+        return gql_msg
+
+    @strawberry.mutation
+    def add_journal_entry(self, info: strawberry.Info, input: JournalEntryInput) -> Message:
+        """Add a personal journal entry for an entity.
+
+        Journal entries are self-referential (character writes to themself)
+        and visible to the GM. No recipient parameter needed.
+        """
+        from transversal.api.sse.bus import StreamEvent, event_bus
+        from transversal.services.session_manager import session_manager
+
+        repo = _em(info).repo
+        msg = repo.send_message(
+            str(input.entity_id),
+            str(input.entity_id),
+            body=input.body,
+            kind="journal",
+            title=input.title,
+        )
+
+        gql_msg = _message_to_gql(msg, repo)
+        for s in session_manager.list_active():
+            event_bus.publish(StreamEvent(
+                event="message_received",
+                session_id=s.id,
+                data={
+                    "id": msg.id,
+                    "sender_entity_id": msg.sender_entity_id,
+                    "recipient_entity_id": msg.recipient_entity_id,
+                    "kind": "journal",
+                    "title": msg.title,
+                    "body": msg.body,
+                    "created_at": msg.created_at,
+                    "relationship_description": "",
                 },
             ))
 
