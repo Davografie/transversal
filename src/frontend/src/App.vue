@@ -766,6 +766,7 @@ function onWrapperLeave() {
 
 onMounted(() => {
   syncClosedPosition()
+  if (playerId.value) fetchPlayerEntities()
   DIAG.mark('onMounted', { showLoginOverlay: showLoginOverlay.value, playerId: playerId.value, entityId: entityId.value, sessionId: sessionId.value, gmMode: gmMode.value })
   // Dump full diagnostic timeline after init settles
   setTimeout(() => {
