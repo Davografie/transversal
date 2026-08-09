@@ -124,13 +124,13 @@ const selectedThread = ref(null)
 
 const QUERY_FEED = `
   query($eid: ID!) {
-    incoming: incomingMessages(entityId: $eid) { id senderEntityId recipientEntityId body title createdAt relationshipDescription tags kind }
-    journal: journal(entityId: $eid) { id senderEntityId recipientEntityId body title createdAt tags kind }
+    incoming: incomingMessages(entityId: $eid) { id senderEntityId recipientEntityId body title createdAt relationshipDescription threads kind }
+    journal: journal(entityId: $eid) { id senderEntityId recipientEntityId body title createdAt threads kind }
   }
 `
 
-const SEND_LETTER = `mutation($sender:ID!,$recipient:ID!,$body:String!,$tags:[String!]){sendMessage(input:{senderEntityId:$sender,recipientEntityId:$recipient,kind:LETTER,body:$body,tags:$tags}){id}}`
-const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$tags:[String!]){addJournalEntry(input:{entityId:$eid,title:$title,body:$body,tags:$tags}){id}}`
+const SEND_LETTER = `mutation($sender:ID!,$recipient:ID!,$body:String!,$threads:[String!]){sendMessage(input:{senderEntityId:$sender,recipientEntityId:$recipient,kind:LETTER,body:$body,threads:$threads}){id}}`
+const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$threads:[String!]){addJournalEntry(input:{entityId:$eid,title:$title,body:$body,threads:$threads}){id}}`
 const MESSAGE_TAGS = `query{messageThreads}`
 const RELATED_ENTITIES = `query($eid:ID!,$q:String!){relatedEntities(entityId:$eid,query:$q){id name sheetPortrait}}`
 
@@ -201,13 +201,16 @@ function senderInitial(eid) { const n = senderName(eid); return n ? n.charAt(0).
 function parseTags() { return composeThreads.value.split(',').map(t => t.trim()).filter(Boolean) }
 
 async function send() {
+  console.log("[BB] send() called", JSON.stringify({ body: composeBody.value, sending: sending.value, isSelf: isSelfRecipient.value, mode: composeMode.value, recipientId: composeRecipientId.value }))
   await nextTick()
-  if (!composeBody.value.trim() || sending.value) return
+  if (!composeBody.value.trim() || sending.value) { console.log("[BB] send() blocked"); return }
   sending.value = true
+  console.log("[BB] send() executing")
   try {
     const body = composeBody.value.trim()
     const tags = parseTags()
     if (isSelfRecipient.value) {
+        console.log("[BB] graphql variables", JSON.stringify({ eid: props.entityId, title: composeTitle.value.trim(), body, threads: tags.length ? tags : null }))
       await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, threads: tags.length ? tags : null })
     } else {
       const recipient = composeMode.value === 'reply' ? replyTarget.value : composeRecipientId.value
