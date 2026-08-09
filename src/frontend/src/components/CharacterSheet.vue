@@ -9,6 +9,18 @@
           <h2>{{ entity.name }}</h2>
           <video v-if="entity.sheetPortrait && isSheetVideo" :src="entity.sheetPortrait" class="sheet-portrait-video" autoplay loop muted playsinline />
           <img v-else-if="entity.sheetPortrait" :src="entity.sheetPortrait" class="sheet-portrait" />
+          <div v-if="isForeignSheet" class="rel-widget">
+            <template v-if="relationship">
+              <span class="rel-desc" @click.stop="showRelEditor = true" :title="'Click to edit'">{{ relationship.description || 'associated' }}</span>
+              <button class="rel-btn rel-del" @click.stop="removeRelationship" title="Remove relationship">✕</button>
+            </template>
+            <button v-else class="rel-btn rel-add" @click.stop="showRelEditor = true" title="Add relationship">+</button>
+            <div v-if="showRelEditor" class="rel-editor" @click.stop>
+              <input ref="relInput" v-model="relDescription" placeholder="Describe relationship…" @keyup.enter="saveRelationship" @keyup.escape="showRelEditor = false" />
+              <button class="rel-btn rel-save" @click="saveRelationship">✓</button>
+              <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
+            </div>
+          </div>
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -137,6 +149,16 @@ function displayName(name) {
 const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
 const entity = ref(null)
 const traitSets = ref([])
+
+// ── Relationship widget (foreign sheets only) ──────
+const relationship = ref(null)
+const showRelEditor = ref(false)
+const relDescription = ref('')
+const relInput = ref(null)
+
+const isForeignSheet = computed(() =>
+  props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
+)
 
 const isSheetVideo = computed(() => entity.value?.sheetPortrait && /\.(webm|mp4)(\?|$)/i.test(entity.value.sheetPortrait))
 
@@ -690,6 +712,66 @@ watch(() => props.entityId, fetchEntity)
 watch(() => props.universe, fetchEntity)
 watch(() => props.overrideEntityId, fetchEntity)
 
+// ── Relationship fetch ─────────────────────────────
+async function fetchRelationship() {
+  if (!props.viewerEntityId || !props.overrideEntityId) {
+    relationship.value = null
+    return
+  }
+  const query = `
+    query($viewer: ID!, $target: ID!) {
+      relationship(fromEntityId: $viewer, toEntityId: $target) {
+        description
+      }
+    }
+  `
+  const data = await graphql(query, {
+    viewer: props.viewerEntityId,
+    target: props.overrideEntityId,
+  })
+  relationship.value = data?.relationship || null
+}
+
+async function saveRelationship() {
+  if (!props.viewerEntityId || !props.overrideEntityId) return
+  const query = `
+    mutation($from: ID!, $to: ID!, $desc: String!) {
+      createRelationship(input: { fromEntityId: $from, toEntityId: $to, description: $desc }) {
+        description
+      }
+    }
+  `
+  await graphql(query, {
+    from: props.viewerEntityId,
+    to: props.overrideEntityId,
+    desc: relDescription.value,
+  })
+  showRelEditor.value = false
+  await fetchRelationship()
+}
+
+async function removeRelationship() {
+  if (!props.viewerEntityId || !props.overrideEntityId) return
+  const query = `
+    mutation($from: ID!, $to: ID!) {
+      deleteRelationship(input: { fromEntityId: $from, toEntityId: $to })
+    }
+  `
+  await graphql(query, {
+    from: props.viewerEntityId,
+    to: props.overrideEntityId,
+  })
+  relationship.value = null
+  showRelEditor.value = false
+}
+
+watch(() => props.overrideEntityId, () => {
+  if (isForeignSheet.value) fetchRelationship()
+})
+watch(() => props.viewerEntityId, () => {
+  if (isForeignSheet.value) fetchRelationship()
+})
+
 // Sync external pool sources (for GM panel)
 watch(() => props.externalPoolSources, (sources) => {
   if (sources !== null) poolSources.value = [...sources]
@@ -1176,4 +1258,98 @@ watch(() => props.externalPoolSources, (sources) => {
 .sfx-btn:hover { opacity: 0.8; }
 .sfx-btn:disabled, .sfx-btn.sfx-used { opacity: 0.3; cursor: default; }
 .sfx-btn.sfx-active { background: var(--accent); color: #fff; opacity: 1; }
+
+/* ── Relationship widget ──────────────────────── */
+.rel-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  position: relative;
+  flex-shrink: 0;
+}
+.rel-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.rel-desc:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.rel-btn {
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.rel-add {
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+.rel-add:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.rel-del {
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.rel-del:hover {
+  background: var(--danger);
+  color: #fff;
+}
+.rel-editor {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.rel-editor input {
+  width: 180px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12px;
+  font-style: italic;
+  outline: none;
+}
+.rel-editor input:focus {
+  border-color: var(--accent);
+}
+.rel-save {
+  background: var(--accent);
+  color: #fff;
+}
+.rel-save:hover {
+  opacity: 0.8;
+}
+.rel-cancel {
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+.rel-cancel:hover {
+  color: var(--text);
+}
 </style>

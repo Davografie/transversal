@@ -484,3 +484,32 @@ class JournalEntryInput:
     entity_id: strawberry.ID
     title: str = ""
     body: str
+
+
+# ── Relationships ─────────────────────────────────────
+
+@strawberry.type
+class Relationship:
+    """A directional relationship edge between two entities."""
+    id: str
+    from_entity_id: strawberry.ID
+    to_entity_id: strawberry.ID
+    type: str
+    description: str = ""
+
+
+@strawberry.input
+class CreateRelationshipInput:
+    """Input for creating or updating a relationship edge."""
+    from_entity_id: strawberry.ID
+    to_entity_id: strawberry.ID
+    type: str = "associate"
+    description: str = ""
+
+
+@strawberry.input
+class DeleteRelationshipInput:
+    """Input for deleting a relationship edge."""
+    from_entity_id: strawberry.ID
+    to_entity_id: strawberry.ID
+    type: str = "associate"

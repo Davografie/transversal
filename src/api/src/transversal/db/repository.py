@@ -610,6 +610,23 @@ class EntityRepository:
         }))
         return cursor[0] if cursor else None
 
+    def delete_relationship(
+        self, from_id: str, to_id: str, rel_type: str
+    ) -> bool:
+        """Delete a directional relationship edge between two entities."""
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @from_ref AND r._to == @to_ref AND r.type == @rel_type
+            REMOVE r IN {RELATIONSHIPS}
+            RETURN OLD
+        """
+        result = self.db.aql.execute(query, bind_vars={
+            "from_ref": f"{ENTITIES}/{from_id}",
+            "to_ref": f"{ENTITIES}/{to_id}",
+            "rel_type": rel_type,
+        })
+        return bool(list(result))
+
     # ── Messages ──────────────────────────────────────
 
     def _doc_to_message(self, doc: dict) -> "Message":

@@ -7,6 +7,8 @@ from typing import Optional
 from transversal.api.graphql.types import (
     CharacterView,
     CreateEntityInput,
+    CreateRelationshipInput,
+    DeleteRelationshipInput,
     EffectActionMeta as GqlEffectActionMeta,
     EffectFieldDef as GqlEffectFieldDef,
     Entity,
@@ -15,6 +17,7 @@ from transversal.api.graphql.types import (
     Message,
     MessageKind,
     Projection,
+    Relationship,
     RazmeritResult,
     SendMessageInput,
     SfxEffect as GqlSfxEffect,
@@ -251,6 +254,26 @@ class Query:
         repo = _em(info).repo
         entries = repo.get_journal(str(entity_id))
         return [_message_to_gql(m, repo) for m in entries]
+
+    @strawberry.field
+    def relationship(
+        self, info: strawberry.Info,
+        from_entity_id: strawberry.ID,
+        to_entity_id: strawberry.ID,
+        type: str = "associate",
+    ) -> Optional[Relationship]:
+        """Get a directional relationship edge between two entities, or null."""
+        repo = _em(info).repo
+        edge = repo.get_relationship(str(from_entity_id), str(to_entity_id), type)
+        if edge is None:
+            return None
+        return Relationship(
+            id=edge["_key"],
+            from_entity_id=str(from_entity_id),
+            to_entity_id=str(to_entity_id),
+            type=edge.get("type", type),
+            description=edge.get("description", ""),
+        )
 
 
 # ── Mutations ────────────────────────────────────────
@@ -662,6 +685,32 @@ class Mutation:
             ))
 
         return gql_msg
+
+    @strawberry.mutation
+    def create_relationship(self, info: strawberry.Info, input: CreateRelationshipInput) -> Relationship:
+        """Create (or update) a directional relationship edge between two entities."""
+        repo = _em(info).repo
+        # Upsert: delete first if exists, then create fresh
+        repo.delete_relationship(str(input.from_entity_id), str(input.to_entity_id), input.type)
+        repo.create_relationship(
+            str(input.from_entity_id), str(input.to_entity_id),
+            input.type, description=input.description,
+        )
+        return Relationship(
+            id="",
+            from_entity_id=str(input.from_entity_id),
+            to_entity_id=str(input.to_entity_id),
+            type=input.type,
+            description=input.description,
+        )
+
+    @strawberry.mutation
+    def delete_relationship(self, info: strawberry.Info, input: DeleteRelationshipInput) -> bool:
+        """Delete a directional relationship edge between two entities."""
+        repo = _em(info).repo
+        return repo.delete_relationship(
+            str(input.from_entity_id), str(input.to_entity_id), input.type,
+        )
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
