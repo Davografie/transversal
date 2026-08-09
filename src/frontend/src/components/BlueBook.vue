@@ -18,20 +18,20 @@
           <button class="bb-reply-cancel" @click="cancelCompose()">cancel</button>
         </div>
         <div v-if="composeMode !== 'reply'" class="bb-recipient-row">
-          <div class="bb-recipient-display">
-            <span v-if="isSelfRecipient" class="bb-self-indicator">📓 Journal (self)</span>
-            <span v-else class="bb-other-indicator">✉ To: {{ composeRecipientName }}</span>
-            <button class="bb-change-recipient" @click="showRecipientPicker = !showRecipientPicker">{{ showRecipientPicker ? 'cancel' : 'change' }}</button>
-          </div>
-          <div v-if="showRecipientPicker" class="bb-recipient-picker">
-            <input v-model="composeRecipientName" class="bb-input" placeholder="Recipient name…" @input="onRecipientInput" />
-            <div v-if="recipientSuggestions.length" class="bb-suggestions">
-              <button v-for="s in recipientSuggestions" :key="s.id" class="bb-suggestion-item" @mousedown.prevent @click="selectRecipient(s)">
-                <img v-if="s.sheetPortrait" :src="s.sheetPortrait" class="bb-suggestion-img" />
-                <span v-else class="bb-suggestion-avatar">{{ s.name.charAt(0) }}</span>
-                {{ s.name }}
-              </button>
-            </div>
+          <button class="bb-recipient-btn" @click="toggleRecipientList">
+            <span v-if="isSelfRecipient">📓 Self (journal)</span>
+            <span v-else>✉ {{ composeRecipientName }}</span>
+            <span class="bb-recipient-arrow">{{ showRecipientList ? '▴' : '▾' }}</span>
+          </button>
+          <div v-if="showRecipientList" class="bb-suggestions">
+            <button class="bb-suggestion-item" :class="{ active: isSelfRecipient }" @mousedown.prevent @click="selectSelf">
+              📓 Self (journal)
+            </button>
+            <button v-for="e in relatedEntities" :key="e.id" class="bb-suggestion-item" :class="{ active: composeRecipientId === e.id }" @mousedown.prevent @click="selectRecipient(e)">
+              <img v-if="e.sheetPortrait" :src="e.sheetPortrait" class="bb-suggestion-img" />
+              <span v-else class="bb-suggestion-avatar">{{ e.name.charAt(0) }}</span>
+              {{ e.name }}
+            </button>
           </div>
         </div>
         <input v-model="composeTitle" class="bb-input" placeholder="Title (optional)" @keyup.enter="focusBody" />
@@ -99,7 +99,7 @@ const sending = ref(false)
 const entries = ref([])
 
 const showCompose = ref(false)
-const showRecipientPicker = ref(false)
+const showRecipientList = ref(false)
 const composeMode = ref('new')
 const composeTitle = ref('')
 const composeBody = ref('')
@@ -110,7 +110,7 @@ const bodyEl = ref(null)
 
 const tagFocused = ref(false)
 const allTags = ref([])
-const recipientSuggestions = ref([])
+const relatedEntities = ref([])
 
 const senderNames = ref({})
 const senderPortraits = ref({})
@@ -217,21 +217,26 @@ async function send() {
   }
 }
 
-async function onRecipientInput() {
-  const q = composeRecipientName.value.trim()
-  if (!q || q.length < 2) { recipientSuggestions.value = []; return }
-  const data = await graphql(RELATED_ENTITIES, { eid: props.entityId, q })
-  recipientSuggestions.value = (data?.relatedEntities || []).filter(e =>
-    e.name.toLowerCase().includes(q.toLowerCase())
-  ).slice(0, 8)
-  composeRecipientId.value = ''
+async function fetchRelatedEntities() {
+  const data = await graphql(RELATED_ENTITIES, { eid: props.entityId, q: '' })
+  relatedEntities.value = data?.relatedEntities || []
+}
+
+function toggleRecipientList() {
+  showRecipientList.value = !showRecipientList.value
+  if (showRecipientList.value && !relatedEntities.value.length) fetchRelatedEntities()
+}
+
+function selectSelf() {
+  composeRecipientId.value = props.entityId
+  composeRecipientName.value = props.entityName || 'Me'
+  showRecipientList.value = false
 }
 
 function selectRecipient(entity) {
   composeRecipientName.value = entity.name
   composeRecipientId.value = entity.id
-  recipientSuggestions.value = []
-  showRecipientPicker.value = false
+  showRecipientList.value = false
 }
 
 function onTagInput() {}
@@ -257,7 +262,7 @@ function openCompose(mode) {
 
 function cancelCompose() {
   showCompose.value = false
-  showRecipientPicker.value = false
+  showRecipientList.value = false
   composeTitle.value = ''
   composeBody.value = ''
   composeTags.value = ''
@@ -310,6 +315,9 @@ watch(() => props.visible, (v) => { if (v) fetch() })
 .bb-textarea{flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);font-size:12px;resize:none;outline:none;font-family:inherit}
 .bb-textarea:focus{border-color:var(--accent)}
 .bb-recipient-row,.bb-tags-row{position:relative}
+.bb-recipient-btn{display:flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);font-size:12px;cursor:pointer;width:100%}
+.bb-recipient-btn:hover{border-color:var(--accent)}
+.bb-recipient-arrow{font-size:10px;color:var(--text-dim);margin-left:auto}
 .bb-recipient-picker{position:relative}
 .bb-suggestions{position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--bg-panel);border:1px solid var(--border);border-radius:4px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
 .bb-suggestion-item{display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:4px 8px;border:none;background:none;color:var(--text-dim);font-size:12px;cursor:pointer}
