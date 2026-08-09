@@ -65,19 +65,22 @@
       <!-- ── Inbox ── -->
       <div v-if="tab === 'inbox'" class="bb-entries">
         <div v-if="loading" class="bb-empty">Loading…</div>
-        <div v-else-if="!inbox.length" class="bb-empty">No messages yet.</div>
-        <div v-for="m in inbox" :key="m.id" class="bb-entry">
+        <div v-else-if="!filteredInbox.length" class="bb-empty">No messages yet.</div>
+        <div v-if="inboxTags.length" class="bb-tag-filter">
+          <button :class="{ active: !selectedTag }" @click="selectedTag = null">All</button>
+          <button v-for="t in inboxTags" :key="t" :class="{ active: selectedTag === t }" @click="selectedTag = (selectedTag === t ? null : t)">#{{ t }}</button>
+        </div>
+        <div v-for="m in filteredInbox" :key="m.id" class="bb-entry">
           <div class="bb-entry-header">
-            <span class="bb-sender">{{ senderName(m.senderEntityId) }}</span>
+            <img v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" />
+            <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
+            <span class="bb-sender-name">{{ senderName(m.senderEntityId) }}</span>
             <span v-if="m.relationshipDescription" class="bb-rel">· {{ m.relationshipDescription }} ·</span>
           </div>
-          <div class="bb-body">{{ m.body }}</div>
-          <div class="bb-meta">
-            <span class="bb-time">{{ formatTime(m.createdAt) }}</span>
-            <span v-if="m.tags?.length" class="bb-tags">
-              <span v-for="t in m.tags" :key="t" class="bb-tag">#{{ t }}</span>
-            </span>
+          <div v-if="m.tags?.length" class="bb-entry-tags">
+            <span v-for="t in m.tags" :key="t" class="bb-tag">#{{ t }}</span>
           </div>
+          <div class="bb-body">{{ m.body }}</div>
           <div class="bb-entry-actions">
             <button class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
           </div>
@@ -138,8 +141,12 @@ const recipientSuggestions = ref([])
 
 // Entity name cache for inbox senders
 const senderNames = ref({})
+const senderPortraits = ref({})
 const replyTarget = ref(null)
 const replyName = ref('')
+
+// Tag filter
+const selectedTag = ref(null)
 
 const QUERY_INBOX = `
   query($eid: ID!) {
@@ -218,14 +225,39 @@ async function fetch() {
 
 async function fetchEntityName(eid) {
   try {
-    const data = await graphql('{ entity(id: "' + eid + '") { name } }')
-    if (data?.entity) senderNames.value[eid] = data.entity.name
+    const data = await graphql('{ entity(id: "' + eid + '") { name sheetPortrait } }')
+    if (data?.entity) {
+      senderNames.value[eid] = data.entity.name
+      if (data.entity.sheetPortrait) senderPortraits.value[eid] = data.entity.sheetPortrait
+    }
   } catch { /* ignore */ }
 }
 
 function senderName(eid) {
   return senderNames.value[eid] || eid
 }
+
+function senderPortrait(eid) {
+  return senderPortraits.value[eid] || null
+}
+
+function senderInitial(eid) {
+  const name = senderName(eid)
+  return name ? name.charAt(0).toUpperCase() : '?'
+}
+
+const inboxTags = computed(() => {
+  const seen = new Set()
+  for (const m of inbox.value) {
+    for (const t of (m.tags || [])) seen.add(t)
+  }
+  return [...seen].sort()
+})
+
+const filteredInbox = computed(() => {
+  if (!selectedTag.value) return inbox.value
+  return inbox.value.filter(m => (m.tags || []).includes(selectedTag.value))
+})
 
 function parseTags() {
   return composeTags.value.split(',').map(t => t.trim()).filter(Boolean)
@@ -590,4 +622,61 @@ watch(() => props.visible, (v) => { if (v) fetch() })
 }
 .bb-reply-btn:hover { background: var(--bg-hover); }
 .bb-entry-actions { margin-top: 4px; }
+
+/* ── Tag filter ── */
+.bb-tag-filter {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.bb-tag-filter button {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.bb-tag-filter button:hover { background: var(--bg-hover); color: var(--text); }
+.bb-tag-filter button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ── Sender portrait ── */
+.bb-sender-img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.bb-sender-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.bb-sender-name {
+  font-weight: 600;
+}
+.bb-entry-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 2px 0 4px;
+}
 </style>
