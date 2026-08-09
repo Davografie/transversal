@@ -1,9 +1,13 @@
 <template>
   <div v-if="visible && !embedded" class="bluebook-backdrop" @click.self="$emit('close')">
     <div class="bluebook-panel">
-      <div class="bb-header"><h2>{{ entityName }}'s Blue Book</h2><button class="bb-close" @click="$emit('close')" title="Close">✕</button></div>
+      <div class="bb-header">
+        <h2>{{ entityName }}'s Blue Book</h2>
+        <button class="bb-close" @click="$emit('close')" title="Close">✕</button>
+      </div>
+    </div>
   </div>
-  <div v-if="visible && embedded" class="bluebook-embedded">
+  <div v-if="visible && embedded">
       <span class="bb-header-label">📘 {{ entityName }}</span>
 
       <!-- ── Compose toggle ── -->
@@ -76,7 +80,6 @@
           </div>
         </div>
       </div>
-    </div>
   </div>
 </template>
 
@@ -174,8 +177,7 @@ async function fetch() {
     const data = await graphql(QUERY_FEED, { eid: props.entityId })
     const inc = data?.incoming || []
     const jrn = data?.journal || []
-    const seen = new Set()
-    entries.value = [...inc, ...jrn].filter(m => seen.has(m.id) ? false : (seen.add(m.id), true)).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    entries.value = [...inc, ...jrn].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     for (const m of inc) {
       if (!senderNames.value[m.senderEntityId]) fetchEntityInfo(m.senderEntityId)
     }
