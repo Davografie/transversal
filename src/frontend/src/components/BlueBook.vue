@@ -8,7 +8,6 @@
     </div>
   </div>
   <div v-if="visible && embedded">
-      <span class="bb-header-label">📘 {{ entityName }}</span>
 
       <!-- ── Compose toggle ── -->
       <div v-if="!showCompose" class="bb-compose-toggle">
