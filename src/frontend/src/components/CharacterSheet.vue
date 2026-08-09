@@ -21,7 +21,7 @@
               <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
             </div>
           </div>
-          <button v-if="!gmMode" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = true" title="Blue Book">📘</button>
+          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = true" title="Blue Book">📘</button>
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -170,6 +170,12 @@ const showBlueBook = ref(false)
 const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
 )
+
+const ownsCharacter = computed(() => {
+  const id = props.overrideEntityId || props.entityId
+  if (!props.playerOwnedEntityIds?.length) return false
+  return props.playerOwnedEntityIds.includes(id)
+})
 
 const isSheetVideo = computed(() => entity.value?.sheetPortrait && /\.(webm|mp4)(\?|$)/i.test(entity.value.sheetPortrait))
 

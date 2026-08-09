@@ -167,6 +167,7 @@
         :entity-id="entityId"
         :override-entity-id="viewingEntityId"
         :viewer-entity-id="entityId"
+        :player-owned-entity-ids="ownedEntityIds"
         :universe="universe"
         :phase="phase"
         embedded
@@ -354,6 +355,8 @@ const charPending = ref(null)
 const charStatus = ref('')
 const pendingPlayerEntities = ref([])
 const playerEntities = ref([])
+
+const ownedEntityIds = computed(() => playerEntities.value.map(e => e.id))
 
 const newCharName = ref('')
 const creatingChar = ref(false)
