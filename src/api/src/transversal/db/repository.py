@@ -597,8 +597,18 @@ class EntityRepository:
         self, from_id: str, to_id: str, rel_type: str
     ) -> dict | None:
         """Get a directional relationship edge between two entities."""
-        edge_key = f"edge:{from_id}:{to_id}:{rel_type}"
-        return self._relationships.get(edge_key)
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @from_ref AND r._to == @to_ref AND r.type == @rel_type
+            LIMIT 1
+            RETURN r
+        """
+        cursor = list(self.db.aql.execute(query, bind_vars={
+            "from_ref": f"{ENTITIES}/{from_id}",
+            "to_ref": f"{ENTITIES}/{to_id}",
+            "rel_type": rel_type,
+        }))
+        return cursor[0] if cursor else None
 
     # ── Messages ──────────────────────────────────────
 
