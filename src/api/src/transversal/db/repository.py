@@ -638,6 +638,8 @@ class EntityRepository:
             kind=doc.get("kind", "letter"),
             title=doc.get("title", ""),
             body=doc["body"],
+            after_ids=doc.get("after_ids", []),
+            tags=doc.get("tags", []),
             created_at=doc.get("created_at", ""),
         )
 
@@ -648,6 +650,8 @@ class EntityRepository:
         body: str,
         kind: str = "letter",
         title: str = "",
+        after_ids: list[str] | None = None,
+        tags: list[str] | None = None,
     ) -> "Message":
         import uuid
         from datetime import datetime, timezone
@@ -665,6 +669,8 @@ class EntityRepository:
             "kind": kind,
             "title": title,
             "body": body,
+            "after_ids": after_ids or [],
+            "tags": tags or [],
             "created_at": created_at,
         }
         self._messages.insert(doc)
@@ -732,6 +738,108 @@ class EntityRepository:
         """
         results = self.db.aql.execute(query, bind_vars={"eid": entity_id})
         return [self._doc_to_message(m) for m in results]
+
+    def get_all_tags(self) -> list[str]:
+        """Return all distinct tags across all messages, sorted."""
+        query = f"""
+            FOR m IN {MESSAGES}
+            FOR tag IN (m.tags || [])
+            COLLECT tags = tag
+            SORT tags
+            RETURN tags
+        """
+        return list(self.db.aql.execute(query))
+
+    def get_timeline(
+        self,
+        entity_id: str = "",
+        tags: list[str] | None = None,
+    ) -> list["Message"]:
+        """Fetch messages and return them in topological (causal) order.
+
+        Filters by entity (sender or recipient) and/or tags.
+        Orders messages by their ``after_ids`` DAG using Kahn's algorithm.
+        Messages with no ``after_ids`` come first; ties break on ``created_at``.
+        Cycles are broken by removing the oldest edge and logging a warning.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # ── Fetch candidate messages ─────────────────
+        filters = []
+        bind_vars = {}
+        if entity_id:
+            filters.append("(m.sender_entity_id == @eid OR m.recipient_entity_id == @eid)")
+            bind_vars["eid"] = entity_id
+        if tags:
+            # Any tag match (OR semantics)
+            filters.append("LENGTH(INTERSECTION(m.tags, @tags)) > 0")
+            bind_vars["tags"] = tags
+        filter_clause = f"FILTER {' AND '.join(filters)}" if filters else ""
+        query = f"""
+            FOR m IN {MESSAGES}
+            {filter_clause}
+            RETURN m
+        """
+        raw = list(self.db.aql.execute(query, bind_vars=bind_vars))
+        messages = [self._doc_to_message(m) for m in raw]
+
+        # ── Build index and DAG ───────────────────────
+        msg_map = {m.id: m for m in messages}
+        in_degree: dict[str, int] = {m.id: 0 for m in messages}
+        children: dict[str, list[str]] = {m.id: [] for m in messages}
+
+        for m in messages:
+            for after_id in m.after_ids:
+                if after_id in msg_map:
+                    children.setdefault(after_id, []).append(m.id)
+                    in_degree[m.id] = in_degree.get(m.id, 0) + 1
+
+        # ── Kahn's topological sort ───────────────────
+        # Start with nodes that have no predecessors
+        queue = [m.id for m in messages if in_degree.get(m.id, 0) == 0]
+        # Stable sort: floaters tiebreak by created_at descending (newest first for equal-rank)
+        queue.sort(key=lambda mid: msg_map[mid].created_at)
+
+        result: list[Message] = []
+        while queue:
+            node_id = queue.pop(0)
+            result.append(msg_map[node_id])
+            for child_id in children.get(node_id, []):
+                in_degree[child_id] -= 1
+                if in_degree[child_id] == 0:
+                    queue.append(child_id)
+                    # Re-sort to maintain stable order
+                    queue.sort(key=lambda mid: msg_map[mid].created_at)
+
+        # ── Cycle detection ───────────────────────────
+        if len(result) < len(messages):
+            missing = [m.id for m in messages if m.id not in {r.id for r in result}]
+            logger.warning(
+                "timeline: %d message(s) in cycle, breaking at oldest edge — %s",
+                len(missing), missing[:5],
+            )
+            # Break cycles: for each missing node, remove all after_ids and re-insert
+            for mid in missing:
+                msg_map[mid].after_ids = []
+            result.extend(msg_map[mid] for mid in missing)
+            result.sort(key=lambda m: m.created_at, reverse=True)
+
+        return result
+
+    def update_message(
+        self, message_id: str, after_ids: list[str] | None = None, tags: list[str] | None = None
+    ) -> bool:
+        """Update the after_ids and/or tags of an existing message."""
+        doc = self._messages.get(message_id)
+        if not doc:
+            return False
+        if after_ids is not None:
+            doc["after_ids"] = after_ids
+        if tags is not None:
+            doc["tags"] = tags
+        self._messages.update(doc)
+        return True
 
     # ── Players ──────────────────────────────────────
 

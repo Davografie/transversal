@@ -34,6 +34,7 @@ from transversal.api.graphql.types import (
     TraitUpdateInput,
     TransversalTypeEnum,
     UpdateEntityInput,
+    UpdateMessageInput,
     Zone,
 )
 from transversal.domain import Entity as DomainEntity
@@ -93,6 +94,8 @@ def _message_to_gql(m: "Message", repo) -> Message:
         kind=MessageKind(m.kind.value),
         title=m.title,
         body=m.body,
+        after_ids=m.after_ids,
+        tags=m.tags,
         created_at=m.created_at,
         relationship_description=(rel or {}).get("description", ""),
     )
@@ -274,6 +277,29 @@ class Query:
             type=edge.get("type", type),
             description=edge.get("description", ""),
         )
+
+    @strawberry.field
+    def message_tags(self, info: strawberry.Info) -> list[str]:
+        """Return all distinct tags across all messages (for autocomplete)."""
+        return _em(info).repo.get_all_tags()
+
+    @strawberry.field
+    def timeline(
+        self, info: strawberry.Info,
+        entity_id: strawberry.ID = "",
+        tags: Optional[list[str]] = None,
+    ) -> list[Message]:
+        """Return messages in causal (topological) order.
+
+        Filter by entity (sender or recipient) and/or tags.
+        Messages ordered by after_ids DAG; floaters by created_at.
+        """
+        repo = _em(info).repo
+        messages = repo.get_timeline(
+            entity_id=str(entity_id) if entity_id else "",
+            tags=tags,
+        )
+        return [_message_to_gql(m, repo) for m in messages]
 
 
 # ── Mutations ────────────────────────────────────────
@@ -627,6 +653,8 @@ class Mutation:
             body=input.body,
             kind=input.kind.value if input.kind else "letter",
             title=input.title,
+            after_ids=[str(a) for a in (input.after_ids or [])],
+            tags=list(input.tags or []),
         )
 
         gql_msg = _message_to_gql(msg, repo)
@@ -641,6 +669,8 @@ class Mutation:
                     "kind": msg.kind.value if hasattr(msg.kind, 'value') else msg.kind,
                     "title": msg.title,
                     "body": msg.body,
+                    "after_ids": msg.after_ids,
+                    "tags": msg.tags,
                     "created_at": msg.created_at,
                     "relationship_description": gql_msg.relationship_description,
                 },
@@ -665,6 +695,8 @@ class Mutation:
             body=input.body,
             kind="journal",
             title=input.title,
+            after_ids=[str(a) for a in (input.after_ids or [])],
+            tags=list(input.tags or []),
         )
 
         gql_msg = _message_to_gql(msg, repo)
@@ -679,6 +711,8 @@ class Mutation:
                     "kind": "journal",
                     "title": msg.title,
                     "body": msg.body,
+                    "after_ids": msg.after_ids,
+                    "tags": msg.tags,
                     "created_at": msg.created_at,
                     "relationship_description": "",
                 },
@@ -710,6 +744,16 @@ class Mutation:
         repo = _em(info).repo
         return repo.delete_relationship(
             str(input.from_entity_id), str(input.to_entity_id), input.type,
+        )
+
+    @strawberry.mutation
+    def update_message(self, info: strawberry.Info, input: UpdateMessageInput) -> bool:
+        """Update after_ids and/or tags on an existing message."""
+        repo = _em(info).repo
+        return repo.update_message(
+            str(input.id),
+            after_ids=[str(a) for a in input.after_ids] if input.after_ids is not None else None,
+            tags=input.tags,
         )
 
 
