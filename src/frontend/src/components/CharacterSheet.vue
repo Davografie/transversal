@@ -144,6 +144,7 @@ const props = defineProps({
   externalPoolSources: { type: Array, default: null },
   overrideEntityId: { type: String, default: null },
   viewerEntityId: { type: String, default: null },
+  playerOwnedEntityIds: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'openSettings'])
