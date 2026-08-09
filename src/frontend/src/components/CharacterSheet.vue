@@ -21,7 +21,7 @@
               <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
             </div>
           </div>
-          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = true" title="Blue Book">📘</button>
+          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn bb-open-btn" :class="{ active: showBlueBook }" @click.stop="showBlueBook = !showBlueBook" :title="showBlueBook ? 'Close Blue Book' : 'Blue Book'">{{ showBlueBook ? '✕' : '📘' }}</button>
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -118,14 +118,94 @@
       </div>
     </template>
     <div v-else class="empty">No entity loaded</div>
+    <BlueBook
+      v-if="showBlueBook"
+      :entity-id="overrideEntityId || entityId"
+      :entity-name="entity?.name || ''"
+      :visible="true"
+      embedded
+    />
+    <template v-else-if="entity">
+      <div class="razmerit">
+        <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(-1)">−</button>
+        <span class="razmerit-value">{{ entity.razmerit }}</span>
+        razmerit
+        <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(1)">+</button>
+      </div>
+      <div v-if="traitSets.length && !showAddTrait" class="trait-sets">
+        <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
+          <h4 @click="toggleSet(ts.name)" class="set-header">
+            <span class="set-caret">{{ expandedSets.has(ts.name) ? '▾' : '▸' }}</span>
+            {{ ts.name }}
+            <span v-if="ts.limit" class="limit-dots">
+              <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
+            </span>
+          </h4>
+          <div v-show="expandedSets.has(ts.name)" class="set-body">
+            <template v-for="t in ts.traits" :key="t.name">
+              <div v-if="isKnown(t)" class="trait-row" :class="{ ego: t.ego, 'in-pool': isInPool(t), 'limit-reached': inPoolCount(ts) >= ts.limit && !isInPool(t) }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
+                <div class="trait-left">
+                  <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
+                  <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
+                </div>
+                <div class="trait-right">
+                  <span class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
+                  <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
+                  <button
+                    v-for="sfxId in t.sfxIds"
+                    :key="sfxId"
+                    class="sfx-btn"
+                    :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
+                    :disabled="sfxUsed(sfxId) && !sfxActive(sfxId)"
+                    @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
+                    :title="sfxActive(sfxId) ? `Deactivate ${sfxId}` : `Activate ${sfxId}`"
+                  >{{ sfxId.replace('sfx-', '') }}</button>
+                </div>
+              </div>
+              <div v-else class="trait-row unknown-trait">
+                <div class="trait-left">
+                  <span class="trait-name unknown">???</span>
+                </div>
+                <div class="trait-right">
+                  <span class="trait-die unknown-die">?</span>
+                </div>
+              </div>
+              <div v-if="editingTraitId === t.id" class="trait-edit" @click.stop>
+                <div class="edit-dice">
+                  <button v-for="(d, i) in editDice" :key="i" class="die-chip" @click="pickIdx = i; showDiePicker = true">{{ d }}</button>
+                  <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
+                </div>
+                <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
+                <div v-if="t.possibleSfxIds?.length" class="edit-sfx">
+                  <span class="edit-sfx-label">SFX</span>
+                  <button v-for="sfxId in t.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">{{ sfxId.replace('sfx-', '') }}</button>
+                </div>
+                <input v-if="t.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" />
+                <div class="edit-actions">
+                  <button class="edit-done-btn" @click="cancelEdit">Done</button>
+                  <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === t.id }" @click="onDeleteClick(t)">{{ deleteCountdown > 0 && deletingTraitId === t.id ? `Cancel (${deleteCountdown})` : 'Delete' }}</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="!showAddTrait" class="empty">No traits configured</div>
+      <button v-if="!overrideEntityId && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
+      <div v-if="showAddTrait" class="trait-picker">
+        <template v-if="addPhase === 'sets'">
+          <h4>Pick a trait set</h4>
+          <button v-for="ts in availableTraitSets" :key="ts.id" class="picker-item" @click="selectSet(ts)">{{ ts.name }}</button>
+        </template>
+        <template v-if="addPhase === 'traits'">
+          <button class="picker-back" @click="addPhase = 'sets'">← {{ selectedTraitSet?.name }}</button>
+          <button v-for="t in filteredTraits" :key="t.id" class="picker-item" @click="addTrait(t)">{{ t.name }}<span class="picker-die">{{ t.defaultDieType }}</span></button>
+          <div v-if="!filteredTraits.length" class="empty">{{ emptySetMessage }}</div>
+        </template>
+        <button class="picker-cancel" @click="showAddTrait = false">Cancel</button>
+      </div>
+    </template>
   </div>
-
-  <BlueBook
-    :entity-id="overrideEntityId || entityId"
-    :entity-name="entity?.name || ''"
-    :visible="showBlueBook"
-    @close="showBlueBook = false"
-  />
 
 </template>
 

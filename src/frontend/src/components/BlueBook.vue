@@ -1,10 +1,10 @@
 <template>
-  <div v-if="visible" class="bluebook-backdrop" @click.self="$emit('close')">
+  <div v-if="visible && !embedded" class="bluebook-backdrop" @click.self="$emit('close')">
     <div class="bluebook-panel">
-      <div class="bb-header">
-        <h2>{{ entityName }}'s Blue Book</h2>
-        <button class="bb-close" @click="$emit('close')" title="Close">✕</button>
-      </div>
+      <div class="bb-header"><h2>{{ entityName }}'s Blue Book</h2><button class="bb-close" @click="$emit('close')" title="Close">✕</button></div>
+  </div>
+  <div v-if="visible && embedded" class="bluebook-embedded">
+      <span class="bb-header-label">📘 {{ entityName }}</span>
 
       <!-- ── Compose toggle ── -->
       <div v-if="!showCompose" class="bb-compose-toggle">
@@ -88,6 +88,7 @@ const props = defineProps({
   entityId: { type: String, required: true },
   entityName: { type: String, default: '' },
   visible: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
 })
 
 defineEmits(['close'])
