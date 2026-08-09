@@ -208,11 +208,11 @@ async function send() {
     const body = composeBody.value.trim()
     const tags = parseTags()
     if (isSelfRecipient.value) {
-      await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, threads: threads.length ? tags : null })
+      await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, threads: tags.length ? tags : null })
     } else {
       const recipient = composeMode.value === 'reply' ? replyTarget.value : composeRecipientId.value
       if (!recipient) return
-      await graphql(SEND_LETTER, { sender: props.entityId, recipient, body, threads: threads.length ? tags : null })
+      await graphql(SEND_LETTER, { sender: props.entityId, recipient, body, threads: tags.length ? tags : null })
     }
   } finally {
     sending.value = false
