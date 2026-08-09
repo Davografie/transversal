@@ -21,6 +21,7 @@
               <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
             </div>
           </div>
+          <button v-if="!gmMode" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = true" title="Blue Book">📘</button>
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -119,12 +120,20 @@
     <div v-else class="empty">No entity loaded</div>
   </div>
 
+  <BlueBook
+    :entity-id="overrideEntityId || entityId"
+    :entity-name="entity?.name || ''"
+    :visible="showBlueBook"
+    @close="showBlueBook = false"
+  />
+
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import DiePicker from './DiePicker.vue'
+import BlueBook from './BlueBook.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -155,6 +164,8 @@ const relationship = ref(null)
 const showRelEditor = ref(false)
 const relDescription = ref('')
 const relInput = ref(null)
+
+const showBlueBook = ref(false)
 
 const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
