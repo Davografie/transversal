@@ -22,6 +22,7 @@ from transversal.db.arango import (
     TRAITS,
     TRAITSETS,
     TRAITSETTINGS,
+    MESSAGES,
     get_db,
 )
 from transversal.domain import (
@@ -30,6 +31,7 @@ from transversal.domain import (
     EntityImage,
     EntityType,
     ImageType,
+    Message,
     Projection,
     SFX,
     Trait,
@@ -56,6 +58,7 @@ class EntityRepository:
         self._relationships = self.db.collection(RELATIONSHIPS)
         self._players = self.db.collection(PLAYERS)
         self._entity_images = self.db.collection(ENTITY_IMAGES)
+        self._messages = self.db.collection(MESSAGES)
 
     # ── Entity CRUD ───────────────────────────────────
 
@@ -198,6 +201,11 @@ class EntityRepository:
         # Delete entity image records from DB
         self.db.aql.execute(
             f"FOR img IN {ENTITY_IMAGES} FILTER img.entity_id == @eid REMOVE img IN {ENTITY_IMAGES}",
+            bind_vars={"eid": entity_id},
+        )
+        # Delete messages involving this entity
+        self.db.aql.execute(
+            f"FOR m IN {MESSAGES} FILTER m.sender_entity_id == @eid OR m.recipient_entity_id == @eid REMOVE m IN {MESSAGES}",
             bind_vars={"eid": entity_id},
         )
         # Delete media files from disk
@@ -574,14 +582,84 @@ class EntityRepository:
     # ── Relationships ─────────────────────────────────
 
     def create_relationship(
-        self, from_id: str, to_id: str, rel_type: str
+        self, from_id: str, to_id: str, rel_type: str, description: str = ""
     ) -> dict:
         edge = {
             "_from": f"{ENTITIES}/{from_id}",
             "_to": f"{ENTITIES}/{to_id}",
             "type": rel_type,
         }
+        if description:
+            edge["description"] = description
         return self._relationships.insert(edge)
+
+    def get_relationship(
+        self, from_id: str, to_id: str, rel_type: str
+    ) -> dict | None:
+        """Get a directional relationship edge between two entities."""
+        edge_key = f"edge:{from_id}:{to_id}:{rel_type}"
+        return self._relationships.get(edge_key)
+
+    # ── Messages ──────────────────────────────────────
+
+    def send_message(
+        self, sender_entity_id: str, recipient_entity_id: str, body: str
+    ) -> "Message":
+        import uuid
+        from datetime import datetime, timezone
+
+        msg_id = str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "_key": msg_id,
+            "sender_entity_id": sender_entity_id,
+            "recipient_entity_id": recipient_entity_id,
+            "body": body,
+            "created_at": created_at,
+        }
+        self._messages.insert(doc)
+        return Message(
+            id=msg_id,
+            sender_entity_id=sender_entity_id,
+            recipient_entity_id=recipient_entity_id,
+            body=body,
+            created_at=created_at,
+        )
+
+    def get_incoming_messages(self, entity_id: str) -> list["Message"]:
+        """Get messages addressed to an entity, newest first."""
+        query = f"""
+            FOR m IN {MESSAGES}
+            FILTER m.recipient_entity_id == @eid
+            SORT m.created_at DESC
+            RETURN m
+        """
+        results = self.db.aql.execute(query, bind_vars={"eid": entity_id})
+        return [
+            Message(
+                id=m["_key"], sender_entity_id=m["sender_entity_id"],
+                recipient_entity_id=m["recipient_entity_id"],
+                body=m["body"], created_at=m.get("created_at", ""),
+            ) for m in results
+        ]
+
+    def get_conversation(self, entity_a: str, entity_b: str) -> list["Message"]:
+        """Get all messages between two entities (for GM view), newest first."""
+        query = f"""
+            FOR m IN {MESSAGES}
+            FILTER (m.sender_entity_id == @a AND m.recipient_entity_id == @b)
+                OR (m.sender_entity_id == @b AND m.recipient_entity_id == @a)
+            SORT m.created_at DESC
+            RETURN m
+        """
+        results = self.db.aql.execute(query, bind_vars={"a": entity_a, "b": entity_b})
+        return [
+            Message(
+                id=m["_key"], sender_entity_id=m["sender_entity_id"],
+                recipient_entity_id=m["recipient_entity_id"],
+                body=m["body"], created_at=m.get("created_at", ""),
+            ) for m in results
+        ]
 
     # ── Players ──────────────────────────────────────
 

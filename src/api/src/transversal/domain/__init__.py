@@ -496,3 +496,19 @@ class EntityImage(BaseModel):
     filename: str = ""  # base filename without variant suffix or extension
     extension: str = "png"
     created_at: str = ""  # ISO 8601
+
+
+# ── Messages ────────────────────────────────────────────
+
+class Message(BaseModel):
+    """Persistent message between entities.
+
+    Stored in the `messages` collection.
+    Relationship descriptions are resolved at query time from
+    the ``associate`` edge in ``relationships``.
+    """
+    id: str
+    sender_entity_id: str
+    recipient_entity_id: str
+    body: str
+    created_at: str = ""  # ISO 8601, populated by repository on insert

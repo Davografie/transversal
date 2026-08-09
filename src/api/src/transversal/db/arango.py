@@ -53,6 +53,7 @@ TRAITSETTINGS = "traitsettings"    # edge collection
 SFXS = "sfxs"
 PLAYERS = "players"
 RELATIONSHIPS = "relationships"    # edge collection
+MESSAGES = "messages"              # inter-entity persistent messages
 ENTITY_IMAGES = "entity_images"    # generated image metadata
 
 COLLECTIONS = {
@@ -64,6 +65,7 @@ COLLECTIONS = {
     SFXS: False,
     PLAYERS: False,
     RELATIONSHIPS: True,  # edge
+    MESSAGES: False,      # document
     ENTITY_IMAGES: False,
 }
 
@@ -126,6 +128,10 @@ def _ensure_indexes(db) -> None:
     # entity_images
     _add_hash_index(db, ENTITY_IMAGES, ["entity_id"])
     _add_hash_index(db, ENTITY_IMAGES, ["entity_id", "universe"])
+
+    # messages
+    _add_hash_index(db, MESSAGES, ["sender_entity_id"])
+    _add_hash_index(db, MESSAGES, ["recipient_entity_id"])
 
 
 

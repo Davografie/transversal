@@ -449,3 +449,24 @@ class CharacterView:
     entity: Entity
     projections: list[Projection]
     trait_settings: list[TraitSetting]
+
+
+# ── Messages ──────────────────────────────────────────
+
+@strawberry.type
+class Message:
+    """A persistent message between entities, with resolved relationship info."""
+    id: strawberry.ID
+    sender_entity_id: strawberry.ID
+    recipient_entity_id: strawberry.ID
+    body: str
+    created_at: str = ""
+    relationship_description: str = ""  # resolved from associate edge at query time
+
+
+@strawberry.input
+class SendMessageInput:
+    """Input for sending a message to another entity."""
+    sender_entity_id: strawberry.ID
+    recipient_entity_id: strawberry.ID
+    body: str

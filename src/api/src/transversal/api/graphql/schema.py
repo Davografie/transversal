@@ -11,8 +11,10 @@ from transversal.api.graphql.types import (
     EffectFieldDef as GqlEffectFieldDef,
     Entity,
     EntityType,
+    Message,
     Projection,
     RazmeritResult,
+    SendMessageInput,
     SfxEffect as GqlSfxEffect,
     SfxInput,
     SfxRef,
@@ -69,6 +71,23 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         statement=s.statement, negative=s.negative,
         ego=s.ego, sfx_ids=s.sfx_ids,
         known_to=s.known_to,
+    )
+
+
+def _message_to_gql(m: "Message", repo) -> Message:
+    """Convert a domain Message to GraphQL Message, resolving the
+    ``associate`` relationship description between sender and recipient."""
+    from transversal.domain import Message as DomainMessage
+    rel = repo.get_relationship(m.sender_entity_id, m.recipient_entity_id, "associate")
+    if rel is None:
+        rel = repo.get_relationship(m.recipient_entity_id, m.sender_entity_id, "associate")
+    return Message(
+        id=m.id,
+        sender_entity_id=m.sender_entity_id,
+        recipient_entity_id=m.recipient_entity_id,
+        body=m.body,
+        created_at=m.created_at,
+        relationship_description=(rel or {}).get("description", ""),
     )
 
 
@@ -185,6 +204,26 @@ class Query:
                 fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
             ) for m in EFFECT_ACTION_REGISTRY
+        ]
+
+    @strawberry.field
+    def incoming_messages(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[Message]:
+        """Get messages addressed to this entity (player: only incoming; GM: all)."""
+        repo = _em(info).repo
+        messages = repo.get_incoming_messages(str(entity_id))
+        return [
+            _message_to_gql(m, repo) for m in messages
+        ]
+
+    @strawberry.field
+    def conversation(
+        self, info: strawberry.Info, entity_a: strawberry.ID, entity_b: strawberry.ID
+    ) -> list[Message]:
+        """Get all messages between two entities (GM view)."""
+        repo = _em(info).repo
+        messages = repo.get_conversation(str(entity_a), str(entity_b))
+        return [
+            _message_to_gql(m, repo) for m in messages
         ]
 
 
@@ -522,6 +561,39 @@ class Mutation:
     @strawberry.mutation
     def delete_sfx(self, info: strawberry.Info, id: strawberry.ID) -> bool:
         return _em(info).repo.delete_sfx(str(id))
+
+    @strawberry.mutation
+    def send_message(self, info: strawberry.Info, input: SendMessageInput) -> Message:
+        """Send a persistent message from one entity to another.
+
+        Publishes a ``message_received`` SSE event to all active sessions.
+        """
+        from transversal.api.sse.bus import StreamEvent, event_bus
+        from transversal.services.session_manager import session_manager
+
+        repo = _em(info).repo
+        msg = repo.send_message(
+            str(input.sender_entity_id),
+            str(input.recipient_entity_id),
+            input.body,
+        )
+
+        gql_msg = _message_to_gql(msg, repo)
+        for s in session_manager.list_active():
+            event_bus.publish(StreamEvent(
+                event="message_received",
+                session_id=s.id,
+                data={
+                    "id": msg.id,
+                    "sender_entity_id": msg.sender_entity_id,
+                    "recipient_entity_id": msg.recipient_entity_id,
+                    "body": msg.body,
+                    "created_at": msg.created_at,
+                    "relationship_description": gql_msg.relationship_description,
+                },
+            ))
+
+        return gql_msg
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
