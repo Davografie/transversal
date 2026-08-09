@@ -662,7 +662,7 @@ class EntityRepository:
             title=doc.get("title", ""),
             body=doc["body"],
             after_ids=doc.get("after_ids", []),
-            tags=doc.get("tags", []),
+            threads=doc.get("threads", []),
             created_at=doc.get("created_at", ""),
         )
 
@@ -674,7 +674,7 @@ class EntityRepository:
         kind: str = "letter",
         title: str = "",
         after_ids: list[str] | None = None,
-        tags: list[str] | None = None,
+        threads: list[str] | None = None,
     ) -> "Message":
         import uuid
         from datetime import datetime, timezone
@@ -693,7 +693,7 @@ class EntityRepository:
             "title": title,
             "body": body,
             "after_ids": after_ids or [],
-            "tags": tags or [],
+            "threads": threads or [],
             "created_at": created_at,
         }
         self._messages.insert(doc)
@@ -762,11 +762,11 @@ class EntityRepository:
         results = self.db.aql.execute(query, bind_vars={"eid": entity_id})
         return [self._doc_to_message(m) for m in results]
 
-    def get_all_tags(self) -> list[str]:
-        """Return all distinct tags across all messages, sorted."""
+    def get_all_threads(self) -> list[str]:
+        """Return all distinct threads across all messages, sorted."""
         query = f"""
             FOR m IN {MESSAGES}
-            FOR tag IN (m.tags || [])
+            FOR tag IN (m.threads || [])
             COLLECT tags = tag
             SORT tags
             RETURN tags
@@ -776,11 +776,11 @@ class EntityRepository:
     def get_timeline(
         self,
         entity_id: str = "",
-        tags: list[str] | None = None,
+        threads: list[str] | None = None,
     ) -> list["Message"]:
         """Fetch messages and return them in topological (causal) order.
 
-        Filters by entity (sender or recipient) and/or tags.
+        Filters by entity (sender or recipient) and/or threads.
         Orders messages by their ``after_ids`` DAG using Kahn's algorithm.
         Messages with no ``after_ids`` come first; ties break on ``created_at``.
         Cycles are broken by removing the oldest edge and logging a warning.
@@ -794,9 +794,9 @@ class EntityRepository:
         if entity_id:
             filters.append("(m.sender_entity_id == @eid OR m.recipient_entity_id == @eid)")
             bind_vars["eid"] = entity_id
-        if tags:
+        if threads:
             # Any tag match (OR semantics)
-            filters.append("LENGTH(INTERSECTION(m.tags, @tags)) > 0")
+            filters.append("LENGTH(INTERSECTION(m.threads, @tags)) > 0")
             bind_vars["tags"] = tags
         filter_clause = f"FILTER {' AND '.join(filters)}" if filters else ""
         query = f"""
@@ -851,16 +851,16 @@ class EntityRepository:
         return result
 
     def update_message(
-        self, message_id: str, after_ids: list[str] | None = None, tags: list[str] | None = None
+        self, message_id: str, after_ids: list[str] | None = None, threads: list[str] | None = None
     ) -> bool:
-        """Update the after_ids and/or tags of an existing message."""
+        """Update the after_ids and/or threads of an existing message."""
         doc = self._messages.get(message_id)
         if not doc:
             return False
         if after_ids is not None:
             doc["after_ids"] = after_ids
-        if tags is not None:
-            doc["tags"] = tags
+        if threads is not None:
+            doc["threads"] = threads
         self._messages.update(doc)
         return True
 

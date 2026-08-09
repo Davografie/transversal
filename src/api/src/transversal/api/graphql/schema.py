@@ -96,7 +96,7 @@ def _message_to_gql(m: "Message", repo) -> Message:
         title=m.title,
         body=m.body,
         after_ids=m.after_ids,
-        tags=m.tags,
+        tags=m.threads,
         created_at=m.created_at,
         relationship_description=(rel or {}).get("description", ""),
     )
@@ -280,7 +280,7 @@ class Query:
         )
 
     @strawberry.field
-    def message_tags(self, info: strawberry.Info) -> list[str]:
+    def message_threads(self, info: strawberry.Info) -> list[str]:
         """Return all distinct tags across all messages (for autocomplete)."""
         return _em(info).repo.get_all_tags()
 
@@ -298,7 +298,7 @@ class Query:
         repo = _em(info).repo
         messages = repo.get_timeline(
             entity_id=str(entity_id) if entity_id else "",
-            tags=tags,
+            threads=threads,
         )
         return [_message_to_gql(m, repo) for m in messages]
 
@@ -669,7 +669,7 @@ class Mutation:
             kind=input.kind.value if input.kind else "letter",
             title=input.title,
             after_ids=[str(a) for a in (input.after_ids or [])],
-            tags=list(input.tags or []),
+            tags=list(input.threads or []),
         )
 
         gql_msg = _message_to_gql(msg, repo)
@@ -685,7 +685,7 @@ class Mutation:
                     "title": msg.title,
                     "body": msg.body,
                     "after_ids": msg.after_ids,
-                    "tags": msg.tags,
+                    "threads": msg.threads,
                     "created_at": msg.created_at,
                     "relationship_description": gql_msg.relationship_description,
                 },
@@ -711,7 +711,7 @@ class Mutation:
             kind="journal",
             title=input.title,
             after_ids=[str(a) for a in (input.after_ids or [])],
-            tags=list(input.tags or []),
+            tags=list(input.threads or []),
         )
 
         gql_msg = _message_to_gql(msg, repo)
@@ -727,7 +727,7 @@ class Mutation:
                     "title": msg.title,
                     "body": msg.body,
                     "after_ids": msg.after_ids,
-                    "tags": msg.tags,
+                    "threads": msg.threads,
                     "created_at": msg.created_at,
                     "relationship_description": "",
                 },
@@ -768,7 +768,7 @@ class Mutation:
         return repo.update_message(
             str(input.id),
             after_ids=[str(a) for a in input.after_ids] if input.after_ids is not None else None,
-            tags=input.tags,
+            tags=input.threads,
         )
 
 

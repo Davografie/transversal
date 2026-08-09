@@ -38,10 +38,10 @@
           </div>
         </div>
         <input v-model="composeTitle" class="bb-input" placeholder="Title (optional)" @keyup.enter="focusBody" />
-        <div class="bb-tags-row">
-          <input v-model="composeTags" class="bb-input" placeholder="Tags: dreams, investigation (comma-separated)" @focus="tagFocused = true" @blur="tagBlur" @input="onTagInput" />
-          <div v-if="tagFocused && filteredTagSuggestions.length" class="bb-suggestions">
-            <button v-for="t in filteredTagSuggestions" :key="t" class="bb-suggestion-item" @mousedown.prevent @click="addTag(t)">{{ t }}</button>
+        <div class="bb-threads-row">
+          <input v-model="composeThreads" class="bb-input" placeholder="Threads: dreams, investigation (comma-separated)" @focus="threadFocused = true" @blur="threadBlur" @input="onThreadInput" />
+          <div v-if="threadFocused && filteredThreadSuggestions.length" class="bb-suggestions">
+            <button v-for="t in filteredThreadSuggestions" :key="t" class="bb-suggestion-item" @mousedown.prevent @click="addThread(t)">{{ t }}</button>
           </div>
         </div>
         <div class="bb-body-row-full">
@@ -57,9 +57,9 @@
       <div class="bb-entries">
         <div v-if="loading" class="bb-empty">Loading…</div>
         <div v-else-if="!filteredEntries.length" class="bb-empty">No entries yet.</div>
-        <div v-if="allEntryTags.length" class="bb-tag-filter">
-          <button :class="{ active: !selectedTag }" @click="selectedTag = null">All</button>
-          <button v-for="t in allEntryTags" :key="t" :class="{ active: selectedTag === t }" @click="selectedTag = (selectedTag === t ? null : t)">#{{ t }}</button>
+        <div v-if="allEntryThreads.length" class="bb-thread-filter">
+          <button :class="{ active: !selectedThread }" @click="selectedThread = null">All</button>
+          <button v-for="t in allEntryThreads" :key="t" :class="{ active: selectedThread === t }" @click="selectedThread = (selectedThread === t ? null : t)">#{{ t }}</button>
         </div>
         <div v-for="m in filteredEntries" :key="m.id" class="bb-entry">
           <div class="bb-entry-header">
@@ -72,7 +72,7 @@
             <div v-else class="bb-journal-badge">📓 Journal entry</div>
             <div v-if="m.title" class="bb-entry-title">{{ m.title }}</div>
           </div>
-          <div v-if="m.tags?.length" class="bb-entry-tags"><span v-for="t in m.tags" :key="t" class="bb-tag">#{{ t }}</span></div>
+          <div v-if="m.threads?.length" class="bb-entry-threads"><span v-for="t in m.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
           <div class="bb-body">{{ m.body }}</div>
           <div class="bb-entry-actions">
             <button v-if="m.senderEntityId !== m.recipientEntityId" class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
@@ -106,13 +106,13 @@ const showRecipientList = ref(false)
 const composeMode = ref('new')
 const composeTitle = ref('')
 const composeBody = ref('')
-const composeTags = ref('')
+const composeThreads = ref('')
 const composeRecipientId = ref('')
 const composeRecipientName = ref('')
 const bodyEl = ref(null)
 
-const tagFocused = ref(false)
-const allTags = ref([])
+const threadFocused = ref(false)
+const allThreads = ref([])
 const relatedEntities = ref([])
 
 const senderNames = ref({})
@@ -120,7 +120,7 @@ const senderPortraits = ref({})
 const replyTarget = ref(null)
 const replyName = ref('')
 
-const selectedTag = ref(null)
+const selectedThread = ref(null)
 
 const QUERY_FEED = `
   query($eid: ID!) {
@@ -131,7 +131,7 @@ const QUERY_FEED = `
 
 const SEND_LETTER = `mutation($sender:ID!,$recipient:ID!,$body:String!,$tags:[String!]){sendMessage(input:{senderEntityId:$sender,recipientEntityId:$recipient,kind:LETTER,body:$body,tags:$tags}){id}}`
 const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$tags:[String!]){addJournalEntry(input:{entityId:$eid,title:$title,body:$body,tags:$tags}){id}}`
-const MESSAGE_TAGS = `query{messageTags}`
+const MESSAGE_TAGS = `query{messageThreads}`
 const RELATED_ENTITIES = `query($eid:ID!,$q:String!){relatedEntities(entityId:$eid,query:$q){id name sheetPortrait}}`
 
 const composePlaceholder = computed(() => {
@@ -150,23 +150,23 @@ const sendLabel = computed(() => {
   return 'Send ' + (composeRecipientName.value || composeRecipientId.value)
 })
 
-const allEntryTags = computed(() => {
+const allEntryThreads = computed(() => {
   const seen = new Set()
-  for (const m of entries.value) for (const t of (m.tags || [])) seen.add(t)
+  for (const m of entries.value) for (const t of (m.threads || [])) seen.add(t)
   return [...seen].sort()
 })
 
 const filteredEntries = computed(() => {
-  if (!selectedTag.value) return entries.value
-  return entries.value.filter(m => (m.tags || []).includes(selectedTag.value))
+  if (!selectedThread.value) return entries.value
+  return entries.value.filter(m => (m.threads || []).includes(selectedThread.value))
 })
 
-const filteredTagSuggestions = computed(() => {
-  if (!composeTags.value) return allTags.value
-  const parts = composeTags.value.split(',')
+const filteredThreadSuggestions = computed(() => {
+  if (!composeThreads.value) return allThreads.value
+  const parts = composeThreads.value.split(',')
   const current = parts[parts.length - 1].trim().toLowerCase()
   if (!current) return []
-  return allTags.value.filter(t => t.toLowerCase().includes(current) && !parts.slice(0, -1).map(p => p.trim()).includes(t))
+  return allThreads.value.filter(t => t.toLowerCase().includes(current) && !parts.slice(0, -1).map(p => p.trim()).includes(t))
 })
 
 async function fetch() {
@@ -198,7 +198,7 @@ function senderName(eid) { return senderNames.value[eid] || eid }
 function senderPortrait(eid) { return senderPortraits.value[eid] || null }
 function senderInitial(eid) { const n = senderName(eid); return n ? n.charAt(0).toUpperCase() : '?' }
 
-function parseTags() { return composeTags.value.split(',').map(t => t.trim()).filter(Boolean) }
+function parseTags() { return composeThreads.value.split(',').map(t => t.trim()).filter(Boolean) }
 
 async function send() {
   await nextTick()
@@ -208,11 +208,11 @@ async function send() {
     const body = composeBody.value.trim()
     const tags = parseTags()
     if (isSelfRecipient.value) {
-      await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, tags: tags.length ? tags : null })
+      await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, threads: threads.length ? tags : null })
     } else {
       const recipient = composeMode.value === 'reply' ? replyTarget.value : composeRecipientId.value
       if (!recipient) return
-      await graphql(SEND_LETTER, { sender: props.entityId, recipient, body, tags: tags.length ? tags : null })
+      await graphql(SEND_LETTER, { sender: props.entityId, recipient, body, threads: threads.length ? tags : null })
     }
   } finally {
     sending.value = false
@@ -243,16 +243,16 @@ function selectRecipient(entity) {
   showRecipientList.value = false
 }
 
-function onTagInput() {}
-function addTag(tag) {
-  const parts = composeTags.value.split(',').map(t => t.trim()).filter(Boolean)
+function onThreadInput() {}
+function addThread(tag) {
+  const parts = composeThreads.value.split(',').map(t => t.trim()).filter(Boolean)
   if (parts[parts.length - 1]) parts.pop()
   parts.push(tag)
-  composeTags.value = parts.join(', ') + ', '
-  tagFocused.value = true
+  composeThreads.value = parts.join(', ') + ', '
+  threadFocused.value = true
   bodyEl.value?.focus()
 }
-function tagBlur() { setTimeout(() => { tagFocused.value = false }, 150) }
+function threadBlur() { setTimeout(() => { threadFocused.value = false }, 150) }
 
 function openCompose(mode) {
   composeMode.value = mode || 'new'
@@ -269,7 +269,7 @@ function cancelCompose() {
   showRecipientList.value = false
   composeTitle.value = ''
   composeBody.value = ''
-  composeTags.value = ''
+  composeThreads.value = ''
   composeRecipientId.value = ''
   composeRecipientName.value = ''
   replyTarget.value = null
@@ -318,7 +318,7 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-body-row-full .bb-textarea{width:100%;min-height:80px}
 .bb-textarea{flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);font-size:12px;resize:none;outline:none;font-family:inherit}
 .bb-textarea:focus{border-color:var(--accent)}
-.bb-recipient-row,.bb-tags-row{position:relative}
+.bb-recipient-row,.bb-threads-row{position:relative}
 .bb-recipient-btn{display:flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);font-size:12px;cursor:pointer;width:100%}
 .bb-recipient-btn:hover{border-color:var(--accent)}
 .bb-recipient-arrow{font-size:10px;color:var(--text-dim);margin-left:auto}
@@ -336,10 +336,10 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-cancel:hover{color:var(--text);background:var(--bg-hover)}
 .bb-entries{flex:1;overflow-y:auto;padding:8px 12px}
 .bb-empty{color:var(--text-dim);font-size:13px;text-align:center;padding:32px 0}
-.bb-tag-filter{display:flex;gap:4px;flex-wrap:wrap;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
-.bb-tag-filter button{padding:2px 8px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-dim);font-size:11px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s}
-.bb-tag-filter button:hover{background:var(--bg-hover);color:var(--text)}
-.bb-tag-filter button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bb-thread-filter{display:flex;gap:4px;flex-wrap:wrap;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.bb-thread-filter button{padding:2px 8px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-dim);font-size:11px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s}
+.bb-thread-filter button:hover{background:var(--bg-hover);color:var(--text)}
+.bb-thread-filter button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .bb-entry{padding:10px 0;border-bottom:1px solid var(--border)}
 .bb-entry:last-child{border-bottom:none}
 .bb-entry-header{display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:wrap}
@@ -349,8 +349,8 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-sender-name{font-weight:600;font-size:12px;color:var(--accent)}
 .bb-journal-badge{font-size:11px;color:var(--text-dim)}
 .bb-entry-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
-.bb-entry-tags{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
-.bb-tag{font-size:10px;color:var(--accent);opacity:0.7}
+.bb-entry-threads{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
+.bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}
 .bb-body{font-size:13px;color:var(--text);line-height:1.4;white-space:pre-wrap}
 .bb-entry-actions{margin-top:4px}

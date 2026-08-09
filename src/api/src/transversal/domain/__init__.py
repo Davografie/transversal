@@ -527,5 +527,5 @@ class Message(BaseModel):
     title: str = ""
     body: str
     after_ids: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=list)
+    threads: list[str] = Field(default_factory=list)
     created_at: str = ""  # ISO 8601, populated by repository on insert
