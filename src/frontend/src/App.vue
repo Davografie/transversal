@@ -937,6 +937,7 @@ function confirmSwitch() {
   showLoginOverlay.value = false
   playerEntities.value = []
   fetch(`/api/v1/players/${p.id}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+  fetchPlayerEntities()
   initLocation()
   loadPlayerRole()
 }
