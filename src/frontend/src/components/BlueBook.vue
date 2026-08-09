@@ -24,32 +24,42 @@
           <span>Replying to <strong>{{ replyName }}</strong></span>
           <button class="bb-reply-cancel" @click="cancelCompose()">cancel</button>
         </div>
-        <input
-          v-if="tab === 'journal'"
-          v-model="composeTitle"
-          class="bb-input"
-          placeholder="Title (optional)"
-          @keyup.enter="focusBody"
-        />
-        <div class="bb-body-row">
+        <div v-if="tab === 'inbox' && composeMode !== 'reply'" class="bb-recipient-row">
+          <input v-model="composeRecipient" class="bb-input" placeholder="Recipient entity ID…" @input="onRecipientInput" />
+          <div v-if="recipientSuggestions.length" class="bb-suggestions">
+            <button v-for="s in recipientSuggestions" :key="s.id" class="bb-suggestion-item" @mousedown.prevent @click="selectRecipient(s)">{{ s.name }}</button>
+          </div>
+        </div>
+        <input v-model="composeTitle" class="bb-input" placeholder="Title (optional)" @keyup.enter="focusBody" />
+        <div class="bb-tags-row">
+          <input
+            v-model="composeTags"
+            class="bb-input"
+            placeholder="Tags: dreams, investigation (comma-separated)"
+            @focus="tagFocused = true"
+            @blur="tagBlur"
+            @input="onTagInput"
+          />
+          <div v-if="tagFocused && filteredTagSuggestions.length" class="bb-suggestions">
+            <button v-for="t in filteredTagSuggestions" :key="t" class="bb-suggestion-item" @mousedown.prevent @click="addTag(t)">{{ t }}</button>
+          </div>
+        </div>
+        <div class="bb-body-row-full">
           <textarea
             ref="bodyEl"
             v-model="composeBody"
             class="bb-textarea"
             :placeholder="composePlaceholder"
-            rows="2"
+            rows="4"
             @keyup.enter.ctrl="send"
           ></textarea>
+        </div>
+        <div class="bb-compose-actions">
           <button class="bb-send" @click="send" :disabled="!composeBody.trim() || sending" :title="composeMode === 'reply' ? 'Reply' : 'Send'">
             {{ sending ? '…' : 'Send' }}
           </button>
+          <button class="bb-cancel" @click="cancelCompose()">Cancel</button>
         </div>
-        <input
-          v-if="tab === 'journal'"
-          v-model="composeTags"
-          class="bb-input bb-tags"
-          placeholder="Tags: dreams, investigation (comma-separated)"
-        />
       </div>
 
       <!-- ── Inbox ── -->
@@ -118,7 +128,13 @@ const composeMode = ref('new')  // 'new' | 'reply'
 const composeTitle = ref('')
 const composeBody = ref('')
 const composeTags = ref('')
+const composeRecipient = ref('')
 const bodyEl = ref(null)
+
+// Autocomplete state
+const tagFocused = ref(false)
+const allTags = ref([])
+const recipientSuggestions = ref([])
 
 // Entity name cache for inbox senders
 const senderNames = ref({})
@@ -142,12 +158,13 @@ const QUERY_JOURNAL = `
 `
 
 const SEND_LETTER = `
-  mutation($sender: ID!, $recipient: ID!, $body: String!) {
+  mutation($sender: ID!, $recipient: ID!, $body: String!, $tags: [String!]) {
     sendMessage(input: {
       senderEntityId: $sender
       recipientEntityId: $recipient
       kind: LETTER
       body: $body
+      tags: $tags
     }) { id }
   }
 `
@@ -161,6 +178,14 @@ const ADD_JOURNAL = `
       tags: $tags
     }) { id }
   }
+`
+
+const MESSAGE_TAGS = `
+  query { messageTags }
+`
+
+const SEARCH_ENTITIES = `
+  query($q: String!) { entities(type: CHARACTER) { id name } }
 `
 
 const composePlaceholder = computed(() => {
@@ -202,28 +227,40 @@ function senderName(eid) {
   return senderNames.value[eid] || eid
 }
 
+function parseTags() {
+  return composeTags.value.split(',').map(t => t.trim()).filter(Boolean)
+}
+
+const filteredTagSuggestions = computed(() => {
+  if (!composeTags.value) return allTags.value
+  const parts = composeTags.value.split(',')
+  const current = parts[parts.length - 1].trim().toLowerCase()
+  if (!current) return []
+  return allTags.value.filter(t => t.toLowerCase().includes(current) && !parts.slice(0, -1).map(p => p.trim()).includes(t))
+})
+
 async function send() {
   await nextTick()
   if (!composeBody.value.trim() || sending.value) return
   sending.value = true
   try {
     const body = composeBody.value.trim()
+    const tags = parseTags()
     if (tab.value === 'journal') {
-      const tags = composeTags.value
-        .split(',')
-        .map(t => t.trim())
-        .filter(Boolean)
       await graphql(ADD_JOURNAL, {
         eid: props.entityId,
         title: composeTitle.value.trim(),
         body: body,
         tags: tags.length ? tags : null,
       })
-    } else if (composeMode.value === 'reply' && replyTarget.value) {
+    } else {
+      const recipient = composeMode.value === 'reply' ? replyTarget.value : composeRecipient.value.trim()
+      if (!recipient) return
       await graphql(SEND_LETTER, {
         sender: props.entityId,
-        recipient: replyTarget.value,
+        recipient: recipient,
         body: body,
+        tags: tags.length ? tags : null,
       })
     }
   } finally {
@@ -231,6 +268,38 @@ async function send() {
     cancelCompose()
     await fetch()
   }
+}
+
+function onTagInput() {
+  // Trigger autocomplete filtering via computed
+}
+
+function addTag(tag) {
+  const parts = composeTags.value.split(',').map(t => t.trim()).filter(Boolean)
+  if (parts[parts.length - 1]) parts.pop()
+  parts.push(tag)
+  composeTags.value = parts.join(', ') + ', '
+  tagFocused.value = true
+  bodyEl.value?.focus()
+}
+
+function tagBlur() {
+  setTimeout(() => { tagFocused.value = false }, 150)
+}
+
+async function onRecipientInput() {
+  const q = composeRecipient.value.trim()
+  if (!q || q.length < 2) { recipientSuggestions.value = []; return }
+  const data = await graphql(SEARCH_ENTITIES, { q })
+  const all = data?.entities || []
+  recipientSuggestions.value = all.filter(e => 
+    e.name.toLowerCase().includes(q.toLowerCase()) || e.id.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, 8)
+}
+
+function selectRecipient(entity) {
+  composeRecipient.value = entity.id
+  recipientSuggestions.value = []
 }
 
 function openCompose(mode) {
@@ -245,6 +314,7 @@ function cancelCompose() {
   composeTitle.value = ''
   composeBody.value = ''
   composeTags.value = ''
+  composeRecipient.value = ''
   replyTarget.value = null
   replyName.value = ''
   composeMode.value = 'new'
@@ -454,4 +524,70 @@ watch(() => props.visible, (v) => { if (v) fetch() })
   color: var(--accent);
   opacity: 0.7;
 }
+
+.bb-recipient-row, .bb-tags-row {
+  position: relative;
+}
+.bb-body-row-full {
+  display: flex;
+  flex-direction: column;
+}
+.bb-body-row-full .bb-textarea {
+  width: 100%;
+  min-height: 80px;
+}
+.bb-compose-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.bb-cancel {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.bb-cancel:hover { color: var(--text); background: var(--bg-hover); }
+.bb-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.bb-suggestion-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.bb-suggestion-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.bb-reply-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.bb-reply-btn:hover { background: var(--bg-hover); }
+.bb-entry-actions { margin-top: 4px; }
 </style>
