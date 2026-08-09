@@ -21,7 +21,7 @@
               <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
             </div>
           </div>
-          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = true" title="Blue Book">📘</button>
+          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = !showBlueBook" :title="showBlueBook ? 'Close Blue Book' : 'Blue Book'">{{ showBlueBook ? '🎲' : '📘' }}</button>
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">

@@ -291,7 +291,7 @@ function formatTime(iso) {
   catch { return iso }
 }
 
-watch(() => props.visible, (v) => { if (v) fetch() })
+watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 </script>
 
 <style scoped>
