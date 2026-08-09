@@ -467,7 +467,7 @@ class Message:
     created_at: str = ""
     relationship_description: str = ""  # resolved from associate edge at query time
     after_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
-    tags: list[str] = strawberry.field(default_factory=list)
+    threads: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
@@ -479,7 +479,7 @@ class SendMessageInput:
     title: str = ""
     body: str
     after_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
-    tags: list[str] = strawberry.field(default_factory=list)
+    threads: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
@@ -489,15 +489,15 @@ class JournalEntryInput:
     title: str = ""
     body: str
     after_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
-    tags: list[str] = strawberry.field(default_factory=list)
+    threads: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
 class UpdateMessageInput:
-    """Input for updating a message's after_ids and/or tags."""
+    """Input for updating a message's after_ids and/or threads."""
     id: strawberry.ID
     after_ids: Optional[list[strawberry.ID]] = None
-    tags: Optional[list[str]] = None
+    threads: Optional[list[str]] = None
 
 
 # ── Relationships ─────────────────────────────────────
