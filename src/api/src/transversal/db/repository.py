@@ -612,8 +612,25 @@ class EntityRepository:
 
     # ── Messages ──────────────────────────────────────
 
+    def _doc_to_message(self, doc: dict) -> "Message":
+        """Convert an ArangoDB messages document to a Message model."""
+        return Message(
+            id=doc["_key"],
+            sender_entity_id=doc["sender_entity_id"],
+            recipient_entity_id=doc["recipient_entity_id"],
+            kind=doc.get("kind", "letter"),
+            title=doc.get("title", ""),
+            body=doc["body"],
+            created_at=doc.get("created_at", ""),
+        )
+
     def send_message(
-        self, sender_entity_id: str, recipient_entity_id: str, body: str
+        self,
+        sender_entity_id: str,
+        recipient_entity_id: str,
+        body: str,
+        kind: str = "letter",
+        title: str = "",
     ) -> "Message":
         import uuid
         from datetime import datetime, timezone
@@ -624,17 +641,13 @@ class EntityRepository:
             "_key": msg_id,
             "sender_entity_id": sender_entity_id,
             "recipient_entity_id": recipient_entity_id,
+            "kind": kind,
+            "title": title,
             "body": body,
             "created_at": created_at,
         }
         self._messages.insert(doc)
-        return Message(
-            id=msg_id,
-            sender_entity_id=sender_entity_id,
-            recipient_entity_id=recipient_entity_id,
-            body=body,
-            created_at=created_at,
-        )
+        return self._doc_to_message(doc)
 
     def get_incoming_messages(self, entity_id: str) -> list["Message"]:
         """Get messages addressed to an entity, newest first."""
@@ -645,13 +658,7 @@ class EntityRepository:
             RETURN m
         """
         results = self.db.aql.execute(query, bind_vars={"eid": entity_id})
-        return [
-            Message(
-                id=m["_key"], sender_entity_id=m["sender_entity_id"],
-                recipient_entity_id=m["recipient_entity_id"],
-                body=m["body"], created_at=m.get("created_at", ""),
-            ) for m in results
-        ]
+        return [self._doc_to_message(m) for m in results]
 
     def get_conversation(self, entity_a: str, entity_b: str) -> list["Message"]:
         """Get all messages between two entities (for GM view), newest first."""
@@ -663,13 +670,34 @@ class EntityRepository:
             RETURN m
         """
         results = self.db.aql.execute(query, bind_vars={"a": entity_a, "b": entity_b})
-        return [
-            Message(
-                id=m["_key"], sender_entity_id=m["sender_entity_id"],
-                recipient_entity_id=m["recipient_entity_id"],
-                body=m["body"], created_at=m.get("created_at", ""),
-            ) for m in results
-        ]
+        return [self._doc_to_message(m) for m in results]
+
+    def get_recent_messages(
+        self, since: str = "", kind: str = ""
+    ) -> list["Message"]:
+        """Get all messages across all entities (GM activity feed), newest first.
+
+        Optionally filter by kind (letter, journal, report, gm_note)
+        and/or by a minimum created_at timestamp.
+        """
+        filters = []
+        bind_vars = {}
+        if since:
+            filters.append("m.created_at >= @since")
+            bind_vars["since"] = since
+        if kind:
+            filters.append("m.kind == @kind")
+            bind_vars["kind"] = kind
+        filter_clause = f"FILTER {' AND '.join(filters)}" if filters else ""
+        query = f"""
+            FOR m IN {MESSAGES}
+            {filter_clause}
+            SORT m.created_at DESC
+            LIMIT 200
+            RETURN m
+        """
+        results = self.db.aql.execute(query, bind_vars=bind_vars)
+        return [self._doc_to_message(m) for m in results]
 
     # ── Players ──────────────────────────────────────
 

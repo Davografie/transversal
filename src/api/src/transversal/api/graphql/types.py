@@ -11,6 +11,7 @@ from transversal.domain import (
     ChallengePolarity as DomainChallengePolarity,
     EffectPolarity as DomainEffectPolarity,
     EffectTiming as DomainEffectTiming,
+    MessageKind as DomainMessageKind,
 )
 
 
@@ -23,6 +24,7 @@ TransversalTypeEnum = strawberry.enum(DomainTransversalType)
 ChallengePolarity = strawberry.enum(DomainChallengePolarity)
 EffectPolarity = strawberry.enum(DomainEffectPolarity)
 EffectTimingEnum = strawberry.enum(DomainEffectTiming)
+MessageKind = strawberry.enum(DomainMessageKind)
 
 
 # ── Trait Display Name ───────────────────────────────
@@ -459,6 +461,8 @@ class Message:
     id: strawberry.ID
     sender_entity_id: strawberry.ID
     recipient_entity_id: strawberry.ID
+    kind: MessageKind = MessageKind.LETTER
+    title: str = ""
     body: str
     created_at: str = ""
     relationship_description: str = ""  # resolved from associate edge at query time
@@ -469,4 +473,6 @@ class SendMessageInput:
     """Input for sending a message to another entity."""
     sender_entity_id: strawberry.ID
     recipient_entity_id: strawberry.ID
+    kind: MessageKind = MessageKind.LETTER
+    title: str = ""
     body: str

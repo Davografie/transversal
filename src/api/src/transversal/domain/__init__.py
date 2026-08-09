@@ -500,15 +500,30 @@ class EntityImage(BaseModel):
 
 # ── Messages ────────────────────────────────────────────
 
+class MessageKind(str, Enum):
+    LETTER = "letter"
+    JOURNAL = "journal"
+    REPORT = "report"
+    GM_NOTE = "gm_note"
+
+
 class Message(BaseModel):
     """Persistent message between entities.
 
     Stored in the `messages` collection.
     Relationship descriptions are resolved at query time from
     the ``associate`` edge in ``relationships``.
+
+    Kinds:
+      letter   — entity → entity, visible to recipient + GM
+      journal  — entity → GM only (private musings)
+      report   — entity → GMC, visible to GM
+      gm_note  — GM → entity (NPC correspondence, GM nudges)
     """
     id: str
     sender_entity_id: str
     recipient_entity_id: str
+    kind: MessageKind = MessageKind.LETTER
+    title: str = ""
     body: str
     created_at: str = ""  # ISO 8601, populated by repository on insert

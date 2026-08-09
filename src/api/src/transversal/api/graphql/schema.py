@@ -12,6 +12,7 @@ from transversal.api.graphql.types import (
     Entity,
     EntityType,
     Message,
+    MessageKind,
     Projection,
     RazmeritResult,
     SendMessageInput,
@@ -77,7 +78,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
 def _message_to_gql(m: "Message", repo) -> Message:
     """Convert a domain Message to GraphQL Message, resolving the
     ``associate`` relationship description between sender and recipient."""
-    from transversal.domain import Message as DomainMessage
+    from transversal.domain import MessageKind as DomainMessageKind
     rel = repo.get_relationship(m.sender_entity_id, m.recipient_entity_id, "associate")
     if rel is None:
         rel = repo.get_relationship(m.recipient_entity_id, m.sender_entity_id, "associate")
@@ -85,6 +86,8 @@ def _message_to_gql(m: "Message", repo) -> Message:
         id=m.id,
         sender_entity_id=m.sender_entity_id,
         recipient_entity_id=m.recipient_entity_id,
+        kind=MessageKind(m.kind.value),
+        title=m.title,
         body=m.body,
         created_at=m.created_at,
         relationship_description=(rel or {}).get("description", ""),
@@ -225,6 +228,19 @@ class Query:
         return [
             _message_to_gql(m, repo) for m in messages
         ]
+
+    @strawberry.field
+    def recent_messages(
+        self, info: strawberry.Info,
+        since: str = "",
+        kind: Optional[MessageKind] = None,
+    ) -> list[Message]:
+        """Get all messages across all entities (GM activity feed), newest first.
+
+        Optionally filter by kind and/or minimum created_at ISO timestamp."""
+        repo = _em(info).repo
+        messages = repo.get_recent_messages(since=since, kind=kind.value if kind else "")
+        return [_message_to_gql(m, repo) for m in messages]
 
 
 # ── Mutations ────────────────────────────────────────
@@ -575,7 +591,9 @@ class Mutation:
         msg = repo.send_message(
             str(input.sender_entity_id),
             str(input.recipient_entity_id),
-            input.body,
+            body=input.body,
+            kind=input.kind.value if input.kind else "letter",
+            title=input.title,
         )
 
         gql_msg = _message_to_gql(msg, repo)
@@ -587,6 +605,8 @@ class Mutation:
                     "id": msg.id,
                     "sender_entity_id": msg.sender_entity_id,
                     "recipient_entity_id": msg.recipient_entity_id,
+                    "kind": msg.kind.value if hasattr(msg.kind, 'value') else msg.kind,
+                    "title": msg.title,
                     "body": msg.body,
                     "created_at": msg.created_at,
                     "relationship_description": gql_msg.relationship_description,
