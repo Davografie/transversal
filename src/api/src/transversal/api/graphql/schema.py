@@ -17,6 +17,7 @@ from transversal.api.graphql.types import (
     Message,
     MessageKind,
     Projection,
+    RelatedEntity,
     Relationship,
     RazmeritResult,
     SendMessageInput,
@@ -300,6 +301,20 @@ class Query:
             tags=tags,
         )
         return [_message_to_gql(m, repo) for m in messages]
+
+    @strawberry.field
+    def related_entities(
+        self, info: strawberry.Info,
+        entity_id: strawberry.ID,
+        query: str = "",
+    ) -> list[RelatedEntity]:
+        """Get entities connected via relationship edges, filtered by name."""
+        repo = _em(info).repo
+        results = repo.get_related_entities(str(entity_id), query)
+        return [
+            RelatedEntity(id=r["id"], name=r["name"], sheet_portrait=r.get("sheet_portrait", ""))
+            for r in results
+        ]
 
 
 # ── Mutations ────────────────────────────────────────

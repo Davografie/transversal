@@ -527,3 +527,13 @@ class DeleteRelationshipInput:
     from_entity_id: strawberry.ID
     to_entity_id: strawberry.ID
     type: str = "associate"
+
+
+# ── Related Entity ────────────────────────────────────
+
+@strawberry.type
+class RelatedEntity:
+    """An entity connected via a relationship edge, with portrait."""
+    id: strawberry.ID
+    name: str
+    sheet_portrait: str = ""

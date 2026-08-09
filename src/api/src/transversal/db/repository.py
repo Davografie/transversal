@@ -627,6 +627,29 @@ class EntityRepository:
         })
         return bool(list(result))
 
+    def get_related_entities(self, entity_id: str, name_query: str = "") -> list[dict]:
+        """Get entities connected via any relationship edge, optionally filtered by name."""
+        eref = f"{ENTITIES}/{entity_id}"
+        bind_vars = {"eref": eref}
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @eref OR r._to == @eref
+            LET other_key = r._from == @eref
+                ? PARSE_IDENTIFIER(r._to).key
+                : PARSE_IDENTIFIER(r._from).key
+            COLLECT key = other_key
+            FOR e IN {ENTITIES}
+            FILTER e._key == key
+        """
+        if name_query:
+            query += "FILTER CONTAINS(LOWER(e.name), @nq) "
+            bind_vars["nq"] = name_query.lower()
+        query += """
+            SORT e.name
+            RETURN { id: e._key, name: e.name, sheet_portrait: e.background_image || null }
+        """
+        return list(self.db.aql.execute(query, bind_vars=bind_vars))
+
     # ── Messages ──────────────────────────────────────
 
     def _doc_to_message(self, doc: dict) -> "Message":
