@@ -6,16 +6,9 @@
         <button class="bb-close" @click="$emit('close')" title="Close">✕</button>
       </div>
 
-      <div class="bb-tabs">
-        <button :class="{ active: tab === 'inbox' }" @click="tab = 'inbox'">✉ Inbox</button>
-        <button :class="{ active: tab === 'journal' }" @click="tab = 'journal'">📓 Journal</button>
-      </div>
-
       <!-- ── Compose toggle ── -->
       <div v-if="!showCompose" class="bb-compose-toggle">
-        <button class="bb-write-btn" @click="openCompose()">
-          {{ tab === 'journal' ? '📝 New journal entry' : '📝 Write a letter' }}
-        </button>
+        <button class="bb-write-btn" @click="openCompose()">📝 New entry</button>
       </div>
 
       <!-- ── Compose ── -->
@@ -24,81 +17,58 @@
           <span>Replying to <strong>{{ replyName }}</strong></span>
           <button class="bb-reply-cancel" @click="cancelCompose()">cancel</button>
         </div>
-        <div v-if="tab === 'inbox' && composeMode !== 'reply'" class="bb-recipient-row">
-          <input v-model="composeRecipient" class="bb-input" placeholder="Recipient entity ID…" @input="onRecipientInput" />
-          <div v-if="recipientSuggestions.length" class="bb-suggestions">
-            <button v-for="s in recipientSuggestions" :key="s.id" class="bb-suggestion-item" @mousedown.prevent @click="selectRecipient(s)">{{ s.name }}</button>
+        <div v-if="composeMode !== 'reply'" class="bb-recipient-row">
+          <div class="bb-recipient-display">
+            <span v-if="isSelfRecipient" class="bb-self-indicator">📓 Journal (self)</span>
+            <span v-else class="bb-other-indicator">✉ To: {{ recipientName }}</span>
+            <button class="bb-change-recipient" @click="showRecipientPicker = !showRecipientPicker">{{ showRecipientPicker ? 'cancel' : 'change' }}</button>
+          </div>
+          <div v-if="showRecipientPicker" class="bb-recipient-row">
+            <input v-model="composeRecipient" class="bb-input" placeholder="Recipient entity ID…" @input="onRecipientInput" />
+            <div v-if="recipientSuggestions.length" class="bb-suggestions">
+              <button v-for="s in recipientSuggestions" :key="s.id" class="bb-suggestion-item" @mousedown.prevent @click="selectRecipient(s)">{{ s.name }}</button>
+            </div>
           </div>
         </div>
         <input v-model="composeTitle" class="bb-input" placeholder="Title (optional)" @keyup.enter="focusBody" />
         <div class="bb-tags-row">
-          <input
-            v-model="composeTags"
-            class="bb-input"
-            placeholder="Tags: dreams, investigation (comma-separated)"
-            @focus="tagFocused = true"
-            @blur="tagBlur"
-            @input="onTagInput"
-          />
+          <input v-model="composeTags" class="bb-input" placeholder="Tags: dreams, investigation (comma-separated)" @focus="tagFocused = true" @blur="tagBlur" @input="onTagInput" />
           <div v-if="tagFocused && filteredTagSuggestions.length" class="bb-suggestions">
             <button v-for="t in filteredTagSuggestions" :key="t" class="bb-suggestion-item" @mousedown.prevent @click="addTag(t)">{{ t }}</button>
           </div>
         </div>
         <div class="bb-body-row-full">
-          <textarea
-            ref="bodyEl"
-            v-model="composeBody"
-            class="bb-textarea"
-            :placeholder="composePlaceholder"
-            rows="4"
-            @keyup.enter.ctrl="send"
-          ></textarea>
+          <textarea ref="bodyEl" v-model="composeBody" class="bb-textarea" :placeholder="composePlaceholder" rows="4" @keyup.enter.ctrl="send"></textarea>
         </div>
         <div class="bb-compose-actions">
-          <button class="bb-send" @click="send" :disabled="!composeBody.trim() || sending" :title="composeMode === 'reply' ? 'Reply' : 'Send'">
-            {{ sending ? '…' : 'Send' }}
-          </button>
+          <button class="bb-send" @click="send" :disabled="!composeBody.trim() || sending">{{ sending ? '…' : sendLabel }}</button>
           <button class="bb-cancel" @click="cancelCompose()">Cancel</button>
         </div>
       </div>
 
-      <!-- ── Inbox ── -->
-      <div v-if="tab === 'inbox'" class="bb-entries">
+      <!-- ── Entries ── -->
+      <div class="bb-entries">
         <div v-if="loading" class="bb-empty">Loading…</div>
-        <div v-else-if="!filteredInbox.length" class="bb-empty">No messages yet.</div>
-        <div v-if="inboxTags.length" class="bb-tag-filter">
+        <div v-else-if="!filteredEntries.length" class="bb-empty">No entries yet.</div>
+        <div v-if="allEntryTags.length" class="bb-tag-filter">
           <button :class="{ active: !selectedTag }" @click="selectedTag = null">All</button>
-          <button v-for="t in inboxTags" :key="t" :class="{ active: selectedTag === t }" @click="selectedTag = (selectedTag === t ? null : t)">#{{ t }}</button>
+          <button v-for="t in allEntryTags" :key="t" :class="{ active: selectedTag === t }" @click="selectedTag = (selectedTag === t ? null : t)">#{{ t }}</button>
         </div>
-        <div v-for="m in filteredInbox" :key="m.id" class="bb-entry">
+        <div v-for="m in filteredEntries" :key="m.id" class="bb-entry">
           <div class="bb-entry-header">
-            <img v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" />
-            <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
-            <span class="bb-sender-name">{{ senderName(m.senderEntityId) }}</span>
-            <span v-if="m.relationshipDescription" class="bb-rel">· {{ m.relationshipDescription }} ·</span>
+            <div v-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
+              <img v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" />
+              <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
+              <span class="bb-sender-name">{{ senderName(m.senderEntityId) }}</span>
+              <span v-if="m.relationshipDescription" class="bb-rel">· {{ m.relationshipDescription }} ·</span>
+            </div>
+            <div v-else class="bb-journal-badge">📓 Journal entry</div>
+            <div v-if="m.title" class="bb-entry-title">{{ m.title }}</div>
           </div>
-          <div v-if="m.tags?.length" class="bb-entry-tags">
-            <span v-for="t in m.tags" :key="t" class="bb-tag">#{{ t }}</span>
-          </div>
+          <div v-if="m.tags?.length" class="bb-entry-tags"><span v-for="t in m.tags" :key="t" class="bb-tag">#{{ t }}</span></div>
           <div class="bb-body">{{ m.body }}</div>
           <div class="bb-entry-actions">
-            <button class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Journal ── -->
-      <div v-if="tab === 'journal'" class="bb-entries">
-        <div v-if="loading" class="bb-empty">Loading…</div>
-        <div v-else-if="!journal.length" class="bb-empty">No journal entries yet. Write your first.</div>
-        <div v-for="m in journal" :key="m.id" class="bb-entry">
-          <div v-if="m.title" class="bb-entry-title">{{ m.title }}</div>
-          <div class="bb-body">{{ m.body }}</div>
-          <div class="bb-meta">
-            <span class="bb-time">{{ formatTime(m.createdAt) }}</span>
-            <span v-if="m.tags?.length" class="bb-tags">
-              <span v-for="t in m.tags" :key="t" class="bb-tag">#{{ t }}</span>
-            </span>
+            <button v-if="m.senderEntityId !== m.recipientEntityId" class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
           </div>
         </div>
       </div>
@@ -120,13 +90,12 @@ defineEmits(['close'])
 
 const { graphql } = useApi()
 
-const tab = ref('inbox')
 const loading = ref(false)
 const sending = ref(false)
-const inbox = ref([])
-const journal = ref([])
+const entries = ref([])
 
 const showCompose = ref(false)
+const showRecipientPicker = ref(false)
 const composeMode = ref('new')  // 'new' | 'reply'
 const composeTitle = ref('')
 const composeBody = ref('')
@@ -148,18 +117,13 @@ const replyName = ref('')
 // Tag filter
 const selectedTag = ref(null)
 
-const QUERY_INBOX = `
+const QUERY_FEED = `
   query($eid: ID!) {
-    incomingMessages(entityId: $eid) {
-      id senderEntityId body createdAt relationshipDescription tags
+    incoming: incomingMessages(entityId: $eid) {
+      id senderEntityId recipientEntityId body title createdAt relationshipDescription tags kind
     }
-  }
-`
-
-const QUERY_JOURNAL = `
-  query($eid: ID!) {
-    journal(entityId: $eid) {
-      id title body createdAt tags
+    journal: journal(entityId: $eid) {
+      id senderEntityId recipientEntityId body title createdAt tags kind
     }
   }
 `
@@ -192,31 +156,41 @@ const MESSAGE_TAGS = `
 `
 
 const SEARCH_ENTITIES = `
-  query($q: String!) { entities(type: CHARACTER) { id name } }
+  query($q: String!) { entities(type: CHARACTER) { id name sheetPortrait } }
 `
 
 const composePlaceholder = computed(() => {
   if (composeMode.value === 'reply') return 'Write your reply…'
-  if (tab.value === 'journal') return 'Write a journal entry…'
+  if (isSelfRecipient.value) return 'Write a journal entry…'
   return 'Write a letter…'
+})
+
+const isSelfRecipient = computed(() => {
+  const r = composeMode.value === 'reply' ? replyTarget.value : composeRecipient.value
+  return r === props.entityId
+})
+
+const recipientName = computed(() => {
+  const r = composeMode.value === 'reply' ? replyTarget.value : composeRecipient.value
+  return senderName(r)
+})
+
+const sendLabel = computed(() => {
+  if (composeMode.value === 'reply') return 'Reply'
+  if (isSelfRecipient.value) return 'Create journal entry'
+  return 'Send ' + recipientName.value
 })
 
 async function fetch() {
   if (!props.visible) return
   loading.value = true
   try {
-    if (tab.value === 'inbox') {
-      const data = await graphql(QUERY_INBOX, { eid: props.entityId })
-      inbox.value = data?.incomingMessages || []
-      // Resolve sender names
-      for (const m of inbox.value) {
-        if (!senderNames.value[m.senderEntityId]) {
-          fetchEntityName(m.senderEntityId)
-        }
-      }
-    } else {
-      const data = await graphql(QUERY_JOURNAL, { eid: props.entityId })
-      journal.value = data?.journal || []
+    const data = await graphql(QUERY_FEED, { eid: props.entityId })
+    const inc = data?.incoming || []
+    const jrn = data?.journal || []
+    entries.value = [...inc, ...jrn].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    for (const m of inc) {
+      if (!senderNames.value[m.senderEntityId]) fetchEntityName(m.senderEntityId)
     }
   } finally {
     loading.value = false
@@ -246,17 +220,17 @@ function senderInitial(eid) {
   return name ? name.charAt(0).toUpperCase() : '?'
 }
 
-const inboxTags = computed(() => {
+const allEntryTags = computed(() => {
   const seen = new Set()
-  for (const m of inbox.value) {
+  for (const m of entries.value) {
     for (const t of (m.tags || [])) seen.add(t)
   }
   return [...seen].sort()
 })
 
-const filteredInbox = computed(() => {
-  if (!selectedTag.value) return inbox.value
-  return inbox.value.filter(m => (m.tags || []).includes(selectedTag.value))
+const filteredEntries = computed(() => {
+  if (!selectedTag.value) return entries.value
+  return entries.value.filter(m => (m.tags || []).includes(selectedTag.value))
 })
 
 function parseTags() {
@@ -278,7 +252,7 @@ async function send() {
   try {
     const body = composeBody.value.trim()
     const tags = parseTags()
-    if (tab.value === 'journal') {
+    if (isSelfRecipient.value) {
       await graphql(ADD_JOURNAL, {
         eid: props.entityId,
         title: composeTitle.value.trim(),
@@ -337,6 +311,7 @@ function selectRecipient(entity) {
 function openCompose(mode) {
   if (mode === void 0) mode = 'new'
   composeMode.value = mode || 'new'
+  if (composeMode.value === 'new') composeRecipient.value = props.entityId
   showCompose.value = true
   nextTick(() => bodyEl.value?.focus())
 }
@@ -374,8 +349,6 @@ function formatTime(iso) {
   } catch { return iso }
 }
 
-// Refetch when tab changes or panel opens
-watch(tab, fetch)
 watch(() => props.visible, (v) => { if (v) fetch() })
 </script>
 
