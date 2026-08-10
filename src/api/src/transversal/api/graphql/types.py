@@ -463,7 +463,8 @@ class Message:
     recipient_entity_id: strawberry.ID
     kind: MessageKind = MessageKind.LETTER
     title: str = ""
-    body: str
+    body: str = ""
+    images: list[str] = strawberry.field(default_factory=list)
     created_at: str = ""
     relationship_description: str = ""  # resolved from associate edge at query time
     after_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
@@ -477,7 +478,8 @@ class SendMessageInput:
     recipient_entity_id: strawberry.ID
     kind: MessageKind = MessageKind.LETTER
     title: str = ""
-    body: str
+    body: str = ""
+    images: list[str] = strawberry.field(default_factory=list)
     after_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     threads: list[str] = strawberry.field(default_factory=list)
 
@@ -487,7 +489,8 @@ class JournalEntryInput:
     """Input for adding a personal journal entry (self-referential, GM-visible)."""
     entity_id: strawberry.ID
     title: str = ""
-    body: str
+    body: str = ""
+    images: list[str] = strawberry.field(default_factory=list)
     after_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     threads: list[str] = strawberry.field(default_factory=list)
 

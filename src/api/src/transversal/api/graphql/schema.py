@@ -95,8 +95,9 @@ def _message_to_gql(m: "Message", repo) -> Message:
         kind=MessageKind(m.kind.value),
         title=m.title,
         body=m.body,
+        images=m.images,
         after_ids=m.after_ids,
-        tags=m.threads,
+        threads=m.threads,
         created_at=m.created_at,
         relationship_description=(rel or {}).get("description", ""),
     )
@@ -282,7 +283,7 @@ class Query:
     @strawberry.field
     def message_threads(self, info: strawberry.Info) -> list[str]:
         """Return all distinct tags across all messages (for autocomplete)."""
-        return _em(info).repo.get_all_tags()
+        return _em(info).repo.get_all_threads()
 
     @strawberry.field
     def timeline(
@@ -292,13 +293,13 @@ class Query:
     ) -> list[Message]:
         """Return messages in causal (topological) order.
 
-        Filter by entity (sender or recipient) and/or tags.
+        Filter by entity (sender or recipient) and/or threads.
         Messages ordered by after_ids DAG; floaters by created_at.
         """
         repo = _em(info).repo
         messages = repo.get_timeline(
             entity_id=str(entity_id) if entity_id else "",
-            threads=threads,
+            threads=tags,
         )
         return [_message_to_gql(m, repo) for m in messages]
 
@@ -668,8 +669,9 @@ class Mutation:
             body=input.body,
             kind=input.kind.value if input.kind else "letter",
             title=input.title,
+            images=list(input.images or []),
             after_ids=[str(a) for a in (input.after_ids or [])],
-            tags=list(input.threads or []),
+            threads=list(input.threads or []),
         )
 
         gql_msg = _message_to_gql(msg, repo)
@@ -684,6 +686,7 @@ class Mutation:
                     "kind": msg.kind.value if hasattr(msg.kind, 'value') else msg.kind,
                     "title": msg.title,
                     "body": msg.body,
+                    "images": msg.images,
                     "after_ids": msg.after_ids,
                     "threads": msg.threads,
                     "created_at": msg.created_at,
@@ -710,8 +713,9 @@ class Mutation:
             body=input.body,
             kind="journal",
             title=input.title,
+            images=list(input.images or []),
             after_ids=[str(a) for a in (input.after_ids or [])],
-            tags=list(input.threads or []),
+            threads=list(input.threads or []),
         )
 
         gql_msg = _message_to_gql(msg, repo)
@@ -726,6 +730,7 @@ class Mutation:
                     "kind": "journal",
                     "title": msg.title,
                     "body": msg.body,
+                    "images": msg.images,
                     "after_ids": msg.after_ids,
                     "threads": msg.threads,
                     "created_at": msg.created_at,
@@ -763,12 +768,12 @@ class Mutation:
 
     @strawberry.mutation
     def update_message(self, info: strawberry.Info, input: UpdateMessageInput) -> bool:
-        """Update after_ids and/or tags on an existing message."""
+        """Update after_ids and/or threads on an existing message."""
         repo = _em(info).repo
         return repo.update_message(
             str(input.id),
             after_ids=[str(a) for a in input.after_ids] if input.after_ids is not None else None,
-            tags=input.threads,
+            threads=input.threads,
         )
 
 

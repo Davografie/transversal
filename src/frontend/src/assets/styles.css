@@ -461,15 +461,39 @@ input:focus, select:focus {
   transform: translateX(-50%) translateY(0);
 }
 
-/* Embedded character sheet — top of wrapper */
+/* Embedded character sheet — flex column, children handle their own scroll */
 .embedded-sheet {
-  flex-shrink: 0;
+  max-height: calc(100dvh - 240px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   transition: opacity 0.25s ease;
+}
+
+/* Dice roller — pinned at bottom of wrapper */
+.dice-panel-wrapper > .dice-roller {
+  flex-shrink: 0;
 }
 .embedded-sheet.sheet-hidden {
   opacity: 0;
   pointer-events: none;
 }
+
+/* Blue Book cascade animation */
+@keyframes bb-enter {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bb-list-enter-active {
+  animation-name: bb-enter;
+  animation-duration: 0.3s;
+  animation-timing-function: ease;
+  animation-fill-mode: both;
+}
+.bb-list-leave-active { transition: all 0.25s ease; position: absolute; }
+.bb-list-leave-to { opacity: 0; transform: translateY(8px); }
+.bb-list-move { transition: transform 0.3s ease; }
+.bb-list.bb-phasing { opacity: 0; transition: opacity 0.2s ease; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-8px); }

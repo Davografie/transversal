@@ -13,8 +13,9 @@
             <template v-if="relationship">
               <span class="rel-desc" @click.stop="showRelEditor = true" :title="'Click to edit'">{{ relationship.description || 'associated' }}</span>
               <button class="rel-btn rel-del" @click.stop="removeRelationship" title="Remove relationship">✕</button>
+              <button class="rel-btn rel-send" @click.stop="openBlueBookLetter" title="Send letter">✉</button>
             </template>
-            <button v-else class="rel-btn rel-add" @click.stop="showRelEditor = true" title="Add relationship">+</button>
+            <button v-else class="rel-btn rel-add" @click.stop="createImmediateRelationship" title="Add relationship">+</button>
             <div v-if="showRelEditor" class="rel-editor" @click.stop>
               <input ref="relInput" v-model="relDescription" placeholder="Describe relationship…" @keyup.enter="saveRelationship" @keyup.escape="showRelEditor = false" />
               <button class="rel-btn rel-save" @click="saveRelationship">✓</button>
@@ -28,21 +29,23 @@
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
         </div>
+      </div>
+      <BlueBook
+        v-if="showBlueBook"
+        :entity-id="overrideEntityId || entityId"
+        ref="blueBookRef"
+        :entity-name="entity?.name || ''"
+        :visible="true"
+        embedded
+      />
+      <template v-else>
         <div class="razmerit">
           <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(-1)">−</button>
           <span class="razmerit-value">{{ entity.razmerit }}</span>
           razmerit
           <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(1)">+</button>
         </div>
-      </div>
-      <BlueBook
-        v-if="showBlueBook"
-        :entity-id="overrideEntityId || entityId"
-        :entity-name="entity?.name || ''"
-        :visible="true"
-        embedded
-      />
-      <template v-else>
+        <div class="sheet-scroll">
         <div v-if="traitSets.length && !showAddTrait" class="trait-sets">
         <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
           <h4 @click="toggleSet(ts.name)" class="set-header">
@@ -124,6 +127,7 @@
         </template>
         <button class="picker-cancel" @click="showAddTrait = false">Cancel</button>
       </div>
+      </div> <!-- .sheet-scroll -->
       </template>
     </template>
     <div v-else class="empty">No entity loaded</div>
@@ -132,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
@@ -167,6 +171,7 @@ const relationship = ref(null)
 const showRelEditor = ref(false)
 const relDescription = ref('')
 const relInput = ref(null)
+const blueBookRef = ref(null)
 
 const showBlueBook = ref(false)
 
@@ -770,6 +775,32 @@ async function saveRelationship() {
   await fetchRelationship()
 }
 
+async function createImmediateRelationship() {
+  if (!props.viewerEntityId || !props.overrideEntityId) return
+  const query = `
+    mutation($from: ID!, $to: ID!) {
+      createRelationship(input: { fromEntityId: $from, toEntityId: $to }) {
+        description
+      }
+    }
+  `
+  await graphql(query, {
+    from: props.viewerEntityId,
+    to: props.overrideEntityId,
+  })
+  await fetchRelationship()
+}
+
+function openBlueBookLetter() {
+  showBlueBook.value = true
+  nextTick(() => {
+    blueBookRef.value?.openCompose('new', {
+      id: props.overrideEntityId || props.entityId,
+      name: entity.value?.name || ''
+    })
+  })
+}
+
 async function removeRelationship() {
   if (!props.viewerEntityId || !props.overrideEntityId) return
   const query = `
@@ -804,6 +835,14 @@ watch(() => props.externalPoolSources, (sources) => {
   backdrop-filter: blur(12px);
   border-radius: var(--radius);
   padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sheet-scroll {
+  flex: 1;
+  overflow-y: auto; overflow-x: hidden;
 }
 
 .set-header {
@@ -1009,7 +1048,7 @@ watch(() => props.externalPoolSources, (sources) => {
   margin-top: 8px;
   padding: 8px 0;
   max-height: calc(100vh - 320px);
-  overflow-y: auto;
+  overflow-y: auto; overflow-x: hidden;
 }
 .trait-picker h4 {
   font-size: 12px;
@@ -1329,6 +1368,15 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .rel-del:hover {
   background: var(--danger);
+  color: #fff;
+}
+.rel-send {
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+}
+.rel-send:hover {
+  background: var(--accent);
   color: #fff;
 }
 .rel-editor {

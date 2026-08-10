@@ -525,7 +525,8 @@ class Message(BaseModel):
     recipient_entity_id: str
     kind: MessageKind = MessageKind.LETTER
     title: str = ""
-    body: str
+    body: str = ""
+    images: list[str] = Field(default_factory=list)  # media paths
     after_ids: list[str] = Field(default_factory=list)
     threads: list[str] = Field(default_factory=list)
     created_at: str = ""  # ISO 8601, populated by repository on insert

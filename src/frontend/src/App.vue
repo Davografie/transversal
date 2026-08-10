@@ -719,6 +719,7 @@ const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
+const documentDragging = ref(false)
 
 function openPanel() {
   hoverOpen.value = true
@@ -757,7 +758,8 @@ function onWrapperEnter() {
 }
 
 function onWrapperLeave() {
-  if (phase.value === 'picking') return  // don't close during drag-and-drop
+  if (phase.value === 'picking') return  // don't close during dice drag-and-drop
+  if (documentDragging.value) return    // don't close during HTML5 drag-and-drop
   closeTimer = setTimeout(() => {
     closeTimer = null
     closePanel()
@@ -766,6 +768,8 @@ function onWrapperLeave() {
 
 onMounted(() => {
   syncClosedPosition()
+  document.addEventListener('dragstart', () => { documentDragging.value = true })
+  document.addEventListener('dragend', () => { documentDragging.value = false })
   if (playerId.value) fetchPlayerEntities()
   DIAG.mark('onMounted', { showLoginOverlay: showLoginOverlay.value, playerId: playerId.value, entityId: entityId.value, sessionId: sessionId.value, gmMode: gmMode.value })
   // Dump full diagnostic timeline after init settles

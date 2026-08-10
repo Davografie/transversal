@@ -7,7 +7,7 @@
       </div>
     </div>
   </div>
-  <div v-if="visible && embedded">
+  <div v-if="visible && embedded" class="bb-embedded">
 
       <!-- ── Compose toggle ── -->
       <div v-if="!showCompose" class="bb-compose-toggle">
@@ -47,21 +47,34 @@
         <div class="bb-body-row-full">
           <textarea ref="bodyEl" v-model="composeBody" class="bb-textarea" :placeholder="composePlaceholder" rows="4" @keyup.enter.ctrl="send"></textarea>
         </div>
+        <div class="bb-images-row">
+          <div v-for="(img, i) in composeImages" :key="i" class="bb-image-preview">
+            <img :src="img" />
+            <button class="bb-image-remove" @click="composeImages.splice(i, 1)" title="Remove image">✕</button>
+          </div>
+          <label class="bb-image-add" :class="{ uploading: uploadingImage }">
+            <input type="file" ref="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" @change="uploadImage" hidden />
+            {{ uploadingImage ? '…' : '📷' }}
+          </label>
+        </div>
         <div class="bb-compose-actions">
-          <button class="bb-send" @click="send" :disabled="!composeBody.trim() || sending">{{ sending ? '…' : sendLabel }}</button>
+          <button class="bb-send" @click="send" :disabled="!(composeBody.trim() || composeImages.length || composeTitle.trim()) || sending">{{ sending ? '…' : sendLabel }}</button>
           <button class="bb-cancel" @click="cancelCompose()">Cancel</button>
         </div>
       </div>
 
+      <!-- ── Thread filter (sticky above entries) ── -->
+      <div v-if="allEntryThreads.length && entries.length" class="bb-thread-filter">
+        <button :class="{ active: !selectedThread }" @click="selectedThread = null">All</button>
+        <button v-for="t in allEntryThreads" :key="t" :class="{ active: selectedThread === t }" @click="selectedThread = (selectedThread === t ? null : t)">#{{ t }}</button>
+      </div>
+
       <!-- ── Entries ── -->
-      <div class="bb-entries">
+      <div ref="entriesEl" class="bb-entries">
         <div v-if="loading" class="bb-empty">Loading…</div>
-        <div v-else-if="!filteredEntries.length" class="bb-empty">No entries yet.</div>
-        <div v-if="allEntryThreads.length" class="bb-thread-filter">
-          <button :class="{ active: !selectedThread }" @click="selectedThread = null">All</button>
-          <button v-for="t in allEntryThreads" :key="t" :class="{ active: selectedThread === t }" @click="selectedThread = (selectedThread === t ? null : t)">#{{ t }}</button>
-        </div>
-        <div v-for="m in filteredEntries" :key="m.id" class="bb-entry">
+        <div v-else-if="!displayEntries.length" class="bb-empty">No entries yet.</div>
+        <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
+          <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx }" draggable="true" @dragstart="onDragStart($event, idx)" @dragover="onDragOver($event, idx)" @drop="onDrop(idx)" @dragend="onDragEnd" @touchstart="onTouchStart($event, idx)" @touchmove="onDocTouchMove" @touchend="e => endTouchDrag(true)" @touchcancel="() => cancelTouchDrag()">
           <div class="bb-entry-header">
             <div v-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
               <img v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" />
@@ -74,16 +87,20 @@
           </div>
           <div v-if="m.threads?.length" class="bb-entry-threads"><span v-for="t in m.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
           <div class="bb-body">{{ m.body }}</div>
+          <div v-if="m.images?.length" class="bb-images">
+            <img v-for="(img, i) in m.images" :key="i" :src="img" class="bb-image" @click="viewImage(img)" />
+          </div>
           <div class="bb-entry-actions">
             <button v-if="m.senderEntityId !== m.recipientEntityId" class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
           </div>
         </div>
+        </TransitionGroup>
       </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 
 const props = defineProps({
@@ -107,6 +124,10 @@ const composeMode = ref('new')
 const composeTitle = ref('')
 const composeBody = ref('')
 const composeThreads = ref('')
+const composeImages = ref([])
+const uploadingImage = ref(false)
+const imageInput = ref(null)
+const entriesEl = ref(null)
 const composeRecipientId = ref('')
 const composeRecipientName = ref('')
 const bodyEl = ref(null)
@@ -122,15 +143,22 @@ const replyName = ref('')
 
 const selectedThread = ref(null)
 
-const QUERY_FEED = `
+const dragIndex = ref(-1)
+const dragOverIndex = ref(-1)
+const touchDrag = ref(null)
+
+const QUERY_TIMELINE = `
   query($eid: ID!) {
-    incoming: incomingMessages(entityId: $eid) { id senderEntityId recipientEntityId body title createdAt relationshipDescription threads kind }
-    journal: journal(entityId: $eid) { id senderEntityId recipientEntityId body title createdAt threads kind }
+    timeline(entityId: $eid) {
+      id senderEntityId recipientEntityId body images title createdAt relationshipDescription threads kind afterIds
+    }
   }
 `
 
-const SEND_LETTER = `mutation($sender:ID!,$recipient:ID!,$body:String!,$threads:[String!]){sendMessage(input:{senderEntityId:$sender,recipientEntityId:$recipient,kind:LETTER,body:$body,threads:$threads}){id}}`
-const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$threads:[String!]){addJournalEntry(input:{entityId:$eid,title:$title,body:$body,threads:$threads}){id}}`
+const UPDATE_MESSAGE = `mutation($id:ID!,$afterIds:[ID!]!){updateMessage(input:{id:$id,afterIds:$afterIds})}`
+
+const SEND_LETTER = `mutation($sender:ID!,$recipient:ID!,$body:String!,$images:[String!]!,$afterIds:[ID!]!,$threads:[String!]!){sendMessage(input:{senderEntityId:$sender,recipientEntityId:$recipient,kind:LETTER,body:$body,images:$images,afterIds:$afterIds,threads:$threads}){id}}`
+const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$images:[String!]!,$afterIds:[ID!]!,$threads:[String!]!){addJournalEntry(input:{entityId:$eid,title:$title,body:$body,images:$images,afterIds:$afterIds,threads:$threads}){id}}`
 const MESSAGE_TAGS = `query{messageThreads}`
 const RELATED_ENTITIES = `query($eid:ID!,$q:String!){relatedEntities(entityId:$eid,query:$q){id name sheetPortrait}}`
 
@@ -161,6 +189,42 @@ const filteredEntries = computed(() => {
   return entries.value.filter(m => (m.threads || []).includes(selectedThread.value))
 })
 
+// Phased display for smooth filter transitions
+const displayEntries = ref([])
+const filterPhasing = ref(false)
+let filterTimer = null
+
+async function refreshEntries(newList) {
+  displayEntries.value = []
+  await nextTick()
+  displayEntries.value = [...newList]
+  // Scroll to bottom after cascade completes
+  const delay = (newList.length - 1) * 40 + 300 + 50
+  setTimeout(() => {
+    const el = entriesEl.value
+    if (el) el.scrollTop = el.scrollHeight
+  }, delay)
+}
+
+watch(selectedThread, (newVal) => {
+  clearTimeout(filterTimer)
+  if (newVal) {
+    filterPhasing.value = true
+    filterTimer = setTimeout(async () => {
+      await refreshEntries(filteredEntries.value)
+      filterTimer = setTimeout(() => { filterPhasing.value = false }, 50)
+    }, 200)
+  } else {
+    refreshEntries(entries.value)
+  }
+})
+
+watch(entries, () => {
+  clearTimeout(filterTimer)
+  refreshEntries(filteredEntries.value)
+  filterPhasing.value = false
+}, { immediate: true })
+
 const filteredThreadSuggestions = computed(() => {
   if (!composeThreads.value) return allThreads.value
   const parts = composeThreads.value.split(',')
@@ -173,15 +237,19 @@ async function fetch() {
   if (!props.visible) return
   loading.value = true
   try {
-    const data = await graphql(QUERY_FEED, { eid: props.entityId })
-    const inc = data?.incoming || []
-    const jrn = data?.journal || []
-    const seen = new Set()
-    entries.value = [...inc, ...jrn].filter(m => seen.has(m.id) ? false : (seen.add(m.id), true)).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-    for (const m of inc) {
-      if (!senderNames.value[m.senderEntityId]) fetchEntityInfo(m.senderEntityId)
+    const data = await graphql(QUERY_TIMELINE, { eid: props.entityId })
+    entries.value = data?.timeline || []
+    for (const m of entries.value) {
+      if (m.senderEntityId !== props.entityId && !senderNames.value[m.senderEntityId]) {
+        fetchEntityInfo(m.senderEntityId)
+      }
     }
   } finally { loading.value = false }
+  fetchThreads()
+  nextTick(() => {
+    const el = entriesEl.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
 }
 
 async function fetchEntityInfo(eid) {
@@ -194,6 +262,113 @@ async function fetchEntityInfo(eid) {
   } catch {}
 }
 
+async function fetchThreads() {
+  try {
+    const data = await graphql(MESSAGE_TAGS)
+    if (data?.messageThreads) allThreads.value = data.messageThreads
+  } catch {}
+}
+
+function onDragStart(e, idx) {
+  dragIndex.value = idx
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', idx)
+}
+
+function onDragOver(e, idx) {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = idx
+}
+
+function onDragEnd() {
+  dragIndex.value = -1
+  dragOverIndex.value = -1
+}
+
+// ── Touch drag (long-press) ─────────────────────────
+
+function onTouchStart(e, idx) {
+  const entry = e.currentTarget
+  touchDrag.value = { idx, el: entry, engaged: false, ghost: null }
+  touchDrag.value._timer = setTimeout(() => {
+    if (!touchDrag.value) return
+    touchDrag.value.engaged = true
+    const ghost = entry.cloneNode(true)
+    ghost.style.cssText = `position:fixed;left:${e.touches[0].clientX - 20}px;top:${e.touches[0].clientY - 10}px;z-index:100;pointer-events:none;opacity:0.8;width:${entry.offsetWidth}px`
+    document.body.appendChild(ghost)
+    touchDrag.value.ghost = ghost
+    dragIndex.value = idx
+  }, 400)
+}
+
+function cancelTouchDrag() {
+  if (!touchDrag.value) return
+  clearTimeout(touchDrag.value._timer)
+  if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
+  dragIndex.value = -1
+  dragOverIndex.value = -1
+  touchDrag.value = null
+}
+
+function onDocTouchMove(e) {
+  const td = touchDrag.value
+  if (!td) return
+  if (!td.engaged) {
+    if (Math.abs(e.touches[0].clientY - td.el.getBoundingClientRect().top) > 10) cancelTouchDrag()
+    return
+  }
+  e.preventDefault()
+  const t = e.touches[0]
+  if (td.ghost) { td.ghost.style.left = (t.clientX - 20) + 'px'; td.ghost.style.top = (t.clientY - 10) + 'px' }
+  // Find entry under touch point
+  const target = document.elementFromPoint(t.clientX, t.clientY)
+  const row = target?.closest('.bb-entry')
+  const idx = row ? parseInt(row.dataset.bbIdx) : -1
+  dragOverIndex.value = idx >= 0 ? idx : -1
+}
+
+function endTouchDrag(fromTouchEnd) {
+  if (!touchDrag.value) return
+  clearTimeout(touchDrag.value._timer)
+  if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
+  if (touchDrag.value.engaged && fromTouchEnd) {
+    const srcIdx = dragIndex.value
+    const dropIdx = dragOverIndex.value
+    if (srcIdx >= 0 && dropIdx >= 0 && srcIdx !== dropIdx) onDrop(dropIdx)
+  }
+  dragIndex.value = -1
+  dragOverIndex.value = -1
+  touchDrag.value = null
+}
+
+async function onDrop(dropIdx) {
+  const srcIdx = dragIndex.value
+  if (srcIdx < 0 || srcIdx === dropIdx) return
+
+  const visible = [...displayEntries.value]
+  if (!visible.length) return
+
+  // Reorder: remove from srcIdx, insert at dropIdx
+  const [X] = visible.splice(srcIdx, 1)
+  const targetIdx = srcIdx < dropIdx ? dropIdx - 1 : dropIdx
+  visible.splice(targetIdx, 0, X)
+
+  // Rebuild after_ids: each entry points to the one above it
+  const updates = []
+  for (let i = 0; i < visible.length; i++) {
+    const newAfterIds = i > 0 ? [visible[i - 1].id] : []
+    const current = (visible[i].afterIds || []).sort().join(',')
+    const proposed = newAfterIds.sort().join(',')
+    if (current !== proposed) {
+      updates.push(graphql(UPDATE_MESSAGE, { id: visible[i].id, afterIds: newAfterIds }))
+    }
+  }
+
+  if (updates.length) await Promise.all(updates)
+  await fetch()
+}
+
 function senderName(eid) { return senderNames.value[eid] || eid }
 function senderPortrait(eid) { return senderPortraits.value[eid] || null }
 function senderInitial(eid) { const n = senderName(eid); return n ? n.charAt(0).toUpperCase() : '?' }
@@ -203,19 +378,20 @@ function parseTags() { return composeThreads.value.split(',').map(t => t.trim())
 async function send() {
   console.log("[BB] send() called", JSON.stringify({ body: composeBody.value, sending: sending.value, isSelf: isSelfRecipient.value, mode: composeMode.value, recipientId: composeRecipientId.value }))
   await nextTick()
-  if (!composeBody.value.trim() || sending.value) { console.log("[BB] send() blocked"); return }
+  const hasContent = composeBody.value.trim() || composeImages.value.length || composeTitle.value.trim()
+  if (!hasContent || sending.value) { console.log("[BB] send() blocked"); return }
   sending.value = true
   console.log("[BB] send() executing")
   try {
     const body = composeBody.value.trim()
+    const images = [...composeImages.value]
     const tags = parseTags()
     if (isSelfRecipient.value) {
-        console.log("[BB] graphql variables", JSON.stringify({ eid: props.entityId, title: composeTitle.value.trim(), body, threads: tags.length ? tags : null }))
-      await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, threads: tags.length ? tags : null })
+      await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, images, afterIds: [], threads: tags.length ? tags : [] })
     } else {
       const recipient = composeMode.value === 'reply' ? replyTarget.value : composeRecipientId.value
       if (!recipient) return
-      await graphql(SEND_LETTER, { sender: props.entityId, recipient, body, threads: tags.length ? tags : null })
+      await graphql(SEND_LETTER, { sender: props.entityId, recipient, body, images, afterIds: [], threads: tags.length ? tags : [] })
     }
   } finally {
     sending.value = false
@@ -223,6 +399,35 @@ async function send() {
     await fetch()
   }
 }
+
+async function uploadImage(e) {
+  const input = e.target
+  const file = input.files?.[0]
+  if (!file) return
+  uploadingImage.value = true
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    // Use XHR to bypass PWA service worker (SW intercepts fetch but not XHR)
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/v1/media/upload')
+      xhr.onload = () => {
+        try { resolve(JSON.parse(xhr.responseText)) }
+        catch { reject(new Error(`Upload failed: ${xhr.status}`)) }
+      }
+      xhr.onerror = () => reject(new Error('Network error'))
+      xhr.send(form)
+    })
+    if (data.path) composeImages.value.push(data.path)
+  } catch (err) {
+    console.error('[BB] image upload failed', err.message)
+  } finally {
+    uploadingImage.value = false
+    input.value = ''
+  }
+}
+function viewImage(src) { window.open(src, '_blank') }
 
 async function fetchRelatedEntities() {
   const data = await graphql(RELATED_ENTITIES, { eid: props.entityId, q: '' })
@@ -257,9 +462,12 @@ function addThread(tag) {
 }
 function threadBlur() { setTimeout(() => { threadFocused.value = false }, 150) }
 
-function openCompose(mode) {
+function openCompose(mode, recipient) {
   composeMode.value = mode || 'new'
-  if (composeMode.value === 'new') {
+  if (recipient) {
+    composeRecipientId.value = recipient.id
+    composeRecipientName.value = recipient.name
+  } else if (composeMode.value === 'new') {
     composeRecipientId.value = props.entityId
     composeRecipientName.value = props.entityName || 'Me'
   }
@@ -267,12 +475,15 @@ function openCompose(mode) {
   nextTick(() => bodyEl.value?.focus())
 }
 
+defineExpose({ openCompose })
+
 function cancelCompose() {
   showCompose.value = false
   showRecipientList.value = false
   composeTitle.value = ''
   composeBody.value = ''
   composeThreads.value = ''
+  composeImages.value = []
   composeRecipientId.value = ''
   composeRecipientName.value = ''
   replyTarget.value = null
@@ -295,6 +506,20 @@ function formatTime(iso) {
 }
 
 watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
+
+const onDocTouchEnd = () => endTouchDrag(true)
+const onDocTouchCancel = () => cancelTouchDrag()
+
+onMounted(() => {
+  document.addEventListener('touchmove', onDocTouchMove, { passive: false })
+  document.addEventListener('touchend', onDocTouchEnd)
+  document.addEventListener('touchcancel', onDocTouchCancel)
+})
+onUnmounted(() => {
+  document.removeEventListener('touchmove', onDocTouchMove)
+  document.removeEventListener('touchend', onDocTouchEnd)
+  document.removeEventListener('touchcancel', onDocTouchCancel)
+})
 </script>
 
 <style scoped>
@@ -331,13 +556,14 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-suggestion-item:hover{background:var(--bg-hover);color:var(--text)}
 .bb-suggestion-img{width:20px;height:20px;border-radius:50%;object-fit:cover}
 .bb-suggestion-avatar{width:20px;height:20px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.bb-embedded{display:flex;flex-direction:column;overflow:hidden;flex:1}
 .bb-compose-actions{display:flex;gap:6px;justify-content:flex-end}
 .bb-send{padding:4px 12px;border:none;border-radius:4px;background:var(--accent);color:#fff;font-size:12px;cursor:pointer;white-space:nowrap}
 .bb-send:disabled{opacity:0.4;cursor:default}
 .bb-send:not(:disabled):hover{opacity:0.85}
 .bb-cancel{padding:4px 12px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-dim);font-size:12px;cursor:pointer}
 .bb-cancel:hover{color:var(--text);background:var(--bg-hover)}
-.bb-entries{flex:1;overflow-y:auto;padding:8px 12px}
+.bb-entries{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 12px}
 .bb-empty{color:var(--text-dim);font-size:13px;text-align:center;padding:32px 0}
 .bb-thread-filter{display:flex;gap:4px;flex-wrap:wrap;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
 .bb-thread-filter button{padding:2px 8px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-dim);font-size:11px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s}
@@ -345,6 +571,8 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-thread-filter button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .bb-entry{padding:10px 0;border-bottom:1px solid var(--border)}
 .bb-entry:last-child{border-bottom:none}
+.bb-entry.bb-dragging{opacity:0.4}
+.bb-entry.bb-drag-over{border-top:2px solid var(--accent)}
 .bb-entry-header{display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:wrap}
 .bb-sender-row{display:flex;align-items:center;gap:4px}
 .bb-sender-img{width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0}
@@ -356,6 +584,15 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}
 .bb-body{font-size:13px;color:var(--text);line-height:1.4;white-space:pre-wrap}
+.bb-images{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.bb-image{max-width:100%;max-height:200px;border-radius:4px;cursor:pointer;border:1px solid var(--border)}
+.bb-images-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.bb-image-preview{position:relative;width:48px;height:48px;border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+.bb-image-preview img{width:100%;height:100%;object-fit:cover}
+.bb-image-remove{position:absolute;top:0;right:0;background:rgba(0,0,0,0.7);color:#fff;border:none;font-size:8px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:0 0 0 4px;line-height:1}
+.bb-image-add{cursor:pointer;width:48px;height:48px;border:1px dashed var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-dim);transition:color 0.15s,border-color 0.15s}
+.bb-image-add:hover{color:var(--accent);border-color:var(--accent)}
+.bb-image-add.uploading{opacity:0.5;pointer-events:none}
 .bb-entry-actions{margin-top:4px}
 .bb-reply-btn{background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px}
 .bb-reply-btn:hover{background:var(--bg-hover)}
