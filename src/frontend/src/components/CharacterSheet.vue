@@ -818,6 +818,7 @@ async function removeRelationship() {
 
 watch(() => props.overrideEntityId, () => {
   if (isForeignSheet.value) fetchRelationship()
+  if (!ownsCharacter.value) showBlueBook.value = false
 })
 watch(() => props.viewerEntityId, () => {
   if (isForeignSheet.value) fetchRelationship()
