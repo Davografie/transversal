@@ -547,3 +547,57 @@ def seed_all(em) -> None:
     seed_default_character(em)
     seed_elena(em)
     seed_locations(em)
+    seed_life_paths(em.repo)
+
+
+def seed_life_paths(repo) -> None:
+    """Seed life path definitions."""
+    from transversal.domain import (
+        DieType, LifePath, LifePathType,
+        CurriculumItem, QualificationInfo,
+    )
+
+    paths = [
+        LifePath(
+            id="lp-drifter-three-realms",
+            name="Rogue Cultivator",
+            universe="three_realms",
+            description="Walk the land alone, beholden to no sect.",
+            type=LifePathType.DRIFTER,
+            curriculum=[
+                CurriculumItem(trait_id="trait-3r-cultivation", create_at=DieType.D4, step_up=True, min_rank=0),
+            ],
+        ),
+        LifePath(
+            id="lp-drifter-earth",
+            name="Street Survivor",
+            universe="earth",
+            description="Live by your wits on the margins of society.",
+            type=LifePathType.DRIFTER,
+            curriculum=[
+                CurriculumItem(trait_id="trait-earth-streetwise", create_at=DieType.D4, step_up=False, min_rank=0),
+            ],
+        ),
+        LifePath(
+            id="lp-verdant-disciple",
+            name="Verdant Steps Outer Disciple",
+            universe="three_realms",
+            description="Train under the guidance of the Verdant Steps Sect.",
+            type=LifePathType.SECT,
+            qualification=QualificationInfo(
+                trait_id="trait-3r-cultivation",
+                difficulty=DieType.D4,
+                must_be_at_location=None,
+                draft="lp-drifter-three-realms",
+            ),
+            curriculum=[
+                CurriculumItem(trait_id="trait-3r-cultivation", create_at=DieType.D6, step_up=True, min_rank=0),
+                CurriculumItem(trait_id="trait-3r-qi-reserves", create_at=DieType.D4, step_up=True, min_rank=0),
+            ],
+        ),
+    ]
+
+    for lp in paths:
+        existing = repo.get_lifepath(lp.id)
+        if existing is None:
+            repo.create_lifepath(lp)

@@ -14,9 +14,12 @@ from transversal.api.graphql.types import (
     Entity,
     EntityType,
     JournalEntryInput,
+    LifePath as GqlLifePath,
     Message,
     MessageKind,
     Projection,
+    QualificationResult,
+    LearnResult,
     RelatedEntity,
     Relationship,
     RazmeritResult,
@@ -24,6 +27,10 @@ from transversal.api.graphql.types import (
     SfxEffect as GqlSfxEffect,
     SfxInput,
     SfxRef,
+    SurviveResult,
+    EventResult,
+    AdvanceResult,
+    TermResult,
     TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
     TraitInput,
@@ -316,6 +323,37 @@ class Query:
             RelatedEntity(id=r["id"], name=r["name"], sheet_portrait=r.get("sheet_portrait", ""))
             for r in results
         ]
+
+    @strawberry.field
+    def life_paths(self, info: strawberry.Info, universe: Optional[str] = None) -> list[GqlLifePath]:
+        """List life paths, optionally filtered by universe."""
+        repo = _em(info).repo
+        if universe:
+            lps = repo.list_lifepaths_by_universe(universe)
+        else:
+            lps = repo.list_all_lifepaths()
+        return [_life_path_to_gql(lp) for lp in lps]
+
+
+# ── Life path helpers ─────────────────────────────────
+
+def _life_path_to_gql(lp) -> GqlLifePath:
+    """Convert a domain LifePath to the GraphQL type."""
+    from transversal.api.graphql.types import LifePathType as GqlLifePathType
+    return GqlLifePath(
+        id=lp.id,
+        name=lp.name,
+        universe=lp.universe,
+        description=lp.description if hasattr(lp, 'description') else "",
+        type=GqlLifePathType(lp.type.value) if hasattr(lp.type, 'value') else GqlLifePathType(str(lp.type)),
+        qualification=lp.qualification,
+        discovery=lp.discovery,
+        curriculum=lp.curriculum,
+        survival=lp.survival,
+        events=lp.events,
+        advancement=lp.advancement,
+        muster_out=lp.muster_out,
+    )
 
 
 # ── Mutations ────────────────────────────────────────
@@ -774,6 +812,67 @@ class Mutation:
             str(input.id),
             after_ids=[str(a) for a in input.after_ids] if input.after_ids is not None else None,
             threads=input.threads,
+        )
+
+    @strawberry.mutation
+    def take_term(self, info: strawberry.Info, entity_id: strawberry.ID, life_path_id: strawberry.ID,
+                  razmerit_spent: int = 0) -> TermResult:
+        """Execute one term of a life path for an entity."""
+        from transversal.services.lifepath_executor import take_term
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+        life_path = repo.get_lifepath(str(life_path_id))
+        if life_path is None:
+            raise ValueError(f"LifePath '{life_path_id}' not found")
+
+        result = take_term(entity, life_path, razmerit_spent, repo)
+
+        def _ql(r: dict | None):
+            if r is None:
+                return None
+            return QualificationResult(
+                success=r["success"], drafted=r["drafted"],
+                drafted_path_id=r.get("drafted_path_id"),
+                location_blocked=r.get("location_blocked", False),
+            )
+
+        def _lr(r: dict | None):
+            if r is None:
+                return None
+            return LearnResult(
+                trait_gained_id=r["trait_gained_id"],
+                trait_name=r["trait_name"],
+                was_stepped_up=r["was_stepped_up"],
+            )
+
+        def _sr(r: dict | None):
+            if r is None:
+                return None
+            return SurviveResult(success=r["success"], roll_summary=r["roll_summary"])
+
+        def _er(r: dict | None):
+            if r is None:
+                return None
+            return EventResult(event_index=r["event_index"], description=r["description"])
+
+        def _ar(r: dict | None):
+            if r is None:
+                return None
+            return AdvanceResult(success=r["success"], new_rank=r["new_rank"], rank_name=r["rank_name"])
+
+        return TermResult(
+            qualification=_ql(result.get("qualification")),
+            learn=_lr(result.get("learn")),
+            survive=_sr(result.get("survive")),
+            event=_er(result.get("event")),
+            advance=_ar(result.get("advance")),
+            new_trait_settings=[strawberry.ID(ts_id) for ts_id in result.get("new_trait_settings", [])],
+            modified_trait_settings=[strawberry.ID(ts_id) for ts_id in result.get("modified_trait_settings", [])],
+            razmerit_change=result.get("razmerit_change", 0),
+            term_number=result.get("term_number", 0),
         )
 
 

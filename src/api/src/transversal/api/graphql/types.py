@@ -640,3 +640,52 @@ class LifePath:
     events: list[EventItem]
     advancement: Optional[AdvancementInfo]
     muster_out: Optional[MusterOutInfo]
+
+
+# ── Term Result Types ──────────────────────────────
+
+@strawberry.type
+class LearnResult:
+    trait_gained_id: strawberry.ID
+    trait_name: str
+    was_stepped_up: bool
+
+
+@strawberry.type
+class SurviveResult:
+    success: bool
+    roll_summary: str  # "12 vs 8 — success"
+
+
+@strawberry.type
+class EventResult:
+    event_index: int
+    description: str
+
+
+@strawberry.type
+class AdvanceResult:
+    success: bool
+    new_rank: int
+    rank_name: str
+
+
+@strawberry.type
+class QualificationResult:
+    success: bool
+    drafted: bool
+    drafted_path_id: Optional[str] = None
+    location_blocked: bool = False
+
+
+@strawberry.type
+class TermResult:
+    qualification: Optional[QualificationResult]
+    learn: Optional[LearnResult]
+    survive: Optional[SurviveResult]
+    event: Optional[EventResult]
+    advance: Optional[AdvanceResult]
+    new_trait_settings: list[strawberry.ID]
+    modified_trait_settings: list[strawberry.ID]
+    razmerit_change: int
+    term_number: int
