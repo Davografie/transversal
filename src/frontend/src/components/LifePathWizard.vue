@@ -241,7 +241,7 @@ async function doMusterOut(){
 function resetWizard(){ step.value='choose'; phaseIdx.value=0; manualValues.value={}; manualValue.value=null; result.value={}; selectedPath.value=null; loadPaths() }
 async function loadPaths(){
   loadingPaths.value=true
-  const data=await graphql(`query($u:String){lifePaths(universe:$u){id name universe description type qualification{difficulty}}}`,{u:props.universe})
+  const data=await graphql(`query($u:String){lifePaths(universe:$u){id name universe description type qualification{traitId difficulty}}}`,{u:props.universe})
   paths.value=data?.lifePaths||[]; loadingPaths.value=false
 }
 watch(()=>props.visible,(v)=>{if(v)resetWizard()},{immediate:true})
