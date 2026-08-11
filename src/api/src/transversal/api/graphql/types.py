@@ -307,6 +307,13 @@ class TraitSetting:
                 }
         return {"teachable": False, "giftable": False, "takable": False}
 
+    @strawberry.field
+    def possible_sfx_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        trait = em.repo.get_trait(self.trait_id)
+        return trait.possible_sfx_ids if trait else []
+
 
 @strawberry.input
 class TraitSettingInput:
