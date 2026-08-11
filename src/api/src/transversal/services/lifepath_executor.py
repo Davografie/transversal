@@ -162,11 +162,14 @@ def take_term(
                     break
             elif not existing:
                 # Create new trait setting at create_at rating
+                # Resolve traitset_id from the trait registry
+                trait = repo.get_trait(ci.trait_id)
+                resolved_ts_id = trait.traitset_id if trait else ""
                 ts = TraitSetting(
                     id=f"{entity.id}:{ci.trait_id}",
                     entity_id=entity.id,
                     trait_id=ci.trait_id,
-                    traitset_id="",  # resolved from trait registry at creation time
+                    traitset_id=resolved_ts_id,
                     dice=[ci.create_at],
                     source_type="life_path_term",
                     source_life_path_id=life_path.id,
@@ -333,7 +336,7 @@ def _run_event(entity, life_path, repo) -> dict | None:
                 id=f"{entity.id}:{trait_id}:evt{entity.terms_served}",
                 entity_id=entity.id,
                 trait_id=trait_id,
-                traitset_id=effect.get("traitset_id", ""),
+                traitset_id=effect.get("traitset_id") or (repo.get_trait(trait_id).traitset_id if repo.get_trait(trait_id) else ""),
                 dice=[effect.get("die_type", DieType.D4)],
                 source_type="event",
                 source_life_path_id=life_path.id,
@@ -400,7 +403,7 @@ def _run_advance(entity, life_path, repo) -> dict | None:
                     id=f"{entity.id}:{benefit.get('trait_id', '')}:r{entity.current_rank}",
                     entity_id=entity.id,
                     trait_id=benefit.get("trait_id", ""),
-                    traitset_id=benefit.get("traitset_id", ""),
+                    traitset_id=benefit.get("traitset_id") or (repo.get_trait(benefit.get("trait_id", "")).traitset_id if repo.get_trait(benefit.get("trait_id", "")) else ""),
                     dice=[benefit.get("die_type", DieType.D4)],
                     source_type="life_path_term",
                     source_life_path_id=life_path.id,
@@ -491,7 +494,7 @@ def muster_out(entity: Entity, repo: "EntityRepository") -> dict:
                         id=f"{entity.id}:{benefit.get('trait_id', '')}:mo",
                         entity_id=entity.id,
                         trait_id=benefit.get("trait_id", ""),
-                        traitset_id=benefit.get("traitset_id", ""),
+                        traitset_id=benefit.get("traitset_id") or (repo.get_trait(benefit.get("trait_id", "")).traitset_id if repo.get_trait(benefit.get("trait_id", "")) else ""),
                         dice=[benefit.get("die_type", DieType.D4)],
                         source_type="life_path_term",
                         source_life_path_id=life_path.id,

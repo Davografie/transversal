@@ -610,7 +610,7 @@ def seed_life_paths(repo) -> None:
             description="Walk the land alone, beholden to no sect.",
             type=LifePathType.DRIFTER,
             curriculum=[
-                CurriculumItem(trait_id="trait-3r-cultivation", create_at=DieType.D4, step_up=True, min_rank=0),
+                CurriculumItem(trait_id="trait-cultivation-stage-76c7", create_at=DieType.D4, step_up=True, min_rank=0),
             ],
         ),
         LifePath(
@@ -620,7 +620,7 @@ def seed_life_paths(repo) -> None:
             description="Live by your wits on the margins of society.",
             type=LifePathType.DRIFTER,
             curriculum=[
-                CurriculumItem(trait_id="trait-earth-streetwise", create_at=DieType.D4, step_up=False, min_rank=0),
+                CurriculumItem(trait_id="trait-hack-8a0f", create_at=DieType.D4, step_up=False, min_rank=0),
             ],
         ),
         LifePath(
@@ -630,14 +630,14 @@ def seed_life_paths(repo) -> None:
             description="Train under the guidance of the Verdant Steps Sect.",
             type=LifePathType.SECT,
             qualification=QualificationInfo(
-                trait_id="trait-3r-cultivation",
+                trait_id="trait-cultivation-stage-76c7",
                 difficulty=DieType.D4,
                 must_be_at_location=None,
                 draft="lp-drifter-three-realms",
             ),
             curriculum=[
-                CurriculumItem(trait_id="trait-3r-cultivation", create_at=DieType.D6, step_up=True, min_rank=0),
-                CurriculumItem(trait_id="trait-3r-qi-reserves", create_at=DieType.D4, step_up=True, min_rank=0),
+                CurriculumItem(trait_id="trait-cultivation-stage-76c7", create_at=DieType.D6, step_up=True, min_rank=0),
+                CurriculumItem(trait_id="trait-qi-abf8", create_at=DieType.D4, step_up=True, min_rank=0),
             ],
         ),
     ]
