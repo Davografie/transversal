@@ -654,7 +654,9 @@ class LearnResult:
 @strawberry.type
 class SurviveResult:
     success: bool
-    roll_summary: str  # "12 vs 8 — success"
+    roll_summary: str
+    mishap_description: Optional[str] = None
+    complication_trait_id: Optional[strawberry.ID] = None
 
 
 @strawberry.type
@@ -689,6 +691,17 @@ class TermResult:
     modified_trait_settings: list[strawberry.ID]
     razmerit_change: int
     term_number: int
+
+
+@strawberry.type
+class MusterOutResult:
+    path_id: strawberry.ID
+    path_name: str
+    terms_served: int
+    final_rank: int
+    mishap_muster: bool
+    benefits: list[str]
+    razmerit_gained: int
 
 
 # ── Trait Transfer Result Types ──────────────────────

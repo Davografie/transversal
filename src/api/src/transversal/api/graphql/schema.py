@@ -34,6 +34,7 @@ from transversal.api.graphql.types import (
     GiftResult,
     TakeResult,
     TermResult,
+    MusterOutResult,
     TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
     TraitInput,
@@ -854,7 +855,11 @@ class Mutation:
         def _sr(r: dict | None):
             if r is None:
                 return None
-            return SurviveResult(success=r["success"], roll_summary=r["roll_summary"])
+            return SurviveResult(
+                success=r["success"], roll_summary=r["roll_summary"],
+                mishap_description=r.get("mishap_description"),
+                complication_trait_id=strawberry.ID(r["complication_trait_id"]) if r.get("complication_trait_id") else None,
+            )
 
         def _er(r: dict | None):
             if r is None:
@@ -879,7 +884,7 @@ class Mutation:
         )
 
     @strawberry.mutation
-    def teach_trait(self, info, teacher_id: strawberry.ID, student_id: strawberry.ID,
+    def teach_trait(self, info: strawberry.Info, teacher_id: strawberry.ID, student_id: strawberry.ID,
                     trait_setting_id: strawberry.ID) -> TeachResult:
         from transversal.services.trait_transfer import teach_trait
 
@@ -893,7 +898,7 @@ class Mutation:
         )
 
     @strawberry.mutation
-    def gift_trait(self, info, giver_id: strawberry.ID, recipient_id: strawberry.ID,
+    def gift_trait(self, info: strawberry.Info, giver_id: strawberry.ID, recipient_id: strawberry.ID,
                    trait_setting_id: strawberry.ID) -> GiftResult:
         from transversal.services.trait_transfer import gift_trait
 
@@ -905,7 +910,7 @@ class Mutation:
         )
 
     @strawberry.mutation
-    def take_trait(self, info, taker_id: strawberry.ID, victim_id: strawberry.ID,
+    def take_trait(self, info: strawberry.Info, taker_id: strawberry.ID, victim_id: strawberry.ID,
                    trait_setting_id: strawberry.ID, method: str = "stealth") -> TakeResult:
         from transversal.services.trait_transfer import take_trait
 
@@ -923,6 +928,27 @@ class Mutation:
             contest_summary=summary,
             transferred_trait_id=result["transferred_trait"].id if result.get("transferred_trait") else None,
             stolen=result.get("stolen", False),
+        )
+
+    @strawberry.mutation
+    def muster_out(self, info: strawberry.Info, entity_id: strawberry.ID) -> MusterOutResult:
+        """Voluntarily muster out of the current life path, collecting benefits."""
+        from transversal.services.lifepath_executor import muster_out
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+
+        result = muster_out(entity, repo)
+        return MusterOutResult(
+            path_id=result["path_id"],
+            path_name=result["path_name"],
+            terms_served=result["terms_served"],
+            final_rank=result["final_rank"],
+            mishap_muster=result.get("mishap_muster", False),
+            benefits=result.get("benefits", []),
+            razmerit_gained=result.get("razmerit_gained", 0),
         )
 
 
