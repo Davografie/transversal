@@ -27,6 +27,9 @@ def take_term(
     life_path: LifePath,
     razmerit_spent: int,
     repo: "EntityRepository",
+    qual_manual: int | None = None,
+    survive_manual: int | None = None,
+    advance_manual: int | None = None,
 ) -> dict:
     """Execute one term of a life path.
 
@@ -88,19 +91,23 @@ def take_term(
             pool_dice[idx] = (min_die[0].step_up(), min_die[1])
             razmerit_change -= 1
 
-        request = DicePoolRequest(
-            entity_id=entity.id,
-            universe=entity.current_universe,
-            dice=pool_dice,
-            razmerit_spent=min(razmerit_spent, 2),
-            opposition=Opposition(
-                type="static_difficulty",
-                static_difficulty=q.difficulty.max_value,
-            ),
-        )
-        result = resolve(request)
-        # Success if tier is MARGINAL or better
-        qual_success = result.tier.value not in ("fail",)
+        # ── Roll qualification (or use manual result) ──
+        if qual_manual is not None:
+            # Manual result: 1-2=FAIL, 3-5=MARGINAL, 6-8=SUCCESS, 9-10=EXCEPTIONAL, 11-12=PERFECT
+            qual_success = qual_manual >= 3  # MARGINAL or better
+        else:
+            request = DicePoolRequest(
+                entity_id=entity.id,
+                universe=entity.current_universe,
+                dice=pool_dice,
+                razmerit_spent=min(razmerit_spent, 2),
+                opposition=Opposition(
+                    type="static_difficulty",
+                    static_difficulty=q.difficulty.max_value,
+                ),
+            )
+            result = resolve(request)
+            qual_success = result.tier.value not in ("fail",)
 
         qual = {
             "success": qual_success,
@@ -196,7 +203,8 @@ def take_term(
     repo.update_entity(entity)
 
     # ── 3. Survive phase ──────────────────────────────
-    survive_result = _run_survive(entity, life_path, repo)
+    survive_result = _run_survive(entity, life_path, repo, survive_manual)
+
     if survive_result and survive_result.get("forced_muster"):
         # Mishap forced muster-out: record with mishap_muster=True
         _record_muster(entity, life_path, repo, mishap_muster=True)
@@ -216,7 +224,7 @@ def take_term(
     event_result = _run_event(entity, life_path, repo)
 
     # ── 5. Advance phase ──────────────────────────────
-    advance_result = _run_advance(entity, life_path, repo)
+    advance_result = _run_advance(entity, life_path, repo, advance_manual)
 
     # ── 6. Return ─────────────────────────────────────
     return {
@@ -234,7 +242,7 @@ def take_term(
 
 # ── Phase implementations ─────────────────────────────
 
-def _run_survive(entity, life_path, repo) -> dict | None:
+def _run_survive(entity, life_path, repo, manual_result: int | None = None) -> dict | None:
     """Run the survive phase. Returns result dict or None if no survival block."""
     import random
 
@@ -267,22 +275,27 @@ def _run_survive(entity, life_path, repo) -> dict | None:
     if not pool_dice:
         pool_dice = [(DieType.D4, "untrained")]
 
-    # ── Roll ──
-    request = DicePoolRequest(
-        entity_id=entity.id,
-        universe=entity.current_universe,
-        dice=pool_dice,
-        opposition=Opposition(
-            type="static_difficulty",
-            static_difficulty=survival_difficulty.max_value,
-        ),
-    )
-    result = resolve(request)
-    survive_success = result.tier.value not in ("fail",)
+    # ── Roll (or use manual result) ──
+    if manual_result is not None:
+        survive_success = manual_result >= survival_difficulty.max_value
+        roll_summary = f"{manual_result} vs {survival_difficulty.max_value} — {'success' if survive_success else 'failure'}"
+    else:
+        request = DicePoolRequest(
+            entity_id=entity.id,
+            universe=entity.current_universe,
+            dice=pool_dice,
+            opposition=Opposition(
+                type="static_difficulty",
+                static_difficulty=survival_difficulty.max_value,
+            ),
+        )
+        result = resolve(request)
+        survive_success = result.tier.value not in ("fail",)
+        roll_summary = f"{result.highest if hasattr(result, 'highest') else result.total} vs {survival_difficulty.max_value} — {'success' if survive_success else 'failure'}"
 
     survive_data = {
         "success": survive_success,
-        "roll_summary": f"{result.highest if hasattr(result, 'highest') else result.total} vs {survival_difficulty.max_value} — {'success' if survive_success else 'failure'}",
+        "roll_summary": roll_summary,
     }
 
     # ── Mishap ──
@@ -355,7 +368,7 @@ def _run_event(entity, life_path, repo) -> dict | None:
     return event_data
 
 
-def _run_advance(entity, life_path, repo) -> dict | None:
+def _run_advance(entity, life_path, repo, manual_result: int | None = None) -> dict | None:
     """Run the advance phase. Returns result dict or None if no advancement block."""
     if not life_path.advancement or not life_path.advancement.ranks:
         return None
@@ -371,18 +384,21 @@ def _run_advance(entity, life_path, repo) -> dict | None:
     if not pool_dice:
         pool_dice = [(DieType.D4, "untrained")]
 
-    # ── Roll ──
-    request = DicePoolRequest(
-        entity_id=entity.id,
-        universe=entity.current_universe,
-        dice=pool_dice,
-        opposition=Opposition(
-            type="static_difficulty",
-            static_difficulty=life_path.advancement.difficulty.max_value,
-        ),
-    )
-    result = resolve(request)
-    advance_success = result.tier.value not in ("fail",)
+    # ── Roll (or use manual result) ──
+    if manual_result is not None:
+        advance_success = manual_result >= life_path.advancement.difficulty.max_value
+    else:
+        request = DicePoolRequest(
+            entity_id=entity.id,
+            universe=entity.current_universe,
+            dice=pool_dice,
+            opposition=Opposition(
+                type="static_difficulty",
+                static_difficulty=life_path.advancement.difficulty.max_value,
+            ),
+        )
+        result = resolve(request)
+        advance_success = result.tier.value not in ("fail",)
 
     advance_data = {
         "success": advance_success,

@@ -844,8 +844,10 @@ class Mutation:
 
     @strawberry.mutation
     def take_term(self, info: strawberry.Info, entity_id: strawberry.ID, life_path_id: strawberry.ID,
-                  razmerit_spent: int = 0) -> TermResult:
-        """Execute one term of a life path for an entity."""
+                  razmerit_spent: int = 0, qual_manual: Optional[int] = None,
+                  survive_manual: Optional[int] = None,
+                  advance_manual: Optional[int] = None) -> TermResult:
+        """Execute one term of a life path. Pass manual die results for tabletop dice."""
         from transversal.services.lifepath_executor import take_term
 
         repo = _em(info).repo
@@ -856,7 +858,10 @@ class Mutation:
         if life_path is None:
             raise ValueError(f"LifePath '{life_path_id}' not found")
 
-        result = take_term(entity, life_path, razmerit_spent, repo)
+        result = take_term(entity, life_path, razmerit_spent, repo,
+                          qual_manual=qual_manual,
+                          survive_manual=survive_manual,
+                          advance_manual=advance_manual)
 
         def _ql(r: dict | None):
             if r is None:
