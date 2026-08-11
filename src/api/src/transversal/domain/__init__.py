@@ -10,6 +10,7 @@ Collections:
   traitsettings — edge: entity → trait, carries rating/type/statement
   sfxs          — SFX registry
   relationships — edge: entity → entity
+  life_paths    — life path definitions (Traveller-style term loops)
 """
 
 from enum import Enum
@@ -95,6 +96,15 @@ class TransversalType(str, Enum):
     NATIVE = "native"
     CONSCIOUSNESS = "consciousness"
     INAPPOSITE = "inapposite"
+
+
+class LifePathType(str, Enum):
+    SECT = "sect"
+    GUILD = "guild"
+    DRIFTER = "drifter"
+    MERCENARY = "mercenary"
+    TRADE = "trade"
+    LINEAGE = "lineage"
 
 
 # ── Die Roll Models ───────────────────────────────────
@@ -233,6 +243,13 @@ class TraitDisplayName(BaseModel):
     universe: str
     ratings: list[list[DieType]] = Field(default_factory=list)
 
+class TransferFlags(BaseModel):
+    """Declares whether traits in a set or a specific trait can be transferred."""
+    teachable: bool = False
+    giftable: bool = False
+    takable: bool = False
+
+
 class Trait(BaseModel):
     """Registry entry — defines a trait that can exist in a universe.
 
@@ -252,6 +269,7 @@ class Trait(BaseModel):
     explanation: str = ""
     random_weight: int = 0
     display_names: list[TraitDisplayName] = Field(default_factory=list)
+    transfer_flags: Optional[TransferFlags] = None
 
 
 class TraitSet(BaseModel):
@@ -269,6 +287,7 @@ class TraitSet(BaseModel):
     location_restricted: bool = False
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
+    transfer_flags: Optional[TransferFlags] = None
 
 
 # ── Dice helpers ──────────────────────────────────────
@@ -349,6 +368,14 @@ class TraitSetting(BaseModel):
     locations_enabled: list[str] = Field(default_factory=list)
     locations_disabled: list[str] = Field(default_factory=list)
     known_to: list[str] = Field(default_factory=list)
+    # Provenance — how this trait was acquired
+    source_type: Optional[str] = None
+        # "taught" | "gifted" | "taken" | "life_path_term" | "event" | null
+    source_entity_id: Optional[str] = None  # who taught/gifted it, or who it was taken from
+    source_trait_setting_id: Optional[str] = None  # original TraitSetting this derived from (teach)
+    source_life_path_id: Optional[str] = None  # which life path generated this (life_path_term)
+    source_term_number: Optional[int] = None  # which term in that path (life_path_term)
+    stolen: bool = False  # trait was taken — may have narrative consequences
 
 
 # ── Projections ───────────────────────────────────────
@@ -403,6 +430,105 @@ class Entity(BaseModel):
     owned_by: Optional[str] = None
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
+    # Life path tracking
+    terms_served: int = 0                     # total terms across all paths
+    current_life_path_id: Optional[str] = None  # _key of active path
+    current_rank: int = 0                     # rank in current path
+    life_history: list["LifeTerm"] = Field(default_factory=list)
+    drifter_terms: int = 0                    # terms spent as a drifter
+    discovered_life_paths: list[str] = Field(default_factory=list)  # _keys of discovered paths
+
+
+# ── Life Paths ─────────────────────────────────────────
+
+class DiscoveryBlock(BaseModel):
+    """Conditions for discovering a hidden life path.  Any one condition met → discovered."""
+    at_location: list[str] = Field(default_factory=list)
+    knows_entity: list[str] = Field(default_factory=list)
+    possesses_trait: list[str] = Field(default_factory=list)
+    has_trait_rating: dict[str, DieType] = Field(default_factory=dict)
+    has_relationship: list[str] = Field(default_factory=list)
+
+
+class QualificationInfo(BaseModel):
+    """Entry requirements for a life path."""
+    trait_id: str
+    difficulty: DieType = DieType.D6
+    must_be_at_location: Optional[str] = None  # location entity ID required to take a term
+    draft: Optional[str] = None  # path _key to draft into on failure
+
+
+class CurriculumItem(BaseModel):
+    """A trait gained or stepped up during the Learn phase."""
+    trait_id: str
+    create_at: DieType = DieType.D4  # rating if trait is new to the character
+    step_up: bool = False  # if the character already has the trait, step up instead
+    min_rank: int = 0  # rank required for this curriculum item
+
+
+class SurvivalInfo(BaseModel):
+    """Survival phase configuration for a life path."""
+    trait_ids: list[str] = Field(default_factory=list)
+    difficulty: DieType = DieType.D6
+    term_penalty_after: int = 4  # after N terms in this path, difficulty steps up
+    mishaps: list[dict] = Field(default_factory=list)  # [{description, effect}]
+
+
+class EventItem(BaseModel):
+    """A single event in a life path's event table."""
+    description: str
+    effect: dict = Field(default_factory=dict)
+    min_rank: int = 0  # rank required for this event to be rollable
+
+
+class RankInfo(BaseModel):
+    """A rank in a life path's advancement ladder."""
+    number: int
+    name: str
+    benefits: list[dict] = Field(default_factory=list)
+
+
+class AdvancementInfo(BaseModel):
+    """Advancement phase configuration for a life path."""
+    trait_ids: list[str] = Field(default_factory=list)
+    difficulty: DieType = DieType.D6
+    ranks: list[RankInfo] = Field(default_factory=list)
+
+
+class MusterOutInfo(BaseModel):
+    """Benefits granted when mustering out of a life path."""
+    per_term_benefits: list[dict] = Field(default_factory=list)  # razmerit, asset traits, contacts
+    at_ranks: dict[str, list[dict]] = Field(default_factory=dict)  # rank_number → benefits
+
+
+class LifePath(BaseModel):
+    """A life path definition — a structured narrative container for character growth.
+
+    Stored in the `life_paths` collection.
+    """
+    id: str
+    name: str
+    universe: str
+    description: str = ""
+    type: LifePathType = LifePathType.DRIFTER
+    qualification: Optional[QualificationInfo] = None
+    discovery: Optional[DiscoveryBlock] = None  # null → always visible
+    curriculum: list[CurriculumItem] = Field(default_factory=list)
+    survival: Optional[SurvivalInfo] = None
+    events: list[EventItem] = Field(default_factory=list)
+    advancement: Optional[AdvancementInfo] = None
+    muster_out: Optional[MusterOutInfo] = None
+
+
+class LifeTerm(BaseModel):
+    """Record of a completed life path term in an entity's life_history."""
+    path_id: str
+    path_name: str
+    universe: str
+    terms_served: int
+    final_rank: int
+    mustered_out: bool = False
+    mishap_muster: bool = False  # true if forced out by mishap → re-entry at rank 0
 
 
 # ── SFX ───────────────────────────────────────────────

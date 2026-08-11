@@ -55,6 +55,7 @@ PLAYERS = "players"
 RELATIONSHIPS = "relationships"    # edge collection
 MESSAGES = "messages"              # inter-entity persistent messages
 ENTITY_IMAGES = "entity_images"    # generated image metadata
+LIFE_PATHS = "life_paths"          # life path definitions
 
 COLLECTIONS = {
     ENTITIES: False,
@@ -67,6 +68,7 @@ COLLECTIONS = {
     RELATIONSHIPS: True,  # edge
     MESSAGES: False,      # document
     ENTITY_IMAGES: False,
+    LIFE_PATHS: False,    # document
 }
 
 
