@@ -57,6 +57,7 @@
         :visible="showWizard"
         :entity-id="overrideEntityId || entityId"
         :universe="entity?.currentUniverse || 'earth'"
+        :trait-settings="character?.traitSettings || []"
         embedded
         @close="showWizard = false"
         @updated="fetchEntity"

@@ -90,6 +90,7 @@
       </div>
     </template>
     <template v-else-if="step === 'configure'">
+      <div class="wiz-path-banner" v-if="selectedPath">{{ selectedPath.name }} — {{ selectedPath.type }}</div>
       <p class="wiz-phase-label">{{ phaseLabel }}</p>
       <p class="wiz-phase-hint">{{ phaseHint }}</p>
       <table v-if="showTable" class="wiz-table">
@@ -153,6 +154,7 @@ const props = defineProps({
   embedded: { type: Boolean, default: false },
   entityId: { type: String, required: true },
   universe: { type: String, default: 'earth' },
+  traitSettings: { type: Array, default: () => [] },  // { id, traitId, name, dice }[]
 })
 const emit = defineEmits(['close', 'updated'])
 const { graphql } = useApi()
@@ -171,19 +173,28 @@ const phases = ['qual', 'learn', 'survive', 'event', 'advance']
 
 function displayName(name) { return (name||'').split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') }
 function truncate(s,n) { return s&&s.length>n?s.slice(0,n)+'…':s||'' }
+function dieNum(dieType) { return String(dieType||'').replace(/^D/i,'') }
+
+const traitNameMap = computed(() => {
+  const m = {}
+  for (const ts of props.traitSettings) if (ts.traitId && ts.name) m[ts.traitId] = ts.name
+  return m
+})
 
 const phaseLabel = computed(() => ({qual:'Qualification',learn:'Learn',survive:'Survive',event:'Event',advance:'Advance'})[phases[phaseIdx.value]]||'')
-const qualDifficulty = computed(() => selectedPath.value?.qualification?.difficulty||'D4')
-const surviveDifficulty = computed(() => selectedPath.value?.survival?.difficulty||'D6')
-const advanceDifficulty = computed(() => selectedPath.value?.advancement?.difficulty||'D6')
+const qualTraitId = computed(() => selectedPath.value?.qualification?.traitId)
+const qualDifficulty = computed(() => dieNum(selectedPath.value?.qualification?.difficulty||'D4'))
+const surviveDifficulty = computed(() => dieNum(selectedPath.value?.survival?.difficulty||'D6'))
+const advanceDifficulty = computed(() => dieNum(selectedPath.value?.advancement?.difficulty||'D6'))
+const qualTraitName = computed(() => traitNameMap.value[qualTraitId.value] || displayName(qualTraitId.value||''))
 const showTable = computed(() => ['qual','survive','advance'].includes(phases[phaseIdx.value]))
 const showList = computed(() => ['learn','event'].includes(phases[phaseIdx.value]))
 const showRoll = computed(() => showTable.value && manualValue.value === null)
 const phaseHint = computed(() => {
   const p=phases[phaseIdx.value]
-  if(p==='qual') return `Roll to qualify. Target: ${qualDifficulty.value}`
-  if(p==='survive') return `Roll to survive. Target: ${surviveDifficulty.value}`
-  if(p==='advance') return `Roll for promotion. Target: ${advanceDifficulty.value}`
+  if(p==='qual') return `Roll ${qualTraitName.value} vs ${qualDifficulty.value}`
+  if(p==='survive') return `Roll to survive vs ${surviveDifficulty.value}`
+  if(p==='advance') return `Roll for promotion vs ${advanceDifficulty.value}`
   if(p==='learn') return 'Train a trait this term.'
   if(p==='event') return 'Something happens…'
   return ''
