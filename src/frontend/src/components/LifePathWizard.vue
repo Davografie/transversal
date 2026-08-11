@@ -285,8 +285,8 @@ watch(() => props.visible, (v) => { if (v) resetWizard() }, { immediate: true })
 </script>
 
 <style scoped>
-.wizard-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
-.wizard-panel { background: var(--bg-panel); backdrop-filter: blur(16px); border-radius: var(--radius); border: 1px solid var(--border); width: 420px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.wizard-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.6); display: flex; align-items: safe center; justify-content: center; padding: 20px; }
+.wizard-panel { background: var(--bg-panel); backdrop-filter: blur(16px); border-radius: var(--radius); border: 1px solid var(--border); width: 420px; max-width: 95vw; max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .wizard-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .wizard-header h2 { font-size: 16px; margin: 0; }
 .wiz-close { background: none; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; }
