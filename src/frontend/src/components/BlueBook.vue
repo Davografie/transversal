@@ -74,8 +74,8 @@
         <div v-if="loading" class="bb-empty">Loading…</div>
         <div v-else-if="!displayEntries.length" class="bb-empty">No entries yet.</div>
         <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
-          <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx }" draggable="true" @dragstart="onDragStart($event, idx)" @dragover="onDragOver($event, idx)" @drop="onDrop(idx)" @dragend="onDragEnd" @touchstart="onTouchStart($event, idx)" @touchmove="onDocTouchMove" @touchend="e => endTouchDrag(true)" @touchcancel="() => cancelTouchDrag()">
-          <div class="bb-entry-header">
+          <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx, 'bb-continuation': entryContinuations.has(m.id) }" draggable="true" @dragstart="onDragStart($event, idx)" @dragover="onDragOver($event, idx)" @drop="onDrop(idx)" @dragend="onDragEnd" @touchstart="onTouchStart($event, idx)" @touchmove="onDocTouchMove" @touchend="e => endTouchDrag(true)" @touchcancel="() => cancelTouchDrag()">
+          <div v-if="!entryContinuations.has(m.id)" class="bb-entry-header">
             <div v-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
               <img v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" />
               <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
@@ -91,7 +91,7 @@
             <img v-for="(img, i) in m.images" :key="i" :src="img" class="bb-image" @click="viewImage(img)" />
           </div>
           <div class="bb-entry-actions">
-            <button v-if="m.senderEntityId !== m.recipientEntityId" class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
+            <button v-if="m.senderEntityId !== m.recipientEntityId && lastInGroup.has(m.id)" class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
           </div>
         </div>
         </TransitionGroup>
@@ -224,6 +224,29 @@ watch(entries, () => {
   refreshEntries(filteredEntries.value)
   filterPhasing.value = false
 }, { immediate: true })
+
+const entryContinuations = computed(() => {
+  const items = displayEntries.value
+  const cont = new Set()
+  for (let i = 1; i < items.length; i++) {
+    const prev = items[i - 1]
+    const curr = items[i]
+    const sameSender = prev.senderEntityId === curr.senderEntityId
+    const sharedThread = curr.threads?.length && curr.threads.some(t => prev.threads?.includes(t))
+    if (sameSender || sharedThread) cont.add(curr.id)
+  }
+  return cont
+})
+
+const lastInGroup = computed(() => {
+  const items = displayEntries.value
+  const last = new Set()
+  for (let i = 0; i < items.length; i++) {
+    const next = items[i + 1]
+    if (!next || !entryContinuations.value.has(next.id)) last.add(items[i].id)
+  }
+  return last
+})
 
 const filteredThreadSuggestions = computed(() => {
   if (!composeThreads.value) return allThreads.value
