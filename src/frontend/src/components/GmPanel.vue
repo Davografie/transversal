@@ -121,6 +121,15 @@ const traitsLoading = ref(false)
 // the already-open GmTraitsetsPanel still shows the stale snapshot.
 // Reactive computed — passed as ref through props so sub-panels see updates
 const filteredTraitsets = computed(() => traitsets.value.filter(ts => traitsetMatchesFilters(ts)))
+const traitNameMap = computed(() => {
+  const m = {}
+  for (const ts of traitsets.value) {
+    for (const t of ts.traits || []) {
+      m[t.id] = t.name
+    }
+  }
+  return m
+})
 
 function nextBeat() { emit('next-beat') }
 function startSession() { sessionActive.value = true; emit('start-session') }
@@ -253,6 +262,7 @@ function openEntityEdit() {
         entityId: selectedId.value,
         imagenJob: imagenJob.value,
         animateJob: animateJob.value,
+        traitNameMap: traitNameMap.value,
       },
       listeners: {
         'update:form': (v) => { form.value = v },

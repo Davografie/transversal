@@ -32,23 +32,9 @@
         </div>
       </div>
     </div>
-    <div v-if="form.type === 'UNIVERSE'" class="lora-config-section">
-      <h4>LoRA Configuration</h4>
-      <p class="lora-hint">Select which LoRAs apply to each entity type during image generation in this universe.</p>
-      <div v-if="!availableLoras.length" class="lora-empty">No LoRAs available — check imagEN LoRA server.</div>
-      <div v-for="et in imagenEntityTypes" :key="et" class="lora-type-row">
-        <span class="lora-type-label">{{ et }}</span>
-        <div class="lora-selects">
-          <select class="lora-select" :value="loraAt(et, 0)" @change="setLora(et, 0, $event.target.value)">
-            <option value="">—</option>
-            <option v-for="lora in availableLoras" :key="lora.name" :value="lora.name">{{ lora.name }}</option>
-          </select>
-          <select class="lora-select" :value="loraAt(et, 1)" @change="setLora(et, 1, $event.target.value)">
-            <option value="">—</option>
-            <option v-for="lora in availableLoras" :key="lora.name" :value="lora.name">{{ lora.name }}</option>
-          </select>
-        </div>
-      </div>
+    <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
+      <button class="section-btn" @click="openLoraConfig">🖼 LoRA Configuration</button>
+      <button class="section-btn" @click="openLifePaths">📋 Life Paths <span v-if="lifePaths.length" class="section-count">{{ lifePaths.length }}</span></button>
     </div>
     <div class="danger-zone">
       <h4>Danger Zone</h4>
@@ -69,10 +55,44 @@
 
 <script setup>
 import { ref, computed, watch, useAttrs, onMounted, onUnmounted } from 'vue'
+import { useApi } from '@/composables/useApi.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
+import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
+import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
 
 const CONFIRM_TIMEOUT = 3000
+
+const { graphql } = useApi()
+const lifePaths = ref([])
+const loadingLifepaths = ref(false)
+
+async function loadLifePaths(universeKey) {
+  if (!universeKey) return
+  loadingLifepaths.value = true
+  try {
+    const data = await graphql(
+      `query($u: String!) {
+        lifePaths(universe: $u) {
+          id name universe description type
+          qualification { traitId difficulty mustBeAtLocation draft }
+          discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship }
+          curriculum { traitId createAt stepUp minRank }
+          survival { traitIds difficulty termPenaltyAfter mishaps }
+          events { description effect minRank }
+          advancement { traitIds difficulty ranks { number name benefits } }
+          musterOut { perTermBenefits atRanks }
+        }
+      }`,
+      { u: universeKey }
+    )
+    lifePaths.value = data?.lifePaths || []
+  } catch {
+    lifePaths.value = []
+  } finally {
+    loadingLifepaths.value = false
+  }
+}
 
 const props = defineProps({
   form: { type: Object, default: () => ({}) },
@@ -80,9 +100,36 @@ const props = defineProps({
   imagenJob: { type: Object, default: null },
   animateJob: { type: Object, default: null },
   open: { type: Function, default: null },
+  traitNameMap: { type: Object, default: () => ({}) },
 })
 
+function openLoraConfig() {
+  if (!props.open) return
+  props.open({
+    component: GmLoRAConfigPanel,
+    title: 'LoRA Configuration',
+    props: { loraConfigJson: props.form.lora_config || '{}' },
+    listeners: {
+      'update:loraConfig': (json) => emit('update:form', { ...props.form, lora_config: json }),
+    },
+  })
+}
+
+function openLifePaths() {
+  if (!props.open) return
+  props.open({
+    component: GmLifePathsPanel,
+    title: 'Life Paths',
+    props: { paths: lifePaths.value, traitNameMap: props.traitNameMap, open: props.open },
+  })
+}
+
 const emit = defineEmits(['update:form', 'upload-bg', 'switch-to-sheet', 'delete', 'prune', 'imagen', 'cancel', 'image-open'])
+
+// Load life paths when editing a universe entity
+watch(() => [props.entityId, props.form?.type], ([id, type]) => {
+  if (id && type === 'UNIVERSE') loadLifePaths(props.form.current_universe || props.entityId)
+}, { immediate: true })
 
 // Independent job polling — props are snapshots from the panel system
 const localImagenJob = ref(null)
@@ -215,7 +262,7 @@ async function loadImages() {
 }
 
 watch(() => props.entityId, loadImages, { immediate: true })
-onMounted(() => { fetchLoras(); pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
+onMounted(() => { pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
 onUnmounted(() => { clearInterval(_jobPollTimer) })
 defineExpose({ refresh: loadImages })
 </script>
@@ -264,26 +311,15 @@ defineExpose({ refresh: loadImages })
   to { opacity: 1; }
 }
 
-.lora-config-section {
-  margin-top: 12px; padding: 10px;
-  border: 1px solid rgba(139,92,246,0.25); border-radius: 6px;
-  background: rgba(139,92,246,0.06);
+.section-buttons {
+  margin-top: 12px; display: flex; gap: 6px;
 }
-.lora-config-section h4 {
-  font-size: 10px; color: #c4b5fd; text-transform: uppercase; letter-spacing: 1px;
-  margin: 0 0 4px 0;
+.section-btn {
+  flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03); color: var(--text); cursor: pointer;
+  font-size: 12px; text-align: center;
+  transition: border-color 0.15s;
 }
-.lora-hint { font-size: 9px; color: var(--text-dim); margin: 0 0 8px 0; }
-.lora-empty { font-size: 10px; color: var(--text-dim); padding: 8px 0; }
-.lora-type-row { margin-bottom: 6px; }
-.lora-type-label {
-  display: block; font-size: 9px; color: var(--text-dim); margin-bottom: 2px;
-  text-transform: uppercase; letter-spacing: 0.5px;
-}
-.lora-selects { display: flex; gap: 4px; }
-.lora-select {
-  font-size: 10px; padding: 3px 6px; border-radius: 3px; flex: 1; min-width: 0;
-  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
-  color: var(--text);
-}
+.section-btn:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
+.section-count { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 </style>

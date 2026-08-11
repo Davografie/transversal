@@ -35,8 +35,6 @@
               <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
             </div>
           </div>
-          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = !showBlueBook" :title="showBlueBook ? 'Close Blue Book' : 'Blue Book'">{{ showBlueBook ? '🎲' : '📘' }}</button>
-          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn lp-btn" @click.stop="showWizard = !showWizard" title="Life Path">🛤️</button>
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -44,8 +42,13 @@
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
         </div>
       </div>
+      <div v-if="!gmMode && ownsCharacter && !overrideEntityId" class="sheet-pills">
+        <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="activeSheetView = 'traits'">Traits</button>
+        <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️ Life Path</button>
+        <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘 Blue Book</button>
+      </div>
       <BlueBook
-        v-if="showBlueBook"
+        v-if="activeSheetView === 'bluebook'"
         :entity-id="overrideEntityId || entityId"
         ref="blueBookRef"
         :entity-name="entity?.name || ''"
@@ -53,13 +56,15 @@
         embedded
       />
       <LifePathWizard
-        v-if="showWizard"
-        :visible="showWizard"
+        v-if="activeSheetView === 'lifepath'"
+        :visible="activeSheetView === 'lifepath'"
         :entity-id="overrideEntityId || entityId"
         :universe="entity?.currentUniverse || 'earth'"
-        :trait-settings="character?.traitSettings || []"
+        :trait-settings="entity?.traitSettings || []"
+        :current-life-path-id="entity?.currentLifePathId || null"
+        :terms-served="entity?.termsServed || 0"
         embedded
-        @close="showWizard = false"
+        @close="activeSheetView = 'traits'"
         @updated="fetchEntity"
       />
       <template v-else>
@@ -221,8 +226,7 @@ const relationTypes = [
   { id: 'trait-relation-duty', name: 'Duty' },
 ]
 
-const showBlueBook = ref(false)
-const showWizard = ref(false)
+const activeSheetView = ref('traits')  // 'traits' | 'lifepath' | 'bluebook'
 
 const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
@@ -496,6 +500,8 @@ const QUERY = `
       razmerit
       currentUniverse
       currentLocation
+      currentLifePathId
+      termsServed
       backgroundImage
       sheetPortrait
       traitSettings {
@@ -868,7 +874,7 @@ async function saveRatedRelationship() {
 }
 
 function openBlueBookLetter() {
-  showBlueBook.value = true
+  activeSheetView.value = 'bluebook'
   nextTick(() => {
     blueBookRef.value?.openCompose('new', {
       id: props.overrideEntityId || props.entityId,
@@ -998,7 +1004,7 @@ async function confirmTransfer() {
 
 watch(() => props.overrideEntityId, () => {
   if (isForeignSheet.value) fetchRelationship()
-  if (!ownsCharacter.value) showBlueBook.value = false
+  if (!ownsCharacter.value && activeSheetView.value === 'bluebook') activeSheetView.value = 'traits'
 })
 watch(() => props.viewerEntityId, () => {
   if (isForeignSheet.value) fetchRelationship()
@@ -1601,4 +1607,9 @@ watch(() => props.externalPoolSources, (sources) => {
 .rel-cancel:hover {
   color: var(--text);
 }
+.sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
+.pill { padding: 5px 14px; font-size: 11px; border: none; cursor: pointer; background: rgba(255,255,255,0.02); color: var(--text-dim); transition: background 0.15s, color 0.15s; }
+.pill + .pill { border-left: 1px solid rgba(255,255,255,0.06); }
+.pill:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.pill.active { background: var(--accent-dim); color: var(--text); font-weight: 600; }
 </style>

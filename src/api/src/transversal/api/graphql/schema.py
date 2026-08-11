@@ -78,6 +78,8 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,
+        current_life_path_id=e.current_life_path_id,
+        terms_served=e.terms_served,
     )
 
 
@@ -846,7 +848,9 @@ class Mutation:
     def take_term(self, info: strawberry.Info, entity_id: strawberry.ID, life_path_id: strawberry.ID,
                   razmerit_spent: int = 0, qual_manual: Optional[int] = None,
                   survive_manual: Optional[int] = None,
-                  advance_manual: Optional[int] = None) -> TermResult:
+                  advance_manual: Optional[int] = None,
+                  learn_index: Optional[int] = None,
+                  mishap_index: Optional[int] = None) -> TermResult:
         """Execute one term of a life path. Pass manual die results for tabletop dice."""
         from transversal.services.lifepath_executor import take_term
 
@@ -861,7 +865,9 @@ class Mutation:
         result = take_term(entity, life_path, razmerit_spent, repo,
                           qual_manual=qual_manual,
                           survive_manual=survive_manual,
-                          advance_manual=advance_manual)
+                          advance_manual=advance_manual,
+                          learn_index=learn_index,
+                          mishap_index=mishap_index)
 
         def _ql(r: dict | None):
             if r is None:
@@ -888,6 +894,7 @@ class Mutation:
                 success=r["success"], roll_summary=r["roll_summary"],
                 mishap_description=r.get("mishap_description"),
                 complication_trait_id=strawberry.ID(r["complication_trait_id"]) if r.get("complication_trait_id") else None,
+                forced_muster=r.get("forced_muster", False),
             )
 
         def _er(r: dict | None):

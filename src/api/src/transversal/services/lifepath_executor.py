@@ -30,6 +30,8 @@ def take_term(
     qual_manual: int | None = None,
     survive_manual: int | None = None,
     advance_manual: int | None = None,
+    learn_index: int | None = None,
+    mishap_index: int | None = None,
 ) -> dict:
     """Execute one term of a life path.
 
@@ -144,30 +146,46 @@ def take_term(
     # ── 2. Learn phase ────────────────────────────────
     trait_settings = repo.get_traitsettings_for_entity(entity.id)
     curriculum_items = [c for c in life_path.curriculum if c.min_rank <= entity.current_rank]
+    import logging
+    logging.warning(f"[LEARN-DIAG] entity={entity.id} trait_settings_count={len(trait_settings)} curriculum_count={len(curriculum_items)} learn_index={learn_index}")
+    for ts in trait_settings:
+        logging.warning(f"[LEARN-DIAG]   ts trait_id={ts.trait_id} dice={ts.dice} id={ts.id}")
 
     if curriculum_items:
-        # Pick the first curriculum item the entity hasn't maxed out,
-        # or the first one if all are maxed
-        for ci in curriculum_items:
+        # If a specific index was chosen, try that item first; fall back to iteration
+        items_to_try = curriculum_items
+        if learn_index is not None and 0 <= learn_index < len(curriculum_items):
+            items_to_try = [curriculum_items[learn_index]] + [c for i, c in enumerate(curriculum_items) if i != learn_index]
+        for ci in items_to_try:
             existing = next((ts for ts in trait_settings if ts.trait_id == ci.trait_id), None)
-            if existing and ci.step_up:
-                # Step up the first die
-                min_die = min(existing.dice, key=lambda d: d.max_value, default=None)
-                if min_die and min_die != DieType.D12:
-                    idx = existing.dice.index(min_die)
-                    existing.dice[idx] = min_die.step_up()
-                    existing.source_type = "life_path_term"
-                    existing.source_life_path_id = life_path.id
-                    existing.source_term_number = entity.terms_served + 1
-                    repo.update_traitsetting(existing)
-                    modified_trait_ids.append(existing.id)
+            if existing:
+                if ci.step_up:
+                    min_die = min(existing.dice, key=lambda d: d.max_value, default=None)
+                    if min_die and min_die != DieType.D12:
+                        idx = existing.dice.index(min_die)
+                        existing.dice[idx] = min_die.step_up()
+                        existing.source_type = "life_path_term"
+                        existing.source_life_path_id = life_path.id
+                        existing.source_term_number = entity.terms_served + 1
+                        repo.update_traitsetting(existing)
+                        modified_trait_ids.append(existing.id)
+                        learn = {
+                            "trait_gained_id": existing.id,
+                            "trait_name": ci.trait_id,
+                            "was_stepped_up": True,
+                        }
+                        break
+                    # Already at max or no dice; don't fall through — just record that we did it
                     learn = {
                         "trait_gained_id": existing.id,
                         "trait_name": ci.trait_id,
-                        "was_stepped_up": True,
+                        "was_stepped_up": False,
                     }
                     break
-            elif not existing:
+                # step_up is False (create_at only); trait already exists, nothing to do
+                learn = None
+                break
+            else:
                 # Create new trait setting at create_at rating
                 # Resolve traitset_id from the trait registry
                 trait = repo.get_trait(ci.trait_id)
@@ -203,11 +221,15 @@ def take_term(
     repo.update_entity(entity)
 
     # ── 3. Survive phase ──────────────────────────────
-    survive_result = _run_survive(entity, life_path, repo, survive_manual)
+    survive_result = _run_survive(entity, life_path, repo, survive_manual, mishap_index)
+    if survive_result and survive_result.get("complication_trait_id"):
+        new_trait_ids.append(survive_result["complication_trait_id"])
 
-    if survive_result and survive_result.get("forced_muster"):
-        # Mishap forced muster-out: record with mishap_muster=True
-        _record_muster(entity, life_path, repo, mishap_muster=True)
+    if survive_result and not survive_result.get("success"):
+        # Survive failure: skip event and advance
+        if survive_result.get("forced_muster"):
+            _record_muster(entity, life_path, repo, mishap_muster=True)
+        logging.warning(f"[SURVIVE] fail — mishap={survive_result.get('mishap_description','?')} forced_muster={survive_result.get('forced_muster')} skipping event+advance")
         return {
             "qualification": qual,
             "learn": learn,
@@ -242,27 +264,15 @@ def take_term(
 
 # ── Phase implementations ─────────────────────────────
 
-def _run_survive(entity, life_path, repo, manual_result: int | None = None) -> dict | None:
+def _run_survive(entity, life_path, repo, manual_result: int | None = None, mishap_index: int | None = None) -> dict | None:
     """Run the survive phase. Returns result dict or None if no survival block."""
     import random
 
     if not life_path.survival:
         return None
 
-    # ── Calculate effective survival difficulty (term penalties) ──
+    # ── Survival difficulty ──────────────────────────
     survival_difficulty = life_path.survival.difficulty
-
-    # Per-path penalty: count terms already served in this path
-    terms_in_path = sum(
-        lt.terms_served for lt in entity.life_history if lt.path_id == life_path.id
-    )
-    if life_path.survival.term_penalty_after and terms_in_path >= life_path.survival.term_penalty_after:
-        survival_difficulty = survival_difficulty.step_up()
-
-    # Global penalty: every 7 total terms
-    global_penalties = (entity.terms_served - 1) // 7  # terms_served already incremented
-    for _ in range(global_penalties):
-        survival_difficulty = survival_difficulty.step_up()
 
     # ── Assemble survival pool ──
     pool_dice: list[tuple[DieType, str]] = []
@@ -300,8 +310,13 @@ def _run_survive(entity, life_path, repo, manual_result: int | None = None) -> d
 
     # ── Mishap ──
     if not survive_success and life_path.survival.mishaps:
-        mishap = random.choice(life_path.survival.mishaps)
+        if mishap_index is not None and 0 <= mishap_index < len(life_path.survival.mishaps):
+            mishap = life_path.survival.mishaps[mishap_index]
+        else:
+            mishap = random.choice(life_path.survival.mishaps)
         survive_data["mishap_description"] = mishap.get("description", "[Mishap]")
+        if mishap.get("must_muster_out"):
+            survive_data["forced_muster"] = True
         effect = mishap.get("effect", {})
         if effect.get("type") == "complication":
             comp_trait_id = effect.get("trait_id", "trait-complication-mishap")
@@ -310,7 +325,7 @@ def _run_survive(entity, life_path, repo, manual_result: int | None = None) -> d
                 entity_id=entity.id,
                 trait_id=comp_trait_id,
                 traitset_id="ts-complications",
-                dice=[effect.get("die_type", DieType.D4)],
+                dice=[DieType(str(effect.get("die_type", "d4")).lower())],
                 negative=True,
                 source_type="life_path_term",
                 source_life_path_id=life_path.id,
@@ -345,12 +360,16 @@ def _run_event(entity, life_path, repo) -> dict | None:
     if effect.get("type") == "create_trait":
         trait_id = effect.get("trait_id", "")
         if trait_id:
+            trait = repo.get_trait(trait_id)
+            resolved_ts = effect.get("traitset_id") or (trait.traitset_id if trait else None)
+            if not resolved_ts:
+                resolved_ts = "ts-complications"
             ts = TraitSetting(
                 id=f"{entity.id}:{trait_id}:evt{entity.terms_served}",
                 entity_id=entity.id,
                 trait_id=trait_id,
-                traitset_id=effect.get("traitset_id") or (repo.get_trait(trait_id).traitset_id if repo.get_trait(trait_id) else ""),
-                dice=[effect.get("die_type", DieType.D4)],
+                traitset_id=resolved_ts,
+                dice=[DieType(str(effect.get("die_type", "d4")).lower())],
                 source_type="event",
                 source_life_path_id=life_path.id,
                 source_term_number=entity.terms_served,

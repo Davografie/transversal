@@ -381,6 +381,8 @@ class Entity:
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
+    current_life_path_id: Optional[str] = None
+    terms_served: int = 0
 
     @strawberry.field
     def projections(self, info: strawberry.Info) -> list[Projection]:
@@ -679,6 +681,7 @@ class SurviveResult:
     roll_summary: str
     mishap_description: Optional[str] = None
     complication_trait_id: Optional[strawberry.ID] = None
+    forced_muster: bool = False
 
 
 @strawberry.type
