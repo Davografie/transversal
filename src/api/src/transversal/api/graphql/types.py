@@ -1,6 +1,7 @@
 """Strawberry GraphQL types — mapping domain models to GraphQL schema."""
 
 import strawberry
+from enum import Enum
 from typing import Optional
 
 from transversal.domain import (
@@ -12,6 +13,16 @@ from transversal.domain import (
     EffectPolarity as DomainEffectPolarity,
     EffectTiming as DomainEffectTiming,
     MessageKind as DomainMessageKind,
+    DiscoveryBlock,
+    QualificationInfo,
+    CurriculumItem,
+    SurvivalInfo,
+    EventItem,
+    RankInfo,
+    AdvancementInfo,
+    MusterOutInfo,
+    LifePath,
+    LifePathType as DomainLifePathType,
 )
 
 
@@ -541,3 +552,91 @@ class RelatedEntity:
     id: strawberry.ID
     name: str
     sheet_portrait: str = ""
+
+
+# ── Life Paths ─────────────────────────────────────────
+
+@strawberry.enum
+class LifePathType(Enum):
+    SECT = "sect"
+    GUILD = "guild"
+    DRIFTER = "drifter"
+    MERCENARY = "mercenary"
+    TRADE = "trade"
+    LINEAGE = "lineage"
+
+
+@strawberry.type
+class DiscoveryBlock:
+    at_location: list[str]
+    knows_entity: list[str]
+    possesses_trait: list[str]
+    has_trait_rating: strawberry.scalars.JSON  # dict[str, DieType]
+    has_relationship: list[str]
+
+
+@strawberry.type
+class QualificationInfo:
+    trait_id: str
+    difficulty: DieType
+    must_be_at_location: Optional[str]
+    draft: Optional[str]
+
+
+@strawberry.type
+class CurriculumItem:
+    trait_id: str
+    create_at: DieType
+    step_up: bool
+    min_rank: int
+
+
+@strawberry.type
+class SurvivalInfo:
+    trait_ids: list[str]
+    difficulty: DieType
+    term_penalty_after: int
+    mishaps: strawberry.scalars.JSON  # list[dict]
+
+
+@strawberry.type
+class EventItem:
+    description: str
+    effect: strawberry.scalars.JSON  # dict
+    min_rank: int
+
+
+@strawberry.type
+class RankInfo:
+    number: int
+    name: str
+    benefits: strawberry.scalars.JSON  # list[dict]
+
+
+@strawberry.type
+class AdvancementInfo:
+    trait_ids: list[str]
+    difficulty: DieType
+    ranks: list[RankInfo]
+
+
+@strawberry.type
+class MusterOutInfo:
+    per_term_benefits: strawberry.scalars.JSON  # list[dict]
+    at_ranks: strawberry.scalars.JSON  # dict[str, list[dict]]
+
+
+@strawberry.type
+class LifePath:
+    id: strawberry.ID
+    name: str
+    universe: str
+    description: str
+    type: LifePathType
+    qualification: Optional[QualificationInfo]
+    discovery: Optional[DiscoveryBlock]
+    curriculum: list[CurriculumItem]
+    survival: Optional[SurvivalInfo]
+    events: list[EventItem]
+    advancement: Optional[AdvancementInfo]
+    muster_out: Optional[MusterOutInfo]

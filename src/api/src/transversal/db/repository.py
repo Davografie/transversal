@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 from transversal.db.arango import (
     ENTITIES,
     ENTITY_IMAGES,
+    LIFE_PATHS,
     PLAYERS,
     PROJECTIONS,
     RELATIONSHIPS,
@@ -31,6 +32,7 @@ from transversal.domain import (
     EntityImage,
     EntityType,
     ImageType,
+    LifePath,
     Message,
     Projection,
     SFX,
@@ -55,6 +57,7 @@ class EntityRepository:
         self._traitsets = self.db.collection(TRAITSETS)
         self._traitsettings = self.db.collection(TRAITSETTINGS)
         self._sfxs = self.db.collection(SFXS)
+        self._life_paths = self.db.collection(LIFE_PATHS)
         self._relationships = self.db.collection(RELATIONSHIPS)
         self._players = self.db.collection(PLAYERS)
         self._entity_images = self.db.collection(ENTITY_IMAGES)
@@ -377,6 +380,50 @@ class EntityRepository:
     def delete_sfx(self, sfx_id: str) -> bool:
         try:
             self._sfxs.delete(sfx_id)
+            return True
+        except Exception:
+            return False
+
+    # ── Life Paths ────────────────────────────────────
+
+    def create_lifepath(self, lp: LifePath) -> LifePath:
+        doc = lp.model_dump()
+        doc["_key"] = lp.id
+        self._life_paths.insert(doc)
+        return lp
+
+    def get_lifepath(self, lp_id: str) -> Optional[LifePath]:
+        doc = self._life_paths.get(lp_id)
+        return LifePath.model_validate({**doc, "id": doc["_key"]}) if doc else None
+
+    def list_lifepaths_by_universe(self, universe: str) -> list[LifePath]:
+        query = f"""
+            FOR lp IN {LIFE_PATHS}
+            FILTER lp.universe == @universe
+            SORT lp.name ASC
+            RETURN lp
+        """
+        return [
+            LifePath.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"universe": universe})
+        ]
+
+    def list_all_lifepaths(self) -> list[LifePath]:
+        query = f"FOR lp IN {LIFE_PATHS} SORT lp.universe ASC, lp.name ASC RETURN lp"
+        return [
+            LifePath.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
+        ]
+
+    def update_lifepath(self, lp: LifePath) -> LifePath:
+        doc = lp.model_dump()
+        doc["_key"] = lp.id
+        self._life_paths.replace(doc)
+        return lp
+
+    def delete_lifepath(self, lp_id: str) -> bool:
+        try:
+            self._life_paths.delete(lp_id)
             return True
         except Exception:
             return False
