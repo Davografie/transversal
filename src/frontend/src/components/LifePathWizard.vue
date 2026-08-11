@@ -1,103 +1,32 @@
 <template>
-  <div v-if="visible" class="wizard-backdrop" @click.self="$emit('close')">
+  <!-- Modal overlay (non-embedded) -->
+  <div v-if="visible && !embedded" class="wizard-backdrop" @click.self="$emit('close')">
     <div class="wizard-panel">
       <div class="wizard-header">
         <h2>{{ selectedPath ? selectedPath.name : 'Life Path' }}</h2>
         <button class="wiz-close" @click="$emit('close')">✕</button>
       </div>
-
-      <!-- Step 0: Choose Path -->
-      <div v-if="step === 'choose'" class="wiz-body">
-        <p class="wiz-hint">Choose a life path to take a term in.</p>
-        <div v-if="loadingPaths" class="wiz-loading">Loading…</div>
-        <div v-else-if="!paths.length" class="wiz-empty">No life paths available in this universe.</div>
-        <div v-else class="wiz-path-list">
-          <button v-for="lp in paths" :key="lp.id" class="wiz-path-btn" @click="startPath(lp)">
-            <span class="wiz-path-name">{{ lp.name }}</span>
-            <span class="wiz-path-type">{{ lp.type }}</span>
-            <span class="wiz-path-desc">{{ truncate(lp.description, 60) }}</span>
-          </button>
-        </div>
+      <div class="wiz-body">
+        <wizard-steps />
       </div>
-
-      <!-- Phase steps: qual → learn → survive → event → advance -->
-      <div v-else-if="phaseIdx >= 0 && phaseIdx < phases.length" class="wiz-body">
-        <p class="wiz-phase-label">{{ phaseLabel }}</p>
-        <p class="wiz-phase-hint">{{ phaseHint }}</p>
-
-        <!-- Outcome table (clickable rows) -->
-        <div v-if="showTable" class="wiz-table">
-          <button v-for="row in outcomeRows" :key="row.label"
-            class="wiz-table-row" :class="{ selected: row.selected }"
-            @click="selectRow(row)">
-            <span class="wiz-row-range">{{ row.label }}</span>
-            <span class="wiz-row-desc">{{ row.desc }}</span>
-            <span v-if="row.selected" class="wiz-row-check">✓</span>
-          </button>
-        </div>
-
-        <!-- Curriculum / event list (for learn/event phases) -->
-        <div v-else-if="showList" class="wiz-list">
-          <div v-for="item in listItems" :key="item.label" class="wiz-list-item">
-            <span>{{ item.label }}</span>
-            <span class="wiz-list-desc">{{ item.desc }}</span>
-          </div>
-        </div>
-
-        <div class="wiz-phase-actions">
-          <button v-if="showRoll" class="wiz-next" @click="executeTerm">🎲 Roll</button>
-          <button v-if="manualValue !== null || !showTable" class="wiz-next" @click="nextPhase">Continue →</button>
-          <button class="wiz-back" @click="prevPhase">← Back</button>
-        </div>
-      </div>
-
-      <!-- Results summary -->
-      <div v-else-if="step === 'results'" class="wiz-body">
-        <p class="wiz-phase-label">Term Complete — #{{ result.termNumber }}</p>
-        <div v-if="result.qualification" class="wiz-result" :class="result.qualification.success ? 'wiz-good' : 'wiz-bad'">
-          Qualification: {{ result.qualification.success ? '✅' : '❌' }}
-          <span v-if="result.qualification.drafted">(drafted)</span>
-        </div>
-        <div v-if="result.learn" class="wiz-result wiz-good">
-          {{ result.learn.wasSteppedUp ? '📈' : '📖' }} {{ displayName(result.learn.traitName) }}
-        </div>
-        <div v-if="result.survive" class="wiz-result" :class="result.survive.success ? 'wiz-good' : 'wiz-bad'">
-          {{ result.survive.rollSummary }}
-          <span v-if="result.survive.mishapDescription">💀 {{ result.survive.mishapDescription }}</span>
-        </div>
-        <div v-if="result.event" class="wiz-result wiz-good">📋 {{ result.event.description }}</div>
-        <div v-if="result.advance" class="wiz-result" :class="result.advance.success ? 'wiz-good' : 'wiz-dim'">
-          {{ result.advance.success ? '🏆 ' + result.advance.rankName : 'No advancement' }}
-        </div>
-        <div class="wiz-done-actions">
-          <button class="wiz-next" @click="resetWizard">🔄 Another Term</button>
-          <button class="wiz-muster-btn" @click="doMusterOut">🏁 Muster Out</button>
-          <button class="wiz-done-btn" @click="$emit('close')">Done</button>
-        </div>
-      </div>
-
-      <!-- Muster Out Result -->
-      <div v-else-if="step === 'mustered'" class="wiz-body">
-        <p class="wiz-phase-label">Mustered Out</p>
-        <div v-if="musterResult" class="wiz-result wiz-good">
-          <p>🎉 {{ musterResult.pathName }}</p>
-          <p v-if="musterResult.benefits.length">{{ musterResult.benefits.join(', ') }}</p>
-          <p>💰 +{{ musterResult.razmeritGained }} razmerit</p>
-        </div>
-        <button class="wiz-done-btn" @click="$emit('close')">Done</button>
-      </div>
-
       <div v-if="executing" class="wiz-loading-overlay">⏳</div>
     </div>
+  </div>
+
+  <!-- Embedded inside character sheet -->
+  <div v-else-if="visible && embedded" class="wiz-embedded">
+    <wizard-steps />
+    <div v-if="executing" class="wiz-loading-inline">⏳ Rolling…</div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, defineComponent, h } from 'vue'
 import { useApi } from '../composables/useApi.js'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
   entityId: { type: String, required: true },
   universe: { type: String, default: 'earth' },
 })
@@ -113,7 +42,7 @@ const selectedPath = ref(null)
 const result = ref({})
 const musterResult = ref(null)
 const phaseIdx = ref(0)
-const manualValues = ref({})  // phase → manual result
+const manualValues = ref({})
 const manualValue = ref(null)
 
 const phases = ['qual', 'learn', 'survive', 'event', 'advance']
@@ -122,16 +51,12 @@ const phaseLabels = { qual: 'Qualification', learn: 'Learn', survive: 'Survive',
 function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : s || '' }
 function displayName(name) { return (name || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }
 
-// ── Outcome tables ────────────────────────────────
-
 const qualDifficulty = computed(() => selectedPath.value?.qualification?.difficulty || 'D4')
 const surviveDifficulty = computed(() => selectedPath.value?.survival?.difficulty || 'D6')
 const advanceDifficulty = computed(() => selectedPath.value?.advancement?.difficulty || 'D6')
-
 const showTable = computed(() => ['qual', 'survive', 'advance'].includes(phases[phaseIdx.value]))
 const showList = computed(() => phases[phaseIdx.value] === 'learn' || phases[phaseIdx.value] === 'event')
 const showRoll = computed(() => showTable.value && manualValue.value === null)
-
 const phaseLabel = computed(() => phaseLabels[phases[phaseIdx.value]] || '')
 const phaseHint = computed(() => {
   const p = phases[phaseIdx.value]
@@ -160,15 +85,8 @@ function buildOutcomeRows(phase) {
     { label: '9–10', value: 9, tier: 'exceptional', desc: '🌟 Exceptional', selected: selected === 9 },
     { label: '11–12', value: 11, tier: 'perfect', desc: '💎 Perfect', selected: selected === 11 },
   ]
-  if (phase === 'survive') {
-    // Override descriptions for survival
-    base[0].desc = '❌ Mishap — suffer consequences'
-    base[1].desc = '⚠️ Barely survived'
-  }
-  if (phase === 'advance') {
-    base[0].desc = '❌ No promotion'
-    base[1].desc = '❌ No promotion'
-  }
+  if (phase === 'survive') { base[0].desc = '❌ Mishap — suffer consequences'; base[1].desc = '⚠️ Barely survived' }
+  if (phase === 'advance') { base[0].desc = '❌ No promotion'; base[1].desc = '❌ No promotion' }
   return base
 }
 
@@ -188,65 +106,18 @@ const listItems = computed(() => {
   return []
 })
 
-function selectRow(row) {
-  const p = phases[phaseIdx.value]
-  manualValues.value[p] = row.value
-  manualValue.value = row.value
-}
-
-// ── Navigation ────────────────────────────────────
-
-function nextPhase() {
-  manualValue.value = null
-  if (phaseIdx.value < phases.length - 1) {
-    phaseIdx.value++
-  } else {
-    step.value = 'results'
-  }
-}
-function prevPhase() {
-  if (phaseIdx.value > 0) {
-    phaseIdx.value--
-    manualValue.value = manualValues.value[phases[phaseIdx.value]] || null
-  } else {
-    resetWizard()
-  }
-}
-
-function startPath(lp) {
-  selectedPath.value = lp
-  phaseIdx.value = 0
-  manualValues.value = {}
-  manualValue.value = null
-  result.value = {}
-  step.value = 'configure'
-}
-
-// ── Execute ───────────────────────────────────────
+function selectRow(row) { manualValues.value[phases[phaseIdx.value]] = row.value; manualValue.value = row.value }
+function nextPhase() { manualValue.value = null; phaseIdx.value = phaseIdx.value < phases.length - 1 ? phaseIdx.value + 1 : phaseIdx.value; if (phaseIdx.value >= phases.length) step.value = 'results' }
+function prevPhase() { if (phaseIdx.value > 0) { phaseIdx.value--; manualValue.value = manualValues.value[phases[phaseIdx.value]] || null } else resetWizard() }
+function startPath(lp) { selectedPath.value = lp; phaseIdx.value = 0; manualValues.value = {}; manualValue.value = null; result.value = {}; step.value = 'configure' }
 
 async function executeTerm() {
-  // Collect manual values
   const qm = manualValues.value['qual'] ?? null
   const sm = manualValues.value['survive'] ?? null
   const am = manualValues.value['advance'] ?? null
-
   executing.value = true
-  const query = `
-    mutation($eid: ID!, $lpid: ID!, $qm: Int, $sm: Int, $am: Int) {
-      takeTerm(entityId: $eid, lifePathId: $lpid, qualManual: $qm, surviveManual: $sm, advanceManual: $am) {
-        qualification { success drafted draftedPathId locationBlocked }
-        learn { traitGainedId traitName wasSteppedUp }
-        survive { success rollSummary mishapDescription }
-        event { eventIndex description }
-        advance { success newRank rankName }
-        termNumber razmeritChange
-      }
-    }
-  `
-  const data = await graphql(query, {
-    eid: props.entityId, lpid: selectedPath.value.id,
-    qm, sm, am,
-  })
+  const query = `mutation($eid: ID!, $lpid: ID!, $qm: Int, $sm: Int, $am: Int) { takeTerm(entityId: $eid, lifePathId: $lpid, qualManual: $qm, surviveManual: $sm, advanceManual: $am) { qualification { success drafted locationBlocked } learn { traitGainedId traitName wasSteppedUp } survive { success rollSummary mishapDescription } event { eventIndex description } advance { success newRank rankName } termNumber } }`
+  const data = await graphql(query, { eid: props.entityId, lpid: selectedPath.value.id, qm, sm, am })
   result.value = data?.takeTerm || {}
   executing.value = false
   step.value = 'results'
@@ -263,15 +134,7 @@ async function doMusterOut() {
   emit('updated')
 }
 
-function resetWizard() {
-  step.value = 'choose'
-  phaseIdx.value = 0
-  manualValues.value = {}
-  manualValue.value = null
-  result.value = {}
-  selectedPath.value = null
-  loadPaths()
-}
+function resetWizard() { step.value = 'choose'; phaseIdx.value = 0; manualValues.value = {}; manualValue.value = null; result.value = {}; selectedPath.value = null; loadPaths() }
 
 async function loadPaths() {
   loadingPaths.value = true
@@ -281,16 +144,107 @@ async function loadPaths() {
   loadingPaths.value = false
 }
 
+// ── Render function for shared steps content ──────
+const WizardSteps = defineComponent({
+  setup() {
+    // Access parent's state via closure (same module scope)
+    return () => {
+      const s = step.value
+      if (s === 'choose') {
+        return h('div', [
+          h('p', { class: 'wiz-hint' }, 'Choose a life path to take a term in.'),
+          loadingPaths.value
+            ? h('div', { class: 'wiz-loading' }, 'Loading…')
+            : paths.value.length === 0
+              ? h('div', { class: 'wiz-empty' }, 'No life paths available in this universe.')
+              : h('div', { class: 'wiz-path-list' }, paths.value.map(lp =>
+                  h('button', { class: 'wiz-path-btn', key: lp.id, onClick: () => startPath(lp) }, [
+                    h('span', { class: 'wiz-path-name' }, lp.name),
+                    h('span', { class: 'wiz-path-type' }, lp.type),
+                    h('span', { class: 'wiz-path-desc' }, truncate(lp.description, 60)),
+                  ])
+                )),
+        ])
+      }
+      if (s === 'configure' && phaseIdx.value < phases.length) {
+        const rows = outcomeRows.value
+        const items = listItems.value
+        return h('div', [
+          h('p', { class: 'wiz-phase-label' }, phaseLabel.value),
+          h('p', { class: 'wiz-phase-hint' }, phaseHint.value),
+          showTable.value
+            ? h('div', { class: 'wiz-table' }, rows.map(row =>
+                h('button', {
+                  class: 'wiz-table-row' + (row.selected ? ' selected' : ''),
+                  key: row.label, onClick: () => selectRow(row)
+                }, [
+                  h('span', { class: 'wiz-row-range' }, row.label),
+                  h('span', { class: 'wiz-row-desc' }, row.desc),
+                  row.selected ? h('span', { class: 'wiz-row-check' }, '✓') : null,
+                ])
+              ))
+            : showList.value
+              ? h('div', { class: 'wiz-list' }, items.map(item =>
+                  h('div', { class: 'wiz-list-item', key: item.label }, [
+                    h('span', null, item.label),
+                    h('span', { class: 'wiz-list-desc' }, item.desc),
+                  ])
+                ))
+              : null,
+          h('div', { class: 'wiz-phase-actions' }, [
+            showRoll.value ? h('button', { class: 'wiz-next', onClick: executeTerm }, '🎲 Roll') : null,
+            (manualValue.value !== null || !showTable.value)
+              ? h('button', { class: 'wiz-next', onClick: nextPhase }, 'Continue →') : null,
+            h('button', { class: 'wiz-back', onClick: prevPhase }, '← Back'),
+          ]),
+        ])
+      }
+      if (s === 'results') {
+        const r = result.value
+        return h('div', [
+          h('p', { class: 'wiz-phase-label' }, `Term Complete — #${r.termNumber || '?'}`),
+          r.qualification ? h('div', { class: 'wiz-result ' + (r.qualification.success ? 'wiz-good' : 'wiz-bad') }, `Qualification: ${r.qualification.success ? '✅' : '❌'}${r.qualification.drafted ? ' (drafted)' : ''}`) : null,
+          r.learn ? h('div', { class: 'wiz-result wiz-good' }, `${r.learn.wasSteppedUp ? '📈' : '📖'} ${displayName(r.learn.traitName)}`) : null,
+          r.survive ? h('div', { class: 'wiz-result ' + (r.survive.success ? 'wiz-good' : 'wiz-bad') }, [r.survive.rollSummary, r.survive.mishapDescription ? ` 💀 ${r.survive.mishapDescription}` : '']) : null,
+          r.event ? h('div', { class: 'wiz-result wiz-good' }, `📋 ${r.event.description}`) : null,
+          r.advance ? h('div', { class: 'wiz-result ' + (r.advance.success ? 'wiz-good' : 'wiz-dim') }, r.advance.success ? `🏆 ${r.advance.rankName}` : 'No advancement') : null,
+          h('div', { class: 'wiz-done-actions' }, [
+            h('button', { class: 'wiz-next', onClick: resetWizard }, '🔄 Another Term'),
+            h('button', { class: 'wiz-muster-btn', onClick: doMusterOut }, '🏁 Muster Out'),
+            h('button', { class: 'wiz-done-btn', onClick: () => emit('close') }, 'Done'),
+          ]),
+        ])
+      }
+      if (s === 'mustered') {
+        const mr = musterResult.value
+        return h('div', [
+          h('p', { class: 'wiz-phase-label' }, 'Mustered Out'),
+          mr ? h('div', { class: 'wiz-result wiz-good' }, [
+            h('p', null, `🎉 ${mr.pathName}`),
+            mr.benefits?.length ? h('p', null, mr.benefits.join(', ')) : null,
+            h('p', null, `💰 +${mr.razmeritGained} razmerit`),
+          ]) : null,
+          h('button', { class: 'wiz-done-btn', onClick: () => emit('close') }, 'Done'),
+        ])
+      }
+      return h('div', { class: 'wiz-empty' }, '...')
+    }
+  }
+})
+
 watch(() => props.visible, (v) => { if (v) resetWizard() }, { immediate: true })
 </script>
 
 <style scoped>
 .wizard-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.6); display: flex; align-items: safe center; justify-content: center; padding: 20px; }
 .wizard-panel { background: var(--bg-panel); backdrop-filter: blur(16px); border-radius: var(--radius); border: 1px solid var(--border); width: 420px; max-width: 95vw; max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; position: relative; }
-.wizard-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.wizard-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .wizard-header h2 { font-size: 16px; margin: 0; }
 .wiz-close { background: none; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; }
 .wiz-body { padding: 16px; flex: 1; min-height: 0; overflow-y: auto; }
+
+.wiz-embedded { padding: 0 0 12px 0; }
+
 .wiz-hint { color: var(--text-dim); margin: 0 0 12px; font-size: 13px; }
 .wiz-loading, .wiz-empty { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
 .wiz-path-list { display: flex; flex-direction: column; gap: 6px; }
@@ -325,7 +279,7 @@ watch(() => props.visible, (v) => { if (v) resetWizard() }, { immediate: true })
 .wiz-good { background: rgba(0,200,100,0.1); color: #4c4; }
 .wiz-bad { background: rgba(200,50,50,0.1); color: #c55; }
 .wiz-dim { background: var(--bg-input); color: var(--text-dim); }
-
 .wiz-done-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
 .wiz-loading-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 20px; z-index: 10; }
+.wiz-loading-inline { padding: 12px; text-align: center; color: var(--text-dim); font-size: 14px; }
 </style>
