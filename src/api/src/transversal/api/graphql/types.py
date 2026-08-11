@@ -286,7 +286,7 @@ class TraitSetting:
         return ts.limit if ts else 1
 
     @strawberry.field
-    def transfer_flags(self, info: strawberry.Info):
+    def transfer_flags(self, info: strawberry.Info) -> strawberry.scalars.JSON:
         """Resolve transfer flags from trait registry (trait → traitset fallback)."""
         from transversal.domain import TransferFlags as DomainTransferFlags
         em = info.context["entity_manager"]

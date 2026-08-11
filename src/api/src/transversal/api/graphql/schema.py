@@ -9,6 +9,7 @@ from transversal.api.graphql.types import (
     CreateEntityInput,
     CreateRelationshipInput,
     DeleteRelationshipInput,
+    DieType as GqlDieType,
     EffectActionMeta as GqlEffectActionMeta,
     EffectFieldDef as GqlEffectFieldDef,
     Entity,
@@ -807,6 +808,29 @@ class Mutation:
         return repo.delete_relationship(
             str(input.from_entity_id), str(input.to_entity_id), input.type,
         )
+
+    @strawberry.mutation
+    def add_relationship_trait(self, info: strawberry.Info, from_entity_id: strawberry.ID,
+                               to_entity_id: strawberry.ID, rel_type: str = "relation",
+                               trait_id: strawberry.ID = "", die: GqlDieType = GqlDieType.D6) -> TraitSetting:
+        """Create a rated trait on a relationship edge."""
+        repo = _em(info).repo
+        edge_key = f"edge:{from_entity_id}:{to_entity_id}:{rel_type}"
+        # Ensure the relationship edge exists
+        rel = repo.get_relationship(str(from_entity_id), str(to_entity_id), rel_type)
+        if not rel:
+            repo.create_relationship(str(from_entity_id), str(to_entity_id), rel_type)
+
+        ts = DomainTraitSetting(
+            id=f"{edge_key}:{trait_id}",
+            entity_id=edge_key,
+            trait_id=str(trait_id),
+            traitset_id="ts-relations",
+            from_type="relationship",
+            dice=[die],
+        )
+        created = repo.create_traitsetting(ts)
+        return _ts_to_gql(created)
 
     @strawberry.mutation
     def update_message(self, info: strawberry.Info, input: UpdateMessageInput) -> bool:

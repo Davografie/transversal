@@ -15,7 +15,20 @@
               <button class="rel-btn rel-del" @click.stop="removeRelationship" title="Remove relationship">✕</button>
               <button class="rel-btn rel-send" @click.stop="openBlueBookLetter" title="Send letter">✉</button>
             </template>
-            <button v-else class="rel-btn rel-add" @click.stop="createImmediateRelationship" title="Add relationship">+</button>
+            <template v-else-if="showRelTypePicker">
+              <div class="rel-type-picker" @click.stop>
+                <select v-model="newRelType" class="rel-type-select">
+                  <option v-for="rt in relationTypes" :key="rt.id" :value="rt.id">{{ rt.name }}</option>
+                </select>
+                <select v-model="newRelRating" class="rel-rating-select">
+                  <option v-for="d in ['d4','d6','d8','d10','d12']" :key="d" :value="d">{{ d }}</option>
+                </select>
+                <input ref="relInput" v-model="relDescription" placeholder="Describe…" @keyup.enter="saveRatedRelationship" @keyup.escape="showRelTypePicker = false" />
+                <button class="rel-btn rel-save" @click="saveRatedRelationship">✓</button>
+                <button class="rel-btn rel-cancel" @click="showRelTypePicker = false">✕</button>
+              </div>
+            </template>
+            <button v-else class="rel-btn rel-add" @click.stop="showRelTypePicker = true" title="Add rated relationship">+</button>
             <div v-if="showRelEditor" class="rel-editor" @click.stop>
               <input ref="relInput" v-model="relDescription" placeholder="Describe relationship…" @keyup.enter="saveRelationship" @keyup.escape="showRelEditor = false" />
               <button class="rel-btn rel-save" @click="saveRelationship">✓</button>
@@ -23,6 +36,7 @@
             </div>
           </div>
           <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn bb-open-btn" @click.stop="showBlueBook = !showBlueBook" :title="showBlueBook ? 'Close Blue Book' : 'Blue Book'">{{ showBlueBook ? '🎲' : '📘' }}</button>
+          <button v-if="!gmMode && ownsCharacter" class="sheet-settings-btn lp-btn" @click.stop="showWizard = !showWizard" title="Life Path">🛤️</button>
           <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
         </div>
         <div v-if="gmMode" class="meta">
@@ -37,6 +51,14 @@
         :entity-name="entity?.name || ''"
         :visible="true"
         embedded
+      />
+      <LifePathWizard
+        v-if="showWizard"
+        :visible="showWizard"
+        :entity-id="overrideEntityId || entityId"
+        :universe="entity?.currentUniverse || 'earth'"
+        @close="showWizard = false"
+        @updated="fetchEntity"
       />
       <template v-else>
         <div class="razmerit">
@@ -149,6 +171,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
+import LifePathWizard from './LifePathWizard.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -182,7 +205,22 @@ const relDescription = ref('')
 const relInput = ref(null)
 const blueBookRef = ref(null)
 
+// Rated relationship creation
+const showRelTypePicker = ref(false)
+const newRelType = ref('trait-relation-trust')
+const newRelRating = ref('d6')
+const relationTypes = [
+  { id: 'trait-relation-trust', name: 'Trust' },
+  { id: 'trait-relation-debt', name: 'Debt' },
+  { id: 'trait-relation-rivalry', name: 'Rivalry' },
+  { id: 'trait-relation-loyalty', name: 'Loyalty' },
+  { id: 'trait-relation-fear', name: 'Fear' },
+  { id: 'trait-relation-love', name: 'Love' },
+  { id: 'trait-relation-duty', name: 'Duty' },
+]
+
 const showBlueBook = ref(false)
+const showWizard = ref(false)
 
 const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
@@ -798,6 +836,32 @@ async function createImmediateRelationship() {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
   })
+  await fetchRelationship()
+}
+
+async function saveRatedRelationship() {
+  if (!props.viewerEntityId || !props.overrideEntityId) return
+  const dmap = { d4: 'D4', d6: 'D6', d8: 'D8', d10: 'D10', d12: 'D12' }
+  const query = `
+    mutation($from: ID!, $to: ID!, $relType: String!, $traitId: ID!, $die: DieType!) {
+      createRelationship(input: { fromEntityId: $from, toEntityId: $to, description: $desc }) { description }
+      addRelationshipTrait(fromEntityId: $from, toEntityId: $to, relType: $relType, traitId: $traitId, die: $die) { id dice }
+    }
+  `
+  try {
+    await graphql(query, {
+      from: props.viewerEntityId,
+      to: props.overrideEntityId,
+      relType: 'relation',
+      traitId: newRelType.value,
+      die: dmap[newRelRating.value],
+      desc: relDescription.value || '',
+    })
+  } catch (e) {
+    console.error('saveRatedRelationship:', e)
+  }
+  showRelTypePicker.value = false
+  relDescription.value = ''
   await fetchRelationship()
 }
 
