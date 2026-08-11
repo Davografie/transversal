@@ -74,6 +74,15 @@
                     @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
                     :title="sfxActive(sfxId) ? `Deactivate ${sfxId}` : `Activate ${sfxId}`"
                   >{{ sfxId.replace('sfx-', '') }}</button>
+                  <button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.teachable"
+                    class="transfer-btn teach-btn" @click.stop="showTeachPicker(t)"
+                    title="Teach this trait">🎓</button>
+                  <button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.giftable"
+                    class="transfer-btn gift-btn" @click.stop="giftTraitAction(t)"
+                    title="Gift this trait">🎁</button>
+                  <button v-if="isForeignSheet && t.transferFlags?.takable"
+                    class="transfer-btn take-btn" @click.stop="takeTraitAction(t)"
+                    title="Take this trait">🫳</button>
                 </div>
               </div>
               <div v-else class="trait-row unknown-trait">
@@ -467,6 +476,7 @@ const QUERY = `
         traitsetLimit
         knownTo
         possibleSfxIds
+        transferFlags
       }
     }
   }
@@ -814,6 +824,110 @@ async function removeRelationship() {
   })
   relationship.value = null
   showRelEditor.value = false
+}
+
+// ── Trait Transfer ─────────────────────────────────
+
+const showTransferPicker = ref(false)
+const transferTargetId = ref('')
+const transferTrait = ref(null)
+const transferMode = ref('') // 'teach' | 'gift' | 'take'
+const relatedForTransfer = ref([])
+
+async function loadRelatedForTransfer() {
+  const id = props.overrideEntityId || props.entityId
+  const query = `
+    query($id: ID!, $q: String!) {
+      relatedEntities(entityId: $id, query: $q) { id name }
+    }
+  `
+  const data = await graphql(query, { id, q: '' })
+  relatedForTransfer.value = data?.relatedEntities || []
+}
+
+function showTeachPicker(t) {
+  transferTrait.value = t
+  transferMode.value = 'teach'
+  transferTargetId.value = ''
+  loadRelatedForTransfer()
+  showTransferPicker.value = true
+}
+
+async function giftTraitAction(t) {
+  const targetId = prompt('Enter recipient entity ID to gift this trait to:')
+  if (!targetId || targetId === props.entityId) return
+  const query = `
+    mutation($giver: ID!, $recipient: ID!, $tsId: ID!) {
+      giftTrait(giverId: $giver, recipientId: $recipient, traitSettingId: $tsId) {
+        transferredTraitId
+      }
+    }
+  `
+  try {
+    await graphql(query, {
+      giver: props.entityId,
+      recipient: targetId,
+      tsId: t.id,
+    })
+    await fetchEntity()
+  } catch (e) {
+    console.error('giftTrait failed:', e)
+    alert('Gift failed. Both characters must be in the same location.')
+  }
+}
+
+async function takeTraitAction(t) {
+  const method = prompt('Take method? (stealth, combat, social, technical)', 'stealth') || 'stealth'
+  const query = `
+    mutation($taker: ID!, $victim: ID!, $tsId: ID!, $method: String!) {
+      takeTrait(takerId: $taker, victimId: $victim, traitSettingId: $tsId, method: $method) {
+        success contestSummary transferredTraitId
+      }
+    }
+  `
+  try {
+    const data = await graphql(query, {
+      taker: props.viewerEntityId,
+      victim: props.overrideEntityId,
+      tsId: t.id,
+      method,
+    })
+    const result = data?.takeTrait
+    if (result?.success) {
+      alert(`Taken! ${result.contestSummary}`)
+      await fetchEntity()
+    } else {
+      alert(`Failed! ${result?.contestSummary}`)
+    }
+  } catch (e) {
+    console.error('takeTrait failed:', e)
+  }
+}
+
+async function confirmTransfer() {
+  if (!transferTargetId.value || !transferTrait.value) return
+  if (transferMode.value === 'teach') {
+    const query = `
+      mutation($teacher: ID!, $student: ID!, $tsId: ID!) {
+        teachTrait(teacherId: $teacher, studentId: $student, traitSettingId: $tsId) {
+          studentTraitSettingId razmeritCost
+        }
+      }
+    `
+    try {
+      await graphql(query, {
+        teacher: props.entityId,
+        student: transferTargetId.value,
+        tsId: transferTrait.value.id,
+      })
+      await fetchEntity()
+    } catch (e) {
+      console.error('teachTrait failed:', e)
+      alert('Teach failed. Both characters must be in the same location.')
+    }
+  }
+  showTransferPicker.value = false
+  transferTrait.value = null
 }
 
 watch(() => props.overrideEntityId, () => {
