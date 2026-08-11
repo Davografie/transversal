@@ -37,15 +37,51 @@ async def navigate(location_id: str):
     from transversal.db.repository import EntityRepository
     from transversal.domain import ImageType
     repo = EntityRepository()
-    for occ in result.get("occupants", []):
-        images = repo.get_entity_images(occ["id"])
+
+    def _resolve_navdot(entity: dict) -> str | None:
+        eid = (entity or {}).get("_key") or (entity or {}).get("id")
+        if not eid:
+            return None
+        images = repo.get_entity_images(eid)
         for img in images:
             if "navdot" in img.roles:
                 if img.image_type == ImageType.ANIMATED:
-                    occ["image"] = f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
                 else:
-                    occ["image"] = f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
-                break
+                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+        return None
+
+    for occ in result.get("occupants", []):
+        nav = _resolve_navdot(occ)
+        if nav:
+            occ["image"] = nav
+
+    for child in result.get("children", []):
+        nav = _resolve_navdot(child)
+        if nav:
+            child["navdot_image"] = nav
+
+    for trans in result.get("transversal", []):
+        nav = _resolve_navdot(trans)
+        if nav:
+            trans["navdot_image"] = nav
+
+    parent = result.get("parent")
+    if parent:
+        nav = _resolve_navdot(parent)
+        if nav:
+            parent["navdot_image"] = nav
+
+    # Populate zone location_id by matching children to zones by name
+    children = result.get("children", [])
+    zones = result.get("location", {}).get("zones", [])
+    for child in children:
+        child_name = child.get("name", "")
+        child_key = child.get("_key", "")
+        if child_name and child_key:
+            for zone in zones:
+                if zone.get("name") == child_name and not zone.get("location_id"):
+                    zone["location_id"] = child_key
 
     return result
 
@@ -149,6 +185,7 @@ class ZoneUpdate(BaseModel):
     x: float
     y: float
     background_image: str | None = None
+    location_id: str | None = None
 
 
 @router.put("/locations/{location_id}/zones")
@@ -160,7 +197,7 @@ async def update_zones(location_id: str, zones: list[ZoneUpdate]):
         raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
 
     entity.zones = [
-        Zone(name=z.name, x=z.x, y=z.y, background_image=z.background_image)
+        Zone(name=z.name, x=z.x, y=z.y, background_image=z.background_image, location_id=z.location_id)
         for z in zones
     ]
     repo.update_entity(entity)

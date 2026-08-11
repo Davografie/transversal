@@ -47,7 +47,7 @@
       v-if="showElements"
       type="zone"
       :x="parallaxX(z.x)" :y="parallaxY(z.y)"
-      :image="childImage(z.name)"
+      :image="childImage(z)"
       :label="z.name"
       :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name"
       :draggable="editZones"
@@ -760,14 +760,13 @@ async function onOccDragEnd() {
     const t = dragTarget
     dragTarget = null
     if (t.type === 'zone') {
-      const children = nav.value.children || []
-      const child = children.find(c => c.name === t.name)
-      if (child) {
-        const zone = zones.value.find(z => z.name === t.name)
-        if (zone) {
+      const zone = zones.value.find(z => z.name === t.name)
+      if (zone) {
+        const child = childForZone(zone)
+        if (child) {
           travelWithAnimation(zone, child)
         } else {
-          moveTo(child._key, child.current_universe)
+          moveTo(zone.location_id || child?._key || '', '')
         }
         return
       }
@@ -855,15 +854,23 @@ async function moveTo(locationId, universe) {
 
 // ── Child location image lookup ────────────────────
 
-function childImage(zoneName) {
+function childForZone(zone) {
+  // Match zone to child by location_id first, then by name
   const children = nav.value.children || []
-  const child = children.find(c => c.name === zoneName)
-  return child?.background_image || null
+  if (zone.location_id) {
+    const byId = children.find(c => c._key === zone.location_id)
+    if (byId) return byId
+  }
+  return children.find(c => c.name === zone.name) || null
 }
 
-function childId(zoneName) {
-  const children = nav.value.children || []
-  const child = children.find(c => c.name === zoneName)
+function childImage(zone) {
+  const child = childForZone(zone)
+  return child?.navdot_image || child?.background_image || null
+}
+
+function childId(zone) {
+  const child = childForZone(zone)
   return child?._key || null
 }
 
@@ -1081,8 +1088,7 @@ function placeCharacterAtSource(sourceId) {
 function onExpandedClick(type, item) {
   if (props.editZones) return
   if (type === 'zone') {
-    const children = nav.value.children || []
-    const child = children.find(c => c.name === item.name)
+    const child = childForZone(item)
     if (child) {
       travelWithAnimation(item, child)
     }

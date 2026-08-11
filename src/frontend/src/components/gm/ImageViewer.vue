@@ -23,7 +23,7 @@
         <option v-for="u in availableUniverses" :key="u.key" :value="u.key">{{ u.name }}</option>
       </select>
     </div>
-    <div class="image-meta">{{ alt }}<span v-if="sizeBytes" class="meta-size"> · {{ formatBytes(sizeBytes) }}</span></div>
+    <div class="image-meta">{{ alt }}<span v-if="fileExt" class="meta-ext"> · {{ fileExt }}</span><span v-if="sizeBytes" class="meta-size"> · {{ formatBytes(sizeBytes) }}</span></div>
     <div v-if="message" class="message">{{ message }}</div>
 
     <div class="danger-zone">
@@ -53,6 +53,7 @@ const animating = ref(false)
 
 const activeSrc = computed(() => props.imageType === 'animated' && props.animatedSrc ? props.animatedSrc : props.src)
 const isVideo = computed(() => /\.(webm|mp4)(\?|$)/i.test(activeSrc.value))
+const fileExt = computed(() => { const m = activeSrc.value.match(/\.(\w+)(\?|$)/); return m ? m[1] : '' })
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return ''
@@ -239,6 +240,7 @@ async function onDelete() {
 
 .image-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
 .meta-size { color: var(--accent); }
+.meta-ext { color: var(--text-dim); text-transform: uppercase; }
 .message { font-size: 11px; color: var(--accent); margin-top: 6px; }
 
 .danger-zone {

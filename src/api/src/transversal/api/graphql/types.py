@@ -323,6 +323,7 @@ class Projection:
 class Zone:
     name: str
     background_image: Optional[str] = None
+    location_id: Optional[str] = None
     x: float = 50.0
     y: float = 50.0
 

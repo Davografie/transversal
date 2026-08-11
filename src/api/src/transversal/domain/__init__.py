@@ -369,6 +369,7 @@ class Projection(BaseModel):
 class Zone(BaseModel):
     name: str
     background_image: Optional[str] = None
+    location_id: Optional[str] = None  # _key of the child location this zone links to
     x: float = 50.0   # percentage position on background image (0–100)
     y: float = 50.0   # percentage position on background image (0–100)
 
