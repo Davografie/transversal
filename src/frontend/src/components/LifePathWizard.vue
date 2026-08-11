@@ -192,7 +192,13 @@ const outcomeRows = computed(() => {
   const p=phases[phaseIdx.value]
   if(['qual','survive','advance'].includes(p)){
     const s=manualValues.value[p]
-    const r=[{roll:'1–2',name:p==='survive'?'❌ Mishap':p==='advance'?'❌ No promotion':'❌ Fail',selected:s===1},{roll:'3–5',name:p==='survive'?'⚠️ Barely survived':p==='advance'?'❌ No promotion':'✅ Marginal',selected:s===3},{roll:'6–8',name:'🎉 Success',selected:s===6},{roll:'9–10',name:'🌟 Exceptional',selected:s===9},{roll:'11–12',name:'💎 Perfect',selected:s===11}]
+    const r=[
+      {roll:'1–2',val:1,name:p==='survive'?'❌ Mishap':p==='advance'?'❌ No promotion':'❌ Fail',selected:s===1},
+      {roll:'3–5',val:3,name:p==='survive'?'⚠️ Barely survived':p==='advance'?'❌ No promotion':'✅ Marginal',selected:s===3},
+      {roll:'6–8',val:6,name:'🎉 Success',selected:s===6},
+      {roll:'9–10',val:9,name:'🌟 Exceptional',selected:s===9},
+      {roll:'11–12',val:11,name:'💎 Perfect',selected:s===11},
+    ]
     return r
   }
   return []
@@ -206,7 +212,7 @@ const listItems = computed(() => {
   }
   return []
 })
-function selectRow(row){ manualValues.value[phases[phaseIdx.value]]=1; manualValue.value=1 }
+function selectRow(row){ manualValues.value[phases[phaseIdx.value]]=row.val; manualValue.value=row.val }
 function nextPhase(){ manualValue.value=null; if(phaseIdx.value<phases.length-1) phaseIdx.value++; else step.value='results' }
 function prevPhase(){ if(phaseIdx.value>0){phaseIdx.value--;manualValue.value=manualValues.value[phases[phaseIdx.value]]||null}else resetWizard() }
 function startPath(lp){ selectedPath.value=lp; phaseIdx.value=0; manualValues.value={}; manualValue.value=null; result.value={}; step.value='configure' }
