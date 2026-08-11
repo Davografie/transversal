@@ -33,7 +33,8 @@
             <span v-if="result.qualification.drafted">— drafted to {{ result.qualification.draftedPathId }}</span>
           </div>
         </div>
-        <button v-if="result.qualification?.success || result.qualification?.drafted" class="wiz-next" @click="advanceStep">Continue →</button>
+        <div v-else class="wiz-result wiz-good">✅ Continuing term (no qualification needed)</div>
+        <button v-if="!result.qualification || result.qualification?.success || result.qualification?.drafted" class="wiz-next" @click="advanceStep">Continue →</button>
         <button v-if="result.qualification?.locationBlocked" class="wiz-next" @click="step = 'choose'">← Back</button>
       </div>
 
