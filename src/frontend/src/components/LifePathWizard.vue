@@ -290,7 +290,7 @@ watch(() => props.visible, (v) => { if (v) resetWizard() }, { immediate: true })
 .wizard-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .wizard-header h2 { font-size: 16px; margin: 0; }
 .wiz-close { background: none; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; }
-.wiz-body { padding: 16px; flex: 1; overflow-y: auto; }
+.wiz-body { padding: 16px; flex: 1; min-height: 0; overflow-y: auto; }
 .wiz-hint { color: var(--text-dim); margin: 0 0 12px; font-size: 13px; }
 .wiz-loading, .wiz-empty { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
 .wiz-path-list { display: flex; flex-direction: column; gap: 6px; }
