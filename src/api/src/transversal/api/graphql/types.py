@@ -689,3 +689,25 @@ class TermResult:
     modified_trait_settings: list[strawberry.ID]
     razmerit_change: int
     term_number: int
+
+
+# ── Trait Transfer Result Types ──────────────────────
+
+@strawberry.type
+class TeachResult:
+    student_trait_setting_id: strawberry.ID
+    razmerit_cost: int
+
+
+@strawberry.type
+class GiftResult:
+    transferred_trait_id: strawberry.ID
+    relationship_created: bool
+
+
+@strawberry.type
+class TakeResult:
+    success: bool
+    contest_summary: str  # "Kael rolled 14 vs Elena 9 — success"
+    transferred_trait_id: Optional[strawberry.ID] = None
+    stolen: bool = False

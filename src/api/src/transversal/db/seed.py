@@ -539,11 +539,56 @@ def seed_universes(em) -> None:
             ))
 
 
+def seed_relations_traitset(repo) -> None:
+    """Seed the Relations trait set and its trait types."""
+    from transversal.domain import TraitSet, Trait, DieType, RatingType, EntityType
+
+    ts_id = "ts-relations"
+    existing = repo.get_traitset_by_id(ts_id)
+    if existing is None:
+        ts = TraitSet(
+            id=ts_id,
+            name="Relations",
+            universes=["earth", "three_realms"],
+            description="Relationship traits between entities",
+            entity_types=[EntityType.CHARACTER, EntityType.GMC, EntityType.FACTION],
+            order=100,
+            limit=10,
+            default_rating_type=RatingType.STATIC,
+            default_die_type=DieType.D6,
+        )
+        repo.create_traitset(ts)
+
+    relation_traits = [
+        ("trait-relation-trust", "Trust", "I trust them — adds to cooperative pools"),
+        ("trait-relation-debt", "Debt", "Resource pool — razmerit or favors owed"),
+        ("trait-relation-rivalry", "Rivalry", "We push each other — adds to opposed pools"),
+        ("trait-relation-loyalty", "Loyalty", "I would die for them"),
+        ("trait-relation-fear", "Fear", "Negative — opponent uses it against you"),
+        ("trait-relation-love", "Love", "Adds to pools involving that person"),
+        ("trait-relation-duty", "Duty", "I owe them my service — obligation"),
+    ]
+    for tid, name, explanation in relation_traits:
+        existing_trait = repo.get_trait(tid)
+        if existing_trait is None:
+            trait = Trait(
+                id=tid,
+                name=name,
+                universes=["earth", "three_realms"],
+                traitset_id=ts_id,
+                default_die_type=DieType.D6,
+                default_rating_type=RatingType.STATIC,
+                explanation=explanation,
+            )
+            repo.create_trait(trait)
+
+
 def seed_all(em) -> None:
     """Run all seed functions."""
     seed_universes(em)
     seed_trait_registry(em.repo)
     seed_sfx_registry(em.repo)
+    seed_relations_traitset(em.repo)
     seed_default_character(em)
     seed_elena(em)
     seed_locations(em)

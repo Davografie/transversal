@@ -356,6 +356,7 @@ class TraitSetting(BaseModel):
     id: str
     entity_id: str
     trait_id: str
+    from_type: str = "entity"  # "entity" | "relationship" — which collection _from points to
     traitset_id: str
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)

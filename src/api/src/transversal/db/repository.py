@@ -505,7 +505,10 @@ class EntityRepository:
     def create_traitsetting(self, ts: TraitSetting) -> TraitSetting:
         doc = ts.model_dump()
         doc["_key"] = ts.id
-        doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
+        if ts.from_type == "relationship":
+            doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
+        else:
+            doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
         self._traitsettings.insert(doc)
         return ts
@@ -543,7 +546,10 @@ class EntityRepository:
     def update_traitsetting(self, ts: TraitSetting) -> TraitSetting:
         doc = ts.model_dump()
         doc["_key"] = ts.id
-        doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
+        if ts.from_type == "relationship":
+            doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
+        else:
+            doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
         self._traitsettings.replace(doc)
         return ts
@@ -554,6 +560,31 @@ class EntityRepository:
             return True
         except Exception:
             return False
+
+    def get_relationship_traitsettings(self, edge_key: str) -> list[TraitSetting]:
+        """Get trait settings attached to a relationship edge."""
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.entity_id == @ekey AND ts.from_type == 'relationship'
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"ekey": edge_key})
+        ]
+
+    def get_relationship_traits_for_entities(
+        self, entity_id_a: str, entity_id_b: str
+    ) -> list[TraitSetting]:
+        """Get all trait settings on relationships between two entities (either direction)."""
+        results: list[TraitSetting] = []
+        for rel_type in ["relation", "associate", "gifted", "suspects", "hostile_to"]:
+            for frm, to in [(entity_id_a, entity_id_b), (entity_id_b, entity_id_a)]:
+                edge_key = f"edge:{frm}:{to}:{rel_type}"
+                rel = self.get_relationship(frm, to, rel_type)
+                if rel:
+                    results.extend(self.get_relationship_traitsettings(edge_key))
+        return results
 
     # ── Character Assembly ────────────────────────────
 

@@ -30,6 +30,9 @@ from transversal.api.graphql.types import (
     SurviveResult,
     EventResult,
     AdvanceResult,
+    TeachResult,
+    GiftResult,
+    TakeResult,
     TermResult,
     TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
@@ -873,6 +876,53 @@ class Mutation:
             modified_trait_settings=[strawberry.ID(ts_id) for ts_id in result.get("modified_trait_settings", [])],
             razmerit_change=result.get("razmerit_change", 0),
             term_number=result.get("term_number", 0),
+        )
+
+    @strawberry.mutation
+    def teach_trait(self, info, teacher_id: strawberry.ID, student_id: strawberry.ID,
+                    trait_setting_id: strawberry.ID) -> TeachResult:
+        from transversal.services.trait_transfer import teach_trait
+
+        repo = _em(info).repo
+        result = teach_trait(str(teacher_id), str(student_id), str(trait_setting_id), repo)
+        # Spend razmerit from teacher
+        _raz(info).spend(str(teacher_id), 1, "teach_trait")
+        return TeachResult(
+            student_trait_setting_id=result["student_trait_setting"].id,
+            razmerit_cost=1,
+        )
+
+    @strawberry.mutation
+    def gift_trait(self, info, giver_id: strawberry.ID, recipient_id: strawberry.ID,
+                   trait_setting_id: strawberry.ID) -> GiftResult:
+        from transversal.services.trait_transfer import gift_trait
+
+        repo = _em(info).repo
+        result = gift_trait(str(giver_id), str(recipient_id), str(trait_setting_id), repo)
+        return GiftResult(
+            transferred_trait_id=result["transferred_trait"].id,
+            relationship_created=result.get("relationship_created") is not None,
+        )
+
+    @strawberry.mutation
+    def take_trait(self, info, taker_id: strawberry.ID, victim_id: strawberry.ID,
+                   trait_setting_id: strawberry.ID, method: str = "stealth") -> TakeResult:
+        from transversal.services.trait_transfer import take_trait
+
+        repo = _em(info).repo
+        result = take_trait(str(taker_id), str(victim_id), str(trait_setting_id), method, repo)
+        contest = result.get("contest_result")
+        summary = ""
+        if contest:
+            if hasattr(contest, 'player_result') and hasattr(contest.player_result, 'highest'):
+                summary = f"taker {contest.player_result.highest} vs victim {contest.opponent_result.highest} — {'success' if result['success'] else 'failure'}"
+            else:
+                summary = f"{'success' if result['success'] else 'failure'}"
+        return TakeResult(
+            success=result["success"],
+            contest_summary=summary,
+            transferred_trait_id=result["transferred_trait"].id if result.get("transferred_trait") else None,
+            stolen=result.get("stolen", False),
         )
 
 

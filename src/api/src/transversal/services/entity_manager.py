@@ -222,6 +222,12 @@ class EntityManager:
 
         return result
 
+    def get_relationship_trait_settings(
+        self, entity_id: str, related_entity_id: str
+    ) -> list[TraitSetting]:
+        """Return trait settings on relationships between two entities."""
+        return self.repo.get_relationship_traits_for_entities(entity_id, related_entity_id)
+
     # ── Locations ─────────────────────────────────────
 
     def move_to(self, entity: Entity, location: str, universe: Optional[str] = None,
