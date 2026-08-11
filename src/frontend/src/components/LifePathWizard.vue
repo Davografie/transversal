@@ -216,7 +216,7 @@ watch(() => props.visible, (v) => {
     selectedPath.value = null
     loadPaths()
   }
-})
+}, { immediate: true })
 </script>
 
 <style scoped>
