@@ -53,6 +53,7 @@ import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
+import { usePanel } from '@/composables/usePanel.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
@@ -62,12 +63,11 @@ import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 const { graphql } = useApi()
+const panel = usePanel()
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
   currentLocationId: { type: String, default: '' },
-  open: { type: Function, default: null },
-  close: { type: Function, default: null },
 })
 
 const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool'])
@@ -195,7 +195,7 @@ const {
 function toggleEntity(e) {
   if (editing.value && selectedId.value === e.id) {
     editing.value = false; selected.value = null; selectedId.value = null
-    if (props.close) props.close()
+    panel.closeChild()
   } else {
     onSelectEntity(e)
   }
@@ -211,9 +211,9 @@ async function onSelectEntity(e) {
 
 // ── Panel opening ───────────────────────────────────
 function openEntityEdit() {
-  if (!props.open || !selected.value) return
+  if (!panel.open || !selected.value) return
   creating.value = false
-  props.open({
+  panel.open({
     component: GmEntityEditPanel,
     title: selected.value.name || 'Edit Entity',
     props: { entityId: selectedId.value },
@@ -225,9 +225,9 @@ function openEntityEdit() {
 }
 
 function switchToSheet() {
-  if (!props.open || !selected.value) return
+  if (!panel.open || !selected.value) return
   editing.value = false
-  props.open({
+  panel.open({
     component: CharacterSheet,
     title: selected.value.name || 'Character Sheet',
     props: { entityId: selected.value.id, universe: props.universe, embedded: true, gmMode: true },
@@ -236,42 +236,35 @@ function switchToSheet() {
 
 function inspectEntity(id) {
   editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
-  if (props.open) {
-    props.open({
-      component: CharacterSheet,
-      title: 'Character Sheet',
-      props: { entityId: id, universe: props.universe, embedded: true, gmMode: true },
-    })
-  }
+  panel.open({
+    component: CharacterSheet,
+    title: 'Character Sheet',
+    props: { entityId: id, universe: props.universe, embedded: true, gmMode: true },
+  })
 }
 
 function startCreate() {
   creating.value = true; editing.value = false; selected.value = null
-  if (props.open) {
-    props.open({
-      component: GmEntityCreatePanel,
-      title: 'New Entity',
-      props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value, entityTypes: ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
-      listeners: { 'create': createEntity },
-    })
-  }
+  panel.open({
+    component: GmEntityCreatePanel,
+    title: 'New Entity',
+    props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value, entityTypes: ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
+    listeners: { 'create': createEntity },
+  })
 }
 
 async function openTraitsConfig() {
   editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
   if (traitsets.value.length === 0 || allSfxs.value.length === 0) await fetchTraitsConfig()
-  if (props.open) {
-    props.open({
-      component: GmTraitsetsPanel,
-      title: 'Traitsets',
-      props: {},
-    })
-  }
+  panel.open({
+    component: GmTraitsetsPanel,
+    title: 'Traitsets',
+    props: {},
+  })
 }
 
 function onImageOpen(img) {
-  if (!props.open) return
-  props.open({
+  panel.open({
     component: ImageViewer,
     title: img.id,
     props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },

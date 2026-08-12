@@ -3,8 +3,8 @@
 
   <div v-if="show" class="panel-stack">
     <Panel :title="rootPanel?.title" :min-visible-depth="minVisibleDepth" closable @close="show = false">
-      <template v-if="rootPanel" #default="{ open, close }">
-        <component :is="rootPanel.component" :open="open" :close="close" v-bind="rootPanel.props || {}" v-on="rootPanel.listeners || {}" />
+      <template v-if="rootPanel" #default>
+        <component :is="rootPanel.component" v-bind="rootPanel.props || {}" v-on="rootPanel.listeners || {}" />
       </template>
     </Panel>
   </div>

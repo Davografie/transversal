@@ -38,11 +38,13 @@
 import { reactive, ref, watch, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
 import ChipInput from './ChipInput.vue'
 import GmTraitEditPanel from '@/components/gm/GmTraitEditPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
+const panel = usePanel()
 const { traitsets, allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
 
 const universeOptions = [
@@ -60,8 +62,6 @@ const entityTypeOptions = [
 const props = defineProps({
   traitsetId: { type: String, default: '' },
   selectedId: { type: String, default: '' },
-  open: { type: Function, default: null },
-  close: { type: Function, default: null },
 })
 
 // Derive traitset/traits reactively from the composable ref — stays current after refresh
@@ -72,7 +72,7 @@ const traits = computed(() => traitset.value?.traits || [])
 
 // Close self if traitset was deleted
 watch(traitset, (ts) => {
-  if (!ts && props.close) props.close()
+  if (!ts) panel.close()
 })
 
 const saving = ref(false)
@@ -105,23 +105,19 @@ async function saveTraitset() {
 }
 
 function onTraitClick(t) {
-  if (props.open) {
-    props.open({
-      component: GmTraitEditPanel,
-      title: t.name,
-      props: { traitId: t.id, traitsetId: props.traitsetId },
-    })
-  }
+  panel.open({
+    component: GmTraitEditPanel,
+    title: t.name,
+    props: { traitId: t.id, traitsetId: props.traitsetId },
+  })
 }
 
 function onNewTrait() {
-  if (props.open) {
-    props.open({
-      component: GmTraitEditPanel,
-      title: 'New Trait',
-      props: { traitId: null, traitsetId: traitset.value?.id },
-    })
-  }
+  panel.open({
+    component: GmTraitEditPanel,
+    title: 'New Trait',
+    props: { traitId: null, traitsetId: traitset.value?.id },
+  })
 }
 
 async function onDeleteTraitset() {
@@ -130,7 +126,7 @@ async function onDeleteTraitset() {
   try {
     await graphql(`mutation($id: ID!) { deleteTraitset(id: $id) }`, { id: traitset.value.id })
     await fetchTraitsConfig()
-    if (props.close) props.close()
+    panel.close()
   } finally { saving.value = false }
 }
 </script>

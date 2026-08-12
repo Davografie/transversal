@@ -122,16 +122,18 @@
 import { reactive, ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql, error: apiError } = useApi()
+const panel = usePanel()
 const { patchData, fetchTraitsConfig } = useTraitsConfig()
 
 const props = defineProps({
   sfx: { type: Object, default: null },
 })
 
-const emit = defineEmits(['sfx-created', 'sfx-updated', 'sfx-deleted', 'close'])
+const emit = defineEmits(['sfx-created', 'sfx-updated', 'sfx-deleted'])
 
 const saving = ref(false)
 const errorMsg = ref('')
@@ -240,7 +242,7 @@ async function onCreate() {
       description: form.description, limit: form.limit, effects: [...form.effects],
     })
     // Close the panel after a brief delay so the user sees the success message
-    setTimeout(() => { emit('close') }, 600)
+    setTimeout(() => { panel.close() }, 600)
     form.name = ''
     form.description = ''
     form.limit = ''
@@ -257,7 +259,7 @@ async function onDelete() {
     await graphql(`mutation($id: ID!) { deleteSfx(id: $id) }`, { id: props.sfx.id })
     emit('sfx-deleted', props.sfx.id)
     await fetchTraitsConfig()
-    emit('close')
+    panel.close()
   } finally { saving.value = false }
 }
 

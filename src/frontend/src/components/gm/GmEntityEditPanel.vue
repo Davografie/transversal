@@ -58,6 +58,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
@@ -65,6 +67,8 @@ import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
+const panel = usePanel()
+const bus = usePanelBus()
 
 // ── Composables: shared state with GmPanel ──────────
 const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob } = useEntityCrud()
@@ -103,16 +107,13 @@ async function loadLifePaths(universeKey) {
 
 const props = defineProps({
   entityId: { type: String, default: null },
-  open: { type: Function, default: null },
-  close: { type: Function, default: null },
 })
 
-const emit = defineEmits(['close', 'switch-to-sheet', 'image-open'])
+const emit = defineEmits(['switch-to-sheet', 'image-open'])
 
 // ── Sub-panel openers ───────────────────────────────
 function openLoraConfig() {
-  if (!props.open) return
-  props.open({
+  panel.open({
     component: GmLoRAConfigPanel,
     title: 'LoRA Configuration',
     props: { loraConfigJson: form.value.lora_config || '{}' },
@@ -123,12 +124,11 @@ function openLoraConfig() {
 }
 
 function openLifePaths() {
-  if (!props.open) return
   const currentUniverse = form.value?.current_universe || props.entityId
-  props.open({
+  panel.open({
     component: GmLifePathsPanel,
     title: 'Life Paths',
-    props: { universe: currentUniverse, open: props.open, close: props.close },
+    props: { universe: currentUniverse },
   })
 }
 
@@ -172,12 +172,12 @@ watch(localImagenJob, (now, prev) => {
 // ── Delete / prune (two-click confirm handled by DangerButton) ──
 async function onDeleteConfirmed() {
   await deleteEntity(props.entityId)
-  emit('close')
+  panel.close()
 }
 
 async function onPruneConfirmed() {
   await deleteEntity(props.entityId, true)
-  emit('close')
+  panel.close()
 }
 
 function formatSize(bytes) {
@@ -189,13 +189,12 @@ function formatSize(bytes) {
 const openedImageId = ref(null)
 
 function openImage(img) {
-  if (!props.open) return
   if (openedImageId.value === img.id) {
-    if (props.close) { props.close(); openedImageId.value = null }
+    panel.closeChild(); openedImageId.value = null
     return
   }
   openedImageId.value = img.id
-  props.open({
+  panel.open({
     component: ImageViewer,
     title: img.id,
     props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: props.entityId, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
@@ -217,12 +216,13 @@ async function loadImages() {
 
 watch(() => props.entityId, loadImages, { immediate: true })
 onMounted(() => { pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
+let offLifepathSaved = null
 onMounted(() => {
-  window.addEventListener('lifepath-saved', (e) => {
+  offLifepathSaved = bus.on('lifepath-saved', () => {
     if (form.value?.type === 'UNIVERSE') loadLifePaths(form.value.current_universe || props.entityId)
   })
 })
-onUnmounted(() => { clearInterval(_jobPollTimer) })
+onUnmounted(() => { clearInterval(_jobPollTimer); if (offLifepathSaved) offLifepathSaved() })
 defineExpose({ refresh: loadImages })
 </script>
 

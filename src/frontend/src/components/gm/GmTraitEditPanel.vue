@@ -96,6 +96,7 @@
 import { reactive, ref, watch, onMounted, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
 import ChipInput from './ChipInput.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
@@ -103,6 +104,7 @@ import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
+const panel = usePanel()
 const { traitsets, allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
 
 // Derive trait reactively from the composable — stays current after refresh
@@ -118,8 +120,6 @@ const props = defineProps({
   traitId: { type: String, default: null },
   selectedId: { type: String, default: '' },
   traitsetId: { type: String, default: '' },
-  open: { type: Function, default: null },
-  close: { type: Function, default: null },
 })
 
 const saving = ref(false)
@@ -250,8 +250,8 @@ async function deleteDisplayName(index) {
 
 // ── Display Name editor ──
 function openDisplayNameEditor(index) {
-  if (!props.open || !trait.value?.id) return
-  props.open({
+  if (!panel.open || !trait.value?.id) return
+  panel.open({
     component: GmDisplayNameEditPanel,
     title: index === null ? 'Add Display Name' : 'Edit Display Name',
     props: {
@@ -302,44 +302,40 @@ function toggleDefaultSfx(id) {
 }
 
 function openSfxPicker() {
-  if (props.open) {
-    props.open({
-      component: GmSfxPickerPanel,
-      title: 'Add SFX to Trait',
-      props: {
-        selectedIds: [...form.possibleSfxIds],
+  panel.open({
+    component: GmSfxPickerPanel,
+    title: 'Add SFX to Trait',
+    props: {
+      selectedIds: [...form.possibleSfxIds],
+    },
+    listeners: {
+      'add-sfx': (id) => {
+        if (!form.possibleSfxIds.includes(id)) {
+          form.possibleSfxIds.push(id)
+        }
       },
-      listeners: {
-        'add-sfx': (id) => {
-          if (!form.possibleSfxIds.includes(id)) {
-            form.possibleSfxIds.push(id)
-          }
-        },
-        'remove-sfx': (id) => {
-          form.possibleSfxIds = form.possibleSfxIds.filter(sid => sid !== id)
-        },
+      'remove-sfx': (id) => {
+        form.possibleSfxIds = form.possibleSfxIds.filter(sid => sid !== id)
       },
-    })
-  }
+    },
+  })
 }
 
 // ── SFX navigation ──
 function onSfxClick(sfx) {
-  if (props.open) {
-    props.open({
-      component: GmSfxEditPanel,
-      title: sfx.name || 'Edit SFX',
-      props: { sfx: sfx },
-      listeners: {},
-    })
-  }
+  panel.open({
+    component: GmSfxEditPanel,
+    title: sfx.name || 'Edit SFX',
+    props: { sfx: sfx },
+    listeners: {},
+  })
 }
 
 // ── Delete ──
 async function onDelete() {
   if (!trait.value?.id) return
   saving.value = true
-  try { await graphql(`mutation($id: ID!) { deleteTrait(id: $id) }`, { id: trait.value.id }); await fetchTraitsConfig(); if (props.close) props.close() }
+  try { await graphql(`mutation($id: ID!) { deleteTrait(id: $id) }`, { id: trait.value.id }); await fetchTraitsConfig(); panel.close() }
   finally { saving.value = false }
 }
 </script>

@@ -60,7 +60,7 @@ const props = defineProps({
   traitId: { type: String, required: true },
 })
 
-const emit = defineEmits(['close', 'saved', 'deleted'])
+const emit = defineEmits(['saved', 'deleted'])
 
 const DICE = ['D4', 'D6', 'D8', 'D10', 'D12']
 

@@ -224,10 +224,14 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmTraitPicker from './GmTraitPicker.vue'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
+const panel = usePanel()
+const bus = usePanelBus()
 const { traitNameMap } = useTraitsConfig()
 
 const props = defineProps({
@@ -235,10 +239,7 @@ const props = defineProps({
   section: { type: String, default: null },
   itemIndex: { type: Number, default: null },
   addNew: { type: Boolean, default: false },
-  open: { type: Function, default: null },
-  close: { type: Function, default: null },
 })
-const emit = defineEmits(['close'])
 const { graphql } = useApi()
 const dieTypes = ['d4','d6','d8','d10','d12']
 const universes = ref([])
@@ -742,8 +743,8 @@ async function save() {
     saveMsg.value = 'Saved.'
     const realId = result?.saveLifePath?.id || vars.id
     console.log('[save] result:', result, 'realId:', realId, 'vars.id:', vars.id)
-    window.dispatchEvent(new CustomEvent('lifepath-saved', { detail: { id: realId, universe: vars.universe, isNew: !vars.id } }))
-    if (!vars.id) emit('close')
+    bus.emit('lifepath-saved', { id: realId, universe: vars.universe, isNew: !vars.id })
+    if (!vars.id) panel.close()
   } catch (e) {
     saveMsg.value = 'Error: ' + e.message
   } finally {

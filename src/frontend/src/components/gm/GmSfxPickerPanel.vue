@@ -24,16 +24,17 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 
+const panel = usePanel()
 const { allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
 
 const props = defineProps({
   selectedIds: { type: Array, default: () => [] },
-  open: { type: Function, default: null },
 })
 
-const emit = defineEmits(['add-sfx', 'remove-sfx', 'close'])
+const emit = defineEmits(['add-sfx', 'remove-sfx'])
 
 const search = ref('')
 
@@ -56,19 +57,17 @@ function toggleSfx(id) {
 }
 
 function onNewSfx() {
-  if (props.open) {
-    props.open({
-      component: GmSfxEditPanel,
-      title: 'New SFX',
-      props: { sfx: null },
-      listeners: {
-        'sfx-created': (created) => {
-          emit('add-sfx', created.id)
-          emit('close')
-        },
+  panel.open({
+    component: GmSfxEditPanel,
+    title: 'New SFX',
+    props: { sfx: null },
+    listeners: {
+      'sfx-created': (created) => {
+        emit('add-sfx', created.id)
+        panel.close()
       },
-    })
-  }
+    },
+  })
 }
 </script>
 

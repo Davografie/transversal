@@ -12,12 +12,12 @@
         </slot>
       </header>
       <div class="panel-body">
-        <slot :open="openChild" :close="closeChild" />
+        <slot />
       </div>
     </div>
-    <!-- Self-reference: nested child panel
-         ⚠ :close passes a function that sets THIS panel's child=null (not the nested Panel's own child).
-         This is what allows a deep component to close the panel it lives in. -->
+    <!-- Self-reference: nested child panel.
+         :on-close / :on-replace let the nested Panel close/replace itself
+         in THIS panel's stack. @close handles the nested Panel's own × button. -->
     <Panel
       v-if="child"
       nested
@@ -25,17 +25,20 @@
       :min-visible-depth="minVisibleDepth"
       :title="child.title"
       closable
+      :on-close="() => { child = null }"
+      :on-replace="(spec) => { child = normalizeSpec(spec) }"
       @close="child = null"
     >
-      <template #default="{ open: childOpen, close: childClose }">
-        <component :is="child.component" v-bind="child.props || {}" :open="childOpen" :close="childClose" v-on="child.listeners || {}" @close="child = null" />
+      <template #default>
+        <component :is="child.component" v-bind="child.props || {}" v-on="child.listeners || {}" @close="child = null" />
       </template>
     </Panel>
   </div>
 </template>
 
 <script setup>
-import { shallowRef, nextTick, markRaw, inject, onMounted, onUnmounted } from 'vue'
+import { shallowRef, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
+import { panelKey } from '@/composables/usePanel.js'
 
 const props = defineProps({
   title: { type: String, default: '' },
@@ -43,6 +46,10 @@ const props = defineProps({
   nested: { type: Boolean, default: false },
   depth: { type: Number, default: 0 },
   minVisibleDepth: { type: Number, default: 0 },
+  // Callbacks supplied by the parent Panel so this Panel can close/replace
+  // itself in the parent's stack.
+  onClose: { type: Function, default: null },
+  onReplace: { type: Function, default: null },
 })
 
 defineEmits(['close'])
@@ -53,15 +60,15 @@ defineEmits(['close'])
 const child = shallowRef(null)
 
 // ── Depth tracking for viewport-aware visibility ──
-// Each Panel registers its depth on mount. PanelStack sums these to compute
-// how many panels are open, then hides shallow panels that overflow the viewport.
-// Must use provide/inject (not props) because depth changes trigger re-renders
-// on PanelStack only, not on every intermediate Panel.
 const registerDepth = inject('registerDepth', null)
 const unregisterDepth = inject('unregisterDepth', null)
 
 onMounted(() => { if (registerDepth) registerDepth(props.depth) })
 onUnmounted(() => { if (unregisterDepth) unregisterDepth(props.depth) })
+
+function normalizeSpec(spec) {
+  return { ...spec, component: markRaw(spec.component) }
+}
 
 // Opens a child Panel. The spec.component is markRaw'd to prevent Vue from
 // making the component definition reactive (triggers "Component made reactive" warning).
@@ -69,14 +76,31 @@ onUnmounted(() => { if (unregisterDepth) unregisterDepth(props.depth) })
 // (if any) plays before the new panel enters.
 function openChild(spec) {
   child.value = null
-  nextTick(() => { child.value = { ...spec, component: markRaw(spec.component) } })
+  nextTick(() => { child.value = normalizeSpec(spec) })
 }
 
-// Closes the current child Panel. Exposed via slot so child components
-// can close themselves (e.g. after delete).
+// Closes the current child Panel (pops the stack).
 function closeChild() {
   child.value = null
 }
+
+// Closes THIS panel (removes it from the parent's stack).
+function closeSelf() {
+  if (props.onClose) props.onClose()
+}
+
+// Replaces THIS panel with another spec in the parent's stack.
+function replaceSelf(spec) {
+  if (props.onReplace) props.onReplace(spec)
+}
+
+// ── Panel navigation context for the component in this panel's slot ──
+provide(panelKey, {
+  open: openChild,
+  closeChild,
+  close: closeSelf,
+  replace: replaceSelf,
+})
 </script>
 
 <style scoped>
@@ -135,6 +159,4 @@ function closeChild() {
 .panel-body {
   flex: 1; overflow-y: auto; padding: 10px;
 }
-
 </style>
-

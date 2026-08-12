@@ -6,34 +6,37 @@
       <span class="lpl-name">{{ lp.name }}</span>
       
     </button>
-    <button v-if="open" class="lpl-add-btn" @click="addNew">＋ Add life path</button>
+    <button v-if="panel" class="lpl-add-btn" @click="addNew">＋ Add life path</button>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { usePanel } from '@/composables/usePanel.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 
+const panel = usePanel()
+const bus = usePanelBus()
+
 const props = defineProps({
   universe: { type: String, default: '' },
-  open: { type: Function, default: null },
-  close: { type: Function, default: null },
 })
 
 const { graphql } = useApi()
 const paths = ref([])
 let autoOpenId = null
 
-async function fetchPaths(e) {
+async function fetchPaths() {
   if (!props.universe) return
   try {
     const data = await graphql(`query($u: String!) { lifePaths(universe: $u) { id name universe description qualification { traitId difficulty mustBeAtLocation draft } discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship } curriculum { traitId createAt stepUp } survival { traitIds difficulty termPenaltyAfter mishaps } events { description effect } advancement { traitIds difficulty ranks { number name benefits } } musterOut { perTermBenefits atRanks } } }`, { u: props.universe })
     paths.value = data?.lifePaths || []
     console.log('[paths] fetchPaths result:', paths.value.length, 'paths')
     // Auto-open detail panel for newly created paths
-    if (autoOpenId && props.open) {
+    if (autoOpenId) {
       const lp = paths.value.find(p => p.id === autoOpenId)
       if (lp) openDetail(lp)
       autoOpenId = null
@@ -41,28 +44,27 @@ async function fetchPaths(e) {
   } catch {}
 }
 
+let offLifepathSaved = null
 onMounted(() => {
   fetchPaths()
-  window.addEventListener('lifepath-saved', (e) => {
-    if (e.detail?.isNew) autoOpenId = e.detail.id
+  offLifepathSaved = bus.on('lifepath-saved', (payload) => {
+    if (payload?.isNew) autoOpenId = payload.id
     fetchPaths()
   })
 })
-onUnmounted(() => window.removeEventListener('lifepath-saved', fetchPaths))
+onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function openDetail(lp) {
-  if (!props.open) return
-  props.open({
+  panel.open({
     component: GmLifePathDetailPanel,
     title: lp.name,
-    props: { lp, open: props.open, close: props.close },
+    props: { lp },
   })
 }
 
 function addNew() {
-  if (!props.open) return
   const blank = { id: '', name: '', description: '', universe: props.universe }
-  props.open({
+  panel.open({
     component: GmLifePathEditPanel,
     title: 'New Life Path',
     props: { lp: blank, section: '_root' },

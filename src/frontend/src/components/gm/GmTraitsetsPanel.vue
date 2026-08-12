@@ -34,14 +34,15 @@
 import { computed, ref } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
 import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 
 const { graphql } = useApi()
+const panel = usePanel()
 const { traitsets, allSfxs, loading, fetchTraitsConfig } = useTraitsConfig()
 
 const props = defineProps({
   selectedId: { type: String, default: '' },
-  open: { type: Function, default: null },
 })
 
 const search = ref('')
@@ -63,13 +64,11 @@ const filtered = computed(() => {
 
 function onClick(ts) {
   if (dragIndex.value >= 0) return
-  if (props.open) {
-    props.open({
-      component: GmTraitsetDetail,
-      title: ts.name,
-      props: { traitsetId: ts.id },
-    })
-  }
+  panel.open({
+    component: GmTraitsetDetail,
+    title: ts.name,
+    props: { traitsetId: ts.id },
+  })
 }
 
 function onDragStart(i, e) {

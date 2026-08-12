@@ -173,19 +173,20 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { usePanel } from '@/composables/usePanel.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
+const panel = usePanel()
+const bus = usePanelBus()
 const { traitNameMap } = useTraitsConfig()
 
 const props = defineProps({
   lp: { type: Object, required: true },
-  open: { type: Function, default: null },
-  close: { type: Function, default: null },
 })
 
 const { graphql } = useApi()
-const emit = defineEmits(['close'])
 const lpRef = ref(props.lp)
 const entityNameMap = ref({})
 
@@ -206,13 +207,14 @@ async function refreshLp() {
   } catch {}
 }
 
-onMounted(() => window.addEventListener('lifepath-saved', refreshLp))
-onUnmounted(() => window.removeEventListener('lifepath-saved', refreshLp))
+let offLifepathSaved = null
+onMounted(() => { offLifepathSaved = bus.on('lifepath-saved', refreshLp) })
+onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function onDeleteConfirmed() {
   graphql(`mutation($id:ID!){deleteLifePath(id:$id)}`, { id: lpRef.value.id })
-  window.dispatchEvent(new CustomEvent('lifepath-saved', { detail: { id: lpRef.value.id, universe: lpRef.value.universe } }))
-  emit('close')
+  bus.emit('lifepath-saved', { id: lpRef.value.id, universe: lpRef.value.universe })
+  panel.close()
 }
 
 const discoveryRows = computed(() => {
@@ -238,8 +240,7 @@ const discoveryRows = computed(() => {
 })
 
 function openEdit(section, itemIndex = null, addNew = false) {
-  if (!props.open) return
-  props.open({ component: GmLifePathEditPanel, title: `Edit ${section} — ${lpRef.value.name}`, props: { lp: lpRef.value, section, itemIndex, addNew } })
+  panel.open({ component: GmLifePathEditPanel, title: `Edit ${section} — ${lpRef.value.name}`, props: { lp: lpRef.value, section, itemIndex, addNew } })
 }
 
 function tName(id) {
