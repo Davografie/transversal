@@ -36,8 +36,11 @@ def check_discovery(
     # ── at_location ──────────────────────────────────────
     if discovery.at_location:
         entity = repo.get_entity(entity_id)
-        if entity and entity.current_location in discovery.at_location:
-            return True
+        if entity and entity.current_location:
+            loc_ids = {entity.current_location}
+            loc_ids.update(repo.get_location_ancestors(entity.current_location))
+            if loc_ids & set(discovery.at_location):
+                return True
 
     # ── knows_entity ─────────────────────────────────────
     if discovery.knows_entity:

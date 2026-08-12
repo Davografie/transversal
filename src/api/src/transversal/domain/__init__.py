@@ -98,15 +98,6 @@ class TransversalType(str, Enum):
     INAPPOSITE = "inapposite"
 
 
-class LifePathType(str, Enum):
-    SECT = "sect"
-    GUILD = "guild"
-    DRIFTER = "drifter"
-    MERCENARY = "mercenary"
-    TRADE = "trade"
-    LINEAGE = "lineage"
-
-
 # ── Die Roll Models ───────────────────────────────────
 
 class DieRoll(BaseModel):
@@ -471,7 +462,7 @@ class SurvivalInfo(BaseModel):
     """Survival phase configuration for a life path."""
     trait_ids: list[str] = Field(default_factory=list)
     difficulty: DieType = DieType.D6
-    term_penalty_after: int = 4  # after N terms in this path, difficulty steps up
+    term_penalty_after: Optional[int] = 4  # after N terms in this path, difficulty steps up
     mishaps: list[dict] = Field(default_factory=list)  # [{description, effect}]
 
 
@@ -511,7 +502,6 @@ class LifePath(BaseModel):
     name: str
     universe: str
     description: str = ""
-    type: LifePathType = LifePathType.DRIFTER
     qualification: Optional[QualificationInfo] = None
     discovery: Optional[DiscoveryBlock] = None  # null → always visible
     curriculum: list[CurriculumItem] = Field(default_factory=list)

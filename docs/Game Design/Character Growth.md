@@ -30,7 +30,7 @@ Character growth in Transversal is powered by three interconnected subsystems: t
 
 ### Overview
 
-A **life path** is a structured narrative container — a sect, guild, career, or way of life in a specific universe. Each path is stored in the `life_paths` collection and defines a five-phase term loop. Terms can be taken during:
+A **life path** is a structured narrative container — a sect, guild, career, or way of life in a specific universe. Each path is stored in the `life_paths` collection and defines a six-phase term loop. Terms can be taken during:
 
 - **Character creation** — generating the morph-body's history
 - **Downtime** — the player chooses to invest a cycle in a path
@@ -139,16 +139,16 @@ life_paths/
 
 ### The Term Loop
 
-Each term walks through five phases in sequence:
+Each term walks through six phases in sequence:
 
 ```
-┌──────────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Choose Path  │───▶│  Learn   │───▶│ Survive  │───▶│  Event   │───▶│ Advance  │
-└──────────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
-     ▲                                                                   │
-     │                          Muster Out ◀─────────────────────────────│
-     │                              │                                    │
-     └──────────────────────────────┘ (take another term in same or new path)
+┌──────────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Choose Path  │───▶│  Learn   │───▶│ Survive  │───▶│  Event   │───▶│ Advance  │───▶│  Mishap  │
+└──────────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
+     ▲                                                                                   │
+     │                                    Muster Out ◀───────────────────────────────────│
+     │                                        │                                          │
+     └────────────────────────────────────────┘ (take another term in same or new path)
 ```
 
 #### Phase 1: Choose Path
@@ -193,19 +193,14 @@ source_term_number: 2
 
 #### Phase 3: Survive
 
-The character rolls against the path's danger. Failure means a mishap.
+The character rolls against the path's danger. Failure flags a mishap (resolved in Phase 6).
 
 - **Character's pool**: assembled from the `survival.trait_ids` traits available in the current universe.
 - **Opposition**: static difficulty at `survival.difficulty`, auto-rolled by the resolver as a single die.
 - **Pipeline**: determined by pool size (simplified for 1–2 dice, pool for 3+).
 - **Razmerit**: can be spent to add dice or step up dice before the roll.
 - On **success**: no mishap. Continue to Event.
-- On **failure**: roll on the path's `mishaps` table. Mishaps produce:
-  - **Complication traits** (negative traits in the `complications` traitset) — injuries, debts, enemies, curses
-  - **Razmerit loss**
-  - **Rank demotion**
-  - **Relationship edges** (a new enemy, a faction that wants you dead)
-  - In extreme cases, a **forced muster-out** (mishap muster-out resets rank to 0 if the character later returns)
+- On **failure**: flag a mishap; proceed to Event, then Phase 6 will resolve it.
 
 #### Term Penalty (Aging / Accumulated Risk)
 
@@ -240,6 +235,20 @@ The character attempts to rise in the life path:
 - **Opposition**: static difficulty at `advancement.difficulty`, auto-rolled.
 - On **success**: advance one rank. Gain the rank's benefits (new traits, SFX unlocks, access to advanced curriculum, bonus muster-out benefits).
 - On **failure**: stay at current rank. The next advancement attempt in this path has its difficulty stepped up by one (cumulative until success resets it).
+
+#### Phase 6: Mishap
+
+If the survive roll failed, the mishap is resolved here. Roll on the path's `mishaps` table. Mishaps produce:
+
+- **Complication traits** (negative traits in the `complications` traitset) — injuries, debts, enemies, curses
+- **Razmerit loss**
+- **Rank demotion**
+- **Relationship edges** (a new enemy, a faction that wants you dead)
+- In extreme cases, a **forced muster-out** (mishap muster-out resets rank to 0 if the character later returns)
+
+Each mishap entry in the path's `mishaps` list has a `must_muster_out` flag and an `effect` block specifying the consequence (complication trait ID + die, razmerit loss amount, etc.). Mishap effects are applied immediately, and if `must_muster_out` is set, the character is forced into the Muster Out step.
+
+After mishap resolution (or if no mishap was flagged), the player chooses: **Muster Out** (leave the path) or **take another term** in the same or a new path.
 
 #### Muster Out
 

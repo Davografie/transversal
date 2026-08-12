@@ -346,6 +346,7 @@ class EntityRepository:
             f"FOR ts IN {TRAITSETTINGS} FILTER ts.trait_id == @tid REMOVE ts IN {TRAITSETTINGS} RETURN OLD._key",
             bind_vars={"tid": trait_id}
         )))
+        self._cleanup_lifepath_trait_refs(trait_id)
         try:
             self._traits.delete(trait_id)
             return True
@@ -428,6 +429,82 @@ class EntityRepository:
         except Exception:
             return False
 
+    def _cleanup_lifepath_trait_refs(self, trait_id: str) -> None:
+        """Remove `trait_id` from every life path that references it.
+
+        Deletes curriculum items / qualification blocks that become empty
+        as a result.  Saves each modified life path.
+        """
+        if self.db is not None:
+            query = f"""
+                FOR lp IN {LIFE_PATHS}
+                FILTER CONTAINS(TO_STRING(lp), @tid)
+                RETURN lp
+            """
+            docs = list(self.db.aql.execute(query, bind_vars={"tid": trait_id}))
+        else:
+            docs = []
+            for lp in self._life_paths_docs:
+                if trait_id in str(lp):
+                    docs.append(lp)
+
+        for doc in docs:
+            lp = LifePath.model_validate({**doc, "id": doc["_key"]})
+            changed = False
+
+            # -- qualification.trait_id --
+            if lp.qualification and lp.qualification.trait_id == trait_id:
+                lp.qualification = None
+                changed = True
+
+            # -- curriculum items --
+            if lp.curriculum:
+                keep = [c for c in lp.curriculum if c.trait_id != trait_id]
+                if len(keep) != len(lp.curriculum):
+                    lp.curriculum = keep
+                    changed = True
+
+            # -- survival.trait_ids --
+            if lp.survival and trait_id in lp.survival.trait_ids:
+                lp.survival.trait_ids = [t for t in lp.survival.trait_ids if t != trait_id]
+                changed = True
+
+            # -- advancement.trait_ids --
+            if lp.advancement and trait_id in lp.advancement.trait_ids:
+                lp.advancement.trait_ids = [t for t in lp.advancement.trait_ids if t != trait_id]
+                changed = True
+
+            # -- events.effect.trait_id --
+            if lp.events:
+                for ev in lp.events:
+                    if ev.effect.get("trait_id") == trait_id:
+                        ev.effect = {}
+                        changed = True
+
+            # -- mishaps.effect.trait_id --
+            if lp.survival and lp.survival.mishaps:
+                for m in lp.survival.mishaps:
+                    eff = m.get("effect", {}) if isinstance(m, dict) else getattr(m, "effect", {})
+                    if eff.get("trait_id") == trait_id:
+                        if isinstance(m, dict):
+                            m["effect"] = {}
+                        else:
+                            m.effect = {}
+                        changed = True
+
+            # -- discovery.possesses_trait --
+            if lp.discovery and trait_id in lp.discovery.possesses_trait:
+                lp.discovery.possesses_trait = [t for t in lp.discovery.possesses_trait if t != trait_id]
+                changed = True
+
+            # -- discovery.has_trait_rating --
+            if lp.discovery and trait_id in lp.discovery.has_trait_rating:
+                del lp.discovery.has_trait_rating[trait_id]
+                changed = True
+
+            if changed:
+                self.update_lifepath(lp)
+
     # ── TraitSet Registry ─────────────────────────────
 
     def create_traitset(self, traitset: TraitSet) -> TraitSet:
@@ -483,6 +560,7 @@ class EntityRepository:
                 bind_vars={"tids": trait_keys}
             )))
         for tkey in trait_keys:
+            self._cleanup_lifepath_trait_refs(tkey)
             try: self._traits.delete(tkey)
             except Exception: pass
         try: self._traitsets.delete(traitset_id)
@@ -1177,6 +1255,40 @@ class EntityRepository:
         results = list(cursor)
         default = {"location": None, "parent": None, "children": [], "transversal": [], "occupants": []}
         return results[0] if results else default
+
+    def get_location_ancestors(self, location_id: str) -> list[str]:
+        """Return all ancestor location IDs by following 'super' edges upward.
+
+        The chain goes child → parent → grandparent → …  Returns location
+        ``_key`` values sorted from nearest ancestor to root.
+        """
+        if self.db is not None:
+            query = f"""
+                FOR v, e IN 1..10 OUTBOUND @loc_ref {RELATIONSHIPS}
+                FILTER e.type == 'super'
+                RETURN v._key
+            """
+            cursor = self.db.aql.execute(query, bind_vars={
+                "loc_ref": f"{ENTITIES}/{location_id}",
+            })
+            return list(cursor)
+        else:
+            # In-memory mode
+            ancestors = []
+            current = location_id
+            for _ in range(10):
+                parent = None
+                for rel in self._relationships:
+                    if (rel.get("_from") == f"{ENTITIES}/{current}"
+                            and rel.get("type") == "super"):
+                        parent = rel.get("_to", "").replace(f"{ENTITIES}/", "")
+                        break
+                if parent:
+                    ancestors.append(parent)
+                    current = parent
+                else:
+                    break
+            return ancestors
 
     # ── Entity Images ─────────────────────────────────
 

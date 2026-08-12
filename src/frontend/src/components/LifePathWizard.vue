@@ -14,7 +14,7 @@
           <div v-else class="wiz-path-list">
             <button v-for="lp in paths" :key="lp.id" class="wiz-path-btn" @click="startPath(lp)">
               <span class="wiz-path-name">{{ lp.name }}</span>
-              <span class="wiz-path-type">{{ lp.type }}</span>
+              
               <span class="wiz-path-desc">{{ truncate(lp.description, 60) }}</span>
             </button>
           </div>
@@ -57,7 +57,7 @@
             <p class="wiz-phase-label">Qualification Failed</p>
             <div class="wiz-result wiz-bad">
               <p>❌ You did not qualify for {{ selectedPath?.name }}.</p>
-              <p v-if="draftPath" class="wiz-dim">Drafted into <strong>{{ draftPath.name }}</strong> ({{ draftPath.type }})</p>
+              <p v-if="draftPath" class="wiz-dim">Drafted into <strong>{{ draftPath.name }}</strong> ()</p>
             </div>
             <div class="wiz-done-actions">
               <button v-if="draftPath" class="wiz-next" @click="takeDraftTerm">📋 Take Term in {{ draftPath.name }}</button>
@@ -107,13 +107,13 @@
       <div v-else class="wiz-path-list">
         <button v-for="lp in paths" :key="lp.id" class="wiz-path-btn" @click="startPath(lp)">
           <span class="wiz-path-name">{{ lp.name }}</span>
-          <span class="wiz-path-type">{{ lp.type }}</span>
+          
           <span class="wiz-path-desc">{{ truncate(lp.description, 60) }}</span>
         </button>
       </div>
     </template>
     <template v-else-if="step === 'configure'">
-      <div class="wiz-path-banner" v-if="selectedPath">{{ selectedPath.name }} — {{ selectedPath.type }}</div>
+      <div class="wiz-path-banner" v-if="selectedPath">{{ selectedPath.name }} — </div>
       <p class="wiz-phase-label">{{ phaseLabel }}</p>
       <p v-if="!showTable" class="wiz-phase-hint">{{ phaseHint }}</p>
       <table v-if="showTable" class="wiz-table">
@@ -151,7 +151,7 @@
         <p class="wiz-phase-label">Qualification Failed</p>
         <div class="wiz-result wiz-bad">
           <p>❌ You did not qualify for {{ selectedPath?.name }}.</p>
-          <p v-if="draftPath" class="wiz-dim">Drafted into <strong>{{ draftPath.name }}</strong> ({{ draftPath.type }})</p>
+          <p v-if="draftPath" class="wiz-dim">Drafted into <strong>{{ draftPath.name }}</strong> ()</p>
         </div>
         <div class="wiz-done-actions">
           <button v-if="draftPath" class="wiz-next" @click="takeDraftTerm">📋 Take Term in {{ draftPath.name }}</button>
@@ -459,7 +459,19 @@ function nextPhase(){
   log('nextPhase', `${fromPhase} → ${toPhase}`)
 }
 function prevPhase(){ if(phaseIdx.value>0){phaseIdx.value--;manualValue.value=manualValues.value[phases[phaseIdx.value]]||null}else resetWizard() }
-function startPath(lp){ selectedPath.value=lp; phaseIdx.value=0; manualValues.value={}; manualValue.value=null; result.value={}; step.value='configure'; log('startPath', `choose → configure  path=${lp.name}  qualTraitId=${lp.qualification?.traitId||'none'}  qualDie=${traitDieMap.value[lp.qualification?.traitId]||'none'}`) }
+function startPath(lp){
+  selectedPath.value=lp; manualValues.value={}; manualValue.value=null; result.value={}; step.value='configure'
+  const hasQual = lp.qualification && lp.qualification.traitId
+  if (!hasQual) {
+    // No qualification check — auto-succeed and skip to learn phase
+    manualValues.value['qual'] = 7
+    phaseIdx.value = 1
+    log('startPath', `choose → learn (qual auto-success)  path=${lp.name}`)
+  } else {
+    phaseIdx.value = 0
+    log('startPath', `choose → configure  path=${lp.name}  qualTraitId=${lp.qualification?.traitId}  qualDie=${traitDieMap.value[lp.qualification?.traitId]||'none'}`)
+  }
+}
 async function executeTerm(){
   const qm=manualValues.value['qual']??null, sm=manualValues.value['survive']??null, am=manualValues.value['advance']??null
   const li = selectedLearn.value

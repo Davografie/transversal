@@ -22,7 +22,6 @@ from transversal.domain import (
     AdvancementInfo,
     MusterOutInfo,
     LifePath,
-    LifePathType as DomainLifePathType,
 )
 
 
@@ -580,16 +579,6 @@ class RelatedEntity:
 
 # ── Life Paths ─────────────────────────────────────────
 
-@strawberry.enum
-class LifePathType(Enum):
-    SECT = "sect"
-    GUILD = "guild"
-    DRIFTER = "drifter"
-    MERCENARY = "mercenary"
-    TRADE = "trade"
-    LINEAGE = "lineage"
-
-
 @strawberry.type
 class DiscoveryBlock:
     at_location: list[str]
@@ -619,7 +608,7 @@ class CurriculumItem:
 class SurvivalInfo:
     trait_ids: list[str]
     difficulty: DieType
-    term_penalty_after: int
+    term_penalty_after: Optional[int]
     mishaps: strawberry.scalars.JSON  # list[dict]
 
 
@@ -656,7 +645,6 @@ class LifePath:
     name: str
     universe: str
     description: str
-    type: LifePathType
     qualification: Optional[QualificationInfo]
     discovery: Optional[DiscoveryBlock]
     curriculum: list[CurriculumItem]

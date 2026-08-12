@@ -346,13 +346,20 @@ class Query:
 
 def _life_path_to_gql(lp) -> GqlLifePath:
     """Convert a domain LifePath to the GraphQL type."""
-    from transversal.api.graphql.types import LifePathType as GqlLifePathType
+    import json, logging
+    _log = logging.getLogger("transversal.lifepath")
+    disc = lp.discovery
+    if disc:
+        _log.info("_life_path_to_gql discovery: at_location=%s knows_entity=%s possesses_trait=%s has_trait_rating=%s has_relationship=%s",
+                  disc.at_location, disc.knows_entity, disc.possesses_trait,
+                  dict(disc.has_trait_rating), disc.has_relationship)
+    else:
+        _log.info("_life_path_to_gql discovery: None")
     return GqlLifePath(
         id=lp.id,
         name=lp.name,
         universe=lp.universe,
         description=lp.description if hasattr(lp, 'description') else "",
-        type=GqlLifePathType(lp.type.value) if hasattr(lp.type, 'value') else GqlLifePathType(str(lp.type)),
         qualification=lp.qualification,
         discovery=lp.discovery,
         curriculum=lp.curriculum,
@@ -986,6 +993,119 @@ class Mutation:
             benefits=result.get("benefits", []),
             razmerit_gained=result.get("razmerit_gained", 0),
         )
+
+    @strawberry.mutation
+    def save_life_path(self, info: strawberry.Info, id: str, name: str, universe: str,
+                       description: str,
+                       qualification: Optional[strawberry.scalars.JSON] = None,
+                       discovery: Optional[strawberry.scalars.JSON] = None,
+                       curriculum: Optional[strawberry.scalars.JSON] = None,
+                       survival: Optional[strawberry.scalars.JSON] = None,
+                       events: Optional[strawberry.scalars.JSON] = None,
+                       advancement: Optional[strawberry.scalars.JSON] = None,
+                       muster_out: Optional[strawberry.scalars.JSON] = None) -> strawberry.scalars.JSON:
+        """Create or update a life path definition. For GM content authoring."""
+        from transversal.domain import (
+            LifePath, CurriculumItem, QualificationInfo,
+            DiscoveryBlock, SurvivalInfo, EventItem, RankInfo, AdvancementInfo, MusterOutInfo,
+            DieType,
+        )
+
+        def _die(v): return DieType(v) if v else DieType.D4
+
+        q = None
+        if qualification:
+            q = QualificationInfo(
+                trait_id=qualification.get("traitId", ""),
+                difficulty=_die(qualification.get("difficulty")),
+                must_be_at_location=qualification.get("mustBeAtLocation"),
+                draft=qualification.get("draft"),
+            )
+
+        d = None
+        if discovery:
+            d = DiscoveryBlock(
+                at_location=discovery.get("atLocation", []) or [],
+                knows_entity=discovery.get("knowsEntity", []) or [],
+                possesses_trait=discovery.get("possessesTrait", []) or [],
+                has_trait_rating=discovery.get("hasTraitRating"),
+                has_relationship=discovery.get("hasRelationship", []) or [],
+            )
+
+        ci = []
+        if curriculum:
+            for c in curriculum:
+                ci.append(CurriculumItem(
+                    trait_id=c.get("traitId", ""),
+                    create_at=_die(c.get("createAt")),
+                    step_up=c.get("stepUp", False),
+                    min_rank=c.get("minRank", 0),
+                ))
+
+        sv = None
+        if survival:
+            sv = SurvivalInfo(
+                trait_ids=survival.get("traitIds", []) or [],
+                difficulty=_die(survival.get("difficulty")),
+                term_penalty_after=survival.get("termPenaltyAfter"),
+                mishaps=survival.get("mishaps", []) or [],
+            )
+
+        ev = []
+        if events:
+            for e in events:
+                ev.append(EventItem(
+                    description=e.get("description", ""),
+                    effect=e.get("effect") or {},
+                    min_rank=e.get("minRank", 0),
+                ))
+
+        av = None
+        if advancement:
+            ranks = []
+            for r in (advancement.get("ranks") or []):
+                ranks.append(RankInfo(
+                    number=r.get("number", 0),
+                    name=r.get("name", ""),
+                    benefits=r.get("benefits") or [],
+                ))
+            av = AdvancementInfo(
+                trait_ids=advancement.get("traitIds", []) or [],
+                difficulty=_die(advancement.get("difficulty")),
+                ranks=ranks,
+            )
+
+        mo = None
+        if muster_out:
+            mo = MusterOutInfo(
+                per_term_benefits=muster_out.get("perTermBenefits") or [],
+                at_ranks=muster_out.get("atRanks") or {},
+            )
+
+        import logging, uuid
+        _log = logging.getLogger("transversal.lifepath")
+        _log.info("save_life_path discovery received: %s", d.model_dump() if d else None)
+        if not id:
+            id = f"lp-{uuid.uuid4().hex[:8]}"
+        lp = LifePath(
+            id=id, name=name, universe=universe, description=description,
+            qualification=q, discovery=d,
+            curriculum=ci, survival=sv, events=ev, advancement=av, muster_out=mo,
+        )
+
+        repo = info.context["entity_manager"].repo
+        existing = repo.get_lifepath(id)
+        if existing:
+            repo.update_lifepath(lp)
+        else:
+            repo.create_lifepath(lp)
+        return {"ok": True, "id": id}
+
+    @strawberry.mutation
+    def delete_life_path(self, info: strawberry.Info, id: strawberry.ID) -> strawberry.scalars.JSON:
+        repo = info.context["entity_manager"].repo
+        repo.delete_lifepath(str(id))
+        return {"ok": True}
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

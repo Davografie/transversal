@@ -598,7 +598,7 @@ def seed_all(em) -> None:
 def seed_life_paths(repo) -> None:
     """Seed life path definitions."""
     from transversal.domain import (
-        DieType, LifePath, LifePathType, LifeTerm,
+        DieType, LifePath, LifeTerm,
         CurriculumItem, QualificationInfo, DiscoveryBlock,
         SurvivalInfo, EventItem, RankInfo, AdvancementInfo, MusterOutInfo,
     )
@@ -609,7 +609,6 @@ def seed_life_paths(repo) -> None:
             name="Rogue Cultivator",
             universe="three_realms",
             description="Walk the land alone, beholden to no sect.",
-            type=LifePathType.DRIFTER,
             curriculum=[
                 CurriculumItem(trait_id="trait-cultivation-stage-76c7", create_at=DieType.D4, step_up=True, min_rank=0),
             ],
@@ -636,7 +635,6 @@ def seed_life_paths(repo) -> None:
             name="Street Survivor",
             universe="earth",
             description="Live by your wits on the margins of society.",
-            type=LifePathType.DRIFTER,
             curriculum=[
                 CurriculumItem(trait_id="trait-hack-8a0f", create_at=DieType.D4, step_up=False, min_rank=0),
             ],
@@ -663,7 +661,6 @@ def seed_life_paths(repo) -> None:
             name="Verdant Steps Outer Disciple",
             universe="three_realms",
             description="Train under the guidance of the Verdant Steps Sect.",
-            type=LifePathType.SECT,
             qualification=QualificationInfo(
                 trait_id="trait-cultivation-stage-76c7",
                 difficulty=DieType.D4,

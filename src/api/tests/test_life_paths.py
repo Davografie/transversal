@@ -11,7 +11,6 @@ from transversal.domain import (
     EntityType,
     EventItem,
     LifePath,
-    LifePathType,
     LifeTerm,
     MusterOutInfo,
     QualificationInfo,
@@ -96,7 +95,6 @@ class TestLifePath:
             universe="earth",
         )
         assert lp.id == "lp-test"
-        assert lp.type == LifePathType.DRIFTER
         assert lp.qualification is None
         assert lp.discovery is None
         assert lp.curriculum == []
@@ -107,7 +105,6 @@ class TestLifePath:
             name="Verdant Steps Outer Disciple",
             universe="three_realms",
             description="The safe cultivation path",
-            type=LifePathType.SECT,
             qualification=QualificationInfo(
                 trait_id="trait-cultivation",
                 difficulty=DieType.D4,

@@ -74,7 +74,7 @@ async function loadLifePaths(universeKey) {
     const data = await graphql(
       `query($u: String!) {
         lifePaths(universe: $u) {
-          id name universe description type
+          id name universe description
           qualification { traitId difficulty mustBeAtLocation draft }
           discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship }
           curriculum { traitId createAt stepUp minRank }
@@ -100,6 +100,7 @@ const props = defineProps({
   imagenJob: { type: Object, default: null },
   animateJob: { type: Object, default: null },
   open: { type: Function, default: null },
+  close: { type: Function, default: null },
   traitNameMap: { type: Object, default: () => ({}) },
 })
 
@@ -120,7 +121,7 @@ function openLifePaths() {
   props.open({
     component: GmLifePathsPanel,
     title: 'Life Paths',
-    props: { paths: lifePaths.value, traitNameMap: props.traitNameMap, open: props.open },
+    props: { universe: props.form?.current_universe || props.entityId, open: props.open, close: props.close },
   })
 }
 
@@ -263,6 +264,11 @@ async function loadImages() {
 
 watch(() => props.entityId, loadImages, { immediate: true })
 onMounted(() => { pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
+onMounted(() => {
+  window.addEventListener('lifepath-saved', (e) => {
+    if (props.form?.type === 'UNIVERSE') loadLifePaths(props.form.current_universe || props.entityId)
+  })
+})
 onUnmounted(() => { clearInterval(_jobPollTimer) })
 defineExpose({ refresh: loadImages })
 </script>
