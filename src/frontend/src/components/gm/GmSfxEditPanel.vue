@@ -108,18 +108,21 @@
     </button>
 
     <div v-if="sfx" class="danger-zone">
-      <button
-        class="danger-btn" :class="{ confirming: confirmingDelete }"
-        @click="onDeleteClick" :disabled="saving"
-      >{{ saving ? 'Deleting…' : confirmingDelete ? 'Confirm?' : 'Delete SFX' }}</button>
+      <DangerButton
+        label="Delete SFX"
+        loading-label="Deleting…"
+        :disabled="saving"
+        @confirm="onDelete"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed, onMounted, onUnmounted } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql, error: apiError } = useApi()
 const { patchData, fetchTraitsConfig } = useTraitsConfig()
@@ -249,7 +252,6 @@ async function onCreate() {
 // ── Delete ──
 async function onDelete() {
   if (!props.sfx?.id) return
-  if (!confirm(`Delete SFX "${props.sfx.name}"? This cannot be undone.`)) return
   saving.value = true
   try {
     await graphql(`mutation($id: ID!) { deleteSfx(id: $id) }`, { id: props.sfx.id })
@@ -417,12 +419,7 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .save-btn:disabled { opacity: 0.5; cursor: default; }
 .save-main { margin-top: 10px; width: 100%; }
 .danger-zone { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(212,64,64,0.2); }
-.danger-btn { width: 100%; font-size: 12px; padding: 6px; background: rgba(212,64,64,0.12); color: var(--danger); border: 1px solid rgba(212,64,64,0.25); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
-.danger-btn:hover { background: rgba(212,64,64,0.25); }
-.danger-btn:disabled { opacity: 0.4; cursor: default; }
-.danger-btn.confirming { background: rgba(212,64,64,0.35); border-color: rgba(212,64,64,0.5); font-weight: 600; animation: pulse-confirm 0.6s ease-in-out infinite alternate; }
 .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
-@keyframes pulse-confirm { from { opacity: 0.85; } to { opacity: 1; } }
 .error-msg { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 .success-msg { font-size: 11px; color: #40b860; background: rgba(64,184,96,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 </style>

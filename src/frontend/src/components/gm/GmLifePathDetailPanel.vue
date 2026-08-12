@@ -165,7 +165,7 @@
       <span class="lpd-subtitle lpd-clickable" @click="openEdit('muster')">Muster Out ✎</span>
       <span class="lpd-detail">No muster-out benefits defined</span>
     </div>
-    <button v-if="open" class="lpd-del-btn" @click="deleteStep">{{ delStep === 0 ? 'Delete life path' : 'Confirm?' }}</button>
+    <DangerButton v-if="open" label="Delete life path" @confirm="onDeleteConfirmed" />
   </div>
 </template>
 
@@ -174,6 +174,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
+import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { traitNameMap } = useTraitsConfig()
 
@@ -208,19 +209,10 @@ async function refreshLp() {
 onMounted(() => window.addEventListener('lifepath-saved', refreshLp))
 onUnmounted(() => window.removeEventListener('lifepath-saved', refreshLp))
 
-const delStep = ref(0)
-
-function deleteStep() {
-  if (delStep.value === 0) {
-    delStep.value = 1
-    setTimeout(() => { delStep.value = 0 }, 3000)
-    return
-  }
-  // delStep === 1: confirmed
+function onDeleteConfirmed() {
   graphql(`mutation($id:ID!){deleteLifePath(id:$id)}`, { id: lpRef.value.id })
   window.dispatchEvent(new CustomEvent('lifepath-saved', { detail: { id: lpRef.value.id, universe: lpRef.value.universe } }))
   emit('close')
-  delStep.value = 2
 }
 
 const discoveryRows = computed(() => {
@@ -282,6 +274,4 @@ function tNames(ids) {
 .lpd-edit-hint { font-size: 9px; color: var(--text-dim); margin: 0 0 4px 0; }
 .lpd-add-btn { font-size: 9px; padding: 2px 8px; cursor: pointer; background: rgba(255,255,255,0.04); color: var(--text-dim); border: 1px solid rgba(255,255,255,0.06); border-radius: 3px; margin-top: 2px; }
 .lpd-add-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
-.lpd-del-btn { font-size: 11px; padding: 4px 10px; margin-top: 8px; border: 1px solid rgba(224,96,96,0.3); border-radius: 3px; color: #e06060; background: none; cursor: pointer; }
-.lpd-del-btn:hover { background: rgba(224,96,96,0.1); }
 </style>

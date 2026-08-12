@@ -39,15 +39,15 @@
     <div class="danger-zone">
       <h4>Danger Zone</h4>
       <div class="danger-actions">
-        <button
-          class="danger-btn" :class="{ confirming: confirmingDelete }"
-          @click="onDeleteClick"
-        >{{ confirmingDelete ? 'Confirm?' : 'Delete' }}</button>
-        <button
+        <DangerButton
+          label="Delete"
+          @confirm="onDeleteConfirmed"
+        />
+        <DangerButton
           v-if="form.type === 'LOCATION'"
-          class="prune-btn" :class="{ confirming: confirmingPrune }"
-          @click="onPruneClick"
-        >{{ confirmingPrune ? 'Confirm?' : 'Prune' }}</button>
+          label="Prune"
+          @confirm="onPruneConfirmed"
+        />
       </div>
     </div>
   </div>
@@ -62,8 +62,7 @@ import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
-
-const CONFIRM_TIMEOUT = 3000
+import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
 
@@ -170,35 +169,16 @@ watch(localImagenJob, (now, prev) => {
   if (prev && !now) loadImages()
 })
 
-// ── Two-click confirmation ──────────────────────────
-const _confirmTimer = ref(null)
-const confirmingDelete = ref(false)
-const confirmingPrune = ref(false)
-
-async function onDeleteClick() {
-  if (confirmingDelete.value) {
-    clearTimeout(_confirmTimer.value)
-    confirmingDelete.value = false
-    await deleteEntity(props.entityId)
-    emit('close')
-  } else {
-    confirmingDelete.value = true
-    _confirmTimer.value = setTimeout(() => { confirmingDelete.value = false }, CONFIRM_TIMEOUT)
-  }
+// ── Delete / prune (two-click confirm handled by DangerButton) ──
+async function onDeleteConfirmed() {
+  await deleteEntity(props.entityId)
+  emit('close')
 }
 
-async function onPruneClick() {
-  if (confirmingPrune.value) {
-    clearTimeout(_confirmTimer.value)
-    confirmingPrune.value = false
-    await deleteEntity(props.entityId, true)
-    emit('close')
-  } else {
-    confirmingPrune.value = true
-    _confirmTimer.value = setTimeout(() => { confirmingPrune.value = false }, CONFIRM_TIMEOUT)
-  }
+async function onPruneConfirmed() {
+  await deleteEntity(props.entityId, true)
+  emit('close')
 }
-onUnmounted(() => clearTimeout(_confirmTimer.value))
 
 function formatSize(bytes) {
   if (!bytes || bytes === 0) return ''
@@ -251,11 +231,6 @@ defineExpose({ refresh: loadImages })
 .imagen-btn.cancelling { background: #dc2626; }
 .imagen-btn .btn-label { padding: 4px 8px; }
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
-.danger-btn { background: var(--danger); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
-.prune-btn { background: #b03030; color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; margin-left: 4px; }
-.prune-btn:hover { background: #d04040; }
-.danger-btn.confirming,
-.prune-btn.confirming { background: #fff; color: #b03030; font-weight: 600; animation: pulse-confirm 0.6s ease-in-out infinite alternate; }
 
 .danger-zone {
   margin-top: 12px; padding: 10px;
@@ -266,7 +241,7 @@ defineExpose({ refresh: loadImages })
   font-size: 10px; color: #e06060; text-transform: uppercase; letter-spacing: 1px;
   margin: 0 0 8px 0;
 }
-.danger-actions { display: flex; gap: 6px; }
+.danger-actions { display: flex; flex-direction: column; gap: 6px; }
 
 .image-gallery { margin-top: 12px; }
 .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
@@ -284,11 +259,6 @@ defineExpose({ refresh: loadImages })
 .gallery-label { display: block; font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 4px; background: rgba(0,0,0,0.3); }
 .universe-badge { display: inline-block; font-size: 7px; background: rgba(139,92,246,0.3); color: #c4b5fd; padding: 0 3px; border-radius: 2px; margin-left: 3px; }
 .role-badge { display: inline-block; font-size: 7px; background: rgba(245,158,11,0.3); color: #fcd34d; padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }
-
-@keyframes pulse-confirm {
-  from { opacity: 0.85; }
-  to { opacity: 1; }
-}
 
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;

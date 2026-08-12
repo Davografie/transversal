@@ -58,7 +58,12 @@
       <button class="ps-add-btn" @click="openSfxPicker">+ Add SFX</button>
 
       <div class="danger-zone">
-        <button class="danger-btn" @click="onDelete" :disabled="saving">{{ saving ? 'Deleting…' : 'Delete Trait' }}</button>
+        <DangerButton
+          label="Delete Trait"
+          loading-label="Deleting…"
+          :disabled="saving"
+          @confirm="onDelete"
+        />
       </div>
     </template>
 
@@ -95,6 +100,7 @@ import ChipInput from './ChipInput.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
+import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
 const { traitsets, allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
@@ -364,9 +370,6 @@ async function onDelete() {
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }
 .danger-zone { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(212,64,64,0.2); }
-.danger-btn { width: 100%; font-size: 12px; padding: 6px; background: rgba(212,64,64,0.12); color: var(--danger); border: 1px solid rgba(212,64,64,0.25); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
-.danger-btn:hover { background: rgba(212,64,64,0.25); }
-.danger-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* Display Names (read-only list) */
 .dn-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }

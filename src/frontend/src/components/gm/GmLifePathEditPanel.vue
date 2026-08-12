@@ -66,7 +66,7 @@
           <label>Minimum die</label>
           <select v-model="discEntryDie"><option v-for="d in dieTypes" :key="d" :value="d">{{ d }}</option></select>
         </div>
-        <button v-if="!addNew && discEntryType" class="lpe-del lpe-item-del" @click="deleteDiscFlatItem(discEntryIndex)">Delete</button>
+        <DangerButton v-if="!addNew && discEntryType" label="Delete" :requires-confirm="false" @confirm="deleteDiscFlatItem(discEntryIndex)" />
       </div>
     </div>
 
@@ -90,7 +90,7 @@
         </div>
         <div class="lpe-row"><label>Create at</label><select v-model="form.curriculum[effectiveItemIndex].createAt"><option v-for="d in dieTypes" :key="d" :value="d">{{ d }}</option></select></div>
         <label class="lpe-chk" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" v-model="form.curriculum[effectiveItemIndex].stepUp" /> Step up existing</label>
-        <button class="lpe-del lpe-item-del" @click="deleteCurrentItem()">Delete</button>
+        <DangerButton label="Delete" :requires-confirm="false" @confirm="deleteCurrentItem()" />
       </div>
     </div>
 
@@ -139,7 +139,7 @@
         </div>
         <div class="lpe-row"><label>Die type</label><select v-model="form.survival.mishaps[effectiveItemIndex].effectDie"><option v-for="d in dieTypes" :key="d" :value="d">{{ d }}</option></select></div>
         <label class="lpe-chk" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;color:var(--text);cursor:pointer"><input type="checkbox" v-model="form.survival.mishaps[effectiveItemIndex].must_muster_out" /> Forces muster out</label>
-        <button class="lpe-del lpe-item-del" @click="deleteCurrentItem()">Delete</button>
+        <DangerButton label="Delete" :requires-confirm="false" @confirm="deleteCurrentItem()" />
       </div>
     </div>
 
@@ -163,7 +163,7 @@
           <GmTraitPicker v-model="form.events[effectiveItemIndex].effectTraitId" :universe="form.universe" />
         </div>
         <div class="lpe-row"><label>Die type</label><select v-model="form.events[effectiveItemIndex].effectDie"><option v-for="d in dieTypes" :key="d" :value="d">{{ d }}</option></select></div>
-        <button class="lpe-del lpe-item-del" @click="deleteCurrentItem()">Delete</button>
+        <DangerButton label="Delete" :requires-confirm="false" @confirm="deleteCurrentItem()" />
       </div>
     </div>
 
@@ -202,7 +202,7 @@
         <div class="lpe-row"><label>Number</label><input v-model.number="form.advancement.ranks[effectiveItemIndex].number" type="number" min="1" /></div>
         <div class="lpe-row"><label>Name</label><input v-model="form.advancement.ranks[effectiveItemIndex].name" placeholder="rank name" /></div>
         <div class="lpe-row"><label>Benefits</label><input v-model="form.advancement.ranks[effectiveItemIndex].benefitsStr" placeholder="JSON, e.g. [{type:'razmerit',amount:100}]" /></div>
-        <button class="lpe-del lpe-item-del" @click="deleteCurrentItem()">Delete</button>
+        <DangerButton label="Delete" :requires-confirm="false" @confirm="deleteCurrentItem()" />
       </div>
     </div>
 
@@ -226,6 +226,7 @@ import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmTraitPicker from './GmTraitPicker.vue'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
+import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { traitNameMap } = useTraitsConfig()
 
@@ -770,8 +771,6 @@ async function save() {
 .lpe-add:hover { background: rgba(255,255,255,0.08); color: var(--text); }
 .lpe-del { font-size: 10px; padding: 1px 5px; cursor: pointer; background: none; color: var(--text-dim); border: none; }
 .lpe-del:hover { color: #e06060; }
-.lpe-item-del { font-size: 11px; padding: 4px 10px; margin-top: 8px; border: 1px solid rgba(224,96,96,0.3); border-radius: 3px; color: #e06060; }
-.lpe-item-del:hover { background: rgba(224,96,96,0.1); }
 .lpe-actions { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
 .lpe-save { font-size: 12px; padding: 5px 18px; cursor: pointer; background: var(--accent-dim); color: var(--text); border: none; border-radius: 4px; }
 .lpe-save:disabled { opacity: 0.5; cursor: default; }

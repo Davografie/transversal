@@ -24,22 +24,23 @@
     <button class="ps-add-btn" @click="onNewTrait">+ New Trait</button>
 
     <div class="danger-zone">
-      <button
-        class="danger-btn" :class="{ confirming: confirmingDelete }"
-        @click="onDeleteClick" :disabled="saving"
-      >{{ saving ? 'Deleting…' : confirmingDelete ? 'Confirm?' : 'Delete Traitset' }}</button>
+      <DangerButton
+        label="Delete Traitset"
+        loading-label="Deleting…"
+        :disabled="saving"
+        @confirm="onDeleteTraitset"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, watch, computed, onUnmounted } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import ChipInput from './ChipInput.vue'
 import GmTraitEditPanel from '@/components/gm/GmTraitEditPanel.vue'
-
-const CONFIRM_TIMEOUT = 3000
+import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
 const { traitsets, allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
@@ -123,21 +124,6 @@ function onNewTrait() {
   }
 }
 
-const confirmingDelete = ref(false)
-let _traitsetConfirmTimer = null
-
-function onDeleteClick() {
-  if (confirmingDelete.value) {
-    clearTimeout(_traitsetConfirmTimer)
-    confirmingDelete.value = false
-    onDeleteTraitset()
-  } else {
-    confirmingDelete.value = true
-    _traitsetConfirmTimer = setTimeout(() => { confirmingDelete.value = false }, CONFIRM_TIMEOUT)
-  }
-}
-onUnmounted(() => clearTimeout(_traitsetConfirmTimer))
-
 async function onDeleteTraitset() {
   if (!traitset.value?.id) return
   saving.value = true
@@ -163,13 +149,4 @@ async function onDeleteTraitset() {
 .ps-add-btn { font-size: 12px; padding: 6px; margin-top: 8px; background: var(--accent-dim); color: var(--text); border-radius: 6px; border: none; cursor: pointer; width: 100%; }
 .ps-add-btn:hover { background: var(--accent); }
 .danger-zone { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(212,64,64,0.2); }
-.danger-btn { width: 100%; font-size: 12px; padding: 6px; background: rgba(212,64,64,0.12); color: var(--danger); border: 1px solid rgba(212,64,64,0.25); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
-.danger-btn:hover { background: rgba(212,64,64,0.25); }
-.danger-btn:disabled { opacity: 0.4; cursor: default; }
-.danger-btn.confirming { background: rgba(212,64,64,0.35); border-color: rgba(212,64,64,0.5); font-weight: 600; animation: pulse-confirm 0.6s ease-in-out infinite alternate; }
-
-@keyframes pulse-confirm {
-  from { opacity: 0.85; }
-  to { opacity: 1; }
-}
 </style>
