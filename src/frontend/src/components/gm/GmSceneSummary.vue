@@ -28,14 +28,4 @@ defineEmits(['inspect'])
 }
 .scene-row:hover { background: rgba(255,255,255,0.08); }
 .scene-raz { font-size: 11px; color: var(--accent); font-weight: 600; margin-left: auto; }
-
-.entity-type-badge {
-  font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; font-weight: 600;
-}
-.type-character, .type-pc { background: #4088d4; color: #fff; }
-.type-gmc { background: #e88830; color: #0a0a0f; }
-.type-CHARACTER, .type-PC { background: #4088d4; color: #fff; }
-.type-GMC { background: #e88830; color: #0a0a0f; }
-.entity-name { flex: 1; font-weight: 500; }
-.empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 </style>

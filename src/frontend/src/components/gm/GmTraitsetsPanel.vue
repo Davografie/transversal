@@ -96,19 +96,9 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 
 <style scoped>
 .ps-list { display: flex; flex-direction: column; gap: 3px; }
-.entity-row {
-  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
-  border-radius: 6px; cursor: pointer;
-  background: rgba(255,255,255,0.03);
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-  font-size: 13px; user-select: none;
-}
-.entity-row:hover { background: rgba(255,255,255,0.06); }
-.entity-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
+.entity-row { user-select: none; transition: background 0.15s, transform 0.15s, box-shadow 0.15s; }
 .entity-row.dragging { opacity: 0.4; }
 .entity-row.drag-over { background: rgba(64,136,212,0.12); box-shadow: 0 0 0 1px var(--accent-dim) inset; transform: scale(1.02); }
 .drag-handle { font-size: 12px; color: var(--text-dim); cursor: grab; opacity: 0.4; transition: opacity 0.15s; padding: 0 2px; }
 .entity-row:hover .drag-handle { opacity: 0.7; }
-.entity-name { flex: 1; font-weight: 500; }
-.loading, .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 </style>

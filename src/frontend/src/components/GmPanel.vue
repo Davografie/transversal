@@ -353,22 +353,7 @@ onUnmounted(() => { stopJobPolling() })
 .create-btn { width: 100%; font-size: 12px; padding: 8px; margin-bottom: 8px; background: var(--accent-dim); color: var(--text); }
 .create-btn:hover { background: var(--accent); }
 
-.entity-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px; margin-bottom: 4px; background: rgba(255,255,255,0.04); border-radius: 6px; cursor: pointer; transition: background 0.15s; font-size: 13px; }
-.entity-row:hover { background: rgba(255,255,255,0.08); }
-.entity-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
-.entity-type-badge { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
-.type-character, .type-pc { background: #4088d4; color: #fff; }
-.type-location { background: #40b860; color: #0a0a0f; }
-.type-gmc { background: #e88830; color: #0a0a0f; }
-.type-faction { background: #d44040; color: #fff; }
-.type-asset { background: #888; color: #fff; }
-.type-CHARACTER, .type-PC { background: #4088d4; color: #fff; }
-.type-LOCATION { background: #40b860; color: #0a0a0f; }
-.type-GMC { background: #e88830; color: #0a0a0f; }
-.type-FACTION { background: #d44040; color: #fff; }
-.type-ASSET { background: #888; color: #fff; }
-.entity-name { flex: 1; font-weight: 500; }
-.entity-universe { font-size: 10px; color: var(--text-dim); }
+.entity-row { margin-bottom: 4px; }
 .factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
 
 .form-actions { display: flex; gap: 6px; }
@@ -379,6 +364,5 @@ onUnmounted(() => { stopJobPolling() })
 .panel-body label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-top: 8px; }
 .panel-body input, .panel-body select { font-size: 13px; padding: 6px 10px; width: 100%; box-sizing: border-box; }
 
-.loading, .error, .empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
-.error { color: var(--danger); }
+
 </style>

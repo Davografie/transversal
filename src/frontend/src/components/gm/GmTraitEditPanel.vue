@@ -341,13 +341,9 @@ async function onDelete() {
 </script>
 
 <style scoped>
-.ps-form { display: flex; flex-direction: column; gap: 6px; }
-.ps-form label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ps-form input, .ps-form select { font-size: 12px; padding: 6px 8px; }
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: none; cursor: pointer; }
 .checkbox-label input { width: auto; }
-.ps-section-title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
-
 .sfx-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .sfx-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; background: rgba(255,255,255,0.04); }
 .sfx-row:hover { background: rgba(255,255,255,0.08); }
@@ -355,17 +351,10 @@ async function onDelete() {
 .checkbox-inner { display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0; }
 .checkbox-inner input { width: auto; margin: 0; cursor: pointer; }
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }
-.row-del-btn { font-size: 12px; padding: 2px 6px; background: none; color: var(--text-dim); border: none; cursor: pointer; border-radius: 3px; }
-.row-del-btn:hover { color: var(--danger); background: rgba(212,64,64,0.12); }
 
-.empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
-.ps-add-btn { font-size: 12px; padding: 6px; margin-top: 8px; background: var(--accent-dim); color: var(--text); border-radius: 6px; border: none; cursor: pointer; width: 100%; }
-.ps-add-btn:hover { background: var(--accent); }
-.ps-add-btn:disabled { opacity: 0.4; cursor: default; }
 .create-actions { display: flex; gap: 6px; margin-top: 4px; }
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }
-.danger-zone { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(212,64,64,0.2); }
 
 /* Display Names (read-only list) */
 .dn-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }

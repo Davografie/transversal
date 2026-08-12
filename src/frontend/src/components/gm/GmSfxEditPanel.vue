@@ -371,8 +371,6 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 </script>
 
 <style scoped>
-.ps-form { display: flex; flex-direction: column; gap: 6px; }
-.ps-form label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ps-form input, .ps-form select, .ps-form textarea {
   font-size: 12px; padding: 6px 8px;
   background: rgba(255,255,255,0.06); color: var(--text);
@@ -382,7 +380,6 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .ps-form textarea { resize: vertical; min-height: 48px; }
 .hint { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 9px; }
 
-.ps-section-title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
 
 .effects-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .effect-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: grab; font-size: 12px; background: rgba(255,255,255,0.04); transition: background 0.1s; }
@@ -400,11 +397,7 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 
 .effect-summary { flex: 1; font-family: monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .effect-timing { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
-.row-del-btn { font-size: 12px; padding: 2px 6px; background: none; color: var(--text-dim); border: none; cursor: pointer; border-radius: 3px; }
-.row-del-btn:hover { color: var(--danger); background: rgba(212,64,64,0.12); }
 
-.ps-add-btn { font-size: 12px; padding: 6px; margin-top: 8px; background: var(--accent-dim); color: var(--text); border-radius: 6px; border: none; cursor: pointer; width: 100%; }
-.ps-add-btn:hover { background: var(--accent); }
 
 .add-effect-form { margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
 .form-title { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
@@ -420,8 +413,6 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }
 .save-main { margin-top: 10px; width: 100%; }
-.danger-zone { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(212,64,64,0.2); }
-.empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 .error-msg { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 .success-msg { font-size: 11px; color: #40b860; background: rgba(64,184,96,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 </style>

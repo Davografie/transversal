@@ -148,26 +148,7 @@ function cancelTouchDrag() {
 .tree-toggle.leaf { visibility: hidden; }
 .tree-toggle.occupant { font-size: 8px; width: 32px; min-height: 32px; line-height: 32px; color: var(--text-dim); }
 
-.entity-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 10px; margin-bottom: 4px;
-  background: rgba(255,255,255,0.04); border-radius: 6px;
-  font-size: 13px;
-}
-.entity-type-badge {
-  font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; font-weight: 600;
-}
-.type-character, .type-pc { background: #4088d4; color: #fff; }
-.type-location { background: #40b860; color: #0a0a0f; }
-.type-gmc { background: #e88830; color: #0a0a0f; }
-.type-asset { background: #888; color: #fff; }
-.type-universe { background: #c060d8; color: #fff; }
-.type-CHARACTER, .type-PC { background: #4088d4; color: #fff; }
-.type-LOCATION { background: #40b860; color: #0a0a0f; }
-.type-GMC { background: #e88830; color: #0a0a0f; }
-.type-ASSET { background: #888; color: #fff; }
-.type-UNIVERSE { background: #c060d8; color: #fff; }
-.entity-name { flex: 1; font-weight: 500; }
+.entity-row { margin-bottom: 4px; }
 
 .tree-enter-active, .tree-leave-active { transition: all 0.2s ease; }
 .tree-enter-from, .tree-leave-to { opacity: 0; transform: translateY(-8px); }

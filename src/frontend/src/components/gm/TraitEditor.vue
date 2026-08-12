@@ -136,5 +136,4 @@ function emitAdd() {
   border: 1px solid rgba(255,255,255,0.06);
 }
 
-.empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 </style>

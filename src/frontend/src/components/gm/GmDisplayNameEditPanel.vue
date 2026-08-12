@@ -156,8 +156,6 @@ async function doSave() {
 </script>
 
 <style scoped>
-.ps-form { display: flex; flex-direction: column; gap: 6px; }
-.ps-form label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ps-form input, .ps-form select {
   font-size: 12px; padding: 6px 8px;
   background: rgba(255,255,255,0.06); color: var(--text);
@@ -195,11 +193,9 @@ async function doSave() {
 }
 .die-opt:hover { background: var(--accent); color: #fff; }
 
-.row-del-btn { font-size: 12px; padding: 2px 6px; background: none; color: var(--text-dim); border: none; cursor: pointer; border-radius: 3px; flex-shrink: 0; }
-.row-del-btn:hover { color: var(--danger); background: rgba(212,64,64,0.12); }
+.row-del-btn { flex-shrink: 0; }
 
-.ps-add-btn { font-size: 12px; padding: 6px; margin-top: 4px; background: var(--accent-dim); color: var(--text); border-radius: 6px; border: none; cursor: pointer; width: 100%; }
-.ps-add-btn:hover { background: var(--accent); }
+.ps-add-btn { margin-top: 4px; }
 
 .error-msg { font-size: 11px; color: var(--danger); margin-top: 8px; padding: 6px 8px; background: rgba(212,64,64,0.08); border-radius: 4px; }
 .saving-hint { font-size: 10px; color: var(--text-dim); text-align: center; margin-top: 6px; }

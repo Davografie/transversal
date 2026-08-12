@@ -86,8 +86,5 @@ function onNewSfx() {
 .sfx-name { flex: 1; font-weight: 500; }
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }
 
-.empty { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 
-.ps-add-btn { font-size: 12px; padding: 6px; margin-top: 8px; background: var(--accent-dim); color: var(--text); border-radius: 6px; border: none; cursor: pointer; width: 100%; }
-.ps-add-btn:hover { background: var(--accent); }
 </style>
