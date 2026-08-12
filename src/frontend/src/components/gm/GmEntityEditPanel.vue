@@ -1,9 +1,9 @@
 <template>
   <div>
     <GmEntityForm
-      :model-value="form"
+      v-model="form"
       :entity-id="entityId"
-      @update:model-value="onFormUpdate"
+      :allow-type-change="false"
     />
     <div class="image-gallery">
       <div class="gallery-header">
@@ -11,7 +11,7 @@
         <div class="gallery-actions">
           <label class="upload-btn">
             📤 Upload
-            <input type="file" accept="image/*" @change="$emit('upload-bg', $event)" hidden />
+            <input type="file" accept="image/*" @change="uploadBgImage" hidden />
           </label>
           <button class="imagen-btn" :class="{ cancelling: imagenStatus.cancelling }" @click="onImagenClick">
             <span class="btn-label">{{ imagenStatus.label }}</span>
@@ -54,8 +54,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, useAttrs, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useEntityCrud } from '@/composables/useEntityCrud.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
@@ -64,6 +66,12 @@ import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
 const CONFIRM_TIMEOUT = 3000
 
 const { graphql } = useApi()
+
+// ── Composables: shared state with GmPanel ──────────
+const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob } = useEntityCrud()
+const { traitNameMap } = useTraitsConfig()
+
+// ── Life paths (panel-specific, not from composable) ─
 const lifePaths = ref([])
 const loadingLifepaths = ref(false)
 
@@ -95,44 +103,42 @@ async function loadLifePaths(universeKey) {
 }
 
 const props = defineProps({
-  form: { type: Object, default: () => ({}) },
   entityId: { type: String, default: null },
-  imagenJob: { type: Object, default: null },
-  animateJob: { type: Object, default: null },
   open: { type: Function, default: null },
   close: { type: Function, default: null },
-  traitNameMap: { type: Object, default: () => ({}) },
 })
 
+const emit = defineEmits(['close', 'switch-to-sheet', 'image-open'])
+
+// ── Sub-panel openers ───────────────────────────────
 function openLoraConfig() {
   if (!props.open) return
   props.open({
     component: GmLoRAConfigPanel,
     title: 'LoRA Configuration',
-    props: { loraConfigJson: props.form.lora_config || '{}' },
+    props: { loraConfigJson: form.value.lora_config || '{}' },
     listeners: {
-      'update:loraConfig': (json) => emit('update:form', { ...props.form, lora_config: json }),
+      'update:loraConfig': (json) => { form.value = { ...form.value, lora_config: json } },
     },
   })
 }
 
 function openLifePaths() {
   if (!props.open) return
+  const currentUniverse = form.value?.current_universe || props.entityId
   props.open({
     component: GmLifePathsPanel,
     title: 'Life Paths',
-    props: { universe: props.form?.current_universe || props.entityId, open: props.open, close: props.close },
+    props: { universe: currentUniverse, open: props.open, close: props.close },
   })
 }
 
-const emit = defineEmits(['update:form', 'upload-bg', 'switch-to-sheet', 'delete', 'prune', 'imagen', 'cancel', 'image-open'])
-
 // Load life paths when editing a universe entity
-watch(() => [props.entityId, props.form?.type], ([id, type]) => {
-  if (id && type === 'UNIVERSE') loadLifePaths(props.form.current_universe || props.entityId)
+watch(() => [props.entityId, form.value?.type], ([id, type]) => {
+  if (id && type === 'UNIVERSE') loadLifePaths(form.value.current_universe || props.entityId)
 }, { immediate: true })
 
-// Independent job polling — props are snapshots from the panel system
+// ── Imagen ──────────────────────────────────────────
 const localImagenJob = ref(null)
 let _jobPollTimer = null
 
@@ -148,15 +154,15 @@ async function pollOwnJob() {
 }
 
 const imagenStatus = computed(() => {
-  const j = localImagenJob.value || props.imagenJob
+  const j = localImagenJob.value || imagenJob.value
   if (!j) return { label: '🖼 Imagen', status: '', cancelling: false }
   if (j.status === 'failed') return { label: '🖼 Imagen', status: '!', cancelling: false }
   return { label: 'Cancel', status: '✕', cancelling: true }
 })
 
 function onImagenClick() {
-  if (imagenStatus.value.cancelling) emit('cancel')
-  else emit('imagen')
+  if (imagenStatus.value.cancelling) doCancel()
+  else doImagen()
 }
 
 // Refresh gallery when a job completes
@@ -164,18 +170,33 @@ watch(localImagenJob, (now, prev) => {
   if (prev && !now) loadImages()
 })
 
-// ── Two-click confirmation (no dialogs) ────────────
+// ── Two-click confirmation ──────────────────────────
 const _confirmTimer = ref(null)
 const confirmingDelete = ref(false)
 const confirmingPrune = ref(false)
 
-function onDeleteClick() {
-  if (confirmingDelete.value) { clearTimeout(_confirmTimer.value); confirmingDelete.value = false; emit('delete') }
-  else { confirmingDelete.value = true; _confirmTimer.value = setTimeout(() => { confirmingDelete.value = false }, CONFIRM_TIMEOUT) }
+async function onDeleteClick() {
+  if (confirmingDelete.value) {
+    clearTimeout(_confirmTimer.value)
+    confirmingDelete.value = false
+    await deleteEntity(props.entityId)
+    emit('close')
+  } else {
+    confirmingDelete.value = true
+    _confirmTimer.value = setTimeout(() => { confirmingDelete.value = false }, CONFIRM_TIMEOUT)
+  }
 }
-function onPruneClick() {
-  if (confirmingPrune.value) { clearTimeout(_confirmTimer.value); confirmingPrune.value = false; emit('prune') }
-  else { confirmingPrune.value = true; _confirmTimer.value = setTimeout(() => { confirmingPrune.value = false }, CONFIRM_TIMEOUT) }
+
+async function onPruneClick() {
+  if (confirmingPrune.value) {
+    clearTimeout(_confirmTimer.value)
+    confirmingPrune.value = false
+    await deleteEntity(props.entityId, true)
+    emit('close')
+  } else {
+    confirmingPrune.value = true
+    _confirmTimer.value = setTimeout(() => { confirmingPrune.value = false }, CONFIRM_TIMEOUT)
+  }
 }
 onUnmounted(() => clearTimeout(_confirmTimer.value))
 
@@ -184,69 +205,21 @@ function formatSize(bytes) {
   return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`
 }
 
-// ── LoRA configuration (universe entities only) ─────
-const imagenEntityTypes = ['CHARACTER', 'GMC', 'LOCATION', 'FACTION', 'ASSET']
-const availableLoras = ref([])
-const loraConfig = ref({})
-
-async function fetchLoras() {
-  try {
-    const r = await fetch('/api/v1/imagen/loras')
-    if (r.ok) {
-      const d = await r.json()
-      availableLoras.value = (d.loras || []).map(l => typeof l === 'string' ? { name: l, path: l } : l)
-    }
-  } catch {}
-}
-
-watch(() => props.form?.lora_config, (v) => {
-  try { loraConfig.value = v ? JSON.parse(v) : {} } catch { loraConfig.value = {} }
-}, { immediate: true })
-
-function loraAt(entityType, idx) {
-  const list = loraConfig.value[entityType] || []
-  return list[idx] || ''
-}
-
-function setLora(entityType, idx, loraName) {
-  const list = [...(loraConfig.value[entityType] || [])]
-  while (list.length <= idx) list.push('')
-  list[idx] = loraName
-  // Compact: remove empty trailing entries
-  while (list.length && !list[list.length - 1]) list.pop()
-  loraConfig.value = { ...loraConfig.value, [entityType]: list }
-  emit('update:form', { ...props.form, lora_config: JSON.stringify(loraConfig.value) })
-}
-
-function onFormUpdate(v) { emit('update:form', v) }
+// ── Image gallery (panel-specific) ──────────────────
 const openedImageId = ref(null)
-const attrs = useAttrs()
 
 function openImage(img) {
   if (!props.open) return
   if (openedImageId.value === img.id) {
-    const closeFn = props.close || attrs.close
-        if (closeFn) { closeFn(); openedImageId.value = null }
+    if (props.close) { props.close(); openedImageId.value = null }
     return
   }
   openedImageId.value = img.id
   props.open({
     component: ImageViewer,
-    title: img.image_type + ' — ' + img.id,
-    props: {
-      src: img.path_animated || img.path_large,
-      animatedSrc: img.path_animated,
-      alt: img.image_type + ' — ' + img.width + '×' + img.height,
-      entityId: props.entityId,
-      imageId: img.id,
-      imageType: img.image_type,
-      roles: img.roles || [],
-      animateJob: props.animateJob,
-      sizeBytes: img.size_bytes,
-    },
+    title: img.id,
+    props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: props.entityId, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
     listeners: {
-      'deleted': loadImages,
-      'refresh': loadImages,
       'close': () => { openedImageId.value = null },
     },
   })
@@ -266,7 +239,7 @@ watch(() => props.entityId, loadImages, { immediate: true })
 onMounted(() => { pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
 onMounted(() => {
   window.addEventListener('lifepath-saved', (e) => {
-    if (props.form?.type === 'UNIVERSE') loadLifePaths(props.form.current_universe || props.entityId)
+    if (form.value?.type === 'UNIVERSE') loadLifePaths(form.value.current_universe || props.entityId)
   })
 })
 onUnmounted(() => { clearInterval(_jobPollTimer) })

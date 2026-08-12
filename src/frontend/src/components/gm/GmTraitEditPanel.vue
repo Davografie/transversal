@@ -90,37 +90,35 @@
 <script setup>
 import { reactive, ref, watch, onMounted, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import ChipInput from './ChipInput.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
 
 const { graphql } = useApi()
+const { traitsets, allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
+
+// Derive trait reactively from the composable — stays current after refresh
+const trait = computed(() => {
+  for (const ts of traitsets?.value ?? []) {
+    const found = (ts.traits || []).find(t => t.id === props.traitId)
+    if (found) return found
+  }
+  return null
+})
 
 const props = defineProps({
-  trait: { type: Object, default: null },
-  allSfxs: { type: Array, default: () => [] },
+  traitId: { type: String, default: null },
   selectedId: { type: String, default: '' },
   traitsetId: { type: String, default: '' },
-  onRefresh: { type: Function, default: null },
-  onPatch: { type: Function, default: null },
   open: { type: Function, default: null },
   close: { type: Function, default: null },
 })
 
 const saving = ref(false)
 
-// Self-fetch SFXs if the prop chain didn't deliver them
-const localSfxs = ref([])
-onMounted(async () => {
-  if (!props.allSfxs || props.allSfxs.length === 0) {
-    const data = await graphql(`{ sfxs { id name description trigger limit effects { polarity timing type action target result } } }`)
-    if (data?.sfxs) localSfxs.value = data.sfxs
-  }
-})
-const allSfxsEffective = computed(() =>
-  (props.allSfxs && props.allSfxs.length > 0) ? props.allSfxs : localSfxs.value
-)
+// allSfxs is now provided by useTraitsConfig() composable — no local fallback needed
 
 const universeOptions = [
   { label: 'Earth', value: 'earth' },
@@ -178,7 +176,7 @@ function syncDisplayNamesFromTrait(t) {
   }
 }
 
-watch(() => props.trait, (t) => {
+watch(trait, (t) => {
   if (t) {
     form.name = t.name || ''
     form.universes = [...(t.universes || [])]
@@ -197,7 +195,7 @@ watch([
   () => form.defaultRatingType, () => form.locationRestricted,
   () => [...form.possibleSfxIds], () => [...form.defaultSfxIds],
 ], () => {
-  if (!props.trait) return
+  if (!trait.value) return
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => save(), 600)
 }, { deep: true })
@@ -213,12 +211,12 @@ function serializeDisplayNames() {
 }
 
 async function save() {
-  if (!props.trait?.id) return
+  if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: props.trait.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
   )
-  if (props.onPatch) props.onPatch('traits', props.trait.id, {
+  patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
     defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted,
     possibleSfxIds: [...form.possibleSfxIds],
@@ -228,7 +226,7 @@ async function save() {
 
 // ── Display Name delete ──
 async function deleteDisplayName(index) {
-  if (!props.trait?.id) return
+  if (!trait.value?.id) return
   const updated = displayNames.value
     .filter((_, i) => i !== index)
     .map(dn => ({
@@ -238,29 +236,26 @@ async function deleteDisplayName(index) {
     }))
     .filter(dn => dn.name)
   displayNames.value = updated
-  if (props.trait) props.trait.displayNames = updated
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: props.trait.id, input: { displayNames: updated } }
+    { id: trait.value.id, input: { displayNames: updated } }
   )
 }
 
 // ── Display Name editor ──
 function openDisplayNameEditor(index) {
-  if (!props.open || !props.trait?.id) return
+  if (!props.open || !trait.value?.id) return
   props.open({
     component: GmDisplayNameEditPanel,
     title: index === null ? 'Add Display Name' : 'Edit Display Name',
     props: {
       allDisplayNames: displayNames.value,
       editIndex: index,
-      traitId: props.trait.id,
-      onPatch: props.onPatch,
+      traitId: trait.value.id,
     },
     listeners: {
       'saved': (updatedList) => {
         displayNames.value = updatedList
-        if (props.trait) props.trait.displayNames = updatedList
       },
     },
   })
@@ -272,19 +267,19 @@ const createForm = reactive({ id: '', name: '', universes: [], defaultDieType: '
 async function onCreate() {
   saving.value = true
   try {
-    const tsId = props.traitsetId || props.trait?.traitsetId || ''
+    const tsId = props.traitsetId || trait.value?.traitsetId || ''
     const universes = createForm.universes.length > 0 ? [...createForm.universes] : []
     await graphql(
       `mutation($input: TraitInput!) { createTrait(input: $input) { id } }`,
       { input: { id: createForm.id.trim(), name: createForm.name.trim(), universes, traitsetId: tsId, defaultDieType: createForm.defaultDieType, defaultRatingType: createForm.defaultRatingType, displayNames: [] } }
     )
-    if (props.onRefresh) await props.onRefresh()
+    await fetchTraitsConfig()
   } finally { saving.value = false }
 }
 
 // ── Possible SFXs (filtered from all) ──
 const possibleSfxs = computed(() =>
-  allSfxsEffective.value.filter(s => form.possibleSfxIds.includes(s.id))
+  allSfxs.value.filter(s => form.possibleSfxIds.includes(s.id))
 )
 
 function removePossibleSfx(id) {
@@ -306,10 +301,7 @@ function openSfxPicker() {
       component: GmSfxPickerPanel,
       title: 'Add SFX to Trait',
       props: {
-        allSfxs: allSfxsEffective.value,
         selectedIds: [...form.possibleSfxIds],
-        onRefresh: props.onRefresh,
-        onPatch: props.onPatch,
       },
       listeners: {
         'add-sfx': (id) => {
@@ -331,25 +323,17 @@ function onSfxClick(sfx) {
     props.open({
       component: GmSfxEditPanel,
       title: sfx.name || 'Edit SFX',
-      props: { sfx: sfx, onRefresh: props.onRefresh, onPatch: props.onPatch },
-      listeners: {
-        'sfx-updated': (updated) => {
-          const idx = localSfxs.value.findIndex(s => s.id === updated.id)
-          if (idx >= 0) Object.assign(localSfxs.value[idx], updated)
-        },
-        'sfx-deleted': (id) => {
-          localSfxs.value = localSfxs.value.filter(s => s.id !== id)
-        },
-      },
+      props: { sfx: sfx },
+      listeners: {},
     })
   }
 }
 
 // ── Delete ──
 async function onDelete() {
-  if (!props.trait?.id) return
+  if (!trait.value?.id) return
   saving.value = true
-  try { await graphql(`mutation($id: ID!) { deleteTrait(id: $id) }`, { id: props.trait.id }); if (props.onRefresh) await props.onRefresh(); if (props.close) props.close() }
+  try { await graphql(`mutation($id: ID!) { deleteTrait(id: $id) }`, { id: trait.value.id }); await fetchTraitsConfig(); if (props.close) props.close() }
   finally { saving.value = false }
 }
 </script>

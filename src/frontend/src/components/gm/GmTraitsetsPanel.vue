@@ -1,7 +1,7 @@
 <template>
   <div>
     <input v-model="search" class="filter-input" placeholder="Search…" style="margin-bottom:8px" />
-    <div v-if="loading?.value" class="loading">Loading…</div>
+    <div v-if="loading.value" class="loading">Loading…</div>
     <div v-else class="ps-list">
       <div
         v-for="(ts, i) in filtered"
@@ -25,7 +25,7 @@
         <span class="entity-name">{{ ts.name }}</span>
         <span style="font-size:10px;color:var(--text-dim)">{{ (ts.traits?.length) || 0 }}</span>
       </div>
-      <div v-if="filtered.length === 0 && !showCreate" class="empty">No traitsets found</div>
+      <div v-if="filtered.length === 0" class="empty">No traitsets found</div>
     </div>
   </div>
 </template>
@@ -33,21 +33,18 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 
 const { graphql } = useApi()
+const { traitsets, allSfxs, loading, fetchTraitsConfig } = useTraitsConfig()
 
 const props = defineProps({
-  traitsets: { type: Object, default: null },   // computed ref from GmPanel
-  allSfxs: { type: Object, default: null },     // ref from GmPanel
-  loading: { type: Object, default: null },     // ref from GmPanel
   selectedId: { type: String, default: '' },
-  onRefresh: { type: Function, default: null },
   open: { type: Function, default: null },
 })
 
 const search = ref('')
-const showCreate = ref(false)
 
 // ── Drag-and-drop reorder ────────────────────────────
 const dragIndex = ref(-1)
@@ -56,8 +53,7 @@ let localOrder = null
 
 const filtered = computed(() => {
   const q = search.value.toLowerCase()
-  const src = props.traitsets?.value ?? []
-  const list = localOrder || src
+  const list = localOrder || traitsets.value
   if (!q) return list
   return list.filter(ts =>
     ts.name.toLowerCase().includes(q) ||
@@ -66,17 +62,12 @@ const filtered = computed(() => {
 })
 
 function onClick(ts) {
-  if (dragIndex.value >= 0) return  // E7: don't open during drag
+  if (dragIndex.value >= 0) return
   if (props.open) {
     props.open({
       component: GmTraitsetDetail,
       title: ts.name,
-      props: {
-        traitsetsRef: props.traitsets,      // reactive computed ref
-        traitsetId: ts.id,                   // look up by ID so data stays current
-        allSfxs: props.allSfxs?.value ?? [],
-        onRefresh: props.onRefresh,
-      },
+      props: { traitsetId: ts.id },
     })
   }
 }
@@ -96,7 +87,7 @@ function onDrop(i) {
   localOrder = list
   const ids = list.map(ts => ts.id)
   graphql(`mutation($ids: [ID!]!) { reorderTraitsets(ids: $ids) }`, { ids }).then(() => {
-    if (props.onRefresh) props.onRefresh()
+    fetchTraitsConfig()
     localOrder = null
   })
   dragOverIndex.value = -1; dragIndex.value = -1

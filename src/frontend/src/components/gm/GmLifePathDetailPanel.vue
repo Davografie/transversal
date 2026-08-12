@@ -172,11 +172,13 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
+
+const { traitNameMap } = useTraitsConfig()
 
 const props = defineProps({
   lp: { type: Object, required: true },
-  traitNameMap: { type: Object, default: () => ({}) },
   open: { type: Function, default: null },
   close: { type: Function, default: null },
 })
@@ -245,12 +247,12 @@ const discoveryRows = computed(() => {
 
 function openEdit(section, itemIndex = null, addNew = false) {
   if (!props.open) return
-  props.open({ component: GmLifePathEditPanel, title: `Edit ${section} — ${lpRef.value.name}`, props: { lp: lpRef.value, traitNameMap: props.traitNameMap, section, itemIndex, addNew } })
+  props.open({ component: GmLifePathEditPanel, title: `Edit ${section} — ${lpRef.value.name}`, props: { lp: lpRef.value, section, itemIndex, addNew } })
 }
 
 function tName(id) {
   if (!id) return '—'
-  return props.traitNameMap[id] || entityNameMap.value[id] || id.replace(/^trait-/, '').replace(/[-_]\w{4}$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  return traitNameMap.value[id] || entityNameMap.value[id] || id.replace(/^trait-/, '').replace(/[-_]\w{4}$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
 function tNames(ids) {

@@ -119,13 +119,13 @@
 <script setup>
 import { reactive, ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 
 const { graphql, error: apiError } = useApi()
+const { patchData, fetchTraitsConfig } = useTraitsConfig()
 
 const props = defineProps({
   sfx: { type: Object, default: null },
-  onRefresh: { type: Function, default: null },
-  onPatch: { type: Function, default: null },
 })
 
 const emit = defineEmits(['sfx-created', 'sfx-updated', 'sfx-deleted', 'close'])
@@ -195,7 +195,7 @@ async function onSave() {
       { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, limit: form.limit, effects: form.effects } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
-    if (props.onPatch) props.onPatch('sfxs', props.sfx.id, {
+    patchData('sfxs', props.sfx.id, {
       name: form.name, trigger: form.trigger, description: form.description, limit: form.limit, effects: [...form.effects],
     })
     emit('sfx-updated', {
@@ -226,12 +226,10 @@ async function onCreate() {
     }
     errorMsg.value = ''
     // Refresh the SFX list so the new SFX appears on next panel open
-    if (props.onRefresh) await props.onRefresh()
-    if (props.onPatch) {
-      props.onPatch('sfxs', sfxId, {
-        id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, limit: form.limit, effects: [...form.effects],
-      })
-    }
+    await fetchTraitsConfig()
+    patchData('sfxs', sfxId, {
+      id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, limit: form.limit, effects: [...form.effects],
+    })
     // Show success and clear form for next SFX
     successMsg.value = `Created "${form.name}"`
     emit('sfx-created', {
@@ -256,7 +254,7 @@ async function onDelete() {
   try {
     await graphql(`mutation($id: ID!) { deleteSfx(id: $id) }`, { id: props.sfx.id })
     emit('sfx-deleted', props.sfx.id)
-    if (props.onRefresh) await props.onRefresh()
+    await fetchTraitsConfig()
     emit('close')
   } finally { saving.value = false }
 }

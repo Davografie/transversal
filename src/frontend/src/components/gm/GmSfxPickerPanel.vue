@@ -23,13 +23,13 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 
+const { allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
+
 const props = defineProps({
-  allSfxs: { type: Array, default: () => [] },
   selectedIds: { type: Array, default: () => [] },
-  onRefresh: { type: Function, default: null },
-  onPatch: { type: Function, default: null },
   open: { type: Function, default: null },
 })
 
@@ -39,8 +39,8 @@ const search = ref('')
 
 const filtered = computed(() => {
   const q = search.value.toLowerCase()
-  if (!q) return props.allSfxs
-  return props.allSfxs.filter(s =>
+  if (!q) return allSfxs.value
+  return allSfxs.value.filter(s =>
     s.name.toLowerCase().includes(q) ||
     (s.trigger || '').toLowerCase().includes(q) ||
     (s.description || '').toLowerCase().includes(q)
@@ -60,7 +60,7 @@ function onNewSfx() {
     props.open({
       component: GmSfxEditPanel,
       title: 'New SFX',
-      props: { sfx: null, onRefresh: props.onRefresh, onPatch: props.onPatch },
+      props: { sfx: null },
       listeners: {
         'sfx-created': (created) => {
           emit('add-sfx', created.id)

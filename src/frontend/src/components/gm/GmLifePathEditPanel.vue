@@ -223,14 +223,16 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmTraitPicker from './GmTraitPicker.vue'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
 
+const { traitNameMap } = useTraitsConfig()
+
 const props = defineProps({
   lp: { type: Object, required: true },
-  traitNameMap: { type: Object, default: () => ({}) },
-  section: { type: String, default: null },  // null → show all
-  itemIndex: { type: Number, default: null },  // null → show section, number → show one row
+  section: { type: String, default: null },
+  itemIndex: { type: Number, default: null },
   addNew: { type: Boolean, default: false },
   open: { type: Function, default: null },
   close: { type: Function, default: null },
@@ -266,7 +268,7 @@ const qualDropdown = reactive({ trait: false, location: false, draft: false })
 const qualSelected = reactive({ traitName: '', locationName: '', draftName: '' })
 
 const qualOptions = computed(() => ({
-  trait: filterSingleOpts(props.traitNameMap, qualSearch.trait, form.qualification.traitId),
+  trait: filterSingleOpts(traitNameMap.value, qualSearch.trait, form.qualification.traitId),
   location: filterSingleOpts(locationNameMap.value, qualSearch.location, form.qualification.mustBeAtLocation),
   draft: filterSingleOpts(lifePathNameMap.value, qualSearch.draft, form.qualification.draft),
 }))
@@ -302,7 +304,7 @@ function itemOpts(field) {
     ? form.events[effectiveItemIndex.value]?.effectTraitId
     : form.curriculum[effectiveItemIndex.value]?.traitId
   const s = itemSearch[field].toLowerCase()
-  return Object.entries(props.traitNameMap)
+  return Object.entries(traitNameMap.value)
     .filter(([id, name]) => (!s || name.toLowerCase().includes(s)) && id !== excludeId)
     .map(([id, name]) => ({ id, name }))
     .slice(0, 20)
@@ -337,7 +339,7 @@ const atOptions = computed(() => chipTraitOpts(form.advancement.traitItems, atSe
 function chipTraitOpts(items, search) {
   const ids = new Set(items.map(i => i.id))
   const s = search.toLowerCase()
-  return Object.entries(props.traitNameMap)
+  return Object.entries(traitNameMap.value)
     .filter(([id, name]) => !ids.has(id) && (!s || name.toLowerCase().includes(s)))
     .map(([id, name]) => ({ id, name }))
     .slice(0, 20)
@@ -359,7 +361,7 @@ const discOptions = computed(() => {
   const fields = ['atLocation', 'knowsEntity', 'possessesTrait', 'hasTraitRating', 'hasRelationship']
   const result = {}
   for (const f of fields) {
-    const map = f === 'atLocation' ? locationNameMap.value : f === 'possessesTrait' || f === 'hasTraitRating' ? props.traitNameMap : entityNameMap.value
+    const map = f === 'atLocation' ? locationNameMap.value : f === 'possessesTrait' || f === 'hasTraitRating' ? traitNameMap.value : entityNameMap.value
     const items = f === 'hasTraitRating' ? form.discovery.hasTraitRatingItems : form.discovery[f + 'Items']
     const ids = new Set(items.map(i => i.id))
     const s = discSearch[f].toLowerCase()
@@ -373,7 +375,7 @@ const discOptions = computed(() => {
 
 function discItemName(field, item) {
   if (item.name && item.name !== item.id) return item.name
-  const map = field === 'atLocation' ? locationNameMap.value : field === 'possessesTrait' || field === 'hasTraitRating' ? props.traitNameMap : entityNameMap.value
+  const map = field === 'atLocation' ? locationNameMap.value : field === 'possessesTrait' || field === 'hasTraitRating' ? traitNameMap.value : entityNameMap.value
   return map[item.id] || item.id.replace(/^trait-/, '').replace(/[-_]\w{4}$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
@@ -412,7 +414,7 @@ const discEntryDropdown = ref(false)
 
 const discEntryOptions = computed(() => {
   const map = discEntryType.value === 'atLocation' ? locationNameMap.value
-    : (discEntryType.value === 'possessesTrait' || discEntryType.value === 'hasTraitRating') ? props.traitNameMap
+    : (discEntryType.value === 'possessesTrait' || discEntryType.value === 'hasTraitRating') ? traitNameMap.value
     : entityNameMap.value
   const s = discEntrySearch.value.toLowerCase()
   return Object.entries(map)
@@ -477,7 +479,7 @@ onMounted(async () => {
   } catch {}
   // Resolve qualification autocomplete names
   if (form.qualification.traitId) {
-    qualSelected.traitName = props.traitNameMap[form.qualification.traitId] || ''
+    qualSelected.traitName = traitNameMap.value[form.qualification.traitId] || ''
   }
   if (form.qualification.mustBeAtLocation) {
     qualSelected.locationName = locationNameMap.value[form.qualification.mustBeAtLocation] || ''
@@ -516,8 +518,8 @@ function initForm() {
     discovery: {
       atLocationItems: (lp.discovery?.atLocation || []).map(id => ({ id, name: id })),
       knowsEntityItems: (lp.discovery?.knowsEntity || []).map(id => ({ id, name: id })),
-      possessesTraitItems: (lp.discovery?.possessesTrait || []).map(id => ({ id, name: props.traitNameMap[id] || id })),
-      hasTraitRatingItems: Object.entries(lp.discovery?.hasTraitRating || {}).map(([id, die]) => ({ id, name: props.traitNameMap[id] || id, die: String(die).toLowerCase() })),
+      possessesTraitItems: (lp.discovery?.possessesTrait || []).map(id => ({ id, name: traitNameMap.value[id] || id })),
+      hasTraitRatingItems: Object.entries(lp.discovery?.hasTraitRating || {}).map(([id, die]) => ({ id, name: traitNameMap.value[id] || id, die: String(die).toLowerCase() })),
       hasRelationshipItems: (lp.discovery?.hasRelationship || []).map(id => ({ id, name: id })),
     },
     curriculum: (lp.curriculum || []).map(c => ({
@@ -526,7 +528,7 @@ function initForm() {
       stepUp: !!c.stepUp,
     })),
     survival: {
-      traitItems: (lp.survival?.traitIds || []).map(id => ({ id, name: props.traitNameMap[id] || id })),
+      traitItems: (lp.survival?.traitIds || []).map(id => ({ id, name: traitNameMap.value[id] || id })),
       difficulty: lp.survival?.difficulty || 'd6',
       termPenaltyAfter: lp.survival?.termPenaltyAfter || null,
       mishaps: (lp.survival?.mishaps || []).map(m => ({
@@ -542,7 +544,7 @@ function initForm() {
       effectDie: String(e.effect?.die_type || 'd4').toLowerCase(),
     })),
     advancement: {
-      traitItems: (lp.advancement?.traitIds || []).map(id => ({ id, name: props.traitNameMap[id] || id })),
+      traitItems: (lp.advancement?.traitIds || []).map(id => ({ id, name: traitNameMap.value[id] || id })),
       difficulty: lp.advancement?.difficulty || 'd6',
       ranks: (lp.advancement?.ranks || []).map(r => ({
         number: r.number,

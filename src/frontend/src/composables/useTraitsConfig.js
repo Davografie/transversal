@@ -1,0 +1,96 @@
+import { ref, computed } from 'vue'
+import { useApi } from './useApi.js'
+
+// ── Module-level singleton state ─────────────────────
+// All components sharing this composable read/write the same refs.
+const traitsets = ref([])
+const allSfxs = ref([])
+const loading = ref(false)
+
+export function useTraitsConfig() {
+  const { graphql } = useApi()
+
+  // ── Fetch ──────────────────────────────────────────
+  async function fetchTraitsConfig() {
+    loading.value = true
+    const [ts, sf] = await Promise.all([
+      graphql(`query {
+        traitsets {
+          id name universes entityTypes order limit
+          traits {
+            id name defaultDieType traitsetId universes
+            possibleSfxIds
+            displayNames { name universe ratings }
+          }
+        }
+      }`),
+      graphql(`query {
+        sfxs {
+          id name description trigger limit
+          effects { polarity timing type action target result }
+        }
+      }`),
+    ])
+    if (ts?.traitsets) traitsets.value = ts.traitsets
+    if (sf?.sfxs) allSfxs.value = sf.sfxs
+    loading.value = false
+  }
+
+  // ── Optimistic local patch ─────────────────────────
+  // Used by sub-panels after mutations so the UI updates instantly
+  // without waiting for a full re-fetch.
+  function patchData(collection, id, changes) {
+    let arr
+    if (collection === 'traitsets') {
+      arr = traitsets
+    } else if (collection === 'traits') {
+      for (const ts of traitsets.value) {
+        const idx = (ts.traits || []).findIndex(t => t.id === id)
+        if (idx >= 0) {
+          Object.assign(ts.traits[idx], changes)
+          ts.traits[idx]._flash = (ts.traits[idx]._flash || 0) + 1
+          setTimeout(() => { if (ts.traits[idx]._flash) ts.traits[idx]._flash = 0 }, 600)
+          break
+        }
+      }
+      return
+    } else if (collection === 'sfxs') {
+      arr = allSfxs
+    }
+    if (arr) {
+      const idx = arr.value.findIndex(item => item.id === id)
+      if (idx >= 0) {
+        Object.assign(arr.value[idx], changes)
+        arr.value[idx]._flash = (arr.value[idx]._flash || 0) + 1
+        setTimeout(() => { if (arr.value[idx]._flash) arr.value[idx]._flash = 0 }, 600)
+      } else if (changes.id) {
+        // New item — push it
+        arr.value.push({ ...changes, _flash: 1 })
+        setTimeout(() => {
+          const newIdx = arr.value.findIndex(item => item.id === id)
+          if (newIdx >= 0 && arr.value[newIdx]._flash) arr.value[newIdx]._flash = 0
+        }, 600)
+      }
+    }
+  }
+
+  // ── Derived ────────────────────────────────────────
+  const traitNameMap = computed(() => {
+    const m = {}
+    for (const ts of traitsets.value) {
+      for (const t of (ts.traits || [])) {
+        m[t.id] = t.name
+      }
+    }
+    return m
+  })
+
+  return {
+    traitsets,
+    allSfxs,
+    loading,
+    fetchTraitsConfig,
+    patchData,
+    traitNameMap,
+  }
+}

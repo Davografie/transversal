@@ -49,14 +49,15 @@
 <script setup>
 import { reactive, ref, computed, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 
 const { graphql } = useApi()
+const { patchData } = useTraitsConfig()
 
 const props = defineProps({
   allDisplayNames: { type: Array, default: () => [] },
-  editIndex: { type: Number, default: null },  // null = new
+  editIndex: { type: Number, default: null },
   traitId: { type: String, required: true },
-  onPatch: { type: Function, default: null },
 })
 
 const emit = defineEmits(['close', 'saved', 'deleted'])
@@ -143,7 +144,7 @@ async function doSave() {
       `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
       { id: props.traitId, input: { displayNames } }
     )
-    if (props.onPatch) props.onPatch('traits', props.traitId, { displayNames })
+    patchData('traits', props.traitId, { displayNames })
     isDirty.value = false
     emit('saved', displayNames)
   } catch (e) {

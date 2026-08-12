@@ -50,6 +50,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { useEntityCrud } from '@/composables/useEntityCrud.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { useLocationTree } from '@/composables/useLocationTree.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
@@ -58,7 +61,7 @@ import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 
-const { graphql, imagenEntity } = useApi()
+const { graphql } = useApi()
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -69,73 +72,54 @@ const props = defineProps({
 
 const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool'])
 
+// ── Composables ─────────────────────────────────────
+const {
+  entities, selected, selectedId, editing, creating, saving, form,
+  jobStatuses, imagenJob, animateJob,
+  fetchEntities, selectEntity, saveEntity, deleteEntity, createEntity,
+  uploadBgImage, pollJobs, onImagen, onCancel,
+} = useEntityCrud()
+
+const {
+  traitsets, allSfxs, loading: traitsLoading,
+  fetchTraitsConfig, patchData, traitNameMap,
+} = useTraitsConfig()
+
+// ── Session UI ──────────────────────────────────────
 const mode = ref('play')
 const viewSceneSummary = ref(true)
 const sessionActive = ref(false)
 
-// ── Job polling ────────────────────────────────────────
-const jobStatuses = ref({})  // {entity_id: {type, status, percent, message}}
+function nextBeat() { emit('next-beat') }
+function startSession() { sessionActive.value = true; emit('start-session') }
+function endSession() { sessionActive.value = false; emit('end-session') }
+
+// ── Job polling ─────────────────────────────────────
 let _jobPollTimer = null
-
-async function pollJobs() {
-  try {
-    const r = await fetch('/api/v1/imagen/jobs')
-    if (r.ok) jobStatuses.value = (await r.json()).jobs || {}
-  } catch {}
-}
-
 function startJobPolling() {
   pollJobs()
   _jobPollTimer = setInterval(pollJobs, 2000)
 }
 function stopJobPolling() { clearInterval(_jobPollTimer) }
 
-const imagenJob = computed(() => {
-  const j = jobStatuses.value[selectedId.value]
-  return (j && j.type === 'imagen') ? j : null
-})
-const animateJob = computed(() => {
-  const j = jobStatuses.value[selectedId.value]
-  return (j && j.type === 'animate') ? j : null
-})
-
+// ── Filter state ────────────────────────────────────
 const activeFilters = ref([])
 const filterInput = ref('')
 const showSuggestions = ref(false)
-const locationTree = ref([])
-const expandedNodes = ref({})
 
-const entities = ref([])
-const selected = ref(null)
-const selectedId = ref(null)
-const editing = ref(false)
-const creating = ref(false)
-const saving = ref(false)
-const traitsets = ref([])
-const allSfxsData = ref([])
-const traitsLoading = ref(false)
+// ⚠ Both value AND q must be lowercased.
+function fuzzyMatch(value, q) {
+  if (!value || !q) return false
+  const raw = value.toLowerCase()
+  const ql = q.toLowerCase()
+  if (raw.includes(ql)) return true
+  const normalized = raw.replace(/_/g, ' ')
+  if (normalized.includes(ql)) return true
+  const qNormalized = ql.replace(/ /g, '_')
+  if (raw.includes(qNormalized)) return true
+  return false
+}
 
-// ⚠ Pass computed refs (not .value) as props so sub-panels see live updates.
-// Panel.vue uses shallowRef so these refs survive without being unwrapped.
-// Without this, onRefresh → fetchTraitsConfig updates GmPanel's data but
-// the already-open GmTraitsetsPanel still shows the stale snapshot.
-// Reactive computed — passed as ref through props so sub-panels see updates
-const filteredTraitsets = computed(() => traitsets.value.filter(ts => traitsetMatchesFilters(ts)))
-const traitNameMap = computed(() => {
-  const m = {}
-  for (const ts of traitsets.value) {
-    for (const t of ts.traits || []) {
-      m[t.id] = t.name
-    }
-  }
-  return m
-})
-
-function nextBeat() { emit('next-beat') }
-function startSession() { sessionActive.value = true; emit('start-session') }
-function endSession() { sessionActive.value = false; emit('end-session') }
-
-// ── Filter helpers ──────────────────────────────────
 function entityMatchesFilters(e) {
   for (const f of activeFilters.value) {
     if (f.type === 'universe' && e.currentUniverse !== f.value) return false
@@ -144,6 +128,7 @@ function entityMatchesFilters(e) {
   }
   return true
 }
+
 function traitsetMatchesFilters(ts) {
   for (const f of activeFilters.value) {
     if (f.type === 'universe' && !(ts.universes || []).includes(f.value)) return false
@@ -153,13 +138,19 @@ function traitsetMatchesFilters(ts) {
   return true
 }
 
+// ── Filtered data ───────────────────────────────────
+const filteredEntities = computed(() => entities.value.filter(entityMatchesFilters))
+const filteredFactions = computed(() => filteredEntities.value.filter(e => e.type === 'FACTION'))
+const sceneEntities = computed(() => filteredEntities.value.filter(e => e.type === 'CHARACTER' || e.type === 'GMC'))
+const locationEntities = computed(() => filteredEntities.value.filter(e => e.type === 'LOCATION'))
+const universes = computed(() => entities.value.filter(e => e.type === 'UNIVERSE').map(u => ({ key: u.currentUniverse, name: u.name })))
+
 // ── Autocomplete ────────────────────────────────────
 const suggestions = computed(() => {
   const q = filterInput.value.trim().toLowerCase()
   if (!q) return []
   const results = []
   const seen = new Set()
-  // Universe suggestions
   for (const u of universes.value) {
     if ((u.key && fuzzyMatch(u.key, q)) || (u.name && fuzzyMatch(u.name, q))) {
       if (!seen.has('uni:' + u.key)) {
@@ -168,14 +159,12 @@ const suggestions = computed(() => {
       }
     }
   }
-  // Entity type suggestions
   const types = ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET']
   for (const t of types) {
     if (fuzzyMatch(t, q)) {
       results.push({ id: 'type:' + t, name: t.charAt(0) + t.slice(1).toLowerCase(), entityType: t, hint: 'type', filterType: 'entityType', filterValue: t, filterLabel: t.charAt(0) + t.slice(1).toLowerCase() })
     }
   }
-  // Entity name suggestions (filtered by active filters)
   for (const e of entities.value.filter(entityMatchesFilters)) {
     if (fuzzyMatch(e.name, q) && !seen.has('ent:' + e.id)) {
       seen.add('ent:' + e.id)
@@ -184,158 +173,55 @@ const suggestions = computed(() => {
   }
   return results.slice(0, 10)
 })
+
 function selectSuggestion(s) {
   if (s.filterType && s.filterValue) {
-    // Don't add duplicate filters
     const exists = activeFilters.value.find(f => f.type === s.filterType && f.value === s.filterValue)
     if (!exists) {
       activeFilters.value.push({ type: s.filterType, value: s.filterValue, label: s.filterLabel || s.filterValue })
     }
   }
-  // ⚠ Do NOT set showSuggestions=false here. After selection, filterInput is
-  // cleared to '', which makes suggestions=[], hiding the dropdown naturally.
-  // If we set showSuggestions=false, the user must re-focus to type another filter.
   filterInput.value = ''
 }
 function hideSuggestions() { setTimeout(() => { showSuggestions.value = false }, 150) }
 
-// ── Filtered data ──────────────────────────────────
-const filteredEntities = computed(() => entities.value.filter(entityMatchesFilters))
-const filteredFactions = computed(() => filteredEntities.value.filter(e => e.type === 'FACTION'))
-const sceneEntities = computed(() => filteredEntities.value.filter(e => e.type === 'CHARACTER' || e.type === 'GMC'))
-const locationEntities = computed(() => filteredEntities.value.filter(e => e.type === 'LOCATION'))
-const universes = computed(() => entities.value.filter(e => e.type === 'UNIVERSE').map(u => ({ key: u.currentUniverse, name: u.name })))
+// ── Location tree ───────────────────────────────────
+const {
+  locationTree, expandedNodes,
+  fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds,
+} = useLocationTree({ filteredEntities, activeFilters })
 
-// ── Forms ──────────────────────────────────────────
-const form = ref({})
-const createForm = ref({ name: '', type: 'CHARACTER', universe: props.universe, location: '', razmerit: 0 })
-// ── API ────────────────────────────────────────────
-const ALL_ENTITIES = `query($type: EntityType) { entities(type: $type) { id type name razmerit currentUniverse currentLocation hidden backgroundImage traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
-const ENTITY_QUERY = `query($id: ID!) { entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden backgroundImage loraConfig traitSettings { id name dieType rating ratingType statement ego sfxIds traitsetName universe } } }`
-
-async function fetchEntities() { const data = await graphql(ALL_ENTITIES, { type: null }); if (data?.entities) entities.value = data.entities }
-
-async function fetchTraitsConfig() {
-  traitsLoading.value = true
-  const [ts, sf] = await Promise.all([
-    graphql(`query { traitsets { id name universes entityTypes order limit traits { id name defaultDieType traitsetId universes possibleSfxIds displayNames { name universe ratings } } } }`),
-    graphql(`query { sfxs { id name description trigger limit effects { polarity timing type action target result } } }`),
-  ])
-  if (ts?.traitsets) traitsets.value = ts.traitsets
-  if (sf?.sfxs) allSfxsData.value = sf.sfxs
-  traitsLoading.value = false
-}
-
-// ── Entity management ──────────────────────────────
+// ── Entity selection ────────────────────────────────
 function toggleEntity(e) {
   if (editing.value && selectedId.value === e.id) {
     editing.value = false; selected.value = null; selectedId.value = null
     if (props.close) props.close()
   } else {
-    selectEntity(e)
+    onSelectEntity(e)
   }
 }
 function onSelectUniverse(id) { toggleEntity({ id }) }
 function onSelectLocation(id) { toggleEntity({ id }) }
 function onSelectOccupant(e) { toggleEntity(e) }
 
-  // ⚠ When already editing the same entity, skip openEntityEdit() to avoid
-  // re-opening the panel (visible flicker).
-  async function selectEntity(e) {
-    const alreadyEditing = editing.value && selectedId.value === e.id
-    const data = await graphql(ENTITY_QUERY, { id: e.id })
-    if (data?.entity) {
-      selected.value = data.entity; selectedId.value = e.id; editing.value = true
-      form.value = { name: data.entity.name, type: data.entity.type, current_universe: data.entity.currentUniverse, current_location: data.entity.currentLocation || '', razmerit: data.entity.razmerit, background_image: data.entity.backgroundImage || '', overlay: data.entity.overlay || null, hidden: data.entity.hidden, lora_config: data.entity.loraConfig || '{}' }
-      if (!alreadyEditing) openEntityEdit()
-    }
-  }
+async function onSelectEntity(e) {
+  const alreadyEditing = await selectEntity(e)
+  if (!alreadyEditing) openEntityEdit()
+}
 
+// ── Panel opening ───────────────────────────────────
 function openEntityEdit() {
   if (!props.open || !selected.value) return
   creating.value = false
   props.open({
     component: GmEntityEditPanel,
     title: selected.value.name || 'Edit Entity',
-      props: {
-        form: form.value,
-        entityId: selectedId.value,
-        imagenJob: imagenJob.value,
-        animateJob: animateJob.value,
-        traitNameMap: traitNameMap.value,
-      },
-      listeners: {
-        'update:form': (v) => { form.value = v },
-        'upload-bg': uploadBgImage,
-        'switch-to-sheet': switchToSheet,
-        'delete': deleteSelected,
-        'prune': deletePrune,
-        'imagen': onImagen,
-        'cancel': onCancel,
-        'image-open': onImageOpen,
-      },
+    props: { entityId: selectedId.value },
+    listeners: {
+      'switch-to-sheet': switchToSheet,
+      'image-open': onImageOpen,
+    },
   })
-}
-// ⚠ Must update selected.value directly — must NOT call selectEntity() here.
-// selectEntity() sets form.value (new object), which triggers the watcher below,
-// which calls saveEntity() again → infinite re-open loop.
-async function saveEntity() {
-  saving.value = true
-  const result = await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id name razmerit currentUniverse currentLocation hidden backgroundImage loraConfig } }`, { input: { id: selected.value.id, name: form.value.name, razmerit: form.value.razmerit, currentUniverse: form.value.current_universe, currentLocation: form.value.current_location || null, hidden: form.value.hidden, backgroundImage: form.value.background_image || null, overlay: form.value.overlay, loraConfig: form.value.lora_config } })
-  // Update selected entity directly — don't call selectEntity() which would re-trigger the watcher loop
-  if (result?.updateEntity) {
-    const ue = result.updateEntity
-    if (selected.value) {
-      selected.value.name = ue.name
-      selected.value.razmerit = ue.razmerit
-      selected.value.currentUniverse = ue.currentUniverse
-      selected.value.currentLocation = ue.currentLocation
-      selected.value.hidden = ue.hidden
-      selected.value.backgroundImage = ue.backgroundImage
-    }
-  }
-  saving.value = false
-  await fetchEntities()
-}
-let entitySaveTimer = null
-watch(() => form.value, () => {
-  if (!editing.value || !selected.value) return
-  clearTimeout(entitySaveTimer)
-  entitySaveTimer = setTimeout(() => saveEntity(), 600)
-}, { deep: true })
-
-async function deleteSelected() {
-  const isLoc = selected.value.type === 'LOCATION'
-  await graphql(`mutation($id: ID!) { deleteEntity(id: $id) }`, { id: selected.value.id })
-  selected.value = null; selectedId.value = null; editing.value = false
-  if (props.close) props.close()
-  if (isLoc) await fetchLocationTree()
-  await fetchEntities()
-}
-
-async function deletePrune() {
-  await graphql(`mutation($id: ID!, $rmtree: Boolean!) { deleteEntity(id: $id, rmtree: $rmtree) }`, { id: selected.value.id, rmtree: true })
-  selected.value = null; selectedId.value = null; editing.value = false
-  if (props.close) props.close()
-  await fetchLocationTree()
-  await fetchEntities()
-}
-async function startCreate() {
-  creating.value = true; editing.value = false; selected.value = null
-  if (props.open) {
-    props.open({
-      component: GmEntityCreatePanel,
-      title: 'New Entity',
-      props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value },
-      listeners: { 'create': createEntity },
-    })
-  }
-}
-async function createEntity(formData) {
-  const f = formData || createForm.value
-  saving.value = true
-  await graphql(`mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type razmerit currentUniverse currentLocation } }`, { input: { name: f.name, type: f.type, universe: f.universe, location: f.location || null, razmerit: f.razmerit || 0 } })
-  saving.value = false; creating.value = false; await fetchEntities()
 }
 
 function switchToSheet() {
@@ -348,191 +234,6 @@ function switchToSheet() {
   })
 }
 
-
-// ── Drag-drop move ─────────────────────────────────
-async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
-  if (entityKind === 'occupant') {
-    // Occupant → Location: update currentLocation (existing behaviour)
-    await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation } }`, { input: { id: entityId, currentLocation: targetId } })
-  } else if (entityKind === 'location') {
-    // Location → Universe or Location: update universe and/or parent
-    if (targetUniverse) {
-      try { await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentUniverse } }`, { input: { id: entityId, currentUniverse: targetUniverse } }) } catch {}
-    }
-
-    // Swap parent super edge
-    try {
-      const r = await fetch(`/api/v1/locations/${entityId}/navigate`)
-      const nav = await r.json()
-      const oldParentId = nav.parent?._key || null
-
-      if (targetKind === 'universe') {
-        // Drop on universe: clear parent
-        if (oldParentId) {
-          await fetch(`/api/v1/locations/${entityId}/edges/${oldParentId}?type=super`, { method: 'DELETE' })
-        }
-      } else if (targetKind === 'location' && targetId !== oldParentId) {
-        // Drop on a different location: replace parent edge
-        if (oldParentId) {
-          await fetch(`/api/v1/locations/${entityId}/edges/${oldParentId}?type=super`, { method: 'DELETE' })
-        }
-        await fetch(`/api/v1/locations/${entityId}/edges/${targetId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'super' }),
-        })
-      }
-    } catch {}
-
-    await fetchLocationTree()
-  }
-  fetchEntities()
-}
-
-// ── Image upload ───────────────────────────────────
-async function uploadBgImage(e) {
-  const file = e.target?.files?.[0]; if (!file) return
-  const fd = new FormData(); fd.append('file', file)
-  try {
-    const r = await fetch(`/api/v1/media/upload?entity_id=${encodeURIComponent(selected.value?.id || '')}`, { method: 'POST', body: fd })
-    const data = await r.json()
-    if (data.path) { form.value.background_image = data.path; await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id backgroundImage } }`, { input: { id: selected.value.id, backgroundImage: data.path } }) }
-  } catch (err) { console.error('uploadBgImage:', err) }
-}
-
-// ── Location tree ──────────────────────────────────
-const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
-const OCCUPANT_TYPES = new Set(['CHARACTER', 'GMC', 'ASSET'])
-function _sortOccupants(arr) { arr.sort((a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9)) }
-
-const occupantsByLocation = computed(() => {
-  const map = {}
-  for (const e of filteredEntities.value) {
-    if (OCCUPANT_TYPES.has(e.type) && e.currentLocation) {
-      if (!map[e.currentLocation]) map[e.currentLocation] = []
-      map[e.currentLocation].push(e)
-    }
-  }
-  for (const key of Object.keys(map)) _sortOccupants(map[key])
-  return map
-})
-// Occupants without a location — shown at the universe level
-const unplacedByUniverse = computed(() => {
-  const map = {}
-  for (const e of filteredEntities.value) {
-    if (OCCUPANT_TYPES.has(e.type) && !e.currentLocation && e.currentUniverse) {
-      if (!map[e.currentUniverse]) map[e.currentUniverse] = []
-      map[e.currentUniverse].push(e)
-    }
-  }
-  for (const key of Object.keys(map)) _sortOccupants(map[key])
-  return map
-})
-// Auto-expand + prune when occupant-affecting filters (type or name) are active
-const hasOccupantFilter = computed(() => activeFilters.value.some(f => f.type === 'entityType' || f.type === 'name'))
-// Set of location IDs that have at least one occupant (direct or descendant)
-const populatedLocations = computed(() => {
-  const occ = occupantsByLocation.value
-  const set = new Set(Object.keys(occ))
-  // Walk the location tree and mark ancestors of occupied locations
-  function markAncestors(nodes, targetSet) {
-    for (const n of nodes) {
-      let hasOccupiedDescendant = false
-      if (n.children) hasOccupiedDescendant = markAncestors(n.children, targetSet)
-      if (targetSet.has(n.id) || hasOccupiedDescendant) {
-        set.add(n.id)
-        return true
-      }
-    }
-    return false
-  }
-  markAncestors(locationTree.value, set)
-  return set
-})
-// ⚠ Both value AND q must be lowercased. The autocomplete stores the entity's
-// original-cased name as the filter value, but users type lowercase queries.
-// Originally only `value` was lowercased — this broke name filters on entities
-// with uppercase letters (e.g. "Kael Drift").
-function fuzzyMatch(value, q) {
-  if (!value || !q) return false
-  const raw = value.toLowerCase()
-  const ql = q.toLowerCase()
-  if (raw.includes(ql)) return true
-  // Normalize underscores → spaces to match user-friendly input
-  const normalized = raw.replace(/_/g, ' ')
-  if (normalized.includes(ql)) return true
-  // Also try the reverse: spaces → underscores in query
-  const qNormalized = ql.replace(/ /g, '_')
-  if (raw.includes(qNormalized)) return true
-  return false
-}
-// Extract universe keys from active universe filters
-const activeUniverseFilters = computed(() => {
-  const keys = new Set()
-  for (const f of activeFilters.value) {
-    if (f.type === 'universe') keys.add(f.value)
-  }
-  return keys
-})
-
-function flattenTree(nodes, occupants, depth = 0) {
-  const result = []
-  for (const node of nodes) {
-    // Determine kind from node_type (backend) or fall back for occupant nodes
-    const kind = node.kind || (node.node_type === 'universe' ? 'universe' : 'location')
-    // If universe filters are active, filter at universe/root level
-    if (activeUniverseFilters.value.size > 0) {
-      if (kind === 'universe' && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
-      if (kind === 'location' && depth === 0 && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
-    }
-    // When occupant-affecting filters are active, prune locations that have no matching occupants
-    if (hasOccupantFilter.value && kind === 'location' && !populatedLocations.value.has(node.id)) continue
-    const hasChildren = (node.children && node.children.length > 0) || (occupants[node.id] && occupants[node.id].length > 0)
-    let expanded
-    if (expandedNodes.value[node.id] !== undefined) {
-      expanded = expandedNodes.value[node.id]  // user explicitly toggled
-    } else if (hasOccupantFilter.value) {
-      expanded = populatedLocations.value.has(node.id)  // auto-expand path to matching occupants
-    } else {
-      expanded = depth === 0  // default: expand only root level
-    }
-    result.push({ id: node.id, name: node.name, universe: node.universe, depth, hasChildren, kind, expanded })
-    if (expanded && occupants[node.id]) { for (const e of occupants[node.id]) { result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
-    // Unplaced occupants (no location) shown at universe level
-    if (expanded && kind === 'universe' && node.universe) {
-      const unplaced = unplacedByUniverse.value[node.universe]
-      if (unplaced) { for (const e of unplaced) { result.push({ id: e.id, name: e.name, universe: e.currentUniverse || '', depth: depth + 1, hasChildren: false, kind: 'occupant', entityType: e.type, entity: e }) } }
-    }
-    if (expanded && node.children && node.children.length) result.push(...flattenTree(node.children, occupants, depth + 1))
-  }
-  return result
-}
-// Auto-expand ancestors of the current location so it's visible in the tree
-function _findAncestorIds(nodes, targetId, path) {
-  for (const n of nodes) {
-    path.push(n.id)
-    if (n.id === targetId) return true
-    if (n.children && _findAncestorIds(n.children, targetId, path)) return true
-    path.pop()
-  }
-  return false
-}
-watch([locationTree, () => props.currentLocationId], () => {
-  const path = []
-  if (props.currentLocationId && _findAncestorIds(locationTree.value, props.currentLocationId, path)) {
-    const next = { ...expandedNodes.value }
-    for (const id of path) next[id] = true
-    expandedNodes.value = next
-  }
-})
-
-const flatTree = computed(() => {
-  return flattenTree(locationTree.value, occupantsByLocation.value, 0)
-})
-function toggleTreeNode(id) { expandedNodes.value = { ...expandedNodes.value, [id]: !expandedNodes.value[id] } }
-async function fetchLocationTree() { try { const r = await fetch('/api/v1/locations/tree'); locationTree.value = await r.json() } catch { locationTree.value = [] } }
-
-// ── Inspection ─────────────────────────────────────
 function inspectEntity(id) {
   editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
   if (props.open) {
@@ -544,73 +245,27 @@ function inspectEntity(id) {
   }
 }
 
-// ── Traits config (via open) ───────────────────────
-async function openTraitsConfig() {
-  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
-  if (traitsets.value.length === 0 || allSfxsData.value.length === 0) await fetchTraitsConfig()
-  // Pass raw refs as props so sub-panels see updates reactively
+function startCreate() {
+  creating.value = true; editing.value = false; selected.value = null
   if (props.open) {
     props.open({
-      component: GmTraitsetsPanel,
-      title: 'Traitsets',
-      props: { traitsets: filteredTraitsets, allSfxs: allSfxsData, loading: traitsLoading, onRefresh: fetchTraitsConfig },
+      component: GmEntityCreatePanel,
+      title: 'New Entity',
+      props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value, entityTypes: ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
+      listeners: { 'create': createEntity },
     })
   }
 }
 
-// ── Patch helper ──
-function patchData(collection, id, changes) {
-  let arr
-  if (collection === 'traitsets') {
-    arr = traitsets
-  } else if (collection === 'traits') {
-    for (const ts of traitsets.value) {
-      const idx = (ts.traits || []).findIndex(t => t.id === id)
-      if (idx >= 0) {
-        Object.assign(ts.traits[idx], changes)
-        ts.traits[idx]._flash = (ts.traits[idx]._flash || 0) + 1
-        setTimeout(() => { if (ts.traits[idx]._flash) ts.traits[idx]._flash = 0 }, 600)
-        break
-      }
-    }
-    return
-  } else if (collection === 'sfxs') {
-    arr = allSfxsData
-  }
-  if (arr) {
-    const idx = arr.value.findIndex(item => item.id === id)
-    if (idx >= 0) {
-      Object.assign(arr.value[idx], changes)
-      arr.value[idx]._flash = (arr.value[idx]._flash || 0) + 1
-      setTimeout(() => { if (arr.value[idx]._flash) arr.value[idx]._flash = 0 }, 600)
-    } else if (changes.id) {
-      // New item — push it
-      arr.value.push({ ...changes, _flash: 1 })
-      setTimeout(() => {
-        const newIdx = arr.value.findIndex(item => item.id === id)
-        if (newIdx >= 0 && arr.value[newIdx]._flash) arr.value[newIdx]._flash = 0
-      }, 600)
-    }
-  }
-}
-// ── Imagen / Animate ──────────────────────────────
-async function onImagen() {
-  if (!selectedId.value || imagenJob.value) return
-  jobStatuses.value = { ...jobStatuses.value, [selectedId.value]: { type: 'imagen', status: 'queued', queue_position: '⋯' } }
-  try {
-    await imagenEntity(selectedId.value)
-  } catch (e) {
-    const s = { ...jobStatuses.value }; delete s[selectedId.value]; jobStatuses.value = s
-    console.error('[GmPanel] imagen failed:', e)
-  }
-}
-
-async function onCancel() {
-  if (!selectedId.value) return
-  try {
-    await fetch(`/api/v1/imagen/${selectedId.value}/cancel`, { method: 'POST' })
-  } catch (e) {
-    console.error('[GmPanel] cancel failed:', e)
+async function openTraitsConfig() {
+  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
+  if (traitsets.value.length === 0 || allSfxs.value.length === 0) await fetchTraitsConfig()
+  if (props.open) {
+    props.open({
+      component: GmTraitsetsPanel,
+      title: 'Traitsets',
+      props: {},
+    })
   }
 }
 
@@ -619,12 +274,54 @@ function onImageOpen(img) {
   props.open({
     component: ImageViewer,
     title: img.id,
-      props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
+    props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
     listeners: {},
   })
 }
 
-// ── Lifecycle ──────────────────────────────────────
+// ── Drag-drop move ──────────────────────────────────
+async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
+  if (entityKind === 'occupant') {
+    await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation } }`, { input: { id: entityId, currentLocation: targetId } })
+  } else if (entityKind === 'location') {
+    if (targetUniverse) {
+      try { await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentUniverse } }`, { input: { id: entityId, currentUniverse: targetUniverse } }) } catch {}
+    }
+    try {
+      const r = await fetch(`/api/v1/locations/${entityId}/navigate`)
+      const nav = await r.json()
+      const oldParentId = nav.parent?._key || null
+      if (targetKind === 'universe') {
+        if (oldParentId) {
+          await fetch(`/api/v1/locations/${entityId}/edges/${oldParentId}?type=super`, { method: 'DELETE' })
+        }
+      } else if (targetKind === 'location' && targetId !== oldParentId) {
+        if (oldParentId) {
+          await fetch(`/api/v1/locations/${entityId}/edges/${oldParentId}?type=super`, { method: 'DELETE' })
+        }
+        await fetch(`/api/v1/locations/${entityId}/edges/${targetId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'super' }),
+        })
+      }
+    } catch {}
+    await fetchLocationTree()
+  }
+  fetchEntities()
+}
+
+// ── Auto-expand current location ────────────────────
+watch([locationTree, () => props.currentLocationId], () => {
+  const path = []
+  if (props.currentLocationId && findAncestorIds(locationTree.value, props.currentLocationId, path)) {
+    const next = { ...expandedNodes.value }
+    for (const id of path) next[id] = true
+    expandedNodes.value = next
+  }
+})
+
+// ── Lifecycle ───────────────────────────────────────
 onMounted(() => { fetchEntities(); fetchLocationTree(); startJobPolling() })
 onUnmounted(() => { stopJobPolling() })
 </script>
