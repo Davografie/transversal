@@ -14,23 +14,21 @@
       <div class="lpe-row"><label>Difficulty</label><select v-model="form.qualification.difficulty"><option v-for="d in dieTypes" :key="d" :value="d">{{ d }}</option></select></div>
       <div class="lpe-row">
         <label>Must be at location</label>
-        <div class="lpe-search-wrap">
-          <input v-model="qualSearch.location" @focus="qualDropdown.location = true" @blur="closeQualDropdown('location')" @input="qualDropdown.location = true" :placeholder="qualSelected.locationName || 'Search location…'" />
-          <div v-if="qualDropdown.location" class="lpe-dropdown">
-            <div v-if="!qualOptions.location.length" class="lpe-dropdown-empty">No matches</div>
-            <div v-for="opt in qualOptions.location" :key="opt.id" class="lpe-dropdown-item" @mousedown.prevent="selectQual('location', opt)">{{ opt.name }}</div>
-          </div>
-        </div>
+        <SearchDropdown
+          :options="locationOptions"
+          :model-value="form.qualification.mustBeAtLocation"
+          placeholder="Search location…"
+          @select="form.qualification.mustBeAtLocation = $event.id"
+        />
       </div>
       <div class="lpe-row">
         <label>Draft path</label>
-        <div class="lpe-search-wrap">
-          <input v-model="qualSearch.draft" @focus="qualDropdown.draft = true" @blur="closeQualDropdown('draft')" @input="qualDropdown.draft = true" :placeholder="qualSelected.draftName || 'Search life path…'" />
-          <div v-if="qualDropdown.draft" class="lpe-dropdown">
-            <div v-if="!qualOptions.draft.length" class="lpe-dropdown-empty">No matches</div>
-            <div v-for="opt in qualOptions.draft" :key="opt.id" class="lpe-dropdown-item" @mousedown.prevent="selectQual('draft', opt)">{{ opt.name }}</div>
-          </div>
-        </div>
+        <SearchDropdown
+          :options="lifePathOptions"
+          :model-value="form.qualification.draft"
+          placeholder="Search life path…"
+          @select="form.qualification.draft = $event.id"
+        />
       </div>
     </div>
 
@@ -54,13 +52,13 @@
         </div>
         <div v-if="discEntryType" class="lpe-row">
           <label>{{ discTypeLabel(discEntryType) }}</label>
-          <div class="lpe-search-wrap">
-            <input v-model="discEntrySearch" @focus="discEntryDropdown = true" @blur="closeDiscEntryDropdown()" @input="discEntryDropdown = true" :placeholder="discEntryName || 'Search…'" />
-            <div v-if="discEntryDropdown" class="lpe-dropdown">
-              <div v-if="!discEntryOptions.length" class="lpe-dropdown-empty">No matches</div>
-              <div v-for="opt in discEntryOptions" :key="opt.id" class="lpe-dropdown-item" @mousedown.prevent="selectDiscEntry(opt)">{{ opt.name }}</div>
-            </div>
-          </div>
+          <SearchDropdown
+            :key="`disc-${itemIndex}-${addNew}`"
+            :options="discEntryCandidates"
+            :model-value="discEntryValue"
+            placeholder="Search…"
+            @select="selectDiscEntry"
+          />
         </div>
         <div v-if="discEntryType === 'hasTraitRating'" class="lpe-row">
           <label>Minimum die</label>
@@ -105,13 +103,12 @@
             <button class="lpe-chip-remove" @click="removeTraitChip('survival', item.id)">×</button>
           </span>
         </div>
-        <div class="lpe-search-wrap">
-          <input v-model="stSearch" @focus="stDropdown = true" @blur="stDropdown = false" @input="stDropdown = true" placeholder="Search traits…" />
-          <div v-if="stDropdown" class="lpe-dropdown">
-            <div v-if="!stOptions.length" class="lpe-dropdown-empty">No matches</div>
-            <div v-for="opt in stOptions" :key="opt.id" class="lpe-dropdown-item" @mousedown.prevent="addTraitChip('survival', opt)">{{ opt.name }}</div>
-          </div>
-        </div>
+        <SearchDropdown
+          :options="traitOptions"
+          :exclude-ids="form.survival.traitItems.map(i => i.id)"
+          placeholder="Search traits…"
+          @select="addTraitChip('survival', $event)"
+        />
       </div>
       <div class="lpe-row"><label>Difficulty</label><select v-model="form.survival.difficulty"><option v-for="d in dieTypes" :key="d" :value="d">{{ d }}</option></select></div>
       <div class="lpe-row"><label>Term penalty after</label><input v-model.number="form.survival.termPenaltyAfter" type="number" min="0" /></div>
@@ -178,13 +175,12 @@
             <button class="lpe-chip-remove" @click="removeTraitChip('advancement', item.id)">×</button>
           </span>
         </div>
-        <div class="lpe-search-wrap">
-          <input v-model="atSearch" @focus="atDropdown = true" @blur="atDropdown = false" @input="atDropdown = true" placeholder="Search traits…" />
-          <div v-if="atDropdown" class="lpe-dropdown">
-            <div v-if="!atOptions.length" class="lpe-dropdown-empty">No matches</div>
-            <div v-for="opt in atOptions" :key="opt.id" class="lpe-dropdown-item" @mousedown.prevent="addTraitChip('advancement', opt)">{{ opt.name }}</div>
-          </div>
-        </div>
+        <SearchDropdown
+          :options="traitOptions"
+          :exclude-ids="form.advancement.traitItems.map(i => i.id)"
+          placeholder="Search traits…"
+          @select="addTraitChip('advancement', $event)"
+        />
       </div>
       <div class="lpe-row"><label>Difficulty</label><select v-model="form.advancement.difficulty"><option v-for="d in dieTypes" :key="d" :value="d">{{ d }}</option></select></div>
       <div v-if="itemIndex === null && !addNew">
@@ -227,8 +223,8 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmTraitPicker from './GmTraitPicker.vue'
-import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
+import SearchDropdown from './SearchDropdown.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -245,162 +241,26 @@ const dieTypes = ['d4','d6','d8','d10','d12']
 const universes = ref([])
 const saving = ref(false)
 
-// ── Discovery autocomplete state ──────────────────────
-const discSearch = reactive({
-  atLocation: '',
-  knowsEntity: '',
-  possessesTrait: '',
-  hasTraitRating: '',
-  hasRelationship: '',
-})
-const discDropdown = reactive({
-  atLocation: false,
-  knowsEntity: false,
-  possessesTrait: false,
-  hasTraitRating: false,
-  hasRelationship: false,
-})
 const locationNameMap = ref({})  // id → name for LOCATION entities
 const entityNameMap = ref({})    // id → name for all entities
 const lifePathNameMap = ref({})  // id → name for life paths
 
-// ── Qualification autocomplete state ─────────────────
-const qualSearch = reactive({ trait: '', location: '', draft: '' })
-const qualDropdown = reactive({ trait: false, location: false, draft: false })
-const qualSelected = reactive({ traitName: '', locationName: '', draftName: '' })
+// ── Autocomplete option sources ──────────────────────
+const locationOptions = computed(() => toOptions(locationNameMap.value))
+const lifePathOptions = computed(() => toOptions(lifePathNameMap.value))
+const traitOptions = computed(() => toOptions(traitNameMap.value))
 
-const qualOptions = computed(() => ({
-  trait: filterSingleOpts(traitNameMap.value, qualSearch.trait, form.qualification.traitId),
-  location: filterSingleOpts(locationNameMap.value, qualSearch.location, form.qualification.mustBeAtLocation),
-  draft: filterSingleOpts(lifePathNameMap.value, qualSearch.draft, form.qualification.draft),
-}))
-
-function filterSingleOpts(nameMap, search, excludeId) {
-  const s = search.toLowerCase()
-  return Object.entries(nameMap)
-    .filter(([id, name]) => (!s || name.toLowerCase().includes(s)) && id !== excludeId)
-    .map(([id, name]) => ({ id, name }))
-    .slice(0, 20)
+function toOptions(map) {
+  return Object.entries(map).map(([id, name]) => ({ id, name }))
 }
 
-function selectQual(field, opt) {
-  form.qualification[field === 'trait' ? 'traitId' : field === 'location' ? 'mustBeAtLocation' : 'draft'] = opt.id
-  qualSelected[field + 'Name'] = opt.name
-  qualSearch[field] = ''
-  qualDropdown[field] = false
-}
-
-function closeQualDropdown(field) {
-  setTimeout(() => { qualDropdown[field] = false }, 150)
-}
-
-// ── Single-item trait autocomplete state ─────────────
-const itemSearch = reactive({ curriculum: '', mishap: '', event: '' })
-const itemDropdown = reactive({ curriculum: false, mishap: false, event: false })
-const itemSelected = reactive({ curriculumName: '', mishapName: '', eventName: '' })
-
-function itemOpts(field) {
-  const excludeId = form[field === 'mishap' ? 'survival' : field].mishaps
-    ? form.survival.mishaps[effectiveItemIndex.value]?.effectTraitId
-    : field === 'event'
-    ? form.events[effectiveItemIndex.value]?.effectTraitId
-    : form.curriculum[effectiveItemIndex.value]?.traitId
-  const s = itemSearch[field].toLowerCase()
-  return Object.entries(traitNameMap.value)
-    .filter(([id, name]) => (!s || name.toLowerCase().includes(s)) && id !== excludeId)
-    .map(([id, name]) => ({ id, name }))
-    .slice(0, 20)
-}
-
-function selectItemTrait(field, opt) {
-  if (field === 'curriculum') {
-    form.curriculum[effectiveItemIndex.value].traitId = opt.id
-  } else if (field === 'mishap') {
-    form.survival.mishaps[effectiveItemIndex.value].effectTraitId = opt.id
-  } else {
-    form.events[effectiveItemIndex.value].effectTraitId = opt.id
-  }
-  itemSelected[field + 'Name'] = opt.name
-  itemSearch[field] = ''
-  itemDropdown[field] = false
-}
-
-function closeItemDropdown(field) {
-  setTimeout(() => { itemDropdown[field] = false }, 150)
-}
-
-// ── Survival / Advancement trait chip state ──────────
-const stSearch = ref('')
-const stDropdown = ref(false)
-const atSearch = ref('')
-const atDropdown = ref(false)
-
-const stOptions = computed(() => chipTraitOpts(form.survival.traitItems, stSearch.value))
-const atOptions = computed(() => chipTraitOpts(form.advancement.traitItems, atSearch.value))
-
-function chipTraitOpts(items, search) {
-  const ids = new Set(items.map(i => i.id))
-  const s = search.toLowerCase()
-  return Object.entries(traitNameMap.value)
-    .filter(([id, name]) => !ids.has(id) && (!s || name.toLowerCase().includes(s)))
-    .map(([id, name]) => ({ id, name }))
-    .slice(0, 20)
-}
-
+// ── Survival / Advancement trait chips ───────────────
 function addTraitChip(field, opt) {
   form[field].traitItems.push({ id: opt.id, name: opt.name })
-  if (field === 'survival') { stSearch.value = ''; stDropdown.value = false }
-  else { atSearch.value = ''; atDropdown.value = false }
 }
 
 function removeTraitChip(field, id) {
   const items = form[field].traitItems
-  const idx = items.findIndex(i => i.id === id)
-  if (idx >= 0) items.splice(idx, 1)
-}
-
-const discOptions = computed(() => {
-  const fields = ['atLocation', 'knowsEntity', 'possessesTrait', 'hasTraitRating', 'hasRelationship']
-  const result = {}
-  for (const f of fields) {
-    const map = f === 'atLocation' ? locationNameMap.value : f === 'possessesTrait' || f === 'hasTraitRating' ? traitNameMap.value : entityNameMap.value
-    const items = f === 'hasTraitRating' ? form.discovery.hasTraitRatingItems : form.discovery[f + 'Items']
-    const ids = new Set(items.map(i => i.id))
-    const s = discSearch[f].toLowerCase()
-    result[f] = Object.entries(map)
-      .filter(([id, name]) => !ids.has(id) && (!s || name.toLowerCase().includes(s)))
-      .map(([id, name]) => ({ id, name }))
-      .slice(0, 20)
-  }
-  return result
-})
-
-function discItemName(field, item) {
-  if (item.name && item.name !== item.id) return item.name
-  const map = field === 'atLocation' ? locationNameMap.value : field === 'possessesTrait' || field === 'hasTraitRating' ? traitNameMap.value : entityNameMap.value
-  return map[item.id] || item.id.replace(/^trait-/, '').replace(/[-_]\w{4}$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function openDiscDropdown(field) {
-  discDropdown[field] = true
-}
-
-function closeDiscDropdown(field) {
-  setTimeout(() => { discDropdown[field] = false }, 150)
-}
-
-function addDiscItem(field, opt) {
-  if (field === 'hasTraitRating') {
-    form.discovery.hasTraitRatingItems.push({ id: opt.id, name: opt.name, die: 'd4' })
-  } else {
-    form.discovery[field + 'Items'].push({ id: opt.id, name: opt.name })
-  }
-  discSearch[field] = ''
-  discDropdown[field] = false
-}
-
-function removeDiscItem(field, id) {
-  const items = field === 'hasTraitRating' ? form.discovery.hasTraitRatingItems : form.discovery[field + 'Items']
   const idx = items.findIndex(i => i.id === id)
   if (idx >= 0) items.splice(idx, 1)
 }
@@ -410,19 +270,12 @@ const discEntryType = ref('')
 const discEntryValue = ref('')
 const discEntryIndex = ref(null)
 const discEntryDie = ref('d4')
-const discEntryName = ref('')
-const discEntrySearch = ref('')
-const discEntryDropdown = ref(false)
 
-const discEntryOptions = computed(() => {
+const discEntryCandidates = computed(() => {
   const map = discEntryType.value === 'atLocation' ? locationNameMap.value
     : (discEntryType.value === 'possessesTrait' || discEntryType.value === 'hasTraitRating') ? traitNameMap.value
     : entityNameMap.value
-  const s = discEntrySearch.value.toLowerCase()
-  return Object.entries(map)
-    .filter(([id, name]) => (!s || name.toLowerCase().includes(s)) && id !== discEntryValue.value)
-    .map(([id, name]) => ({ id, name }))
-    .slice(0, 20)
+  return Object.entries(map).map(([id, name]) => ({ id, name }))
 })
 
 function discTypeLabel(type) {
@@ -437,9 +290,6 @@ function selectDiscEntry(opt) {
     deleteDiscFlatItem(discEntryIndex.value)
   }
   discEntryValue.value = opt.id
-  discEntryName.value = opt.name
-  discEntrySearch.value = ''
-  discEntryDropdown.value = false
   // Persist to form discovery arrays
   if (discEntryType.value === 'hasTraitRating') {
     form.discovery.hasTraitRatingItems.push({ id: opt.id, name: opt.name, die: discEntryDie.value })
@@ -448,11 +298,6 @@ function selectDiscEntry(opt) {
   }
   discEntryIndex.value = discFlatItems.value.findIndex(i => i.value === opt.id && i.type === discEntryType.value)
 }
-
-function closeDiscEntryDropdown() {
-  setTimeout(() => { discEntryDropdown.value = false }, 150)
-}
-
 
 onMounted(async () => {
   try {
@@ -479,16 +324,6 @@ onMounted(async () => {
       lpData.lifePaths.forEach(lp => { lifePathNameMap.value[lp.id] = lp.name })
     }
   } catch {}
-  // Resolve qualification autocomplete names
-  if (form.qualification.traitId) {
-    qualSelected.traitName = traitNameMap.value[form.qualification.traitId] || ''
-  }
-  if (form.qualification.mustBeAtLocation) {
-    qualSelected.locationName = locationNameMap.value[form.qualification.mustBeAtLocation] || ''
-  }
-  if (form.qualification.draft) {
-    qualSelected.draftName = lifePathNameMap.value[form.qualification.draft] || ''
-  }
   // Resolve pre-existing entity names on discovery items
   const allMap = { ...locationNameMap.value, ...entityNameMap.value }
   for (const item of form.discovery.atLocationItems) {
@@ -597,20 +432,16 @@ function deleteDiscFlatItem(idx) {
   discEntryType.value = ''
   discEntryValue.value = ''
   discEntryDie.value = 'd4'
-  discEntryName.value = ''
 }
 
 watch(() => [props.section, props.itemIndex, props.addNew], ([s, idx, addNew]) => {
   if (s !== 'discovery') return
   console.log('[disc-init] watch fired', { s, idx, addNew, flatLen: discFlatItems.value.length })
-  discEntrySearch.value = ''
-  discEntryDropdown.value = false
   if (addNew) {
     discEntryIndex.value = null
     discEntryType.value = ''
     discEntryValue.value = ''
     discEntryDie.value = 'd4'
-    discEntryName.value = ''
   } else if (idx !== null) {
     const item = discFlatItems.value[idx]
     console.log('[disc-init] editing item', idx, item)
@@ -619,7 +450,6 @@ watch(() => [props.section, props.itemIndex, props.addNew], ([s, idx, addNew]) =
       discEntryType.value = item.type
       discEntryValue.value = item.value
       discEntryDie.value = item.die || 'd4'
-      discEntryName.value = item.name || ''
     }
   }
 }, { immediate: true })
@@ -787,31 +617,10 @@ async function save() {
   background: rgba(0,200,150,0.12); color: var(--accent);
   border: 1px solid rgba(0,200,150,0.2);
 }
-.lpe-chip-die { gap: 4px; }
-.lpe-chip-die-sel {
-  font-size: 9px; padding: 0 2px; border-radius: 2px;
-  border: 1px solid rgba(0,200,150,0.3); background: rgba(0,200,150,0.08);
-  color: var(--accent); cursor: pointer;
-}
 .lpe-chip-remove {
   font-size: 11px; line-height: 1; padding: 0 2px; cursor: pointer;
   background: none; border: none; color: var(--text-dim);
 }
 .lpe-chip-remove:hover { color: #e06060; }
-.lpe-search-wrap { position: relative; }
-.lpe-search-wrap input {
-  width: 100%; font-size: 11px; padding: 4px 6px; border-radius: 3px; box-sizing: border-box;
-  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text);
-}
-.lpe-dropdown {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
-  max-height: 140px; overflow-y: auto;
-  background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 3px;
-}
-.lpe-dropdown-item {
-  font-size: 10px; padding: 4px 8px; cursor: pointer; color: var(--text);
-}
-.lpe-dropdown-item:hover { background: rgba(0,200,150,0.1); color: var(--accent); }
-.lpe-dropdown-empty { font-size: 10px; padding: 6px 8px; color: var(--text-dim); }
 .lpe-hint { font-size: 9px; color: var(--text-dim); margin: 0 0 6px 0; }
 </style>
