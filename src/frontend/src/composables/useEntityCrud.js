@@ -186,6 +186,16 @@ export function useEntityCrud() {
     } catch {}
   }
 
+  let _jobPollTimer = null
+  function startJobPolling() {
+    pollJobs()
+    _jobPollTimer = setInterval(pollJobs, 2000)
+  }
+  function stopJobPolling() {
+    clearInterval(_jobPollTimer)
+    _jobPollTimer = null
+  }
+
   async function onImagen() {
     if (!selectedId.value || imagenJob.value) return
     jobStatuses.value = {
@@ -249,6 +259,8 @@ export function useEntityCrud() {
     uploadBgImage,
     // Imagen actions
     pollJobs,
+    startJobPolling,
+    stopJobPolling,
     onImagen,
     onCancel,
   }

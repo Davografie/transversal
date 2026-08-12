@@ -48,11 +48,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
+import { useEntityFilter } from '@/composables/useEntityFilter.js'
 import { usePanel } from '@/composables/usePanel.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
@@ -74,15 +75,14 @@ const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-p
 
 // ── Composables ─────────────────────────────────────
 const {
-  entities, selected, selectedId, editing, creating, saving, form,
-  jobStatuses, imagenJob, animateJob,
-  fetchEntities, selectEntity, saveEntity, deleteEntity, createEntity,
-  uploadBgImage, pollJobs, onImagen, onCancel,
+  entities, selected, selectedId, editing, creating, saving,
+  fetchEntities, selectEntity, createEntity,
+  startJobPolling, stopJobPolling,
 } = useEntityCrud()
 
 const {
-  traitsets, allSfxs, loading: traitsLoading,
-  fetchTraitsConfig, patchData, traitNameMap,
+  traitsets, allSfxs,
+  fetchTraitsConfig,
 } = useTraitsConfig()
 
 // ── Session UI ──────────────────────────────────────
@@ -94,96 +94,12 @@ function nextBeat() { emit('next-beat') }
 function startSession() { sessionActive.value = true; emit('start-session') }
 function endSession() { sessionActive.value = false; emit('end-session') }
 
-// ── Job polling ─────────────────────────────────────
-let _jobPollTimer = null
-function startJobPolling() {
-  pollJobs()
-  _jobPollTimer = setInterval(pollJobs, 2000)
-}
-function stopJobPolling() { clearInterval(_jobPollTimer) }
-
-// ── Filter state ────────────────────────────────────
-const activeFilters = ref([])
-const filterInput = ref('')
-const showSuggestions = ref(false)
-
-// ⚠ Both value AND q must be lowercased.
-function fuzzyMatch(value, q) {
-  if (!value || !q) return false
-  const raw = value.toLowerCase()
-  const ql = q.toLowerCase()
-  if (raw.includes(ql)) return true
-  const normalized = raw.replace(/_/g, ' ')
-  if (normalized.includes(ql)) return true
-  const qNormalized = ql.replace(/ /g, '_')
-  if (raw.includes(qNormalized)) return true
-  return false
-}
-
-function entityMatchesFilters(e) {
-  for (const f of activeFilters.value) {
-    if (f.type === 'universe' && e.currentUniverse !== f.value) return false
-    if (f.type === 'entityType' && e.type !== f.value) return false
-    if (f.type === 'name' && !fuzzyMatch(e.name, f.value)) return false
-  }
-  return true
-}
-
-function traitsetMatchesFilters(ts) {
-  for (const f of activeFilters.value) {
-    if (f.type === 'universe' && !(ts.universes || []).includes(f.value)) return false
-    if (f.type === 'entityType' && (ts.entityTypes || []).length > 0 && !(ts.entityTypes || []).includes(f.value)) return false
-    if (f.type === 'name' && !fuzzyMatch(ts.name, f.value)) return false
-  }
-  return true
-}
-
-// ── Filtered data ───────────────────────────────────
-const filteredEntities = computed(() => entities.value.filter(entityMatchesFilters))
-const filteredFactions = computed(() => filteredEntities.value.filter(e => e.type === 'FACTION'))
-const sceneEntities = computed(() => filteredEntities.value.filter(e => e.type === 'CHARACTER' || e.type === 'GMC'))
-const locationEntities = computed(() => filteredEntities.value.filter(e => e.type === 'LOCATION'))
-const universes = computed(() => entities.value.filter(e => e.type === 'UNIVERSE').map(u => ({ key: u.currentUniverse, name: u.name })))
-
-// ── Autocomplete ────────────────────────────────────
-const suggestions = computed(() => {
-  const q = filterInput.value.trim().toLowerCase()
-  if (!q) return []
-  const results = []
-  const seen = new Set()
-  for (const u of universes.value) {
-    if ((u.key && fuzzyMatch(u.key, q)) || (u.name && fuzzyMatch(u.name, q))) {
-      if (!seen.has('uni:' + u.key)) {
-        seen.add('uni:' + u.key)
-        results.push({ id: 'uni:' + u.key, name: u.name || u.key, entityType: 'UNIVERSE', hint: 'universe', filterType: 'universe', filterValue: u.key, filterLabel: u.name || u.key })
-      }
-    }
-  }
-  const types = ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET']
-  for (const t of types) {
-    if (fuzzyMatch(t, q)) {
-      results.push({ id: 'type:' + t, name: t.charAt(0) + t.slice(1).toLowerCase(), entityType: t, hint: 'type', filterType: 'entityType', filterValue: t, filterLabel: t.charAt(0) + t.slice(1).toLowerCase() })
-    }
-  }
-  for (const e of entities.value.filter(entityMatchesFilters)) {
-    if (fuzzyMatch(e.name, q) && !seen.has('ent:' + e.id)) {
-      seen.add('ent:' + e.id)
-      results.push({ id: 'ent:' + e.id, name: e.name, entityType: e.type, hint: 'name', filterType: 'name', filterValue: e.name, filterLabel: e.name })
-    }
-  }
-  return results.slice(0, 10)
-})
-
-function selectSuggestion(s) {
-  if (s.filterType && s.filterValue) {
-    const exists = activeFilters.value.find(f => f.type === s.filterType && f.value === s.filterValue)
-    if (!exists) {
-      activeFilters.value.push({ type: s.filterType, value: s.filterValue, label: s.filterLabel || s.filterValue })
-    }
-  }
-  filterInput.value = ''
-}
-function hideSuggestions() { setTimeout(() => { showSuggestions.value = false }, 150) }
+// ── Filtering (entities) ────────────────────────────
+const {
+  activeFilters, filterInput, showSuggestions,
+  filteredEntities, filteredFactions, sceneEntities,
+  suggestions, selectSuggestion, hideSuggestions,
+} = useEntityFilter(entities)
 
 // ── Location tree ───────────────────────────────────
 const {
