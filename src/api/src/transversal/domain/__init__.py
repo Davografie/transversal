@@ -562,6 +562,42 @@ class SFX(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
 
 
+# ── Roll Tables ──────────────────────────────────────
+
+class RollTableScheme(str, Enum):
+    """How a roll table selects an entry."""
+    RANGE = "range"    # entry declares min_value / max_value
+    WEIGHT = "weight"  # entry declares weight; cumulative proportional pick
+    TIER = "tier"      # entry keyed to an OutcomeTier
+    INDEX = "index"    # ordered list; roll 1 → first entry
+
+
+class RollTableEntry(BaseModel):
+    """A single entry in a roll table.
+
+    Which selection fields are meaningful depends on the parent table's
+    ``scheme``: range uses ``min_value``/``max_value``, weight uses ``weight``,
+    tier uses ``tier``, and index uses the entry's position in the list.
+    """
+    label: str = ""
+    description: str = ""
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    weight: Optional[int] = None
+    tier: Optional[OutcomeTier] = None
+    effects: list[Effect] = Field(default_factory=list)
+
+
+class RollTable(BaseModel):
+    """A reusable roll table whose entries execute effects when selected."""
+    id: str
+    name: str
+    universe: str = ""
+    scheme: RollTableScheme = RollTableScheme.RANGE
+    die: DieType = DieType.D6  # die size for range/index rolls
+    entries: list[RollTableEntry] = Field(default_factory=list)
+
+
 # ── Assembled Views (not stored, built by repo) ───────
 
 class CharacterView(BaseModel):
