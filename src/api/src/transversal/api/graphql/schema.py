@@ -644,7 +644,13 @@ class Mutation:
 
     @strawberry.mutation
     def create_sfx(self, info: strawberry.Info, input: SfxInput) -> SfxRef:
+        import logging
         from transversal.domain import SFX as DomainSFX, Effect as DomainEffect
+        logging.info(
+            "[SFX-CREATE] id=%s name=%s trigger=%s effects=%s",
+            input.id, input.name, input.trigger,
+            [(e.type, e.action, e.target, e.result, e.timing) for e in input.effects],
+        )
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
             trigger=input.trigger, limit=input.limit,
@@ -671,7 +677,13 @@ class Mutation:
 
     @strawberry.mutation
     def update_sfx(self, info: strawberry.Info, input: SfxUpdateInput) -> SfxRef:
+        import logging
         from transversal.domain import Effect as DomainEffect
+        logging.info(
+            "[SFX-UPDATE] id=%s effects=%s",
+            input.id,
+            [(e.type, e.action, e.target, e.result, e.timing) for e in (input.effects or [])],
+        )
         existing = _em(info).repo.get_sfx(str(input.id))
         if not existing:
             raise ValueError(f"SFX '{input.id}' not found")

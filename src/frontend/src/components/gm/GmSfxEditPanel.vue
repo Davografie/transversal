@@ -284,6 +284,10 @@ function onActionChange() {
   }
 }
 
+function strVal(v) {
+  return (v === null || v === undefined) ? null : String(v)
+}
+
 function addEffect() {
   const meta = selectedAction.value
   if (!meta) return
@@ -292,7 +296,7 @@ function addEffect() {
     type: meta.effectType,
     action: meta.effectAction,
     target: meta.implicitTarget || newEffect.fields.target || '',
-    result: meta.implicitResult || newEffect.fields.result || null,
+    result: meta.implicitResult || strVal(newEffect.fields.result),
   }
   form.effects.push(eff)
   closeEffectEditor()
@@ -329,7 +333,7 @@ function updateEffect() {
     type: meta.effectType,
     action: meta.effectAction,
     target: meta.implicitTarget || newEffect.fields.target || '',
-    result: meta.implicitResult || newEffect.fields.result || null,
+    result: meta.implicitResult || strVal(newEffect.fields.result),
   }
   closeEffectEditor()
 }
