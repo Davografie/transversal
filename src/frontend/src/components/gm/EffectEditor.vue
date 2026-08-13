@@ -59,31 +59,24 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
-import { useApi } from '@/composables/useApi.js'
+import { useEffectActions } from '@/composables/useEffectActions.js'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:modelValue'])
 
-const { graphql } = useApi()
-
 const effects = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v),
 })
 
-const effectActions = ref([])
+const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
 const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: '' })
 
-onMounted(async () => {
-  try {
-    const data = await graphql(`{ effectActions { actionId label description category effectType effectAction validTimings fields { name label fieldType required default options } implicitTarget implicitResult implicitTiming targetKind requiresChoice } }`)
-    if (data?.effectActions) effectActions.value = data.effectActions
-  } catch {}
-})
+onMounted(() => { load() })
 
 const selectedAction = computed(() => {
   if (!newEffect.actionId) return null
@@ -184,14 +177,6 @@ function categorySign(cat) {
   if (cat === 'benefit') return '+'
   return '~'
 }
-function effectSummary(eff) {
-  const parts = [eff.type, eff.action].filter(Boolean)
-  let tail = ''
-  if (eff.target && eff.target !== 'self' && eff.target !== '{source_trait}') tail += ` → ${eff.target}`
-  if (eff.result) tail += ` (${eff.result})`
-  return parts.join('/') + tail
-}
-
 // Drag reorder
 const dragIndex = ref(-1)
 const dragOverIndex = ref(-1)

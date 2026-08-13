@@ -55,6 +55,7 @@
 import { ref, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
+import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
 
@@ -65,9 +66,11 @@ const props = defineProps({
 
 const panel = usePanel()
 const { graphql } = useApi()
+const { load: loadEffectActions, summarize: effectSummary } = useEffectActions()
 const table = ref(null)
 
 onMounted(async () => {
+  loadEffectActions()
   try {
     const data = await graphql(`query($id:ID!){rollTable(id:$id){id name universe lifePath scheme die check{traitIds difficulty freeChoice} entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`, { id: props.tableId })
     table.value = data?.rollTable || null
@@ -87,13 +90,6 @@ function entryKey(e) {
   if (e.weight != null) return `w${e.weight}`
   if (e.tier) return e.tier
   return ''
-}
-
-function effectSummary(e) {
-  const parts = [`${e.type}/${e.action}`]
-  if (e.target) parts.push(e.target)
-  if (e.result) parts.push(e.result)
-  return parts.join(' ')
 }
 
 function conditionSummary(c) {
