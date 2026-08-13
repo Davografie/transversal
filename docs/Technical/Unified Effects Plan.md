@@ -98,11 +98,13 @@ A `RollTable` is a reusable data unit: a set of entries, each carrying a label, 
 - **Manual / physical dice** — the user can click a row in the table to communicate what they rolled, or provide a rolled number/tier that the app maps to an entry.
 - **Flow effects** (`next_step`, `draft`, `force_muster`) move the term forward; a term reduces to *resolve current table → apply the chosen entry's effects → repeat until a terminal flow effect*.
 
-### Open items for Change 2
+### Settled decisions for Change 2
 
-- Exact table schema: entry field set per selection scheme (`min`/`max`, `weight`, `tier`, `index`).
-- Whether `curriculum` / `muster_out` survive as named life-path concepts or become generic tables.
-- How a check-table declares its pool (traits) + difficulty + tier→entry mapping.
+- **RollTables are first-class ArangoDB documents** in a new `roll_tables` collection, each with `_key`/`id` and `name`, plus an optional `life_path` field (null = shared/general table). A life path holds an entry-point table id; tables are linked by `next_step` effects whose `target` is the next table's `_key`.
+- **Checks keep the dice pool.** A check rolls a pool (predetermined trait, combination of traits, or free player choice) against a difficulty; the outcome tier selects a tier-keyed entry. The effect die is degree-of-success, not the pass/fail gate.
+- **Learn is a RollTable** — no separate curriculum logic. `CurriculumItem` dissolves into a table entry + `gain_or_step_up` effect + a `min_rank` condition.
+- **Conditions/limits become a distinct `Condition` data unit**, parallel to `Effect`: `{ type, target, value, narrative }`, evaluated automatically against the entity. `min_rank`, `at_location`, `has_trait`, `has_relationship`, `always`, and `narrative` are the initial types. SFX's narrative `limit` stays as-is for now.
+- **`roll_tables` collection + entries = a new database data type.**
 
 ## In scope
 
@@ -145,7 +147,7 @@ Build the `RollTable` data unit with the selection schemes above and click-to-se
 - *Verify:* unit tests per selection scheme; manual entry selection resolves the correct effects.
 
 **C2.2 — Re-model life-path phases as tables/checks.**
-Replace the bespoke `QualificationInfo` / `SurvivalInfo` / `EventItem` / `AdvancementInfo` / `MusterOutInfo` structure with tables + flow effects. Flow effects (`next_step`, `draft`, `force_muster`) drive term progression.
+Introduce the `Condition` data unit + evaluator, add the `roll_tables` collection and repository CRUD, and re-shape `LifePath` to reference roll tables (entry-point table + `next_step`-linked tables) instead of the bespoke `QualificationInfo` / `SurvivalInfo` / `EventItem` / `AdvancementInfo` / `MusterOutInfo` types. Flow effects (`next_step`, `draft`, `force_muster`) drive term progression.
 
 - *Verify:* seeded life paths execute equivalently; draft/forced-muster/skip behaviors preserved.
 
