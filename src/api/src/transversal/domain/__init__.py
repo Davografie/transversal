@@ -429,6 +429,7 @@ class Entity(BaseModel):
     life_history: list["LifeTerm"] = Field(default_factory=list)
     drifter_terms: int = 0                    # terms spent as a drifter
     discovered_life_paths: list[str] = Field(default_factory=list)  # _keys of discovered paths
+    pending_term: Optional["PendingTerm"] = None  # in-progress term state (checkpoint)
 
 
 # ── Life Paths ─────────────────────────────────────────
@@ -522,6 +523,16 @@ class LifeTerm(BaseModel):
     mishap_muster: bool = False  # true if forced out by mishap → re-entry at rank 0
 
 
+class PendingTerm(BaseModel):
+    """In-progress life path term checkpoint.
+
+    Holds where the entity is in the linked roll-table flow so a term can be
+    resumed mid-way (reload / another device).
+    """
+    current_table_id: str = ""
+    continuation: list[str] = Field(default_factory=list)  # return-address stack
+
+
 # ── SFX ───────────────────────────────────────────────
 
 # Timing for deferred effects.
@@ -612,13 +623,27 @@ class RollTableEntry(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
 
 
+class RollTableCheck(BaseModel):
+    """Dice-pool check metadata for a TIER-scheme roll table.
+
+    When present, resolving the table assembles a pool (predetermined traits or a
+    free player choice) and rolls against ``difficulty``; the outcome tier selects
+    a tier-keyed entry.
+    """
+    trait_ids: list[str] = Field(default_factory=list)
+    difficulty: DieType = DieType.D6
+    free_choice: bool = False
+
+
 class RollTable(BaseModel):
     """A reusable roll table whose entries execute effects when selected."""
     id: str
     name: str
     universe: str = ""
+    life_path: Optional[str] = None  # owning life path id; None = shared/general
     scheme: RollTableScheme = RollTableScheme.RANGE
     die: DieType = DieType.D6  # die size for range/index rolls
+    check: Optional[RollTableCheck] = None  # dice-pool check when scheme == TIER
     entries: list[RollTableEntry] = Field(default_factory=list)
 
 
