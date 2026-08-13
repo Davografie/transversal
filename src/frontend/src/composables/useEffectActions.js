@@ -29,10 +29,12 @@ export function useEffectActions() {
   }
 
   // Human-friendly one-line summary: "Step Up Die → highest trait die (d8)".
-  function summarize(effect) {
+  // `resolve` (optional) maps a raw target id to a display name.
+  function summarize(effect, resolve) {
     if (!effect) return ''
     let out = labelFor(effect)
-    if (effect.target && effect.target !== 'self' && effect.target !== '{source_trait}') out += ` → ${effect.target}`
+    const target = resolve ? resolve(effect.target) : effect.target
+    if (target && target !== 'self' && target !== '{source_trait}') out += ` → ${target}`
     if (effect.result) out += ` (${effect.result})`
     return out
   }

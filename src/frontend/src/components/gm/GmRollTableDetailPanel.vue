@@ -15,7 +15,7 @@
     <div v-if="table?.check" class="rtd-subsection">
       <span class="rtd-subtitle">Check</span>
       <span class="rtd-detail">
-        roll {{ table.check.traitIds.join(', ') || '(untrained)' }} vs {{ table.check.difficulty }}
+        roll {{ (table.check.traitIds || []).map(traitName).join(', ') || '(untrained)' }} vs {{ table.check.difficulty }}
         <template v-if="table.check.freeChoice"> · free choice</template>
       </span>
     </div>
@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
@@ -66,15 +66,46 @@ const props = defineProps({
 
 const panel = usePanel()
 const { graphql } = useApi()
-const { load: loadEffectActions, summarize: effectSummary } = useEffectActions()
+const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
 const table = ref(null)
+const rollTableNames = reactive({})
+const traitNames = reactive({})
+
+function nameFor(map, id) {
+  return id && map[id] ? map[id] : id
+}
+function traitName(id) { return nameFor(traitNames, id) }
+function resolveTarget(t) {
+  if (!t) return t
+  return traitNames[t] || rollTableNames[t] || t
+}
+function effectSummary(eff) {
+  return summarizeEffect(eff, resolveTarget)
+}
+
+async function loadRollTableNames() {
+  try {
+    const data = await graphql(`{ rollTables { id name } }`)
+    for (const t of (data?.rollTables || [])) rollTableNames[t.id] = t.name
+  } catch {}
+}
+
+async function loadTraitNames(universe) {
+  try {
+    const data = await graphql(`query($u:String!){ traitsByUniverse(universe:$u){ id name } }`, { u: universe })
+    for (const t of (data?.traitsByUniverse || [])) traitNames[t.id] = t.name
+  } catch {}
+}
 
 onMounted(async () => {
   loadEffectActions()
+  const namesPromise = loadRollTableNames()
   try {
     const data = await graphql(`query($id:ID!){rollTable(id:$id){id name universe lifePath scheme die check{traitIds difficulty freeChoice} entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`, { id: props.tableId })
     table.value = data?.rollTable || null
   } catch {}
+  await namesPromise
+  if (table.value?.universe) loadTraitNames(table.value.universe)
 })
 
 function editTable() {
@@ -121,7 +152,18 @@ function conditionSummary(c) {
 .rtd-desc { font-size: 9px; color: var(--text-dim); }
 .rtd-conditions { margin-top: 2px; display: flex; flex-direction: column; gap: 1px; }
 .rtd-cond { font-size: 9px; color: var(--accent); }
-.rtd-effect { font-family: monospace; font-size: 10px; color: var(--text); }
+.rtd-effect {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 3px 6px;
+  margin: 2px 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
 .rtd-row { cursor: pointer; }
 .rtd-row:hover { background: rgba(255,255,255,0.04); }
 </style>
