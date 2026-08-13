@@ -15,9 +15,6 @@ def evaluate_condition(entity: Entity, condition: Condition, repo: "EntityReposi
     if condition.type in (ConditionType.ALWAYS, ConditionType.NARRATIVE):
         return True  # narrative limits are not auto-blocking
 
-    if condition.type == ConditionType.RANK_MIN:
-        return entity.current_rank >= int(condition.value or 0)
-
     if condition.type == ConditionType.AT_LOCATION:
         return entity.current_location == condition.target
 

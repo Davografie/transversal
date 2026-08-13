@@ -167,10 +167,9 @@ def test_transfer_razmerit():
 # ── Rank / flow ──────────────────────────────────────
 
 def test_rank_set_is_passthrough():
-    """rank/set was removed — rank is a relationship trait, not current_rank."""
-    entity = _entity(current_rank=0)
+    """rank/set was removed — rank is a relationship trait, not an entity field."""
+    entity = _entity()
     result = apply_effects(entity, [_effect("rank", "set", "lp-x", "3")], FakeRepo())
-    assert entity.current_rank == 0
     assert len(result.passthrough) == 1
 
 

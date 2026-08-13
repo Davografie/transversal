@@ -500,8 +500,6 @@ const QUERY = `
       razmerit
       currentUniverse
       currentLocation
-      currentLifePathId
-      termsServed
       backgroundImage
       sheetPortrait
       traitSettings {

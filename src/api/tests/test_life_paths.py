@@ -5,10 +5,10 @@ import pytest
 from transversal.domain import (
     DieType,
     DiscoveryBlock,
+    Enrollment,
     Entity,
     EntityType,
     LifePath,
-    LifeTerm,
     PendingTerm,
     Trait,
     TraitSet,
@@ -105,32 +105,6 @@ class TestLifePath:
         assert lp.discovery.at_location == ["loc-valley"]
 
 
-class TestLifeTerm:
-    def test_basic_term(self):
-        lt = LifeTerm(
-            path_id="lp-verdant",
-            path_name="Verdant Steps",
-            universe="three_realms",
-            terms_served=3,
-            final_rank=1,
-        )
-        assert lt.mustered_out is False
-        assert lt.mishap_muster is False
-
-    def test_mishap_muster(self):
-        lt = LifeTerm(
-            path_id="lp-rough",
-            path_name="Rough Path",
-            universe="earth",
-            terms_served=1,
-            final_rank=0,
-            mustered_out=True,
-            mishap_muster=True,
-        )
-        assert lt.mustered_out is True
-        assert lt.mishap_muster is True
-
-
 class TestEntityLifePathFields:
     def test_defaults(self):
         e = Entity(
@@ -139,34 +113,25 @@ class TestEntityLifePathFields:
             name="Kael",
             current_universe="earth",
         )
-        assert e.terms_served == 0
-        assert e.current_life_path_id is None
-        assert e.current_rank == 0
-        assert e.life_history == []
-        assert e.drifter_terms == 0
+        assert e.life_paths == []
         assert e.discovered_life_paths == []
+        assert e.pending_term is None
 
-    def test_with_history(self):
+    def test_with_enrollments(self):
         e = Entity(
             id="kael-1",
             type=EntityType.CHARACTER,
             name="Kael",
             current_universe="earth",
-            terms_served=5,
-            current_life_path_id="lp-verdant",
-            current_rank=2,
             discovered_life_paths=["lp-drifter", "lp-verdant", "lp-secret"],
-            life_history=[
-                LifeTerm(path_id="lp-drifter", path_name="Drifter", universe="earth",
-                         terms_served=2, final_rank=0, mustered_out=True),
-                LifeTerm(path_id="lp-verdant", path_name="Verdant Steps", universe="three_realms",
-                         terms_served=3, final_rank=2),
+            life_paths=[
+                Enrollment(faction_id="fac-1", path_id="lp-verdant", mustered=True),
+                Enrollment(faction_id="fac-2", path_id="lp-drifter"),
             ],
         )
-        assert e.terms_served == 5
-        assert len(e.life_history) == 2
-        assert e.life_history[0].path_name == "Drifter"
-        assert e.life_history[1].terms_served == 3
+        assert len(e.life_paths) == 2
+        assert e.life_paths[0].mustered is True
+        assert e.life_paths[1].mustered is False
         assert len(e.discovered_life_paths) == 3
 
 

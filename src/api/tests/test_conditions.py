@@ -48,11 +48,6 @@ def test_narrative_true():
     )
 
 
-def test_rank_min():
-    assert evaluate_condition(_entity(current_rank=3), Condition(type=ConditionType.RANK_MIN, value="3"), FakeRepo())
-    assert not evaluate_condition(_entity(current_rank=2), Condition(type=ConditionType.RANK_MIN, value="3"), FakeRepo())
-
-
 def test_at_location():
     assert evaluate_condition(_entity(current_location="loc-x"), Condition(type=ConditionType.AT_LOCATION, target="loc-x"), FakeRepo())
     assert not evaluate_condition(_entity(current_location="loc-y"), Condition(type=ConditionType.AT_LOCATION, target="loc-x"), FakeRepo())
@@ -73,11 +68,11 @@ def test_has_relationship():
 def test_all_must_pass():
     repo = FakeRepo(traitsettings=[_ts("iron-will")])
     conditions = [
-        Condition(type=ConditionType.RANK_MIN, value="2"),
         Condition(type=ConditionType.HAS_TRAIT, target="iron-will"),
+        Condition(type=ConditionType.AT_LOCATION, target="loc-x"),
     ]
-    assert evaluate_conditions(_entity(current_rank=2), conditions, repo)
-    assert not evaluate_conditions(_entity(current_rank=1), conditions, repo)
+    assert evaluate_conditions(_entity(current_location="loc-x"), conditions, repo)
+    assert not evaluate_conditions(_entity(current_location="loc-y"), conditions, repo)
 
 
 def test_empty_conditions_true():

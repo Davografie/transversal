@@ -22,8 +22,6 @@ from transversal.api.graphql.types import (
     OutcomeTier as GqlOutcomeTier,
     PendingTerm as GqlPendingTerm,
     Projection,
-    QualificationResult,
-    LearnResult,
     RelatedEntity,
     Relationship,
     RazmeritResult,
@@ -31,9 +29,6 @@ from transversal.api.graphql.types import (
     Effect as GqlEffect,
     SfxInput,
     SfxRef,
-    SurviveResult,
-    EventResult,
-    AdvanceResult,
     TeachResult,
     GiftResult,
     TakeResult,
@@ -79,8 +74,6 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,
-        current_life_path_id=e.current_life_path_id,
-        terms_served=e.terms_served,
     )
 
 

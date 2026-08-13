@@ -375,8 +375,6 @@ class Entity:
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
-    current_life_path_id: Optional[str] = None
-    terms_served: int = 0
 
     @strawberry.field
     def projections(self, info: strawberry.Info) -> list[Projection]:
@@ -615,69 +613,6 @@ class LifePathStepResult:
     error: Optional[str] = None
     table_id: Optional[str] = None
     entry_label: Optional[str] = None
-
-
-# ── Term Result Types ──────────────────────────────
-
-@strawberry.type
-class LearnResult:
-    trait_gained_id: strawberry.ID
-    trait_name: str
-    was_stepped_up: bool
-
-
-@strawberry.type
-class SurviveResult:
-    success: bool
-    roll_summary: str
-    mishap_description: Optional[str] = None
-    complication_trait_id: Optional[strawberry.ID] = None
-    forced_muster: bool = False
-
-
-@strawberry.type
-class EventResult:
-    event_index: int
-    description: str
-
-
-@strawberry.type
-class AdvanceResult:
-    success: bool
-    new_rank: int
-    rank_name: str
-
-
-@strawberry.type
-class QualificationResult:
-    success: bool
-    drafted: bool
-    drafted_path_id: Optional[str] = None
-    location_blocked: bool = False
-
-
-@strawberry.type
-class TermResult:
-    qualification: Optional[QualificationResult]
-    learn: Optional[LearnResult]
-    survive: Optional[SurviveResult]
-    event: Optional[EventResult]
-    advance: Optional[AdvanceResult]
-    new_trait_settings: list[strawberry.ID]
-    modified_trait_settings: list[strawberry.ID]
-    razmerit_change: int
-    term_number: int
-
-
-@strawberry.type
-class MusterOutResult:
-    path_id: strawberry.ID
-    path_name: str
-    terms_served: int
-    final_rank: int
-    mishap_muster: bool
-    benefits: list[str]
-    razmerit_gained: int
 
 
 # ── Trait Transfer Result Types ──────────────────────

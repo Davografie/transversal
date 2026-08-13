@@ -428,12 +428,6 @@ class Entity(BaseModel):
     suitable_life_path_ids: list[str] = Field(default_factory=list)  # faction-only: offered paths
     discovered_life_paths: list[str] = Field(default_factory=list)  # _keys of discovered paths
     pending_term: Optional["PendingTerm"] = None  # in-progress term state (checkpoint)
-    # Legacy (deprecated — replaced by life_paths + relationship traits)
-    terms_served: int = 0
-    current_life_path_id: Optional[str] = None
-    current_rank: int = 0
-    life_history: list["LifeTerm"] = Field(default_factory=list)
-    drifter_terms: int = 0
 
 
 # ── Life Paths ─────────────────────────────────────────
@@ -459,17 +453,6 @@ class LifePath(BaseModel):
     description: str = ""
     entry_table_id: str = ""  # _key of the first RollTable in the flow
     discovery: Optional[DiscoveryBlock] = None  # null → always visible
-
-
-class LifeTerm(BaseModel):
-    """Record of a completed life path term in an entity's life_history."""
-    path_id: str
-    path_name: str
-    universe: str
-    terms_served: int
-    final_rank: int
-    mustered_out: bool = False
-    mishap_muster: bool = False  # true if forced out by mishap → re-entry at rank 0
 
 
 class Enrollment(BaseModel):
@@ -537,7 +520,6 @@ class SFX(BaseModel):
 class ConditionType(str, Enum):
     """Kinds of automatically-evaluable gate/limit conditions."""
     ALWAYS = "always"
-    RANK_MIN = "rank_min"                # value = rank threshold
     AT_LOCATION = "at_location"          # target = location entity id
     HAS_TRAIT = "has_trait"              # target = trait id
     HAS_RELATIONSHIP = "has_relationship"  # target = related entity id
