@@ -85,14 +85,8 @@ async function loadLifePaths(universeKey) {
     const data = await graphql(
       `query($u: String!) {
         lifePaths(universe: $u) {
-          id name universe description
-          qualification { traitId difficulty mustBeAtLocation draft }
+          id name universe description entryTableId
           discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship }
-          curriculum { traitId createAt stepUp minRank }
-          survival { traitIds difficulty termPenaltyAfter mishaps }
-          events { description effect minRank }
-          advancement { traitIds difficulty ranks { number name benefits } }
-          musterOut { perTermBenefits atRanks }
         }
       }`,
       { u: universeKey }
