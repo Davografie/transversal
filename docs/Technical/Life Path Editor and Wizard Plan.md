@@ -18,7 +18,7 @@ aliases:
 # Life Path Editor and Wizard Plan
 
 > [!note] Status
-> Agreed plan, pre-implementation. Builds on [[Unified Effects Plan]] and [[SFX and Effects]]. Backend for effects / roll tables / term execution is already complete; this plan covers the authoring and execution **frontend**, plus the small amount of backend authoring API still missing.
+> Phases 1–3 are complete (roll-table read/write API, editor panels, shared `EffectEditor`/`ConditionEditor`). Phase 4 (wizard) is next; Phase 5 (target-choice) is deferred. Builds on [[Unified Effects Plan]] and [[SFX and Effects]].
 
 ## Goal
 
@@ -89,6 +89,7 @@ Backend `resolveChoice` + pending-choice persistence on the term checkpoint; fro
 
 - DiceRoller visibility for every life-path roll.
 - Trait-rating signed-value redesign.
+- **Effect `context` field UI** — replace the raw JSON textarea in `EffectEditor` with metadata-driven, per-action context fields (e.g. `relationship` → faction dropdown, `return_to` → roll-table dropdown, `description` → text). Requires extending `EffectActionMeta` with a `context_fields` declaration and exposing it via `effectActions`; `Effect.context` storage stays a dict.
 
 ## Frontend conventions
 
