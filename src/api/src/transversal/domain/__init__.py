@@ -443,73 +443,18 @@ class DiscoveryBlock(BaseModel):
     has_relationship: list[str] = Field(default_factory=list)
 
 
-class QualificationInfo(BaseModel):
-    """Entry requirements for a life path."""
-    trait_id: str
-    difficulty: DieType = DieType.D6
-    must_be_at_location: Optional[str] = None  # location entity ID required to take a term
-    draft: Optional[str] = None  # path _key to draft into on failure
-
-
-class CurriculumItem(BaseModel):
-    """A trait gained or stepped up during the Learn phase."""
-    trait_id: str
-    create_at: DieType = DieType.D4  # rating if trait is new to the character
-    step_up: bool = False  # if the character already has the trait, step up instead
-    min_rank: int = 0  # rank required for this curriculum item
-
-
-class SurvivalInfo(BaseModel):
-    """Survival phase configuration for a life path."""
-    trait_ids: list[str] = Field(default_factory=list)
-    difficulty: DieType = DieType.D6
-    term_penalty_after: Optional[int] = 4  # after N terms in this path, difficulty steps up
-    mishaps: list[dict] = Field(default_factory=list)  # [{description, effect}]
-
-
-class EventItem(BaseModel):
-    """A single event in a life path's event table."""
-    description: str
-    effect: dict = Field(default_factory=dict)
-    min_rank: int = 0  # rank required for this event to be rollable
-
-
-class RankInfo(BaseModel):
-    """A rank in a life path's advancement ladder."""
-    number: int
-    name: str
-    benefits: list[dict] = Field(default_factory=list)
-
-
-class AdvancementInfo(BaseModel):
-    """Advancement phase configuration for a life path."""
-    trait_ids: list[str] = Field(default_factory=list)
-    difficulty: DieType = DieType.D6
-    ranks: list[RankInfo] = Field(default_factory=list)
-
-
-class MusterOutInfo(BaseModel):
-    """Benefits granted when mustering out of a life path."""
-    per_term_benefits: list[dict] = Field(default_factory=list)  # razmerit, asset traits, contacts
-    at_ranks: dict[str, list[dict]] = Field(default_factory=dict)  # rank_number → benefits
-
-
 class LifePath(BaseModel):
-    """A life path definition — a structured narrative container for character growth.
+    """A life path definition — an entry point into a graph of linked roll tables.
 
-    Stored in the `life_paths` collection.
+    Stored in the `life_paths` collection. Term structure lives in RollTable
+    documents linked by ``next_step`` effects; discovery gating is optional.
     """
     id: str
     name: str
     universe: str
     description: str = ""
-    qualification: Optional[QualificationInfo] = None
+    entry_table_id: str = ""  # _key of the first RollTable in the flow
     discovery: Optional[DiscoveryBlock] = None  # null → always visible
-    curriculum: list[CurriculumItem] = Field(default_factory=list)
-    survival: Optional[SurvivalInfo] = None
-    events: list[EventItem] = Field(default_factory=list)
-    advancement: Optional[AdvancementInfo] = None
-    muster_out: Optional[MusterOutInfo] = None
 
 
 class LifeTerm(BaseModel):

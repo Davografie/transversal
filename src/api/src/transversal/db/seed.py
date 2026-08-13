@@ -595,12 +595,8 @@ def seed_all(em) -> None:
 
 
 def seed_life_paths(repo) -> None:
-    """Seed life path definitions."""
-    from transversal.domain import (
-        DieType, LifePath, LifeTerm,
-        CurriculumItem, QualificationInfo, DiscoveryBlock,
-        SurvivalInfo, EventItem, RankInfo, AdvancementInfo, MusterOutInfo,
-    )
+    """Seed life path definitions (entry points; term tables land in C2.3)."""
+    from transversal.domain import LifePath
 
     paths = [
         LifePath(
@@ -608,103 +604,21 @@ def seed_life_paths(repo) -> None:
             name="Rogue Cultivator",
             universe="three_realms",
             description="Walk the land alone, beholden to no sect.",
-            curriculum=[
-                CurriculumItem(trait_id="trait-cultivation-stage-76c7", create_at=DieType.D4, step_up=True, min_rank=0),
-            ],
-            survival=SurvivalInfo(
-                trait_ids=["trait-3r-qi-reserves"],
-                difficulty=DieType.D6,
-                term_penalty_after=4,
-                mishaps=[
-                    {"description": "Cultivation deviation — your meridians are damaged", "must_muster_out": True, "effect": {"type": "complication", "trait_id": "trait-qi-deviation-14a6", "die_type": "d4"}},
-                    {"description": "Spirit beast scar — you barely escaped", "must_muster_out": False, "effect": {"type": "complication", "trait_id": "trait-scar-4115", "die_type": "d4"}},
-                ],
-            ),
-            events=[
-                EventItem(description="Stumble upon a hidden herb — gain dao insight", effect={"type": "create_trait", "trait_id": "trait-3r-dao-comprehension", "die_type": "d4"}, min_rank=0),
-                EventItem(description="Cross paths with a wandering cultivator — pick up sword basics", effect={"type": "create_trait", "trait_id": "trait-3r-sword-intent", "die_type": "d4"}, min_rank=0),
-                EventItem(description="Survive a qi storm — strengthen your reserves", effect={"type": "create_trait", "trait_id": "trait-3r-qi-reserves", "die_type": "d4"}, min_rank=0),
-            ],
-            muster_out=MusterOutInfo(
-                per_term_benefits=[{"type": "razmerit", "amount": "1d6"}],
-            ),
         ),
         LifePath(
             id="lp-drifter-earth",
             name="Street Survivor",
             universe="earth",
             description="Live by your wits on the margins of society.",
-            curriculum=[
-                CurriculumItem(trait_id="trait-hack-8a0f", create_at=DieType.D4, step_up=False, min_rank=0),
-            ],
-            survival=SurvivalInfo(
-                trait_ids=["trait-earth-survival"],
-                difficulty=DieType.D6,
-                term_penalty_after=3,
-                mishaps=[
-                    {"description": "Burned by a deal gone wrong — trust issues", "must_muster_out": True, "effect": {"type": "complication", "trait_id": "trait-reputation-17f6", "die_type": "d4"}},
-                    {"description": "Caught in the crossfire — lingering injury", "must_muster_out": False, "effect": {"type": "complication", "trait_id": "trait-physical-trauma-22b8", "die_type": "d4"}},
-                ],
-            ),
-            events=[
-                EventItem(description="Find a stash of black-market gear", effect={"type": "create_trait", "trait_id": "trait-earth-hacking", "die_type": "d4"}, min_rank=0),
-                EventItem(description="Talk your way out of a tight spot", effect={"type": "create_trait", "trait_id": "trait-earth-persuasion", "die_type": "d4"}, min_rank=0),
-                EventItem(description="Shadow someone without being noticed", effect={"type": "create_trait", "trait_id": "trait-earth-stealth", "die_type": "d4"}, min_rank=0),
-            ],
-            muster_out=MusterOutInfo(
-                per_term_benefits=[{"type": "razmerit", "amount": "1d6"}],
-            ),
         ),
         LifePath(
             id="lp-verdant-disciple",
             name="Verdant Steps Outer Disciple",
             universe="three_realms",
             description="Train under the guidance of the Verdant Steps Sect.",
-            qualification=QualificationInfo(
-                trait_id="trait-cultivation-stage-76c7",
-                difficulty=DieType.D4,
-                must_be_at_location=None,
-                draft="lp-drifter-three-realms",
-            ),
-            curriculum=[
-                CurriculumItem(trait_id="trait-cultivation-stage-76c7", create_at=DieType.D6, step_up=True, min_rank=0),
-                CurriculumItem(trait_id="trait-qi-abf8", create_at=DieType.D4, step_up=True, min_rank=0),
-            ],
-            survival=SurvivalInfo(
-                trait_ids=["trait-3r-qi-reserves"],
-                difficulty=DieType.D6,
-                term_penalty_after=4,
-                mishaps=[
-                    {"description": "Qi deviation during meditation — damaged dantian", "must_muster_out": False, "effect": {"type": "complication", "trait_id": "trait-qi-deviation-14a6", "die_type": "d4"}},
-                    {"description": "Failed tribulation — saved by elders but lose face", "must_muster_out": True, "effect": {"type": "complication", "trait_id": "trait-reputation-17f6", "die_type": "d6"}},
-                ],
-            ),
-            events=[
-                EventItem(description="Attend a lecture by an Inner Disciple — gain dao insight", effect={"type": "create_trait", "trait_id": "trait-3r-dao-comprehension", "die_type": "d4"}, min_rank=0),
-                EventItem(description="Spar with a senior — improve footwork", effect={"type": "create_trait", "trait_id": "trait-3r-footwork", "die_type": "d4"}, min_rank=0),
-                EventItem(description="Tend the herb gardens — learn basic alchemy", effect={"type": "create_trait", "trait_id": "trait-3r-alchemy", "die_type": "d4"}, min_rank=0),
-            ],
-            advancement=AdvancementInfo(
-                trait_ids=["trait-3r-qi-reserves"],
-                difficulty=DieType.D6,
-                ranks=[
-                    RankInfo(number=1, name="Inner Disciple", benefits=[{"type": "razmerit", "amount": 100}]),
-                    RankInfo(number=2, name="Core Disciple", benefits=[{"type": "razmerit", "amount": 200}]),
-                    RankInfo(number=3, name="Elder", benefits=[{"type": "razmerit", "amount": 500}]),
-                ],
-            ),
-            muster_out=MusterOutInfo(
-                per_term_benefits=[{"type": "razmerit", "amount": "1d6"}],
-                at_ranks={
-                    "1": [{"type": "razmerit", "amount": 100}],
-                    "2": [{"type": "razmerit", "amount": 200}],
-                    "3": [{"type": "razmerit", "amount": 500}],
-                },
-            ),
         ),
     ]
 
     for lp in paths:
-        existing = repo.get_lifepath(lp.id)
-        if existing is None:
+        if repo.get_lifepath(lp.id) is None:
             repo.create_lifepath(lp)

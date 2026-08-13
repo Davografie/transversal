@@ -3,19 +3,13 @@
 import pytest
 
 from transversal.domain import (
-    AdvancementInfo,
-    CurriculumItem,
     DieType,
     DiscoveryBlock,
     Entity,
     EntityType,
-    EventItem,
     LifePath,
     LifeTerm,
-    MusterOutInfo,
-    QualificationInfo,
-    RankInfo,
-    SurvivalInfo,
+    PendingTerm,
     Trait,
     TraitSet,
     TraitSetting,
@@ -95,61 +89,20 @@ class TestLifePath:
             universe="earth",
         )
         assert lp.id == "lp-test"
-        assert lp.qualification is None
+        assert lp.entry_table_id == ""
         assert lp.discovery is None
-        assert lp.curriculum == []
 
-    def test_full_life_path(self):
+    def test_life_path_with_entry_and_discovery(self):
         lp = LifePath(
             id="lp-verdant",
-            name="Verdant Steps Outer Disciple",
+            name="Verdant Steps",
             universe="three_realms",
             description="The safe cultivation path",
-            qualification=QualificationInfo(
-                trait_id="trait-cultivation",
-                difficulty=DieType.D4,
-                must_be_at_location="loc-valley",
-                draft="lp-drifter-three-realms",
-            ),
+            entry_table_id="tbl-verdant-qualification",
             discovery=DiscoveryBlock(at_location=["loc-valley"]),
-            curriculum=[
-                CurriculumItem(trait_id="trait-qi-reserves", create_at=DieType.D6, step_up=False, min_rank=0),
-                CurriculumItem(trait_id="trait-sword-intent", create_at=DieType.D4, step_up=True, min_rank=2),
-            ],
-            survival=SurvivalInfo(
-                trait_ids=["trait-cultivation", "trait-willpower"],
-                difficulty=DieType.D6,
-                term_penalty_after=4,
-                mishaps=[{"description": "Training injury", "effect": {"type": "complication"}}],
-            ),
-            events=[
-                EventItem(description="Found a scroll", effect={"type": "create_trait"}, min_rank=0),
-                EventItem(description="Met a rival", effect={"type": "create_relationship"}, min_rank=1),
-            ],
-            advancement=AdvancementInfo(
-                trait_ids=["trait-cultivation"],
-                difficulty=DieType.D8,
-                ranks=[
-                    RankInfo(number=1, name="Inner Disciple", benefits=[{"type": "razmerit", "amount": 10}]),
-                    RankInfo(number=2, name="Core Disciple", benefits=[{"type": "sfx_unlock"}]),
-                ],
-            ),
-            muster_out=MusterOutInfo(
-                per_term_benefits=[{"type": "razmerit", "amount": "1d6"}],
-                at_ranks={"1": [{"type": "trait", "trait_id": "trait-technique"}]},
-            ),
         )
-        assert lp.qualification.trait_id == "trait-cultivation"
-        assert lp.qualification.must_be_at_location == "loc-valley"
+        assert lp.entry_table_id == "tbl-verdant-qualification"
         assert lp.discovery.at_location == ["loc-valley"]
-        assert len(lp.curriculum) == 2
-        assert lp.curriculum[1].min_rank == 2
-        assert lp.survival.term_penalty_after == 4
-        assert len(lp.events) == 2
-        assert lp.events[0].min_rank == 0
-        assert len(lp.advancement.ranks) == 2
-        assert lp.advancement.ranks[0].number == 1
-        assert lp.muster_out.at_ranks["1"][0]["type"] == "trait"
 
 
 class TestLifeTerm:

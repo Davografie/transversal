@@ -347,27 +347,13 @@ class Query:
 
 def _life_path_to_gql(lp) -> GqlLifePath:
     """Convert a domain LifePath to the GraphQL type."""
-    import json, logging
-    _log = logging.getLogger("transversal.lifepath")
-    disc = lp.discovery
-    if disc:
-        _log.info("_life_path_to_gql discovery: at_location=%s knows_entity=%s possesses_trait=%s has_trait_rating=%s has_relationship=%s",
-                  disc.at_location, disc.knows_entity, disc.possesses_trait,
-                  dict(disc.has_trait_rating), disc.has_relationship)
-    else:
-        _log.info("_life_path_to_gql discovery: None")
     return GqlLifePath(
         id=lp.id,
         name=lp.name,
         universe=lp.universe,
         description=lp.description if hasattr(lp, 'description') else "",
-        qualification=lp.qualification,
+        entry_table_id=lp.entry_table_id,
         discovery=lp.discovery,
-        curriculum=lp.curriculum,
-        survival=lp.survival,
-        events=lp.events,
-        advancement=lp.advancement,
-        muster_out=lp.muster_out,
     )
 
 
@@ -873,73 +859,8 @@ class Mutation:
                   advance_manual: Optional[int] = None,
                   learn_index: Optional[int] = None,
                   mishap_index: Optional[int] = None) -> TermResult:
-        """Execute one term of a life path. Pass manual die results for tabletop dice."""
-        from transversal.services.lifepath_executor import take_term
-
-        repo = _em(info).repo
-        entity = repo.get_entity(str(entity_id))
-        if entity is None:
-            raise ValueError(f"Entity '{entity_id}' not found")
-        life_path = repo.get_lifepath(str(life_path_id))
-        if life_path is None:
-            raise ValueError(f"LifePath '{life_path_id}' not found")
-
-        result = take_term(entity, life_path, razmerit_spent, repo,
-                          qual_manual=qual_manual,
-                          survive_manual=survive_manual,
-                          advance_manual=advance_manual,
-                          learn_index=learn_index,
-                          mishap_index=mishap_index)
-
-        def _ql(r: dict | None):
-            if r is None:
-                return None
-            return QualificationResult(
-                success=r["success"], drafted=r["drafted"],
-                drafted_path_id=r.get("drafted_path_id"),
-                location_blocked=r.get("location_blocked", False),
-            )
-
-        def _lr(r: dict | None):
-            if r is None:
-                return None
-            return LearnResult(
-                trait_gained_id=r["trait_gained_id"],
-                trait_name=r["trait_name"],
-                was_stepped_up=r["was_stepped_up"],
-            )
-
-        def _sr(r: dict | None):
-            if r is None:
-                return None
-            return SurviveResult(
-                success=r["success"], roll_summary=r["roll_summary"],
-                mishap_description=r.get("mishap_description"),
-                complication_trait_id=strawberry.ID(r["complication_trait_id"]) if r.get("complication_trait_id") else None,
-                forced_muster=r.get("forced_muster", False),
-            )
-
-        def _er(r: dict | None):
-            if r is None:
-                return None
-            return EventResult(event_index=r["event_index"], description=r["description"])
-
-        def _ar(r: dict | None):
-            if r is None:
-                return None
-            return AdvanceResult(success=r["success"], new_rank=r["new_rank"], rank_name=r["rank_name"])
-
-        return TermResult(
-            qualification=_ql(result.get("qualification")),
-            learn=_lr(result.get("learn")),
-            survive=_sr(result.get("survive")),
-            event=_er(result.get("event")),
-            advance=_ar(result.get("advance")),
-            new_trait_settings=[strawberry.ID(ts_id) for ts_id in result.get("new_trait_settings", [])],
-            modified_trait_settings=[strawberry.ID(ts_id) for ts_id in result.get("modified_trait_settings", [])],
-            razmerit_change=result.get("razmerit_change", 0),
-            term_number=result.get("term_number", 0),
-        )
+        """DEPRECATED — term execution is being rebuilt on roll tables (C2.3)."""
+        raise NotImplementedError("take_term is being replaced by roll-table term execution")
 
     @strawberry.mutation
     def teach_trait(self, info: strawberry.Info, teacher_id: strawberry.ID, student_id: strawberry.ID,
@@ -990,52 +911,16 @@ class Mutation:
 
     @strawberry.mutation
     def muster_out(self, info: strawberry.Info, entity_id: strawberry.ID) -> MusterOutResult:
-        """Voluntarily muster out of the current life path, collecting benefits."""
-        from transversal.services.lifepath_executor import muster_out
-
-        repo = _em(info).repo
-        entity = repo.get_entity(str(entity_id))
-        if entity is None:
-            raise ValueError(f"Entity '{entity_id}' not found")
-
-        result = muster_out(entity, repo)
-        return MusterOutResult(
-            path_id=result["path_id"],
-            path_name=result["path_name"],
-            terms_served=result["terms_served"],
-            final_rank=result["final_rank"],
-            mishap_muster=result.get("mishap_muster", False),
-            benefits=result.get("benefits", []),
-            razmerit_gained=result.get("razmerit_gained", 0),
-        )
+        """DEPRECATED — mustering is being rebuilt on roll tables (C2.3)."""
+        raise NotImplementedError("muster_out is being replaced by roll-table term execution")
 
     @strawberry.mutation
     def save_life_path(self, info: strawberry.Info, id: str, name: str, universe: str,
                        description: str,
-                       qualification: Optional[strawberry.scalars.JSON] = None,
-                       discovery: Optional[strawberry.scalars.JSON] = None,
-                       curriculum: Optional[strawberry.scalars.JSON] = None,
-                       survival: Optional[strawberry.scalars.JSON] = None,
-                       events: Optional[strawberry.scalars.JSON] = None,
-                       advancement: Optional[strawberry.scalars.JSON] = None,
-                       muster_out: Optional[strawberry.scalars.JSON] = None) -> strawberry.scalars.JSON:
+                       entry_table_id: str = "",
+                       discovery: Optional[strawberry.scalars.JSON] = None) -> strawberry.scalars.JSON:
         """Create or update a life path definition. For GM content authoring."""
-        from transversal.domain import (
-            LifePath, CurriculumItem, QualificationInfo,
-            DiscoveryBlock, SurvivalInfo, EventItem, RankInfo, AdvancementInfo, MusterOutInfo,
-            DieType,
-        )
-
-        def _die(v): return DieType(v) if v else DieType.D4
-
-        q = None
-        if qualification:
-            q = QualificationInfo(
-                trait_id=qualification.get("traitId", ""),
-                difficulty=_die(qualification.get("difficulty")),
-                must_be_at_location=qualification.get("mustBeAtLocation"),
-                draft=qualification.get("draft"),
-            )
+        from transversal.domain import DiscoveryBlock, LifePath
 
         d = None
         if discovery:
@@ -1047,65 +932,12 @@ class Mutation:
                 has_relationship=discovery.get("hasRelationship", []) or [],
             )
 
-        ci = []
-        if curriculum:
-            for c in curriculum:
-                ci.append(CurriculumItem(
-                    trait_id=c.get("traitId", ""),
-                    create_at=_die(c.get("createAt")),
-                    step_up=c.get("stepUp", False),
-                    min_rank=c.get("minRank", 0),
-                ))
-
-        sv = None
-        if survival:
-            sv = SurvivalInfo(
-                trait_ids=survival.get("traitIds", []) or [],
-                difficulty=_die(survival.get("difficulty")),
-                term_penalty_after=survival.get("termPenaltyAfter"),
-                mishaps=survival.get("mishaps", []) or [],
-            )
-
-        ev = []
-        if events:
-            for e in events:
-                ev.append(EventItem(
-                    description=e.get("description", ""),
-                    effect=e.get("effect") or {},
-                    min_rank=e.get("minRank", 0),
-                ))
-
-        av = None
-        if advancement:
-            ranks = []
-            for r in (advancement.get("ranks") or []):
-                ranks.append(RankInfo(
-                    number=r.get("number", 0),
-                    name=r.get("name", ""),
-                    benefits=r.get("benefits") or [],
-                ))
-            av = AdvancementInfo(
-                trait_ids=advancement.get("traitIds", []) or [],
-                difficulty=_die(advancement.get("difficulty")),
-                ranks=ranks,
-            )
-
-        mo = None
-        if muster_out:
-            mo = MusterOutInfo(
-                per_term_benefits=muster_out.get("perTermBenefits") or [],
-                at_ranks=muster_out.get("atRanks") or {},
-            )
-
-        import logging, uuid
-        _log = logging.getLogger("transversal.lifepath")
-        _log.info("save_life_path discovery received: %s", d.model_dump() if d else None)
+        import uuid
         if not id:
             id = f"lp-{uuid.uuid4().hex[:8]}"
         lp = LifePath(
             id=id, name=name, universe=universe, description=description,
-            qualification=q, discovery=d,
-            curriculum=ci, survival=sv, events=ev, advancement=av, muster_out=mo,
+            entry_table_id=entry_table_id, discovery=d,
         )
 
         repo = info.context["entity_manager"].repo
