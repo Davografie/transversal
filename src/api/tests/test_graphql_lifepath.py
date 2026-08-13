@@ -96,10 +96,16 @@ def _build():
 
 
 def _run(repo, query, variables=None):
+    from transversal.services.effects_engine import EffectsEngine
+
     result = graphql_sync(
         schema._schema,
         query,
-        context_value={"entity_manager": FakeEM(repo), "razmerit_service": None},
+        context_value={
+            "entity_manager": FakeEM(repo),
+            "razmerit_service": None,
+            "effects_engine": EffectsEngine(),
+        },
         variable_values=variables or {},
     )
     assert result.errors is None, result.errors

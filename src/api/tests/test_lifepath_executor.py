@@ -200,3 +200,32 @@ def test_muster_marks_mustered_without_mishap():
     assert entity.pending_term is None
     assert entity.life_paths[0].mustered is True
     assert entity.life_paths[0].mishap_muster is False
+
+
+class FakeEngine:
+    def __init__(self):
+        self.scheduled = []
+
+    def schedule_effect(self, entity_id, universe, effect, sfx_name="", context=None):
+        self.scheduled.append((entity_id, universe, effect, sfx_name))
+
+
+def test_deferred_effect_is_scheduled():
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
+    deferred = Effect(
+        timing=EffectTiming.END_OF_SCENE,
+        type="modify_trait", action="gain", target="iron-will", result="d6",
+    )
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("gain later", [deferred])])
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+    engine = FakeEngine()
+
+    summary = resolve_step(entity, repo, index=1, engine=engine)
+
+    # Not applied immediately — queued for the end of the scene.
+    assert len(repo.created_traitsettings) == 0
+    assert len(engine.scheduled) == 1
+    assert summary["scheduled"] == 1
+    assert engine.scheduled[0][2].timing == EffectTiming.END_OF_SCENE

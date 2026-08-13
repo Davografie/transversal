@@ -287,3 +287,18 @@ class TestScheduling:
         assert len(result) == 2
         # One effect is deferred
         assert engine.scheduled_count == 1
+
+    def test_schedule_effect_fires_on_tick(self):
+        """Life-path deferred effects queue and fire through schedule_effect."""
+        _reset()
+        engine = EffectsEngine()
+        effect = _make_effect("negative", "end_of_beat", "modify_trait", "step_down", "target")
+
+        engine.schedule_effect("e1", "earth", effect)
+        assert engine.scheduled_count == 1
+
+        before = len(_test_applied)
+        fired = engine.tick_beat()
+        assert len(fired) == 1
+        assert engine.scheduled_count == 0
+        assert len(_test_applied) > before

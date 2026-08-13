@@ -210,6 +210,30 @@ class EffectsEngine:
 
     # ── Scheduling ───────────────────────────────────
 
+    def schedule_effect(
+        self,
+        entity_id: str,
+        universe: str,
+        effect: Effect,
+        sfx_name: str = "",
+        context: Optional[dict] = None,
+    ) -> None:
+        """Queue a single deferred effect to fire at its configured timing.
+
+        Used by the life path executor to defer non-immediate consequences into
+        the same schedule that SFX effects use.
+        """
+        self._schedule.append(ScheduledEffect(
+            sfx_name=sfx_name,
+            entity_id=entity_id,
+            universe=universe,
+            timing=effect.timing,
+            beats_remaining=_beats_for_timing(effect.timing),
+            condition=None,
+            effects=[effect],
+            context=context or {},
+        ))
+
     def tick_beat(self) -> list[ScheduledEffect]:
         """Advance the schedule by one beat. Returns effects that fire now."""
         fired = []

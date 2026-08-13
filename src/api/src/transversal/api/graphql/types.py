@@ -611,6 +611,7 @@ class LifePathStepResult:
     mustered: bool
     mishap_muster: bool
     pending_term: Optional[PendingTerm]
+    scheduled: int = 0
     error: Optional[str] = None
     table_id: Optional[str] = None
     entry_label: Optional[str] = None

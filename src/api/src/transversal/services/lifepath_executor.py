@@ -13,6 +13,7 @@ from transversal.domain import (
     DieType,
     DicePoolRequest,
     Effect,
+    EffectTiming,
     Enrollment,
     Entity,
     OutcomeTier,
@@ -49,11 +50,15 @@ def resolve_step(
     roll: Optional[int] = None,
     tier: Optional[OutcomeTier] = None,
     index: Optional[int] = None,
+    engine=None,
 ) -> dict:
     """Resolve the current pending table, apply effects, and advance the flow.
 
-    Returns a summary dict with ``done``, ``pending_term``, and any pending
-    target choices.
+    Immediate mutation effects apply and persist in-place; non-immediate ones
+    (``end_of_beat`` / ``end_of_scene`` / ``end_of_session`` / ``after_beats``
+    / ``on_condition``) are queued into ``engine``. Flow effects are always
+    immediate. Returns a summary dict with ``done``, ``pending_term``, and any
+    pending target choices.
     """
     pt = entity.pending_term
     if pt is None or not pt.current_table_id:
@@ -75,16 +80,31 @@ def resolve_step(
     flow_effects = [e for e in entry.effects if e.type == "life_path"]
 
     old_razmerit = entity.razmerit
-    result: EffectsResult = apply_effects(entity, mutation_effects, repo)
-    flow = _process_flow(entity, flow_effects, repo)
+    scheduled = 0
 
-    _persist(entity, result, repo, old_razmerit)
+    if engine is not None:
+        immediate = [e for e in mutation_effects if e.timing == EffectTiming.IMMEDIATE]
+        deferred = [e for e in mutation_effects if e.timing != EffectTiming.IMMEDIATE]
+
+        result: EffectsResult = apply_effects(entity, immediate, repo)
+        flow = _process_flow(entity, flow_effects, repo)
+        _persist(entity, result, repo, old_razmerit)
+
+        for e in deferred:
+            engine.schedule_effect(entity.id, entity.current_universe, e, sfx_name="life_path")
+            scheduled += 1
+    else:
+        # No scheduler available (e.g. direct unit tests) — apply everything now.
+        result: EffectsResult = apply_effects(entity, mutation_effects, repo)
+        flow = _process_flow(entity, flow_effects, repo)
+        _persist(entity, result, repo, old_razmerit)
 
     return {
         "done": flow.get("done", False),
         "table_id": table.id,
         "entry_label": entry.label,
         "applied": [a.summary for a in result.applied],
+        "scheduled": scheduled,
         "pending_choices": [c.kind for c in result.pending_choices] + flow.get("pending_choices", []),
         "pending_term": entity.pending_term,
         "mustered": flow.get("mustered", False),

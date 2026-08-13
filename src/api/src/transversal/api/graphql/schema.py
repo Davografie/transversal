@@ -887,7 +887,8 @@ class Mutation:
 
         ``index`` is a manual/click selection (1-based); ``roll`` is a rolled
         number for range/index/weight tables; ``tier`` is an outcome tier for
-        check tables. Effects apply immediately and the term advances.
+        check tables. Immediate effects apply now; deferred-timing effects are
+        queued into the shared scheduler.
         """
         from transversal.domain import OutcomeTier as DomainOutcomeTier
         from transversal.services.lifepath_executor import resolve_step as resolve_lp_step
@@ -898,7 +899,10 @@ class Mutation:
             raise ValueError(f"Entity '{entity_id}' not found")
 
         domain_tier = DomainOutcomeTier(tier.value) if tier is not None else None
-        summary = resolve_lp_step(entity, repo, roll=roll, tier=domain_tier, index=index)
+        summary = resolve_lp_step(
+            entity, repo, roll=roll, tier=domain_tier, index=index,
+            engine=info.context["effects_engine"],
+        )
 
         pt = summary.get("pending_term")
         pending_term = (
@@ -919,6 +923,7 @@ class Mutation:
             mustered=summary.get("mustered", False),
             mishap_muster=summary.get("mishap_muster", False),
             pending_term=pending_term,
+            scheduled=summary.get("scheduled", 0),
             error=summary.get("error"),
             table_id=summary.get("table_id"),
             entry_label=summary.get("entry_label"),
