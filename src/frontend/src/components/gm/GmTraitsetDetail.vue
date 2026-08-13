@@ -1,5 +1,6 @@
 <template>
   <div>
+    <div class="traitset-id">ID: {{ traitset?.id || traitsetId }}</div>
     <div class="ps-form">
       <label>Name</label>
       <input v-model="form.name" />
@@ -133,5 +134,6 @@ async function onDeleteTraitset() {
 
 <style scoped>
 .ps-form input { font-size: 12px; padding: 6px 8px; }
+.traitset-id { font-family: monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .ps-list { display: flex; flex-direction: column; gap: 3px; }
 </style>
