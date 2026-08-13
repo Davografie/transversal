@@ -1,5 +1,10 @@
 # Panel — Self-referential Component Plan
 
+> [!warning] Superseded
+> This plan's "Data flow" (fetch in `GmPanel`, pass down as props) is now an
+> anti-pattern. See [[GM Panel Development]] for the current conventions
+> (composable-owned data and logic).
+
 > Status: PLANNING | Started: 2026-06-20
 
 ## Decisions from user
