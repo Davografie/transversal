@@ -6,6 +6,7 @@
       <span class="lpl-name">{{ lp.name }}</span>
       
     </button>
+    <button class="lpl-add-btn" @click="addNew">＋ Add life path</button>
   </div>
 </template>
 
@@ -15,6 +16,7 @@ import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
+import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -57,6 +59,15 @@ function openDetail(lp) {
     component: GmLifePathDetailPanel,
     title: lp.name,
     props: { lp },
+  })
+}
+
+function addNew() {
+  const blank = { id: '', name: '', description: '', universe: props.universe, entryTableId: '' }
+  panel.open({
+    component: GmLifePathEditPanel,
+    title: 'New Life Path',
+    props: { lp: blank },
   })
 }
 </script>

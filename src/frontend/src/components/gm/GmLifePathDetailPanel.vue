@@ -3,6 +3,7 @@
     <div class="lpd-header">
       <span class="lpd-name">{{ lp.name }}</span>
       <span class="lpd-type">{{ lp.universe }}</span>
+      <button class="lpd-edit" @click="editPath">✎ Edit</button>
     </div>
     <p class="lpd-desc">{{ lp.description || 'No description' }}</p>
 
@@ -43,6 +44,7 @@ import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
+import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -70,6 +72,10 @@ onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function openTable(t) {
   panel.open({ component: GmRollTableDetailPanel, title: t.name, props: { tableId: t.id, name: t.name } })
+}
+
+function editPath() {
+  panel.open({ component: GmLifePathEditPanel, title: 'Edit ' + props.lp.name, props: { lp: props.lp } })
 }
 
 function onDeleteConfirmed() {
@@ -112,6 +118,7 @@ const discoveryRows = computed(() => {
 .lpd-table-btn:hover { border-color: rgba(0,200,150,0.3); background: rgba(0,200,150,0.05); }
 .lpd-table-name { font-weight: 500; font-size: 11px; }
 .lpd-table-scheme { font-size: 9px; color: var(--text-dim); text-transform: uppercase; margin-left: auto; }
+.lpd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; }
 .lpd-delete {
   width: 100%; margin-top: 12px; font-size: 11px; padding: 6px 0;
   background: rgba(212,64,64,0.08); border: 1px solid rgba(212,64,64,0.25);

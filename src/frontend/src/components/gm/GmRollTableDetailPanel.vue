@@ -3,6 +3,7 @@
     <div class="rtd-header">
       <span class="rtd-name">{{ table?.name || name }}</span>
       <span class="rtd-type">{{ table?.universe }}</span>
+      <button class="rtd-edit" @click="editTable">✎ Edit</button>
     </div>
 
     <div class="rtd-meta">
@@ -53,12 +54,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
+import { usePanel } from '@/composables/usePanel.js'
+import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 
 const props = defineProps({
   tableId: { type: String, required: true },
   name: { type: String, default: '' },
 })
 
+const panel = usePanel()
 const { graphql } = useApi()
 const table = ref(null)
 
@@ -68,6 +72,10 @@ onMounted(async () => {
     table.value = data?.rollTable || null
   } catch {}
 })
+
+function editTable() {
+  panel.open({ component: GmRollTableEditPanel, title: 'Edit ' + (table.value?.name || props.name), props: { tableId: props.tableId, lifePathId: table.value?.lifePath || '' } })
+}
 
 function entryKey(e) {
   if (e.minValue != null || e.maxValue != null) return `${e.minValue ?? ''}–${e.maxValue ?? ''}`
@@ -97,6 +105,7 @@ function conditionSummary(c) {
 .rtd-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .rtd-name { font-weight: 600; font-size: 14px; }
 .rtd-type { font-size: 9px; color: var(--text-dim); text-transform: uppercase; background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; }
+.rtd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; }
 .rtd-meta { display: flex; gap: 6px; margin-bottom: 8px; }
 .rtd-chip { font-size: 9px; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
 .rtd-subsection { margin-top: 10px; }
