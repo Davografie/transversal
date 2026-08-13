@@ -6,6 +6,7 @@ from typing import Optional
 
 from transversal.api.graphql.types import (
     CharacterView,
+    Condition,
     CreateEntityInput,
     CreateRelationshipInput,
     DeleteRelationshipInput,
@@ -24,6 +25,9 @@ from transversal.api.graphql.types import (
     Projection,
     RelatedEntity,
     Relationship,
+    RollTable,
+    RollTableCheck,
+    RollTableEntry,
     RazmeritResult,
     SendMessageInput,
     Effect as GqlEffect,
@@ -50,6 +54,11 @@ from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
 from transversal.domain import TraitSetting as DomainTraitSetting
 from transversal.domain import TraitDisplayName as DomainTraitDisplayName
+from transversal.domain import Condition as DomainCondition
+from transversal.domain import Effect as DomainEffect
+from transversal.domain import RollTable as DomainRollTable
+from transversal.domain import RollTableEntry as DomainRollTableEntry
+from transversal.domain import RollTableCheck as DomainRollTableCheck
 from transversal.domain import dice_list_to_rating
 from transversal.services.entity_manager import EntityManager
 from transversal.services.razmerit import RazmeritService
@@ -111,6 +120,44 @@ def _message_to_gql(m: "Message", repo) -> Message:
     )
 
 
+def _effect_to_gql(e: DomainEffect) -> GqlEffect:
+    return GqlEffect(
+        timing=e.timing, type=e.type, action=e.action,
+        target=e.target, result=e.result, target_scope=e.target_scope,
+        context=e.context,
+    )
+
+
+def _condition_to_gql(c: DomainCondition) -> Condition:
+    return Condition(type=c.type, target=c.target, value=c.value, narrative=c.narrative)
+
+
+def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
+    return RollTableEntry(
+        label=e.label, description=e.description,
+        min_value=e.min_value, max_value=e.max_value, weight=e.weight, tier=e.tier,
+        conditions=[_condition_to_gql(c) for c in e.conditions],
+        effects=[_effect_to_gql(x) for x in e.effects],
+    )
+
+
+def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
+    return RollTable(
+        id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
+        scheme=t.scheme, die=t.die,
+        check=(
+            RollTableCheck(
+                trait_ids=t.check.trait_ids,
+                difficulty=t.check.difficulty,
+                free_choice=t.check.free_choice,
+            )
+            if t.check is not None
+            else None
+        ),
+        entries=[_entry_to_gql(e) for e in t.entries],
+    )
+
+
 # ── Queries ──────────────────────────────────────────
 
 @strawberry.type
@@ -168,7 +215,7 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit,
-                    effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in s.effects],
+                    effects=[_effect_to_gql(e) for e in s.effects],
                 )
                 for s in db_sfxs
             ]
@@ -179,7 +226,7 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit,
-                    effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in s.effects],
+                    effects=[_effect_to_gql(e) for e in s.effects],
                 ) for s in engine.get_all()
             ]
         return []
@@ -335,6 +382,19 @@ class Query:
         else:
             lps = repo.list_all_lifepaths()
         return [_life_path_to_gql(lp) for lp in lps]
+
+    @strawberry.field
+    def roll_tables(self, info: strawberry.Info, life_path_id: Optional[str] = None) -> list[RollTable]:
+        """List roll tables, optionally scoped to a life path."""
+        repo = _em(info).repo
+        tables = repo.list_roll_tables(life_path_id)
+        return [_roll_table_to_gql(t) for t in tables]
+
+    @strawberry.field
+    def roll_table(self, info: strawberry.Info, id: strawberry.ID) -> Optional[RollTable]:
+        """Fetch one roll table by id."""
+        t = _em(info).repo.get_roll_table(str(id))
+        return _roll_table_to_gql(t) if t else None
 
 
 # ── Life path helpers ─────────────────────────────────
@@ -640,6 +700,7 @@ class Mutation:
                     type=e.type, action=e.action,
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
+                    context=e.context,
                 )
                 for e in input.effects
             ],
@@ -652,7 +713,7 @@ class Mutation:
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
             trigger=created.trigger, limit=created.limit,
-            effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in created.effects],
+            effects=[_effect_to_gql(e) for e in created.effects],
         )
 
     @strawberry.mutation
@@ -682,6 +743,7 @@ class Mutation:
                     type=e.type, action=e.action,
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
+                    context=e.context,
                 )
                 for e in input.effects
             ]
@@ -693,7 +755,7 @@ class Mutation:
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
             trigger=updated.trigger, limit=updated.limit,
-            effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in updated.effects],
+            effects=[_effect_to_gql(e) for e in updated.effects],
         )
 
     @strawberry.mutation

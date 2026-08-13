@@ -1,256 +1,94 @@
 <template>
   <div class="lpd-root">
-    <div v-if="open" class="lpd-header lpd-clickable" @click="openEdit('_root')">
-      <span class="lpd-name">{{ lpRef.name }} ✎</span>
+    <div class="lpd-header">
+      <span class="lpd-name">{{ lp.name }}</span>
+      <span class="lpd-type">{{ lp.universe }}</span>
     </div>
-    <div v-else class="lpd-header">
-      <span class="lpd-name">{{ lpRef.name }}</span>
-      
-    </div>
-    <p class="lpd-desc">{{ lpRef.description }}</p>
-    <p v-if="open" class="lpd-edit-hint">Click a section header to edit the section, or a row to edit just that item.</p>
+    <p class="lpd-desc">{{ lp.description || 'No description' }}</p>
 
-    <!-- Qualification -->
-    <div v-if="lpRef.qualification" class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('qualification')">Qualification ✎</span>
-      <span class="lpd-detail">Roll {{ tName(lpRef.qualification.traitId) }} vs {{ lpRef.qualification.difficulty }}</span>
-      <span v-if="lpRef.qualification.mustBeAtLocation" class="lpd-detail">📍 Must be at {{ lpRef.qualification.mustBeAtLocation }}</span>
-      <span v-if="lpRef.qualification.draft" class="lpd-detail">📋 Drafts to {{ lpRef.qualification.draft }}</span>
-    </div>
-    <div v-else class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('qualification')">Qualification ✎</span>
-      <span class="lpd-detail">None required — always available</span>
+    <div class="lpd-subsection">
+      <span class="lpd-subtitle">Entry table</span>
+      <span class="lpd-detail">{{ lp.entryTableId || 'None' }}</span>
     </div>
 
-    <!-- Discovery -->
-    <div v-if="discoveryRows.length" class="lpd-subsection">
+    <div class="lpd-subsection">
       <span class="lpd-subtitle">Discovery</span>
-      <table class="lpd-table">
-        <thead><tr><th>Condition</th><th>Value</th></tr></thead>
+      <span v-if="!discoveryRows.length" class="lpd-detail">None — visible to all</span>
+      <table v-else class="lpd-table">
         <tbody>
-          <tr v-for="(row, i) in discoveryRows" :key="i" class="lpd-row-clickable" @click="openEdit('discovery', i)">
-            <td>{{ row.typeLabel }}</td>
+          <tr v-for="(row, i) in discoveryRows" :key="i">
+            <td class="lpd-key">{{ row.typeLabel }}</td>
             <td>{{ row.valueLabel }}</td>
           </tr>
         </tbody>
       </table>
-      <button v-if="open" class="lpd-add-btn" @click="openEdit('discovery', null, true)">＋ Add</button>
-    </div>
-    <div v-else class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('discovery', null, true)">Discovery ✎</span>
-      <span class="lpd-detail">None — visible to all characters</span>
     </div>
 
-    <!-- Curriculum -->
     <div class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('curriculum')">Curriculum ✎</span>
-      <div v-if="lpRef.curriculum?.length">
-      <table class="lpd-table">
-        <thead><tr><th>Trait</th><th>Create At</th><th>Step Up</th></tr></thead>
-        <tbody>
-          <tr v-for="(c, i) in lpRef.curriculum" :key="c.traitId" class="lpd-row-clickable" @click="openEdit('curriculum', i)">
-            <td>{{ tName(c.traitId) }}</td>
-            <td>{{ c.createAt }}</td>
-            <td>{{ c.stepUp ? '✅' : '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
-      </div>
-      <span v-else class="lpd-detail">No curriculum items</span>
-      <button v-if="open" class="lpd-add-btn" @click="openEdit('curriculum', null, true)">＋ Add</button>
+      <span class="lpd-subtitle">Roll tables</span>
+      <div v-if="!tables.length" class="lpd-detail">No tables linked</div>
+      <button v-for="t in tables" :key="t.id" class="lpd-table-btn" @click="openTable(t)">
+        <span class="lpd-table-name">{{ t.name }}</span>
+        <span class="lpd-table-scheme">{{ t.scheme }}</span>
+      </button>
     </div>
 
-    <!-- Survival -->
-    <div v-if="lpRef.survival" class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('survival')">Survival ✎</span>
-      <span class="lpd-detail">Roll {{ tNames(lpRef.survival.traitIds) }} vs {{ lpRef.survival.difficulty }}</span>
-      <span v-if="lpRef.survival.termPenaltyAfter" class="lpd-detail">📈 +1 difficulty every {{ lpRef.survival.termPenaltyAfter }} terms</span>
-    </div>
-    <div v-else class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('survival')">Survival ✎</span>
-      <span class="lpd-detail">No survival roll defined</span>
-    </div>
-
-    <!-- Events -->
-    <div class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('events')">Events ✎</span>
-      <div v-if="lpRef.events?.length">
-      <table class="lpd-table">
-        <thead><tr><th>#</th><th>Description</th></tr></thead>
-        <tbody>
-          <tr v-for="(e, i) in lpRef.events" :key="i" class="lpd-row-clickable" @click="openEdit('events', i)">
-            <td class="lpd-num">{{ i + 1 }}</td>
-            <td>{{ e.description }}</td>
-          </tr>
-        </tbody>
-      </table>
-      </div>
-      <span v-else class="lpd-detail">No events defined</span>
-      <button v-if="open" class="lpd-add-btn" @click="openEdit('events', null, true)">＋ Add</button>
-    </div>
-
-    <!-- Advancement -->
-    <div v-if="lpRef.advancement" class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('advancement')">Advancement ✎</span>
-      <span class="lpd-detail">Roll {{ tNames(lpRef.advancement.traitIds) }} vs {{ lpRef.advancement.difficulty }}</span>
-      <div v-if="lpRef.advancement.ranks?.length">
-        <span class="lpd-subsubtitle">Ranks</span>
-        <table class="lpd-table">
-          <thead><tr><th>#</th><th>Name</th><th>Benefits</th></tr></thead>
-          <tbody>
-            <tr v-for="(r, i) in lpRef.advancement.ranks" :key="r.number" class="lpd-row-clickable" @click="openEdit('advancement', i)">
-              <td class="lpd-num">{{ r.number }}</td>
-              <td>{{ r.name }}</td>
-              <td>{{ (r.benefits || []).map(b => b.type || b).join(', ') || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <span v-else class="lpd-detail">No ranks defined</span>
-      <button v-if="open" class="lpd-add-btn" @click="openEdit('advancement', null, true)">＋ Add</button>
-    </div>
-    <div v-else class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('advancement')">Advancement ✎</span>
-      <span class="lpd-detail">No advancement ladder</span>
-    </div>
-
-    <!-- Mishaps -->
-    <div v-if="lpRef.survival" class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('mishap')">Mishaps ✎</span>
-      <div v-if="lpRef.survival.mishaps?.length">
-      <table class="lpd-table">
-        <thead><tr><th>#</th><th>Description</th><th class="lpd-mo-col">Musters Out</th></tr></thead>
-        <tbody>
-          <tr v-for="(m, i) in lpRef.survival.mishaps" :key="i" class="lpd-row-clickable" @click="openEdit('mishap', i)">
-            <td class="lpd-num">{{ i + 1 }}</td>
-            <td>{{ m.description || m }}</td>
-            <td class="lpd-mo-col">{{ m.must_muster_out ? '🏁' : '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
-      </div>
-      <span v-else class="lpd-detail">No mishaps defined</span>
-      <button v-if="open" class="lpd-add-btn" @click="openEdit('mishap', null, true)">＋ Add</button>
-    </div>
-
-    <!-- Muster Out -->
-    <div v-if="lpRef.musterOut" class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('muster')">Muster Out ✎</span>
-      <div v-if="lpRef.musterOut.perTermBenefits?.length">
-        <span class="lpd-subsubtitle">Per Term</span>
-        <table class="lpd-table">
-          <thead><tr><th>Type</th><th>Amount</th></tr></thead>
-          <tbody>
-            <tr v-for="(b, i) in lpRef.musterOut.perTermBenefits" :key="i">
-              <td>{{ b.type || b }}</td>
-              <td>{{ b.amount || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div v-if="lpRef.musterOut.atRanks && Object.keys(lpRef.musterOut.atRanks).length">
-        <span class="lpd-subsubtitle">At Ranks</span>
-        <table class="lpd-table">
-          <thead><tr><th>Rank</th><th>Benefits</th></tr></thead>
-          <tbody>
-            <tr v-for="(benefits, rank) in lpRef.musterOut.atRanks" :key="rank">
-              <td class="lpd-num">{{ rank }}</td>
-              <td>{{ (benefits || []).map(b => `${b.type || b} ${b.amount || ''}`).join(', ') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div v-else class="lpd-subsection">
-      <span class="lpd-subtitle lpd-clickable" @click="openEdit('muster')">Muster Out ✎</span>
-      <span class="lpd-detail">No muster-out benefits defined</span>
-    </div>
-    <DangerButton v-if="open" label="Delete life path" @confirm="onDeleteConfirmed" />
+    <button class="lpd-delete" @click="onDeleteConfirmed">Delete life path</button>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
-import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
-import DangerButton from '@/components/gm/DangerButton.vue'
+import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { traitNameMap } = useTraitsConfig()
+const { graphql } = useApi()
 
 const props = defineProps({
   lp: { type: Object, required: true },
 })
 
-const { graphql } = useApi()
-const lpRef = ref(props.lp)
-const entityNameMap = ref({})
+const tables = ref([])
 
-onMounted(async () => {
+async function fetchTables() {
   try {
-    const data = await graphql(`{ entities { id name } }`)
-    if (data?.entities) {
-      data.entities.forEach(e => { entityNameMap.value[e.id] = e.name })
-    }
-  } catch {}
-})
-
-async function refreshLp() {
-  try {
-    const data = await graphql(`{ lifePaths { id name universe description qualification { traitId difficulty mustBeAtLocation draft } discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship } curriculum { traitId createAt stepUp } survival { traitIds difficulty termPenaltyAfter mishaps } events { description effect } advancement { traitIds difficulty ranks { number name benefits } } musterOut { perTermBenefits atRanks } } }`)
-    const match = (data?.lifePaths || []).find(lp => lp.id === lpRef.value.id)
-    if (match) lpRef.value = match
+    const data = await graphql(`query($lp:String){rollTables(lifePathId:$lp){id name scheme die}}`, { lp: props.lp.id })
+    tables.value = data?.rollTables || []
   } catch {}
 }
 
 let offLifepathSaved = null
-onMounted(() => { offLifepathSaved = bus.on('lifepath-saved', refreshLp) })
+onMounted(() => {
+  fetchTables()
+  offLifepathSaved = bus.on('lifepath-saved', fetchTables)
+})
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
+function openTable(t) {
+  panel.open({ component: GmRollTableDetailPanel, title: t.name, props: { tableId: t.id, name: t.name } })
+}
+
 function onDeleteConfirmed() {
-  graphql(`mutation($id:ID!){deleteLifePath(id:$id)}`, { id: lpRef.value.id })
-  bus.emit('lifepath-saved', { id: lpRef.value.id, universe: lpRef.value.universe })
+  graphql(`mutation($id:ID!){deleteLifePath(id:$id)}`, { id: props.lp.id })
+  bus.emit('lifepath-saved', { id: props.lp.id, universe: props.lp.universe })
   panel.close()
 }
 
 const discoveryRows = computed(() => {
   const rows = []
-  const d = lpRef.value.discovery
+  const d = props.lp.discovery
   if (!d) return rows
-  for (const loc of (d.atLocation || [])) {
-    rows.push({ type: 'atLocation', typeLabel: '📍 Location', value: loc, valueLabel: tName(loc) })
-  }
-  for (const ent of (d.knowsEntity || [])) {
-    rows.push({ type: 'knowsEntity', typeLabel: '👤 Knows', value: ent, valueLabel: tName(ent) })
-  }
-  for (const trait of (d.possessesTrait || [])) {
-    rows.push({ type: 'possessesTrait', typeLabel: '🎯 Has trait', value: trait, valueLabel: tName(trait) })
-  }
-  for (const [trait, die] of Object.entries(d.hasTraitRating || {})) {
-    rows.push({ type: 'hasTraitRating', typeLabel: `⭐ Rating ≥ ${die}`, value: trait, die, valueLabel: tName(trait) })
-  }
-  for (const rel of (d.hasRelationship || [])) {
-    rows.push({ type: 'hasRelationship', typeLabel: '🔗 Relationship', value: rel, valueLabel: tName(rel) })
-  }
+  for (const loc of (d.atLocation || [])) rows.push({ typeLabel: '📍 Location', valueLabel: loc })
+  for (const ent of (d.knowsEntity || [])) rows.push({ typeLabel: '👤 Knows', valueLabel: ent })
+  for (const trait of (d.possessesTrait || [])) rows.push({ typeLabel: '🎯 Has trait', valueLabel: trait })
+  for (const [trait, die] of Object.entries(d.hasTraitRating || {})) rows.push({ typeLabel: `⭐ Rating ≥ ${die}`, valueLabel: trait })
+  for (const rel of (d.hasRelationship || [])) rows.push({ typeLabel: '🔗 Relationship', valueLabel: rel })
   return rows
 })
-
-function openEdit(section, itemIndex = null, addNew = false) {
-  panel.open({ component: GmLifePathEditPanel, title: `Edit ${section} — ${lpRef.value.name}`, props: { lp: lpRef.value, section, itemIndex, addNew } })
-}
-
-function tName(id) {
-  if (!id) return '—'
-  return traitNameMap.value[id] || entityNameMap.value[id] || id.replace(/^trait-/, '').replace(/[-_]\w{4}$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function tNames(ids) {
-  return (ids || []).map(tName).join(', ') || '—'
-}
 </script>
 
 <style scoped>
@@ -261,18 +99,23 @@ function tNames(ids) {
 .lpd-desc { font-size: 11px; color: var(--text-dim); margin: 0 0 8px 0; }
 .lpd-subsection { margin-top: 8px; }
 .lpd-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
-.lpd-subsubtitle { display: block; font-size: 8px; color: var(--text-dim); text-transform: uppercase; margin: 4px 0 2px; }
 .lpd-detail { display: block; font-size: 10px; color: var(--text-dim); line-height: 1.5; }
 .lpd-table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; font-size: 10px; }
-.lpd-table th { text-align: left; padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); color: var(--text-dim); font-size: 8px; text-transform: uppercase; }
 .lpd-table td { padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text); }
-.lpd-num { width: 24px; text-align: center; color: var(--text-dim); }
-.lpd-mo-col { width: 56px; text-align: center; }
-.lpd-clickable { cursor: pointer; }
-.lpd-clickable:hover { color: var(--accent); }
-.lpd-row-clickable { cursor: pointer; }
-.lpd-row-clickable:hover { background: rgba(255,255,255,0.04); }
-.lpd-edit-hint { font-size: 9px; color: var(--text-dim); margin: 0 0 4px 0; }
-.lpd-add-btn { font-size: 9px; padding: 2px 8px; cursor: pointer; background: rgba(255,255,255,0.04); color: var(--text-dim); border: 1px solid rgba(255,255,255,0.06); border-radius: 3px; margin-top: 2px; }
-.lpd-add-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.lpd-key { color: var(--text-dim); width: 130px; }
+.lpd-table-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px; padding: 6px 10px; margin-bottom: 4px;
+  cursor: pointer; text-align: left; color: var(--text);
+}
+.lpd-table-btn:hover { border-color: rgba(0,200,150,0.3); background: rgba(0,200,150,0.05); }
+.lpd-table-name { font-weight: 500; font-size: 11px; }
+.lpd-table-scheme { font-size: 9px; color: var(--text-dim); text-transform: uppercase; margin-left: auto; }
+.lpd-delete {
+  width: 100%; margin-top: 12px; font-size: 11px; padding: 6px 0;
+  background: rgba(212,64,64,0.08); border: 1px solid rgba(212,64,64,0.25);
+  border-radius: 4px; color: var(--danger); cursor: pointer;
+}
+.lpd-delete:hover { background: rgba(212,64,64,0.16); }
 </style>

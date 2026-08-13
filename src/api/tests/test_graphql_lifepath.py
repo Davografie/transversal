@@ -42,6 +42,11 @@ class GqlRepo:
     def get_roll_table(self, tid):
         return self.tables.get(tid)
 
+    def list_roll_tables(self, life_path_id=None):
+        if life_path_id is not None:
+            return [t for t in self.tables.values() if t.life_path == life_path_id]
+        return list(self.tables.values())
+
     def get_traitsettings_for_entity(self, eid):
         return self.traitsettings
 
@@ -152,3 +157,37 @@ def test_start_term_and_resolve_step_wiring():
     """, {"eid": "char-1", "index": 1})
 
     assert second["resolveStep"]["done"] is True
+
+
+def test_roll_table_queries():
+    from transversal.domain import Condition, ConditionType
+
+    repo = _build()
+    repo.tables["tbl-a"].life_path = "lp-1"
+    repo.tables["tbl-a"].entries[0].conditions = [Condition(type=ConditionType.ALWAYS)]
+
+    listed = _run(repo, """
+        query($lp: String) {
+            rollTables(lifePathId: $lp) {
+                id name lifePath scheme die
+                entries { label conditions { type } effects { action target } }
+            }
+        }
+    """, {"lp": "lp-1"})
+
+    tables = listed["rollTables"]
+    assert len(tables) == 1
+    assert tables[0]["id"] == "tbl-a"
+    assert tables[0]["scheme"] == "INDEX"
+    assert tables[0]["entries"][0]["label"] == "to b"
+    assert tables[0]["entries"][0]["conditions"][0]["type"] == "ALWAYS"
+    assert tables[0]["entries"][0]["effects"][0]["action"] == "next_step"
+
+    one = _run(repo, """
+        query($id: ID!) {
+            rollTable(id: $id) { id name scheme die entries { label effects { action target } } }
+        }
+    """, {"id": "tbl-a"})
+
+    assert one["rollTable"]["id"] == "tbl-a"
+    assert one["rollTable"]["entries"][0]["effects"][0]["target"] == "tbl-b"

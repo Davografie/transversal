@@ -10,9 +10,11 @@ from transversal.domain import (
     EntityType as DomainEntityType,
     TransversalType as DomainTransversalType,
     ChallengePolarity as DomainChallengePolarity,
+    ConditionType as DomainConditionType,
     EffectTiming as DomainEffectTiming,
     MessageKind as DomainMessageKind,
     OutcomeTier as DomainOutcomeTier,
+    RollTableScheme as DomainRollTableScheme,
     DiscoveryBlock,
     LifePath,
 )
@@ -28,6 +30,8 @@ ChallengePolarity = strawberry.enum(DomainChallengePolarity)
 EffectTimingEnum = strawberry.enum(DomainEffectTiming)
 MessageKind = strawberry.enum(DomainMessageKind)
 OutcomeTier = strawberry.enum(DomainOutcomeTier)
+RollTableScheme = strawberry.enum(DomainRollTableScheme)
+ConditionType = strawberry.enum(DomainConditionType)
 
 
 # ── Trait Display Name ───────────────────────────────
@@ -106,6 +110,7 @@ class Effect:
     target: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
+    context: Optional[strawberry.scalars.JSON] = None
 
 
 @strawberry.input
@@ -116,6 +121,7 @@ class EffectInput:
     target: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
+    context: Optional[strawberry.scalars.JSON] = None
 
 
 @strawberry.type
@@ -149,6 +155,51 @@ class SfxUpdateInput:
     trigger: Optional[str] = None
     limit: Optional[str] = None
     effects: Optional[list[EffectInput]] = None
+
+
+# ── Roll Tables ─────────────────────────────────────
+
+@strawberry.type
+class Condition:
+    """A configurable, automatically-evaluated gate or limit."""
+    type: ConditionType
+    target: str = ""
+    value: Optional[str] = None
+    narrative: str = ""
+
+
+@strawberry.type
+class RollTableCheck:
+    """Dice-pool check metadata for a TIER-scheme roll table."""
+    trait_ids: list[str]
+    difficulty: DieType
+    free_choice: bool = False
+
+
+@strawberry.type
+class RollTableEntry:
+    """A single entry in a roll table."""
+    label: str = ""
+    description: str = ""
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    weight: Optional[int] = None
+    tier: Optional[OutcomeTier] = None
+    conditions: list[Condition]
+    effects: list[Effect]
+
+
+@strawberry.type
+class RollTable:
+    """A reusable roll table whose entries execute effects when selected."""
+    id: strawberry.ID
+    name: str
+    universe: str = ""
+    life_path: Optional[str] = None
+    scheme: RollTableScheme
+    die: DieType
+    check: Optional[RollTableCheck] = None
+    entries: list[RollTableEntry]
 
 
 # ── Effects Registry (metadata for the UI) ────────────

@@ -6,7 +6,6 @@
       <span class="lpl-name">{{ lp.name }}</span>
       
     </button>
-    <button v-if="panel" class="lpl-add-btn" @click="addNew">＋ Add life path</button>
   </div>
 </template>
 
@@ -16,7 +15,6 @@ import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
-import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -32,7 +30,7 @@ let autoOpenId = null
 async function fetchPaths() {
   if (!props.universe) return
   try {
-    const data = await graphql(`query($u: String!) { lifePaths(universe: $u) { id name universe description qualification { traitId difficulty mustBeAtLocation draft } discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship } curriculum { traitId createAt stepUp } survival { traitIds difficulty termPenaltyAfter mishaps } events { description effect } advancement { traitIds difficulty ranks { number name benefits } } musterOut { perTermBenefits atRanks } } }`, { u: props.universe })
+    const data = await graphql(`query($u: String!) { lifePaths(universe: $u) { id name universe description entryTableId discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship } } }`, { u: props.universe })
     paths.value = data?.lifePaths || []
     console.log('[paths] fetchPaths result:', paths.value.length, 'paths')
     // Auto-open detail panel for newly created paths
@@ -59,15 +57,6 @@ function openDetail(lp) {
     component: GmLifePathDetailPanel,
     title: lp.name,
     props: { lp },
-  })
-}
-
-function addNew() {
-  const blank = { id: '', name: '', description: '', universe: props.universe }
-  panel.open({
-    component: GmLifePathEditPanel,
-    title: 'New Life Path',
-    props: { lp: blank, section: '_root' },
   })
 }
 </script>
