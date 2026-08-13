@@ -73,34 +73,19 @@ def _register_core_handlers(em, raz):
     effect_registry.register("transfer_razmerit", "transfer",
         lambda a, eid, u, ctx: raz.transfer(eid, a.target, int(a.result or "0")))
 
-    # Trait operations
-    def _modify_trait(a, eid, u, ctx):
-        settings = em.get_traitsettings(eid)
-        target = a.target
+    # Trait, rank, and life-path state mutations route through the shared applier.
+    def _commit(a, eid, u, ctx):
+        from transversal.services.effects_commit import commit_effects
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        commit_effects(entity, [a], em.repo)
 
-        # Resolve {source_trait} placeholder: find the trait that has the triggering SFX
-        if target == "{source_trait}":
-            sfx_name = ctx.get("sfx_name", "")
-            for ts in settings:
-                if sfx_name in (ts.sfx_ids or []):
-                    target = ts.id
-                    break
-
-        for ts in settings:
-            if ts.trait_id == target or ts.id == target:
-                if a.action == "step_up":
-                    em.step_up_trait(ts)
-                elif a.action == "step_down":
-                    em.step_down_trait(ts)
-                elif a.action == "set":
-                    from transversal.domain import DieType
-                    ts.dice = [DieType(a.result)] if a.result else ts.dice
-                    em.update_traitsetting(ts)
-                break
-
-    effect_registry.register("modify_trait", "step_up", _modify_trait)
-    effect_registry.register("modify_trait", "step_down", _modify_trait)
-    effect_registry.register("modify_trait", "set", _modify_trait)
+    for action in ("step_up", "step_down", "set", "gain", "gain_or_step_up", "gain_complication"):
+        effect_registry.register("modify_trait", action, _commit)
+    effect_registry.register("rank", "set", _commit)
+    effect_registry.register("life_path", "discover", _commit)
+    effect_registry.register("relationship", "create", _commit)
 
     # Entity operations
     effect_registry.register("create_entity", "create_asset",
