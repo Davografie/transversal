@@ -41,7 +41,7 @@
 
       <div class="eep-subsection">
         <span class="eep-subtitle">Effects</span>
-        <EffectEditor v-model="form.effects" />
+        <EffectEditor v-model="form.effects" :universe="table?.universe" />
       </div>
 
       <button class="eep-save" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save entry' }}</button>

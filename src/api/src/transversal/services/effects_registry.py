@@ -223,6 +223,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
         ],
+        target_kind="trait",
     ),
     EffectActionMeta(
         action_id="step_down_trait",
@@ -238,6 +239,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Deferral", field_type="text",
                           required=False, default="after_resolution"),
         ],
+        target_kind="trait",
     ),
     EffectActionMeta(
         action_id="set_trait",
@@ -253,6 +255,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        target_kind="trait",
     ),
 
     # ── Razmerit ───────────────────────────────────────

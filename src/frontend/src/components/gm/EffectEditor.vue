@@ -40,6 +40,12 @@
           <select v-if="f.fieldType === 'die_select' || f.fieldType === 'select'" v-model="newEffect.fields[f.name]">
             <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
           </select>
+          <GmTraitPicker
+            v-else-if="isTraitTarget(f)"
+            :model-value="newEffect.fields[f.name] || ''"
+            @update:model-value="newEffect.fields[f.name] = $event"
+            :universe="universe"
+          />
           <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" />
           <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
         </div>
@@ -60,9 +66,11 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
+import GmTraitPicker from './GmTraitPicker.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
+  universe: { type: String, default: '' },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -91,6 +99,10 @@ const visibleFields = computed(() => {
     return true
   })
 })
+
+function isTraitTarget(f) {
+  return f.name === 'target' && selectedAction.value?.targetKind === 'trait'
+}
 
 function onActionChange() {
   newEffect.fields = {}
