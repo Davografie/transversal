@@ -423,13 +423,17 @@ class Entity(BaseModel):
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
     # Life path tracking
-    terms_served: int = 0                     # total terms across all paths
-    current_life_path_id: Optional[str] = None  # _key of active path
-    current_rank: int = 0                     # rank in current path
-    life_history: list["LifeTerm"] = Field(default_factory=list)
-    drifter_terms: int = 0                    # terms spent as a drifter
+    life_paths: list["Enrollment"] = Field(default_factory=list)  # memberships (faction + path)
+    active_universes: list[str] = Field(default_factory=list)  # faction-only: where active
+    suitable_life_path_ids: list[str] = Field(default_factory=list)  # faction-only: offered paths
     discovered_life_paths: list[str] = Field(default_factory=list)  # _keys of discovered paths
     pending_term: Optional["PendingTerm"] = None  # in-progress term state (checkpoint)
+    # Legacy (deprecated — replaced by life_paths + relationship traits)
+    terms_served: int = 0
+    current_life_path_id: Optional[str] = None
+    current_rank: int = 0
+    life_history: list["LifeTerm"] = Field(default_factory=list)
+    drifter_terms: int = 0
 
 
 # ── Life Paths ─────────────────────────────────────────
@@ -468,12 +472,22 @@ class LifeTerm(BaseModel):
     mishap_muster: bool = False  # true if forced out by mishap → re-entry at rank 0
 
 
+class Enrollment(BaseModel):
+    """A character's membership in a faction's life path."""
+    faction_id: str
+    path_id: str
+    mustered: bool = False
+    mishap_muster: bool = False
+
+
 class PendingTerm(BaseModel):
     """In-progress life path term checkpoint.
 
     Holds where the entity is in the linked roll-table flow so a term can be
     resumed mid-way (reload / another device).
     """
+    faction_id: str = ""
+    path_id: str = ""
     current_table_id: str = ""
     continuation: list[str] = Field(default_factory=list)  # return-address stack
 
