@@ -63,7 +63,7 @@ def test_seed_wires_verdant_path():
     assert lp is not None
     assert lp.entry_table_id == "rt-verdant-qualify"
 
-    # All six chain tables exist.
+    # All six Verdant chain tables exist.
     expected_tables = {
         "rt-verdant-qualify",
         "rt-verdant-learn",
@@ -72,7 +72,30 @@ def test_seed_wires_verdant_path():
         "rt-verdant-advance",
         "rt-verdant-muster",
     }
-    assert set(repo.tables) == expected_tables
+    assert expected_tables.issubset(set(repo.tables))
+
+
+def test_seed_wires_drifter_path():
+    repo = SeedRepo()
+    seed_life_paths(repo)
+
+    rogue = repo.get_entity("fac-rogue-cultivators")
+    assert rogue is not None
+    assert rogue.active_universes == ["three_realms"]
+    assert rogue.suitable_life_path_ids == ["lp-drifter-three-realms"]
+
+    lp = repo.get_lifepath("lp-drifter-three-realms")
+    assert lp is not None
+    assert lp.entry_table_id == "rt-drifter-3r-learn"
+
+    drifter_tables = {
+        "rt-drifter-3r-learn",
+        "rt-drifter-3r-survive",
+        "rt-drifter-3r-mishap",
+        "rt-drifter-3r-advance",
+        "rt-drifter-3r-muster",
+    }
+    assert drifter_tables.issubset(set(repo.tables))
 
 
 def test_seed_table_links_are_coherent():

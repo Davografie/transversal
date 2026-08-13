@@ -598,11 +598,11 @@ def seed_all(em) -> None:
 
 
 def seed_life_paths(repo) -> None:
-    """Seed the life path content graph: faction, entry points, and linked roll tables.
+    """Seed the life path content graph: factions, entry points, and linked tables.
 
-    The Verdant Steps Sect path is wired end-to-end (qualify → learn → survive →
-    mishap / advance → muster-out). Drifter paths are entry points only; their
-    term tables land later.
+    The Verdant Steps Sect path (qualify → learn → survive → mishap/advance →
+    muster-out) and the three_realms Rogue Cultivator drifter path are wired
+    end-to-end. The earth drifter path remains an entry-point stub.
     """
     from transversal.domain import (
         DieType,
@@ -619,6 +619,7 @@ def seed_life_paths(repo) -> None:
     )
 
     FACTION = "fac-verdant-steps"
+    ROGUE_FACTION = "fac-rogue-cultivators"
 
     # ── Effect / table builders ───────────────────────
     def eff(type_, action, target="", result=None, context=None):
@@ -671,6 +672,7 @@ def seed_life_paths(repo) -> None:
             name="Rogue Cultivator",
             universe="three_realms",
             description="Walk the land alone, beholden to no sect.",
+            entry_table_id="rt-drifter-3r-learn",
         ),
         LifePath(
             id="lp-drifter-earth",
@@ -795,6 +797,103 @@ def seed_life_paths(repo) -> None:
         entries=[
             entry("Serve another term", min_value=1, max_value=2,
                  effects=[trait("gain_or_step_up", "trait-rel-tenure", "d4"), next_step("rt-verdant-learn")]),
+            entry("Muster out (respectfully)", min_value=3, max_value=5,
+                 effects=[flow("muster")]),
+            entry("Muster out (dishonorably)", min_value=6, max_value=6,
+                 effects=[flow("force_muster")]),
+        ],
+    ))
+
+    # ── Rogue Cultivators (drifter) chain ─────────────
+
+    rogue = Entity(
+        id=ROGUE_FACTION,
+        type=EntityType.FACTION,
+        name="Rogue Cultivators",
+        current_universe="three_realms",
+        active_universes=["three_realms"],
+        suitable_life_path_ids=["lp-drifter-three-realms"],
+    )
+    if repo.get_entity(ROGUE_FACTION) is None:
+        repo.create_entity(rogue)
+    else:
+        repo.update_entity(rogue)
+
+    # Learn — no qualification gate; a drifter accepts anyone who walks the land.
+    upsert_table(RollTable(
+        id="rt-drifter-3r-learn",
+        name="Learn",
+        universe="three_realms",
+        life_path="lp-drifter-three-realms",
+        scheme=RollTableScheme.INDEX,
+        entries=[
+            entry(name, effects=[trait("gain_or_step_up", tid, die), next_step("rt-drifter-3r-survive")])
+            for tid, die, name in learn_skills
+        ],
+    ))
+
+    # Survive — roll Qi Reserves; fail → mishap, otherwise advance.
+    upsert_table(RollTable(
+        id="rt-drifter-3r-survive",
+        name="Survival",
+        universe="three_realms",
+        life_path="lp-drifter-three-realms",
+        scheme=RollTableScheme.TIER,
+        check=RollTableCheck(trait_ids=["trait-3r-qi-reserves"], difficulty=DieType.D6),
+        entries=[
+            entry("Injured", tier=OutcomeTier.FAIL, effects=[next_step("rt-drifter-3r-mishap")]),
+            entry("Survived", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-drifter-3r-advance")]),
+            entry("Survived", tier=OutcomeTier.SUCCESS, effects=[next_step("rt-drifter-3r-advance")]),
+            entry("Survived", tier=OutcomeTier.EXCEPTIONAL, effects=[next_step("rt-drifter-3r-advance")]),
+            entry("Survived", tier=OutcomeTier.PERFECT, effects=[next_step("rt-drifter-3r-advance")]),
+        ],
+    ))
+
+    # Mishap — complication / loss, or forced muster.
+    upsert_table(RollTable(
+        id="rt-drifter-3r-mishap",
+        name="Mishap",
+        universe="three_realms",
+        life_path="lp-drifter-three-realms",
+        scheme=RollTableScheme.INDEX,
+        entries=[
+            entry("Lost a little face", effects=[eff("transfer_razmerit", "spend", "self", "1"), next_step("rt-drifter-3r-advance")]),
+            entry("Qi backlash", effects=[trait("gain_complication", "trait-3r-qi-reserves", "d4"), next_step("rt-drifter-3r-advance")]),
+            entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-drifter-3r-advance")]),
+            entry("Wounded spirit", effects=[trait("gain_complication", "trait-3r-dao-comprehension", "d4"), next_step("rt-drifter-3r-advance")]),
+            entry("Demoted", effects=[trait("step_down", "trait-rel-rank", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-advance")]),
+            entry("Expelled", effects=[flow("force_muster")]),
+        ],
+    ))
+
+    # Advance — roll Dao Comprehension; rank up on success, else another term.
+    upsert_table(RollTable(
+        id="rt-drifter-3r-advance",
+        name="Advancement",
+        universe="three_realms",
+        life_path="lp-drifter-three-realms",
+        scheme=RollTableScheme.TIER,
+        check=RollTableCheck(trait_ids=["trait-3r-dao-comprehension"], difficulty=DieType.D6),
+        entries=[
+            entry("No progress", tier=OutcomeTier.FAIL, effects=[next_step("rt-drifter-3r-learn")]),
+            entry("No progress", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-drifter-3r-learn")]),
+            entry("Promoted", tier=OutcomeTier.SUCCESS, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-muster")]),
+            entry("Promoted", tier=OutcomeTier.EXCEPTIONAL, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-muster")]),
+            entry("Promoted", tier=OutcomeTier.PERFECT, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-muster")]),
+        ],
+    ))
+
+    # Muster-out — continue, leave respectfully, or be expelled.
+    upsert_table(RollTable(
+        id="rt-drifter-3r-muster",
+        name="Muster Out",
+        universe="three_realms",
+        life_path="lp-drifter-three-realms",
+        scheme=RollTableScheme.RANGE,
+        die=DieType.D6,
+        entries=[
+            entry("Serve another term", min_value=1, max_value=2,
+                 effects=[trait("gain_or_step_up", "trait-rel-tenure", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-learn")]),
             entry("Muster out (respectfully)", min_value=3, max_value=5,
                  effects=[flow("muster")]),
             entry("Muster out (dishonorably)", min_value=6, max_value=6,
