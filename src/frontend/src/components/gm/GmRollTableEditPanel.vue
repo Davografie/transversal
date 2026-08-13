@@ -56,7 +56,6 @@
           <span class="rte-spacer"></span>
           <button class="rte-mini" :disabled="i === 0" @click="move(i, -1)">↑</button>
           <button class="rte-mini" :disabled="i === form.entries.length - 1" @click="move(i, 1)">↓</button>
-          <button class="rte-mini" @click="openEntry(i)">✎</button>
           <button class="rte-mini rte-del" @click="removeEntry(i)">✕</button>
         </div>
         <input v-model="e.label" placeholder="Entry label" />
@@ -89,11 +88,10 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, onUnmounted } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -155,25 +153,6 @@ onMounted(async () => {
 function addEntry() {
   form.entries.push({ label: '', description: '', minValue: null, maxValue: null, weight: null, tier: '', conditions: [], effects: [] })
 }
-
-function openEntry(i) {
-  panel.open({
-    component: GmRollTableEntryEditPanel,
-    title: 'Edit entry #' + (i + 1),
-    props: { tableId: form.id || props.tableId, index: i, scheme: form.scheme, entry: form.entries[i] },
-  })
-}
-
-let offEntryEdited = null
-onMounted(() => {
-  offEntryEdited = bus.on('entry-edited', (payload) => {
-    if (!payload || payload.tableId !== (form.id || props.tableId)) return
-    if (payload.index != null && payload.entry && form.entries[payload.index]) {
-      form.entries[payload.index] = payload.entry
-    }
-  })
-})
-onUnmounted(() => { if (offEntryEdited) offEntryEdited() })
 
 function removeEntry(i) {
   form.entries.splice(i, 1)

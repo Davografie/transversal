@@ -28,7 +28,7 @@
           <tr><th>#</th><th>Key</th><th>Label</th><th>Effects</th></tr>
         </thead>
         <tbody>
-          <tr v-for="(e, i) in table.entries" :key="i">
+          <tr v-for="(e, i) in table.entries" :key="i" class="rtd-row" @click="openEntry(i)">
             <td class="rtd-num">{{ i + 1 }}</td>
             <td class="rtd-key">{{ entryKey(e) }}</td>
             <td>
@@ -56,6 +56,7 @@ import { ref, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
+import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
 
 const props = defineProps({
   tableId: { type: String, required: true },
@@ -75,6 +76,10 @@ onMounted(async () => {
 
 function editTable() {
   panel.open({ component: GmRollTableEditPanel, title: 'Edit ' + (table.value?.name || props.name), props: { tableId: props.tableId, lifePathId: table.value?.lifePath || '' } })
+}
+
+function openEntry(i) {
+  panel.open({ component: GmRollTableEntryEditPanel, title: 'Edit entry #' + (i + 1), props: { tableId: props.tableId, index: i } })
 }
 
 function entryKey(e) {
@@ -121,4 +126,6 @@ function conditionSummary(c) {
 .rtd-conditions { margin-top: 2px; display: flex; flex-direction: column; gap: 1px; }
 .rtd-cond { font-size: 9px; color: var(--accent); }
 .rtd-effect { font-family: monospace; font-size: 10px; color: var(--text); }
+.rtd-row { cursor: pointer; }
+.rtd-row:hover { background: rgba(255,255,255,0.04); }
 </style>
