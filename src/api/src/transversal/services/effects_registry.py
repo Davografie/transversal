@@ -34,8 +34,8 @@ class EffectActionMeta:
     label: str                  # "Play as Rating"
     description: str            # tooltip / help text
     category: str               # "cost" | "benefit" | "either" (UI hint)
-    effect_type: str            # maps to SfxEffect.type
-    effect_action: str          # maps to SfxEffect.action
+    effect_type: str            # maps to Effect.type
+    effect_action: str          # maps to Effect.action
     valid_timings: list[str] = field(default_factory=lambda: [
         "IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
     ])
@@ -43,6 +43,8 @@ class EffectActionMeta:
     implicit_target: str | None = None   # if always the same, hide field
     implicit_result: str | None = None   # if always the same, hide field
     implicit_timing: str | None = None   # if only one valid timing, hide field
+    requires_choice: bool = False        # target must be resolved at runtime
+    target_kind: str | None = None       # trait | entity | life_path | ...
 
 
 # ── The Registry ──────────────────────────────────────
@@ -325,6 +327,131 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target Entity", field_type="text",
                           required=False, default="wielder"),
         ],
+    ),
+
+    # ── Trait gain / complications ─────────────────────
+    EffectActionMeta(
+        action_id="gain_trait",
+        label="Gain Trait",
+        description="Add a new trait at a die rating (no-op if already present)",
+        category="benefit",
+        effect_type="modify_trait",
+        effect_action="gain",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
+                          required=True, options=["d4", "d6", "d8", "d10", "d12"]),
+        ],
+        target_kind="trait",
+    ),
+    EffectActionMeta(
+        action_id="gain_or_step_up_trait",
+        label="Gain or Step Up Trait",
+        description="Create the trait at the rating if absent, otherwise step it up",
+        category="benefit",
+        effect_type="modify_trait",
+        effect_action="gain_or_step_up",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Create At", field_type="die_select",
+                          required=True, options=["d4", "d6", "d8", "d10", "d12"]),
+        ],
+        target_kind="trait",
+    ),
+    EffectActionMeta(
+        action_id="gain_complication",
+        label="Gain Complication",
+        description="Add a negative complication trait at a die rating",
+        category="cost",
+        effect_type="modify_trait",
+        effect_action="gain_complication",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Complication Trait", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
+                          required=True, options=["d4", "d6", "d8", "d10", "d12"]),
+        ],
+        target_kind="trait",
+    ),
+
+    # ── Rank and life-path flow ────────────────────────
+    EffectActionMeta(
+        action_id="set_rank",
+        label="Set Rank",
+        description="Set the entity's rank in a life path",
+        category="either",
+        effect_type="rank",
+        effect_action="set",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Rank", field_type="number", required=True),
+        ],
+        target_kind="life_path",
+    ),
+    EffectActionMeta(
+        action_id="discover_life_path",
+        label="Discover Life Path",
+        description="Add a life path to the entity's discovered paths",
+        category="benefit",
+        effect_type="life_path",
+        effect_action="discover",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True),
+        ],
+        target_kind="life_path",
+    ),
+    EffectActionMeta(
+        action_id="next_step",
+        label="Next Step",
+        description="Advance the life path term to the next step",
+        category="either",
+        effect_type="life_path",
+        effect_action="next_step",
+        valid_timings=["IMMEDIATE"],
+        fields=[],
+    ),
+    EffectActionMeta(
+        action_id="draft_life_path",
+        label="Draft Into Life Path",
+        description="Draft the entity into another life path",
+        category="either",
+        effect_type="life_path",
+        effect_action="draft",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True),
+        ],
+        target_kind="life_path",
+    ),
+    EffectActionMeta(
+        action_id="force_muster",
+        label="Force Muster Out",
+        description="Force the entity out of the current life path",
+        category="cost",
+        effect_type="life_path",
+        effect_action="force_muster",
+        valid_timings=["IMMEDIATE"],
+        fields=[],
+    ),
+
+    # ── Relationships ──────────────────────────────────
+    EffectActionMeta(
+        action_id="create_relationship",
+        label="Create Relationship",
+        description="Create a directional relationship edge to another entity",
+        category="either",
+        effect_type="relationship",
+        effect_action="create",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target Entity", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Relationship Type", field_type="text", required=True),
+        ],
+        target_kind="entity",
     ),
 ]
 

@@ -27,7 +27,7 @@ export function useTraitsConfig() {
       graphql(`query {
         sfxs {
           id name description trigger limit
-          effects { polarity timing type action target result }
+          effects { timing type action target result targetScope }
         }
       }`),
     ])

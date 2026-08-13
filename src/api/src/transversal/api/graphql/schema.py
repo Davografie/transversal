@@ -25,7 +25,7 @@ from transversal.api.graphql.types import (
     Relationship,
     RazmeritResult,
     SendMessageInput,
-    SfxEffect as GqlSfxEffect,
+    Effect as GqlEffect,
     SfxInput,
     SfxRef,
     SurviveResult,
@@ -174,7 +174,7 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit,
-                    effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in s.effects],
+                    effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in s.effects],
                 )
                 for s in db_sfxs
             ]
@@ -185,7 +185,7 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit,
-                    effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in s.effects],
+                    effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in s.effects],
                 ) for s in engine.get_all()
             ]
         return []
@@ -229,6 +229,7 @@ class Query:
                 valid_timings=m.valid_timings,
                 fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
+                requires_choice=m.requires_choice, target_kind=m.target_kind,
             ) for m in EFFECT_ACTION_REGISTRY
         ]
 
@@ -643,15 +644,16 @@ class Mutation:
 
     @strawberry.mutation
     def create_sfx(self, info: strawberry.Info, input: SfxInput) -> SfxRef:
-        from transversal.domain import SFX as DomainSFX, SfxEffect as DomainSfxEffect
+        from transversal.domain import SFX as DomainSFX, Effect as DomainEffect
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
             trigger=input.trigger, limit=input.limit,
             effects=[
-                DomainSfxEffect(
-                    polarity=e.polarity, timing=e.timing,
+                DomainEffect(
+                    timing=e.timing,
                     type=e.type, action=e.action,
                     target=e.target, result=e.result,
+                    target_scope=e.target_scope,
                 )
                 for e in input.effects
             ],
@@ -664,12 +666,12 @@ class Mutation:
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
             trigger=created.trigger, limit=created.limit,
-            effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in created.effects],
+            effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in created.effects],
         )
 
     @strawberry.mutation
     def update_sfx(self, info: strawberry.Info, input: SfxUpdateInput) -> SfxRef:
-        from transversal.domain import SfxEffect as DomainSfxEffect
+        from transversal.domain import Effect as DomainEffect
         existing = _em(info).repo.get_sfx(str(input.id))
         if not existing:
             raise ValueError(f"SFX '{input.id}' not found")
@@ -683,10 +685,11 @@ class Mutation:
             existing.trigger = input.trigger
         if input.effects is not None:
             existing.effects = [
-                DomainSfxEffect(
-                    polarity=e.polarity, timing=e.timing,
+                DomainEffect(
+                    timing=e.timing,
                     type=e.type, action=e.action,
                     target=e.target, result=e.result,
+                    target_scope=e.target_scope,
                 )
                 for e in input.effects
             ]
@@ -698,7 +701,7 @@ class Mutation:
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
             trigger=updated.trigger, limit=updated.limit,
-            effects=[GqlSfxEffect(polarity=e.polarity, timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result) for e in updated.effects],
+            effects=[GqlEffect(timing=e.timing, type=e.type, action=e.action, target=e.target, result=e.result, target_scope=e.target_scope) for e in updated.effects],
         )
 
     @strawberry.mutation

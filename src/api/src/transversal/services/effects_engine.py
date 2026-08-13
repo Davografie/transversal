@@ -18,8 +18,7 @@ from transversal.domain import (
     ContestResult,
     DieType,
     DicePoolRequest,
-    EffectAction,
-    EffectPolarity,
+    Effect,
     EffectTiming,
     RollResult,
     SFX,
@@ -52,13 +51,13 @@ class ScheduledEffect:
     timing: EffectTiming
     beats_remaining: int = 0
     condition: Optional[str] = None
-    effects: list[EffectAction] = field(default_factory=list)
+    effects: list[Effect] = field(default_factory=list)
     context: dict = field(default_factory=dict)
 
 
 # ── Effect Application ───────────────────────────────
 
-EffectApplier = Callable[[EffectAction, str, str, dict], None]
+EffectApplier = Callable[[Effect, str, str, dict], None]
 """Signature: (action, entity_id, universe, context) -> None"""
 
 
@@ -97,7 +96,7 @@ class EffectsEngine:
         event: GameEvent,
         available_sfx_ids: list[str],
         razmerit_balance: int,
-    ) -> list[EffectAction]:
+    ) -> list[Effect]:
         """Process a game event against available SFXs.
 
         Args:
@@ -108,7 +107,7 @@ class EffectsEngine:
         Returns:
             Immediately applied effects (deferred ones are queued internally).
         """
-        applied: list[EffectAction] = []
+        applied: list[Effect] = []
 
         for sfx_id in available_sfx_ids:
             sfx = self._sfx_registry.get(sfx_id)
@@ -119,27 +118,19 @@ class EffectsEngine:
             if not self._trigger_matches(sfx, event):
                 continue
 
-            # Cost check: sum razmerit costs from negative-polarity spend effects
+            # Cost check: sum razmerit costs from spend effects
             total_razmerit_cost = 0
             for e in sfx.effects:
-                if (e.polarity == EffectPolarity.NEGATIVE
-                        and e.type == "transfer_razmerit"
-                        and e.action == "spend"):
+                if e.type == "transfer_razmerit" and e.action == "spend":
                     total_razmerit_cost += int(e.result or "0")
             if total_razmerit_cost > razmerit_balance:
                 continue
 
             # Execute each effect with its own timing
             for effect in sfx.effects:
-                action = EffectAction(
-                    type=effect.type,
-                    action=effect.action,
-                    target=effect.target,
-                    result=effect.result,
-                )
                 if effect.timing == EffectTiming.IMMEDIATE:
-                    _effects_applier.effect_registry.apply(action, event.entity_id, event.universe, event.context)
-                    applied.append(action)
+                    _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
+                    applied.append(effect)
                 else:
                     self._schedule.append(
                         ScheduledEffect(
@@ -149,7 +140,7 @@ class EffectsEngine:
                             timing=effect.timing,
                             beats_remaining=_beats_for_timing(effect.timing),
                             condition=event.context.get("condition"),
-                            effects=[action],
+                            effects=[effect],
                             context=event.context,
                         )
                     )
@@ -279,7 +270,7 @@ def _beats_for_timing(timing: EffectTiming) -> int:
     return 3  # default; overridden by explicit value in ScheduledEffect
 
 
-def _noop_applier(action: EffectAction, entity_id: str, universe: str, context: dict) -> None:
+def _noop_applier(action: Effect, entity_id: str, universe: str, context: dict) -> None:
     """Default no-op applier for testing."""
     pass
 
@@ -344,13 +335,13 @@ def fire_contest_sfx(
     opponent_sfx_ids: list[str],
     player_razmerit: int,
     opponent_razmerit: int,
-) -> list[EffectAction]:
+) -> list[Effect]:
     """Process a contest result through the effects engine for both sides.
 
     Returns all immediately-applied effects (deferred are queued internally).
     """
     events = contest_to_events(contest, player_id, opponent_id, universe)
-    applied: list[EffectAction] = []
+    applied: list[Effect] = []
 
     for event in events:
         if event.entity_id == player_id:

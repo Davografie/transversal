@@ -2,11 +2,9 @@
 
 from transversal.domain import (
     DieType,
-    EffectAction,
-    EffectPolarity,
+    Effect,
     EffectTiming,
     SFX,
-    SfxEffect,
 )
 from transversal.services.effects_applier import EffectRegistry
 from transversal.services.effects_engine import (
@@ -48,9 +46,8 @@ def _make_sfx(id, name, trigger, effects=None, limit=""):
 
 def _make_effect(polarity="neutral", timing="immediate", type="modify_roll",
                  action="step_up_die", target="primary", result=None):
-    """Helper to create a SfxEffect."""
-    return SfxEffect(
-        polarity=EffectPolarity(polarity),
+    """Helper to create an Effect (polarity arg retained for test-call compat)."""
+    return Effect(
         timing=EffectTiming(timing),
         type=type, action=action, target=target, result=result,
     )

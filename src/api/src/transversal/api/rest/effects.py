@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from transversal.domain import EffectAction
+from transversal.domain import Effect
 from transversal.services.entity_manager import EntityManager
 from transversal.services.effects_engine import EffectsEngine, GameEvent
 
@@ -45,21 +45,18 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
         if sfx is None:
             return {"applied": False, "error": f"SFX '{req.sfx_name}' not found"}
         from transversal.services.effects_applier import effect_registry
-        from transversal.domain import EffectPolarity
         for effect in sfx.effects:
             # Reverse razmerit costs (spend → earn)
-            if (effect.polarity == EffectPolarity.NEGATIVE
-                    and effect.type == "transfer_razmerit"
-                    and effect.action == "spend"):
+            if effect.type == "transfer_razmerit" and effect.action == "spend":
                 effect_registry.apply(
-                    EffectAction(type="transfer_razmerit", action="earn",
-                                target="self", result=effect.result or "1"),
+                    Effect(timing=effect.timing, type="transfer_razmerit", action="earn",
+                           target="self", result=effect.result or "1"),
                     req.entity_id, req.universe, req.context)
             # Reverse razmerit earnings (earn → spend)
-            if effect.type == "transfer_razmerit" and effect.action == "earn":
+            elif effect.type == "transfer_razmerit" and effect.action == "earn":
                 effect_registry.apply(
-                    EffectAction(type="transfer_razmerit", action="spend",
-                                target="self", result=effect.result or "1"),
+                    Effect(timing=effect.timing, type="transfer_razmerit", action="spend",
+                           target="self", result=effect.result or "1"),
                     req.entity_id, req.universe, req.context)
         return {"applied": True, "effects_applied": 1, "effects": [{"type": "reverse", "action": "reverse"}]}
 

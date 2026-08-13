@@ -524,14 +524,7 @@ class LifeTerm(BaseModel):
 
 # ── SFX ───────────────────────────────────────────────
 
-class EffectPolarity(str, Enum):
-    """Whether an effect is detrimental, beneficial, or neutral."""
-    NEGATIVE = "negative"
-    NEUTRAL = "neutral"
-    POSITIVE = "positive"
-
-
-# Timing for deferred effects (shared by old EffectAction and new SfxEffect)
+# Timing for deferred effects.
 
 class EffectTiming(str, Enum):
     IMMEDIATE = "immediate"
@@ -542,25 +535,18 @@ class EffectTiming(str, Enum):
     ON_CONDITION = "on_condition"
 
 
-# Legacy effect action — still used by the engine/applier dispatch layer.
+class Effect(BaseModel):
+    """A single operational effect — shared by SFX and life-path consequences.
 
-class EffectAction(BaseModel):
-    type: str
-    action: str
-    target: str
-    result: Optional[str] = None
-
-
-# New per-effect model with polarity and timing.
-
-class SfxEffect(BaseModel):
-    """A single effect within an SFX, with its own timing and polarity."""
-    polarity: EffectPolarity = EffectPolarity.NEUTRAL
+    Sign (cost vs benefit) is derived from (type, action); it is not stored.
+    """
     timing: EffectTiming = EffectTiming.IMMEDIATE
     type: str
     action: str
     target: str = ""
     result: Optional[str] = None
+    target_scope: Optional[str] = None  # narrowing hint for runtime target choice
+    context: dict = Field(default_factory=dict)  # e.g. relationship description
 
 
 class SFX(BaseModel):
@@ -573,7 +559,7 @@ class SFX(BaseModel):
     description: str = ""
     limit: str = ""          # narrative condition / restriction (markdown)
     trigger: str
-    effects: list[SfxEffect] = Field(default_factory=list)
+    effects: list[Effect] = Field(default_factory=list)
 
 
 # ── Assembled Views (not stored, built by repo) ───────

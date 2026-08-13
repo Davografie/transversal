@@ -15,12 +15,11 @@ from transversal.domain import (
     ContestWinner,
     DieRoll,
     DieType,
-    EffectPolarity,
+    Effect,
     EffectTiming,
     OutcomeTier,
     PoolResult,
     SFX,
-    SfxEffect,
     SimplifiedResult,
 )
 from transversal.services.effects_engine import (
@@ -302,12 +301,12 @@ class TestFireContestSFX:
         # Register a win SFX for player and a loss SFX for opponent
         engine.register(SFX(
             id="sfx-win", name="Victory Lap", trigger="on_contest_win",
-            effects=[SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+            effects=[Effect(timing=EffectTiming.IMMEDIATE,
                               type="modify_roll", action="step_up_die", target="next")],
         ))
         engine.register(SFX(
             id="sfx-loss", name="Vengeful", trigger="on_contest_loss",
-            effects=[SfxEffect(polarity=EffectPolarity.NEUTRAL, timing=EffectTiming.END_OF_BEAT,
+            effects=[Effect(timing=EffectTiming.END_OF_BEAT,
                               type="modify_trait", action="step_up", target="rage")],
         ))
 
@@ -383,9 +382,9 @@ class TestFireContestSFX:
         engine = EffectsEngine()
         engine.register(SFX(
             id="sfx-costly", name="Costly", trigger="on_contest_win",
-            effects=[SfxEffect(polarity=EffectPolarity.NEGATIVE, timing=EffectTiming.IMMEDIATE,
+            effects=[Effect(timing=EffectTiming.IMMEDIATE,
                               type="transfer_razmerit", action="spend", target="self", result="3"),
-                     SfxEffect(polarity=EffectPolarity.POSITIVE, timing=EffectTiming.IMMEDIATE,
+                     Effect(timing=EffectTiming.IMMEDIATE,
                               type="modify_roll", action="step_up_die", target="next")],
         ))
         contest = ContestResult(

@@ -45,8 +45,8 @@
         @click="editEffect(i)"
       >
         <span class="drag-handle">⠿</span>
-          <span class="polarity-badge" :class="'pol-' + (eff.polarity || 'NEUTRAL').toLowerCase()">
-          {{ polarityLabel(eff.polarity) }}
+          <span class="cat-badge" :class="'cat-' + effectCategory(eff)">
+          {{ categorySign(effectCategory(eff)) }}
         </span>
         <span class="effect-summary">{{ effectSummary(eff) }}</span>
         <span class="effect-timing">{{ eff.timing || 'immediate' }}</span>
@@ -77,12 +77,6 @@
           <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" :min="0" />
           <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
         </div>
-        <label>Polarity</label>
-        <select v-model="newEffect.polarity">
-          <option value="NEGATIVE">Negative (cost)</option>
-          <option value="NEUTRAL">Neutral</option>
-          <option value="POSITIVE">Positive (benefit)</option>
-        </select>
         <label>Timing
           <span v-if="selectedAction.validTimings.length === 1" class="hint">(auto: {{ selectedAction.validTimings[0] }})</span>
         </label>
@@ -161,10 +155,15 @@ const visibleFields = computed(() => {
   })
 })
 
-// ── Polarity helpers ──
-function polarityLabel(p) {
-  if (p === 'NEGATIVE') return '−'
-  if (p === 'POSITIVE') return '+'
+// ── Category (sign) helpers ──
+function effectCategory(eff) {
+  const meta = effectActions.value.find(a => a.effectType === eff.type && a.effectAction === eff.action)
+  return meta?.category || 'either'
+}
+
+function categorySign(cat) {
+  if (cat === 'cost') return '−'
+  if (cat === 'benefit') return '+'
   return '~'
 }
 
@@ -196,7 +195,7 @@ async function onSave() {
   errorMsg.value = ''
   try {
     const result = await graphql(
-      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit effects { polarity timing type action target result } } }`,
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit effects { timing type action target result targetScope } } }`,
       { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, limit: form.limit, effects: form.effects } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
@@ -217,7 +216,7 @@ async function onCreate() {
   const sfxId = generateSfxId(form.name)
   try {
     const result = await graphql(
-      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit effects { polarity timing type action target result } } }`,
+      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit effects { timing type action target result targetScope } } }`,
       { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, limit: form.limit, effects: form.effects } }
     )
     if (!result) {
@@ -268,7 +267,6 @@ const showAddEffect = ref(false)
 const editingEffectIndex = ref(null)  // null = adding new, number = editing existing
 const newEffect = reactive({
   actionId: '',
-  polarity: 'NEUTRAL',
   timing: 'IMMEDIATE',
   fields: {},
 })
@@ -283,8 +281,6 @@ function onActionChange() {
     if ((meta.validTimings || []).length === 1) {
       newEffect.timing = meta.validTimings[0]
     }
-    if (meta.category === 'cost') newEffect.polarity = 'NEGATIVE'
-    else if (meta.category === 'benefit') newEffect.polarity = 'POSITIVE'
   }
 }
 
@@ -292,7 +288,6 @@ function addEffect() {
   const meta = selectedAction.value
   if (!meta) return
   const eff = {
-    polarity: newEffect.polarity || 'NEUTRAL',
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
     action: meta.effectAction,
@@ -319,7 +314,6 @@ function editEffect(i) {
   // Find the matching action metadata
   const meta = effectActions.value.find(a => a.effectType === eff.type && a.effectAction === eff.action)
   newEffect.actionId = meta?.actionId || ''
-  newEffect.polarity = eff.polarity || 'NEUTRAL'
   newEffect.timing = eff.timing || 'IMMEDIATE'
   newEffect.fields = {}
   if (eff.target && eff.target !== (meta?.implicitTarget || '')) newEffect.fields.target = eff.target
@@ -331,7 +325,6 @@ function updateEffect() {
   if (!meta || editingEffectIndex.value === null) return
   const i = editingEffectIndex.value
   form.effects[i] = {
-    polarity: newEffect.polarity || 'NEUTRAL',
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
     action: meta.effectAction,
@@ -346,7 +339,6 @@ function closeEffectEditor() {
   editingEffectIndex.value = null
   newEffect.actionId = ''
   newEffect.fields = {}
-  newEffect.polarity = 'NEUTRAL'
   newEffect.timing = 'IMMEDIATE'
 }
 
@@ -390,10 +382,10 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .effect-row { cursor: pointer; }
 .drag-handle { cursor: grab; color: var(--text-dim); font-size: 14px; user-select: none; }
 
-.polarity-badge { font-weight: 700; font-size: 11px; width: 20px; text-align: center; border-radius: 3px; flex-shrink: 0; }
-.pol-negative { color: #d44040; background: rgba(212,64,64,0.12); }
-.pol-positive { color: #40b860; background: rgba(64,184,96,0.12); }
-.pol-neutral { color: var(--text-dim); background: rgba(255,255,255,0.06); }
+.cat-badge { font-weight: 700; font-size: 11px; width: 20px; text-align: center; border-radius: 3px; flex-shrink: 0; }
+.cat-cost { color: #d44040; background: rgba(212,64,64,0.12); }
+.cat-benefit { color: #40b860; background: rgba(64,184,96,0.12); }
+.cat-either { color: var(--text-dim); background: rgba(255,255,255,0.06); }
 
 .effect-summary { flex: 1; font-family: monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .effect-timing { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }

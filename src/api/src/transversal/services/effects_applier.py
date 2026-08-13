@@ -1,4 +1,4 @@
-"""Effects applier — registry-based dispatch for EffectActions.
+"""Effects applier — registry-based dispatch for Effect records.
 
 Rather than hardcoding if/elif for each effect type, the applier
 maintains a registry of handlers keyed by (type, action). New
@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import Callable
 
-from transversal.domain import EffectAction
+from transversal.domain import Effect
 
 
 # Handler signature: (action, entity_id, universe, context) -> None
-EffectHandler = Callable[[EffectAction, str, str, dict], None]
+EffectHandler = Callable[[Effect, str, str, dict], None]
 
 
 class EffectRegistry:
@@ -34,7 +34,7 @@ class EffectRegistry:
         """Register a handler for a specific (type, action) pair."""
         self._handlers[(effect_type, action)] = handler
 
-    def apply(self, action: EffectAction, entity_id: str, universe: str, context: dict) -> None:
+    def apply(self, action: Effect, entity_id: str, universe: str, context: dict) -> None:
         """Dispatch an effect action to its registered handler.
 
         Tries: (type, action) → (*, action) → (type, *) → (*, *) → no-op.

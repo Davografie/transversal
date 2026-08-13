@@ -10,7 +10,6 @@ from transversal.domain import (
     EntityType as DomainEntityType,
     TransversalType as DomainTransversalType,
     ChallengePolarity as DomainChallengePolarity,
-    EffectPolarity as DomainEffectPolarity,
     EffectTiming as DomainEffectTiming,
     MessageKind as DomainMessageKind,
     DiscoveryBlock,
@@ -32,7 +31,6 @@ RatingType = strawberry.enum(DomainRatingType)
 EntityType = strawberry.enum(DomainEntityType)
 TransversalTypeEnum = strawberry.enum(DomainTransversalType)
 ChallengePolarity = strawberry.enum(DomainChallengePolarity)
-EffectPolarity = strawberry.enum(DomainEffectPolarity)
 EffectTimingEnum = strawberry.enum(DomainEffectTiming)
 MessageKind = strawberry.enum(DomainMessageKind)
 
@@ -105,24 +103,24 @@ class TraitSetRef:
 # ── SFX Registry ──────────────────────────────────────
 
 @strawberry.type
-class SfxEffect:
-    """A single effect within an SFX, with timing and polarity."""
-    polarity: EffectPolarity
+class Effect:
+    """A single operational effect — shared by SFX and life-path consequences."""
     timing: EffectTimingEnum
     type: str
     action: str
     target: str = ""
     result: Optional[str] = None
+    target_scope: Optional[str] = None
 
 
 @strawberry.input
-class SfxEffectInput:
-    polarity: EffectPolarity = EffectPolarity.NEUTRAL
+class EffectInput:
     timing: EffectTimingEnum = EffectTimingEnum.IMMEDIATE
     type: str = ""
     action: str = ""
     target: str = ""
     result: Optional[str] = None
+    target_scope: Optional[str] = None
 
 
 @strawberry.type
@@ -133,7 +131,7 @@ class SfxRef:
     description: str = ""
     trigger: str = ""
     limit: str = ""
-    effects: list[SfxEffect] = strawberry.field(default_factory=list)
+    effects: list[Effect] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
@@ -144,7 +142,7 @@ class SfxInput:
     description: str = ""
     trigger: str = ""
     limit: str = ""
-    effects: list[SfxEffectInput] = strawberry.field(default_factory=list)
+    effects: list[EffectInput] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
@@ -155,7 +153,7 @@ class SfxUpdateInput:
     description: Optional[str] = None
     trigger: Optional[str] = None
     limit: Optional[str] = None
-    effects: Optional[list[SfxEffectInput]] = None
+    effects: Optional[list[EffectInput]] = None
 
 
 # ── Effects Registry (metadata for the UI) ────────────
@@ -185,6 +183,8 @@ class EffectActionMeta:
     implicit_target: Optional[str] = None
     implicit_result: Optional[str] = None
     implicit_timing: Optional[str] = None
+    requires_choice: bool = False
+    target_kind: Optional[str] = None
 
 
 @strawberry.input
