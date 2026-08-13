@@ -227,3 +227,40 @@ def test_flow_effect_is_passthrough_for_now():
     entity = _entity()
     result = apply_effects(entity, [_effect("life_path", "next_step")], FakeRepo())
     assert len(result.passthrough) == 1
+
+
+# ── Relationship-trait targeting ─────────────────────
+
+class RelationshipFakeRepo:
+    def __init__(self, edge_key="edge:char-1:fac-1:membership"):
+        self.edge_key = edge_key
+        self.relationship_traits = []
+
+    def get_trait(self, trait_id):
+        return FakeTrait(trait_id, "ts-rel")
+
+    def get_traitsettings_for_entity(self, entity_id):
+        return []
+
+    def get_relationship(self, entity_id, faction_id, rel_type):
+        return {"_key": self.edge_key}
+
+    def get_relationship_traitsettings(self, edge_key):
+        return self.relationship_traits
+
+
+def test_gain_relationship_trait():
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE,
+        type="modify_trait", action="gain_or_step_up",
+        target="trait-rel-rank", result="d4",
+        context={"relationship": "fac-1"},
+    )
+    result = apply_effects(entity, [effect], RelationshipFakeRepo())
+    assert len(result.new_trait_settings) == 1
+    ts = result.new_trait_settings[0]
+    assert ts.from_type == "relationship"
+    assert ts.entity_id == "edge:char-1:fac-1:membership"
+    assert ts.trait_id == "trait-rel-rank"
+    assert ts.dice == [DieType.D4]

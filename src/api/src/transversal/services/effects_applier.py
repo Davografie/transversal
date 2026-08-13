@@ -149,8 +149,28 @@ def _resolve_traitset_id(trait_id: str, repo) -> str:
     return trait.traitset_id if trait else ""
 
 
-def _find_traitsetting(entity: Entity, repo, trait_id: str) -> Optional[TraitSetting]:
-    for ts in repo.get_traitsettings_for_entity(entity.id):
+def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
+    """Return (from_type, owner_id) for the trait targeted by an effect.
+
+    Defaults to the entity; if ``effect.context.relationship`` names a faction,
+    target the character↔faction relationship edge instead.
+    """
+    rel_target = (effect.context or {}).get("relationship")
+    if rel_target:
+        rel = repo.get_relationship(entity.id, rel_target, "membership")
+        if rel and rel.get("_key"):
+            return ("relationship", rel["_key"])
+    return ("entity", entity.id)
+
+
+def _find_traitsetting(owner: tuple[str, str], repo, trait_id: str) -> Optional[TraitSetting]:
+    from_type, owner_id = owner
+    settings = (
+        repo.get_relationship_traitsettings(owner_id)
+        if from_type == "relationship"
+        else repo.get_traitsettings_for_entity(owner_id)
+    )
+    for ts in settings:
         if ts.trait_id == trait_id:
             return ts
     return None
@@ -182,15 +202,17 @@ def _die(result: Optional[str]) -> DieType:
     return DieType(str(result).lower()) if result else DieType.D4
 
 
-def _new_traitsetting(entity: Entity, trait_id: str, die: DieType, repo, *, negative: bool = False) -> TraitSetting:
+def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False) -> TraitSetting:
+    from_type, owner_id = owner
     traitset_id = _resolve_traitset_id(trait_id, repo)
     if not traitset_id and negative:
         traitset_id = "ts-complications"
     return TraitSetting(
-        id=f"{entity.id}:{trait_id}{':complication' if negative else ''}",
-        entity_id=entity.id,
+        id=f"{owner_id}:{trait_id}{':complication' if negative else ''}",
+        entity_id=owner_id,
         trait_id=trait_id,
         traitset_id=traitset_id,
+        from_type=from_type,
         dice=[die],
         negative=negative,
         source_type="effect",
@@ -214,11 +236,12 @@ def _apply_gain(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "trait")
     if target is None:
         return
-    if _find_traitsetting(entity, repo, target):
+    owner = _trait_owner(entity, effect, repo)
+    if _find_traitsetting(owner, repo, target):
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
     die = _die(effect.result)
-    ts = _new_traitsetting(entity, target, die, repo)
+    ts = _new_traitsetting(owner, target, die, repo)
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
 
@@ -227,7 +250,8 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "trait")
     if target is None:
         return
-    existing = _find_traitsetting(entity, repo, target)
+    owner = _trait_owner(entity, effect, repo)
+    existing = _find_traitsetting(owner, repo, target)
     if existing:
         if _step_up(existing):
             result.updated_trait_settings.append(existing)
@@ -236,7 +260,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
             result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
         return
     die = _die(effect.result)
-    ts = _new_traitsetting(entity, target, die, repo)
+    ts = _new_traitsetting(owner, target, die, repo)
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
 
@@ -245,7 +269,8 @@ def _apply_step_up(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "trait")
     if target is None:
         return
-    existing = _find_traitsetting(entity, repo, target)
+    owner = _trait_owner(entity, effect, repo)
+    existing = _find_traitsetting(owner, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step up"))
         return
@@ -260,7 +285,8 @@ def _apply_step_down(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "trait")
     if target is None:
         return
-    existing = _find_traitsetting(entity, repo, target)
+    owner = _trait_owner(entity, effect, repo)
+    existing = _find_traitsetting(owner, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step down"))
         return
@@ -275,7 +301,8 @@ def _apply_set(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "trait")
     if target is None:
         return
-    existing = _find_traitsetting(entity, repo, target)
+    owner = _trait_owner(entity, effect, repo)
+    existing = _find_traitsetting(owner, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to set"))
         return
@@ -289,8 +316,9 @@ def _apply_gain_complication(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "trait")
     if target is None:
         return
+    owner = _trait_owner(entity, effect, repo)
     die = _die(effect.result)
-    ts = _new_traitsetting(entity, target, die, repo, negative=True)
+    ts = _new_traitsetting(owner, target, die, repo, negative=True)
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained complication {target} at {die.value}", ts.id))
 
