@@ -562,6 +562,29 @@ class SFX(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
 
 
+# ── Conditions ──────────────────────────────────────
+
+class ConditionType(str, Enum):
+    """Kinds of automatically-evaluable gate/limit conditions."""
+    ALWAYS = "always"
+    RANK_MIN = "rank_min"                # value = rank threshold
+    AT_LOCATION = "at_location"          # target = location entity id
+    HAS_TRAIT = "has_trait"              # target = trait id
+    HAS_RELATIONSHIP = "has_relationship"  # target = related entity id
+    NARRATIVE = "narrative"              # human-readable only, never auto-blocks
+
+
+class Condition(BaseModel):
+    """A configurable, automatically-evaluated gate or limit.
+
+    Parallel to Effect: authored once, evaluated against an entity's state.
+    """
+    type: ConditionType = ConditionType.ALWAYS
+    target: str = ""                  # trait / location / entity id
+    value: Optional[str] = None       # threshold, e.g. rank number
+    narrative: str = ""               # human-readable fallback text
+
+
 # ── Roll Tables ──────────────────────────────────────
 
 class RollTableScheme(str, Enum):
@@ -585,6 +608,7 @@ class RollTableEntry(BaseModel):
     max_value: Optional[int] = None
     weight: Optional[int] = None
     tier: Optional[OutcomeTier] = None
+    conditions: list[Condition] = Field(default_factory=list)
     effects: list[Effect] = Field(default_factory=list)
 
 
