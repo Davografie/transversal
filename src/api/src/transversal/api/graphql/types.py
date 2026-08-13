@@ -202,6 +202,45 @@ class RollTable:
     entries: list[RollTableEntry]
 
 
+@strawberry.input
+class ConditionInput:
+    type: ConditionType = ConditionType.ALWAYS
+    target: str = ""
+    value: Optional[str] = None
+    narrative: str = ""
+
+
+@strawberry.input
+class RollTableCheckInput:
+    trait_ids: list[str] = strawberry.field(default_factory=list)
+    difficulty: DieType = DieType.D6
+    free_choice: bool = False
+
+
+@strawberry.input
+class RollTableEntryInput:
+    label: str = ""
+    description: str = ""
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    weight: Optional[int] = None
+    tier: Optional[OutcomeTier] = None
+    conditions: list[ConditionInput] = strawberry.field(default_factory=list)
+    effects: list[EffectInput] = strawberry.field(default_factory=list)
+
+
+@strawberry.input
+class RollTableInput:
+    id: str = ""
+    name: str = ""
+    universe: str = ""
+    life_path: Optional[str] = None
+    scheme: RollTableScheme = RollTableScheme.RANGE
+    die: DieType = DieType.D6
+    check: Optional[RollTableCheckInput] = None
+    entries: list[RollTableEntryInput] = strawberry.field(default_factory=list)
+
+
 # ── Effects Registry (metadata for the UI) ────────────
 
 @strawberry.type

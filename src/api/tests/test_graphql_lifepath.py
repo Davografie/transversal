@@ -47,6 +47,17 @@ class GqlRepo:
             return [t for t in self.tables.values() if t.life_path == life_path_id]
         return list(self.tables.values())
 
+    def create_roll_table(self, t):
+        self.tables[t.id] = t
+        return t
+
+    def update_roll_table(self, t):
+        self.tables[t.id] = t
+        return t
+
+    def delete_roll_table(self, tid):
+        return self.tables.pop(tid, None) is not None
+
     def get_traitsettings_for_entity(self, eid):
         return self.traitsettings
 
@@ -191,3 +202,42 @@ def test_roll_table_queries():
 
     assert one["rollTable"]["id"] == "tbl-a"
     assert one["rollTable"]["entries"][0]["effects"][0]["target"] == "tbl-b"
+
+
+def test_roll_table_write_mutations():
+    repo = _build()
+
+    created = _run(repo, """
+        mutation($input: RollTableInput!) {
+            saveRollTable(input: $input) { id name scheme die entries { label } }
+        }
+    """, {"input": {
+        "name": "New Table", "universe": "earth", "scheme": "INDEX", "die": "D6",
+        "entries": [{"label": "first"}],
+    }})
+
+    table = created["saveRollTable"]
+    tid = table["id"]
+    assert tid.startswith("rt-")
+    assert table["name"] == "New Table"
+    assert table["scheme"] == "INDEX"
+    assert tid in repo.tables
+
+    updated = _run(repo, """
+        mutation($input: RollTableInput!) {
+            saveRollTable(input: $input) { id name entries { label } }
+        }
+    """, {"input": {
+        "id": tid, "name": "Renamed", "scheme": "INDEX", "die": "D6",
+        "entries": [{"label": "changed"}],
+    }})
+
+    assert updated["saveRollTable"]["name"] == "Renamed"
+    assert updated["saveRollTable"]["entries"][0]["label"] == "changed"
+
+    deleted = _run(repo, """
+        mutation($id: ID!) { deleteRollTable(id: $id) }
+    """, {"id": tid})
+
+    assert deleted["deleteRollTable"] is True
+    assert tid not in repo.tables

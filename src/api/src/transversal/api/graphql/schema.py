@@ -7,12 +7,14 @@ from typing import Optional
 from transversal.api.graphql.types import (
     CharacterView,
     Condition,
+    ConditionInput,
     CreateEntityInput,
     CreateRelationshipInput,
     DeleteRelationshipInput,
     DieType as GqlDieType,
     EffectActionMeta as GqlEffectActionMeta,
     EffectFieldDef as GqlEffectFieldDef,
+    EffectInput,
     Entity,
     EntityType,
     JournalEntryInput,
@@ -27,7 +29,10 @@ from transversal.api.graphql.types import (
     Relationship,
     RollTable,
     RollTableCheck,
+    RollTableCheckInput,
     RollTableEntry,
+    RollTableEntryInput,
+    RollTableInput,
     RazmeritResult,
     SendMessageInput,
     Effect as GqlEffect,
@@ -155,6 +160,40 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
             else None
         ),
         entries=[_entry_to_gql(e) for e in t.entries],
+    )
+
+
+def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
+    return DomainEffect(
+        timing=e.timing, type=e.type, action=e.action,
+        target=e.target, result=e.result, target_scope=e.target_scope,
+        context=e.context or {},
+    )
+
+
+def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
+    return DomainCondition(type=c.type, target=c.target, value=c.value, narrative=c.narrative)
+
+
+def _check_input_to_domain(c: RollTableCheckInput) -> DomainRollTableCheck:
+    return DomainRollTableCheck(trait_ids=c.trait_ids, difficulty=c.difficulty, free_choice=c.free_choice)
+
+
+def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
+    return DomainRollTableEntry(
+        label=e.label, description=e.description,
+        min_value=e.min_value, max_value=e.max_value, weight=e.weight, tier=e.tier,
+        conditions=[_condition_input_to_domain(c) for c in e.conditions],
+        effects=[_effect_input_to_domain(x) for x in e.effects],
+    )
+
+
+def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
+    return DomainRollTable(
+        id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
+        scheme=t.scheme, die=t.die,
+        check=(_check_input_to_domain(t.check) if t.check is not None else None),
+        entries=[_entry_input_to_domain(e) for e in t.entries],
     )
 
 
@@ -1070,6 +1109,26 @@ class Mutation:
         repo = info.context["entity_manager"].repo
         repo.delete_lifepath(str(id))
         return {"ok": True}
+
+    @strawberry.mutation
+    def save_roll_table(self, info: strawberry.Info, input: RollTableInput) -> RollTable:
+        """Create or update a roll table. Empty ``id`` generates a new key."""
+        import uuid
+
+        repo = _em(info).repo
+        table = _roll_table_input_to_domain(input)
+        if not table.id:
+            table.id = f"rt-{uuid.uuid4().hex[:8]}"
+
+        if repo.get_roll_table(table.id) is None:
+            saved = repo.create_roll_table(table)
+        else:
+            saved = repo.update_roll_table(table)
+        return _roll_table_to_gql(saved)
+
+    @strawberry.mutation
+    def delete_roll_table(self, info: strawberry.Info, id: strawberry.ID) -> bool:
+        return _em(info).repo.delete_roll_table(str(id))
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
