@@ -52,9 +52,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { usePanel } from '@/composables/usePanel.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
@@ -65,6 +66,7 @@ const props = defineProps({
 })
 
 const panel = usePanel()
+const bus = usePanelBus()
 const { graphql } = useApi()
 const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
 const table = ref(null)
@@ -97,16 +99,23 @@ async function loadTraitNames(universe) {
   } catch {}
 }
 
-onMounted(async () => {
-  loadEffectActions()
-  const namesPromise = loadRollTableNames()
+async function loadTable() {
   try {
     const data = await graphql(`query($id:ID!){rollTable(id:$id){id name universe lifePath scheme die check{traitIds difficulty freeChoice} entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`, { id: props.tableId })
     table.value = data?.rollTable || null
   } catch {}
+}
+
+let offLifepathSaved = null
+onMounted(async () => {
+  loadEffectActions()
+  const namesPromise = loadRollTableNames()
+  await loadTable()
   await namesPromise
   if (table.value?.universe) loadTraitNames(table.value.universe)
+  offLifepathSaved = bus.on('lifepath-saved', loadTable)
 })
+onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function editTable() {
   panel.open({ component: GmRollTableEditPanel, title: 'Edit ' + (table.value?.name || props.name), props: { tableId: props.tableId, lifePathId: table.value?.lifePath || '' } })
