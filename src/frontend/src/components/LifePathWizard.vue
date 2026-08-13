@@ -254,8 +254,14 @@ async function resolveStep({ index = null, roll = null } = {}) {
       vars,
     )
     const r = data?.resolveStep
-    if (!r) { error.value = 'No response from resolveStep.'; return }
-    if (r.error) { error.value = r.error; return }
+    if (!r) { const msg = 'No response from resolveStep.'; console.warn('[LifePathWizard]', msg); error.value = msg; return }
+    if (r.error) { console.warn('[LifePathWizard] resolveStep error', r.error); error.value = r.error; return }
+    console.log('[LifePathWizard] resolveStep', {
+      tableId: r.tableId, entryLabel: r.entryLabel, applied: r.applied,
+      scheduled: r.scheduled, pendingChoices: r.pendingChoices,
+      done: r.done, mustered: r.mustered, mishapMuster: r.mishapMuster,
+      pendingTerm: r.pendingTerm,
+    })
     lastResult.value = r
     log.value.push({ entryLabel: r.entryLabel, applied: r.applied, scheduled: r.scheduled, pendingChoices: r.pendingChoices })
     emit('updated')

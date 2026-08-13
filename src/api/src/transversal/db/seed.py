@@ -730,7 +730,7 @@ def seed_life_paths(repo) -> None:
         life_path="lp-verdant-disciple",
         scheme=RollTableScheme.INDEX,
         entries=[
-            entry(name, effects=[trait("gain_or_step_up", tid, die), next_step("rt-verdant-survive")])
+            entry(name, effects=[trait("gain_or_step_up", tid, die, relationship=None), next_step("rt-verdant-survive")])
             for tid, die, name in learn_skills
         ],
     ))
@@ -761,9 +761,9 @@ def seed_life_paths(repo) -> None:
         scheme=RollTableScheme.INDEX,
         entries=[
             entry("Lost a little face", effects=[eff("transfer_razmerit", "spend", "self", "1"), next_step("rt-verdant-advance")]),
-            entry("Qi backlash", effects=[trait("gain_complication", "trait-3r-qi-reserves", "d4"), next_step("rt-verdant-advance")]),
+            entry("Qi backlash", effects=[trait("gain_or_step_up_complication", "trait-3r-qi-reserves", "d4", relationship=None), next_step("rt-verdant-advance")]),
             entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-verdant-advance")]),
-            entry("Wounded spirit", effects=[trait("gain_complication", "trait-3r-dao-comprehension", "d4"), next_step("rt-verdant-advance")]),
+            entry("Wounded spirit", effects=[trait("gain_or_step_up_complication", "trait-3r-dao-comprehension", "d4", relationship=None), next_step("rt-verdant-advance")]),
             entry("Demoted", effects=[trait("step_down", "trait-rel-rank"), next_step("rt-verdant-advance")]),
             entry("Expelled", effects=[flow("force_muster")]),
         ],
@@ -827,7 +827,7 @@ def seed_life_paths(repo) -> None:
         life_path="lp-drifter-three-realms",
         scheme=RollTableScheme.INDEX,
         entries=[
-            entry(name, effects=[trait("gain_or_step_up", tid, die), next_step("rt-drifter-3r-survive")])
+            entry(name, effects=[trait("gain_or_step_up", tid, die, relationship=None), next_step("rt-drifter-3r-survive")])
             for tid, die, name in learn_skills
         ],
     ))
@@ -858,9 +858,9 @@ def seed_life_paths(repo) -> None:
         scheme=RollTableScheme.INDEX,
         entries=[
             entry("Lost a little face", effects=[eff("transfer_razmerit", "spend", "self", "1"), next_step("rt-drifter-3r-advance")]),
-            entry("Qi backlash", effects=[trait("gain_complication", "trait-3r-qi-reserves", "d4"), next_step("rt-drifter-3r-advance")]),
+            entry("Qi backlash", effects=[trait("gain_or_step_up_complication", "trait-3r-qi-reserves", "d4", relationship=None), next_step("rt-drifter-3r-advance")]),
             entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-drifter-3r-advance")]),
-            entry("Wounded spirit", effects=[trait("gain_complication", "trait-3r-dao-comprehension", "d4"), next_step("rt-drifter-3r-advance")]),
+            entry("Wounded spirit", effects=[trait("gain_or_step_up_complication", "trait-3r-dao-comprehension", "d4", relationship=None), next_step("rt-drifter-3r-advance")]),
             entry("Demoted", effects=[trait("step_down", "trait-rel-rank", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-advance")]),
             entry("Expelled", effects=[flow("force_muster")]),
         ],

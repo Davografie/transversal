@@ -140,6 +140,25 @@ def test_gain_complication_sets_negative():
     assert ts.traitset_id == "ts-complications"
 
 
+def test_gain_or_step_up_complication_creates_when_absent():
+    repo = FakeRepo(traits=[FakeTrait("scar", "ts-complications")])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "gain_or_step_up_complication", "scar", "d4")], repo)
+    assert len(result.new_trait_settings) == 1
+    ts = result.new_trait_settings[0]
+    assert ts.negative is True
+    assert ts.dice == [DieType.D4]
+
+
+def test_gain_or_step_up_complication_steps_up_when_present():
+    repo = FakeRepo(traitsettings=[_ts("scar", [DieType.D4], traitset_id="ts-complications", negative=True)])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "gain_or_step_up_complication", "scar", "d4")], repo)
+    assert len(result.new_trait_settings) == 0
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D6]
+
+
 # ── Razmerit ─────────────────────────────────────────
 
 def test_earn_razmerit():

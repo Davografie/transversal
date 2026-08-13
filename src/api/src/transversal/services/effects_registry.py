@@ -378,6 +378,21 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         ],
         target_kind="trait",
     ),
+    EffectActionMeta(
+        action_id="gain_or_step_up_complication",
+        label="Gain or Step Up Complication",
+        description="Create the complication at the rating if absent, otherwise step it up",
+        category="cost",
+        effect_type="modify_trait",
+        effect_action="gain_or_step_up_complication",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Complication Trait", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Create At", field_type="die_select",
+                          required=True, options=["d4", "d6", "d8", "d10", "d12"]),
+        ],
+        target_kind="trait",
+    ),
 
     # ── Rank and life-path flow ────────────────────────
     EffectActionMeta(

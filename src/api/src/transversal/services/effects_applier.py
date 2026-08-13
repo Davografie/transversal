@@ -81,7 +81,7 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(entity, [a], em.repo)
 
-    for action in ("step_up", "step_down", "set", "gain", "gain_or_step_up", "gain_complication"):
+    for action in ("step_up", "step_down", "set", "gain", "gain_or_step_up", "gain_complication", "gain_or_step_up_complication"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -322,6 +322,25 @@ def _apply_gain_complication(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"gained complication {target} at {die.value}", ts.id))
 
 
+def _apply_gain_or_step_up_complication(entity, effect, repo, result):
+    target = _resolve_target(entity, effect, result, "trait")
+    if target is None:
+        return
+    owner = _trait_owner(entity, effect, repo)
+    existing = _find_traitsetting(owner, repo, target)
+    if existing:
+        if _step_up(existing):
+            result.updated_trait_settings.append(existing)
+            result.applied.append(AppliedEffect(effect, f"stepped up complication {target}", existing.id))
+        else:
+            result.applied.append(AppliedEffect(effect, f"complication {target} already at d12", existing.id))
+        return
+    die = _die(effect.result)
+    ts = _new_traitsetting(owner, target, die, repo, negative=True)
+    result.new_trait_settings.append(ts)
+    result.applied.append(AppliedEffect(effect, f"gained complication {target} at {die.value}", ts.id))
+
+
 def _apply_earn(entity, effect, repo, result):
     amount = int(effect.result or "0")
     entity.razmerit += amount
@@ -384,6 +403,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "step_down"): _apply_step_down,
     ("modify_trait", "set"): _apply_set,
     ("modify_trait", "gain_complication"): _apply_gain_complication,
+    ("modify_trait", "gain_or_step_up_complication"): _apply_gain_or_step_up_complication,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,
     ("transfer_razmerit", "transfer"): _apply_transfer,
