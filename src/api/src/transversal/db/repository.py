@@ -19,6 +19,7 @@ from transversal.db.arango import (
     PLAYERS,
     PROJECTIONS,
     RELATIONSHIPS,
+    ROLL_TABLES,
     SFXS,
     TRAITS,
     TRAITSETS,
@@ -35,6 +36,7 @@ from transversal.domain import (
     LifePath,
     Message,
     Projection,
+    RollTable,
     SFX,
     Trait,
     TraitSet,
@@ -58,6 +60,7 @@ class EntityRepository:
         self._traitsettings = self.db.collection(TRAITSETTINGS)
         self._sfxs = self.db.collection(SFXS)
         self._life_paths = self.db.collection(LIFE_PATHS)
+        self._roll_tables = self.db.collection(ROLL_TABLES)
         self._relationships = self.db.collection(RELATIONSHIPS)
         self._players = self.db.collection(PLAYERS)
         self._entity_images = self.db.collection(ENTITY_IMAGES)
@@ -425,6 +428,45 @@ class EntityRepository:
     def delete_lifepath(self, lp_id: str) -> bool:
         try:
             self._life_paths.delete(lp_id)
+            return True
+        except Exception:
+            return False
+
+    # ── Roll Tables ──────────────────────────────────
+
+    def create_roll_table(self, table: RollTable) -> RollTable:
+        doc = table.model_dump()
+        doc["_key"] = table.id
+        self._roll_tables.insert(doc)
+        return table
+
+    def get_roll_table(self, table_id: str) -> Optional[RollTable]:
+        doc = self._roll_tables.get(table_id)
+        return RollTable.model_validate({**doc, "id": doc["_key"]}) if doc else None
+
+    def list_roll_tables(self, life_path_id: Optional[str] = None) -> list[RollTable]:
+        if life_path_id is not None:
+            query = f"""
+                FOR t IN {ROLL_TABLES}
+                FILTER t.life_path == @lp
+                SORT t.name ASC
+                RETURN t
+            """
+            docs = self.db.aql.execute(query, bind_vars={"lp": life_path_id})
+        else:
+            query = f"FOR t IN {ROLL_TABLES} SORT t.name ASC RETURN t"
+            docs = self.db.aql.execute(query)
+        return [RollTable.model_validate({**doc, "id": doc["_key"]}) for doc in docs]
+
+    def update_roll_table(self, table: RollTable) -> RollTable:
+        doc = table.model_dump()
+        doc["_key"] = table.id
+        self._roll_tables.replace(doc)
+        return table
+
+    def delete_roll_table(self, table_id: str) -> bool:
+        try:
+            self._roll_tables.delete(table_id)
             return True
         except Exception:
             return False

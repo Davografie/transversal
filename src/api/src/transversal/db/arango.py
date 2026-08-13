@@ -56,6 +56,7 @@ RELATIONSHIPS = "relationships"    # edge collection
 MESSAGES = "messages"              # inter-entity persistent messages
 ENTITY_IMAGES = "entity_images"    # generated image metadata
 LIFE_PATHS = "life_paths"          # life path definitions
+ROLL_TABLES = "roll_tables"        # reusable roll tables (life path steps + general)
 
 COLLECTIONS = {
     ENTITIES: False,
@@ -69,6 +70,7 @@ COLLECTIONS = {
     MESSAGES: False,      # document
     ENTITY_IMAGES: False,
     LIFE_PATHS: False,    # document
+    ROLL_TABLES: False,   # document
 }
 
 
@@ -131,9 +133,17 @@ def _ensure_indexes(db) -> None:
     _add_hash_index(db, ENTITY_IMAGES, ["entity_id"])
     _add_hash_index(db, ENTITY_IMAGES, ["entity_id", "universe"])
 
+    # life paths
+    _add_hash_index(db, LIFE_PATHS, ["universe"])
+
+    # roll tables
+    _add_hash_index(db, ROLL_TABLES, ["life_path"])
+    _add_hash_index(db, ROLL_TABLES, ["universe"])
+
     # messages
     _add_hash_index(db, MESSAGES, ["sender_entity_id"])
     _add_hash_index(db, MESSAGES, ["recipient_entity_id"])
+
 
 
 
