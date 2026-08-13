@@ -566,6 +566,9 @@ def seed_relations_traitset(repo) -> None:
         ("trait-relation-fear", "Fear", "Negative — opponent uses it against you"),
         ("trait-relation-love", "Love", "Adds to pools involving that person"),
         ("trait-relation-duty", "Duty", "I owe them my service — obligation"),
+        # Life path membership — kept after muster (relationship traits on character↔faction).
+        ("trait-rel-rank", "Rank", "Standing within a faction's life path"),
+        ("trait-rel-tenure", "Tenure", "Terms served in a faction's life path"),
     ]
     for tid, name, explanation in relation_traits:
         existing_trait = repo.get_trait(tid)
@@ -595,9 +598,73 @@ def seed_all(em) -> None:
 
 
 def seed_life_paths(repo) -> None:
-    """Seed life path definitions (entry points; term tables land in C2.3)."""
-    from transversal.domain import LifePath
+    """Seed the life path content graph: faction, entry points, and linked roll tables.
 
+    The Verdant Steps Sect path is wired end-to-end (qualify → learn → survive →
+    mishap / advance → muster-out). Drifter paths are entry points only; their
+    term tables land later.
+    """
+    from transversal.domain import (
+        DieType,
+        Effect,
+        EffectTiming,
+        Entity,
+        EntityType,
+        LifePath,
+        OutcomeTier,
+        RollTable,
+        RollTableCheck,
+        RollTableEntry,
+        RollTableScheme,
+    )
+
+    FACTION = "fac-verdant-steps"
+
+    # ── Effect / table builders ───────────────────────
+    def eff(type_, action, target="", result=None, context=None):
+        return Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type=type_,
+            action=action,
+            target=target,
+            result=result,
+            context=context or {},
+        )
+
+    def flow(action, target="", context=None):
+        return eff("life_path", action, target, context=context)
+
+    def next_step(target=""):
+        return flow("next_step", target)
+
+    def trait(action, trait_id, die=None, relationship=FACTION):
+        ctx = {"relationship": relationship} if relationship else {}
+        return eff("modify_trait", action, trait_id, result=die, context=ctx)
+
+    def entry(label, effects=None, **fields):
+        return RollTableEntry(label=label, effects=effects or [], **fields)
+
+    def upsert_table(table: RollTable) -> None:
+        if repo.get_roll_table(table.id) is None:
+            repo.create_roll_table(table)
+        else:
+            repo.update_roll_table(table)
+
+    # ── Faction ──────────────────────────────────────
+    faction = Entity(
+        id=FACTION,
+        type=EntityType.FACTION,
+        name="Verdant Steps Sect",
+        current_universe="three_realms",
+        active_universes=["three_realms"],
+        suitable_life_path_ids=["lp-verdant-disciple"],
+    )
+    if repo.get_entity(FACTION) is None:
+        repo.create_entity(faction)
+    else:
+        repo.update_entity(faction)
+
+    # ── Life paths ───────────────────────────────────
     paths = [
         LifePath(
             id="lp-drifter-three-realms",
@@ -616,9 +683,121 @@ def seed_life_paths(repo) -> None:
             name="Verdant Steps Outer Disciple",
             universe="three_realms",
             description="Train under the guidance of the Verdant Steps Sect.",
+            entry_table_id="rt-verdant-qualify",
         ),
     ]
 
     for lp in paths:
         if repo.get_lifepath(lp.id) is None:
             repo.create_lifepath(lp)
+        else:
+            repo.update_lifepath(lp)
+
+    # ── Verdant Steps chain ──────────────────────────
+
+    # Qualify — roll Dao Comprehension against d6; pass → enroll + learn.
+    upsert_table(RollTable(
+        id="rt-verdant-qualify",
+        name="Qualification",
+        universe="three_realms",
+        life_path="lp-verdant-disciple",
+        scheme=RollTableScheme.TIER,
+        check=RollTableCheck(trait_ids=["trait-3r-dao-comprehension"], difficulty=DieType.D6),
+        entries=[
+            entry("Rejected", tier=OutcomeTier.FAIL, effects=[next_step("")]),
+            entry("Rejected", tier=OutcomeTier.MARGINAL, effects=[next_step("")]),
+            entry("Accepted", tier=OutcomeTier.SUCCESS, effects=[flow("enroll"), next_step("rt-verdant-learn")]),
+            entry("Accepted", tier=OutcomeTier.EXCEPTIONAL, effects=[flow("enroll"), next_step("rt-verdant-learn")]),
+            entry("Accepted", tier=OutcomeTier.PERFECT, effects=[flow("enroll"), next_step("rt-verdant-learn")]),
+        ],
+    ))
+
+    # Learn — pick a skill; each entry also advances to survival.
+    learn_skills = [
+        ("trait-3r-sword-intent", "d6", "Sword Intent"),
+        ("trait-3r-footwork", "d6", "Footwork"),
+        ("trait-3r-qi-strike", "d6", "Qi Strike"),
+        ("trait-3r-alchemy", "d6", "Alchemy"),
+        ("trait-3r-qi-reserves", "d4", "Qi Reserves"),
+        ("trait-3r-dao-comprehension", "d4", "Dao Comprehension"),
+    ]
+    upsert_table(RollTable(
+        id="rt-verdant-learn",
+        name="Learn",
+        universe="three_realms",
+        life_path="lp-verdant-disciple",
+        scheme=RollTableScheme.INDEX,
+        entries=[
+            entry(name, effects=[trait("gain_or_step_up", tid, die), next_step("rt-verdant-survive")])
+            for tid, die, name in learn_skills
+        ],
+    ))
+
+    # Survive — roll Qi Reserves; fail → mishap, otherwise advance.
+    upsert_table(RollTable(
+        id="rt-verdant-survive",
+        name="Survival",
+        universe="three_realms",
+        life_path="lp-verdant-disciple",
+        scheme=RollTableScheme.TIER,
+        check=RollTableCheck(trait_ids=["trait-3r-qi-reserves"], difficulty=DieType.D6),
+        entries=[
+            entry("Injured", tier=OutcomeTier.FAIL, effects=[next_step("rt-verdant-mishap")]),
+            entry("Survived", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-verdant-advance")]),
+            entry("Survived", tier=OutcomeTier.SUCCESS, effects=[next_step("rt-verdant-advance")]),
+            entry("Survived", tier=OutcomeTier.EXCEPTIONAL, effects=[next_step("rt-verdant-advance")]),
+            entry("Survived", tier=OutcomeTier.PERFECT, effects=[next_step("rt-verdant-advance")]),
+        ],
+    ))
+
+    # Mishap — complication / loss, or forced muster.
+    upsert_table(RollTable(
+        id="rt-verdant-mishap",
+        name="Mishap",
+        universe="three_realms",
+        life_path="lp-verdant-disciple",
+        scheme=RollTableScheme.INDEX,
+        entries=[
+            entry("Lost a little face", effects=[eff("transfer_razmerit", "spend", "self", "1"), next_step("rt-verdant-advance")]),
+            entry("Qi backlash", effects=[trait("gain_complication", "trait-3r-qi-reserves", "d4"), next_step("rt-verdant-advance")]),
+            entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-verdant-advance")]),
+            entry("Wounded spirit", effects=[trait("gain_complication", "trait-3r-dao-comprehension", "d4"), next_step("rt-verdant-advance")]),
+            entry("Expelled", effects=[flow("force_muster")]),
+            entry("Expelled", effects=[flow("force_muster")]),
+        ],
+    ))
+
+    # Advance — roll Dao Comprehension; rank up on success, else another term.
+    upsert_table(RollTable(
+        id="rt-verdant-advance",
+        name="Advancement",
+        universe="three_realms",
+        life_path="lp-verdant-disciple",
+        scheme=RollTableScheme.TIER,
+        check=RollTableCheck(trait_ids=["trait-3r-dao-comprehension"], difficulty=DieType.D6),
+        entries=[
+            entry("No progress", tier=OutcomeTier.FAIL, effects=[next_step("rt-verdant-learn")]),
+            entry("No progress", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-verdant-learn")]),
+            entry("Promoted", tier=OutcomeTier.SUCCESS, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-verdant-muster")]),
+            entry("Promoted", tier=OutcomeTier.EXCEPTIONAL, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-verdant-muster")]),
+            entry("Promoted", tier=OutcomeTier.PERFECT, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-verdant-muster")]),
+        ],
+    ))
+
+    # Muster-out — the term's end: continue, leave respectfully, or be expelled.
+    upsert_table(RollTable(
+        id="rt-verdant-muster",
+        name="Muster Out",
+        universe="three_realms",
+        life_path="lp-verdant-disciple",
+        scheme=RollTableScheme.RANGE,
+        die=DieType.D6,
+        entries=[
+            entry("Serve another term", min_value=1, max_value=2,
+                 effects=[trait("gain_or_step_up", "trait-rel-tenure", "d4"), next_step("rt-verdant-learn")]),
+            entry("Muster out (respectfully)", min_value=3, max_value=5,
+                 effects=[flow("muster")]),
+            entry("Muster out (dishonorably)", min_value=6, max_value=6,
+                 effects=[flow("force_muster")]),
+        ],
+    ))

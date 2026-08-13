@@ -16,8 +16,11 @@ from transversal.api.graphql.types import (
     EntityType,
     JournalEntryInput,
     LifePath as GqlLifePath,
+    LifePathStepResult,
     Message,
     MessageKind,
+    OutcomeTier as GqlOutcomeTier,
+    PendingTerm as GqlPendingTerm,
     Projection,
     QualificationResult,
     LearnResult,
@@ -34,8 +37,6 @@ from transversal.api.graphql.types import (
     TeachResult,
     GiftResult,
     TakeResult,
-    TermResult,
-    MusterOutResult,
     TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
     TraitInput,
@@ -853,14 +854,75 @@ class Mutation:
         )
 
     @strawberry.mutation
-    def take_term(self, info: strawberry.Info, entity_id: strawberry.ID, life_path_id: strawberry.ID,
-                  razmerit_spent: int = 0, qual_manual: Optional[int] = None,
-                  survive_manual: Optional[int] = None,
-                  advance_manual: Optional[int] = None,
-                  learn_index: Optional[int] = None,
-                  mishap_index: Optional[int] = None) -> TermResult:
-        """DEPRECATED — term execution is being rebuilt on roll tables (C2.3)."""
-        raise NotImplementedError("take_term is being replaced by roll-table term execution")
+    def start_term(self, info: strawberry.Info, entity_id: strawberry.ID,
+                   faction_id: strawberry.ID, path_id: strawberry.ID) -> GqlPendingTerm:
+        """Begin (or restart) a term in a faction's life path.
+
+        Sets the entity's pending-term checkpoint to the path's entry table and
+        persists it so the term can be resumed later.
+        """
+        from transversal.services.lifepath_executor import start_term as start_lp_term
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+
+        pt = start_lp_term(entity, str(faction_id), str(path_id), repo)
+        repo.update_entity(entity)
+
+        return GqlPendingTerm(
+            faction_id=pt.faction_id,
+            path_id=pt.path_id,
+            current_table_id=pt.current_table_id,
+            continuation=pt.continuation,
+        )
+
+    @strawberry.mutation
+    def resolve_step(self, info: strawberry.Info, entity_id: strawberry.ID,
+                     roll: Optional[int] = None,
+                     tier: Optional[GqlOutcomeTier] = None,
+                     index: Optional[int] = None) -> LifePathStepResult:
+        """Resolve the current pending roll-table step in a life path term.
+
+        ``index`` is a manual/click selection (1-based); ``roll`` is a rolled
+        number for range/index/weight tables; ``tier`` is an outcome tier for
+        check tables. Effects apply immediately and the term advances.
+        """
+        from transversal.domain import OutcomeTier as DomainOutcomeTier
+        from transversal.services.lifepath_executor import resolve_step as resolve_lp_step
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+
+        domain_tier = DomainOutcomeTier(tier.value) if tier is not None else None
+        summary = resolve_lp_step(entity, repo, roll=roll, tier=domain_tier, index=index)
+
+        pt = summary.get("pending_term")
+        pending_term = (
+            GqlPendingTerm(
+                faction_id=pt.faction_id,
+                path_id=pt.path_id,
+                current_table_id=pt.current_table_id,
+                continuation=pt.continuation,
+            )
+            if pt is not None
+            else None
+        )
+
+        return LifePathStepResult(
+            done=summary.get("done", False),
+            applied=summary.get("applied", []),
+            pending_choices=summary.get("pending_choices", []),
+            mustered=summary.get("mustered", False),
+            mishap_muster=summary.get("mishap_muster", False),
+            pending_term=pending_term,
+            error=summary.get("error"),
+            table_id=summary.get("table_id"),
+            entry_label=summary.get("entry_label"),
+        )
 
     @strawberry.mutation
     def teach_trait(self, info: strawberry.Info, teacher_id: strawberry.ID, student_id: strawberry.ID,
@@ -908,11 +970,6 @@ class Mutation:
             transferred_trait_id=result["transferred_trait"].id if result.get("transferred_trait") else None,
             stolen=result.get("stolen", False),
         )
-
-    @strawberry.mutation
-    def muster_out(self, info: strawberry.Info, entity_id: strawberry.ID) -> MusterOutResult:
-        """DEPRECATED — mustering is being rebuilt on roll tables (C2.3)."""
-        raise NotImplementedError("muster_out is being replaced by roll-table term execution")
 
     @strawberry.mutation
     def save_life_path(self, info: strawberry.Info, id: str, name: str, universe: str,

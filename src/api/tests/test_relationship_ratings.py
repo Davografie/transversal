@@ -259,6 +259,8 @@ class TestSeedRelationsTraitset:
             "trait-relation-fear",
             "trait-relation-love",
             "trait-relation-duty",
+            "trait-rel-rank",
+            "trait-rel-tenure",
         ]
         for tid in expected_traits:
             trait = repo.get_trait(tid)
@@ -280,7 +282,7 @@ class TestSeedRelationsTraitset:
         assert second_ts is not None
         # Should not have created duplicates
         all_traits = [d for d in repo._traits.values() if d["traitset_id"] == "ts-relations"]
-        assert len(all_traits) == 7  # exactly the 7 we seeded
+        assert len(all_traits) == 9  # the 7 relation traits + rank + tenure
 
 
 class TestEntityManagerStub:

@@ -12,6 +12,7 @@ from transversal.domain import (
     ChallengePolarity as DomainChallengePolarity,
     EffectTiming as DomainEffectTiming,
     MessageKind as DomainMessageKind,
+    OutcomeTier as DomainOutcomeTier,
     DiscoveryBlock,
     LifePath,
 )
@@ -26,6 +27,7 @@ TransversalTypeEnum = strawberry.enum(DomainTransversalType)
 ChallengePolarity = strawberry.enum(DomainChallengePolarity)
 EffectTimingEnum = strawberry.enum(DomainEffectTiming)
 MessageKind = strawberry.enum(DomainMessageKind)
+OutcomeTier = strawberry.enum(DomainOutcomeTier)
 
 
 # ── Trait Display Name ───────────────────────────────
@@ -589,6 +591,29 @@ class LifePath:
     description: str
     entry_table_id: str
     discovery: Optional[DiscoveryBlock]
+
+
+@strawberry.type
+class PendingTerm:
+    """In-progress life path term checkpoint."""
+    faction_id: str
+    path_id: str
+    current_table_id: str
+    continuation: list[str]
+
+
+@strawberry.type
+class LifePathStepResult:
+    """Result of resolving one roll-table step in a life path term."""
+    done: bool
+    applied: list[str]
+    pending_choices: list[str]
+    mustered: bool
+    mishap_muster: bool
+    pending_term: Optional[PendingTerm]
+    error: Optional[str] = None
+    table_id: Optional[str] = None
+    entry_label: Optional[str] = None
 
 
 # ── Term Result Types ──────────────────────────────

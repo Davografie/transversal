@@ -153,3 +153,50 @@ def test_mutation_applies():
     assert len(repo.created_traitsettings) == 1
     assert repo.created_traitsettings[0].trait_id == "iron-will"
     assert repo.created_traitsettings[0].dice == [DieType.D6]
+
+
+def test_enroll_records_enrollment():
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("join", [_effect("life_path", "enroll"), _next("tbl-b")])])
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+    resolve_step(entity, repo, index=1)
+    assert len(entity.life_paths) == 1
+    assert entity.life_paths[0].faction_id == "fac-1"
+    assert entity.life_paths[0].path_id == "lp-1"
+    assert entity.life_paths[0].mustered is False
+
+
+class EnrollEdgeRepo(ExecutorRepo):
+    def __init__(self):
+        super().__init__()
+        self.created_relationships = []
+
+    def get_relationship(self, entity_id, faction_id, rel_type):
+        return None
+
+    def create_relationship(self, from_id, to_id, rel_type, description=""):
+        self.created_relationships.append((from_id, to_id, rel_type))
+
+
+def test_enroll_creates_membership_edge():
+    repo = EnrollEdgeRepo()
+    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("join", [_effect("life_path", "enroll")])])
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+    resolve_step(entity, repo, index=1)
+    assert ("char-1", "fac-1", "membership") in repo.created_relationships
+
+
+def test_muster_marks_mustered_without_mishap():
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("leave", [_effect("life_path", "muster")])])
+    entity = _entity(life_paths=[Enrollment(faction_id="fac-1", path_id="lp-1", mustered=False)])
+    start_term(entity, "fac-1", "lp-1", repo)
+    resolve_step(entity, repo, index=1)
+    assert entity.pending_term is None
+    assert entity.life_paths[0].mustered is True
+    assert entity.life_paths[0].mishap_muster is False

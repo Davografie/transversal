@@ -13,6 +13,7 @@ from transversal.domain import (
     DieType,
     DicePoolRequest,
     Effect,
+    Enrollment,
     Entity,
     OutcomeTier,
     PendingTerm,
@@ -73,10 +74,11 @@ def resolve_step(
     mutation_effects = [e for e in entry.effects if e.type != "life_path"]
     flow_effects = [e for e in entry.effects if e.type == "life_path"]
 
+    old_razmerit = entity.razmerit
     result: EffectsResult = apply_effects(entity, mutation_effects, repo)
     flow = _process_flow(entity, flow_effects, repo)
 
-    _persist(entity, result, repo)
+    _persist(entity, result, repo, old_razmerit)
 
     return {
         "done": flow.get("done", False),
@@ -93,7 +95,16 @@ def resolve_step(
 def _resolve_check(entity: Entity, table: RollTable, repo) -> OutcomeTier:
     check = table.check
     pool_dice: list[tuple[DieType, str]] = []
-    for ts in repo.get_traitsettings_for_entity(entity.id):
+    settings = list(repo.get_traitsettings_for_entity(entity.id))
+
+    # Relationship traits on the active term's faction edge (e.g. rank/tenure).
+    pt = entity.pending_term
+    if pt and pt.faction_id:
+        rel = repo.get_relationship(entity.id, pt.faction_id, "membership")
+        if rel and rel.get("_key"):
+            settings.extend(repo.get_relationship_traitsettings(rel["_key"]))
+
+    for ts in settings:
         if ts.trait_id in check.trait_ids and ts.dice:
             for d in ts.dice:
                 pool_dice.append((d, ts.trait_id))
@@ -125,6 +136,17 @@ def _process_flow(entity: Entity, effects: list[Effect], repo) -> dict:
             flow["done"] = True
             flow["mustered"] = True
             flow["mishap_muster"] = True
+            continue
+
+        if effect.action == "muster":
+            _mark_mustered(entity, mishap=False)
+            flow["done"] = True
+            flow["mustered"] = True
+            flow["mishap_muster"] = False
+            continue
+
+        if effect.action == "enroll":
+            _ensure_enrollment(entity, repo)
             continue
 
         if effect.action == "draft":
@@ -179,15 +201,69 @@ def _mark_mustered(entity: Entity, mishap: bool) -> None:
     entity.pending_term = None
 
 
-def _persist(entity: Entity, result: EffectsResult, repo) -> None:
+def _ensure_enrollment(entity: Entity, repo) -> None:
+    """Idempotently record the active term as an enrollment.
+
+    Also ensures the character↔faction ``membership`` edge exists so rank and
+    tenure relationship traits have somewhere to attach.
+    """
+    pt = entity.pending_term
+    if pt is None:
+        return
+    for enrollment in entity.life_paths:
+        if enrollment.faction_id == pt.faction_id and enrollment.path_id == pt.path_id:
+            break
+    else:
+        entity.life_paths.append(Enrollment(faction_id=pt.faction_id, path_id=pt.path_id))
+
+    if repo.get_relationship(entity.id, pt.faction_id, "membership") is None:
+        repo.create_relationship(entity.id, pt.faction_id, "membership")
+
+
+def _persist(entity: Entity, result: EffectsResult, repo, old_razmerit: Optional[int] = None) -> None:
+    """Persist in-memory mutations and broadcast SSE for live updates.
+
+    Mirrors ``effects_commit.commit_effects``, but the primary entity is always
+    persisted so the ``pending_term`` checkpoint survives a mid-term resume.
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    def publish(event: str, data: dict) -> None:
+        for s in session_manager.list_active():
+            event_bus.publish(StreamEvent(event=event, session_id=s.id, data=data))
+
     for other in result.entities_to_update:
         repo.update_entity(other)
+        publish("entity_updated", {
+            "entity_id": other.id,
+            "name": other.name,
+            "current_universe": other.current_universe,
+            "current_location": other.current_location,
+        })
 
+    # The primary entity (always — pending_term checkpoint must persist).
     repo.update_entity(entity)
+    publish("entity_updated", {
+        "entity_id": entity.id,
+        "name": entity.name,
+        "current_universe": entity.current_universe,
+        "current_location": entity.current_location,
+    })
+    if old_razmerit is not None and entity.razmerit != old_razmerit:
+        publish("razmerit_changed", {
+            "entity_id": entity.id,
+            "old_balance": old_razmerit,
+            "new_balance": entity.razmerit,
+            "reason": "life_path",
+        })
 
     for ts in result.new_trait_settings:
         repo.create_traitsetting(ts)
+        publish("trait_updated", {"entity_id": ts.entity_id, "trait_id": ts.trait_id})
     for ts in result.updated_trait_settings:
         repo.update_traitsetting(ts)
+        publish("trait_updated", {"entity_id": ts.entity_id, "trait_id": ts.trait_id})
+
     for rel in result.new_relationships:
         repo.create_relationship(rel["from"], rel["to"], rel["type"], rel.get("description", ""))
