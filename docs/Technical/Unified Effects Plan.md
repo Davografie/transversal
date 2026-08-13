@@ -106,6 +106,15 @@ A `RollTable` is a reusable data unit: a set of entries, each carrying a label, 
 - **Conditions/limits become a distinct `Condition` data unit**, parallel to `Effect`: `{ type, target, value, narrative }`, evaluated automatically against the entity. `min_rank`, `at_location`, `has_trait`, `has_relationship`, `always`, and `narrative` are the initial types. SFX's narrative `limit` stays as-is for now.
 - **`roll_tables` collection + entries = a new database data type.**
 
+### Enrollment, factions, and relationship traits
+
+- **Enrollment** (on the entity) = `{ faction_id, path_id, mustered, mishap_muster }`; a character may hold several at once, one path per faction. Active = `mustered: false`.
+- **`Entity.life_paths: list[Enrollment]`** replaces `current_life_path_id`, `current_rank`, `terms_served`, and `life_history`.
+- **Faction** entities carry `name`, `active_universes`, and `suitable_life_path_ids`. Life paths are reusable across factions.
+- **Rank and tenure** are relationship traits on the character↔faction edge (`trait-rel-rank`, `trait-rel-tenure`), kept after muster. Advancement steps up rank; each term steps up tenure. Muster-out rolls the tenure trait against the muster table.
+- **`pending_term`** = `{ faction_id, path_id, current_table_id, continuation }`.
+- **Dropped effects:** `rank/set` (rank is a trait now) and `earn_with_roll` (muster rolls tenure).
+
 ## In scope
 
 1. Unify the effect model and metadata catalog.
@@ -152,7 +161,7 @@ Introduce the `Condition` data unit + evaluator, add the `roll_tables` collectio
 - *Verify:* seeded life paths execute equivalently; draft/forced-muster/skip behaviors preserved.
 
 **C2.3 — Per-phase term execution + checkpoint.**
-Per-phase mutations (`qualifyTerm`, `learnTerm`, `surviveTerm`, `eventTerm`, `advanceTerm`) commit effects immediately. Add `Entity.pending_term` (phase reached + committed state + roll inputs). Target-choice dialogs interleave on `PendingChoice`. API accepts rolled inputs (number/tier + table row click).
+Add `Enrollment` + entity fields + reshaped `PendingTerm`; extend the applier to target relationship traits via `context.relationship`; write the roll-table term executor (resolve check/table → apply effects → honor `next_step`/`return_to`/`draft`/`force_muster`); step rank/tenure traits; flip `mustered`/`mishap_muster` on muster. Per-phase mutations commit effects immediately and target-choice dialogs interleave on `PendingChoice`.
 
 - *Verify:* manual flow — learned trait appears immediately; survive complication immediately; resume mid-term after reload; unresolved target prompts.
 
