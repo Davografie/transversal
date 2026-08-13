@@ -60,9 +60,6 @@
         :visible="activeSheetView === 'lifepath'"
         :entity-id="overrideEntityId || entityId"
         :universe="entity?.currentUniverse || 'earth'"
-        :trait-settings="entity?.traitSettings || []"
-        :current-life-path-id="entity?.currentLifePathId || null"
-        :terms-served="entity?.termsServed || 0"
         embedded
         @close="activeSheetView = 'traits'"
         @updated="fetchEntity"

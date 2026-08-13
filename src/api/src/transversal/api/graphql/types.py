@@ -446,6 +446,15 @@ class Zone:
 
 
 @strawberry.type
+class PendingTerm:
+    """In-progress life path term checkpoint."""
+    faction_id: str
+    path_id: str
+    current_table_id: str
+    continuation: list[str]
+
+
+@strawberry.type
 class Entity:
     id: strawberry.ID
     type: EntityType
@@ -505,6 +514,21 @@ class Entity:
                     return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
         # Fall back to background image
         return self.background_image()
+
+    @strawberry.field
+    def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:
+        """The entity's in-progress life path term checkpoint, if any."""
+        em = info.context["entity_manager"]
+        entity = em.repo.get_entity(str(self.id))
+        if entity is None or entity.pending_term is None:
+            return None
+        pt = entity.pending_term
+        return PendingTerm(
+            faction_id=pt.faction_id,
+            path_id=pt.path_id,
+            current_table_id=pt.current_table_id,
+            continuation=pt.continuation,
+        )
 
     @strawberry.field
     def trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
@@ -680,14 +704,16 @@ class LifePath:
     entry_table_id: str
     discovery: Optional[DiscoveryBlock]
 
-
-@strawberry.type
-class PendingTerm:
-    """In-progress life path term checkpoint."""
-    faction_id: str
-    path_id: str
-    current_table_id: str
-    continuation: list[str]
+    @strawberry.field
+    def faction_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        """Faction entities that list this life path as suitable (offered)."""
+        em = info.context["entity_manager"]
+        factions = em.repo.list_entities_by_type(DomainEntityType.FACTION)
+        return [
+            strawberry.ID(f.id)
+            for f in factions
+            if str(self.id) in f.suitable_life_path_ids
+        ]
 
 
 @strawberry.type

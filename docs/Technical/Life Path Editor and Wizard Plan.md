@@ -89,6 +89,7 @@ Backend `resolveChoice` + pending-choice persistence on the term checkpoint; fro
 
 - DiceRoller visibility for every life-path roll.
 - Trait-rating signed-value redesign.
+- **Faction picker for multi-faction life paths** — Phase 4 resolves the offering faction via `LifePath.factionIds` and defaults to the first one. When a life path is offered by multiple factions, the wizard must ask which faction to enroll under before calling `startTerm`. When implementing this picker, remember that `startTerm`'s `factionId` is what binds rank/tenure relationship traits to the `character ↔ faction` `membership` edge, so the choice is per-enrollment, not global.
 - **Effect `context` field UI** — replace the raw JSON textarea in `EffectEditor` with metadata-driven, per-action context fields (e.g. `relationship` → faction dropdown, `return_to` → roll-table dropdown, `description` → text). Requires extending `EffectActionMeta` with a `context_fields` declaration and exposing it via `effectActions`; `Effect.context` storage stays a dict.
 
 ## Frontend conventions
@@ -100,4 +101,5 @@ Backend `resolveChoice` + pending-choice persistence on the term checkpoint; fro
 ## Decision log
 
 - **Target-choice resolution** deferred to Phase 5; seeded content has no `{choose_*}` targets, so it is not a blocker.
+- **Faction↔life-path link** resolved via `LifePath.factionIds` (GraphQL), derived from faction entities' `suitable_life_path_ids`. Phase 4 defaults to the first faction; the multi-faction picker is deferred (see Deferred).
 - **Full graph editor** from the start (every layer authorable), rolled out in the phases above.
