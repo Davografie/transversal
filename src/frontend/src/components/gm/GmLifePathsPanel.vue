@@ -11,8 +11,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useApi } from '@/composables/useApi.js'
+import { onMounted, onUnmounted } from 'vue'
+import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
@@ -25,31 +25,17 @@ const props = defineProps({
   universe: { type: String, default: '' },
 })
 
-const { graphql } = useApi()
-const paths = ref([])
-let autoOpenId = null
-
-async function fetchPaths() {
-  if (!props.universe) return
-  try {
-    const data = await graphql(`query($u: String!) { lifePaths(universe: $u) { id name universe description entryTableId discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship } } }`, { u: props.universe })
-    paths.value = data?.lifePaths || []
-    console.log('[paths] fetchPaths result:', paths.value.length, 'paths')
-    // Auto-open detail panel for newly created paths
-    if (autoOpenId) {
-      const lp = paths.value.find(p => p.id === autoOpenId)
-      if (lp) openDetail(lp)
-      autoOpenId = null
-    }
-  } catch {}
-}
+const { paths, fetchLifePaths } = useLifePaths()
 
 let offLifepathSaved = null
 onMounted(() => {
-  fetchPaths()
+  fetchLifePaths(props.universe)
   offLifepathSaved = bus.on('lifepath-saved', (payload) => {
-    if (payload?.isNew) autoOpenId = payload.id
-    fetchPaths()
+    // Newly created paths are already in the shared list — just auto-open.
+    if (payload?.isNew) {
+      const lp = paths.value.find(p => p.id === payload.id)
+      if (lp) openDetail(lp)
+    }
   })
 })
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })

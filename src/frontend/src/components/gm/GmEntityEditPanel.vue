@@ -55,9 +55,9 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
@@ -66,38 +66,13 @@ import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
-const { graphql } = useApi()
 const panel = usePanel()
 const bus = usePanelBus()
 
 // ── Composables: shared state with GmPanel ──────────
 const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
-
-// ── Life paths (panel-specific, not from composable) ─
-const lifePaths = ref([])
-const loadingLifepaths = ref(false)
-
-async function loadLifePaths(universeKey) {
-  if (!universeKey) return
-  loadingLifepaths.value = true
-  try {
-    const data = await graphql(
-      `query($u: String!) {
-        lifePaths(universe: $u) {
-          id name universe description entryTableId
-          discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship }
-        }
-      }`,
-      { u: universeKey }
-    )
-    lifePaths.value = data?.lifePaths || []
-  } catch {
-    lifePaths.value = []
-  } finally {
-    loadingLifepaths.value = false
-  }
-}
+const { paths: lifePaths, loading: loadingLifepaths, fetchLifePaths } = useLifePaths()
 
 const props = defineProps({
   entityId: { type: String, default: null },
@@ -128,7 +103,7 @@ function openLifePaths() {
 
 // Load life paths when editing a universe entity
 watch(() => [props.entityId, form.value?.type], ([id, type]) => {
-  if (id && type === 'UNIVERSE') loadLifePaths(form.value.current_universe || props.entityId)
+  if (id && type === 'UNIVERSE') fetchLifePaths(form.value.current_universe || props.entityId)
 }, { immediate: true })
 
 // ── Imagen ──────────────────────────────────────────
@@ -213,7 +188,7 @@ onMounted(() => { pollOwnJob(); _jobPollTimer = setInterval(pollOwnJob, 2000) })
 let offLifepathSaved = null
 onMounted(() => {
   offLifepathSaved = bus.on('lifepath-saved', () => {
-    if (form.value?.type === 'UNIVERSE') loadLifePaths(form.value.current_universe || props.entityId)
+    if (form.value?.type === 'UNIVERSE') fetchLifePaths(form.value.current_universe || props.entityId)
   })
 })
 onUnmounted(() => { clearInterval(_jobPollTimer); if (offLifepathSaved) offLifepathSaved() })

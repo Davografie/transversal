@@ -39,8 +39,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useApi } from '@/composables/useApi.js'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useLifePaths } from '@/composables/useLifePaths.js'
+import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
@@ -48,25 +49,21 @@ import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { graphql } = useApi()
+const { deleteLifePath } = useLifePaths()
+const { tables, fetchTables } = useRollTables()
 
 const props = defineProps({
   lp: { type: Object, required: true },
 })
 
-const tables = ref([])
-
-async function fetchTables() {
-  try {
-    const data = await graphql(`query($lp:String){rollTables(lifePathId:$lp){id name scheme die}}`, { lp: props.lp.id })
-    tables.value = data?.rollTables || []
-  } catch {}
+async function refreshTables() {
+  try { await fetchTables(props.lp.id) } catch {}
 }
 
 let offLifepathSaved = null
 onMounted(() => {
-  fetchTables()
-  offLifepathSaved = bus.on('lifepath-saved', fetchTables)
+  refreshTables()
+  offLifepathSaved = bus.on('lifepath-saved', refreshTables)
 })
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
@@ -78,8 +75,8 @@ function editPath() {
   panel.open({ component: GmLifePathEditPanel, title: 'Edit ' + props.lp.name, props: { lp: props.lp } })
 }
 
-function onDeleteConfirmed() {
-  graphql(`mutation($id:ID!){deleteLifePath(id:$id)}`, { id: props.lp.id })
+async function onDeleteConfirmed() {
+  await deleteLifePath(props.lp.id)
   bus.emit('lifepath-saved', { id: props.lp.id, universe: props.lp.universe })
   panel.close()
 }

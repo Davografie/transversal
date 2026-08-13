@@ -25,13 +25,13 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import { useApi } from '@/composables/useApi.js'
+import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { graphql } = useApi()
+const { saveLifePath } = useLifePaths()
 
 const props = defineProps({
   lp: { type: Object, required: true },
@@ -51,19 +51,16 @@ async function save() {
   saving.value = true
   error.value = ''
   try {
-    const isNew = !props.lp.id
-    const discovery = props.lp.discovery || null
-    const data = await graphql(`mutation($id:String!,$name:String!,$universe:String!,$description:String!,$entryTableId:String!,$discovery:JSON){saveLifePath(id:$id,name:$name,universe:$universe,description:$description,entryTableId:$entryTableId,discovery:$discovery){ok id}}`, {
+    const result = await saveLifePath({
       id: props.lp.id || '',
       name: form.name,
       universe: form.universe,
       description: form.description,
       entryTableId: form.entryTableId,
-      discovery,
+      discovery: props.lp.discovery || null,
     })
-    const result = data?.saveLifePath
     if (result?.ok) {
-      bus.emit('lifepath-saved', { id: result.id, universe: form.universe, isNew })
+      bus.emit('lifepath-saved', { id: result.id, universe: form.universe, isNew: result.isNew })
       panel.close()
     }
   } catch (e) {

@@ -89,13 +89,13 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { useApi } from '@/composables/useApi.js'
+import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { graphql } = useApi()
+const { fetchTable, saveRollTable } = useRollTables()
 
 const props = defineProps({
   tableId: { type: String, default: '' },
@@ -122,8 +122,7 @@ const error = ref('')
 onMounted(async () => {
   if (!props.tableId) return
   try {
-    const data = await graphql(`query($id:ID!){rollTable(id:$id){id name universe lifePath scheme die check{traitIds difficulty freeChoice} entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`, { id: props.tableId })
-    const t = data?.rollTable
+    const t = await fetchTable(props.tableId)
     if (!t) return
     form.id = t.id
     form.name = t.name
@@ -191,8 +190,7 @@ async function save() {
         effects: e.effects || [],
       })),
     }
-    const data = await graphql(`mutation($input:RollTableInput!){saveRollTable(input:$input){id name}}`, { input })
-    const result = data?.saveRollTable
+    const result = await saveRollTable(input)
     if (result?.id) {
       bus.emit('lifepath-saved', { id: form.lifePath })
       panel.close()

@@ -126,14 +126,11 @@ tree that a parent assembled specifically to pass down.
 - Thin consumer panels: `GmPanel.vue` (root), `GmEntityEditPanel.vue`, `GmTraitEditPanel.vue`.
 - Infrastructure: `PanelStack.vue`, `Panel.vue`, `usePanel.js`, `usePanelBus.js`.
 
-## Migration backlog
+## Migration backlog — complete
 
-Life path and roll table panels currently inline their GraphQL queries and
-mutations and local state instead of using composables:
+Life path and roll table panels have been moved onto the composable pattern:
 
-- `GmLifePathDetailPanel.vue`, `GmLifePathEditPanel.vue`
-- `GmRollTableDetailPanel.vue`, `GmRollTableEditPanel.vue`, `GmRollTableEntryEditPanel.vue`
+- `useLifePaths` — `paths` singleton + `fetchLifePaths`, `saveLifePath`, `deleteLifePath`.
+- `useRollTables` — `tables` / `allTableNames` singletons + `fetchTables`, `fetchAllTableNames`, `fetchTable`, `saveRollTable`, `deleteRollTable`.
 
-These predate the composable pattern being applied to those domains. The
-intended end state is `useLifePaths` and `useRollTables` composables (mirroring
-`useEntityCrud` / `useTraitsConfig`), with the panels consuming them.
+Consumed by `GmLifePathDetailPanel`, `GmLifePathEditPanel`, `GmRollTableDetailPanel`, `GmRollTableEditPanel`, `GmRollTableEntryEditPanel` (plus `GmLifePathsPanel` and `GmEntityEditPanel`'s life-path fetch).

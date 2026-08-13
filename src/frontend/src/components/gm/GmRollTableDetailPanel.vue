@@ -52,8 +52,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import { useApi } from '@/composables/useApi.js'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRollTables } from '@/composables/useRollTables.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
@@ -67,52 +68,25 @@ const props = defineProps({
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { graphql } = useApi()
-const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
+const { allTableNames, fetchTable, fetchAllTableNames } = useRollTables()
 const table = ref(null)
-const rollTableNames = reactive({})
-const traitNames = reactive({})
+const { traitNameMap, fetchTraitsConfig } = useTraitsConfig()
+const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
 
-function nameFor(map, id) {
-  return id && map[id] ? map[id] : id
-}
-function traitName(id) { return nameFor(traitNames, id) }
-function resolveTarget(t) {
-  if (!t) return t
-  return traitNames[t] || rollTableNames[t] || t
-}
-function effectSummary(eff) {
-  return summarizeEffect(eff, resolveTarget)
-}
-
-async function loadRollTableNames() {
-  try {
-    const data = await graphql(`{ rollTables { id name } }`)
-    for (const t of (data?.rollTables || [])) rollTableNames[t.id] = t.name
-  } catch {}
-}
-
-async function loadTraitNames(universe) {
-  try {
-    const data = await graphql(`query($u:String!){ traitsByUniverse(universe:$u){ id name } }`, { u: universe })
-    for (const t of (data?.traitsByUniverse || [])) traitNames[t.id] = t.name
-  } catch {}
-}
+function traitName(id) { return id && traitNameMap.value[id] ? traitNameMap.value[id] : id }
+function resolveTarget(t) { return t ? (traitNameMap.value[t] || allTableNames.value[t] || t) : t }
+function effectSummary(eff) { return summarizeEffect(eff, resolveTarget) }
 
 async function loadTable() {
-  try {
-    const data = await graphql(`query($id:ID!){rollTable(id:$id){id name universe lifePath scheme die check{traitIds difficulty freeChoice} entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`, { id: props.tableId })
-    table.value = data?.rollTable || null
-  } catch {}
+  try { table.value = await fetchTable(props.tableId) } catch {}
 }
 
 let offLifepathSaved = null
 onMounted(async () => {
   loadEffectActions()
-  const namesPromise = loadRollTableNames()
+  fetchAllTableNames()
   await loadTable()
-  await namesPromise
-  if (table.value?.universe) loadTraitNames(table.value.universe)
+  if (!Object.keys(traitNameMap.value).length) fetchTraitsConfig()
   offLifepathSaved = bus.on('lifepath-saved', loadTable)
 })
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })

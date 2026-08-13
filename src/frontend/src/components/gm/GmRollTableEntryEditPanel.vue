@@ -52,7 +52,7 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { useApi } from '@/composables/useApi.js'
+import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import ConditionEditor from './ConditionEditor.vue'
@@ -60,7 +60,7 @@ import EffectEditor from './EffectEditor.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { graphql } = useApi()
+const { fetchTable, saveRollTable } = useRollTables()
 
 const props = defineProps({
   tableId: { type: String, required: true },
@@ -84,8 +84,7 @@ const form = reactive({
 
 onMounted(async () => {
   try {
-    const data = await graphql(`query($id:ID!){rollTable(id:$id){id name universe lifePath scheme die check{traitIds difficulty freeChoice} entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`, { id: props.tableId })
-    table.value = data?.rollTable || null
+    table.value = await fetchTable(props.tableId)
     const e = table.value?.entries?.[props.index]
     if (e) {
       form.label = e.label || ''
@@ -142,8 +141,8 @@ async function save() {
       })),
     }
 
-    const data = await graphql(`mutation($input:RollTableInput!){saveRollTable(input:$input){id}}`, { input })
-    if (data?.saveRollTable?.id) {
+    const result = await saveRollTable(input)
+    if (result?.id) {
       bus.emit('lifepath-saved', { id: table.value.lifePath })
       panel.close()
     } else {
