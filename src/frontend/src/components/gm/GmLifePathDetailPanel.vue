@@ -32,6 +32,7 @@
         <span class="lpd-table-name">{{ t.name }}</span>
         <span class="lpd-table-scheme">{{ t.scheme }}</span>
       </button>
+      <button class="lpd-add-btn" @click="addTable">＋ Add roll table</button>
     </div>
 
     <button class="lpd-delete" @click="onDeleteConfirmed">Delete life path</button>
@@ -45,6 +46,7 @@ import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
+import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 
 const panel = usePanel()
@@ -69,6 +71,14 @@ onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function openTable(t) {
   panel.open({ component: GmRollTableDetailPanel, title: t.name, props: { tableId: t.id, name: t.name } })
+}
+
+function addTable() {
+  panel.open({
+    component: GmRollTableEditPanel,
+    title: 'New Roll Table',
+    props: { tableId: '', lifePathId: props.lp.id, universe: props.lp.universe },
+  })
 }
 
 function editPath() {
@@ -115,6 +125,12 @@ const discoveryRows = computed(() => {
 .lpd-table-btn:hover { border-color: rgba(0,200,150,0.3); background: rgba(0,200,150,0.05); }
 .lpd-table-name { font-weight: 500; font-size: 11px; }
 .lpd-table-scheme { font-size: 9px; color: var(--text-dim); text-transform: uppercase; margin-left: auto; }
+.lpd-add-btn {
+  width: 100%; margin-top: 4px; font-size: 11px; padding: 6px 0;
+  background: rgba(0,200,150,0.08); border: 1px dashed rgba(0,200,150,0.25);
+  border-radius: 4px; color: var(--accent); cursor: pointer;
+}
+.lpd-add-btn:hover { background: rgba(0,200,150,0.14); }
 .lpd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; }
 .lpd-delete {
   width: 100%; margin-top: 12px; font-size: 11px; padding: 6px 0;

@@ -100,12 +100,13 @@ const { fetchTable, saveRollTable } = useRollTables()
 const props = defineProps({
   tableId: { type: String, default: '' },
   lifePathId: { type: String, default: '' },
+  universe: { type: String, default: '' },
 })
 
 const form = reactive({
   id: props.tableId || '',
   name: '',
-  universe: '',
+  universe: props.universe || '',
   lifePath: props.lifePathId || '',
   scheme: 'INDEX',
   die: 'D6',
