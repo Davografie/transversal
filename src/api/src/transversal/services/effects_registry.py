@@ -378,20 +378,6 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
 
     # ── Rank and life-path flow ────────────────────────
     EffectActionMeta(
-        action_id="set_rank",
-        label="Set Rank",
-        description="Set the entity's rank in a life path",
-        category="either",
-        effect_type="rank",
-        effect_action="set",
-        valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Life Path", field_type="text", required=True),
-            EffectFieldDef(name="result", label="Rank", field_type="number", required=True),
-        ],
-        target_kind="life_path",
-    ),
-    EffectActionMeta(
         action_id="discover_life_path",
         label="Discover Life Path",
         description="Add a life path to the entity's discovered paths",

@@ -494,52 +494,12 @@ class EntityRepository:
             lp = LifePath.model_validate({**doc, "id": doc["_key"]})
             changed = False
 
-            # -- qualification.trait_id --
-            if lp.qualification and lp.qualification.trait_id == trait_id:
-                lp.qualification = None
-                changed = True
-
-            # -- curriculum items --
-            if lp.curriculum:
-                keep = [c for c in lp.curriculum if c.trait_id != trait_id]
-                if len(keep) != len(lp.curriculum):
-                    lp.curriculum = keep
-                    changed = True
-
-            # -- survival.trait_ids --
-            if lp.survival and trait_id in lp.survival.trait_ids:
-                lp.survival.trait_ids = [t for t in lp.survival.trait_ids if t != trait_id]
-                changed = True
-
-            # -- advancement.trait_ids --
-            if lp.advancement and trait_id in lp.advancement.trait_ids:
-                lp.advancement.trait_ids = [t for t in lp.advancement.trait_ids if t != trait_id]
-                changed = True
-
-            # -- events.effect.trait_id --
-            if lp.events:
-                for ev in lp.events:
-                    if ev.effect.get("trait_id") == trait_id:
-                        ev.effect = {}
-                        changed = True
-
-            # -- mishaps.effect.trait_id --
-            if lp.survival and lp.survival.mishaps:
-                for m in lp.survival.mishaps:
-                    eff = m.get("effect", {}) if isinstance(m, dict) else getattr(m, "effect", {})
-                    if eff.get("trait_id") == trait_id:
-                        if isinstance(m, dict):
-                            m["effect"] = {}
-                        else:
-                            m.effect = {}
-                        changed = True
-
-            # -- discovery.possesses_trait --
+            # Life paths now reference traits only through ``discovery``;
+            # term content lives in roll tables.
             if lp.discovery and trait_id in lp.discovery.possesses_trait:
                 lp.discovery.possesses_trait = [t for t in lp.discovery.possesses_trait if t != trait_id]
                 changed = True
 
-            # -- discovery.has_trait_rating --
             if lp.discovery and trait_id in lp.discovery.has_trait_rating:
                 del lp.discovery.has_trait_rating[trait_id]
                 changed = True

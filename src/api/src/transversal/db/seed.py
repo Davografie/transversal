@@ -762,7 +762,7 @@ def seed_life_paths(repo) -> None:
             entry("Qi backlash", effects=[trait("gain_complication", "trait-3r-qi-reserves", "d4"), next_step("rt-verdant-advance")]),
             entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-verdant-advance")]),
             entry("Wounded spirit", effects=[trait("gain_complication", "trait-3r-dao-comprehension", "d4"), next_step("rt-verdant-advance")]),
-            entry("Expelled", effects=[flow("force_muster")]),
+            entry("Demoted", effects=[trait("step_down", "trait-rel-rank"), next_step("rt-verdant-advance")]),
             entry("Expelled", effects=[flow("force_muster")]),
         ],
     ))

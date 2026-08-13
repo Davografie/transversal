@@ -166,10 +166,12 @@ def test_transfer_razmerit():
 
 # ── Rank / flow ──────────────────────────────────────
 
-def test_rank_set():
+def test_rank_set_is_passthrough():
+    """rank/set was removed — rank is a relationship trait, not current_rank."""
     entity = _entity(current_rank=0)
-    apply_effects(entity, [_effect("rank", "set", "lp-x", "3")], FakeRepo())
-    assert entity.current_rank == 3
+    result = apply_effects(entity, [_effect("rank", "set", "lp-x", "3")], FakeRepo())
+    assert entity.current_rank == 0
+    assert len(result.passthrough) == 1
 
 
 def test_discover_appends():
@@ -264,3 +266,27 @@ def test_gain_relationship_trait():
     assert ts.entity_id == "edge:char-1:fac-1:membership"
     assert ts.trait_id == "trait-rel-rank"
     assert ts.dice == [DieType.D4]
+
+
+def test_step_down_relationship_trait():
+    """Rank demotion: step down a relationship trait (e.g. trait-rel-rank)."""
+    repo = RelationshipFakeRepo()
+    repo.relationship_traits = [
+        TraitSetting(
+            id="edge:char-1:fac-1:membership:trait-rel-rank",
+            entity_id="edge:char-1:fac-1:membership",
+            trait_id="trait-rel-rank",
+            traitset_id="ts-rel",
+            from_type="relationship",
+            dice=[DieType.D8],
+        )
+    ]
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE,
+        type="modify_trait", action="step_down",
+        target="trait-rel-rank",
+        context={"relationship": "fac-1"},
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D6]

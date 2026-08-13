@@ -83,7 +83,6 @@ def _register_core_handlers(em, raz):
 
     for action in ("step_up", "step_down", "set", "gain", "gain_or_step_up", "gain_complication"):
         effect_registry.register("modify_trait", action, _commit)
-    effect_registry.register("rank", "set", _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
 
@@ -350,12 +349,6 @@ def _apply_transfer(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"transferred {amount} razmerit to {target}"))
 
 
-def _apply_rank_set(entity, effect, repo, result):
-    rank = int(effect.result or "0")
-    entity.current_rank = rank
-    result.applied.append(AppliedEffect(effect, f"set rank to {rank}"))
-
-
 def _apply_discover(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "life_path")
     if target is None:
@@ -394,7 +387,6 @@ _MUTATION_HANDLERS = {
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,
     ("transfer_razmerit", "transfer"): _apply_transfer,
-    ("rank", "set"): _apply_rank_set,
     ("life_path", "discover"): _apply_discover,
     ("relationship", "create"): _apply_relationship_create,
 }
