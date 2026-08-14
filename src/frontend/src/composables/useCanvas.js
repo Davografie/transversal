@@ -348,12 +348,15 @@ export function useCanvas() {
     const positions = {}
     positions[focus.id] = { x: 0, y: 0 }
 
-    const parent = edges.value.find((e) => e.target === focus.id && e.data?.kind === 'super')
-    const children = edges.value.filter((e) => e.source === focus.id && e.data?.kind === 'super').map((e) => e.target)
+    // super edges are always child → parent (source=child, target=parent).
+    // The focus location's parent is an edge where the focus is the source.
+    const parentEdge = edges.value.find((e) => e.source === focus.id && e.data?.kind === 'super')
+    // The focus location's children are edges where the focus is the target.
+    const children = edges.value.filter((e) => e.target === focus.id && e.data?.kind === 'super').map((e) => e.source)
     const transversal = edges.value.filter((e) => e.source === focus.id && e.data?.kind === 'transversal').map((e) => e.target)
     const occupants = edges.value.filter((e) => e.source === focus.id && e.data?.kind === 'located').map((e) => e.target)
 
-    if (parent) positions[parent.source] = { x: 0, y: -DY }
+    if (parentEdge) positions[parentEdge.target] = { x: 0, y: -DY }
 
     children.forEach((id, i) => {
       positions[id] = { x: (i - (children.length - 1) / 2) * DX, y: DY }
