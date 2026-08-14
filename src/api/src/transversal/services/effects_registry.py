@@ -411,12 +411,15 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="next_step",
         label="Next Step",
-        description="Advance the life path term to the next step",
+        description="Advance the term to a roll table (target = table id, empty to continue)",
         category="either",
         effect_type="life_path",
         effect_action="next_step",
         valid_timings=["IMMEDIATE"],
-        fields=[],
+        fields=[
+            EffectFieldDef(name="target", label="Next Table", field_type="text", required=False),
+        ],
+        target_kind="roll_table",
     ),
     EffectActionMeta(
         action_id="draft_life_path",

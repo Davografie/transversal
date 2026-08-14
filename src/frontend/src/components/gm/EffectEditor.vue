@@ -46,6 +46,14 @@
             @update:model-value="newEffect.fields[f.name] = $event"
             :universe="universe"
           />
+          <GmRollTablePicker
+            v-else-if="isRollTableTarget(f)"
+            :model-value="newEffect.fields[f.name] || ''"
+            @update:model-value="newEffect.fields[f.name] = $event"
+            :universe="universe"
+            :faction="faction"
+            :life-path="lifePath"
+          />
           <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" />
           <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
         </div>
@@ -67,10 +75,13 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmTraitPicker from './GmTraitPicker.vue'
+import GmRollTablePicker from './GmRollTablePicker.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   universe: { type: String, default: '' },
+  faction: { type: String, default: '' },
+  lifePath: { type: String, default: '' },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -102,6 +113,10 @@ const visibleFields = computed(() => {
 
 function isTraitTarget(f) {
   return f.name === 'target' && selectedAction.value?.targetKind === 'trait'
+}
+
+function isRollTableTarget(f) {
+  return f.name === 'target' && selectedAction.value?.targetKind === 'roll_table'
 }
 
 function onActionChange() {
