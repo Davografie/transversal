@@ -1364,7 +1364,7 @@ class EntityRepository:
         """
         faction = self.get_entity(faction_id)
         if faction is None:
-            return {"faction": None, "members": [], "locations": [], "ancestors": [], "relations": []}
+            return {"faction": None, "members": [], "locations": [], "ancestors": [], "location_edges": [], "relations": []}
 
         member_query = f"""
             FOR r IN {RELATIONSHIPS}
@@ -1403,6 +1403,21 @@ class EntityRepository:
             if l["id"] not in location_keys
         ]
 
+        # Super edges among the pruned location set (member locations + their
+        # ancestors), so the frontend can render the hierarchy as a tree.
+        relevant_ids = list(set(member_locations) | ancestors)
+        location_edges: list[dict] = []
+        if relevant_ids:
+            edge_query = f"""
+                FOR r IN {RELATIONSHIPS}
+                FILTER r.type == 'super'
+                LET child = PARSE_IDENTIFIER(r._from).key
+                LET parent = PARSE_IDENTIFIER(r._to).key
+                FILTER child IN @ids AND parent IN @ids
+                RETURN {{ child: child, parent: parent }}
+            """
+            location_edges = list(self.db.aql.execute(edge_query, bind_vars={"ids": relevant_ids}))
+
         relations = self._relations_between(member_ids)
 
         return {
@@ -1410,6 +1425,7 @@ class EntityRepository:
             "members": members,
             "locations": locations,
             "ancestors": ancestor_locations,
+            "location_edges": location_edges,
             "relations": relations,
         }
 

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { MarkerType } from '@vue-flow/core'
+import { hierarchy, tree } from 'd3-hierarchy'
 
 const API_BASE = '/api/v1'
 
@@ -263,10 +264,15 @@ export function useCanvas() {
     }
 
     // Build a location tree from scaffolding + member locations.
-    // We approximate the tree by nesting member locations under their
-    // ancestors, but for simplicity we render a flat forest of locations.
     for (const [id, loc] of locById) {
-      newNodes.push(makeLocationNode({ _key: id, name: loc.name, current_universe: loc.universe }, { isScaffolding: loc.scaffolding, expanded: false }))
+      newNodes.push(makeLocationNode({ _key: id, name: loc.name, current_universe: loc.universe }, { isScaffolding: loc.scaffolding, expanded: true }))
+    }
+
+    // Super edges connecting the pruned location tree (child → parent).
+    for (const e of data.location_edges || []) {
+      if (locById.has(e.child) && locById.has(e.parent)) {
+        newEdges.push(makeSuperEdge(nodeId('loc', e.child), nodeId('loc', e.parent)))
+      }
     }
 
     // Members as occupant nodes under their location.
@@ -375,13 +381,46 @@ export function useCanvas() {
   }
 
   function layoutFactionNodes(data) {
-    // Simple grid: locations as columns, members under their location.
-    const locNodes = nodes.value.filter((n) => n.type === 'location')
-    const positions = {}
-    locNodes.forEach((n, i) => {
-      positions[n.id] = { x: (i - (locNodes.length - 1) / 2) * DX, y: 0 }
+    // Build a forest of location trees from super edges, then lay each tree
+    // out top-to-bottom with d3.tree.
+    const parentOf = {}
+    const childrenOf = {}
+    for (const e of edges.value) {
+      if (e.data?.kind === 'super') {
+        parentOf[e.source] = e.target
+        childrenOf[e.target] = childrenOf[e.target] || []
+        childrenOf[e.target].push(e.source)
+      }
+    }
+
+    const locNodeIds = new Set(nodes.value.filter((n) => n.type === 'location').map((n) => n.id))
+    const roots = [...locNodeIds].filter((id) => !parentOf[id])
+
+    const buildData = (id) => ({
+      id,
+      children: (childrenOf[id] || []).map(buildData),
     })
-    // Members below their location
+
+    const positions = {}
+    let offsetX = 0
+    const layout = tree().nodeSize([DX, DY])
+    for (const rootId of roots) {
+      const root = hierarchy(buildData(rootId))
+      layout(root)
+      let minX = Infinity
+      let maxX = -Infinity
+      root.each((d) => {
+        minX = Math.min(minX, d.x)
+        maxX = Math.max(maxX, d.x)
+      })
+      const center = (minX + maxX) / 2
+      root.each((d) => {
+        positions[d.data.id] = { x: d.x - center + offsetX, y: d.y }
+      })
+      offsetX += (maxX - minX) + DX
+    }
+
+    // Members directly below their location.
     const memberByLoc = {}
     for (const m of data.members || []) {
       if (m.location_id) {
@@ -389,13 +428,19 @@ export function useCanvas() {
         memberByLoc[m.location_id].push(nodeId('occ', m.id))
       }
     }
-    let row = 1
     for (const locId of Object.keys(memberByLoc)) {
+      const locNodeId = nodeId('loc', locId)
+      const base = positions[locNodeId]
+      if (!base) continue
       const members = memberByLoc[locId]
       members.forEach((mid, i) => {
-        positions[mid] = { x: positions[nodeId('loc', locId)] ? positions[nodeId('loc', locId)].x + (i - (members.length - 1) / 2) * (DX / 2) : 0, y: DY * row }
+        positions[mid] = {
+          x: base.x + (i - (members.length - 1) / 2) * (DX / 2),
+          y: base.y + DY * 0.8,
+        }
       })
     }
+
     applyPositions(positions)
   }
 

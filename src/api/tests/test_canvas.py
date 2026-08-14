@@ -59,6 +59,23 @@ def test_faction_ancestors_are_disjoint_scaffolding(repo):
     assert any("Valley of Ascension" == l["name"] for l in fc["ancestors"])
 
 
+def test_faction_location_edges_connect_members_to_ancestors(repo):
+    fc = repo.canvas_faction(FACTION_ID)
+    edges = fc["location_edges"]
+    assert edges
+    member_ids = {l["id"] for l in fc["locations"]}
+    child_ids = {e["child"] for e in edges}
+    parent_ids = {e["parent"] for e in edges}
+    # Member locations are leaves: every member is a child, none is a parent.
+    for mid in member_ids:
+        assert mid in child_ids
+        assert mid not in parent_ids
+    # Every ancestor location participates in the tree (as parent or child).
+    ancestor_ids = {l["id"] for l in fc["ancestors"]}
+    assert ancestor_ids <= (child_ids | parent_ids)
+
+
+
 def test_gmc_web_resolves_other_locations(repo):
     gw = repo.canvas_gmc_web(PATRIARCH_GMC)
     assert gw["gmc"]["name"] == "The Hollow Patriarch"
