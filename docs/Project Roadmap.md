@@ -111,6 +111,7 @@ aliases:
 - [x] Portal-style location bubbles (inset box-shadow, no border, background-attachment: fixed)
 - [x] All occupants always expanded (portraits always visible)
 - [x] Two-phase tap restored (pointer-events gating on collapsed overlays)
+- [ ] Relational Canvas — GM interactive node graph for locations, factions, and GMC relationships ([[Relational Canvas]])
 - [ ] End-to-end playtest of a full scene
 
 ## Phase 5: Polish & Launch
@@ -153,6 +154,7 @@ aliases:
 | JSON file player persistence | Simple file-backed store with Docker volume. Survives restarts without adding an ArangoDB collection. Every mutation triggers synchronous save. | 2026-06-06 |
 | Search-driven login with debounced suggestions | Players type their name; partial-match results appear as you type. "New transverser" option visible when no exact match exists — creation is discoverable without a separate button. | 2026-06-06 |
 | Effects toggle per-device in localStorage | Performance escape hatch for lower-powered devices. Only shown on locations that actually have effects set. No server round-trip needed. | 2026-06-06 |
+| Relational Canvas (D3 + Vue Flow) | D3-hierarchy for tree layout, Vue Flow for canvas UX. Lazy-load on expand, auto-layout, focus-aware collapse. GM-only. | 2026-08-12 |
 
 ## Next
 
