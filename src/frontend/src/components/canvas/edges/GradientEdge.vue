@@ -14,14 +14,23 @@
       </linearGradient>
       <marker
         :id="arrowId"
-        viewBox="0 0 12 12"
-        refX="10"
-        refY="6"
-        markerWidth="12"
-        markerHeight="12"
-        orient="auto"
+        class="vue-flow__arrowhead"
+        viewBox="-10 -10 20 20"
+        refX="0"
+        refY="0"
+        markerWidth="12.5"
+        markerHeight="12.5"
+        markerUnits="strokeWidth"
+        orient="auto-start-reverse"
       >
-        <path d="M0,0 L0,12 L12,6 z" fill="#4088d4" />
+        <polyline
+          points="-5,-4 0,0 -5,4 -5,-4"
+          stroke="#4088d4"
+          fill="#4088d4"
+          stroke-width="1"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
       </marker>
     </defs>
     <path
