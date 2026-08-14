@@ -1,5 +1,5 @@
 <template>
-  <div class="relational-canvas">
+  <div class="relational-canvas" :class="{ fullscreen }">
     <div class="canvas-toolbar">
       <div class="canvas-title">{{ title || 'Relational Canvas' }}</div>
       <div class="canvas-controls">
@@ -13,6 +13,7 @@
         </select>
         <button v-if="mode !== 'location'" class="tool-btn" @click="backToLocation">← Location</button>
         <button class="tool-btn" @click="fitView">Fit</button>
+        <button v-if="fullscreen" class="tool-btn close" @click="emit('close-full')">✕</button>
       </div>
     </div>
     <div class="canvas-hint">Drag from a location's ◉ handle to another location to create a transversal link · click ⊕ to expand</div>
@@ -49,15 +50,19 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
 import { useCanvas } from '@/composables/useCanvas.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import LocationNode from '@/components/canvas/nodes/LocationNode.vue'
 import OccupantNode from '@/components/canvas/nodes/OccupantNode.vue'
 
 const props = defineProps({
   locationId: { type: String, default: '' },
   initialFactionId: { type: String, default: '' },
+  fullscreen: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['inspect', 'open-full'])
+const emit = defineEmits(['close-full'])
+
+const bus = usePanelBus()
 
 const canvas = useCanvas()
 const { mode, title, loading, error, factions } = canvas
@@ -83,8 +88,8 @@ const displayNodes = computed(() =>
       onFocus: (id) => canvas.setFocus(id),
       onToggleRelations: (id) => canvas.toggleRelations(id),
       onShowFaction: (id) => canvas.showFaction(id),
-      onInspect: (id) => emit('inspect', id),
-      onOpenFull: (id) => emit('open-full', id),
+      onInspect: (id) => bus.emit('canvas:inspect', id),
+      onOpenFull: (id) => bus.emit('canvas:open-full', { mode: 'location', entityId: id }),
     },
   })),
 )
@@ -125,6 +130,9 @@ onMounted(async () => {
   display: flex; flex-direction: column; height: 100%; min-height: 320px;
   background: #0a0a0f; color: var(--text);
 }
+.relational-canvas.fullscreen {
+  position: fixed; inset: 0; z-index: 20; height: 100vh; min-height: 0;
+}
 .canvas-toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 6px 8px; background: rgba(20, 20, 35, 0.9);
@@ -141,6 +149,8 @@ onMounted(async () => {
   border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer;
 }
 .tool-btn:hover { background: var(--accent); }
+.tool-btn.close { background: rgba(232, 106, 106, 0.2); }
+.tool-btn.close:hover { background: #c05050; }
 .canvas-status { padding: 20px; text-align: center; color: var(--text-dim); }
 .canvas-status.error { color: #e86a6a; }
 .canvas-hint { padding: 4px 8px; font-size: 10px; color: var(--text-dim); background: rgba(20,20,35,0.9); border-bottom: 1px solid rgba(255,255,255,0.06); }

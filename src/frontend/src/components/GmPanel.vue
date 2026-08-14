@@ -35,13 +35,17 @@
         </div>
       </div>
       <button class="create-btn" @click="startCreate">+ New Entity</button>
-      <button class="create-btn canvas-btn" @click="openCanvas">🗺 Relational Canvas</button>
+      <div class="canvas-btn-row">
+        <button class="create-btn canvas-btn" @click="openCanvas">🗺 Canvas</button>
+        <button class="create-btn canvas-btn" @click="openFullLocationCanvas">⛶ Full</button>
+      </div>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
         <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
         <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
-        <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFactionCanvas(e.id)">🗺</button>
+        <button class="faction-canvas-btn" title="Show in embedded canvas" @click.stop="openFactionCanvas(e.id)">🗺</button>
+        <button class="faction-canvas-btn" title="Show in full canvas" @click.stop="openFullFactionCanvas(e.id)">⛶</button>
       </div>
       <button class="create-btn" style="margin-top:8px" @click="openTraitsConfig">Manage Traits</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
@@ -57,6 +61,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
 import { useEntityFilter } from '@/composables/useEntityFilter.js'
 import { usePanel } from '@/composables/usePanel.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
@@ -68,6 +73,8 @@ import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()
+const bus = usePanelBus()
+let offCanvasInspect = null
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -177,9 +184,6 @@ function openCanvas() {
     component: RelationalCanvas,
     title: 'Relational Canvas',
     props: { locationId: props.currentLocationId },
-    listeners: {
-      'inspect': (id) => toggleEntity({ id }),
-    },
   })
 }
 
@@ -188,10 +192,15 @@ function openFactionCanvas(factionId) {
     component: RelationalCanvas,
     title: 'Faction Canvas',
     props: { locationId: props.currentLocationId, initialFactionId: factionId },
-    listeners: {
-      'inspect': (id) => toggleEntity({ id }),
-    },
   })
+}
+
+function openFullLocationCanvas() {
+  bus.emit('canvas:open-full', { mode: 'location', entityId: props.currentLocationId })
+}
+
+function openFullFactionCanvas(factionId) {
+  bus.emit('canvas:open-full', { mode: 'faction', entityId: factionId })
 }
 
 async function openTraitsConfig() {
@@ -256,8 +265,14 @@ watch([locationTree, () => props.currentLocationId], () => {
 })
 
 // ── Lifecycle ───────────────────────────────────────
-onMounted(() => { fetchEntities(); fetchLocationTree(); startJobPolling() })
-onUnmounted(() => { stopJobPolling() })
+onMounted(() => {
+  fetchEntities(); fetchLocationTree(); startJobPolling()
+  offCanvasInspect = bus.on('canvas:inspect', (id) => toggleEntity({ id }))
+})
+onUnmounted(() => {
+  stopJobPolling()
+  if (offCanvasInspect) offCanvasInspect()
+})
 </script>
 
 <style scoped>
@@ -295,6 +310,8 @@ onUnmounted(() => { stopJobPolling() })
 .create-btn:hover { background: var(--accent); }
 .canvas-btn { background: rgba(64, 136, 212, 0.3); border: 1px dashed var(--accent-dim); }
 .canvas-btn:hover { background: var(--accent); border-color: var(--accent); }
+.canvas-btn-row { display: flex; gap: 6px; }
+.canvas-btn-row .create-btn { flex: 1; }
 .faction-canvas-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
 .faction-canvas-btn:hover { background: var(--accent); }
 
