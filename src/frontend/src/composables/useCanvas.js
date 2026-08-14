@@ -528,6 +528,23 @@ export function useCanvas() {
     }
   }
 
+  async function createTransversal(fromId, toId) {
+    try {
+      const r = await fetch(`${API_BASE}/locations/${fromId}/edges/${toId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'transversal' }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      edges.value = [...edges.value, makeTransversalEdge(nodeId('loc', fromId), nodeId('loc', toId))]
+      layoutLocationNodes()
+      return true
+    } catch (e) {
+      error.value = e.message
+      return false
+    }
+  }
+
   function setFocus(locationId) {
     // Re-center the graph on a location node.
     const id = nodeId('loc', locationId)
@@ -558,6 +575,7 @@ export function useCanvas() {
     collapseLocation,
     toggleRelations,
     showFaction,
+    createTransversal,
     setFocus,
     clear,
   }

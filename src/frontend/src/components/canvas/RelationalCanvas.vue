@@ -15,6 +15,7 @@
         <button class="tool-btn" @click="fitView">Fit</button>
       </div>
     </div>
+    <div class="canvas-hint">Drag from a location's ◉ handle to another location to create a transversal link · click ⊕ to expand</div>
 
     <div v-if="loading" class="canvas-status">Loading…</div>
     <div v-else-if="error" class="canvas-status error">{{ error }}</div>
@@ -29,6 +30,7 @@
       :max-zoom="2.5"
       fit-view-on-init
       class="canvas-flow"
+      @connect="onConnect"
     >
       <Background :gap="24" />
       <Controls />
@@ -93,6 +95,17 @@ function onFactionChange() {
   }
 }
 
+async function onConnect(connection) {
+  const fromId = connection.source?.replace('loc:', '')
+  const toId = connection.target?.replace('loc:', '')
+  if (!fromId || !toId || fromId === toId) return
+  const fromNode = nodes.value.find((n) => n.id === connection.source)
+  const toNode = nodes.value.find((n) => n.id === connection.target)
+  // Only allow location → location transversal links.
+  if (fromNode?.type !== 'location' || toNode?.type !== 'location') return
+  await canvas.createTransversal(fromId, toId)
+}
+
 function backToLocation() {
   if (props.locationId) canvas.loadLocation(props.locationId)
 }
@@ -130,6 +143,7 @@ onMounted(async () => {
 .tool-btn:hover { background: var(--accent); }
 .canvas-status { padding: 20px; text-align: center; color: var(--text-dim); }
 .canvas-status.error { color: #e86a6a; }
+.canvas-hint { padding: 4px 8px; font-size: 10px; color: var(--text-dim); background: rgba(20,20,35,0.9); border-bottom: 1px solid rgba(255,255,255,0.06); }
 .canvas-flow { flex: 1; }
 </style>
 
