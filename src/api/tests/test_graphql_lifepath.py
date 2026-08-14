@@ -28,6 +28,7 @@ class GqlRepo:
         self.lifepaths: dict[str, LifePath] = {}
         self.tables: dict[str, RollTable] = {}
         self.traitsettings: list = []
+        self.historical_records: list = []
 
     def get_entity(self, eid):
         return self.entities.get(eid)
@@ -79,6 +80,15 @@ class GqlRepo:
 
     def get_trait(self, tid):
         return None
+
+    def add_historical_record(self, entity_id, record_type, data, universe="", session_id=""):
+        self.historical_records.append({
+            "entity_id": entity_id,
+            "record_type": record_type.value if hasattr(record_type, "value") else record_type,
+            "data": data,
+            "universe": universe,
+            "session_id": session_id,
+        })
 
 
 def _entry(label, effects):

@@ -57,6 +57,7 @@ MESSAGES = "messages"              # inter-entity persistent messages
 ENTITY_IMAGES = "entity_images"    # generated image metadata
 LIFE_PATHS = "life_paths"          # life path definitions
 ROLL_TABLES = "roll_tables"        # reusable roll tables (life path steps + general)
+HISTORICAL_RECORDS = "historical_records"  # append-only entity event log
 
 COLLECTIONS = {
     ENTITIES: False,
@@ -71,6 +72,7 @@ COLLECTIONS = {
     ENTITY_IMAGES: False,
     LIFE_PATHS: False,    # document
     ROLL_TABLES: False,   # document
+    HISTORICAL_RECORDS: False,  # document
 }
 
 
@@ -139,6 +141,10 @@ def _ensure_indexes(db) -> None:
     # roll tables
     _add_hash_index(db, ROLL_TABLES, ["life_path"])
     _add_hash_index(db, ROLL_TABLES, ["universe"])
+
+    # historical records
+    _add_hash_index(db, HISTORICAL_RECORDS, ["entity_id"])
+    _add_hash_index(db, HISTORICAL_RECORDS, ["record_type"])
 
     # messages
     _add_hash_index(db, MESSAGES, ["sender_entity_id"])

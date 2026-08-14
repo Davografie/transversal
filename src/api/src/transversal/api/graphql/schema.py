@@ -17,6 +17,7 @@ from transversal.api.graphql.types import (
     EffectInput,
     Entity,
     EntityType,
+    HistoricalRecord,
     JournalEntryInput,
     LifePath as GqlLifePath,
     LifePathStepResult,
@@ -64,6 +65,7 @@ from transversal.domain import Effect as DomainEffect
 from transversal.domain import RollTable as DomainRollTable
 from transversal.domain import RollTableEntry as DomainRollTableEntry
 from transversal.domain import RollTableCheck as DomainRollTableCheck
+from transversal.domain import HistoricalRecord as DomainHistoricalRecord
 from transversal.domain import dice_list_to_rating
 from transversal.services.entity_manager import EntityManager
 from transversal.services.razmerit import RazmeritService
@@ -149,7 +151,8 @@ def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
 def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
     return RollTable(
         id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
-        scheme=t.scheme, die=t.die,
+        scheme=t.scheme, roll_source=t.roll_source, trait_dice_count=t.trait_dice_count,
+        die=t.die,
         check=(
             RollTableCheck(
                 trait_ids=t.check.trait_ids,
@@ -191,9 +194,23 @@ def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
 def _roll_table_input_to_domain(t: RollTableInput) -> DomainRollTable:
     return DomainRollTable(
         id=t.id, name=t.name, universe=t.universe, life_path=t.life_path,
-        scheme=t.scheme, die=t.die,
+        scheme=t.scheme, roll_source=t.roll_source, trait_dice_count=t.trait_dice_count,
+        die=t.die,
         check=(_check_input_to_domain(t.check) if t.check is not None else None),
         entries=[_entry_input_to_domain(e) for e in t.entries],
+    )
+
+
+def _historical_record_to_gql(r: DomainHistoricalRecord) -> HistoricalRecord:
+    rtype = r.record_type.value if hasattr(r.record_type, "value") else r.record_type
+    return HistoricalRecord(
+        id=r.id,
+        entity_id=r.entity_id,
+        record_type=rtype,
+        universe=r.universe,
+        session_id=r.session_id,
+        data=r.data,
+        created_at=r.created_at,
     )
 
 
@@ -354,6 +371,17 @@ class Query:
         repo = _em(info).repo
         entries = repo.get_journal(str(entity_id))
         return [_message_to_gql(m, repo) for m in entries]
+
+    @strawberry.field
+    def historical_records(
+        self, info: strawberry.Info,
+        entity_id: strawberry.ID,
+        record_type: Optional[str] = None,
+    ) -> list[HistoricalRecord]:
+        """Get an entity's historical records (append-only event log)."""
+        repo = _em(info).repo
+        records = repo.list_historical_records(str(entity_id), record_type or "")
+        return [_historical_record_to_gql(r) for r in records]
 
     @strawberry.field
     def relationship(

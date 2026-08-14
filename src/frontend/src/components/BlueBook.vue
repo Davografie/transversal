@@ -76,16 +76,18 @@
         <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
           <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx, 'bb-continuation': entryContinuations.has(m.id) }" draggable="true" @dragstart="onDragStart($event, idx)" @dragover="onDragOver($event, idx)" @drop="onDrop(idx)" @dragend="onDragEnd" @touchstart="onTouchStart($event, idx)" @touchmove="onDocTouchMove" @touchend="e => endTouchDrag(true)" @touchcancel="() => cancelTouchDrag()">
           <div v-if="!entryContinuations.has(m.id)" class="bb-entry-header">
-            <div v-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
+            <div v-if="m.recordType" class="bb-record-badge">🎲 {{ recordLabel(m) }}</div>
+            <div v-else-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
               <img v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" />
               <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
               <span class="bb-sender-name">{{ senderName(m.senderEntityId) }}</span>
               <span v-if="m.relationshipDescription" class="bb-rel">· {{ m.relationshipDescription }} ·</span>
             </div>
             <div v-else class="bb-journal-badge">📓 Journal entry</div>
-            <div v-if="m.title" class="bb-entry-title">{{ m.title }}</div>
+            <div v-if="m.title && !m.recordType" class="bb-entry-title">{{ m.title }}</div>
           </div>
-          <div v-if="m.threads?.length" class="bb-entry-threads"><span v-for="t in m.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
+          <div v-if="m.recordType && m.title" class="bb-entry-title bb-record-title">{{ m.title }}</div>
+          <div v-if="m.threads?.length && !m.recordType" class="bb-entry-threads"><span v-for="t in m.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
           <div class="bb-body">{{ m.body }}</div>
           <div v-if="m.images?.length" class="bb-images">
             <img v-for="(img, i) in m.images" :key="i" :src="img" class="bb-image" @click="viewImage(img)" />
@@ -155,12 +157,51 @@ const QUERY_TIMELINE = `
   }
 `
 
+const QUERY_RECORDS = `
+  query($eid: ID!) {
+    historicalRecords(entityId: $eid) {
+      id entityId recordType universe sessionId data createdAt
+    }
+  }
+`
+
 const UPDATE_MESSAGE = `mutation($id:ID!,$afterIds:[ID!]!){updateMessage(input:{id:$id,afterIds:$afterIds})}`
 
 const SEND_LETTER = `mutation($sender:ID!,$recipient:ID!,$body:String!,$images:[String!]!,$afterIds:[ID!]!,$threads:[String!]!){sendMessage(input:{senderEntityId:$sender,recipientEntityId:$recipient,kind:LETTER,body:$body,images:$images,afterIds:$afterIds,threads:$threads}){id}}`
 const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$images:[String!]!,$afterIds:[ID!]!,$threads:[String!]!){addJournalEntry(input:{entityId:$eid,title:$title,body:$body,images:$images,afterIds:$afterIds,threads:$threads}){id}}`
 const MESSAGE_TAGS = `query{messageThreads}`
 const RELATED_ENTITIES = `query($eid:ID!,$q:String!){relatedEntities(entityId:$eid,query:$q){id name sheetPortrait}}`
+
+const RECORD_LABELS = { roll_table: 'Roll table', contest: 'Contest', transversal: 'Transversal' }
+
+function recordLabel(m) { return RECORD_LABELS[m.recordType] || m.recordType }
+
+function formatRecord(rec) {
+  const d = rec.data || {}
+  const parts = [d.life_path_name, d.table_name, d.entry_label].filter(x => x != null && x !== '')
+  return parts.length ? parts.join(' | ') : rec.recordType
+}
+
+function normalizeRecord(rec) {
+  return {
+    id: rec.id,
+    recordType: rec.recordType,
+    data: rec.data || {},
+    senderEntityId: props.entityId,
+    recipientEntityId: props.entityId,
+    title: formatRecord(rec),
+    body: '',
+    images: [],
+    threads: [rec.recordType],
+    createdAt: rec.createdAt,
+  }
+}
+
+function byCreatedAt(a, b) {
+  if (!a.createdAt) return 1
+  if (!b.createdAt) return -1
+  return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0
+}
 
 const composePlaceholder = computed(() => {
   if (composeMode.value === 'reply') return 'Write your reply…'
@@ -231,6 +272,13 @@ const entryContinuations = computed(() => {
   for (let i = 1; i < items.length; i++) {
     const prev = items[i - 1]
     const curr = items[i]
+    if (prev.recordType || curr.recordType) {
+      // Consecutive records of the same type form one group
+      if (prev.recordType && curr.recordType && prev.recordType === curr.recordType) {
+        cont.add(curr.id)
+      }
+      continue
+    }
     const sameSender = prev.senderEntityId === curr.senderEntityId
     const sharedThread = curr.threads?.length && curr.threads.some(t => prev.threads?.includes(t))
     if (sameSender || sharedThread) cont.add(curr.id)
@@ -260,9 +308,15 @@ async function fetch() {
   if (!props.visible) return
   loading.value = true
   try {
-    const data = await graphql(QUERY_TIMELINE, { eid: props.entityId })
-    entries.value = data?.timeline || []
+    const [timelineData, recordsData] = await Promise.all([
+      graphql(QUERY_TIMELINE, { eid: props.entityId }),
+      graphql(QUERY_RECORDS, { eid: props.entityId }),
+    ])
+    const messages = timelineData?.timeline || []
+    const records = (recordsData?.historicalRecords || []).map(normalizeRecord)
+    entries.value = [...messages, ...records].sort(byCreatedAt)
     for (const m of entries.value) {
+      if (m.recordType) continue
       if (m.senderEntityId !== props.entityId && !senderNames.value[m.senderEntityId]) {
         fetchEntityInfo(m.senderEntityId)
       }
@@ -602,7 +656,9 @@ onUnmounted(() => {
 .bb-sender-avatar{width:24px;height:24px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .bb-sender-name{font-weight:600;font-size:12px;color:var(--accent)}
 .bb-journal-badge{font-size:11px;color:var(--text-dim)}
+.bb-record-badge{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px}
 .bb-entry-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.bb-record-title{font-size:12px;font-weight:500;color:var(--text);margin:2px 0}
 .bb-entry-threads{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
 .bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}

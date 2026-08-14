@@ -15,6 +15,7 @@ from transversal.domain import (
     MessageKind as DomainMessageKind,
     OutcomeTier as DomainOutcomeTier,
     RollTableScheme as DomainRollTableScheme,
+    RollSource as DomainRollSource,
     DiscoveryBlock,
     LifePath,
 )
@@ -31,6 +32,7 @@ EffectTimingEnum = strawberry.enum(DomainEffectTiming)
 MessageKind = strawberry.enum(DomainMessageKind)
 OutcomeTier = strawberry.enum(DomainOutcomeTier)
 RollTableScheme = strawberry.enum(DomainRollTableScheme)
+RollSource = strawberry.enum(DomainRollSource)
 ConditionType = strawberry.enum(DomainConditionType)
 
 
@@ -197,6 +199,8 @@ class RollTable:
     universe: str = ""
     life_path: Optional[str] = None
     scheme: RollTableScheme
+    roll_source: RollSource = RollSource.FIXED_DIE
+    trait_dice_count: int = 1
     die: DieType
     check: Optional[RollTableCheck] = None
     entries: list[RollTableEntry]
@@ -236,6 +240,8 @@ class RollTableInput:
     universe: str = ""
     life_path: Optional[str] = None
     scheme: RollTableScheme = RollTableScheme.RANGE
+    roll_source: RollSource = RollSource.FIXED_DIE
+    trait_dice_count: int = 1
     die: DieType = DieType.D6
     check: Optional[RollTableCheckInput] = None
     entries: list[RollTableEntryInput] = strawberry.field(default_factory=list)
@@ -643,6 +649,18 @@ class UpdateMessageInput:
     id: strawberry.ID
     after_ids: Optional[list[strawberry.ID]] = None
     threads: Optional[list[str]] = None
+
+
+@strawberry.type
+class HistoricalRecord:
+    """An append-only historical event for an entity."""
+    id: strawberry.ID
+    entity_id: strawberry.ID
+    record_type: str = "roll_table"
+    universe: str = ""
+    session_id: str = ""
+    data: strawberry.scalars.JSON = strawberry.field(default_factory=dict)
+    created_at: str = ""
 
 
 # ── Relationships ─────────────────────────────────────

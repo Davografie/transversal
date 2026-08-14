@@ -547,6 +547,17 @@ class RollTableScheme(str, Enum):
     INDEX = "index"    # ordered list; roll 1 → first entry
 
 
+class RollSource(str, Enum):
+    """Where a roll table's number comes from.
+
+    FIXED_DIE — roll the table's own ``die`` (the original behaviour).
+    TRAIT_DICE — the player picks ``trait_dice_count`` traits they have and
+    rolls those instead; the derived number selects the entry.
+    """
+    FIXED_DIE = "fixed_die"
+    TRAIT_DICE = "trait_dice"
+
+
 class RollTableEntry(BaseModel):
     """A single entry in a roll table.
 
@@ -583,8 +594,10 @@ class RollTable(BaseModel):
     universe: str = ""
     life_path: Optional[str] = None  # owning life path id; None = shared/general
     scheme: RollTableScheme = RollTableScheme.RANGE
-    die: DieType = DieType.D6  # die size for range/index rolls
-    check: Optional[RollTableCheck] = None  # dice-pool check when scheme == TIER
+    roll_source: RollSource = RollSource.FIXED_DIE
+    trait_dice_count: int = 1  # number of trait dice to roll (N=1 for now)
+    die: DieType = DieType.D6  # die size for range/index rolls (FIXED_DIE)
+    check: Optional[RollTableCheck] = None  # legacy dice-pool check; unused
     entries: list[RollTableEntry] = Field(default_factory=list)
 
 
@@ -659,4 +672,29 @@ class Message(BaseModel):
     images: list[str] = Field(default_factory=list)  # media paths
     after_ids: list[str] = Field(default_factory=list)
     threads: list[str] = Field(default_factory=list)
+    created_at: str = ""  # ISO 8601, populated by repository on insert
+
+
+# ── Historical Records ──────────────────────────────────
+
+class HistoricalRecordType(str, Enum):
+    """Kinds of append-only historical events."""
+    ROLL_TABLE = "roll_table"
+    CONTEST = "contest"
+    TRANSVERSAL = "transversal"
+
+
+class HistoricalRecord(BaseModel):
+    """An append-only historical event for an entity.
+
+    Stored in the `historical_records` collection. ``record_type``
+    discriminates the shape of ``data``; future event kinds (contests,
+    location traversals) reuse the same collection.
+    """
+    id: str = ""
+    entity_id: str = ""
+    record_type: HistoricalRecordType = HistoricalRecordType.ROLL_TABLE
+    universe: str = ""
+    session_id: str = ""
+    data: dict = Field(default_factory=dict)  # type-specific payload
     created_at: str = ""  # ISO 8601, populated by repository on insert

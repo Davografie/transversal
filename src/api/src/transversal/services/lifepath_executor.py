@@ -10,17 +10,13 @@ from __future__ import annotations
 from typing import Optional
 
 from transversal.domain import (
-    DieType,
-    DicePoolRequest,
     Effect,
     EffectTiming,
     Enrollment,
     Entity,
     OutcomeTier,
     PendingTerm,
-    RollTable,
 )
-from transversal.services.dice_resolver import Opposition, resolve
 from transversal.services.effects_applier import apply_effects, EffectsResult
 from transversal.services.roll_table import resolve_table
 
@@ -68,13 +64,28 @@ def resolve_step(
     if table is None:
         return {"done": True, "error": f"table '{pt.current_table_id}' not found"}
 
-    resolved_tier = tier
-    if table.check is not None:
-        resolved_tier = _resolve_check(entity, table, repo)
-
-    entry = resolve_table(table, roll=roll, tier=resolved_tier, index=index)
+    entry = resolve_table(table, roll=roll, tier=tier, index=index)
     if entry is None:
         return {"done": True, "error": "no entry resolved"}
+
+    # Append the outcome to the entity's historical record (append-only event log).
+    lp = repo.get_lifepath(pt.path_id)
+    repo.add_historical_record(
+        entity.id,
+        "roll_table",
+        {
+            "life_path_id": pt.path_id,
+            "life_path_name": lp.name if lp is not None else pt.path_id,
+            "table_id": table.id,
+            "table_name": table.name,
+            "scheme": table.scheme.value,
+            "roll_source": table.roll_source.value,
+            "entry_label": entry.label,
+            "entry_tier": entry.tier.value if entry.tier else None,
+            "index": index,
+        },
+        universe=entity.current_universe,
+    )
 
     mutation_effects = [e for e in entry.effects if e.type != "life_path"]
     flow_effects = [e for e in entry.effects if e.type == "life_path"]
@@ -110,39 +121,6 @@ def resolve_step(
         "mustered": flow.get("mustered", False),
         "mishap_muster": flow.get("mishap_muster", False),
     }
-
-
-def _resolve_check(entity: Entity, table: RollTable, repo) -> OutcomeTier:
-    check = table.check
-    pool_dice: list[tuple[DieType, str]] = []
-    settings = list(repo.get_traitsettings_for_entity(entity.id))
-
-    # Relationship traits on the active term's faction edge (e.g. rank/tenure).
-    pt = entity.pending_term
-    if pt and pt.faction_id:
-        rel = repo.get_relationship(entity.id, pt.faction_id, "membership")
-        if rel and rel.get("_key"):
-            settings.extend(repo.get_relationship_traitsettings(rel["_key"]))
-
-    for ts in settings:
-        if ts.trait_id in check.trait_ids and ts.dice:
-            for d in ts.dice:
-                pool_dice.append((d, ts.trait_id))
-
-    if not pool_dice:
-        pool_dice = [(DieType.D4, "untrained")]
-
-    request = DicePoolRequest(
-        entity_id=entity.id,
-        universe=entity.current_universe,
-        dice=pool_dice,
-        opposition=Opposition(
-            type="static_difficulty",
-            static_difficulty=check.difficulty.max_value,
-        ),
-    )
-    result = resolve(request)
-    return result.tier
 
 
 def _process_flow(entity: Entity, effects: list[Effect], repo) -> dict:

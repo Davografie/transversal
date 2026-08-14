@@ -178,15 +178,16 @@
         @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
         @split-die="(d) => diceRef?.splitDie(d)"
         @sfx-toggled="onSfxToggled"
+        @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="(r) => { onRolled(); shareRoll(r); }" @picked="(r) => shareRoll(r)" @pool-change="(s) => { const labels = s.map(d => d.label || '').filter(Boolean); currentPoolSources = labels; sheetRef?.setPoolSources(s); sharePool(s); }" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
 </template>
 
 <script setup>
-import { ref, useTemplateRef, watch, computed, nextTick, onMounted } from 'vue'
+import { ref, useTemplateRef, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
@@ -196,9 +197,11 @@ import { useSSE } from './composables/useSSE.js'
 import { useSessions } from './composables/useSessions.js'
 import { useToasts } from './composables/useToasts.js'
 import { useApi } from './composables/useApi.js'
+import { usePanelBus } from './composables/usePanelBus.js'
 import ToastBar from './components/ToastBar.vue'
 
 const { graphql } = useApi()
+const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
 const DIAG = {
@@ -332,6 +335,7 @@ watch(entityId, () => {
 const keepCount = ref(2)
 const effectCount = ref(1)
 const phase = ref('adding')
+const rollerMode = ref('cortex') // 'cortex' | 'roll_table' (driven by CharacterSheet tab)
 
 // Player identity
 const playerId = ref(localStorage.getItem('playerId') || '')
@@ -563,6 +567,52 @@ function shareRoll(result) {
   }
 }
 
+// ── Roll-table wiring (shared roller driven by LifePathWizard via bus) ──
+function onPoolChange(s) {
+  if (rollerMode.value === 'roll_table') return
+  const labels = s.map(d => d.label || '').filter(Boolean)
+  currentPoolSources = labels
+  sheetRef?.setPoolSources(s)
+  sharePool(s)
+}
+
+function onDiceRolled(result) {
+  if (rollerMode.value === 'roll_table') {
+    bus.emit('roll-table:rolled', result)
+    return
+  }
+  onRolled()
+  shareRoll(result)
+}
+
+function onSheetViewChange(view) {
+  const next = view === 'lifepath' ? 'roll_table' : 'cortex'
+  if (rollerMode.value !== next) {
+    rollerMode.value = next
+    diceRef.value?.clearPool()
+  }
+}
+
+function onRollTablePrepare({ dice = [] } = {}) {
+  rollerMode.value = 'roll_table'
+  const roller = diceRef.value
+  if (!roller) return
+  roller.clearPool()
+  for (const d of dice) roller.addFromSheet(d)
+}
+
+function onRollTableResolved(outcome) {
+  if (sessionId.value === 'session-default') return
+  publishEvent(sessionId.value, 'roll_table_roll', {
+    player_id: playerId.value,
+    entity_id: entityId.value,
+    ...outcome,
+  })
+}
+
+let offRollTablePrepare = null
+let offRollTableResolved = null
+
 // SSE — live state sync
 const { connected, lastEvent, error } = useSSE(sessionId, entityId)
 
@@ -690,10 +740,18 @@ watch(lastEvent, (evt) => {
         addToast(`${name} rolled ${total}${tier}${eff}`, 'roll')
       }
       break
+    case 'roll_table_roll':
+      if (gmMode.value && foreign && eid) {
+        const table = evt.data?.table_name || 'a roll table'
+        const entry = evt.data?.entry_label ? `: ${evt.data.entry_label}` : ''
+        addToast(`${name} rolled on ${table}${entry}`, 'roll')
+      }
+      break
   }
 })
 
 function onPhaseChange(p) {
+  if (rollerMode.value === 'roll_table') return
   phase.value = p
   if (p !== 'adding') forceSheet.value = false
   if (p === 'adding') {
@@ -771,6 +829,8 @@ onMounted(() => {
   document.addEventListener('dragstart', () => { documentDragging.value = true })
   document.addEventListener('dragend', () => { documentDragging.value = false })
   if (playerId.value) fetchPlayerEntities()
+  offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
+  offRollTableResolved = bus.on('roll-table:resolved', onRollTableResolved)
   DIAG.mark('onMounted', { showLoginOverlay: showLoginOverlay.value, playerId: playerId.value, entityId: entityId.value, sessionId: sessionId.value, gmMode: gmMode.value })
   // Dump full diagnostic timeline after init settles
   setTimeout(() => {
@@ -782,6 +842,11 @@ onMounted(() => {
     })
     DIAG.dump()
   }, 3000)
+})
+
+onUnmounted(() => {
+  if (offRollTablePrepare) offRollTablePrepare()
+  if (offRollTableResolved) offRollTableResolved()
 })
 
 // Re-sync closed position when sheet visibility changes while wrapper is closed

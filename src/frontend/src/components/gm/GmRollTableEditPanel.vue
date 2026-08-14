@@ -11,41 +11,36 @@
         <select v-model="form.scheme">
           <option value="RANGE">Range (min–max)</option>
           <option value="WEIGHT">Weight</option>
-          <option value="TIER">Tier (check)</option>
+          <option value="TIER">Tier</option>
           <option value="INDEX">Index (ordered)</option>
         </select>
       </div>
       <div class="rte-field">
+        <label>Roll source</label>
+        <select v-model="form.rollSource">
+          <option value="FIXED_DIE">Fixed die</option>
+          <option value="TRAIT_DICE">Trait dice</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="rte-row">
+      <div class="rte-field" v-if="form.rollSource === 'FIXED_DIE'">
         <label>Die</label>
         <select v-model="form.die">
           <option v-for="d in ['D4','D6','D8','D10','D12']" :key="d" :value="d">{{ d }}</option>
         </select>
       </div>
+      <div class="rte-field" v-else>
+        <label>Trait dice count</label>
+        <input v-model.number="form.traitDiceCount" type="number" min="1" />
+      </div>
     </div>
 
-    <div class="rte-check">
-      <label class="rte-check-toggle">
-        <input type="checkbox" v-model="form.hasCheck" /> Has check (tier roll)
-      </label>
-      <template v-if="form.hasCheck">
-        <div class="rte-field">
-          <label>Trait ids (comma separated)</label>
-          <input v-model="form.traitIds" placeholder="trait-3r-qi-reserves" />
-        </div>
-        <div class="rte-row">
-          <div class="rte-field">
-            <label>Difficulty</label>
-            <select v-model="form.difficulty">
-              <option v-for="d in ['D4','D6','D8','D10','D12']" :key="d" :value="d">{{ d }}</option>
-            </select>
-          </div>
-          <div class="rte-field">
-            <label>Free choice</label>
-            <input type="checkbox" v-model="form.freeChoice" />
-          </div>
-        </div>
-      </template>
-    </div>
+    <p v-if="form.rollSource === 'TRAIT_DICE'" class="rte-detail">
+      The player picks trait{{ form.traitDiceCount === 1 ? '' : 's' }} they have; their roll selects the entry.
+      Applies to Range, Tier, and Index tables.
+    </p>
 
     <div class="rte-subsection">
       <span class="rte-subtitle">Entries</span>
@@ -109,11 +104,9 @@ const form = reactive({
   universe: props.universe || '',
   lifePath: props.lifePathId || '',
   scheme: 'INDEX',
+  rollSource: 'FIXED_DIE',
+  traitDiceCount: 1,
   die: 'D6',
-  hasCheck: false,
-  traitIds: '',
-  difficulty: 'D6',
-  freeChoice: false,
   entries: [],
 })
 
@@ -130,13 +123,9 @@ onMounted(async () => {
     form.universe = t.universe
     form.lifePath = t.lifePath || props.lifePathId || ''
     form.scheme = t.scheme
+    form.rollSource = t.rollSource || 'FIXED_DIE'
+    form.traitDiceCount = t.traitDiceCount ?? 1
     form.die = t.die
-    if (t.check) {
-      form.hasCheck = true
-      form.traitIds = (t.check.traitIds || []).join(', ')
-      form.difficulty = t.check.difficulty
-      form.freeChoice = t.check.freeChoice
-    }
     form.entries = (t.entries || []).map(e => ({
       label: e.label,
       description: e.description,
@@ -176,10 +165,10 @@ async function save() {
       universe: form.universe,
       lifePath: form.lifePath || null,
       scheme: form.scheme,
+      rollSource: form.rollSource,
+      traitDiceCount: form.traitDiceCount ?? 1,
       die: form.die,
-      check: form.hasCheck
-        ? { traitIds: form.traitIds.split(',').map(s => s.trim()).filter(Boolean), difficulty: form.difficulty, freeChoice: form.freeChoice }
-        : null,
+      check: null,
       entries: form.entries.map(e => ({
         label: e.label,
         description: e.description,

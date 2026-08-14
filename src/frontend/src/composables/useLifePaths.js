@@ -30,7 +30,7 @@ export function useLifePaths() {
     const isNew = !id
     const data = await graphql(
       `mutation($id:String!,$name:String!,$universe:String!,$description:String!,$entryTableId:String!,$discovery:JSON){
-        saveLifePath(id:$id,name:$name,universe:$universe,description:$description,entryTableId:$entryTableId,discovery:$discovery){ ok id }
+        saveLifePath(id:$id,name:$name,universe:$universe,description:$description,entryTableId:$entryTableId,discovery:$discovery)
       }`,
       { id: id || '', name, universe, description, entryTableId: entryTableId || '', discovery },
     )
@@ -45,7 +45,7 @@ export function useLifePaths() {
   }
 
   async function deleteLifePath(id) {
-    const data = await graphql(`mutation($id:ID!){ deleteLifePath(id:$id){ ok } }`, { id })
+    const data = await graphql(`mutation($id:ID!){ deleteLifePath(id:$id) }`, { id })
     if (data?.deleteLifePath) {
       paths.value = paths.value.filter(p => p.id !== id)
     }

@@ -38,20 +38,37 @@
           <p class="wiz-phase-label">
             {{ currentTable?.name || 'Roll Table' }}
             <span class="wiz-chip">{{ currentTable?.scheme }}</span>
-            <span v-if="!isCheckTable" class="wiz-chip">{{ currentTable?.die }}</span>
+            <span class="wiz-chip">{{ isTraitDice ? 'trait dice' : currentTable?.die }}</span>
           </p>
 
-          <p v-if="currentTable?.check" class="wiz-check">
-            roll {{ checkTraits }} vs {{ currentTable.check.difficulty }}
-            <template v-if="currentTable.check.freeChoice"> · free choice</template>
-          </p>
+          <div v-if="isTraitDice" class="wiz-traits">
+            <label class="wiz-traits-label" for="wiz-trait-pick">Choose a trait to roll:</label>
+            <select
+              id="wiz-trait-pick"
+              v-model="selectedTraitId"
+              class="wiz-trait-select"
+              @change="onTraitSelect"
+            >
+              <option value="" disabled>— select a trait —</option>
+              <optgroup v-for="(group, gName) in groupedTraits" :key="gName" :label="gName">
+                <option v-for="t in group" :key="t.traitId" :value="t.traitId">{{ t.name }} ({{ traitDiceLabel(t) }})</option>
+              </optgroup>
+            </select>
+            <div v-if="!rollableTraits.length" class="wiz-empty">No rollable traits for this table.</div>
+          </div>
 
           <table v-if="entries.length" class="wiz-table">
             <thead>
               <tr><th>Key</th><th>Result</th></tr>
             </thead>
             <tbody>
-              <tr v-for="(e, i) in entries" :key="i" class="wiz-row" @click="selectEntry(i + 1)">
+              <tr
+                v-for="(e, i) in entries"
+                :key="i"
+                class="wiz-row"
+                :class="{ 'wiz-row-selected': selectedEntryIndex === i }"
+                @click="selectEntry(i)"
+              >
                 <td class="wiz-td-key">{{ entryKey(e, i) }}</td>
                 <td>
                   <div class="wiz-entry-label">{{ e.label }}</div>
@@ -66,8 +83,8 @@
           </table>
 
           <div class="wiz-actions">
-            <button v-if="isCheckTable" class="wiz-next" :disabled="resolving" @click="rollCheck">🎲 Roll Check</button>
-            <button v-else class="wiz-next" :disabled="resolving" @click="rollTable">🎲 Roll {{ currentTable?.die }}</button>
+            <button v-if="isWeight" class="wiz-next" :disabled="resolving" @click="rollWeight">🎲 Roll</button>
+            <button class="wiz-next" :disabled="resolving || selectedEntryIndex === null" @click="continueStep">Continue</button>
             <button class="wiz-back" :disabled="resolving" @click="backToChoose">↩ Paths</button>
           </div>
 
@@ -113,9 +130,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -126,6 +144,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'updated'])
 const { graphql } = useApi()
 const { load: loadEffectActions, summarize: summarizeEffect } = useEffectActions()
+const bus = usePanelBus()
 
 const step = ref('choose') // 'choose' | 'term' | 'done'
 const busy = ref(false)
@@ -139,6 +158,10 @@ const lastResult = ref(null)
 const log = ref([])
 const rollNames = ref({})
 const traitNames = ref({})
+const traits = ref([])          // entity traitSettings — the rollable pool
+const selectedTraitId = ref('')
+const selectedEntryIndex = ref(null)
+const rolledValue = ref(null)
 
 const title = computed(() => {
   if (step.value === 'choose') return 'Life Path'
@@ -146,22 +169,60 @@ const title = computed(() => {
   return selectedPath.value?.name || 'Life Path'
 })
 const entries = computed(() => currentTable.value?.entries || [])
-const isCheckTable = computed(() => currentTable.value?.check != null)
-const checkTraits = computed(() => {
-  const ids = currentTable.value?.check?.traitIds || []
-  return ids.length ? ids.map(traitName).join(', ') : '(untrained)'
+const isTraitDice = computed(() => currentTable.value?.rollSource === 'TRAIT_DICE')
+const isWeight = computed(() => currentTable.value?.scheme === 'WEIGHT')
+const tableMax = computed(() => {
+  const t = currentTable.value
+  if (!t) return 0
+  if (t.scheme === 'INDEX') return (t.entries || []).length
+  if (t.scheme === 'RANGE') return Math.max(0, ...(t.entries || []).map(e => e.maxValue ?? 0))
+  if (t.scheme === 'TIER') return 12
+  return 0
 })
-const dieMax = computed(() => {
-  const d = String(currentTable.value?.die || 'D6').replace(/^D/i, '')
-  const n = parseInt(d, 10)
-  return Number.isFinite(n) ? n : 6
+// Only traits available in the character's current universe; out-of-range
+// rolls are handled by the MOD wrap in resolveIndex().
+const rollableTraits = computed(() => traits.value.filter(t => t.universe === props.universe))
+
+const groupedTraits = computed(() => {
+  const groups = {}
+  for (const t of rollableTraits.value) {
+    const key = t.traitsetName || 'Other'
+    if (!groups[key]) groups[key] = []
+    groups[key].push(t)
+  }
+  return groups
 })
 
 function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : s || '' }
-function nameFor(map, id) { return id && map[id] ? map[id] : id }
-function traitName(id) { return nameFor(traitNames.value, id) }
 function resolveTarget(t) { return t ? (traitNames.value[t] || rollNames.value[t] || t) : t }
 function effectSummary(eff) { return summarizeEffect(eff, resolveTarget) }
+
+function traitDiceLabel(t) {
+  const dice = (t.dice && t.dice.length) ? t.dice : [t.dieType || 'd6']
+  return dice.map(d => String(d).toLowerCase()).join(' ')
+}
+
+function resolveIndex(n) {
+  const t = currentTable.value
+  const list = t?.entries || []
+  if (!list.length) return null
+  if (t.scheme === 'INDEX') {
+    const len = list.length
+    return ((n - 1) % len + len) % len
+  }
+  if (t.scheme === 'RANGE') {
+    const max = tableMax.value
+    const m = max > 0 ? ((n - 1) % max) + 1 : n
+    const idx = list.findIndex(e => e.minValue != null && e.maxValue != null && e.minValue <= m && m <= e.maxValue)
+    return idx >= 0 ? idx : null
+  }
+  if (t.scheme === 'TIER') {
+    const tier = n <= 2 ? 'FAIL' : n <= 5 ? 'MARGINAL' : n <= 8 ? 'SUCCESS' : n <= 11 ? 'EXCEPTIONAL' : 'PERFECT'
+    const idx = list.findIndex(e => e.tier === tier)
+    return idx >= 0 ? idx : null
+  }
+  return null
+}
 
 function entryKey(e, i) {
   if (e.minValue != null || e.maxValue != null) return `${e.minValue ?? ''}–${e.maxValue ?? ''}`
@@ -204,10 +265,23 @@ async function loadNameMaps() {
 
 async function loadTable(tableId) {
   const data = await graphql(
-    `query($id:ID!){rollTable(id:$id){id name universe lifePath scheme die check{traitIds difficulty freeChoice} entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`,
+    `query($id:ID!){rollTable(id:$id){id name universe lifePath scheme rollSource traitDiceCount die entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`,
     { id: tableId },
   )
   currentTable.value = data?.rollTable || null
+  selectedEntryIndex.value = null
+  selectedTraitId.value = ''
+  rolledValue.value = null
+}
+
+async function loadTraits() {
+  try {
+    const data = await graphql(
+      `query($id:ID!){ entity(id:$id){ traitSettings{ traitId name dieType ratingType dice rating universe traitsetName } } }`,
+      { id: props.entityId },
+    )
+    traits.value = data?.entity?.traitSettings || []
+  } catch { traits.value = [] }
 }
 
 async function loadPendingTerm() {
@@ -236,6 +310,9 @@ async function startPath(lp) {
     lastResult.value = null
     await loadTable(pt.currentTableId)
     step.value = 'term'
+    await nextTick()
+    await loadTraits()
+    setupRoller()
     emit('updated')
   } finally {
     resolving.value = false
@@ -269,11 +346,15 @@ async function resolveStep({ index = null, roll = null } = {}) {
       pendingTerm.value = null
       currentTable.value = null
       step.value = 'done'
+      bus.emit('roll-table:prepare', { dice: [] })
       return
     }
     pendingTerm.value = r.pendingTerm
     if (r.pendingTerm?.currentTableId) {
       await loadTable(r.pendingTerm.currentTableId)
+      await nextTick()
+      await loadTraits()
+      setupRoller()
     } else {
       step.value = 'done'
     }
@@ -282,51 +363,128 @@ async function resolveStep({ index = null, roll = null } = {}) {
   }
 }
 
-function selectEntry(index) { resolveStep({ index }) }
-function rollTable() {
-  if (currentTable.value?.scheme === 'INDEX') {
-    resolveStep({ roll: 1 + Math.floor(Math.random() * entries.value.length) })
+function selectEntry(i) { selectedEntryIndex.value = i }
+
+function setupRoller() {
+  if (isWeight.value) {
+    bus.emit('roll-table:prepare', { dice: [] })
+    return
+  }
+  const dice = []
+  if (isTraitDice.value) {
+    const t = traits.value.find(x => x.traitId === selectedTraitId.value)
+    if (t) {
+      const ds = (t.dice && t.dice.length) ? t.dice : [t.dieType || 'd6']
+      for (const d of ds) dice.push({ die: String(d).toLowerCase(), source: t.traitId, label: t.name || t.traitId })
+    }
   } else {
-    resolveStep({ roll: 1 + Math.floor(Math.random() * dieMax.value) })
+    const d = String(currentTable.value?.die || 'd6').toLowerCase()
+    dice.push({ die: d, source: 'table', label: 'table' })
+  }
+  bus.emit('roll-table:prepare', { dice, tableId: currentTable.value?.id })
+}
+
+function pickTrait(t) {
+  selectedTraitId.value = t.traitId
+  selectedEntryIndex.value = null
+  rolledValue.value = null
+  setupRoller()
+}
+
+function onTraitSelect() {
+  selectedEntryIndex.value = null
+  rolledValue.value = null
+  setupRoller()
+}
+
+function onRolled(result) {
+  if (!result?.rolls?.length) return
+  const faces = result.rolls.map(r => r.result)
+  let n
+  if (isTraitDice.value) {
+    const t = traits.value.find(x => x.traitId === selectedTraitId.value)
+    n = t?.ratingType === 'RESOURCE' ? faces.reduce((s, x) => s + x, 0) : Math.max(...faces)
+  } else {
+    n = faces[0]
+  }
+  rolledValue.value = n
+  selectedEntryIndex.value = resolveIndex(n)
+  console.log('[LifePathWizard] roll', {
+    tableId: currentTable.value?.id, scheme: currentTable.value?.scheme,
+    rollSource: currentTable.value?.rollSource, rolled: n, entryIndex: selectedEntryIndex.value,
+  })
+  const entry = entries.value[selectedEntryIndex.value]
+  bus.emit('roll-table:resolved', {
+    lifePathName: selectedPath.value?.name,
+    tableName: currentTable.value?.name,
+    entryLabel: entry?.label,
+  })
+}
+
+function continueStep() {
+  if (selectedEntryIndex.value === null) return
+  resolveStep({ index: selectedEntryIndex.value + 1 })
+}
+
+function rollWeight() {
+  const list = currentTable.value?.entries || []
+  const total = list.reduce((s, e) => s + (e.weight || 0), 0)
+  if (!total) return
+  let r = Math.floor(Math.random() * total) + 1
+  let cum = 0
+  for (let i = 0; i < list.length; i++) {
+    cum += list[i].weight || 0
+    if (r <= cum) { selectedEntryIndex.value = i; rolledValue.value = r; break }
   }
 }
-function rollCheck() { resolveStep({}) }
 
-function backToChoose() { step.value = 'choose'; error.value = '' }
+function backToChoose() { step.value = 'choose'; error.value = ''; bus.emit('roll-table:prepare', { dice: [] }) }
 function startOver() {
   selectedPath.value = null
   pendingTerm.value = null
   currentTable.value = null
   lastResult.value = null
   log.value = []
+  selectedTraitId.value = ''
+  selectedEntryIndex.value = null
+  rolledValue.value = null
   step.value = 'choose'
+  bus.emit('roll-table:prepare', { dice: [] })
 }
 function close() { emit('close') }
 
 async function init() {
   if (!props.visible) return
   error.value = ''
-  await Promise.all([loadPaths(), loadNameMaps(), loadEffectActions()])
+  await Promise.all([loadPaths(), loadNameMaps(), loadEffectActions(), loadTraits()])
   const pt = await loadPendingTerm()
   if (pt?.currentTableId) {
     selectedPath.value = paths.value.find(p => p.id === pt.pathId) || null
     pendingTerm.value = pt
     await loadTable(pt.currentTableId)
     step.value = 'term'
+    await nextTick()
+    setupRoller()
   } else {
     step.value = 'choose'
   }
 }
 
-onMounted(init)
+onMounted(() => {
+  bus.on('roll-table:rolled', onRolled)
+  init()
+})
+onUnmounted(() => {
+  bus.off('roll-table:rolled', onRolled)
+})
 watch(() => props.visible, (v) => { if (v) init() })
 </script>
 
 <style scoped>
 .wiz-shell{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px}
-.wiz-shell.wiz-embedded{position:static;inset:auto;background:transparent;display:block;padding:0;z-index:auto}
+.wiz-shell.wiz-embedded{position:static;inset:auto;background:transparent;display:flex;flex-direction:column;padding:0;z-index:auto;flex:1;min-height:0;overflow:hidden}
 .wiz-panel{background:var(--bg-panel);border-radius:var(--radius);border:1px solid var(--border);width:460px;max-width:95vw;max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden}
-.wiz-embedded .wiz-panel{width:100%;max-width:none;max-height:none;border:0;border-radius:0;background:transparent}
+.wiz-embedded .wiz-panel{width:100%;max-width:none;max-height:none;border:0;border-radius:0;background:transparent;flex:1;min-height:0}
 .wiz-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
 .wiz-header h2{font-size:15px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wiz-close{background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer}
@@ -375,4 +533,9 @@ watch(() => props.visible, (v) => { if (v) init() })
 .wiz-result{padding:10px 12px;border-radius:6px;margin-bottom:8px;font-size:13px}
 .wiz-good{color:#4c4}
 .wiz-done-actions{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+.wiz-traits{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.wiz-traits-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px}
+.wiz-trait-select{font-size:12px;padding:6px 8px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;font-family:inherit;width:100%}
+.wiz-table tbody tr.wiz-row-selected{background:rgba(64,136,212,0.18);box-shadow:inset 2px 0 0 var(--accent)}
+.dice-roller{margin:8px 0}
 </style>

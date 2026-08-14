@@ -11,15 +11,27 @@
       </div>
     </div>
 
-    <div class="add-die" v-if="isAdding()">
+    <div class="add-die" v-if="isAdding() && mode !== 'roll_table'">
       <button v-for="d in dies" :key="d" class="die-btn" :class="`die-btn-${d}`" @click="addDie(d)">
         {{ d }}
       </button>
     </div>
 
     <div v-if="result" class="result panel">
+      <!-- Roll-table roll: show the rolled dice + derived value -->
+      <template v-if="mode === 'roll_table'">
+        <div class="roll-dice">
+          <div v-for="(r, i) in result.rolls" :key="i" class="roll-die-wrap">
+            <DieIcon :die="r.die" :result="r.result" :label="r.source" />
+          </div>
+        </div>
+        <div class="result-line">
+          highest <strong>{{ rollTableHighest }}</strong>
+          <span v-if="result.rolls.length > 1"> · sum <strong>{{ rollTableSum }}</strong></span>
+        </div>
+      </template>
       <!-- Simplified result -->
-      <template v-if="result.pipeline === 'simplified'">
+      <template v-else-if="result.pipeline === 'simplified'">
         <div class="result-line">
           {{ result.highest }} → <strong>{{ result.tier }}</strong>
           <span v-if="result.effect_die"> (effect: {{ result.effect_die }})</span>
@@ -100,7 +112,7 @@
       </button>
     </div>
 
-    <div class="controls" v-if="isResolved()">
+    <div class="controls" v-if="isResolved() && mode !== 'roll_table'">
       <button @click="clearResult" class="roll-btn">New Pool</button>
     </div>
 
@@ -117,7 +129,8 @@ const props = defineProps({
   entityId: { type: String, default: 'kael-1' },
   universe: { type: String, default: 'earth' },
   keepCount: { type: Number, default: 2 },
-  effectCount: { type: Number, default: 1 }
+  effectCount: { type: Number, default: 1 },
+  mode: { type: String, default: 'cortex' } // 'cortex' | 'roll_table'
 })
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen'])
@@ -534,6 +547,16 @@ const computedTotal = computed(() => {
   return selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0)
 })
 
+const rollTableHighest = computed(() => {
+  const r = result.value?.rolls || []
+  return r.length ? Math.max(...r.map(x => x.result)) : 0
+})
+
+const rollTableSum = computed(() => {
+  const r = result.value?.rolls || []
+  return r.reduce((s, x) => s + x.result, 0)
+})
+
 const effectDie = computed(() => {
   if (!result.value || result.value.pipeline !== 'pool') return null
   const idx = selection.effect.find(i => i !== null)
@@ -546,7 +569,7 @@ async function doRoll() {
   result.value = await apiRoll(props.entityId, props.universe, dice)
   pool.length = 0
   notifyPool()
-  if (result.value?.pipeline === 'pool') {
+  if (result.value?.pipeline === 'pool' && props.mode !== 'roll_table') {
     setPhase(Phase.PICKING)
     ensureSlots()
   } else {

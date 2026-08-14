@@ -7,7 +7,7 @@ const allTableNames = ref({}) // id → name, for human-friendly effect summarie
 const loading = ref(false)
 
 const ROLL_TABLE_FIELDS = `
-  id name universe lifePath scheme die
+  id name universe lifePath scheme rollSource traitDiceCount die
   check { traitIds difficulty freeChoice }
   entries {
     label description minValue maxValue weight tier
@@ -22,7 +22,7 @@ export function useRollTables() {
   async function fetchTables(lifePathId = null) {
     loading.value = true
     const data = await graphql(
-      `query($lp:String){ rollTables(lifePathId:$lp){ id name scheme die } }`,
+      `query($lp:String){ rollTables(lifePathId:$lp){ id name scheme rollSource die } }`,
       { lp: lifePathId },
     )
     tables.value = data?.rollTables || []

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 from transversal.db.arango import (
     ENTITIES,
     ENTITY_IMAGES,
+    HISTORICAL_RECORDS,
     LIFE_PATHS,
     PLAYERS,
     PROJECTIONS,
@@ -32,6 +33,7 @@ from transversal.domain import (
     Entity,
     EntityImage,
     EntityType,
+    HistoricalRecord,
     ImageType,
     LifePath,
     Message,
@@ -65,6 +67,7 @@ class EntityRepository:
         self._players = self.db.collection(PLAYERS)
         self._entity_images = self.db.collection(ENTITY_IMAGES)
         self._messages = self.db.collection(MESSAGES)
+        self._historical_records = self.db.collection(HISTORICAL_RECORDS)
 
     # ── Entity CRUD ───────────────────────────────────
 
@@ -922,6 +925,82 @@ class EntityRepository:
         """
         results = self.db.aql.execute(query, bind_vars={"eid": entity_id})
         return [self._doc_to_message(m) for m in results]
+
+    # ── Historical records ─────────────────────────────
+
+    def add_historical_record(
+        self,
+        entity_id: str,
+        record_type,
+        data: dict,
+        universe: str = "",
+        session_id: str = "",
+    ) -> HistoricalRecord:
+        """Append a historical event for an entity.
+
+        ``record_type`` is a ``HistoricalRecordType`` (or its string value).
+        ``data`` is the type-specific payload.
+        """
+        import uuid
+        from datetime import datetime, timezone
+
+        rtype = record_type.value if hasattr(record_type, "value") else record_type
+        rec_id = str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "_key": rec_id,
+            "entity_id": entity_id,
+            "record_type": rtype,
+            "universe": universe,
+            "session_id": session_id,
+            "data": data or {},
+            "created_at": created_at,
+        }
+        self._historical_records.insert(doc)
+        return HistoricalRecord(
+            id=rec_id,
+            entity_id=entity_id,
+            record_type=rtype,
+            universe=universe,
+            session_id=session_id,
+            data=data or {},
+            created_at=created_at,
+        )
+
+    def list_historical_records(
+        self,
+        entity_id: str = "",
+        record_type: str = "",
+    ) -> list[HistoricalRecord]:
+        """List historical records, newest first, optionally filtered."""
+        filters = []
+        bind_vars = {}
+        if entity_id:
+            filters.append("h.entity_id == @eid")
+            bind_vars["eid"] = entity_id
+        if record_type:
+            filters.append("h.record_type == @rtype")
+            bind_vars["rtype"] = record_type
+        where = f"FILTER {' AND '.join(filters)}" if filters else ""
+        query = f"""
+            FOR h IN {HISTORICAL_RECORDS}
+            {where}
+            SORT h.created_at DESC
+            RETURN h
+        """
+        results = self.db.aql.execute(query, bind_vars=bind_vars)
+        return [
+            HistoricalRecord(
+                id=h["_key"],
+                entity_id=h.get("entity_id", ""),
+                record_type=h.get("record_type", "roll_table"),
+                universe=h.get("universe", ""),
+                session_id=h.get("session_id", ""),
+                data=h.get("data") or {},
+                created_at=h.get("created_at", ""),
+            )
+            for h in results
+        ]
 
     def get_all_threads(self) -> list[str]:
         """Return all distinct threads across all messages, sorted."""

@@ -29,6 +29,7 @@ class ExecutorRepo:
         self.traits = {}
         self.created_traitsettings = []
         self.updated_entities = []
+        self.historical_records = []
 
     def get_lifepath(self, path_id):
         return self.lifepaths.get(path_id)
@@ -59,6 +60,15 @@ class ExecutorRepo:
 
     def create_relationship(self, from_id, to_id, rel_type, description=""):
         pass
+
+    def add_historical_record(self, entity_id, record_type, data, universe="", session_id=""):
+        self.historical_records.append({
+            "entity_id": entity_id,
+            "record_type": record_type.value if hasattr(record_type, "value") else record_type,
+            "data": data,
+            "universe": universe,
+            "session_id": session_id,
+        })
 
 
 def _entity(**overrides):
@@ -229,3 +239,22 @@ def test_deferred_effect_is_scheduled():
     assert len(engine.scheduled) == 1
     assert summary["scheduled"] == 1
     assert engine.scheduled[0][2].timing == EffectTiming.END_OF_SCENE
+
+
+def test_resolve_step_records_historical_outcome():
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="Azure Dawn", universe="earth", entry_table_id="tbl-a")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry("Martial Arts", [_next("tbl-b")])])
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+
+    resolve_step(entity, repo, index=1)
+
+    assert len(repo.historical_records) == 1
+    rec = repo.historical_records[0]
+    assert rec["entity_id"] == "char-1"
+    assert rec["record_type"] == "roll_table"
+    assert rec["data"]["life_path_name"] == "Azure Dawn"
+    assert rec["data"]["table_name"] == "tbl-a"
+    assert rec["data"]["entry_label"] == "Martial Arts"
+    assert rec["data"]["index"] == 1

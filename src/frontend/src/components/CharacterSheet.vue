@@ -35,17 +35,17 @@
               <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
             </div>
           </div>
-          <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
+          <div v-if="!gmMode && ownsCharacter && !overrideEntityId" class="sheet-pills">
+            <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="activeSheetView = 'traits'">🎲</button>
+            <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
+            <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
+            <button v-if="!gmMode" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
+          </div>
         </div>
         <div v-if="gmMode" class="meta">
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
         </div>
-      </div>
-      <div v-if="!gmMode && ownsCharacter && !overrideEntityId" class="sheet-pills">
-        <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="activeSheetView = 'traits'">Traits</button>
-        <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️ Life Path</button>
-        <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘 Blue Book</button>
       </div>
       <BlueBook
         v-if="activeSheetView === 'bluebook'"
@@ -56,7 +56,7 @@
         embedded
       />
       <LifePathWizard
-        v-if="activeSheetView === 'lifepath'"
+        v-else-if="activeSheetView === 'lifepath'"
         :visible="activeSheetView === 'lifepath'"
         :entity-id="overrideEntityId || entityId"
         :universe="entity?.currentUniverse || 'earth'"
@@ -189,7 +189,7 @@ const props = defineProps({
   playerOwnedEntityIds: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'openSettings'])
+const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'openSettings', 'sheetViewChange'])
 
 function displayName(name) {
   return name
@@ -224,6 +224,7 @@ const relationTypes = [
 ]
 
 const activeSheetView = ref('traits')  // 'traits' | 'lifepath' | 'bluebook'
+watch(activeSheetView, (v) => emit('sheetViewChange', v))
 
 const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId

@@ -18,7 +18,7 @@ aliases:
 # Life Path Editor and Wizard Plan
 
 > [!note] Status
-> Phases 1–3 are complete (roll-table read/write API, editor panels, shared `EffectEditor`/`ConditionEditor`). Phase 4 (wizard) is next; Phase 5 (target-choice) is deferred. Builds on [[Unified Effects Plan]] and [[SFX and Effects]].
+> Phases 1–4 are complete: roll-table read/write API, editor panels, shared `EffectEditor`/`ConditionEditor`, and the player wizard rebuilt on `startTerm`/`resolveStep` with a roll → highlight → Continue flow. Roll tables now carry a **roll source** (`FIXED_DIE` | `TRAIT_DICE`) and a `trait_dice_count`; the old TIER `check` (difficulty pool) is retired. Phase 5 (target-choice) is deferred. Builds on [[Unified Effects Plan]] and [[SFX and Effects]].
 
 ## Goal
 
@@ -87,7 +87,6 @@ Backend `resolveChoice` + pending-choice persistence on the term checkpoint; fro
 
 ## Deferred (unchanged)
 
-- DiceRoller visibility for every life-path roll.
 - Trait-rating signed-value redesign.
 - **Faction picker for multi-faction life paths** — Phase 4 resolves the offering faction via `LifePath.factionIds` and defaults to the first one. When a life path is offered by multiple factions, the wizard must ask which faction to enroll under before calling `startTerm`. When implementing this picker, remember that `startTerm`'s `factionId` is what binds rank/tenure relationship traits to the `character ↔ faction` `membership` edge, so the choice is per-enrollment, not global.
 - **Effect `context` field UI** — replace the raw JSON textarea in `EffectEditor` with metadata-driven, per-action context fields (e.g. `relationship` → faction dropdown, `return_to` → roll-table dropdown, `description` → text). Requires extending `EffectActionMeta` with a `context_fields` declaration and exposing it via `effectActions`; `Effect.context` storage stays a dict.
@@ -102,4 +101,7 @@ Backend `resolveChoice` + pending-choice persistence on the term checkpoint; fro
 
 - **Target-choice resolution** deferred to Phase 5; seeded content has no `{choose_*}` targets, so it is not a blocker.
 - **Faction↔life-path link** resolved via `LifePath.factionIds` (GraphQL), derived from faction entities' `suitable_life_path_ids`. Phase 4 defaults to the first faction; the multi-faction picker is deferred (see Deferred).
+- **Roll source (trait dice)** — roll tables declare `roll_source` (`FIXED_DIE` = original fixed die | `TRAIT_DICE` = player picks `trait_dice_count` traits they have) and a `trait_dice_count` (default 1, extensible to N≥1). Trait dice apply to RANGE/INDEX/TIER; WEIGHT stays proportional. The rolled number selects the entry: RANGE→min/max, INDEX→position (1-based MOD wrap for out-of-range), TIER→fixed result→tier buckets (1-2 fail, 3-5 marginal, 6-8 success, 9-11 exceptional, 12 perfect). Trait value: static = highest die, resource = sum (capped, then MOD-wrapped). The picker hides traits whose die exceeds the table max.
+- **TIER `check` retired** — the old trait-pool/difficulty check is superseded by the roll-source model; `_resolve_check` no longer runs and `check` remains in the model only for backward-compat. TIER is now just "RANGE with fixed ranges".
+- **Server-side rolling, surfaced in `DiceRoller.vue`** — the Cortex resolver stays server-side (`/roll`); the wizard pre-populates `DiceRoller` (`mode="lifepath"`) with the table/trait dice, the player clicks Roll, `DiceRoller` shows the faces, and the wizard highlights the matched row; Continue applies it via `resolveStep(index:)`.
 - **Full graph editor** from the start (every layer authorable), rolled out in the phases above.
