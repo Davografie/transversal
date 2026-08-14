@@ -35,11 +35,13 @@
         </div>
       </div>
       <button class="create-btn" @click="startCreate">+ New Entity</button>
+      <button class="create-btn canvas-btn" @click="openCanvas">🗺 Relational Canvas</button>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
         <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
         <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
+        <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFactionCanvas(e.id)">🗺</button>
       </div>
       <button class="create-btn" style="margin-top:8px" @click="openTraitsConfig">Manage Traits</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
@@ -61,6 +63,7 @@ import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
+import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 const { graphql } = useApi()
@@ -169,6 +172,28 @@ function startCreate() {
   })
 }
 
+function openCanvas() {
+  panel.open({
+    component: RelationalCanvas,
+    title: 'Relational Canvas',
+    props: { locationId: props.currentLocationId },
+    listeners: {
+      'inspect': (id) => toggleEntity({ id }),
+    },
+  })
+}
+
+function openFactionCanvas(factionId) {
+  panel.open({
+    component: RelationalCanvas,
+    title: 'Faction Canvas',
+    props: { locationId: props.currentLocationId, initialFactionId: factionId },
+    listeners: {
+      'inspect': (id) => toggleEntity({ id }),
+    },
+  })
+}
+
 async function openTraitsConfig() {
   editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
   if (traitsets.value.length === 0 || allSfxs.value.length === 0) await fetchTraitsConfig()
@@ -268,6 +293,10 @@ onUnmounted(() => { stopJobPolling() })
 
 .create-btn { width: 100%; font-size: 12px; padding: 8px; margin-bottom: 8px; background: var(--accent-dim); color: var(--text); }
 .create-btn:hover { background: var(--accent); }
+.canvas-btn { background: rgba(64, 136, 212, 0.3); border: 1px dashed var(--accent-dim); }
+.canvas-btn:hover { background: var(--accent); border-color: var(--accent); }
+.faction-canvas-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
+.faction-canvas-btn:hover { background: var(--accent); }
 
 .entity-row { margin-bottom: 4px; }
 .factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
