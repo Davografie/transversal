@@ -52,7 +52,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { getBezierPath, EdgeLabelRenderer } from '@vue-flow/core'
+import { EdgeLabelRenderer } from '@vue-flow/core'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -68,14 +68,34 @@ const props = defineProps({
 const gradientId = computed(() => `gradient-${props.id.replace(/[^a-zA-Z0-9-]/g, '-')}`)
 const arrowId = computed(() => `${gradientId.value}-arrow`)
 
-const pathData = computed(() => getBezierPath({
-  sourceX: props.sourceX,
-  sourceY: props.sourceY,
-  sourcePosition: props.sourcePosition,
-  targetX: props.targetX,
-  targetY: props.targetY,
-  targetPosition: props.targetPosition,
-}))
+const SOURCE_CURVATURE = 0.05 // shallow near the source
+const TARGET_CURVATURE = 0.28 // steep near the target
+
+const pathData = computed(() => {
+  const { sourceX, sourceY, targetX, targetY } = props
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const len = Math.hypot(dx, dy) || 1
+
+  // Consistent perpendicular (left of the source→target vector), so mutual
+  // edges curve away from each other instead of overlapping.
+  const ux = -dy / len
+  const uy = dx / len
+
+  const sourceOffset = SOURCE_CURVATURE * len
+  const targetOffset = TARGET_CURVATURE * len
+
+  const scx = sourceX + ux * sourceOffset
+  const scy = sourceY + uy * sourceOffset
+  const tcx = targetX + ux * targetOffset
+  const tcy = targetY + uy * targetOffset
+
+  const path = `M${sourceX},${sourceY} C${scx},${scy} ${tcx},${tcy} ${targetX},${targetY}`
+  // Bezier midpoint (t = 0.5) for the label.
+  const labelX = sourceX * 0.125 + scx * 0.375 + tcx * 0.375 + targetX * 0.125
+  const labelY = sourceY * 0.125 + scy * 0.375 + tcy * 0.375 + targetY * 0.125
+  return [path, labelX, labelY]
+})
 
 const path = computed(() => pathData.value[0])
 const labelX = computed(() => pathData.value[1])
