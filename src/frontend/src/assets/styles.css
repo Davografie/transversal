@@ -333,7 +333,7 @@ input:focus, select:focus {
 }
 .char-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
 .char-list button {
@@ -347,14 +347,95 @@ input:focus, select:focus {
   border-color: var(--accent);
   color: #fff;
 }
-.char-add-btn {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  font-size: 16px;
-  padding: 0;
+.char-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px !important;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+}
+.char-portrait {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+}
+.char-portrait-fallback {
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 700;
+}
+.char-chip-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.char-chip-name {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.char-chip-location {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.char-list button.active .char-chip-name { color: #fff; }
+.char-list button.active .char-chip-location { color: rgba(255,255,255,0.7); }
+.char-release-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.char-release-btn:hover {
+  color: var(--danger);
+  background: rgba(255,255,255,0.08);
+}
+.char-list button.active .char-release-btn { color: rgba(255,255,255,0.7); }
+.char-create-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-empty {
+  gap: 4px;
+}
+.settings-empty-title {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin: 0;
+}
+.settings-empty-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.7;
+  line-height: 1.4;
+  margin: 0 0 4px;
 }
 .char-name-input {
   width: 80px;
@@ -371,6 +452,89 @@ input:focus, select:focus {
   justify-content: center;
   background: var(--success);
   color: #0a0a0f;
+}
+.find-char-wrapper {
+  width: 260px;
+}
+.find-char-input {
+  width: 100% !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  text-align: left !important;
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 6px !important;
+}
+.find-char-input:focus {
+  border-color: var(--accent) !important;
+  color: var(--text) !important;
+}
+.suggestion-item.char-search-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.char-search-portrait {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+}
+.char-search-portrait-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.char-search-result-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.char-search-result-name {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.char-search-result-location {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.char-search-empty {
+  color: var(--text-dim);
+  font-style: italic;
+  cursor: default;
+}
+.char-search-empty:hover {
+  background: transparent;
+}
+.char-skeleton-pulse {
+  background: rgba(255,255,255,0.08);
+  animation: charSkeletonPulse 1.2s ease-in-out infinite;
+}
+.char-skeleton-line {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+}
+.char-skeleton-line-name { width: 84px; }
+.char-skeleton-line-location { width: 120px; }
+.char-chip-skeleton { cursor: default; }
+.char-search-skeleton { cursor: default; }
+@keyframes charSkeletonPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
 }
 /* Name search suggestions */
 .search-wrapper {

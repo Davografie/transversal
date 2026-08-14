@@ -101,25 +101,51 @@
           </div>
         </div>
 
-        <div v-if="playerEntities.length" class="settings-section">
+        <div v-if="loadingPlayerEntities" class="settings-section">
+          <label class="settings-label">Your characters</label>
+          <div class="char-list">
+            <div v-for="n in 3" :key="n" class="char-chip char-chip-skeleton" aria-hidden="true">
+              <span class="char-portrait char-skeleton-pulse"></span>
+              <span class="char-chip-meta">
+                <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-name"></span>
+                <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-location"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="playerEntities.length" class="settings-section">
           <label class="settings-label">Your characters</label>
           <div class="char-list">
             <button
               v-for="e in playerEntities" :key="e.id"
+              class="char-chip"
               :class="{ active: entityId === e.id }"
               @click="selectCharacter(e)"
-            >{{ e.name || e.id }}</button>
+            >
+              <video v-if="e.sheetPortrait && isVideoPortrait(e.sheetPortrait)" :src="e.sheetPortrait" class="char-portrait" autoplay loop muted playsinline />
+              <img v-else-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-portrait" alt="" />
+              <span v-else class="char-portrait char-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
+              <span class="char-chip-meta">
+                <span class="char-chip-name">{{ e.name || e.id }}</span>
+                <span v-if="locationLabel(e)" class="char-chip-location">{{ locationLabel(e) }}</span>
+              </span>
+              <span class="char-release-btn" title="Relinquish agency" @click.stop="releaseCharacter(e)">✕</span>
+            </button>
+          </div>
+          <div class="char-create-row">
             <template v-if="showNewChar">
               <input v-model="newCharName" placeholder="Name…" @keyup.enter="createCharacter" class="char-name-input" />
               <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar" class="char-create-btn">✓</button>
             </template>
-            <button v-else class="char-add-btn" @click="showNewChar = true">+</button>
+            <button v-else class="new-char-toggle" @click="showNewChar = true">+ New character</button>
           </div>
           <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
         </div>
 
-        <div v-if="!playerEntities.length" class="settings-section">
-          <label class="settings-label">New character</label>
+        <div v-else class="settings-section settings-empty">
+          <p class="settings-empty-title">No characters yet</p>
+          <p class="settings-empty-hint">Create a new character or find one below to claim agency.</p>
           <template v-if="showNewChar">
             <div class="switch-row">
               <input v-model="newCharName" placeholder="Character name…" @keyup.enter="createCharacter" />
@@ -128,6 +154,47 @@
           </template>
           <button v-else class="new-char-toggle" @click="showNewChar = true">+ New character</button>
           <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-label">Find character</label>
+          <div class="search-wrapper find-char-wrapper">
+            <input
+              v-model="charSearch"
+              placeholder="Search characters…"
+              class="find-char-input"
+              @keyup.enter="onCharSearchEnter"
+            />
+            <div v-if="charSearch.trim() && (charSearching || charSearchSearched)" class="name-suggestions">
+              <div v-if="charSearching" class="char-search-skeleton-list">
+                <div v-for="n in 3" :key="n" class="suggestion-item char-search-result char-search-skeleton" aria-hidden="true">
+                  <span class="char-search-portrait char-skeleton-pulse"></span>
+                  <span class="char-search-result-meta">
+                    <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-name"></span>
+                    <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-location"></span>
+                  </span>
+                </div>
+              </div>
+              <template v-else>
+                <button
+                  v-for="e in charSearchResults" :key="e.id"
+                  class="suggestion-item char-search-result"
+                  @mousedown.prevent
+                  @click="chooseFoundCharacter(e)"
+                >
+                  <video v-if="e.sheetPortrait && isVideoPortrait(e.sheetPortrait)" :src="e.sheetPortrait" class="char-search-portrait" autoplay loop muted playsinline />
+                  <img v-else-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-search-portrait" alt="" />
+                  <span v-else class="char-search-portrait char-search-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
+                  <span class="char-search-result-meta">
+                    <span class="char-search-result-name">{{ e.name || e.id }}</span>
+                    <span v-if="locationLabel(e)" class="char-search-result-location">{{ locationLabel(e) }}</span>
+                  </span>
+                </button>
+                <div v-if="!charSearchResults.length && !charSearchError" class="suggestion-item char-search-empty">No characters found</div>
+              </template>
+            </div>
+          </div>
+          <p v-if="charSearchError" class="switch-error">{{ charSearchError }}</p>
         </div>
       </template>
 
@@ -359,6 +426,10 @@ const charPending = ref(null)
 const charStatus = ref('')
 const pendingPlayerEntities = ref([])
 const playerEntities = ref([])
+const loadingPlayerEntities = ref(false)
+
+const locationNames = ref({})
+let locationNamesLoaded = false
 
 const ownedEntityIds = computed(() => playerEntities.value.map(e => e.id))
 
@@ -366,6 +437,15 @@ const newCharName = ref('')
 const creatingChar = ref(false)
 const createCharError = ref('')
 const showNewChar = ref(false)
+
+// Find character
+const charSearch = ref('')
+const charSearchResults = ref([])
+const charSearching = ref(false)
+const charSearchSearched = ref(false)
+const charSearchError = ref('')
+let charSearchDebounce = null
+let allCharactersCache = null
 
 // Name search
 const nameSuggestions = ref([])
@@ -476,13 +556,34 @@ async function findOrCreatePlayer(name) {
   } catch { return null }
 }
 
+async function fetchPlayer(pid) {
+  if (!pid) return null
+  try {
+    const r = await fetch(`/api/v1/players/${pid}`)
+    if (!r.ok) return null
+    return (await r.json()) || null
+  } catch {
+    return null
+  }
+}
+
 async function ensurePlayer() {
   DIAG.mark('ensurePlayer-start', { playerId: playerId.value, playerName: playerName.value })
   if (playerId.value) {
-    DIAG.mark('ensurePlayer-have-id', { playerId: playerId.value })
-    fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
-    loadPlayerRole()
-    return
+    const p = await fetchPlayer(playerId.value)
+    if (p) {
+      DIAG.mark('ensurePlayer-have-id', { playerId: playerId.value, entityIds: p.entity_ids })
+      if (Array.isArray(p.entity_ids) && p.entity_ids.includes(entityId.value)) {
+        fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
+      }
+      loadPlayerRole()
+      return
+    }
+    DIAG.mark('ensurePlayer-stale-id', { playerId: playerId.value })
+    playerId.value = ''
+    playerName.value = ''
+    localStorage.removeItem('playerId')
+    localStorage.removeItem('playerName')
   }
 
   if (playerName.value) {
@@ -904,6 +1005,13 @@ function openSettings() {
   newCharName.value = ''
   createCharError.value = ''
   showNewChar.value = false
+  charSearch.value = ''
+  charSearchResults.value = []
+  charSearching.value = false
+  charSearchSearched.value = false
+  charSearchError.value = ''
+  allCharactersCache = null
+  locationNamesLoaded = false
   fetchPlayerEntities()
   showLoginOverlay.value = true
 }
@@ -938,10 +1046,46 @@ function onSwitchBlur() {
 
 async function fetchPlayerEntities() {
   if (!playerId.value) return
-  playerEntities.value = await fetchEntitiesFor(playerId.value)
+  loadingPlayerEntities.value = true
+  try {
+    playerEntities.value = await fetchEntitiesFor(playerId.value)
+  } finally {
+    loadingPlayerEntities.value = false
+  }
+}
+
+async function fetchLocationNames() {
+  if (locationNamesLoaded) return
+  try {
+    const r = await fetch('/api/v1/locations/tree')
+    const tree = await r.json()
+    const map = {}
+    const walk = (nodes) => {
+      for (const n of nodes || []) {
+        if (n.id && n.name) map[n.id] = n.name
+        if (n.children) walk(n.children)
+      }
+    }
+    walk(tree)
+    locationNames.value = map
+    locationNamesLoaded = true
+  } catch {
+    locationNames.value = {}
+  }
+}
+
+function locationLabel(e) {
+  const lid = e?.currentLocation
+  if (lid) return locationNames.value[lid] || lid
+  return e?.currentUniverse || ''
+}
+
+function isVideoPortrait(url) {
+  return !!url && /\.(webm|mp4)(\?|$)/i.test(url)
 }
 
 async function fetchEntitiesFor(pid) {
+  fetchLocationNames()
   try {
     const r = await fetch(`/api/v1/players/${pid}`)
     const p = await r.json()
@@ -951,7 +1095,7 @@ async function fetchEntitiesFor(pid) {
         try {
           const r2 = await fetch('/api/v1/graphql', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { id name type } }`, variables: { id: eid } })
+            body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { id name type sheetPortrait currentLocation currentUniverse } }`, variables: { id: eid } })
           })
           const json = await r2.json()
           if (json.data?.entity) results.push(json.data.entity)
@@ -1017,6 +1161,82 @@ function selectCharacter(e) {
   charStatus.value = `Assume the form of ${e.name || e.id}?`
 }
 
+async function releaseCharacter(e) {
+  if (!playerId.value || !e?.id) return
+  try {
+    await fetch(`/api/v1/players/${playerId.value}/release/${e.id}`, { method: 'POST' })
+  } catch {}
+  const wasActive = entityId.value === e.id
+  await fetchPlayerEntities()
+  if (wasActive && playerEntities.value.length) {
+    entityId.value = playerEntities.value[0].id
+  }
+}
+
+async function fetchAllCharacters() {
+  if (allCharactersCache) return allCharactersCache
+  fetchLocationNames()
+  const r = await fetch('/api/v1/graphql', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: `query { entities(type: CHARACTER) { id name type sheetPortrait currentLocation currentUniverse } }` })
+  })
+  const json = await r.json()
+  allCharactersCache = json.data?.entities || []
+  return allCharactersCache
+}
+
+function onCharSearchEnter() {
+  if (charSearchDebounce) clearTimeout(charSearchDebounce)
+  doCharSearch()
+}
+
+// Watch charSearch for live suggestions in settings panel
+watch(charSearch, (val) => {
+  charSearchError.value = ''
+  charSearchSearched.value = false
+  if (charSearchDebounce) clearTimeout(charSearchDebounce)
+  const q = val.trim()
+  if (!q) {
+    charSearchResults.value = []
+    return
+  }
+  charSearchDebounce = setTimeout(() => { doCharSearch() }, 200)
+})
+
+async function doCharSearch() {
+  const q = charSearch.value.trim()
+  if (!q) {
+    charSearchResults.value = []
+    charSearchSearched.value = false
+    return
+  }
+  charSearching.value = true
+  charSearchError.value = ''
+  try {
+    const all = await fetchAllCharacters()
+    const owned = new Set(playerEntities.value.map(e => e.id))
+    charSearchResults.value = all
+      .filter(e => String(e.name || '').toLowerCase().includes(q.toLowerCase()))
+      .filter(e => !owned.has(e.id))
+      .slice(0, 20)
+  } catch (e) {
+    charSearchError.value = e.message
+    charSearchResults.value = []
+  } finally {
+    charSearching.value = false
+    charSearchSearched.value = true
+  }
+}
+
+function chooseFoundCharacter(e) {
+  charSearch.value = ''
+  charSearchResults.value = []
+  charSearchSearched.value = false
+  charSearchError.value = ''
+  charPending.value = e
+  charStatus.value = `Assume the form of ${e.name || e.id}?`
+}
+
 async function createCharacter() {
   const name = newCharName.value.trim()
   if (!name || creatingChar.value) return
@@ -1036,6 +1256,7 @@ async function createCharacter() {
       await fetch(`/api/v1/players/${playerId.value}/claim/${eid}`, { method: 'POST' })
       newCharName.value = ''
       showNewChar.value = false
+      allCharactersCache = null
       fetchPlayerEntities()
     } else {
       createCharError.value = 'Failed to create character'
@@ -1068,10 +1289,15 @@ async function loadPlayerRole() {
 
 function confirmChar() {
   if (!charPending.value) return
-  entityId.value = charPending.value.id
+  const e = charPending.value
+  entityId.value = e.id
   charStatus.value = ''
   charPending.value = null
   showLoginOverlay.value = false
+  if (playerId.value) {
+    fetch(`/api/v1/players/${playerId.value}/claim/${e.id}`, { method: 'POST' }).catch(() => {})
+    fetchPlayerEntities()
+  }
 }
 
 watch(gmMode, (v) => {
