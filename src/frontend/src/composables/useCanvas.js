@@ -622,7 +622,7 @@ export function useCanvas() {
   }
 
   function setFocus(locationId) {
-    // Re-center the graph on a location node.
+    // Highlight the node without repositioning the graph.
     const id = nodeId('loc', locationId)
     nodes.value = nodes.value.map((n) => {
       if (n.type === 'location') {
@@ -631,7 +631,6 @@ export function useCanvas() {
       return n
     })
     focusId.value = locationId
-    layoutLocationNodes()
   }
 
   return {
