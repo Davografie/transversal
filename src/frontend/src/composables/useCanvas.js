@@ -633,6 +633,10 @@ export function useCanvas() {
     focusId.value = locationId
   }
 
+  function updateNodePosition(id, position) {
+    nodes.value = nodes.value.map((n) => (n.id === id ? { ...n, position: { ...position } } : n))
+  }
+
   return {
     nodes,
     edges,
@@ -652,6 +656,7 @@ export function useCanvas() {
     showFaction,
     createTransversal,
     setFocus,
+    updateNodePosition,
     clear,
   }
 }

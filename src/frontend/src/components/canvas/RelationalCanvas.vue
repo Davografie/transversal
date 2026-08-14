@@ -33,6 +33,7 @@
       fit-view-on-init
       class="canvas-flow"
       @connect="onConnect"
+      @node-drag-stop="onNodeDragStop"
     >
       <Background :gap="24" />
       <Controls />
@@ -114,6 +115,10 @@ async function onConnect(connection) {
   // Only allow location → location transversal links.
   if (fromNode?.type !== 'location' || toNode?.type !== 'location') return
   await canvas.createTransversal(fromId, toId)
+}
+
+function onNodeDragStop({ node }) {
+  if (node) canvas.updateNodePosition(node.id, node.position)
 }
 
 function backToLocation() {
