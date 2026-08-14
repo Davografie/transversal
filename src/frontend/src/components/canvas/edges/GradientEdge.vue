@@ -87,8 +87,9 @@ const pathData = computed(() => {
 
   const scx = sourceX + ux * sourceOffset
   const scy = sourceY + uy * sourceOffset
-  const tcx = targetX + ux * targetOffset
-  const tcy = targetY + uy * targetOffset
+  // Opposite side of the target → S-shaped rather than C-shaped.
+  const tcx = targetX - ux * targetOffset
+  const tcy = targetY - uy * targetOffset
 
   const path = `M${sourceX},${sourceY} C${scx},${scy} ${tcx},${tcy} ${targetX},${targetY}`
   // Bezier midpoint (t = 0.5) for the label.
