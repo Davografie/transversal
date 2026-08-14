@@ -43,6 +43,7 @@ from transversal.domain import (
     Trait,
     TraitSet,
     TraitSetting,
+    dice_list_to_rating,
 )
 
 
@@ -1336,6 +1337,170 @@ class EntityRepository:
         results = list(cursor)
         default = {"location": None, "parent": None, "children": [], "transversal": [], "occupants": []}
         return results[0] if results else default
+
+    # ── Relational Canvas ─────────────────────────────
+
+    def canvas_neighborhood(self, location_id: str) -> dict:
+        """Return a location's neighborhood for the relational canvas.
+
+        Extends ``navigate_from`` with faction memberships for occupants and
+        occupant-to-occupant relationship edges (labeled).
+        """
+        result = self.navigate_from(location_id)
+        if result["location"] is None:
+            return result
+
+        occupant_ids = [o["id"] for o in result.get("occupants", [])]
+        result["faction_memberships"] = self._faction_memberships_for(occupant_ids)
+        result["occupant_relations"] = self._relations_between(occupant_ids)
+        return result
+
+    def canvas_faction(self, faction_id: str) -> dict:
+        """Return conspyramid data for a faction.
+
+        Returns members (with rank/role), the locations where members are
+        placed, ancestor scaffolding for the pruned tree, and labeled
+        relations between members.
+        """
+        faction = self.get_entity(faction_id)
+        if faction is None:
+            return {"faction": None, "members": [], "locations": [], "ancestors": [], "relations": []}
+
+        member_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'membership' AND r._to == @faction_ref
+            LET member_key = PARSE_IDENTIFIER(r._from).key
+            FOR e IN {ENTITIES}
+            FILTER e._key == member_key AND e.type IN ['gmc', 'character']
+            RETURN {{ id: e._key, name: e.name, location_id: e.current_location, edge_key: r._key }}
+        """
+        members = list(self.db.aql.execute(
+            member_query, bind_vars={"faction_ref": f"{ENTITIES}/{faction_id}"}
+        ))
+
+        for m in members:
+            m["rank"] = None
+            m["role"] = None
+            for ts in self.get_relationship_traitsettings(m["edge_key"]):
+                if ts.trait_id == "trait-rel-rank" and ts.dice:
+                    m["rank"] = dice_list_to_rating(ts.dice)
+                elif ts.trait_id == "trait-role-cd1b":
+                    m["role"] = ts.statement or ts.trait_id
+            m.pop("edge_key", None)
+
+        member_ids = [m["id"] for m in members]
+        member_locations = [m["location_id"] for m in members if m["location_id"]]
+
+        locations = self._location_dicts(member_locations)
+        location_keys = {l["id"] for l in locations}
+
+        ancestors: set[str] = set()
+        for lid in member_locations:
+            for a in self.get_location_ancestors(lid):
+                ancestors.add(a)
+        ancestor_locations = [
+            l for l in self._location_dicts(list(ancestors))
+            if l["id"] not in location_keys
+        ]
+
+        relations = self._relations_between(member_ids)
+
+        return {
+            "faction": {"id": faction.id, "name": faction.name},
+            "members": members,
+            "locations": locations,
+            "ancestors": ancestor_locations,
+            "relations": relations,
+        }
+
+    def canvas_gmc_web(self, gmc_id: str) -> dict:
+        """Return a GMC's relational web: the GMC, its location, and direct
+        relations to other GMCs plus their locations."""
+        gmc = self.get_entity(gmc_id)
+        if gmc is None:
+            return {"gmc": None, "location": None, "relations": []}
+
+        location = self.get_entity(gmc.current_location) if gmc.current_location else None
+
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER (r._from == @gmc_ref OR r._to == @gmc_ref)
+              AND r.type NOT IN ['super', 'membership', 'agency', 'transversal']
+            LET other_key = PARSE_IDENTIFIER(r._from).key == @gid
+                ? PARSE_IDENTIFIER(r._to).key
+                : PARSE_IDENTIFIER(r._from).key
+            FOR e IN {ENTITIES}
+            FILTER e._key == other_key AND e.type IN ['gmc', 'character']
+            RETURN {{
+                from: PARSE_IDENTIFIER(r._from).key,
+                to: PARSE_IDENTIFIER(r._to).key,
+                type: r.type,
+                description: NOT_NULL(r.description, ''),
+                other_id: e._key,
+                other_name: e.name,
+                other_location_id: e.current_location,
+            }}
+        """
+        relations = list(self.db.aql.execute(query, bind_vars={
+            "gmc_ref": f"{ENTITIES}/{gmc_id}",
+            "gid": gmc_id,
+        }))
+
+        loc_ids = {r["other_location_id"] for r in relations if r["other_location_id"]}
+        loc_map = {l["id"]: l["name"] for l in self._location_dicts(list(loc_ids))}
+        for r in relations:
+            r["other_location_name"] = loc_map.get(r["other_location_id"]) if r["other_location_id"] else None
+
+        return {
+            "gmc": {"id": gmc.id, "name": gmc.name},
+            "location": {"id": location.id, "name": location.name} if location else None,
+            "relations": relations,
+        }
+
+    # ── Canvas helpers ────────────────────────────────
+
+    def _faction_memberships_for(self, entity_ids: list[str]) -> dict:
+        """Map entity_id → list of {{id, name}} factions via membership edges."""
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'membership'
+            LET member_key = PARSE_IDENTIFIER(r._from).key
+            FILTER member_key IN @ids
+            FOR f IN {ENTITIES}
+            FILTER f._key == PARSE_IDENTIFIER(r._to).key AND f.type == 'faction'
+            RETURN {{ member: member_key, id: f._key, name: f.name }}
+        """
+        result: dict = {}
+        for row in self.db.aql.execute(query, bind_vars={"ids": entity_ids}):
+            result.setdefault(row["member"], []).append({"id": row["id"], "name": row["name"]})
+        return result
+
+    def _relations_between(self, entity_ids: list[str]) -> list[dict]:
+        """Return non-structural relationships whose endpoints are all in ``entity_ids``."""
+        if len(entity_ids) < 2:
+            return []
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            LET from_key = PARSE_IDENTIFIER(r._from).key
+            LET to_key = PARSE_IDENTIFIER(r._to).key
+            FILTER from_key IN @ids AND to_key IN @ids
+              AND r.type NOT IN ['super', 'membership', 'agency', 'transversal']
+            RETURN {{ from: from_key, to: to_key, type: r.type, description: NOT_NULL(r.description, '') }}
+        """
+        return list(self.db.aql.execute(query, bind_vars={"ids": entity_ids}))
+
+    def _location_dicts(self, location_ids: list[str]) -> list[dict]:
+        """Return light location dicts for a set of location keys."""
+        if not location_ids:
+            return []
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'location' AND e._key IN @ids
+            RETURN {{ id: e._key, name: e.name, universe: e.current_universe }}
+        """
+        return list(self.db.aql.execute(query, bind_vars={"ids": location_ids}))
 
     def get_location_ancestors(self, location_id: str) -> list[str]:
         """Return all ancestor location IDs by following 'super' edges upward.

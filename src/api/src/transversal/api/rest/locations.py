@@ -86,6 +86,35 @@ async def navigate(location_id: str):
     return result
 
 
+# ── Relational Canvas ───────────────────────────────
+
+@router.get("/locations/{location_id}/canvas")
+async def location_canvas(location_id: str):
+    """Return a location's neighborhood for the relational canvas."""
+    result = _repo().canvas_neighborhood(location_id)
+    if result["location"] is None:
+        raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
+    return result
+
+
+@router.get("/factions/{faction_id}/canvas")
+async def faction_canvas(faction_id: str):
+    """Return a faction's conspyramid data for the relational canvas."""
+    result = _repo().canvas_faction(faction_id)
+    if result["faction"] is None:
+        raise HTTPException(status_code=404, detail=f"Faction '{faction_id}' not found")
+    return result
+
+
+@router.get("/gmcs/{gmc_id}/web")
+async def gmc_web(gmc_id: str):
+    """Return a GMC's relational web for the relational canvas."""
+    result = _repo().canvas_gmc_web(gmc_id)
+    if result["gmc"] is None:
+        raise HTTPException(status_code=404, detail=f"GMC '{gmc_id}' not found")
+    return result
+
+
 from pydantic import BaseModel
 
 
