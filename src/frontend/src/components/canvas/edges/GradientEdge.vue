@@ -21,7 +21,7 @@
         markerWidth="12.5"
         markerHeight="12.5"
         markerUnits="strokeWidth"
-        :orient="arrowAngle"
+        orient="auto-start-reverse"
       >
         <polyline
           points="-5,-4 0,0 -5,4 -5,-4"
@@ -80,15 +80,6 @@ const pathData = computed(() => getBezierPath({
 const path = computed(() => pathData.value[0])
 const labelX = computed(() => pathData.value[1])
 const labelY = computed(() => pathData.value[2])
-
-// Orient the arrowhead along the source→target direction (the edge's angle of
-// approach), rather than the bezier's endpoint tangent which is always
-// perpendicular to the node side.
-const arrowAngle = computed(() => {
-  const dx = props.targetX - props.sourceX
-  const dy = props.targetY - props.sourceY
-  return (Math.atan2(dy, dx) * 180) / Math.PI
-})
 </script>
 
 <style scoped>
