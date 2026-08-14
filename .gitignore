@@ -36,3 +36,6 @@ htmlcov/
 .codewhale/pastes/
 .codewhale/state/
 .codewhale/workflow-runs.jsonl
+
+# Obsidian vault state
+docs/.obsidian/
