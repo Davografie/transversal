@@ -335,10 +335,10 @@ export function useCanvas() {
     return { id: `transversal:${source}:${target}`, source, target, type: 'default', data: { kind: 'transversal' }, animated: true, label: 'transversal', sourceHandle: 'right', targetHandle: 'left', markerStart: MarkerType.ArrowClosed, markerEnd: MarkerType.ArrowClosed }
   }
   function makeLocatedEdge(source, target) {
-    return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' }, sourceHandle: 'bottom-source', targetHandle: 'top' }
+    return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' }, sourceHandle: 'bottom-source', targetHandle: 'target-top' }
   }
   function makeRelationEdge(source, target, label) {
-    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'default', label: label || '', data: { kind: 'relation' }, sourceHandle: 'right', targetHandle: 'left', markerEnd: MarkerType.ArrowClosed }
+    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'default', label: label || '', data: { kind: 'relation' }, markerEnd: MarkerType.ArrowClosed }
   }
 
   // ── Layouts ─────────────────────────────────────────
@@ -417,6 +417,32 @@ export function useCanvas() {
       const pos = positions[n.id]
       if (pos) return { ...n, position: { x: pos.x, y: pos.y } }
       return n
+    })
+    routeEdges()
+  }
+
+  function routeEdges() {
+    // For relation edges, pick the handle pair on the sides facing each other
+    // (closest sides), rather than a fixed right→left.
+    const pos = {}
+    for (const n of nodes.value) pos[n.id] = n.position
+    edges.value = edges.value.map((e) => {
+      if (e.data?.kind !== 'relation') return e
+      const s = pos[e.source]
+      const t = pos[e.target]
+      if (!s || !t) return e
+      const dx = t.x - s.x
+      const dy = t.y - s.y
+      let sourceHandle
+      let targetHandle
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        sourceHandle = dx >= 0 ? 'source-right' : 'source-left'
+        targetHandle = dx >= 0 ? 'target-left' : 'target-right'
+      } else {
+        sourceHandle = dy >= 0 ? 'source-bottom' : 'source-top'
+        targetHandle = dy >= 0 ? 'target-top' : 'target-bottom'
+      }
+      return { ...e, sourceHandle, targetHandle }
     })
   }
 
@@ -519,6 +545,7 @@ export function useCanvas() {
       }
       nodes.value = [...nodes.value, ...newNodes]
       edges.value = [...edges.value, ...newEdges]
+      routeEdges()
     } catch (e) {
       error.value = e.message
     }
