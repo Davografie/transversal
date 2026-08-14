@@ -36,8 +36,8 @@
       @node-drag-stop="onNodeDragStop"
     >
       <Background :gap="24" />
-      <Controls />
-      <MiniMap />
+      <Controls v-if="fullscreen" />
+      <MiniMap v-if="fullscreen" />
     </VueFlow>
   </div>
 </template>
@@ -62,6 +62,7 @@ import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
 const props = defineProps({
   locationId: { type: String, default: '' },
   initialFactionId: { type: String, default: '' },
+  initialGmcId: { type: String, default: '' },
   fullscreen: { type: Boolean, default: false },
 })
 
@@ -131,6 +132,8 @@ onMounted(async () => {
   canvas.loadFactions()
   if (props.initialFactionId) {
     await canvas.loadFaction(props.initialFactionId)
+  } else if (props.initialGmcId) {
+    await canvas.loadGmcWeb(props.initialGmcId)
   } else if (props.locationId) {
     await canvas.loadLocation(props.locationId)
   }

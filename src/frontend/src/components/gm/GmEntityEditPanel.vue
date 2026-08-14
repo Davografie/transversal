@@ -5,6 +5,9 @@
       :entity-id="entityId"
       :allow-type-change="false"
     />
+    <div v-if="form.type === 'LOCATION' || form.type === 'GMC'" class="canvas-open-row">
+      <button class="section-btn" @click="openCanvas">🗺 Open in Canvas</button>
+    </div>
     <div class="image-gallery">
       <div class="gallery-header">
         <h4>Images</h4>
@@ -64,6 +67,7 @@ import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
+import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const panel = usePanel()
@@ -99,6 +103,24 @@ function openLifePaths() {
     title: 'Life Paths',
     props: { universe: currentUniverse },
   })
+}
+
+function openCanvas() {
+  if (!props.entityId) return
+  const type = form.value?.type
+  if (type === 'LOCATION') {
+    panel.open({
+      component: RelationalCanvas,
+      title: 'Location Canvas',
+      props: { locationId: props.entityId },
+    })
+  } else if (type === 'GMC') {
+    panel.open({
+      component: RelationalCanvas,
+      title: 'GMC Relations',
+      props: { initialGmcId: props.entityId },
+    })
+  }
 }
 
 // Load life paths when editing a universe entity
@@ -232,6 +254,8 @@ defineExpose({ refresh: loadImages })
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;
 }
+.canvas-open-row { margin-top: 12px; }
+.canvas-open-row .section-btn { width: 100%; }
 .section-btn {
   flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.03); color: var(--text); cursor: pointer;
