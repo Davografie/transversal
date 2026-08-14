@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { MarkerType } from '@vue-flow/core'
 
 const API_BASE = '/api/v1'
 
@@ -331,13 +332,13 @@ export function useCanvas() {
     return { id: `super:${source}:${target}`, source, target, type: 'default', data: { kind: 'super' }, sourceHandle: 'top', targetHandle: 'bottom' }
   }
   function makeTransversalEdge(source, target) {
-    return { id: `transversal:${source}:${target}`, source, target, type: 'default', data: { kind: 'transversal' }, animated: true, label: 'transversal', sourceHandle: 'right', targetHandle: 'left' }
+    return { id: `transversal:${source}:${target}`, source, target, type: 'default', data: { kind: 'transversal' }, animated: true, label: 'transversal', sourceHandle: 'right', targetHandle: 'left', markerStart: MarkerType.ArrowClosed, markerEnd: MarkerType.ArrowClosed }
   }
   function makeLocatedEdge(source, target) {
     return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' }, sourceHandle: 'bottom-source', targetHandle: 'top' }
   }
   function makeRelationEdge(source, target, label) {
-    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'default', label: label || '', data: { kind: 'relation' }, sourceHandle: 'right', targetHandle: 'left' }
+    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'default', label: label || '', data: { kind: 'relation' }, sourceHandle: 'right', targetHandle: 'left', markerEnd: MarkerType.ArrowClosed }
   }
 
   // ── Layouts ─────────────────────────────────────────
