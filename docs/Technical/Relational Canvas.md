@@ -81,15 +81,20 @@ Both return the same shape:
 
 ### Faction Membership Lookup
 
-No separate membership schema exists yet. Membership is determined by a reverse-lookup AQL query:
+Membership is a `relationships` edge of type `membership` from the GMC (or character) to the faction:
 
 ```aql
-FOR f IN entities
-  FILTER f.type == 'faction' AND @gmc_id IN f.node_ids
-  RETURN { id: f._key, name: f.name }
+FOR r IN relationships
+  FILTER r.type == 'membership' AND r._to == @faction_ref
+  RETURN PARSE_IDENTIFIER(r._from).key
 ```
 
-For the canvas's typical scope (5–20 nodes, 2–3 factions), scanning all faction entities per-request is sufficient. This will be revisited when the conspyramid schema solidifies (rank, role, hierarchy structure).
+Rank and role are **not** fields on the edge — they are `traitsettings` documents hanging off the membership relationship. Their `_from` points at `relationships/{edge_key}` (i.e. `from_type == "relationship"`), not at the GMC entity:
+
+- **rank** — trait `trait-rel-rank` (die rating, e.g. `d4`–`d12`)
+- **role** — trait `trait-role-cd1b` (die rating + `statement` carries the role description, e.g. "they are my cell leader")
+
+Both live in the `relations` traitset (`ts-relations-b114`). The canvas resolves rank/role by joining the membership edge key against `traitsettings.entity_id`.
 
 ### Relationship Edges on the Canvas
 
@@ -97,7 +102,8 @@ For the canvas's typical scope (5–20 nodes, 2–3 factions), scanning all fact
 |-----------|-------------|--------|
 | `super` (parent→child) | `relationships` collection, type: `super` | Solid line, downward, no arrowhead |
 | `transversal` | `relationships` collection, type: `transversal` | Dashed curved bezier, bidirectional arrowheads, label "transversal" |
-| GMC-to-GMC (any type) | `relationships` collection, any type with a `description` set | Solid line, arrow toward target, edge label from `description` |
+| `membership` (GMC→faction) | `relationships` collection, type: `membership` | Dotted line to faction badge (faction not rendered as a tree node) |
+| GMC-to-GMC (e.g. `associate`) | `relationships` collection, any entity→entity edge type with a `description` set | Solid line, arrow toward target, edge label from `description` |
 | Located-at (occupant→location) | Entity `current_location` field | Dotted, no arrow — implicit |
 
 ## Canvas Modes
@@ -275,13 +281,39 @@ src/frontend/src/
 }
 ```
 
-## New Backend Endpoint
+## New Backend Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/api/v1/locations/{id}/canvas?mode=location\|expand` | Return focus/expanded location neighborhood |
+| `GET` | `/api/v1/factions/{id}/canvas` | Return pruned location tree where faction has members + member relations |
+| `GET` | `/api/v1/gmcs/{id}/web` | Return GMC + its location + direct faction relations + those GMCs' locations |
 
-Implementation lives in `src/api/src/transversal/api/rest/locations.py` alongside the existing location endpoints. Query logic in `src/api/src/transversal/db/repository.py`.
+Implementation lives in `src/api/src/transversal/api/rest/locations.py` (or a sibling router) alongside the existing location endpoints. Query logic in `src/api/src/transversal/db/repository.py`.
+
+## Seed Data (Actual Database State)
+
+The seeded scripts are **not** the source of truth. Ground truth lives in ArangoDB (`transversal` database), which contains far more than the scripts suggest:
+
+- **137 locations** in a deep, multi-level `super` hierarchy (3 roots: Earth's `Krasnoyarsk-45`, Three Realms' `River` and `Valley of Ascension`; the Valley branches several levels deep)
+- **2 universes** (`earth`, `three_realms`)
+- **2 GMCs** (`Su Hui`, `Gu Yuan`), both placed in Three Realms locations
+- **2 factions** (`Verdant Steps Sect`, `Rogue Cultivators`) — currently life-path factions with no members
+- **1 `membership` edge** (`kael-1` → `fac-verdant-steps`) — a character, not a GMC
+- **No `transversal` edges** — the seed script declares one (`krasnoyarsk ↔ platform`) but it is not present in the DB
+- **No GMC-to-GMC relationships** — only `associate` edges between characters
+- **`rank` / `role` traits are registered but unassigned** — no traitsettings reference `trait-rel-rank` or `trait-role-cd1b` yet
+
+Conspyramid seeding therefore must create, against the **actual** DB (not the scripts):
+
+1. GMC entities placed at existing locations (reusing the existing `Su Hui` / `Gu Yuan` where appropriate)
+2. `membership` relationship edges (GMC → faction)
+3. `rank` traitsettings on each membership edge (`trait-rel-rank`, die = level)
+4. `role` traitsettings on each membership edge (`trait-role-cd1b`, `statement` = role text)
+5. GMC-to-GMC relationship edges with `description` (for edge labels)
+6. At least one `transversal` edge so travel links are demonstrable
+
+Seed functions must be idempotent (existence-guarded) and must reconcile against live DB keys, not the script's hardcoded `loc-*` IDs.
 
 ## Reusability
 
@@ -296,7 +328,7 @@ To support this, `useCanvasLayout.js` should expose pluggable layout strategies 
 
 - Persisted canvas positions — full auto-layout only
 - Edge traits — traits attached to relationship edges
-- Conspyramid visual pyramid layout — GMCs render at locations, not in a pyramid shape (until schema solidifies)
+- Conspyramid visual pyramid layout — GMCs render at locations, not in a pyramid shape
 - Player-facing canvas — GM-only
 - Animated layout transitions — nodes jump to new positions on expand/collapse
 
