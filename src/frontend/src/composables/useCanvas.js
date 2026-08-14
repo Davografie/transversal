@@ -338,7 +338,7 @@ export function useCanvas() {
     return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' }, sourceHandle: 'bottom-source', targetHandle: 'target-top' }
   }
   function makeRelationEdge(source, target, label) {
-    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'default', label: label || '', data: { kind: 'relation' }, markerEnd: MarkerType.ArrowClosed }
+    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'gradient', label: label || '', data: { kind: 'relation' } }
   }
 
   // ── Layouts ─────────────────────────────────────────

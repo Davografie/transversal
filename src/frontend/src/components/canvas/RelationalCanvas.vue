@@ -27,6 +27,7 @@
       :nodes="displayNodes"
       :edges="edges"
       :node-types="nodeTypes"
+      :edge-types="edgeTypes"
       :min-zoom="0.15"
       :max-zoom="2.5"
       fit-view-on-init
@@ -53,6 +54,7 @@ import { useCanvas } from '@/composables/useCanvas.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import LocationNode from '@/components/canvas/nodes/LocationNode.vue'
 import OccupantNode from '@/components/canvas/nodes/OccupantNode.vue'
+import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
 
 const props = defineProps({
   locationId: { type: String, default: '' },
@@ -77,6 +79,7 @@ function fitView() {
 }
 
 const nodeTypes = { location: LocationNode, occupant: OccupantNode }
+const edgeTypes = { gradient: GradientEdge }
 
 const displayNodes = computed(() =>
   nodes.value.map((n) => ({
