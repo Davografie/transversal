@@ -562,7 +562,11 @@ export function useCanvas() {
       (e) => (e.source === occNodeId || e.target === occNodeId) && e.data?.kind === 'relation',
     )
     if (existing.length) {
-      edges.value = edges.value.filter((e) => e.source !== occNodeId && e.target !== occNodeId)
+      // Remove only relation edges touching this occupant — keep the
+      // located (occupant → location) edge and any other non-relation edges.
+      edges.value = edges.value.filter(
+        (e) => !(e.data?.kind === 'relation' && (e.source === occNodeId || e.target === occNodeId)),
+      )
       return
     }
     try {
