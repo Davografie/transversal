@@ -358,16 +358,16 @@ export function useCanvas() {
 
     if (parentEdge) positions[parentEdge.target] = { x: 0, y: -DY }
 
+    occupants.forEach((id, i) => {
+      positions[id] = { x: (i - (occupants.length - 1) / 2) * (DX / 1.6), y: DY }
+    })
+
     children.forEach((id, i) => {
-      positions[id] = { x: (i - (children.length - 1) / 2) * DX, y: DY }
+      positions[id] = { x: (i - (children.length - 1) / 2) * DX, y: DY * 1.6 }
     })
 
     transversal.forEach((id, i) => {
       positions[id] = { x: DX * 1.5, y: (i - (transversal.length - 1) / 2) * DY }
-    })
-
-    occupants.forEach((id, i) => {
-      positions[id] = { x: (i - (occupants.length - 1) / 2) * (DX / 1.6), y: DY * 1.6 }
     })
 
     applyPositions(positions)
