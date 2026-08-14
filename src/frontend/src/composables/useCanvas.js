@@ -328,16 +328,16 @@ export function useCanvas() {
   // ── Edge factories ──────────────────────────────────
 
   function makeSuperEdge(source, target) {
-    return { id: `super:${source}:${target}`, source, target, type: 'default', data: { kind: 'super' } }
+    return { id: `super:${source}:${target}`, source, target, type: 'default', data: { kind: 'super' }, sourceHandle: 'top', targetHandle: 'bottom' }
   }
   function makeTransversalEdge(source, target) {
-    return { id: `transversal:${source}:${target}`, source, target, type: 'default', data: { kind: 'transversal' }, animated: true, label: 'transversal' }
+    return { id: `transversal:${source}:${target}`, source, target, type: 'default', data: { kind: 'transversal' }, animated: true, label: 'transversal', sourceHandle: 'right', targetHandle: 'left' }
   }
   function makeLocatedEdge(source, target) {
-    return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' } }
+    return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' }, sourceHandle: 'bottom-source', targetHandle: 'top' }
   }
   function makeRelationEdge(source, target, label) {
-    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'default', label: label || '', data: { kind: 'relation' } }
+    return { id: `relation:${source}:${target}:${label}`, source, target, type: 'default', label: label || '', data: { kind: 'relation' }, sourceHandle: 'right', targetHandle: 'left' }
   }
 
   // ── Layouts ─────────────────────────────────────────

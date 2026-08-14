@@ -16,7 +16,7 @@
         <button v-if="fullscreen" class="tool-btn close" @click="emit('close-full')">✕</button>
       </div>
     </div>
-    <div class="canvas-hint">Drag from a location's ◉ handle to another location to create a transversal link · click ⊕ to expand</div>
+    <div class="canvas-hint">Drag from a location's right handle (→) to another location's left handle (←) to create a transversal link · click ⊕ to expand</div>
 
     <div v-if="loading" class="canvas-status">Loading…</div>
     <div v-else-if="error" class="canvas-status error">{{ error }}</div>
@@ -101,6 +101,8 @@ function onFactionChange() {
 }
 
 async function onConnect(connection) {
+  // Only the lateral handles (right → left) create transversal links.
+  if (connection.sourceHandle !== 'right' || connection.targetHandle !== 'left') return
   const fromId = connection.source?.replace('loc:', '')
   const toId = connection.target?.replace('loc:', '')
   if (!fromId || !toId || fromId === toId) return

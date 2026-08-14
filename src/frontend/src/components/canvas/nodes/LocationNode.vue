@@ -33,10 +33,11 @@
         @click.stop="data.onOpenFull?.(data.entityId)"
       >⛶</button>
     </div>
-    <Handle type="target" :position="Position.Top" />
-    <Handle type="source" :position="Position.Bottom" />
-    <Handle type="source" :position="Position.Right" id="lateral" />
-    <Handle type="target" :position="Position.Left" id="lateral-in" />
+    <Handle id="top" type="source" :position="Position.Top" />
+    <Handle id="bottom" type="target" :position="Position.Bottom" />
+    <Handle id="bottom-source" type="source" :position="Position.Bottom" :style="{ left: '72%' }" />
+    <Handle id="right" type="source" :position="Position.Right" />
+    <Handle id="left" type="target" :position="Position.Left" />
   </div>
 </template>
 

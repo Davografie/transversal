@@ -20,7 +20,9 @@
       <button class="occ-btn" title="Show faction" @click.stop="data.onShowFaction?.(data.entityId)">🏴</button>
       <button class="occ-btn" title="Inspect" @click.stop="data.onInspect?.(data.entityId)">🔍</button>
     </div>
-    <Handle type="target" :position="Position.Top" />
+    <Handle id="top" type="target" :position="Position.Top" />
+    <Handle id="right" type="source" :position="Position.Right" />
+    <Handle id="left" type="target" :position="Position.Left" />
   </div>
 </template>
 
