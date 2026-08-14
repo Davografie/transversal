@@ -34,3 +34,5 @@ Thumbs.db
 htmlcov/
 
 .codewhale/pastes/
+.codewhale/state/
+.codewhale/workflow-runs.jsonl
