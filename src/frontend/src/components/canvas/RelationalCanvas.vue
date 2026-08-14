@@ -12,6 +12,7 @@
           <option v-for="f in factions" :key="f.id" :value="f.id">{{ f.name }}</option>
         </select>
         <button v-if="mode !== 'location'" class="tool-btn" @click="backToLocation">← Location</button>
+        <button v-if="!fullscreen" class="tool-btn" title="Open fullscreen" @click="openFull">⛶</button>
         <button class="tool-btn" @click="fitView">Fit</button>
         <button v-if="fullscreen" class="tool-btn close" @click="emit('close-full')">✕</button>
       </div>
@@ -55,6 +56,7 @@ import '@vue-flow/minimap/dist/style.css'
 
 import { useCanvas } from '@/composables/useCanvas.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
+import { usePanel } from '@/composables/usePanel.js'
 import LocationNode from '@/components/canvas/nodes/LocationNode.vue'
 import OccupantNode from '@/components/canvas/nodes/OccupantNode.vue'
 import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
@@ -69,6 +71,7 @@ const props = defineProps({
 const emit = defineEmits(['close-full'])
 
 const bus = usePanelBus()
+const panel = usePanel()
 
 const canvas = useCanvas()
 const { mode, title, loading, error, factions } = canvas
@@ -105,6 +108,11 @@ function onFactionChange() {
   if (selectedFaction.value) {
     canvas.loadFaction(selectedFaction.value)
   }
+}
+
+function openFull() {
+  bus.emit('canvas:open-full', { mode: mode.value, entityId: canvas.focusId.value })
+  panel.close()
 }
 
 async function onConnect(connection) {

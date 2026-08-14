@@ -224,6 +224,7 @@
     fullscreen
     :location-id="fullCanvas.mode === 'location' ? fullCanvas.entityId : currentLocationId"
     :initial-faction-id="fullCanvas.mode === 'faction' ? fullCanvas.entityId : ''"
+    :initial-gmc-id="fullCanvas.mode === 'gmc-web' ? fullCanvas.entityId : ''"
     @close-full="fullCanvas = null"
   />
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
