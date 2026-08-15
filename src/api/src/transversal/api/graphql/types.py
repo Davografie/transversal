@@ -204,6 +204,8 @@ class RollTable:
     die: DieType
     check: Optional[RollTableCheck] = None
     entries: list[RollTableEntry]
+    canvas_x: Optional[float] = None
+    canvas_y: Optional[float] = None
 
 
 @strawberry.input

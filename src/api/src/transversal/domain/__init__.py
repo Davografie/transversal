@@ -599,6 +599,9 @@ class RollTable(BaseModel):
     die: DieType = DieType.D6  # die size for range/index rolls (FIXED_DIE)
     check: Optional[RollTableCheck] = None  # legacy dice-pool check; unused
     entries: list[RollTableEntry] = Field(default_factory=list)
+    # Canvas layout persistence (GM manual arrangement of life-path nodes).
+    canvas_x: Optional[float] = None
+    canvas_y: Optional[float] = None
 
 
 # ── Assembled Views (not stored, built by repo) ───────

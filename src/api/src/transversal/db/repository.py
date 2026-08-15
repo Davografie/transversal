@@ -475,6 +475,24 @@ class EntityRepository:
         except Exception:
             return False
 
+    def set_roll_table_position(self, table_id: str, x: Optional[float], y: Optional[float]) -> Optional[RollTable]:
+        table = self.get_roll_table(table_id)
+        if table is None:
+            return None
+        table.canvas_x = x
+        table.canvas_y = y
+        self.update_roll_table(table)
+        return table
+
+    def clear_roll_table_positions(self, life_path_id: str) -> int:
+        count = 0
+        for table in self.list_roll_tables(life_path_id):
+            table.canvas_x = None
+            table.canvas_y = None
+            self.update_roll_table(table)
+            count += 1
+        return count
+
     def _cleanup_lifepath_trait_refs(self, trait_id: str) -> None:
         """Remove `trait_id` from every life path that references it.
 
