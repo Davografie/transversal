@@ -296,7 +296,7 @@ Ordered, idempotent, guarded by existence checks (existing convention):
 - [ ] Run migration against ArangoDB (needs a live DB).
 
 ### Frontend
-- [ ] Character sheet active-projection name/image rendering.
+- [x] Character sheet active-projection name/image rendering.
 - [x] GM projections management (list/add/remove) in `GmEntityEditPanel`.
 - [x] Entity gallery shows per-universe images (existing `EntityImage` gallery).
 - [x] GM-drag = inapposite travel (`move_to` now relocates the active projection).
@@ -306,5 +306,5 @@ Ordered, idempotent, guarded by existence checks (existing convention):
 - [ ] Inner locations for occupants.
 - [ ] `owned_by` removal.
 - [ ] `EntityImage` ↔ projection image reconciliation.
-- [ ] Remove leftover `[diag]` `console.log` lines in `CharacterSheet.vue`.
+- [x] Remove leftover `[diag]` `console.log` lines in `CharacterSheet.vue`.
 - [ ] Consolidate drag-and-drop into a shared `useDragDrop` composable (currently duplicated across `GmLocationTree`, `GmTraitsetsPanel`, `LocationViewer`, `App`, `BlueBook`, `DiceRoller`, `EffectEditor`, and the new projection image drop).
