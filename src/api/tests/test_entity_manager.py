@@ -111,8 +111,8 @@ class InMemoryRepository(EntityRepository):
         return self._traitsettings.pop(tsid, None) is not None
 
     # effective traits
-    def get_effective_traitsettings(self, eid: str, universe: str) -> list[TraitSetting]:
-        universe_trait_ids = {tid for tid, d in self._traits.items() if universe in d["universes"]}
+    def get_effective_traitsettings(self, eid: str, universes: list[str]) -> list[TraitSetting]:
+        universe_trait_ids = {tid for tid, d in self._traits.items() if any(u in d["universes"] for u in universes)}
         return [
             TraitSetting.model_validate(d)
             for d in self._traitsettings.values()
@@ -284,13 +284,13 @@ class TestEgoTraits:
         ))
 
         # On Earth: both available
-        earth_traits = em.get_effective_traitsettings(kael.id, "earth")
+        earth_traits = em.get_effective_traitsettings(kael.id, ["earth"])
         earth_names = {repo.get_trait(ts.trait_id).name for ts in earth_traits}
         assert "hacking" in earth_names
         assert "curious" in earth_names
 
         # In Three Realms: only curious (ego), not hacking (Earth morph)
-        realm_traits = em.get_effective_traitsettings(kael.id, "three_realms")
+        realm_traits = em.get_effective_traitsettings(kael.id, ["three_realms"])
         realm_names = {repo.get_trait(ts.trait_id).name for ts in realm_traits}
         assert "hacking" not in realm_names
         assert "curious" in realm_names

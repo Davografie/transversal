@@ -47,6 +47,7 @@
         <div v-if="gmMode" class="meta">
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
+          <button type="button" class="all-traits-toggle" :class="{ active: showAllTraits }" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
         </div>
       </div>
       <BlueBook
@@ -135,6 +136,7 @@
                   </button>
                 </div>
                 <input v-if="t.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" />
+                <button type="button" class="ego-toggle" :class="{ 'is-ego': editEgo }" @click="toggleEgo">{{ editEgo ? 'ego' : 'morph' }}</button>
                 <div class="edit-actions">
                   <button class="edit-done-btn" @click="cancelEdit">Done</button>
                   <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === t.id }" @click="onDeleteClick(t)">
@@ -203,6 +205,27 @@ function displayName(name) {
 const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
 const entity = ref(null)
 const traitSets = ref([])
+const allTraitSettings = ref([])
+const effectiveSettings = ref([])
+const showAllTraits = ref(false)
+
+function groupTraitSettings(settings) {
+  const sets = {}
+  for (const ts of settings || []) {
+    const key = ts.traitsetName || 'Other'
+    if (!sets[key]) sets[key] = []
+    sets[key].push(ts)
+  }
+  return Object.entries(sets)
+    .map(([name, traits]) => ({ name, traits, order: traits[0]?.traitsetOrder ?? 99, limit: traits[0]?.traitsetLimit ?? 1 }))
+    .sort((a, b) => a.order - b.order)
+    .map(({ name, traits, order, limit }) => ({ name, traits, limit }))
+}
+
+function recomputeTraitSets() {
+  const src = showAllTraits.value ? allTraitSettings.value : effectiveSettings.value
+  traitSets.value = groupTraitSettings(src)
+}
 
 // ── Relationship widget (foreign sheets only) ──────
 const relationship = ref(null)
@@ -279,6 +302,7 @@ const showDiePicker = ref(false)
 const pickIdx = ref(0)
 const pickedDie = ref('')
 const editSfxIds = ref([])
+const editEgo = ref(false)
 let longPressTimer = null
 
 // ── Add trait picker ────────────────────────────
@@ -522,6 +546,26 @@ const QUERY = `
         possibleSfxIds
         transferFlags
       }
+      effectiveTraitSettings {
+        id
+        traitId
+        name
+        traitsetName
+        dieType
+        ratingType
+        rating
+        ego
+        statement
+        sfxIds
+        universe
+        dice
+        polarity
+        traitsetOrder
+        traitsetLimit
+        knownTo
+        possibleSfxIds
+        transferFlags
+      }
     }
   }
 `
@@ -535,17 +579,9 @@ async function fetchEntity() {
     entity.value = data.entity
     resolveNames(data.entity)
 
-    // Group trait settings by traitset, filter by universe
-    const sets = {}
-    for (const ts of data.entity.traitSettings || []) {
-      const key = ts.traitsetName || 'Other'
-      if (!sets[key]) sets[key] = []
-      sets[key].push(ts)
-    }
-    traitSets.value = Object.entries(sets)
-      .map(([name, traits]) => ({ name, traits, order: traits[0]?.traitsetOrder ?? 99, limit: traits[0]?.traitsetLimit ?? 1 }))
-      .sort((a, b) => a.order - b.order)
-      .map(({ name, traits, order, limit }) => ({ name, traits, limit }))
+    allTraitSettings.value = data.entity.traitSettings || []
+    effectiveSettings.value = data.entity.effectiveTraitSettings || []
+    recomputeTraitSets()
   }
 }
 
@@ -633,6 +669,7 @@ function startEdit(t) {
   editDice.value = (t.dice && t.dice.length ? [...t.dice] : [t.dieType || 'd6']).map(d => d.toLowerCase())
   editStatement.value = t.statement || ''
   editSfxIds.value = [...(t.sfxIds || [])]
+  editEgo.value = !!t.ego
   showDiePicker.value = false
 }
 
@@ -709,8 +746,8 @@ async function deleteTrait(t) {
 async function doSave() {
   if (!editingTraitId.value) return
   const newDice = editDice.value.map(d => d.toUpperCase())
-  const query = `mutation($id: ID!, $dice: [DieType!], $statement: String, $sfxIds: [ID!]) {
-    updateTraitSetting(id: $id, input: { dice: $dice, statement: $statement, sfxIds: $sfxIds }) { id }
+  const query = `mutation($id: ID!, $dice: [DieType!], $statement: String, $sfxIds: [ID!], $ego: Boolean) {
+    updateTraitSetting(id: $id, input: { dice: $dice, statement: $statement, sfxIds: $sfxIds, ego: $ego }) { id }
   }`
   await fetch('/api/v1/graphql', {
     method: 'POST',
@@ -722,6 +759,7 @@ async function doSave() {
         dice: newDice,
         statement: editStatement.value ?? null,
         sfxIds: editSfxIds.value,
+        ego: editEgo.value,
       },
     }),
   })
@@ -733,9 +771,15 @@ async function doSave() {
       t.rating = null  // force fallback to dice display
       t.sfxIds = [...editSfxIds.value]
       t.statement = editStatement.value
+      t.ego = editEgo.value
       break
     }
   }
+}
+
+function toggleEgo() {
+  editEgo.value = !editEgo.value
+  doSave()
 }
 
 function toggleSfx(sfxId) {
@@ -790,6 +834,7 @@ onMounted(() => {
 watch(() => props.entityId, fetchEntity)
 watch(() => props.universe, fetchEntity)
 watch(() => props.overrideEntityId, fetchEntity)
+watch(showAllTraits, recomputeTraitSets)
 
 // ── Relationship fetch ─────────────────────────────
 async function fetchRelationship() {
@@ -1358,6 +1403,33 @@ watch(() => props.externalPoolSources, (sources) => {
   text-transform: uppercase;
   letter-spacing: 1px;
 }
+.all-traits-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+.all-traits-toggle.active { opacity: 1; }
+.ego-toggle {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--text-dim);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.ego-toggle.is-ego {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+}
 .razmerit {
   display: flex;
   align-items: center;
@@ -1424,8 +1496,7 @@ watch(() => props.externalPoolSources, (sources) => {
   background: rgba(255,255,255,0.04);
 }
 .trait-row.ego {
-  border-left: 2px solid var(--accent);
-  padding-left: 8px;
+  background: rgba(64, 136, 212, 0.08);
 }
 
 .trait-left {

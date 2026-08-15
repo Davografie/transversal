@@ -225,7 +225,9 @@ function onImageOpen(img) {
 // ── Drag-drop move ──────────────────────────────────
 async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
   if (entityKind === 'occupant') {
-    await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation } }`, { input: { id: entityId, currentLocation: targetId } })
+    const input = { id: entityId, currentLocation: targetId }
+    if (targetUniverse) input.currentUniverse = targetUniverse
+    await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation currentUniverse } }`, { input })
   } else if (entityKind === 'location') {
     if (targetUniverse) {
       try { await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentUniverse } }`, { input: { id: entityId, currentUniverse: targetUniverse } }) } catch {}

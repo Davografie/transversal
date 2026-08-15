@@ -257,6 +257,7 @@ class Trait(BaseModel):
     possible_sfx_ids: list[str] = Field(default_factory=list)
     default_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False
+    default_ego: bool = False      # default morph/ego for settings created from this trait
     explanation: str = ""
     random_weight: int = 0
     display_names: list[TraitDisplayName] = Field(default_factory=list)
@@ -276,6 +277,7 @@ class TraitSet(BaseModel):
     order: int = 0
     limit: int = 1
     location_restricted: bool = False
+    default_ego: bool = False
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
     transfer_flags: Optional[TransferFlags] = None
@@ -420,6 +422,10 @@ class Entity(BaseModel):
     node_ids: list[str] = Field(default_factory=list)
     # Asset
     owned_by: Optional[str] = None
+    # Transversal (Razmerit-imbued) — carries home-universe laws across boundaries
+    transversal: bool = False
+    home_universes: list[str] = Field(default_factory=list)
+    attunements: list["Attunement"] = Field(default_factory=list)  # active attunements (effect-managed)
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
     # Life path tracking
@@ -486,6 +492,25 @@ class EffectTiming(str, Enum):
     END_OF_SESSION = "end_of_session"
     AFTER_BEATS = "after_beats"
     ON_CONDITION = "on_condition"
+
+
+class AttunementScope(str, Enum):
+    """Who an attunement affects."""
+    SELF = "self"        # only the entity carrying the attunement
+    DOMAIN = "domain"    # occupants in the entity's location subtree
+
+
+class Attunement(BaseModel):
+    """An active temporary addition of a universe to an entity's effective universes.
+
+    Stored on the entity document (``Entity.attunements``).  Expiry is driven by
+    the effects system: when the ``until`` timing fires, the effects system
+    removes the attunement.
+    """
+    universe: str
+    scope: AttunementScope = AttunementScope.SELF
+    until: Optional[EffectTiming] = None
+    source_sfx_id: Optional[str] = None
 
 
 class Effect(BaseModel):

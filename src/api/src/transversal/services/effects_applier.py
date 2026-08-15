@@ -96,11 +96,59 @@ def _register_core_handlers(em, raz):
             razmerit=ctx.get("razmerit", 0),
         ))
 
-    # Location operations
-    effect_registry.register("spoof_location", "enable",
-        lambda a, eid, u, ctx: None)  # handled by resolver reading effective traits
-    effect_registry.register("spoof_location", "disable",
-        lambda a, eid, u, ctx: None)
+    # Attunement (temporary effective-universe additions)
+    def _attune(a, eid, u, ctx):
+        from transversal.domain import Attunement, AttunementScope
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        scope = AttunementScope(ctx.get("scope", "self"))
+        universe = a.result or u
+        if a.action == "enable":
+            if not any(x.universe == universe and x.scope == scope for x in entity.attunements):
+                entity.attunements.append(Attunement(
+                    universe=universe, scope=scope, until=a.timing,
+                    source_sfx_id=ctx.get("sfx_id"),
+                ))
+        else:  # disable
+            entity.attunements = [
+                x for x in entity.attunements
+                if not (x.universe == universe and x.scope == scope)
+            ]
+        em.repo.update_entity(entity)
+
+    effect_registry.register("attune", "enable", _attune)
+    effect_registry.register("attune", "disable", _attune)
+
+    # Inapposite travel — move the entity and relocate its active projection.
+    def _travel(a, eid, u, ctx):
+        from transversal.domain import Projection, TransversalType
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        target_location = a.result or ctx.get("location")
+        if not target_location:
+            return
+        dest = em.repo.get_entity(target_location)
+        if dest is None:
+            return
+        old_universe = entity.current_universe
+        new_universe = dest.current_universe
+        if new_universe != old_universe:
+            old_proj = em.repo.get_projection(f"{eid}:{old_universe}")
+            if old_proj:
+                em.repo.delete_projection(old_proj.id)
+            em.repo.create_projection(Projection(
+                id=f"{eid}:{new_universe}",
+                entity_id=eid,
+                universe=new_universe,
+                transversal_type=TransversalType.INAPPOSITE,
+            ))
+        entity.current_location = target_location
+        entity.current_universe = new_universe
+        em.repo.update_entity(entity)
+
+    effect_registry.register("travel", "move", _travel)
 
     # Dice pool operations (handled by resolver, not state changes)
     effect_registry.register("modify_roll", "*",
@@ -206,6 +254,8 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     traitset_id = _resolve_traitset_id(trait_id, repo)
     if not traitset_id and negative:
         traitset_id = "ts-complications"
+    trait = repo.get_trait(trait_id)
+    ego = getattr(trait, "default_ego", False) if trait else False
     return TraitSetting(
         id=f"{owner_id}:{trait_id}{':complication' if negative else ''}",
         entity_id=owner_id,
@@ -214,6 +264,7 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
         from_type=from_type,
         dice=[die],
         negative=negative,
+        ego=ego,
         source_type="effect",
     )
 

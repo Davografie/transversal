@@ -107,7 +107,7 @@ class TestFullCharacterFlow:
         # 7. Roll dice in the Three Realms — should use cultivation trait + ego trait
         from transversal import main as api_main
         em = api_main._get_em()
-        effective = em.get_effective_traitsettings(eid, "three_realms")
+        effective = em.get_effective_traitsettings(eid, ["three_realms"])
         assert len(effective) >= 1  # at minimum the ego trait should be there
 
         # 8. Earn razmerit from a complication

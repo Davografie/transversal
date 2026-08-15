@@ -315,20 +315,37 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         ],
     ),
 
-    # ── Location Spoof ─────────────────────────────────
+    # ── Attunement ─────────────────────────────────────
     EffectActionMeta(
-        action_id="spoof_location",
-        label="Spoof Location",
-        description="Temporarily change effective universe for trait availability",
+        action_id="attune",
+        label="Attune",
+        description="Add a universe to an entity's effective universes until a timing expires. Context scope 'self' (entity) or 'domain' (location subtree).",
         category="benefit",
-        effect_type="spoof_location",
+        effect_type="attune",
         effect_action="enable",
-        valid_timings=["IMMEDIATE", "END_OF_SCENE"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
         fields=[
             EffectFieldDef(name="result", label="Target Universe", field_type="select",
                           required=True, options=["three_realms", "earth"]),
             EffectFieldDef(name="target", label="Target Entity", field_type="text",
                           required=False, default="wielder"),
+        ],
+    ),
+
+    # ── Travel / Transversal ───────────────────────────
+    EffectActionMeta(
+        action_id="travel",
+        label="Travel",
+        description="Move an entity inappositely to a target location, relocating its projection",
+        category="benefit",
+        effect_type="travel",
+        effect_action="move",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Target Entity", field_type="text",
+                          required=False, default="self"),
+            EffectFieldDef(name="result", label="Target Location", field_type="text",
+                          required=True),
         ],
     ),
 

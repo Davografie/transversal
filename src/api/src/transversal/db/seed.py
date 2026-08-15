@@ -173,7 +173,7 @@ def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
                 Effect(timing=EffectTiming.IMMEDIATE,
                          type="transfer_razmerit", action="spend", target="self", result="1"),
                 Effect(timing=EffectTiming.END_OF_SCENE,
-                         type="spoof_location", action="enable", target="wielder",
+                         type="attune", action="enable", target="wielder",
                          result="three_realms"),
             ],
         ),

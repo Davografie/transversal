@@ -67,6 +67,7 @@ class TraitRef:
     possible_sfx_ids: list[strawberry.ID]
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
+    default_ego: bool = False
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
 
@@ -91,6 +92,7 @@ class TraitSetRef:
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
                 location_restricted=t.location_restricted,
+                default_ego=t.default_ego,
                 display_names=[
                     TraitDisplayName(name=dn.name, universe=dn.universe,
                                      ratings=dn.ratings)
@@ -291,6 +293,7 @@ class TraitInput:
     possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
+    default_ego: bool = False
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
 
@@ -304,6 +307,7 @@ class TraitUpdateInput:
     possible_sfx_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
+    default_ego: Optional[bool] = None
     display_names: Optional[list[TraitDisplayNameInput]] = None
 
 
@@ -454,6 +458,14 @@ class Zone:
 
 
 @strawberry.type
+class Attunement:
+    universe: str
+    scope: str
+    until: Optional[EffectTimingEnum] = None
+    source_sfx_id: Optional[str] = None
+
+
+@strawberry.type
 class PendingTerm:
     """In-progress life path term checkpoint."""
     faction_id: str
@@ -481,6 +493,9 @@ class Entity:
     nav_positions: str = "{}"
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
+    transversal: bool = False
+    home_universes: list[str] = strawberry.field(default_factory=list)
+    attunements: list[Attunement] = strawberry.field(default_factory=list)
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
 
     @strawberry.field
@@ -543,6 +558,24 @@ class Entity:
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
         settings = em.get_traitsettings(self.id)
+        return [
+            TraitSetting(
+                id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
+                traitset_id=s.traitset_id,
+                rating_type=s.rating_type, dice=s.dice,
+                polarity=s.polarity,
+                statement=s.statement, negative=s.negative,
+                ego=s.ego, sfx_ids=s.sfx_ids,
+                known_to=s.known_to,
+            )
+            for s in settings
+        ]
+
+    @strawberry.field
+    def effective_trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        settings = em.get_effective_traitsettings(str(self.id))
         return [
             TraitSetting(
                 id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,

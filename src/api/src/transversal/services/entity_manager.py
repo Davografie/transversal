@@ -174,9 +174,16 @@ class EntityManager:
     def get_traitsettings(self, entity_id: str) -> list[TraitSetting]:
         return self.repo.get_traitsettings_for_entity(entity_id)
 
-    def get_effective_traitsettings(self, entity_id: str, universe: str) -> list[TraitSetting]:
-        """Traits active in a universe: morph for that universe + all ego traits."""
-        return self.repo.get_effective_traitsettings(entity_id, universe)
+    def get_effective_traitsettings(
+        self, entity_id: str, universes: Optional[list[str]] = None
+    ) -> list[TraitSetting]:
+        """Traits active in ``universes``, or the entity's effective universes when omitted."""
+        if universes is None:
+            entity = self.repo.get_entity(entity_id)
+            if entity is None:
+                return []
+            universes = self.repo.effective_universes(entity)
+        return self.repo.get_effective_traitsettings(entity_id, universes)
 
     def get_traitsettings_by_set(
         self, entity_id: str, traitset_id: str

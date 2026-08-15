@@ -128,6 +128,28 @@ class EffectsEngine:
 
             # Execute each effect with its own timing
             for effect in sfx.effects:
+                # Attunement: enable applies now; disable is scheduled at its timing.
+                if effect.type == "attune" and effect.action == "enable":
+                    _effects_applier.effect_registry.apply(
+                        effect, event.entity_id, event.universe, event.context)
+                    applied.append(effect)
+                    if effect.timing != EffectTiming.IMMEDIATE:
+                        disable = Effect(
+                            timing=effect.timing, type="attune", action="disable",
+                            target=effect.target, result=effect.result,
+                            target_scope=effect.target_scope, context=effect.context,
+                        )
+                        self._schedule.append(ScheduledEffect(
+                            sfx_name=sfx.name,
+                            entity_id=event.entity_id,
+                            universe=event.universe,
+                            timing=effect.timing,
+                            beats_remaining=_beats_for_timing(effect.timing),
+                            condition=event.context.get("condition"),
+                            effects=[disable],
+                            context=event.context,
+                        ))
+                    continue
                 if effect.timing == EffectTiming.IMMEDIATE:
                     _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
                     applied.append(effect)

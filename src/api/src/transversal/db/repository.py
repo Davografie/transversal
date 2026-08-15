@@ -29,6 +29,7 @@ from transversal.db.arango import (
     get_db,
 )
 from transversal.domain import (
+    AttunementScope,
     CharacterView,
     Entity,
     EntityImage,
@@ -339,6 +340,17 @@ class EntityRepository:
         return [
             Trait.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars={"tsid": traitset_id})
+        ]
+
+    def get_all_traits(self) -> list[Trait]:
+        query = f"""
+            FOR t IN {TRAITS}
+            SORT t.name ASC
+            RETURN t
+        """
+        return [
+            Trait.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
         ]
 
     def update_trait(self, trait: Trait) -> Trait:
@@ -707,19 +719,65 @@ class EntityRepository:
             trait_settings=all_settings,
         )
 
-    def get_effective_traitsettings(
-        self, entity_id: str, universe: str
-    ) -> list[TraitSetting]:
-        """Get traitsettings active in a given universe.
+    def physical_universe(self, entity: Entity) -> str:
+        """The entity's physical universe, derived from its location chain.
 
-        Includes: morph traits whose trait is native to `universe`,
+        Falls back to the stored ``current_universe`` when the entity has no
+        ``current_location`` (or its location is missing).
+        """
+        if entity.current_location:
+            loc = self.get_entity(entity.current_location)
+            if loc:
+                return loc.current_universe
+        return entity.current_universe
+
+    def effective_universes(self, entity: Entity) -> list[str]:
+        """Compute the set of universes governing the entity's trait availability.
+
+        Union of: physical universe (location chain), home universes (for
+        transversal entities), self-scoped attunements, and domain-scoped
+        attunements from entities at this entity's location or its ancestors.
+        """
+        result: set[str] = set()
+        phys = self.physical_universe(entity)
+        if phys:
+            result.add(phys)
+        if entity.transversal:
+            result.update(entity.home_universes)
+        for att in entity.attunements:
+            if att.scope == AttunementScope.SELF:
+                result.add(att.universe)
+        result.update(self._domain_attunement_universes(entity))
+        return sorted(result)
+
+    def _domain_attunement_universes(self, entity: Entity) -> set[str]:
+        """Universes from domain-scoped attunements over this entity's location chain."""
+        if not entity.current_location:
+            return set()
+        chain = [entity.current_location] + self.get_location_ancestors(entity.current_location)
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.current_location IN @chain AND LENGTH(e.attunements) > 0
+            FOR att IN e.attunements
+            FILTER att.scope == 'domain'
+            RETURN DISTINCT att.universe
+        """
+        return set(self.db.aql.execute(query, bind_vars={"chain": chain}))
+
+    def get_effective_traitsettings(
+        self, entity_id: str, universes: list[str]
+    ) -> list[TraitSetting]:
+        """Get trait settings active in a set of universes.
+
+        Includes morph traits whose trait is native to any of ``universes``,
         plus all ego traits (regardless of universe).
         """
-        # Get the trait IDs for the given universe
         query = f"""
             LET universe_traits = (
                 FOR t IN {TRAITS}
-                FILTER @universe IN t.universes
+                LET set_doc = DOCUMENT(CONCAT('{TRAITSETS}/', t.traitset_id))
+                FILTER LENGTH(INTERSECTION(t.universes, @universes)) > 0
+                FILTER set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0
                 RETURN t._key
             )
             FOR ts IN {TRAITSETTINGS}
@@ -730,7 +788,7 @@ class EntityRepository:
         return [
             TraitSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(
-                query, bind_vars={"eid": entity_id, "universe": universe}
+                query, bind_vars={"eid": entity_id, "universes": universes}
             )
         ]
 
@@ -1333,7 +1391,7 @@ class EntityRepository:
             LET occupants = (
                 FOR e IN {ENTITIES}
                 FILTER e.current_location == @lid
-                  AND e.type IN ['character', 'gmc']
+                  AND e.type IN ['character', 'gmc', 'asset']
                 RETURN {{
                     name: e.name, type: e.type, id: e._key,
                     image: e.background_image,

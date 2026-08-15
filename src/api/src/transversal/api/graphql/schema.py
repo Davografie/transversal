@@ -51,6 +51,7 @@ from transversal.api.graphql.types import (
     TraitSettingInput,
     TraitSettingUpdateInput,
     TraitUpdateInput,
+    Attunement,
     TransversalTypeEnum,
     UpdateEntityInput,
     UpdateMessageInput,
@@ -89,6 +90,13 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         map_x=e.map_x, map_y=e.map_y,
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,
+        transversal=e.transversal,
+        home_universes=list(e.home_universes),
+        attunements=[
+            Attunement(universe=a.universe, scope=a.scope.value,
+                       until=a.until, source_sfx_id=a.source_sfx_id)
+            for a in e.attunements
+        ],
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,
     )
 
@@ -300,6 +308,7 @@ class Query:
                 possible_sfx_ids=t.possible_sfx_ids,
                 default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
+                default_ego=t.default_ego,
                 display_names=[
                     GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                         ratings=dn.ratings)
@@ -680,6 +689,7 @@ class Mutation:
             possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
+            default_ego=input.default_ego,
             display_names=[
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
                                        ratings=dn.ratings)
@@ -695,6 +705,7 @@ class Mutation:
             possible_sfx_ids=created.possible_sfx_ids,
             default_sfx_ids=created.default_sfx_ids,
             location_restricted=created.location_restricted,
+            default_ego=created.default_ego,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)
@@ -723,6 +734,8 @@ class Mutation:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.location_restricted is not None:
             existing.location_restricted = input.location_restricted
+        if input.default_ego is not None:
+            existing.default_ego = input.default_ego
         if input.display_names is not None:
             existing.display_names = [
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -738,6 +751,7 @@ class Mutation:
             possible_sfx_ids=updated.possible_sfx_ids,
             default_sfx_ids=updated.default_sfx_ids,
             location_restricted=updated.location_restricted,
+            default_ego=updated.default_ego,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)

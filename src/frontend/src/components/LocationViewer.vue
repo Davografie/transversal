@@ -52,9 +52,9 @@
       :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name"
       :draggable="editZones"
       :title="z.name"
-      :arrival-x="zoneCache(z.name)?.arriveX"
-      :arrival-y="zoneCache(z.name)?.arriveY"
-      :dest-aspect="zoneCache(z.name)?.destAspect"
+      :arrival-x="zoneCache(z)?.arriveX"
+      :arrival-y="zoneCache(z)?.arriveY"
+      :dest-aspect="zoneCache(z)?.destAspect"
       @click="onDotClick('zone', z)"
       @overlay-click="onExpandedClick('zone', z)"
       @drag-start="(e) => onZoneDragStart(e, z, i)"
@@ -874,8 +874,8 @@ function childId(zone) {
   return child?._key || null
 }
 
-function zoneCache(zoneName) {
-  const cid = childId(zoneName)
+function zoneCache(zone) {
+  const cid = childId(zone)
   return cid ? destNavCache.value[cid] : null
 }
 
@@ -956,7 +956,7 @@ function onDotClick(type, item) {
 }
 
 async function travelWithAnimation(zone, child, imageUrl = null) {
-  const img = imageUrl || childImage(zone.name)
+  const img = imageUrl || childImage(zone)
   const sourceId = props.locationId  // remember where we came from
   if (!img) {
     moveTo(child._key, child.current_universe)
