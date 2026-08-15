@@ -569,6 +569,7 @@ const navDots = computed(() => {
       key, type: 'portal', name: `${t.name} · ${t.transversal_type || 'inapposite'}`,
       image: t.background_image || null,
       x: pos.x, y: pos.y,
+      transversal_type: t.transversal_type || 'inapposite',
       target: { id: t._key, universe: t.current_universe },
     })
   }
@@ -781,7 +782,7 @@ async function onOccDragEnd() {
       if (nd) {
         activeElement.value = { type: 'nav', key: nd.key }
         const fakeZone = { x: nd.x, y: nd.y }
-        const fakeChild = { _key: nd.target.id, current_universe: nd.target.universe }
+        const fakeChild = { _key: nd.target.id, current_universe: nd.target.universe, transversal_type: nd.type === 'portal' ? nd.transversal_type : null }
         travelWithAnimation(fakeZone, fakeChild, nd.image)
         return
       }
@@ -855,6 +856,22 @@ async function moveTo(locationId, universe) {
     const data = await r.json()
     emit('moved', data)
   } catch { /* silent */ }
+}
+
+async function relocate(locationId, universe, consciousness) {
+  if (consciousness) {
+    try {
+      const r = await fetch(`/api/v1/entities/${props.entityId}/consciousness-travel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location: locationId })
+      })
+      const data = await r.json()
+      emit('moved', data)
+    } catch { /* silent */ }
+    return
+  }
+  await moveTo(locationId, universe)
 }
 
 // ── Child location image lookup ────────────────────
@@ -975,7 +992,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   const img = imageUrl || childImage(zone)
   const sourceId = props.locationId  // remember where we came from
   if (!img) {
-    moveTo(child._key, child.current_universe)
+    relocate(child._key, child.current_universe, child.transversal_type === 'consciousness')
     return
   }
 
@@ -1032,7 +1049,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     imageAspect.value = preload.naturalWidth / preload.naturalHeight
   }
 
-  moveTo(child._key, child.current_universe)
+  relocate(child._key, child.current_universe, child.transversal_type === 'consciousness')
 
   setTimeout(async () => {
     await fetchNav()
@@ -1112,7 +1129,7 @@ function onExpandedClick(type, item) {
     // Use travel animation for nav dots too
     activeElement.value = { type: 'nav', key: item.key }
     const fakeZone = { x: item.x, y: item.y }
-    const fakeChild = { _key: item.target.id, current_universe: item.target.universe }
+    const fakeChild = { _key: item.target.id, current_universe: item.target.universe, transversal_type: item.type === 'portal' ? item.transversal_type : null }
     travelWithAnimation(fakeZone, fakeChild, item.image)
   } else if (type === 'occupant') {
     emit('inspectEntity', item.id)

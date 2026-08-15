@@ -149,6 +149,25 @@ async def move_entity(entity_id: str, body: MoveRequest):
     }
 
 
+@router.post("/entities/{entity_id}/consciousness-travel")
+async def consciousness_travel(entity_id: str, body: MoveRequest):
+    """Transfer an entity's consciousness to a projection at the target location."""
+    em = _em()
+    repo = _repo()
+    result = em.consciousness_travel(entity_id, body.location)
+
+    loc = repo.get_entity(body.location)
+    location_name = loc.name if loc else body.location
+
+    return {
+        "entity_id": result.id,
+        "name": result.name,
+        "location": location_name,
+        "location_id": result.current_location,
+        "universe": result.current_universe,
+    }
+
+
 # ── Location Edge Management ─────────────────────────
 
 
