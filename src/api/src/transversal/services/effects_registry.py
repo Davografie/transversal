@@ -336,7 +336,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="travel",
         label="Travel",
-        description="Move an entity inappositely to a target location, relocating its projection",
+        description="Move an entity across a universal boundary (inapposite relocates the body; consciousness transfers the mind)",
         category="benefit",
         effect_type="travel",
         effect_action="move",
@@ -346,6 +346,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=False, default="self"),
             EffectFieldDef(name="result", label="Target Location", field_type="text",
                           required=True),
+            EffectFieldDef(name="transversal_type", label="Transversal Type",
+                          field_type="select", required=False,
+                          options=["inapposite", "consciousness"]),
         ],
     ),
 

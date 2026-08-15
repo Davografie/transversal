@@ -120,9 +120,11 @@ def _register_core_handlers(em, raz):
     effect_registry.register("attune", "enable", _attune)
     effect_registry.register("attune", "disable", _attune)
 
-    # Inapposite travel — move the entity and relocate its active projection in
-    # place. The projection key stays "{entity_id}:{origin_universe}"; only its
-    # ``universe`` and ``current_location`` mutate.
+    # Travel — move the entity across a universal boundary.
+    #
+    # ``inapposite`` relocates the active projection in place (key stays
+    # "{entity_id}:{origin_universe}"). ``consciousness`` leaves the body behind
+    # and spawns/reuses a projection at the destination.
     def _travel(a, eid, u, ctx):
         from transversal.domain import Projection, TransversalType
         entity = em.repo.get_entity(eid)
@@ -136,28 +138,50 @@ def _register_core_handlers(em, raz):
             return
         new_universe = dest.current_universe
 
-        proj_id = entity.current_projection or f"{eid}:{entity.current_universe}"
-        proj = em.repo.get_projection(proj_id)
-        if proj is None:
-            proj = Projection(
-                id=f"{eid}:{new_universe}",
-                entity_id=eid,
-                origin_universe=new_universe,
-                universe=new_universe,
-                current_location=target_location,
-                transversal_type=TransversalType.NATIVE,
-            )
-            em.repo.create_projection(proj)
-        else:
-            if not proj.origin_universe:
-                # backfill legacy projections from their stable key
-                proj.origin_universe = proj.id.rsplit(":", 1)[-1]
-            proj.universe = new_universe
-            proj.current_location = target_location
-            proj.transversal_type = TransversalType.INAPPOSITE
-            em.repo.update_projection(proj)
+        travel_type = (a.context or {}).get("transversal_type") or ctx.get("transversal_type") or "inapposite"
 
-        entity.current_projection = proj.id
+        if travel_type == "consciousness":
+            # Body stays; the consciousness inhabits a projection at the target.
+            proj_id = f"{eid}:{new_universe}"
+            proj = em.repo.get_projection(proj_id)
+            if proj is None:
+                proj = Projection(
+                    id=proj_id,
+                    entity_id=eid,
+                    origin_universe=new_universe,
+                    universe=new_universe,
+                    current_location=target_location,
+                    transversal_type=TransversalType.CONSCIOUSNESS,
+                )
+                em.repo.create_projection(proj)
+            else:
+                proj.current_location = target_location
+                em.repo.update_projection(proj)
+            entity.current_projection = proj_id
+        else:
+            # Inapposite — relocate the active projection in place.
+            proj_id = entity.current_projection or f"{eid}:{entity.current_universe}"
+            proj = em.repo.get_projection(proj_id)
+            if proj is None:
+                proj = Projection(
+                    id=f"{eid}:{new_universe}",
+                    entity_id=eid,
+                    origin_universe=new_universe,
+                    universe=new_universe,
+                    current_location=target_location,
+                    transversal_type=TransversalType.NATIVE,
+                )
+                em.repo.create_projection(proj)
+            else:
+                if not proj.origin_universe:
+                    # backfill legacy projections from their stable key
+                    proj.origin_universe = proj.id.rsplit(":", 1)[-1]
+                proj.universe = new_universe
+                proj.current_location = target_location
+                proj.transversal_type = TransversalType.INAPPOSITE
+                em.repo.update_projection(proj)
+            entity.current_projection = proj.id
+
         entity.current_location = target_location
         entity.current_universe = new_universe
         em.repo.update_entity(entity)
