@@ -67,7 +67,7 @@ class InMemoryRepository(EntityRepository):
     def get_projections_for_entity(self, eid: str) -> list[Projection]:
         return [Projection.model_validate(d) for d in self._projections.values() if d["entity_id"] == eid]
     def update_projection(self, p: Projection) -> Projection:
-        self._projections[p.id] = p.model_dump()
+        self._store(self._projections, p.id, p.model_dump())
         return p
 
     # traits registry
@@ -313,3 +313,24 @@ class TestLocation:
         updated = em.get(kael.id)
         assert updated.current_location == "Valley of Ascension"
         assert updated.current_universe == "three_realms"
+
+    def test_consciousness_travel(self, em, kael):
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        result = em.consciousness_travel(kael.id, loc.id)
+        assert result.current_projection == f"{kael.id}:three_realms"
+        assert result.current_universe == "three_realms"
+        assert result.current_location == loc.id
+        proj = em.repo.get_projection(f"{kael.id}:three_realms")
+        assert proj is not None
+        assert proj.transversal_type == TransversalType.CONSCIOUSNESS
+        assert proj.origin_universe == "three_realms"
+
+    def test_inapposite_travel(self, em, kael):
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        result = em.inapposite_travel(kael.id, loc.id)
+        # key stays origin-earth even though the body is now in three_realms
+        assert result.current_projection == f"{kael.id}:earth"
+        proj = em.repo.get_projection(f"{kael.id}:earth")
+        assert proj.universe == "three_realms"
+        assert proj.origin_universe == "earth"
+        assert proj.transversal_type == TransversalType.INAPPOSITE

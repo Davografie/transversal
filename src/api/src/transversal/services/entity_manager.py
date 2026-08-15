@@ -296,6 +296,50 @@ class EntityManager:
         _publish_location_changed(entity, old_location, old_universe)
         return result
 
+    def consciousness_travel(self, entity_id: str, location: str) -> Entity:
+        """Transfer the entity's consciousness to a projection at ``location``.
+
+        Leaves the current (body) projection in place and spawns/reuses a
+        CONSCIOUSNESS projection keyed by the destination universe, which becomes
+        the entity's active projection.
+        """
+        entity = self.repo.get_entity(entity_id)
+        if entity is None:
+            raise EntityNotFoundError(f"Entity '{entity_id}' not found")
+        loc = self.repo.get_entity(location)
+        if loc is None:
+            raise ValueError(f"Location '{location}' not found")
+
+        new_universe = loc.current_universe
+        old_location = entity.current_location
+        old_universe = entity.current_universe
+
+        proj_id = f"{entity.id}:{new_universe}"
+        proj = self.repo.get_projection(proj_id)
+        if proj is None:
+            proj = Projection(
+                id=proj_id,
+                entity_id=entity.id,
+                origin_universe=new_universe,
+                universe=new_universe,
+                current_location=location,
+                transversal_type=TransversalType.CONSCIOUSNESS,
+            )
+            self.repo.create_projection(proj)
+        else:
+            if not proj.origin_universe:
+                proj.origin_universe = proj.id.rsplit(":", 1)[-1]
+            proj.universe = new_universe
+            proj.current_location = location
+            self.repo.update_projection(proj)
+
+        entity.current_projection = proj.id
+        entity.current_universe = new_universe
+        entity.current_location = location
+        result = self.repo.update_entity(entity)
+        _publish_location_changed(entity, old_location, old_universe)
+        return result
+
     def get_projections(self, entity_id: str) -> list[Projection]:
         return self.repo.get_projections_for_entity(entity_id)
 

@@ -126,65 +126,19 @@ def _register_core_handlers(em, raz):
     # "{entity_id}:{origin_universe}"). ``consciousness`` leaves the body behind
     # and spawns/reuses a projection at the destination.
     def _travel(a, eid, u, ctx):
-        from transversal.domain import Projection, TransversalType
         entity = em.repo.get_entity(eid)
         if entity is None:
             return
         target_location = a.result or ctx.get("location")
         if not target_location:
             return
-        dest = em.repo.get_entity(target_location)
-        if dest is None:
+        if em.repo.get_entity(target_location) is None:
             return
-        new_universe = dest.current_universe
-
         travel_type = (a.context or {}).get("transversal_type") or ctx.get("transversal_type") or "inapposite"
-
         if travel_type == "consciousness":
-            # Body stays; the consciousness inhabits a projection at the target.
-            proj_id = f"{eid}:{new_universe}"
-            proj = em.repo.get_projection(proj_id)
-            if proj is None:
-                proj = Projection(
-                    id=proj_id,
-                    entity_id=eid,
-                    origin_universe=new_universe,
-                    universe=new_universe,
-                    current_location=target_location,
-                    transversal_type=TransversalType.CONSCIOUSNESS,
-                )
-                em.repo.create_projection(proj)
-            else:
-                proj.current_location = target_location
-                em.repo.update_projection(proj)
-            entity.current_projection = proj_id
+            em.consciousness_travel(eid, target_location)
         else:
-            # Inapposite — relocate the active projection in place.
-            proj_id = entity.current_projection or f"{eid}:{entity.current_universe}"
-            proj = em.repo.get_projection(proj_id)
-            if proj is None:
-                proj = Projection(
-                    id=f"{eid}:{new_universe}",
-                    entity_id=eid,
-                    origin_universe=new_universe,
-                    universe=new_universe,
-                    current_location=target_location,
-                    transversal_type=TransversalType.NATIVE,
-                )
-                em.repo.create_projection(proj)
-            else:
-                if not proj.origin_universe:
-                    # backfill legacy projections from their stable key
-                    proj.origin_universe = proj.id.rsplit(":", 1)[-1]
-                proj.universe = new_universe
-                proj.current_location = target_location
-                proj.transversal_type = TransversalType.INAPPOSITE
-                em.repo.update_projection(proj)
-            entity.current_projection = proj.id
-
-        entity.current_location = target_location
-        entity.current_universe = new_universe
-        em.repo.update_entity(entity)
+            em.inapposite_travel(eid, target_location)
 
     effect_registry.register("travel", "move", _travel)
 

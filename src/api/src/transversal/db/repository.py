@@ -752,6 +752,18 @@ class EntityRepository:
                 return proj.universe
         return entity.current_universe
 
+    def _active_location(self, entity: Entity) -> Optional[str]:
+        """The entity's active location — the active projection's current location.
+
+        Falls back to the denormalized ``current_location`` cache when the entity
+        has no active projection (or its projection has no location).
+        """
+        if entity.current_projection:
+            proj = self.get_projection(entity.current_projection)
+            if proj and proj.current_location:
+                return proj.current_location
+        return entity.current_location
+
     def effective_universes(self, entity: Entity) -> list[str]:
         """Compute the set of universes governing the entity's trait availability.
 
@@ -778,10 +790,11 @@ class EntityRepository:
         return sorted(result)
 
     def _domain_attunement_universes(self, entity: Entity) -> set[str]:
-        """Universes from domain-scoped attunements over this entity's location chain."""
-        if not entity.current_location:
+        """Universes from domain-scoped attunements over this entity's active location chain."""
+        location = self._active_location(entity)
+        if not location:
             return set()
-        chain = [entity.current_location] + self.get_location_ancestors(entity.current_location)
+        chain = [location] + self.get_location_ancestors(location)
         query = f"""
             FOR e IN {ENTITIES}
             FILTER e.current_location IN @chain AND LENGTH(e.attunements) > 0
