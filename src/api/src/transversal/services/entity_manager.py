@@ -92,6 +92,7 @@ class EntityManager:
             entity_id=eid,
             universe=universe,
             origin_universe=universe,
+            current_location=location,
             transversal_type=TransversalType.NATIVE,
         )
         self.repo.create_projection(proj)
@@ -250,6 +251,27 @@ class EntityManager:
         entity.current_location = location
         if universe:
             entity.current_universe = universe
+
+        # Keep the active projection's location in sync.
+        new_universe = entity.current_universe
+        proj_id = entity.current_projection or f"{entity.id}:{old_universe or new_universe}"
+        proj = self.repo.get_projection(proj_id)
+        if proj is None:
+            proj = Projection(
+                id=f"{entity.id}:{new_universe}",
+                entity_id=entity.id,
+                origin_universe=new_universe,
+                universe=new_universe,
+                current_location=location,
+                transversal_type=TransversalType.NATIVE,
+            )
+            self.repo.create_projection(proj)
+            entity.current_projection = proj.id
+        else:
+            proj.current_location = location
+            proj.universe = new_universe
+            self.repo.update_projection(proj)
+
         result = self.repo.update_entity(entity)
 
         event = StreamEvent(

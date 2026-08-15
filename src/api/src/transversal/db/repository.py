@@ -250,10 +250,15 @@ class EntityRepository:
         return [self._doc_to_entity(doc) for doc in self.db.aql.execute(query)]
 
     def list_entities_by_location(self, location_id: str) -> list[Entity]:
-        """List all entities currently at a given location."""
+        """List all entities currently at a given location (via their projections)."""
         query = f"""
+            LET occupant_ids = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.current_location == @lid
+                RETURN DISTINCT p.entity_id
+            )
             FOR e IN {ENTITIES}
-            FILTER e.current_location == @lid
+            FILTER e._key IN occupant_ids AND e.type IN ['character', 'gmc', 'asset']
             RETURN e
         """
         return [
@@ -1401,10 +1406,14 @@ class EntityRepository:
                 FILTER r._from == @loc_ref AND r.type == 'transversal'
                 RETURN MERGE(DOCUMENT(r._to), {{ transversal_type: r.transversal_type }})
             )
+            LET occupant_ids = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.current_location == @lid
+                RETURN DISTINCT p.entity_id
+            )
             LET occupants = (
                 FOR e IN {ENTITIES}
-                FILTER e.current_location == @lid
-                  AND e.type IN ['character', 'gmc', 'asset']
+                FILTER e._key IN occupant_ids AND e.type IN ['character', 'gmc', 'asset']
                 RETURN {{
                     name: e.name, type: e.type, id: e._key,
                     image: e.background_image,
