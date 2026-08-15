@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { MarkerType } from '@vue-flow/core'
 import { hierarchy, tree } from 'd3-hierarchy'
 import { buildLifePathGraph } from './lifePathGraph.js'
+import { nextTransversalType } from './useTransversalLinks.js'
 
 const API_BASE = '/api/v1'
 
@@ -224,7 +225,7 @@ export function useCanvas() {
     for (const peer of data.transversal || []) {
       const p = makeLocationNode(peer, { expanded: false })
       newNodes.push(p)
-      newEdges.push(makeTransversalEdge(focus.id, p.id))
+      newEdges.push(makeTransversalEdge(focus.id, p.id, peer.transversal_type))
     }
 
     // Occupants at the focus location
@@ -271,7 +272,7 @@ export function useCanvas() {
       if (!existingIds.has(pid)) {
         const p = makeLocationNode(peer, { expanded: false })
         newNodes.push(p)
-        newEdges.push(makeTransversalEdge(expandedLocId, p.id))
+        newEdges.push(makeTransversalEdge(expandedLocId, p.id, peer.transversal_type))
       }
     }
     const memberships = data.faction_memberships || {}
@@ -382,8 +383,9 @@ export function useCanvas() {
   function makeSuperEdge(source, target) {
     return { id: `super:${source}:${target}`, source, target, type: 'default', data: { kind: 'super' }, sourceHandle: 'top', targetHandle: 'bottom' }
   }
-  function makeTransversalEdge(source, target) {
-    return { id: `transversal:${source}:${target}`, source, target, type: 'default', data: { kind: 'transversal' }, animated: true, label: 'transversal', sourceHandle: 'right', targetHandle: 'left', markerStart: MarkerType.ArrowClosed, markerEnd: MarkerType.ArrowClosed }
+  function makeTransversalEdge(source, target, transversalType) {
+    const t = transversalType === 'consciousness' ? 'consciousness' : 'inapposite'
+    return { id: `transversal:${source}:${target}`, source, target, type: 'default', data: { kind: 'transversal', transversalType: t }, animated: true, label: t, style: { stroke: t === 'consciousness' ? '#f59e0b' : '#8b5cf6' }, sourceHandle: 'right', targetHandle: 'left', markerStart: MarkerType.ArrowClosed, markerEnd: MarkerType.ArrowClosed }
   }
   function makeLocatedEdge(source, target) {
     return { id: `located:${source}:${target}`, source, target, type: 'default', data: { kind: 'located' }, sourceHandle: 'bottom-source', targetHandle: 'target-top' }
@@ -690,6 +692,24 @@ export function useCanvas() {
     }
   }
 
+  async function toggleTransversalEdge(edge) {
+    if (edge?.data?.kind !== 'transversal') return
+    const fromId = edge.source.replace('loc:', '')
+    const toId = edge.target.replace('loc:', '')
+    const next = nextTransversalType(edge.data.transversalType)
+    try {
+      const r = await fetch(`${API_BASE}/locations/${fromId}/edges/${toId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'transversal', transversal_type: next }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      edges.value = edges.value.map((e) => e.id === edge.id ? makeTransversalEdge(e.source, e.target, next) : e)
+    } catch (e) {
+      error.value = e.message
+    }
+  }
+
   async function persistTablePosition(tableId, x, y) {
     try {
       await fetch(`${API_BASE}/graphql`, {
@@ -768,6 +788,7 @@ export function useCanvas() {
     toggleRelations,
     showFaction,
     createTransversal,
+    toggleTransversalEdge,
     setFocus,
     updateNodePosition,
     persistTablePosition,

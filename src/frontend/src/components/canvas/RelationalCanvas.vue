@@ -23,7 +23,7 @@
       </div>
     </div>
     <div v-if="mode === 'life-path'" class="canvas-hint">Roll tables linked by next_step effects · dashed orange edges loop back · click ✎ to open a table</div>
-    <div v-else class="canvas-hint">Drag from a location's right handle (→) to another location's left handle (←) to create a transversal link · click ⊕ to expand</div>
+    <div v-else class="canvas-hint">Drag right handle (→) to left handle (←) to create a transversal link · click a transversal edge to toggle inapposite/consciousness · click ⊕ to expand</div>
 
     <div v-if="loading" class="canvas-status">Loading…</div>
     <div v-else-if="error" class="canvas-status error">{{ error }}</div>
@@ -41,6 +41,7 @@
       class="canvas-flow"
       @connect="onConnect"
       @node-drag-stop="onNodeDragStop"
+      @edge-click="onEdgeClick"
     >
       <Background :gap="24" />
       <Controls v-if="fullscreen" />
@@ -147,6 +148,10 @@ async function onConnect(connection) {
   // Only allow location → location transversal links.
   if (fromNode?.type !== 'location' || toNode?.type !== 'location') return
   await canvas.createTransversal(fromId, toId)
+}
+
+function onEdgeClick({ edge }) {
+  canvas.toggleTransversalEdge(edge)
 }
 
 function onNodeDragStop({ node }) {

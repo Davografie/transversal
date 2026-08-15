@@ -162,6 +162,13 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
     edge_key = f"edge:{from_id}:{to_id}:{body.type}"
 
     if repo._relationships.has(edge_key):
+        # Upsert the transversal type on existing transversal edges.
+        if body.type == "transversal":
+            repo._relationships.update({"_key": edge_key, "transversal_type": body.transversal_type})
+            rev_key = f"edge:{to_id}:{from_id}:{body.type}"
+            if repo._relationships.has(rev_key):
+                repo._relationships.update({"_key": rev_key, "transversal_type": body.transversal_type})
+            return {"status": "updated", "key": edge_key}
         return {"status": "exists", "key": edge_key}
 
     edge_doc = {

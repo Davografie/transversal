@@ -38,8 +38,8 @@
           <div v-if="!gmMode" class="sheet-pills">
             <div v-if="ownsCharacter && !overrideEntityId">
               <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="activeSheetView = 'traits'">🎲</button>
-              <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
               <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
+              <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
             </div>
             <button class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
           </div>
