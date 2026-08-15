@@ -225,9 +225,34 @@ function onImageOpen(img) {
 // ── Drag-drop move ──────────────────────────────────
 async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
   if (entityKind === 'occupant') {
-    const input = { id: entityId, currentLocation: targetId }
-    if (targetUniverse) input.currentUniverse = targetUniverse
-    await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation currentUniverse } }`, { input })
+    if (targetKind === 'universe') {
+      // Dropping onto a universe: activate an existing projection there, if any.
+      const data = await graphql(
+        `query($id: ID!) { entity(id: $id) { projections { id originUniverse universe currentLocation } } }`,
+        { id: entityId }
+      )
+      const projections = data?.entity?.projections || []
+      const proj = projections.find((p) => p.universe === targetUniverse || p.originUniverse === targetUniverse)
+      if (proj) {
+        await graphql(
+          `mutation($entityId: ID!, $projectionId: ID!) { activateProjection(entityId: $entityId, projectionId: $projectionId) { id currentProjection currentUniverse currentLocation } }`,
+          { entityId, projectionId: proj.id }
+        )
+        const next = { ...expandedNodes.value }
+        next[targetId] = true
+        if (proj.currentLocation) {
+          const path = []
+          if (findAncestorIds(locationTree.value, proj.currentLocation, path)) {
+            for (const id of path) next[id] = true
+          }
+        }
+        expandedNodes.value = next
+      }
+    } else {
+      const input = { id: entityId, currentLocation: targetId }
+      if (targetUniverse) input.currentUniverse = targetUniverse
+      await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation currentUniverse } }`, { input })
+    }
   } else if (entityKind === 'location') {
     if (targetUniverse) {
       try { await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentUniverse } }`, { input: { id: entityId, currentUniverse: targetUniverse } }) } catch {}
