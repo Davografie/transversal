@@ -66,7 +66,7 @@
           <img v-else-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
           <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
           <span class="proj-name">{{ p.name || form?.name }}</span>
-          <span class="proj-universe">{{ p.originUniverse }}<template v-if="p.universe !== p.originUniverse"> → {{ p.universe }}</template></span>
+          <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
           <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
           <button class="proj-remove" @click.stop="removeProjection(p.id)" title="Remove projection">✕</button>
         </div>
@@ -125,6 +125,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
+import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
@@ -144,6 +145,8 @@ const bus = usePanelBus()
 const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, updateProjection, removeProjection } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { paths: lifePaths, loading: loadingLifepaths, fetchLifePaths } = useLifePaths()
+const { name: universeName, load: loadUniverseNames } = useUniverseNames()
+loadUniverseNames()
 
 const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.value?.type))
 const newProjLocationId = ref('')

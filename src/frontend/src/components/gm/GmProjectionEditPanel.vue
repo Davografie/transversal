@@ -18,9 +18,9 @@
       <GmLocationPicker v-model="currentLocation" placeholder="Search location…" :universe="projection.universe" @select="onLocationSelect" />
 
       <div class="readonly-row">
-        <span>Origin: {{ projection.originUniverse }}</span>
+        <span>Origin: {{ universeName(projection.originUniverse) }}</span>
         <span>Type: {{ (projection.transversalType || 'native').toLowerCase() }}</span>
-        <span v-if="projection.universe !== projection.originUniverse">Current universe: {{ projection.universe }}</span>
+        <span v-if="projection.universe !== projection.originUniverse">Current universe: {{ universeName(projection.universe) }}</span>
       </div>
     </div>
 
@@ -32,8 +32,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
+import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
 
@@ -49,7 +50,11 @@ const backgroundImage = ref(props.projection.backgroundImage || '')
 const currentLocation = ref(props.projection.currentLocation || '')
 const saving = ref(false)
 
+const { name: universeName, load: loadUniverseNames } = useUniverseNames()
+
 const isVideo = computed(() => /\.(webm|mp4)(\?|$)/i.test(backgroundImage.value))
+
+onMounted(loadUniverseNames)
 
 function onLocationSelect(loc) {
   currentLocation.value = loc.id
