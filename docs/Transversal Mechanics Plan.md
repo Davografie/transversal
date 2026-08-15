@@ -307,3 +307,4 @@ Ordered, idempotent, guarded by existence checks (existing convention):
 - [ ] `owned_by` removal.
 - [ ] `EntityImage` ↔ projection image reconciliation.
 - [ ] Remove leftover `[diag]` `console.log` lines in `CharacterSheet.vue`.
+- [ ] Consolidate drag-and-drop into a shared `useDragDrop` composable (currently duplicated across `GmLocationTree`, `GmTraitsetsPanel`, `LocationViewer`, `App`, `BlueBook`, `DiceRoller`, `EffectEditor`, and the new projection image drop).
