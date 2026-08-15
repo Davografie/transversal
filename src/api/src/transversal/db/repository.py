@@ -259,7 +259,8 @@ class EntityRepository:
                 RETURN DISTINCT p.entity_id
             )
             FOR e IN {ENTITIES}
-            FILTER e._key IN occupant_ids AND e.type IN ['character', 'gmc', 'asset']
+            FILTER e.type IN ['character', 'gmc', 'asset']
+            FILTER e._key IN occupant_ids OR e.current_location == @lid
             RETURN e
         """
         return [
@@ -1422,7 +1423,8 @@ class EntityRepository:
             )
             LET occupants = (
                 FOR e IN {ENTITIES}
-                FILTER e._key IN occupant_ids AND e.type IN ['character', 'gmc', 'asset']
+                FILTER e.type IN ['character', 'gmc', 'asset']
+                FILTER e._key IN occupant_ids OR e.current_location == @lid
                 RETURN {{
                     name: e.name, type: e.type, id: e._key,
                     image: e.background_image,
