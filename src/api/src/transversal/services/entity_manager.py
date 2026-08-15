@@ -151,6 +151,7 @@ class EntityManager:
         entity: Entity,
         universe: str,
         transversal_type: TransversalType = TransversalType.CONSCIOUSNESS,
+        location: Optional[str] = None,
     ) -> Entity:
         existing = self.repo.get_projections_for_entity(entity.id)
         for p in existing:
@@ -162,6 +163,7 @@ class EntityManager:
             entity_id=entity.id,
             universe=universe,
             origin_universe=universe,
+            current_location=location,
             transversal_type=transversal_type,
         )
         self.repo.create_projection(proj)
@@ -180,6 +182,29 @@ class EntityManager:
             entity.current_projection = None
             self.repo.update_entity(entity)
         return entity
+
+    def update_projection(
+        self,
+        entity_id: str,
+        universe: str,
+        name: Optional[str] = None,
+        background_image: Optional[str] = None,
+        current_location: Optional[str] = None,
+    ) -> Projection:
+        """Update a projection's mutable fields (name / image / location).
+
+        ``None`` means "leave unchanged"; an empty string clears the field.
+        """
+        proj = self.repo.get_projection(f"{entity_id}:{universe}")
+        if proj is None:
+            raise ValueError(f"Projection '{entity_id}:{universe}' not found")
+        if name is not None:
+            proj.name = name
+        if background_image is not None:
+            proj.background_image = background_image or None
+        if current_location is not None:
+            proj.current_location = current_location or None
+        return self.repo.update_projection(proj)
 
     def get_projections(self, entity_id: str) -> list[Projection]:
         return self.repo.get_projections_for_entity(entity_id)

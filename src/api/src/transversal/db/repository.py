@@ -44,6 +44,7 @@ from transversal.domain import (
     Trait,
     TraitSet,
     TraitSetting,
+    TransversalType,
     dice_list_to_rating,
 )
 
@@ -743,14 +744,22 @@ class EntityRepository:
     def effective_universes(self, entity: Entity) -> list[str]:
         """Compute the set of universes governing the entity's trait availability.
 
-        Union of: the active universe (active projection), self-scoped
-        attunements, and domain-scoped attunements from entities at this
-        entity's location or its ancestors.
+        Union of: the active universe (active projection), all NATIVE projection
+        universes when the entity has more than one (a multiversal being — this
+        replaces the removed ``transversal`` flag), self-scoped attunements, and
+        domain-scoped attunements from entities at this entity's location or its
+        ancestors.
         """
         result: set[str] = set()
         active = self._active_universe(entity)
         if active:
             result.add(active)
+        native_universes = [
+            p.universe for p in self.get_projections_for_entity(entity.id)
+            if p.transversal_type == TransversalType.NATIVE and p.universe
+        ]
+        if len(native_universes) > 1:
+            result.update(native_universes)
         for att in entity.attunements:
             if att.scope == AttunementScope.SELF:
                 result.add(att.universe)

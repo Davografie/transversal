@@ -152,21 +152,43 @@ export function useEntityCrud() {
   }
 
   // ── Projections ────────────────────────────────────
-  async function addProjection(universe, type = 'NATIVE') {
+  async function addProjection(universe, type = 'NATIVE', location = null) {
     const result = await graphql(
-      `mutation($entityId: ID!, $universe: String!, $type: TransversalType!) {
-        addProjection(entityId: $entityId, universe: $universe, type: $type) {
+      `mutation($entityId: ID!, $universe: String!, $type: TransversalType!, $location: ID) {
+        addProjection(entityId: $entityId, universe: $universe, type: $type, location: $location) {
           id currentProjection
           projections { id originUniverse universe name backgroundImage currentLocation transversalType }
         }
       }`,
-      { entityId: selected.value.id, universe, type }
+      { entityId: selected.value.id, universe, type, location }
     )
     if (result?.addProjection) {
       projections.value = result.addProjection.projections || []
       currentProjection.value = result.addProjection.currentProjection || null
     }
     return result?.addProjection || null
+  }
+
+  async function updateProjection(universe, patch = {}) {
+    const result = await graphql(
+      `mutation($entityId: ID!, $universe: String!, $name: String, $backgroundImage: String, $currentLocation: ID) {
+        updateProjection(entityId: $entityId, universe: $universe, name: $name, backgroundImage: $backgroundImage, currentLocation: $currentLocation) {
+          id originUniverse universe name backgroundImage currentLocation transversalType
+        }
+      }`,
+      {
+        entityId: selected.value.id, universe,
+        name: patch.name ?? null,
+        backgroundImage: patch.backgroundImage ?? null,
+        currentLocation: patch.currentLocation ?? null,
+      }
+    )
+    if (result?.updateProjection) {
+      const p = result.updateProjection
+      const idx = projections.value.findIndex((x) => x.id === p.id)
+      if (idx >= 0) projections.value[idx] = p
+    }
+    return result?.updateProjection || null
   }
 
   async function removeProjection(universe) {
@@ -301,6 +323,7 @@ export function useEntityCrud() {
     deleteEntity,
     createEntity,
     addProjection,
+    updateProjection,
     removeProjection,
     uploadBgImage,
     // Imagen actions

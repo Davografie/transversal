@@ -570,10 +570,15 @@ class Mutation:
         )
 
     @strawberry.mutation
-    def add_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str, type: TransversalTypeEnum = TransversalTypeEnum.CONSCIOUSNESS) -> Entity:
+    def add_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str, type: TransversalTypeEnum = TransversalTypeEnum.CONSCIOUSNESS, location: Optional[strawberry.ID] = None) -> Entity:
         e = _em(info).get(str(entity_id))
-        updated = _em(info).add_projection(e, universe, type)
+        updated = _em(info).add_projection(e, universe, type, location=str(location) if location else None)
         return _entity_to_gql(updated)
+
+    @strawberry.mutation
+    def update_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str, name: Optional[str] = None, background_image: Optional[str] = None, current_location: Optional[strawberry.ID] = None) -> Projection:
+        p = _em(info).update_projection(str(entity_id), universe, name=name, background_image=background_image, current_location=str(current_location) if current_location else None)
+        return Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe, universe=p.universe, name=p.name, background_image=p.background_image, current_location=p.current_location, transversal_type=p.transversal_type)
 
     @strawberry.mutation
     def remove_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str) -> Entity:

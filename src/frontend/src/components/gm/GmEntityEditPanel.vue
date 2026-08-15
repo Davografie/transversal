@@ -24,7 +24,17 @@
       </div>
       <div v-if="!images.length" class="gallery-empty">No images yet — upload or generate one.</div>
       <div v-else class="gallery-grid">
-        <div v-for="img in images" :key="img.id" class="gallery-item" @click="openImage(img)">
+        <div
+          v-for="img in images"
+          :key="img.id"
+          class="gallery-item"
+          draggable="true"
+          @dragstart="onImageDragStart($event, img)"
+          @touchstart="onImageTouchStart($event, img)"
+          @touchmove="onImageTouchMove"
+          @touchend="onImageTouchEnd"
+          @click="openImage(img)"
+        >
           <video v-if="img.image_type === 'animated'" :src="img.path_animated" class="gallery-thumb-video" autoplay loop muted playsinline />
           <img v-else :src="img.path_large" :alt="img.image_type" loading="lazy" />
           <span class="gallery-label">
@@ -41,15 +51,26 @@
       </div>
       <div v-if="!projections.length" class="gallery-empty">No projections yet.</div>
       <div v-else class="projection-list">
-        <div v-for="p in projections" :key="p.id" class="projection-row">
-          <span class="proj-name">{{ p.name || selected?.name }}</span>
+        <div
+          v-for="p in projections"
+          :key="p.id"
+          class="projection-row"
+          :class="{ 'drag-over': dropTarget === p.originUniverse }"
+          :data-origin-universe="p.originUniverse"
+          @dragover.prevent="onProjDragOver(p)"
+          @dragleave="onProjDragLeave(p)"
+          @drop.prevent="onProjDrop(p, $event)"
+        >
+          <img v-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
+          <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
+          <span class="proj-name">{{ p.name || form?.name }}</span>
           <span class="proj-universe">{{ p.originUniverse }}<template v-if="p.universe !== p.originUniverse"> → {{ p.universe }}</template></span>
           <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
           <button class="proj-remove" @click="removeProjection(p.originUniverse)" title="Remove projection">✕</button>
         </div>
       </div>
       <div class="projection-add">
-        <input v-model="newProjUniverse" placeholder="universe key (e.g. three_realms)" class="proj-input" @keyup.enter="addProjectionLocal" />
+        <GmLocationPicker v-model="newProjLocationId" placeholder="Search location…" class="proj-picker" @select="onLocationSelect" />
         <select v-model="newProjType" class="proj-type-select">
           <option value="NATIVE">native</option>
           <option value="CONSCIOUSNESS">consciousness</option>
@@ -90,6 +111,7 @@ import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
+import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
 import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
@@ -97,19 +119,95 @@ const panel = usePanel()
 const bus = usePanelBus()
 
 // ── Composables: shared state with GmPanel ──────────
-const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection } = useEntityCrud()
+const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, updateProjection, removeProjection } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { paths: lifePaths, loading: loadingLifepaths, fetchLifePaths } = useLifePaths()
 
 const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.value?.type))
-const newProjUniverse = ref('')
+const newProjLocationId = ref('')
+const newProjLocation = ref(null)
 const newProjType = ref('NATIVE')
 
+function onLocationSelect(loc) {
+  newProjLocation.value = loc
+}
+
 async function addProjectionLocal() {
-  const universe = newProjUniverse.value.trim()
-  if (!universe) return
-  await addProjection(universe, newProjType.value)
-  newProjUniverse.value = ''
+  const loc = newProjLocation.value
+  if (!loc || !loc.universe) return
+  await addProjection(loc.universe, newProjType.value, loc.id)
+  newProjLocationId.value = ''
+  newProjLocation.value = null
+}
+
+// ── Image → projection drag-and-drop (HTML5 + touch longpress) ──
+const dropTarget = ref(null)
+const touchImageDrag = ref(null)
+
+function onImageDragStart(e, img) {
+  e.dataTransfer.effectAllowed = 'copy'
+  e.dataTransfer.setData('text/plain', JSON.stringify({ path: img.path_large || img.path_animated }))
+}
+
+function onProjDragOver(p) { dropTarget.value = p.originUniverse }
+function onProjDragLeave(p) { if (dropTarget.value === p.originUniverse) dropTarget.value = null }
+function onProjDrop(p, e) {
+  dropTarget.value = null
+  const raw = e.dataTransfer.getData('text/plain')
+  if (!raw) return
+  let payload
+  try { payload = JSON.parse(raw) } catch { payload = { path: raw } }
+  if (payload.path) updateProjection(p.originUniverse, { backgroundImage: payload.path })
+}
+
+function onImageTouchStart(e, img) {
+  const touch = e.touches[0]
+  touchImageDrag.value = { path: img.path_large || img.path_animated, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
+  touchImageDrag.value._timer = setTimeout(() => {
+    if (!touchImageDrag.value) return
+    touchImageDrag.value.engaged = true
+    const ghost = document.createElement('img')
+    ghost.src = touchImageDrag.value.path
+    ghost.style.cssText = 'position:fixed;z-index:100;pointer-events:none;opacity:0.8;width:44px;height:44px;object-fit:cover;border-radius:4px'
+    ghost.style.left = (touch.clientX - 22) + 'px'
+    ghost.style.top = (touch.clientY - 22) + 'px'
+    document.body.appendChild(ghost)
+    touchImageDrag.value.ghost = ghost
+  }, 400)
+}
+
+function onImageTouchMove(e) {
+  if (!touchImageDrag.value) return
+  if (!touchImageDrag.value.engaged) {
+    const t = e.touches[0]
+    if (Math.abs(t.clientX - touchImageDrag.value.sx) > 5 || Math.abs(t.clientY - touchImageDrag.value.sy) > 5) {
+      clearTimeout(touchImageDrag.value._timer)
+      touchImageDrag.value.ghost?.remove()
+      touchImageDrag.value = null
+    }
+    return
+  }
+  const t = e.touches[0]
+  const g = touchImageDrag.value.ghost
+  if (g) { g.style.left = (t.clientX - 22) + 'px'; g.style.top = (t.clientY - 22) + 'px' }
+  const target = document.elementFromPoint(t.clientX, t.clientY)
+  const row = target?.closest('.projection-row')
+  dropTarget.value = row ? (row.dataset.originUniverse || null) : null
+}
+
+function onImageTouchEnd(e) {
+  if (!touchImageDrag.value) return
+  clearTimeout(touchImageDrag.value._timer)
+  if (touchImageDrag.value.engaged) {
+    const t = e.changedTouches[0]
+    const target = document.elementFromPoint(t.clientX, t.clientY)
+    const row = target?.closest('.projection-row')
+    const universe = row?.dataset.originUniverse
+    if (universe && touchImageDrag.value.path) updateProjection(universe, { backgroundImage: touchImageDrag.value.path })
+    touchImageDrag.value.ghost?.remove()
+  }
+  dropTarget.value = null
+  touchImageDrag.value = null
 }
 
 const props = defineProps({
@@ -312,4 +410,8 @@ defineExpose({ refresh: loadImages })
 .proj-input { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .proj-type-select { padding: 6px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .proj-add-btn { flex: 0 0 auto; padding: 6px 10px; }
+.proj-picker { flex: 1; min-width: 0; }
+.proj-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); flex: 0 0 auto; }
+.proj-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-dim); background: rgba(255,255,255,0.04); }
+.projection-row.drag-over { border-color: var(--accent); background: rgba(64,136,212,0.12); }
 </style>
