@@ -90,8 +90,6 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         map_x=e.map_x, map_y=e.map_y,
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,
-        transversal=e.transversal,
-        home_universes=list(e.home_universes),
         attunements=[
             Attunement(universe=a.universe, scope=a.scope.value,
                        until=a.until, source_sfx_id=a.source_sfx_id)

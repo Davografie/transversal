@@ -4,6 +4,8 @@ import pytest
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
+    Attunement,
+    AttunementScope,
     CharacterView,
     DieType,
     Entity,
@@ -190,6 +192,15 @@ class TestProjections:
     def test_duplicate_rejected(self, em, kael):
         with pytest.raises(ValueError, match="already has"):
             em.add_projection(kael, "earth")
+
+    def test_effective_universes(self, em, repo, kael):
+        # base = active projection's universe
+        assert repo.effective_universes(kael) == ["earth"]
+
+        # a self attunement adds its universe
+        kael.attunements.append(Attunement(universe="three_realms", scope=AttunementScope.SELF))
+        repo.update_entity(kael)
+        assert repo.effective_universes(kael) == ["earth", "three_realms"]
 
 
 class TestTraitSettings:

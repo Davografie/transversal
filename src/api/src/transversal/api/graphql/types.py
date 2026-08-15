@@ -493,8 +493,6 @@ class Entity:
     nav_positions: str = "{}"
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
-    transversal: bool = False
-    home_universes: list[str] = strawberry.field(default_factory=list)
     attunements: list[Attunement] = strawberry.field(default_factory=list)
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
 

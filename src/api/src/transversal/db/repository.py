@@ -719,31 +719,29 @@ class EntityRepository:
             trait_settings=all_settings,
         )
 
-    def physical_universe(self, entity: Entity) -> str:
-        """The entity's physical universe, derived from its location chain.
+    def _active_universe(self, entity: Entity) -> str:
+        """The entity's active universe — the active projection's current universe.
 
-        Falls back to the stored ``current_universe`` when the entity has no
-        ``current_location`` (or its location is missing).
+        Falls back to the legacy ``current_universe`` field when the entity has
+        no ``current_projection`` (or its projection is missing).
         """
-        if entity.current_location:
-            loc = self.get_entity(entity.current_location)
-            if loc:
-                return loc.current_universe
+        if entity.current_projection:
+            proj = self.get_projection(entity.current_projection)
+            if proj and proj.universe:
+                return proj.universe
         return entity.current_universe
 
     def effective_universes(self, entity: Entity) -> list[str]:
         """Compute the set of universes governing the entity's trait availability.
 
-        Union of: physical universe (location chain), home universes (for
-        transversal entities), self-scoped attunements, and domain-scoped
-        attunements from entities at this entity's location or its ancestors.
+        Union of: the active universe (active projection), self-scoped
+        attunements, and domain-scoped attunements from entities at this
+        entity's location or its ancestors.
         """
         result: set[str] = set()
-        phys = self.physical_universe(entity)
-        if phys:
-            result.add(phys)
-        if entity.transversal:
-            result.update(entity.home_universes)
+        active = self._active_universe(entity)
+        if active:
+            result.add(active)
         for att in entity.attunements:
             if att.scope == AttunementScope.SELF:
                 result.add(att.universe)
@@ -769,20 +767,31 @@ class EntityRepository:
     ) -> list[TraitSetting]:
         """Get trait settings active in a set of universes.
 
-        Includes morph traits whose trait is native to any of ``universes``,
-        plus all ego traits (regardless of universe).
+        Ego traits (``ego=True``) are always returned. Entity-anchored morph
+        traits are gated by the trait/trait-set universe intersection.
+        Projection-anchored morph traits are gated by their projection's
+        ``origin_universe`` being in ``universes``.
         """
         query = f"""
-            LET universe_traits = (
-                FOR t IN {TRAITS}
-                LET set_doc = DOCUMENT(CONCAT('{TRAITSETS}/', t.traitset_id))
-                FILTER LENGTH(INTERSECTION(t.universes, @universes)) > 0
-                FILTER set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0
-                RETURN t._key
-            )
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.entity_id == @eid
-            FILTER ts.trait_id IN universe_traits OR ts.ego == true
+            LET is_projection = (ts.from_type == 'projection')
+            LET proj = is_projection ? DOCUMENT(ts._from) : null
+            LET trait = DOCUMENT(ts._to)
+            LET set_doc = (trait.traitset_id != null)
+                ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
+            FILTER ts.ego == true
+                OR (
+                    NOT is_projection
+                    AND LENGTH(INTERSECTION(trait.universes, @universes)) > 0
+                    AND (set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0)
+                )
+                OR (
+                    is_projection AND proj != null
+                    AND proj.origin_universe IN @universes
+                    AND proj.origin_universe IN trait.universes
+                    AND (set_doc == null OR proj.origin_universe IN set_doc.universes)
+                )
             RETURN ts
         """
         return [
