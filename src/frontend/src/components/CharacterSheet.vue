@@ -148,7 +148,7 @@
                       class="projection-option"
                       :class="{ selected: p.id === editProjectionId }"
                       @click="selectProjection(p)"
-                    >{{ p.name || universeDisplay(p.universe) }}</button>
+                    >{{ p.name || universeDisplay(p.originUniverse) }}</button>
                   </div>
                 </div>
                 <div class="edit-actions">
@@ -330,7 +330,7 @@ const showProjectionPicker = ref(false)
 const editProjectionOptions = computed(() => entity.value?.projections || [])
 const editProjectionName = computed(() => {
   const p = editProjectionOptions.value.find((p) => p.id === editProjectionId.value)
-  return p ? (p.name || universeDisplay(p.universe)) : (editProjectionId.value || 'select projection')
+  return p ? (p.name || universeDisplay(p.originUniverse)) : (editProjectionId.value || 'select projection')
 })
 let longPressTimer = null
 
