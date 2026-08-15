@@ -6,9 +6,9 @@
     <template v-else-if="entity">
       <div class="header">
         <div class="header-top">
-          <h2>{{ entity.name }}</h2>
-          <video v-if="entity.sheetPortrait && isSheetVideo" :src="entity.sheetPortrait" class="sheet-portrait-video" autoplay loop muted playsinline />
-          <img v-else-if="entity.sheetPortrait" :src="entity.sheetPortrait" class="sheet-portrait" />
+          <h2>{{ activeProjection?.name || entity.name }}</h2>
+          <video v-if="sheetPortrait && isSheetVideo" :src="sheetPortrait" class="sheet-portrait-video" autoplay loop muted playsinline />
+          <img v-else-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" />
           <div v-if="isForeignSheet" class="rel-widget">
             <template v-if="relationship">
               <span class="rel-desc" @click.stop="showRelEditor = true" :title="'Click to edit'">{{ relationship.description || 'associated' }}</span>
@@ -204,6 +204,12 @@ function displayName(name) {
 
 const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
 const entity = ref(null)
+const activeProjection = computed(() => {
+  const e = entity.value
+  if (!e || !e.projections) return null
+  return e.projections.find((p) => p.id === e.currentProjection) || null
+})
+const sheetPortrait = computed(() => activeProjection.value?.backgroundImage || entity.value?.sheetPortrait || '')
 const traitSets = ref([])
 const allTraitSettings = ref([])
 const effectiveSettings = ref([])
@@ -261,7 +267,7 @@ const ownsCharacter = computed(() => {
   return props.playerOwnedEntityIds.includes(id)
 })
 
-const isSheetVideo = computed(() => entity.value?.sheetPortrait && /\.(webm|mp4)(\?|$)/i.test(entity.value.sheetPortrait))
+const isSheetVideo = computed(() => sheetPortrait.value && /\.(webm|mp4)(\?|$)/i.test(sheetPortrait.value))
 
 // Resolved human-readable names
 const locationName = ref('')
@@ -524,8 +530,12 @@ const QUERY = `
       razmerit
       currentUniverse
       currentLocation
+      currentProjection
       backgroundImage
       sheetPortrait
+      projections {
+        id originUniverse universe name backgroundImage currentLocation transversalType
+      }
       traitSettings {
         id
         traitId
@@ -572,9 +582,7 @@ const QUERY = `
 
 async function fetchEntity() {
   const id = props.overrideEntityId || props.entityId
-  console.log('[diag] CharacterSheet QUERY has sheetPortrait:', QUERY.includes('sheetPortrait'))
   const data = await graphql(QUERY, { id })
-  console.log('[diag] CharacterSheet response — sheetPortrait:', data?.entity?.sheetPortrait, 'backgroundImage:', data?.entity?.backgroundImage)
   if (data?.entity) {
     entity.value = data.entity
     resolveNames(data.entity)
