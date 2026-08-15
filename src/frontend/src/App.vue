@@ -779,8 +779,18 @@ watch(lastEvent, (evt) => {
       }
       break
     case 'location_changed':
-      if (eid === entityId.value && evt.data?.to) locationName.value = evt.data.to
-      locationRef.value?.fetchNav()
+      if (eid === entityId.value && evt.data?.to) {
+        currentLocationId.value = evt.data.to
+        if (evt.data?.universe) universe.value = evt.data.universe
+        fetchLocationBg()
+        fetchPeers()
+        fetch(`/api/v1/locations/${evt.data.to}/navigate`)
+          .then(r => r.json())
+          .then(nav => { locationName.value = nav.location?.name || evt.data.to })
+          .catch(() => { locationName.value = evt.data.to })
+      } else {
+        locationRef.value?.fetchNav()
+      }
       if (gmMode.value && foreign && evt.data?.to) {
         nameCache.value[eid] = evt.data.to_name || eid
         addToast(`${name} moved to ${evt.data.to}`, 'move')
