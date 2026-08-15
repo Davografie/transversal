@@ -80,17 +80,22 @@
         <button class="section-btn proj-add-btn" @click="addProjectionLocal">+ Add</button>
       </div>
     </div>
-    <div v-if="form.type === 'LOCATION' && transversalLinks.length" class="transversal-links">
+    <div v-if="form.type === 'LOCATION'" class="transversal-links">
       <div class="gallery-header">
         <h4>Transversal Links</h4>
       </div>
-      <div class="transversal-list">
+      <div v-if="!transversalLinks.length" class="gallery-empty">No transversal links yet.</div>
+      <div v-else class="transversal-list">
         <div v-for="link in transversalLinks" :key="link._key" class="transversal-row">
           <span class="transversal-name">{{ link.name }}</span>
           <button class="transversal-toggle" :class="link.transversal_type || 'inapposite'" @click="toggleLinkType(link)">
             {{ link.transversal_type || 'inapposite' }}
           </button>
         </div>
+      </div>
+      <div class="transversal-add">
+        <GmLocationPicker v-model="newTransversalLocationId" placeholder="Add link to location…" class="proj-picker" @select="onTransversalLocationSelect" />
+        <button class="section-btn proj-add-btn" @click="createTransversalLinkLocal">+ Add</button>
       </div>
     </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
@@ -281,7 +286,9 @@ watch(() => [props.entityId, form.value?.type], ([id, type]) => {
 
 // ── Transversal links (location entities) ───────────
 const transversalLinks = ref([])
-const { toggleTransversalType } = useTransversalLinks()
+const { toggleTransversalType, createTransversalLink } = useTransversalLinks()
+const newTransversalLocationId = ref('')
+const newTransversalLocation = ref(null)
 
 async function loadTransversalLinks() {
   transversalLinks.value = []
@@ -293,6 +300,19 @@ async function loadTransversalLinks() {
       transversalLinks.value = nav.transversal || []
     }
   } catch {}
+}
+
+function onTransversalLocationSelect(loc) {
+  newTransversalLocation.value = loc
+}
+
+async function createTransversalLinkLocal() {
+  const loc = newTransversalLocation.value
+  if (!loc || !loc.id) return
+  await createTransversalLink(props.entityId, loc.id)
+  newTransversalLocationId.value = ''
+  newTransversalLocation.value = null
+  await loadTransversalLinks()
 }
 
 async function toggleLinkType(link) {
@@ -465,4 +485,5 @@ defineExpose({ refresh: loadImages })
 .transversal-toggle { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
 .transversal-toggle.inapposite { background: rgba(139,92,246,0.18); color: #c4b5fd; }
 .transversal-toggle.consciousness { background: rgba(245,158,11,0.18); color: #fcd34d; }
+.transversal-add { display: flex; gap: 6px; margin-top: 8px; }
 </style>

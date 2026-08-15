@@ -20,11 +20,20 @@ export function useTransversalLinks() {
     return type
   }
 
+  async function createTransversalLink(fromId, toId) {
+    const r = await fetch(`${API_BASE}/locations/${fromId}/edges/${toId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'transversal' }),
+    })
+    if (!r.ok) throw new Error(await r.text())
+  }
+
   async function toggleTransversalType(fromId, toId, current) {
     const next = nextTransversalType(current)
     await setTransversalType(fromId, toId, next)
     return next
   }
 
-  return { setTransversalType, toggleTransversalType, nextTransversalType }
+  return { setTransversalType, createTransversalLink, toggleTransversalType, nextTransversalType }
 }

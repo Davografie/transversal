@@ -18,6 +18,17 @@ def _publish_to_sessions(event: StreamEvent) -> None:
     for s in session_manager.list_active():
         event_bus.publish(StreamEvent(
             event=event.event, session_id=s.id, data=event.data))
+
+
+def _publish_location_changed(entity: Entity, old_location: Optional[str], old_universe: str) -> None:
+    """Publish a location_changed event when an entity's active location/universe moved."""
+    if entity.current_location == old_location and entity.current_universe == old_universe:
+        return
+    _publish_to_sessions(StreamEvent(
+        event="location_changed",
+        data={"entity_id": entity.id, "from": old_location or "",
+              "to": entity.current_location or "", "universe": entity.current_universe},
+    ))
 from transversal.domain import (
     CharacterView,
     Entity,
@@ -220,6 +231,8 @@ class EntityManager:
         proj = self.repo.get_projection(projection_id)
         if proj is None:
             raise ValueError(f"Projection '{projection_id}' not found")
+        old_location = entity.current_location
+        old_universe = entity.current_universe
         if location is not None:
             proj.current_location = location
             loc = self.repo.get_entity(location)
@@ -229,7 +242,9 @@ class EntityManager:
         entity.current_projection = projection_id
         entity.current_universe = proj.universe
         entity.current_location = proj.current_location
-        return self.repo.update_entity(entity)
+        result = self.repo.update_entity(entity)
+        _publish_location_changed(entity, old_location, old_universe)
+        return result
 
     def inapposite_travel(self, entity_id: str, location: str) -> Entity:
         """Physically relocate the entity's active projection to ``location``.
@@ -244,6 +259,9 @@ class EntityManager:
         loc = self.repo.get_entity(location)
         if loc is None:
             raise ValueError(f"Location '{location}' not found")
+
+        old_location = entity.current_location
+        old_universe = entity.current_universe
 
         proj = None
         if entity.current_projection:
@@ -274,7 +292,9 @@ class EntityManager:
         entity.current_projection = proj.id
         entity.current_universe = loc.current_universe
         entity.current_location = location
-        return self.repo.update_entity(entity)
+        result = self.repo.update_entity(entity)
+        _publish_location_changed(entity, old_location, old_universe)
+        return result
 
     def get_projections(self, entity_id: str) -> list[Projection]:
         return self.repo.get_projections_for_entity(entity_id)

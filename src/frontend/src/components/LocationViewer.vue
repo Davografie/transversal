@@ -542,8 +542,11 @@ function loadNavPositions() {
   if (raw) {
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
-      if (parsed.parent) navDotPositions.value.parent = parsed.parent
-      if (parsed.portal) navDotPositions.value.portal = parsed.portal
+      for (const [k, v] of Object.entries(parsed || {})) {
+        if (v && typeof v.x === 'number' && typeof v.y === 'number') {
+          navDotPositions.value[k] = v
+        }
+      }
     } catch {}
   }
 }
@@ -559,11 +562,11 @@ const navDots = computed(() => {
       target: { id: nav.value.parent._key, universe: nav.value.parent.current_universe },
     })
   }
-  if (nav.value.transversal?.length) {
-    const t = nav.value.transversal[0]
-    const pos = navDotPositions.value.portal
+  for (const [i, t] of (nav.value.transversal || []).entries()) {
+    const key = i === 0 ? 'portal' : `portal:${i}`
+    const pos = navDotPositions.value[key] || { x: 90, y: 50 + i * 10 }
     dots.push({
-      key: 'portal', type: 'portal', name: `${t.name} · ${t.transversal_type || 'inapposite'}`,
+      key, type: 'portal', name: `${t.name} · ${t.transversal_type || 'inapposite'}`,
       image: t.background_image || null,
       x: pos.x, y: pos.y,
       target: { id: t._key, universe: t.current_universe },
@@ -938,7 +941,7 @@ function onNavDragStart(e, nd) {
 // ── Two-phase interaction ──────────────────────────
 
 async function togglePortalType(nd) {
-  const t = nav.value.transversal?.[0]
+  const t = (nav.value.transversal || []).find(t => t._key === nd.target.id)
   if (!t) return
   const next = await toggleTransversalType(props.locationId, t._key, t.transversal_type)
   t.transversal_type = next
@@ -1083,8 +1086,8 @@ function placeCharacterAtSource(sourceId) {
     if (nd && nav.value.parent?._key === sourceId) { nx = nd.x; ny = nd.y }
   }
   if (nx === 50 && ny === 50) {
-    const pd = navDots.value.find(d => d.key === 'portal')
-    if (pd && nav.value.transversal?.some(t => t._key === sourceId)) { nx = pd.x; ny = pd.y }
+    const pd = navDots.value.find(d => d.type === 'portal' && d.target?.id === sourceId)
+    if (pd) { nx = pd.x; ny = pd.y }
   }
 
   // Set position (dot not mounted yet, just update data)
@@ -1183,8 +1186,10 @@ async function preloadDestNavCache() {
           }
         }
       } else if (dest.kind === 'portal') {
-        // Portal: use portal dot position on destination
-        const portalPos = loc?.nav_positions?.portal
+        // Portal: use the destination's matching portal dot position
+        const idx = (data.transversal || []).findIndex(t => t._key === currentId)
+        const posKey = idx > 0 ? `portal:${idx}` : 'portal'
+        const portalPos = loc?.nav_positions?.[posKey] || loc?.nav_positions?.portal
         if (portalPos) { arriveX = portalPos.x; arriveY = portalPos.y }
       }
 
