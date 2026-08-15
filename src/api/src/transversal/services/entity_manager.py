@@ -231,6 +231,51 @@ class EntityManager:
         entity.current_location = proj.current_location
         return self.repo.update_entity(entity)
 
+    def inapposite_travel(self, entity_id: str, location: str) -> Entity:
+        """Physically relocate the entity's active projection to ``location``.
+
+        The projection keeps its origin key; its ``universe``/``current_location``
+        mutate, and its type becomes INAPPOSITE when crossing universes (NATIVE
+        when it returns home).
+        """
+        entity = self.repo.get_entity(entity_id)
+        if entity is None:
+            raise EntityNotFoundError(f"Entity '{entity_id}' not found")
+        loc = self.repo.get_entity(location)
+        if loc is None:
+            raise ValueError(f"Location '{location}' not found")
+
+        proj = None
+        if entity.current_projection:
+            proj = self.repo.get_projection(entity.current_projection)
+
+        if proj is None:
+            proj = Projection(
+                id=f"{entity.id}:{loc.current_universe}",
+                entity_id=entity.id,
+                origin_universe=loc.current_universe,
+                universe=loc.current_universe,
+                current_location=location,
+                transversal_type=TransversalType.NATIVE,
+            )
+            self.repo.create_projection(proj)
+        else:
+            if not proj.origin_universe:
+                proj.origin_universe = proj.id.rsplit(":", 1)[-1]
+            proj.universe = loc.current_universe
+            proj.current_location = location
+            proj.transversal_type = (
+                TransversalType.NATIVE
+                if loc.current_universe == proj.origin_universe
+                else TransversalType.INAPPOSITE
+            )
+            self.repo.update_projection(proj)
+
+        entity.current_projection = proj.id
+        entity.current_universe = loc.current_universe
+        entity.current_location = location
+        return self.repo.update_entity(entity)
+
     def get_projections(self, entity_id: str) -> list[Projection]:
         return self.repo.get_projections_for_entity(entity_id)
 

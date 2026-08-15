@@ -591,6 +591,11 @@ class Mutation:
         return _entity_to_gql(updated)
 
     @strawberry.mutation
+    def inapposite_travel(self, info: strawberry.Info, entity_id: strawberry.ID, location: strawberry.ID) -> Entity:
+        updated = _em(info).inapposite_travel(str(entity_id), str(location))
+        return _entity_to_gql(updated)
+
+    @strawberry.mutation
     def update_entity(self, info: strawberry.Info, input: UpdateEntityInput) -> Entity:
         e = _em(info).get(str(input.id))
         if input.name is not None:

@@ -260,9 +260,11 @@ async function onMoveEntity({ entityId, entityKind, targetId, targetKind, target
         { entityId, projectionId: proj.id, location: targetId }
       )
     } else {
-      const input = { id: entityId, currentLocation: targetId }
-      if (targetUniverse) input.currentUniverse = targetUniverse
-      await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation currentUniverse } }`, { input })
+      // No projection in that universe → inapposite: relocate the current projection.
+      await graphql(
+        `mutation($entityId: ID!, $location: ID!) { inappositeTravel(entityId: $entityId, location: $location) { id } }`,
+        { entityId, location: targetId }
+      )
     }
   } else if (entityKind === 'location') {
     if (targetUniverse) {
