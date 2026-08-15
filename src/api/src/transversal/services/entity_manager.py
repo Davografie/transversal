@@ -172,21 +172,20 @@ class EntityManager:
         entity.current_projection = proj.id
         return self.repo.update_entity(entity)
 
-    def remove_projection(self, entity_id: str, universe: str) -> Entity:
-        entity = self.repo.get_entity(entity_id)
-        if entity is None:
-            raise EntityNotFoundError(f"Entity '{entity_id}' not found")
-        proj_id = f"{entity_id}:{universe}"
-        self.repo.delete_projection(proj_id)
-        if entity.current_projection == proj_id:
+    def remove_projection(self, projection_id: str) -> Entity:
+        proj = self.repo.get_projection(projection_id)
+        if proj is None:
+            raise ValueError(f"Projection '{projection_id}' not found")
+        self.repo.delete_projection(projection_id)
+        entity = self.repo.get_entity(proj.entity_id)
+        if entity is not None and entity.current_projection == projection_id:
             entity.current_projection = None
             self.repo.update_entity(entity)
         return entity
 
     def update_projection(
         self,
-        entity_id: str,
-        universe: str,
+        projection_id: str,
         name: Optional[str] = None,
         background_image: Optional[str] = None,
         current_location: Optional[str] = None,
@@ -195,9 +194,9 @@ class EntityManager:
 
         ``None`` means "leave unchanged"; an empty string clears the field.
         """
-        proj = self.repo.get_projection(f"{entity_id}:{universe}")
+        proj = self.repo.get_projection(projection_id)
         if proj is None:
-            raise ValueError(f"Projection '{entity_id}:{universe}' not found")
+            raise ValueError(f"Projection '{projection_id}' not found")
         if name is not None:
             proj.name = name
         if background_image is not None:

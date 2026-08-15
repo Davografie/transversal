@@ -169,15 +169,15 @@ export function useEntityCrud() {
     return result?.addProjection || null
   }
 
-  async function updateProjection(universe, patch = {}) {
+  async function updateProjection(projectionId, patch = {}) {
     const result = await graphql(
-      `mutation($entityId: ID!, $universe: String!, $name: String, $backgroundImage: String, $currentLocation: ID) {
-        updateProjection(entityId: $entityId, universe: $universe, name: $name, backgroundImage: $backgroundImage, currentLocation: $currentLocation) {
+      `mutation($projectionId: ID!, $name: String, $backgroundImage: String, $currentLocation: ID) {
+        updateProjection(projectionId: $projectionId, name: $name, backgroundImage: $backgroundImage, currentLocation: $currentLocation) {
           id originUniverse universe name backgroundImage currentLocation transversalType
         }
       }`,
       {
-        entityId: selected.value.id, universe,
+        projectionId,
         name: patch.name ?? null,
         backgroundImage: patch.backgroundImage ?? null,
         currentLocation: patch.currentLocation ?? null,
@@ -191,15 +191,15 @@ export function useEntityCrud() {
     return result?.updateProjection || null
   }
 
-  async function removeProjection(universe) {
+  async function removeProjection(projectionId) {
     const result = await graphql(
-      `mutation($entityId: ID!, $universe: String!) {
-        removeProjection(entityId: $entityId, universe: $universe) {
+      `mutation($projectionId: ID!) {
+        removeProjection(projectionId: $projectionId) {
           id currentProjection
           projections { id originUniverse universe name backgroundImage currentLocation transversalType }
         }
       }`,
-      { entityId: selected.value.id, universe }
+      { projectionId }
     )
     if (result?.removeProjection) {
       projections.value = result.removeProjection.projections || []

@@ -55,8 +55,8 @@
           v-for="p in projections"
           :key="p.id"
           class="projection-row"
-          :class="{ 'drag-over': dropTarget === p.originUniverse }"
-          :data-origin-universe="p.originUniverse"
+          :class="{ 'drag-over': dropTarget === p.id }"
+          :data-projection-id="p.id"
           @dragover.prevent="onProjDragOver(p)"
           @dragleave="onProjDragLeave(p)"
           @drop.prevent="onProjDrop(p, $event)"
@@ -66,7 +66,7 @@
           <span class="proj-name">{{ p.name || form?.name }}</span>
           <span class="proj-universe">{{ p.originUniverse }}<template v-if="p.universe !== p.originUniverse"> → {{ p.universe }}</template></span>
           <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
-          <button class="proj-remove" @click="removeProjection(p.originUniverse)" title="Remove projection">✕</button>
+          <button class="proj-remove" @click="removeProjection(p.id)" title="Remove projection">✕</button>
         </div>
       </div>
       <div class="projection-add">
@@ -149,15 +149,15 @@ function onImageDragStart(e, img) {
   e.dataTransfer.setData('text/plain', JSON.stringify({ path: img.path_large || img.path_animated }))
 }
 
-function onProjDragOver(p) { dropTarget.value = p.originUniverse }
-function onProjDragLeave(p) { if (dropTarget.value === p.originUniverse) dropTarget.value = null }
+function onProjDragOver(p) { dropTarget.value = p.id }
+function onProjDragLeave(p) { if (dropTarget.value === p.id) dropTarget.value = null }
 function onProjDrop(p, e) {
   dropTarget.value = null
   const raw = e.dataTransfer.getData('text/plain')
   if (!raw) return
   let payload
   try { payload = JSON.parse(raw) } catch { payload = { path: raw } }
-  if (payload.path) updateProjection(p.originUniverse, { backgroundImage: payload.path })
+  if (payload.path) updateProjection(p.id, { backgroundImage: payload.path })
 }
 
 function onImageTouchStart(e, img) {
@@ -192,7 +192,7 @@ function onImageTouchMove(e) {
   if (g) { g.style.left = (t.clientX - 22) + 'px'; g.style.top = (t.clientY - 22) + 'px' }
   const target = document.elementFromPoint(t.clientX, t.clientY)
   const row = target?.closest('.projection-row')
-  dropTarget.value = row ? (row.dataset.originUniverse || null) : null
+  dropTarget.value = row ? (row.dataset.projectionId || null) : null
 }
 
 function onImageTouchEnd(e) {
@@ -202,8 +202,8 @@ function onImageTouchEnd(e) {
     const t = e.changedTouches[0]
     const target = document.elementFromPoint(t.clientX, t.clientY)
     const row = target?.closest('.projection-row')
-    const universe = row?.dataset.originUniverse
-    if (universe && touchImageDrag.value.path) updateProjection(universe, { backgroundImage: touchImageDrag.value.path })
+    const projectionId = row?.dataset.projectionId
+    if (projectionId && touchImageDrag.value.path) updateProjection(projectionId, { backgroundImage: touchImageDrag.value.path })
     touchImageDrag.value.ghost?.remove()
   }
   dropTarget.value = null
