@@ -80,6 +80,19 @@
         <button class="section-btn proj-add-btn" @click="addProjectionLocal">+ Add</button>
       </div>
     </div>
+    <div v-if="form.type === 'LOCATION' && transversalLinks.length" class="transversal-links">
+      <div class="gallery-header">
+        <h4>Transversal Links</h4>
+      </div>
+      <div class="transversal-list">
+        <div v-for="link in transversalLinks" :key="link._key" class="transversal-row">
+          <span class="transversal-name">{{ link.name }}</span>
+          <button class="transversal-toggle" :class="link.transversal_type || 'inapposite'" @click="toggleLinkType(link)">
+            {{ link.transversal_type || 'inapposite' }}
+          </button>
+        </div>
+      </div>
+    </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
       <button class="section-btn" @click="openLoraConfig">🖼 LoRA Configuration</button>
       <button class="section-btn" @click="openLifePaths">📋 Life Paths <span v-if="lifePaths.length" class="section-count">{{ lifePaths.length }}</span></button>
@@ -108,6 +121,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
+import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
@@ -265,6 +279,31 @@ watch(() => [props.entityId, form.value?.type], ([id, type]) => {
   if (id && type === 'UNIVERSE') fetchLifePaths(form.value.current_universe || props.entityId)
 }, { immediate: true })
 
+// ── Transversal links (location entities) ───────────
+const transversalLinks = ref([])
+const { toggleTransversalType } = useTransversalLinks()
+
+async function loadTransversalLinks() {
+  transversalLinks.value = []
+  if (!props.entityId) return
+  try {
+    const r = await fetch(`/api/v1/locations/${props.entityId}/navigate`)
+    if (r.ok) {
+      const nav = await r.json()
+      transversalLinks.value = nav.transversal || []
+    }
+  } catch {}
+}
+
+async function toggleLinkType(link) {
+  const next = await toggleTransversalType(props.entityId, link._key, link.transversal_type)
+  link.transversal_type = next
+}
+
+watch(() => [props.entityId, form.value?.type], ([id, type]) => {
+  if (id && type === 'LOCATION') loadTransversalLinks()
+}, { immediate: true })
+
 // ── Imagen ──────────────────────────────────────────
 const localImagenJob = ref(null)
 let _jobPollTimer = null
@@ -419,4 +458,11 @@ defineExpose({ refresh: loadImages })
 .proj-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); flex: 0 0 auto; }
 .proj-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-dim); background: rgba(255,255,255,0.04); }
 .projection-row.drag-over { border-color: var(--accent); background: rgba(64,136,212,0.12); }
+.transversal-links { margin-top: 12px; }
+.transversal-list { display: flex; flex-direction: column; gap: 4px; }
+.transversal-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02); }
+.transversal-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transversal-toggle { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
+.transversal-toggle.inapposite { background: rgba(139,92,246,0.18); color: #c4b5fd; }
+.transversal-toggle.consciousness { background: rgba(245,158,11,0.18); color: #fcd34d; }
 </style>

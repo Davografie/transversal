@@ -165,6 +165,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import MapDot from './MapDot.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
+import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -180,6 +181,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity'])
+const { toggleTransversalType } = useTransversalLinks()
 
 const currentImage = ref('')
 const videoBgEl = ref(null)
@@ -561,7 +563,7 @@ const navDots = computed(() => {
     const t = nav.value.transversal[0]
     const pos = navDotPositions.value.portal
     dots.push({
-      key: 'portal', type: 'portal', name: t.name,
+      key: 'portal', type: 'portal', name: `${t.name} · ${t.transversal_type || 'inapposite'}`,
       image: t.background_image || null,
       x: pos.x, y: pos.y,
       target: { id: t._key, universe: t.current_universe },
@@ -935,8 +937,19 @@ function onNavDragStart(e, nd) {
 
 // ── Two-phase interaction ──────────────────────────
 
+async function togglePortalType(nd) {
+  const t = nav.value.transversal?.[0]
+  if (!t) return
+  const next = await toggleTransversalType(props.locationId, t._key, t.transversal_type)
+  t.transversal_type = next
+}
+
 function onDotClick(type, item) {
-  if (props.editZones) return
+  if (props.editZones) {
+    // In edit mode, clicking a portal navdot toggles its transversal type.
+    if (type === 'nav' && item.type === 'portal') togglePortalType(item)
+    return
+  }
   // Never un-pop the player's own character
   if (type === 'occupant' && item.id === props.entityId) return
   // If already popped, dismiss; otherwise pop this one
