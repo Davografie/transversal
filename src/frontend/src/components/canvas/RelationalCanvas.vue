@@ -3,7 +3,11 @@
     <div class="canvas-toolbar">
       <div class="canvas-title">{{ title || 'Relational Canvas' }}</div>
       <div class="canvas-controls">
+        <select class="edge-select" :value="edgePath" title="Edge path style" @change="setEdgePath($event.target.value)">
+          <option v-for="o in EDGE_PATH_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
         <select
+          v-if="mode !== 'life-path'"
           v-model="selectedFaction"
           class="faction-select"
           @change="onFactionChange"
@@ -11,13 +15,15 @@
           <option value="">— Filter by faction —</option>
           <option v-for="f in factions" :key="f.id" :value="f.id">{{ f.name }}</option>
         </select>
-        <button v-if="mode !== 'location'" class="tool-btn" @click="backToLocation">← Location</button>
+        <button v-if="mode === 'faction' || mode === 'gmc-web'" class="tool-btn" @click="backToLocation">← Location</button>
+        <button v-if="mode === 'life-path'" class="tool-btn" title="Reset layout" @click="resetLayout">↺</button>
         <button v-if="!fullscreen" class="tool-btn" title="Open fullscreen" @click="openFull">⛶</button>
         <button class="tool-btn" @click="fitView">Fit</button>
         <button v-if="fullscreen" class="tool-btn close" @click="emit('close-full')">✕</button>
       </div>
     </div>
-    <div class="canvas-hint">Drag from a location's right handle (→) to another location's left handle (←) to create a transversal link · click ⊕ to expand</div>
+    <div v-if="mode === 'life-path'" class="canvas-hint">Roll tables linked by next_step effects · dashed orange edges loop back · click ✎ to open a table</div>
+    <div v-else class="canvas-hint">Drag from a location's right handle (→) to another location's left handle (←) to create a transversal link · click ⊕ to expand</div>
 
     <div v-if="loading" class="canvas-status">Loading…</div>
     <div v-else-if="error" class="canvas-status error">{{ error }}</div>
@@ -57,14 +63,20 @@ import '@vue-flow/minimap/dist/style.css'
 import { useCanvas } from '@/composables/useCanvas.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { usePanel } from '@/composables/usePanel.js'
+import { edgePath, EDGE_PATH_OPTIONS, setEdgePath } from '@/composables/useEdgeStyle.js'
 import LocationNode from '@/components/canvas/nodes/LocationNode.vue'
 import OccupantNode from '@/components/canvas/nodes/OccupantNode.vue'
+import RollTableNode from '@/components/canvas/nodes/RollTableNode.vue'
+import BundlerNode from '@/components/canvas/nodes/BundlerNode.vue'
 import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
+import LifePathEdge from '@/components/canvas/edges/LifePathEdge.vue'
+import GmRollTableDetailPanel from '@/components/gm/GmRollTableDetailPanel.vue'
 
 const props = defineProps({
   locationId: { type: String, default: '' },
   initialFactionId: { type: String, default: '' },
   initialGmcId: { type: String, default: '' },
+  initialLifePath: { type: Object, default: null },
   fullscreen: { type: Boolean, default: false },
 })
 
@@ -85,8 +97,8 @@ function fitView() {
   flowRef.value?.fitView?.()
 }
 
-const nodeTypes = { location: LocationNode, occupant: OccupantNode }
-const edgeTypes = { gradient: GradientEdge }
+const nodeTypes = { location: LocationNode, occupant: OccupantNode, rolltable: RollTableNode, bundler: BundlerNode }
+const edgeTypes = { gradient: GradientEdge, lifepath: LifePathEdge }
 
 const displayNodes = computed(() =>
   nodes.value.map((n) => ({
@@ -100,6 +112,7 @@ const displayNodes = computed(() =>
       onShowFaction: (id) => canvas.showFaction(id),
       onInspect: (id) => bus.emit('canvas:inspect', id),
       onOpenFull: (id) => bus.emit('canvas:open-full', { mode: 'location', entityId: id }),
+      onOpenTable: (id) => openTable(id),
     },
   })),
 )
@@ -110,8 +123,16 @@ function onFactionChange() {
   }
 }
 
+function openTable(tableId) {
+  const node = nodes.value.find((n) => n.id === `rt:${tableId}`)
+  const name = node?.data?.name || tableId
+  panel.open({ component: GmRollTableDetailPanel, title: name, props: { tableId, name } })
+}
+
 function openFull() {
-  bus.emit('canvas:open-full', { mode: mode.value, entityId: canvas.focusId.value })
+  const payload = { mode: mode.value, entityId: canvas.focusId.value }
+  if (mode.value === 'life-path') payload.lifePath = props.initialLifePath
+  bus.emit('canvas:open-full', payload)
   panel.close()
 }
 
@@ -136,12 +157,20 @@ function backToLocation() {
   if (props.locationId) canvas.loadLocation(props.locationId)
 }
 
+async function resetLayout() {
+  if (mode.value !== 'life-path' || !props.initialLifePath) return
+  await canvas.clearLifePathPositions(props.initialLifePath.id)
+  await canvas.loadLifePath(props.initialLifePath)
+}
+
 onMounted(async () => {
-  canvas.loadFactions()
+  if (!props.initialLifePath) canvas.loadFactions()
   if (props.initialFactionId) {
     await canvas.loadFaction(props.initialFactionId)
   } else if (props.initialGmcId) {
     await canvas.loadGmcWeb(props.initialGmcId)
+  } else if (props.initialLifePath) {
+    await canvas.loadLifePath(props.initialLifePath)
   } else if (props.locationId) {
     await canvas.loadLocation(props.locationId)
   }
@@ -164,6 +193,10 @@ onMounted(async () => {
 .canvas-title { font-size: 13px; font-weight: 700; }
 .canvas-controls { display: flex; align-items: center; gap: 6px; }
 .faction-select {
+  background: var(--bg-panel); color: var(--text); border: 1px solid var(--accent-dim);
+  border-radius: 5px; padding: 3px 6px; font-size: 11px;
+}
+.edge-select {
   background: var(--bg-panel); color: var(--text); border: 1px solid var(--accent-dim);
   border-radius: 5px; padding: 3px 6px; font-size: 11px;
 }

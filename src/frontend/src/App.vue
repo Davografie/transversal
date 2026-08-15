@@ -222,9 +222,10 @@
     v-if="fullCanvas"
     class="fullscreen-canvas"
     fullscreen
-    :location-id="fullCanvas.mode === 'location' ? fullCanvas.entityId : currentLocationId"
+    :location-id="fullCanvas.mode === 'location' ? fullCanvas.entityId : (fullCanvas.mode === 'life-path' ? '' : currentLocationId)"
     :initial-faction-id="fullCanvas.mode === 'faction' ? fullCanvas.entityId : ''"
     :initial-gmc-id="fullCanvas.mode === 'gmc-web' ? fullCanvas.entityId : ''"
+    :initial-life-path="fullCanvas.mode === 'life-path' ? fullCanvas.lifePath : null"
     @close-full="fullCanvas = null"
   />
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />

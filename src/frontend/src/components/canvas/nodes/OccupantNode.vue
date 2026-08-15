@@ -21,13 +21,17 @@
       <button class="occ-btn" title="Inspect" @click.stop="data.onInspect?.(data.entityId)">🔍</button>
     </div>
     <Handle id="target-top" type="target" :position="Position.Top" />
-    <Handle id="target-right" type="target" :position="Position.Right" />
     <Handle id="target-bottom" type="target" :position="Position.Bottom" />
-    <Handle id="target-left" type="target" :position="Position.Left" />
+    <Handle id="target-right-a" type="target" :position="Position.Right" :style="{ top: '25%' }" />
+    <Handle id="target-right-b" type="target" :position="Position.Right" :style="{ top: '75%' }" />
+    <Handle id="target-left-a" type="target" :position="Position.Left" :style="{ top: '25%' }" />
+    <Handle id="target-left-b" type="target" :position="Position.Left" :style="{ top: '75%' }" />
     <Handle id="source-top" type="source" :position="Position.Top" />
-    <Handle id="source-right" type="source" :position="Position.Right" />
     <Handle id="source-bottom" type="source" :position="Position.Bottom" />
-    <Handle id="source-left" type="source" :position="Position.Left" />
+    <Handle id="source-right-a" type="source" :position="Position.Right" :style="{ top: '25%' }" />
+    <Handle id="source-right-b" type="source" :position="Position.Right" :style="{ top: '75%' }" />
+    <Handle id="source-left-a" type="source" :position="Position.Left" :style="{ top: '25%' }" />
+    <Handle id="source-left-b" type="source" :position="Position.Left" :style="{ top: '75%' }" />
   </div>
 </template>
 

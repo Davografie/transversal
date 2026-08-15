@@ -1,13 +1,14 @@
 import { ref } from 'vue'
 import { MarkerType } from '@vue-flow/core'
 import { hierarchy, tree } from 'd3-hierarchy'
+import { buildLifePathGraph } from './lifePathGraph.js'
 
 const API_BASE = '/api/v1'
 
 // Module-level singleton state — shared across all canvas instances.
 const nodes = ref([])
 const edges = ref([])
-const mode = ref('location') // 'location' | 'faction' | 'gmc-web'
+const mode = ref('location') // 'location' | 'faction' | 'gmc-web' | 'life-path'
 const focusId = ref(null)
 const title = ref('')
 const loading = ref(false)
@@ -120,6 +121,50 @@ export function useCanvas() {
       focusId.value = gmcId
       title.value = data.gmc.name
       buildGmcWebGraph(data)
+    } catch (e) {
+      error.value = e.message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadLifePath(lifePath) {
+    loading.value = true
+    error.value = null
+    try {
+      mode.value = 'life-path'
+      focusId.value = lifePath?.id || null
+      title.value = lifePath?.name || 'Life Path'
+
+      if (!lifePath?.entryTableId) {
+        nodes.value = []
+        edges.value = []
+        error.value = 'This life path has no entry table'
+        return
+      }
+
+      const r = await fetch(`${API_BASE}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `query($lp:String){ rollTables(lifePathId:$lp){ id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type target value narrative } effects { timing type action target result targetScope context } } } }`,
+          variables: { lp: lifePath.id },
+        }),
+      })
+      const data = await r.json()
+      if (!r.ok || data.errors) {
+        throw new Error((data.errors && data.errors[0]?.message) || `HTTP ${r.status}`)
+      }
+
+      const tables = data.data?.rollTables || []
+      const graph = buildLifePathGraph(lifePath, tables)
+      nodes.value = graph.nodes
+      edges.value = graph.edges
+      if (!tables.length) {
+        error.value = 'No roll tables found for this life path'
+      } else if (!graph.nodes.length) {
+        error.value = 'This life path has no linked roll tables'
+      }
     } catch (e) {
       error.value = e.message
     } finally {
@@ -468,9 +513,26 @@ export function useCanvas() {
 
   function routeEdges() {
     // For relation edges, pick the handle pair on the sides facing each other
-    // (closest sides), rather than a fixed right→left.
+    // (closest sides). Reciprocal edges between the same pair get distinct
+    // vertical lanes (upper/lower) so they no longer overlap.
     const pos = {}
     for (const n of nodes.value) pos[n.id] = n.position
+
+    // Deterministic lane assignment per unordered node pair, independent of
+    // insertion order (edges arrive lazily via expand / toggleRelations).
+    const groups = new Map()
+    const laneOf = new Map()
+    for (const e of edges.value) {
+      if (e.data?.kind !== 'relation') continue
+      const key = [e.source, e.target].sort().join('|')
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(e)
+    }
+    for (const group of groups.values()) {
+      group.sort((a, b) => (a.source === b.source ? a.target.localeCompare(b.target) : a.source.localeCompare(b.source)))
+      group.forEach((e, i) => { laneOf.set(e.id, i) })
+    }
+
     edges.value = edges.value.map((e) => {
       if (e.data?.kind !== 'relation') return e
       const s = pos[e.source]
@@ -478,12 +540,15 @@ export function useCanvas() {
       if (!s || !t) return e
       const dx = t.x - s.x
       const dy = t.y - s.y
+      const suffix = (laneOf.get(e.id) || 0) % 2 === 0 ? 'a' : 'b'
       let sourceHandle
       let targetHandle
       if (Math.abs(dx) >= Math.abs(dy)) {
-        sourceHandle = dx >= 0 ? 'source-right' : 'source-left'
-        targetHandle = dx >= 0 ? 'target-left' : 'target-right'
+        // Horizontal → left/right lane handles (upper/lower).
+        sourceHandle = `source-${dx >= 0 ? 'right' : 'left'}-${suffix}`
+        targetHandle = `target-${dx >= 0 ? 'left' : 'right'}-${suffix}`
       } else {
+        // Vertical → single top/bottom handles (lanes deferred).
         sourceHandle = dy >= 0 ? 'source-bottom' : 'source-top'
         targetHandle = dy >= 0 ? 'target-top' : 'target-bottom'
       }
@@ -625,6 +690,36 @@ export function useCanvas() {
     }
   }
 
+  async function persistTablePosition(tableId, x, y) {
+    try {
+      await fetch(`${API_BASE}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation($id:ID!,$x:Float,$y:Float){ setRollTablePosition(id:$id,x:$x,y:$y){ id } }`,
+          variables: { id: tableId, x, y },
+        }),
+      })
+    } catch {
+      // non-fatal — layout persistence shouldn't break the canvas
+    }
+  }
+
+  async function clearLifePathPositions(lifePathId) {
+    try {
+      await fetch(`${API_BASE}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation($lp:ID!){ clearRollTablePositions(lifePathId:$lp) }`,
+          variables: { lp: lifePathId },
+        }),
+      })
+    } catch {
+      // non-fatal
+    }
+  }
+
   function setFocus(locationId) {
     // Highlight the node without repositioning the graph.
     const id = nodeId('loc', locationId)
@@ -638,7 +733,20 @@ export function useCanvas() {
   }
 
   function updateNodePosition(id, position) {
-    nodes.value = nodes.value.map((n) => (n.id === id ? { ...n, position: { ...position } } : n))
+    const old = nodes.value.find((n) => n.id === id)
+    const dx = position.x - (old?.position?.x ?? position.x)
+    const dy = position.y - (old?.position?.y ?? position.y)
+    const isTable = old?.type === 'rolltable'
+    const parentId = old?.data?.entityId
+    nodes.value = nodes.value.map((n) => {
+      if (n.id === id) return { ...n, position: { ...position } }
+      // Bundlers stay glued to the table whose rows they fan in from.
+      if (isTable && n.type === 'bundler' && n.data?.parentId === parentId) {
+        return { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } }
+      }
+      return n
+    })
+    if (isTable && parentId) persistTablePosition(parentId, position.x, position.y)
   }
 
   return {
@@ -653,6 +761,7 @@ export function useCanvas() {
     loadLocation,
     loadFaction,
     loadGmcWeb,
+    loadLifePath,
     expandLocation,
     loadFactions,
     collapseLocation,
@@ -661,6 +770,8 @@ export function useCanvas() {
     createTransversal,
     setFocus,
     updateNodePosition,
+    persistTablePosition,
+    clearLifePathPositions,
     clear,
   }
 }

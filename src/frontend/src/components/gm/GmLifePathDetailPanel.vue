@@ -3,6 +3,8 @@
     <div class="lpd-header">
       <span class="lpd-name">{{ lp.name }}</span>
       <span class="lpd-type">{{ lp.universe }}</span>
+      <button class="lpd-canvas" title="Open in canvas" @click="openCanvas">🗺</button>
+      <button class="lpd-canvas" title="Open fullscreen" @click="openFullCanvas">⛶</button>
       <button class="lpd-edit" @click="editPath">✎ Edit</button>
     </div>
     <p class="lpd-desc">{{ lp.description || 'No description' }}</p>
@@ -48,6 +50,7 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
+import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -83,6 +86,14 @@ function addTable() {
 
 function editPath() {
   panel.open({ component: GmLifePathEditPanel, title: 'Edit ' + props.lp.name, props: { lp: props.lp } })
+}
+
+function openCanvas() {
+  panel.open({ component: RelationalCanvas, title: props.lp.name + ' — Canvas', props: { initialLifePath: props.lp } })
+}
+
+function openFullCanvas() {
+  bus.emit('canvas:open-full', { mode: 'life-path', entityId: props.lp.id, lifePath: props.lp })
 }
 
 async function onDeleteConfirmed() {
@@ -132,6 +143,8 @@ const discoveryRows = computed(() => {
 }
 .lpd-add-btn:hover { background: rgba(0,200,150,0.14); }
 .lpd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; }
+.lpd-canvas { font-size: 12px; padding: 2px 6px; background: rgba(0,200,150,0.08); border: 1px solid rgba(0,200,150,0.25); color: var(--accent); border-radius: 4px; cursor: pointer; }
+.lpd-canvas:hover { background: rgba(0,200,150,0.16); }
 .lpd-delete {
   width: 100%; margin-top: 12px; font-size: 11px; padding: 6px 0;
   background: rgba(212,64,64,0.08); border: 1px solid rgba(212,64,64,0.25);
