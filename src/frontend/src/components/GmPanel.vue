@@ -39,7 +39,7 @@
         <button class="create-btn canvas-btn" @click="openCanvas">🗺 Canvas</button>
         <button class="create-btn canvas-btn" @click="openFullLocationCanvas">⛶ Full</button>
       </div>
-      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
+      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
         <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
@@ -223,19 +223,21 @@ function onImageOpen(img) {
 }
 
 // ── Drag-drop move ──────────────────────────────────
+const rejectedUniverseId = ref(null)
+
 async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
   if (entityKind === 'occupant') {
+    const data = await graphql(
+      `query($id: ID!) { entity(id: $id) { projections { id originUniverse universe currentLocation } } }`,
+      { id: entityId }
+    )
+    const projections = data?.entity?.projections || []
+    const proj = projections.find((p) => p.universe === targetUniverse || p.originUniverse === targetUniverse)
+
     if (targetKind === 'universe') {
-      // Dropping onto a universe: activate an existing projection there, if any.
-      const data = await graphql(
-        `query($id: ID!) { entity(id: $id) { projections { id originUniverse universe currentLocation } } }`,
-        { id: entityId }
-      )
-      const projections = data?.entity?.projections || []
-      const proj = projections.find((p) => p.universe === targetUniverse || p.originUniverse === targetUniverse)
       if (proj) {
         await graphql(
-          `mutation($entityId: ID!, $projectionId: ID!) { activateProjection(entityId: $entityId, projectionId: $projectionId) { id currentProjection currentUniverse currentLocation } }`,
+          `mutation($entityId: ID!, $projectionId: ID!) { activateProjection(entityId: $entityId, projectionId: $projectionId) { id } }`,
           { entityId, projectionId: proj.id }
         )
         const next = { ...expandedNodes.value }
@@ -247,7 +249,16 @@ async function onMoveEntity({ entityId, entityKind, targetId, targetKind, target
           }
         }
         expandedNodes.value = next
+      } else {
+        rejectedUniverseId.value = targetId
+        setTimeout(() => { if (rejectedUniverseId.value === targetId) rejectedUniverseId.value = null }, 700)
       }
+    } else if (proj) {
+      // Location drop with a projection in that universe: assume it and move it.
+      await graphql(
+        `mutation($entityId: ID!, $projectionId: ID!, $location: ID) { activateProjection(entityId: $entityId, projectionId: $projectionId, location: $location) { id } }`,
+        { entityId, projectionId: proj.id, location: targetId }
+      )
     } else {
       const input = { id: entityId, currentLocation: targetId }
       if (targetUniverse) input.currentUniverse = targetUniverse

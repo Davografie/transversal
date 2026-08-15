@@ -205,10 +205,14 @@ class EntityManager:
             proj.current_location = current_location or None
         return self.repo.update_projection(proj)
 
-    def activate_projection(self, entity_id: str, projection_id: str) -> Entity:
+    def activate_projection(
+        self, entity_id: str, projection_id: str, location: Optional[str] = None
+    ) -> Entity:
         """Make ``projection_id`` the entity's active projection.
 
         Also aligns the entity's current universe/location with the projection's.
+        When ``location`` is given, the projection is moved there first (its
+        universe follows the location's universe).
         """
         entity = self.repo.get_entity(entity_id)
         if entity is None:
@@ -216,6 +220,12 @@ class EntityManager:
         proj = self.repo.get_projection(projection_id)
         if proj is None:
             raise ValueError(f"Projection '{projection_id}' not found")
+        if location is not None:
+            proj.current_location = location
+            loc = self.repo.get_entity(location)
+            if loc is not None:
+                proj.universe = loc.current_universe
+            self.repo.update_projection(proj)
         entity.current_projection = projection_id
         entity.current_universe = proj.universe
         entity.current_location = proj.current_location

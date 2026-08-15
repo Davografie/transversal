@@ -4,7 +4,7 @@
       v-for="node in flatTree"
       :key="node.kind + '-' + node.id"
       class="entity-row tree-row"
-      :class="{ selected: node.id === selectedId, occupant: node.kind === 'occupant', location: node.kind === 'location', 'drag-over': dragOverId === node.id }"
+      :class="{ selected: node.id === selectedId, occupant: node.kind === 'occupant', location: node.kind === 'location', 'drag-over': dragOverId === node.id, 'pulse-reject': node.id === rejectedId }"
       :style="{ paddingLeft: (12 + node.depth * 20) + 'px' }"
       :data-node-id="node.id"
       :data-node-kind="node.kind"
@@ -38,6 +38,7 @@ const props = defineProps({
   flatTree: { type: Array, default: () => [] },
   expandedIds: { type: Object, default: () => ({}) },
   selectedId: { type: String, default: '' },
+  rejectedId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['select-universe', 'select-location', 'select-occupant', 'toggle-expand', 'move-entity'])
@@ -137,6 +138,11 @@ function cancelTouchDrag() {
 .tree-row.location { cursor: grab; touch-action: none; }
 .tree-row.location:active { cursor: grabbing; }
 .tree-row.drag-over { background: rgba(64,136,212,0.15); border: 1px dashed var(--accent); }
+.tree-row.pulse-reject { animation: pulse-reject 0.7s ease; }
+@keyframes pulse-reject {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: inset 0 0 0 2px #e06060; }
+}
 
 .tree-toggle {
   font-size: 16px; width: 32px; min-height: 32px; line-height: 32px;

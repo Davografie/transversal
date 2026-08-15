@@ -586,8 +586,8 @@ class Mutation:
         return _entity_to_gql(updated) if updated else None
 
     @strawberry.mutation
-    def activate_projection(self, info: strawberry.Info, entity_id: strawberry.ID, projection_id: strawberry.ID) -> Entity:
-        updated = _em(info).activate_projection(str(entity_id), str(projection_id))
+    def activate_projection(self, info: strawberry.Info, entity_id: strawberry.ID, projection_id: strawberry.ID, location: Optional[strawberry.ID] = None) -> Entity:
+        updated = _em(info).activate_projection(str(entity_id), str(projection_id), location=str(location) if location else None)
         return _entity_to_gql(updated)
 
     @strawberry.mutation
