@@ -60,6 +60,7 @@
           @dragover.prevent="onProjDragOver(p)"
           @dragleave="onProjDragLeave(p)"
           @drop.prevent="onProjDrop(p, $event)"
+          @click="openProjectionEditor(p)"
         >
           <video v-if="p.backgroundImage && isProjectionVideo(p)" :src="p.backgroundImage" class="proj-thumb" autoplay loop muted playsinline />
           <img v-else-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
@@ -67,7 +68,7 @@
           <span class="proj-name">{{ p.name || form?.name }}</span>
           <span class="proj-universe">{{ p.originUniverse }}<template v-if="p.universe !== p.originUniverse"> → {{ p.universe }}</template></span>
           <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
-          <button class="proj-remove" @click="removeProjection(p.id)" title="Remove projection">✕</button>
+          <button class="proj-remove" @click.stop="removeProjection(p.id)" title="Remove projection">✕</button>
         </div>
       </div>
       <div class="projection-add">
@@ -131,6 +132,7 @@ import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
+import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
 import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
@@ -277,6 +279,14 @@ function openCanvas() {
       props: { initialGmcId: props.entityId },
     })
   }
+}
+
+function openProjectionEditor(p) {
+  panel.open({
+    component: GmProjectionEditPanel,
+    title: `Projection: ${p.originUniverse || p.universe}`,
+    props: { projection: p },
+  })
 }
 
 // Load life paths when editing a universe entity
