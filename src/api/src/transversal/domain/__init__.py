@@ -378,10 +378,18 @@ class Projection(BaseModel):
     """Per-universe body grouping.
 
     Stored in the `projections` collection.
+
+    ``id`` is immutable and encodes the projection's *origin* universe:
+    ``"{entity_id}:{origin_universe}"``. Inapposite travel mutates ``universe``
+    and ``current_location`` in place — never the key.
     """
     id: str
     entity_id: str
-    universe: str
+    origin_universe: str = ""       # native universe (immutable; equals id suffix)
+    universe: str                   # current universe (mutable)
+    name: str = ""                  # display name; falls back to entity name
+    background_image: Optional[str] = None  # falls back to entity background_image
+    current_location: Optional[str] = None   # where this body currently is
     transversal_type: TransversalType = TransversalType.NATIVE
 
 
@@ -406,6 +414,7 @@ class Entity(BaseModel):
     razmerit: int = 0
     current_universe: str
     current_location: Optional[str] = None
+    current_projection: Optional[str] = None  # active projection id (occupant types)
     hidden: bool = False
     known_to: list[str] = Field(default_factory=list)
     # Location

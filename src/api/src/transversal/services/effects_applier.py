@@ -120,7 +120,9 @@ def _register_core_handlers(em, raz):
     effect_registry.register("attune", "enable", _attune)
     effect_registry.register("attune", "disable", _attune)
 
-    # Inapposite travel — move the entity and relocate its active projection.
+    # Inapposite travel — move the entity and relocate its active projection in
+    # place. The projection key stays "{entity_id}:{origin_universe}"; only its
+    # ``universe`` and ``current_location`` mutate.
     def _travel(a, eid, u, ctx):
         from transversal.domain import Projection, TransversalType
         entity = em.repo.get_entity(eid)
@@ -132,18 +134,30 @@ def _register_core_handlers(em, raz):
         dest = em.repo.get_entity(target_location)
         if dest is None:
             return
-        old_universe = entity.current_universe
         new_universe = dest.current_universe
-        if new_universe != old_universe:
-            old_proj = em.repo.get_projection(f"{eid}:{old_universe}")
-            if old_proj:
-                em.repo.delete_projection(old_proj.id)
-            em.repo.create_projection(Projection(
+
+        proj_id = entity.current_projection or f"{eid}:{entity.current_universe}"
+        proj = em.repo.get_projection(proj_id)
+        if proj is None:
+            proj = Projection(
                 id=f"{eid}:{new_universe}",
                 entity_id=eid,
+                origin_universe=new_universe,
                 universe=new_universe,
-                transversal_type=TransversalType.INAPPOSITE,
-            ))
+                current_location=target_location,
+                transversal_type=TransversalType.NATIVE,
+            )
+            em.repo.create_projection(proj)
+        else:
+            if not proj.origin_universe:
+                # backfill legacy projections from their stable key
+                proj.origin_universe = proj.id.rsplit(":", 1)[-1]
+            proj.universe = new_universe
+            proj.current_location = target_location
+            proj.transversal_type = TransversalType.INAPPOSITE
+            em.repo.update_projection(proj)
+
+        entity.current_projection = proj.id
         entity.current_location = target_location
         entity.current_universe = new_universe
         em.repo.update_entity(entity)

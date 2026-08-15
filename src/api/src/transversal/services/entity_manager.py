@@ -55,6 +55,7 @@ class EntityManager:
 
         proj = Projection(
             id=proj_id, entity_id=entity_id, universe=universe,
+            origin_universe=universe,
             transversal_type=transversal_type,
         )
         return self.repo.create_projection(proj)
@@ -72,6 +73,7 @@ class EntityManager:
         session_id: Optional[str] = None,
     ) -> Entity:
         eid = entity_id or _generate_id(name, entity_type)
+        proj_id = f"{eid}:{universe}"
         entity = Entity(
             id=eid,
             type=entity_type,
@@ -79,15 +81,17 @@ class EntityManager:
             razmerit=razmerit,
             current_universe=universe,
             current_location=location,
+            current_projection=proj_id,
         )
         validate_entity(entity)
         self.repo.create_entity(entity)
 
         # Create initial projection
         proj = Projection(
-            id=f"{eid}:{universe}",
+            id=proj_id,
             entity_id=eid,
             universe=universe,
+            origin_universe=universe,
             transversal_type=TransversalType.NATIVE,
         )
         self.repo.create_projection(proj)
@@ -156,11 +160,13 @@ class EntityManager:
             id=f"{entity.id}:{universe}",
             entity_id=entity.id,
             universe=universe,
+            origin_universe=universe,
             transversal_type=transversal_type,
         )
         self.repo.create_projection(proj)
 
         entity.current_universe = universe
+        entity.current_projection = proj.id
         return self.repo.update_entity(entity)
 
     def get_projections(self, entity_id: str) -> list[Projection]:
