@@ -839,23 +839,25 @@ async function doSave() {
   }
 }
 
-function toggleEgo() {
+async function toggleEgo() {
   editIsEgo.value = !editIsEgo.value
   if (!editIsEgo.value) {
     editProjectionId.value = entity.value?.currentProjection || entity.value?.projections?.[0]?.id || null
   }
   showProjectionPicker.value = false
-  doSave()
+  await doSave()
+  await fetchEntity()
 }
 
 function toggleProjectionPicker() {
   showProjectionPicker.value = !showProjectionPicker.value
 }
 
-function selectProjection(p) {
+async function selectProjection(p) {
   editProjectionId.value = p.id
   showProjectionPicker.value = false
-  doSave()
+  await doSave()
+  await fetchEntity()
 }
 
 function toggleSfx(sfxId) {

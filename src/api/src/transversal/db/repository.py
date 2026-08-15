@@ -291,6 +291,16 @@ class EntityRepository:
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
         ]
 
+    def list_all_projections(self) -> list[Projection]:
+        query = f"""
+            FOR p IN {PROJECTIONS}
+            RETURN p
+        """
+        return [
+            Projection.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
+        ]
+
     def update_projection(self, projection: Projection) -> Projection:
         doc = projection.model_dump()
         doc["_key"] = projection.id
@@ -789,13 +799,17 @@ class EntityRepository:
         Ego traits (``ego=True``) are always returned. Entity-anchored morph
         traits are gated by the trait/trait-set universe intersection.
         Projection-anchored morph traits are gated by their projection's
-        ``origin_universe`` being in ``universes``.
+        ``origin_universe`` being in ``universes`` (falling back to the
+        projection key's universe suffix for pre-migration data).
         """
         query = f"""
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.entity_id == @eid
             LET is_projection = (ts.from_type == 'projection')
             LET proj = is_projection ? DOCUMENT(ts._from) : null
+            LET origin = proj != null
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[-1])
+                : null
             LET trait = DOCUMENT(ts._to)
             LET set_doc = (trait.traitset_id != null)
                 ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
@@ -807,9 +821,9 @@ class EntityRepository:
                 )
                 OR (
                     is_projection AND proj != null
-                    AND proj.origin_universe IN @universes
-                    AND proj.origin_universe IN trait.universes
-                    AND (set_doc == null OR proj.origin_universe IN set_doc.universes)
+                    AND origin IN @universes
+                    AND origin IN trait.universes
+                    AND (set_doc == null OR origin IN set_doc.universes)
                 )
             RETURN ts
         """
