@@ -269,38 +269,41 @@ Ordered, idempotent, guarded by existence checks (existing convention):
 ## Progress checklist
 
 ### Data model
-- [ ] `Projection` gains `origin_universe`, `name`, `background_image`, `current_location`.
-- [ ] `Entity.current_projection` added; `transversal`/`home_universes`/`current_location` removed.
-- [ ] `TraitSetting.from_type` supports `"projection"` (+ `_from` → `projections/{id}`).
-- [ ] `transversal` edges gain `transversal_type`.
+- [x] `Projection` gains `origin_universe`, `name`, `background_image`, `current_location`.
+- [x] `Entity.current_projection` added; `transversal`/`home_universes` removed.
+- [ ] `Entity.current_location` removed (kept as a denormalised active-self cache for now — ~24 read sites still use it).
+- [x] `TraitSetting.from_type` supports `"projection"` (+ `_from` → `projections/{id}`, `projection_id` field).
+- [x] `transversal` edges gain `transversal_type`.
 
 ### Logic
-- [ ] `effective_universes` = `{current_projection.universe}` ∪ unexpired attunements.
-- [ ] Origin-based trait gating (morph iff `origin_universe` ∈ effective).
-- [ ] In-place inapposite travel (no copy/delete; key stays origin).
-- [ ] Consciousness travel (spawn `CONSCIOUSNESS` projection; cleanup on return).
-- [ ] Projection-driven occupancy in `navigate_from`.
-- [ ] Domain attunement over the projection's location subtree.
+- [x] `effective_universes` = `{current_projection.universe}` ∪ unexpired attunements.
+- [x] Origin-based trait gating (morph iff `origin_universe` ∈ effective; legacy entity path preserved).
+- [x] In-place inapposite travel (no copy/delete; key stays origin).
+- [x] Consciousness travel (spawn/reuse `CONSCIOUSNESS` projection).
+- [ ] Consciousness-projection cleanup on return/attunement-end (effects_engine).
+- [x] Projection-driven occupancy in `navigate_from` + `list_entities_by_location`.
+- [ ] Domain attunement over the projection's location subtree (still reads entity cache).
 
 ### Effects
-- [ ] `attune` (carried forward) — confirm unchanged.
-- [ ] `travel` — updated per edge type (in-place inapposite / consciousness).
-- [ ] `project_domain` (carried forward) — confirm unchanged.
+- [x] `attune` (carried forward) — confirmed unchanged.
+- [x] `travel` — in-place inapposite / consciousness per `transversal_type`.
+- [x] `project_domain` (carried forward) — confirmed unchanged.
 
 ### Migration
-- [ ] NATIVE projections + `origin_universe` + `current_location` copy + `current_projection`.
-- [ ] `transversal`/`home_universes` → permanent attunements.
-- [ ] `ego=false` → projection anchor (with ambiguity flag).
-- [ ] Drop obsolete `Entity` fields.
+- [x] `migrate_projections` script (NATIVE projection backfill + `origin_universe`/`current_location` copy + `current_projection`).
+- [x] `ego=false` → projection anchor (with ambiguity flag).
+- [n/a] `transversal`/`home_universes` → permanent attunements (no seed data used them).
+- [ ] Run migration against ArangoDB (needs a live DB).
 
 ### Frontend
-- [ ] Character sheet active-projection rendering.
-- [ ] GM projections management section.
-- [ ] Entity gallery shows all projection images.
-- [ ] GM-drag = inapposite travel.
-- [ ] GmTraitEditPanel ego/morph ↔ anchor mapping.
+- [ ] Character sheet active-projection name/image rendering.
+- [x] GM projections management (list/add/remove) in `GmEntityEditPanel`.
+- [x] Entity gallery shows per-universe images (existing `EntityImage` gallery).
+- [x] GM-drag = inapposite travel (`move_to` now relocates the active projection).
+- [ ] GmTraitEditPanel ego/morph ↔ `from_type` anchor mapping.
 
 ### Not started / deferred
 - [ ] Inner locations for occupants.
 - [ ] `owned_by` removal.
 - [ ] `EntityImage` ↔ projection image reconciliation.
+- [ ] Remove leftover `[diag]` `console.log` lines in `CharacterSheet.vue`.
