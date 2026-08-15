@@ -621,6 +621,8 @@ class EntityRepository:
         doc["_key"] = ts.id
         if ts.from_type == "relationship":
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
+        elif ts.from_type == "projection":
+            doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
@@ -662,6 +664,8 @@ class EntityRepository:
         doc["_key"] = ts.id
         if ts.from_type == "relationship":
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
+        elif ts.from_type == "projection":
+            doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
@@ -1395,7 +1399,7 @@ class EntityRepository:
             LET transversal = (
                 FOR r IN {RELATIONSHIPS}
                 FILTER r._from == @loc_ref AND r.type == 'transversal'
-                RETURN DOCUMENT(r._to)
+                RETURN MERGE(DOCUMENT(r._to), {{ transversal_type: r.transversal_type }})
             )
             LET occupants = (
                 FOR e IN {ENTITIES}

@@ -84,6 +84,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
     return Entity(
         id=e.id, type=e.type, name=e.name, razmerit=e.razmerit,
         current_universe=e.current_universe, current_location=e.current_location,
+        current_projection=e.current_projection,
         hidden=e.hidden, known_to=e.known_to,
         _background_image=e.background_image, overlay=e.overlay,
         zones=[Zone(name=z.name, background_image=z.background_image, location_id=z.location_id, x=z.x, y=z.y) for z in e.zones],
@@ -239,8 +240,9 @@ class Query:
         return CharacterView(
             entity=_entity_to_gql(cv.entity),
             projections=[
-                Projection(id=p.id, entity_id=p.entity_id, universe=p.universe,
-                           transversal_type=p.transversal_type)
+                Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
+                           universe=p.universe, name=p.name, background_image=p.background_image,
+                           current_location=p.current_location, transversal_type=p.transversal_type)
                 for p in cv.projections.values()
             ],
             trait_settings=[_ts_to_gql(s) for s in cv.trait_settings],

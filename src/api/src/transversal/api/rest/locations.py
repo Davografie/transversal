@@ -125,6 +125,7 @@ class MoveRequest(BaseModel):
 
 class EdgeRequest(BaseModel):
     type: str  # "super" or "transversal"
+    transversal_type: str | None = None  # "consciousness" | "inapposite" (transversal edges only)
 
 
 @router.post("/entities/{entity_id}/move")
@@ -163,23 +164,29 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
     if repo._relationships.has(edge_key):
         return {"status": "exists", "key": edge_key}
 
-    repo._relationships.insert({
+    edge_doc = {
         "_key": edge_key,
         "_from": f"entities/{from_id}",
         "_to": f"entities/{to_id}",
         "type": body.type,
-    })
+    }
+    if body.type == "transversal" and body.transversal_type:
+        edge_doc["transversal_type"] = body.transversal_type
+    repo._relationships.insert(edge_doc)
 
     # For transversal edges, also create the reverse
     if body.type == "transversal":
         rev_key = f"edge:{to_id}:{from_id}:{body.type}"
         if not repo._relationships.has(rev_key):
-            repo._relationships.insert({
+            rev_doc = {
                 "_key": rev_key,
                 "_from": f"entities/{to_id}",
                 "_to": f"entities/{from_id}",
                 "type": body.type,
-            })
+            }
+            if body.transversal_type:
+                rev_doc["transversal_type"] = body.transversal_type
+            repo._relationships.insert(rev_doc)
 
     return {"status": "created", "key": edge_key}
 

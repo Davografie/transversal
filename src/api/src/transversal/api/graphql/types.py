@@ -442,7 +442,11 @@ class TraitSettingUpdateInput:
 class Projection:
     id: strawberry.ID
     entity_id: strawberry.ID
+    origin_universe: str = ""
     universe: str
+    name: str = ""
+    background_image: Optional[str] = None
+    current_location: Optional[str] = None
     transversal_type: TransversalTypeEnum
 
 
@@ -482,6 +486,7 @@ class Entity:
     razmerit: int
     current_universe: str
     current_location: Optional[str] = None
+    current_projection: Optional[str] = None
     hidden: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     _background_image: strawberry.Private[Optional[str]] = None
@@ -502,8 +507,9 @@ class Entity:
         em = info.context["entity_manager"]
         projs = em.get_projections(self.id)
         return [
-            Projection(id=p.id, entity_id=p.entity_id, universe=p.universe,
-                       transversal_type=p.transversal_type)
+            Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
+                       universe=p.universe, name=p.name, background_image=p.background_image,
+                       current_location=p.current_location, transversal_type=p.transversal_type)
             for p in projs
         ]
 
