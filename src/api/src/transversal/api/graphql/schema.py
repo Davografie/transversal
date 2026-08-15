@@ -107,7 +107,8 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         rating_type=s.rating_type, dice=s.dice,
         polarity=s.polarity,
         statement=s.statement, negative=s.negative,
-        ego=s.ego, sfx_ids=s.sfx_ids,
+        ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+        sfx_ids=s.sfx_ids,
         known_to=s.known_to,
     )
 
@@ -521,6 +522,8 @@ class Mutation:
             statement=input.statement,
             negative=input.negative,
             ego=input.ego,
+            from_type=input.from_type or "entity",
+            projection_id=str(input.projection_id) if input.projection_id else None,
             sfx_ids=[str(s) for s in input.sfx_ids],
         )
         created = _em(info).add_traitsetting(ts)
@@ -648,6 +651,22 @@ class Mutation:
             ts.negative = input.negative
         if input.ego is not None:
             ts.ego = input.ego
+        if input.from_type is not None:
+            if input.from_type == "projection":
+                if input.projection_id is None:
+                    raise ValueError("projectionId is required when fromType is 'projection'")
+                proj = _em(info).repo.get_projection(str(input.projection_id))
+                if proj is None or proj.entity_id != ts.entity_id:
+                    raise ValueError(f"Projection '{input.projection_id}' does not belong to this entity")
+                ts.from_type = "projection"
+                ts.projection_id = str(input.projection_id)
+                ts.ego = False
+            elif input.from_type == "entity":
+                ts.from_type = "entity"
+                ts.projection_id = None
+                ts.ego = True
+            else:
+                raise ValueError(f"Unknown fromType '{input.from_type}'")
         if input.sfx_ids is not None:
             ts.sfx_ids = [str(s) for s in input.sfx_ids]
         if input.known_to is not None:

@@ -136,7 +136,21 @@
                   </button>
                 </div>
                 <input v-if="t.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" />
-                <button type="button" class="ego-toggle" :class="{ 'is-ego': editEgo }" @click="toggleEgo">{{ editEgo ? 'ego' : 'morph' }}</button>
+                <button type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
+                <div v-if="!editIsEgo" class="edit-projection">
+                  <span class="edit-projection-label">on</span>
+                  <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
+                  <div v-if="showProjectionPicker" class="projection-dropdown">
+                    <button
+                      v-for="p in editProjectionOptions"
+                      :key="p.id"
+                      type="button"
+                      class="projection-option"
+                      :class="{ selected: p.id === editProjectionId }"
+                      @click="selectProjection(p)"
+                    >{{ p.name || universeDisplay(p.universe) }}</button>
+                  </div>
+                </div>
                 <div class="edit-actions">
                   <button class="edit-done-btn" @click="cancelEdit">Done</button>
                   <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === t.id }" @click="onDeleteClick(t)">
@@ -272,6 +286,7 @@ const isSheetVideo = computed(() => sheetPortrait.value && /\.(webm|mp4)(\?|$)/i
 // Resolved human-readable names
 const locationName = ref('')
 const universeName = ref('')
+const universeNames = ref({})  // universe key/id → display name
 
 // Accordion state — user controls which sets are expanded
 const expandedSets = ref(new Set(JSON.parse(localStorage.getItem('expandedSets') || '[]')))
@@ -308,7 +323,15 @@ const showDiePicker = ref(false)
 const pickIdx = ref(0)
 const pickedDie = ref('')
 const editSfxIds = ref([])
-const editEgo = ref(false)
+const editIsEgo = ref(true)
+const editProjectionId = ref(null)
+const showProjectionPicker = ref(false)
+
+const editProjectionOptions = computed(() => entity.value?.projections || [])
+const editProjectionName = computed(() => {
+  const p = editProjectionOptions.value.find((p) => p.id === editProjectionId.value)
+  return p ? (p.name || universeDisplay(p.universe)) : (editProjectionId.value || 'select projection')
+})
 let longPressTimer = null
 
 // ── Add trait picker ────────────────────────────
@@ -545,6 +568,8 @@ const QUERY = `
         ratingType
         rating
         ego
+        fromType
+        projectionId
         statement
         sfxIds
         universe
@@ -565,6 +590,8 @@ const QUERY = `
         ratingType
         rating
         ego
+        fromType
+        projectionId
         statement
         sfxIds
         universe
@@ -609,10 +636,20 @@ async function resolveNames(e) {
       })
       const json = await r.json()
       const universes = json.data?.entities || []
+      const map = {}
+      for (const u of universes) {
+        if (u.currentUniverse) map[u.currentUniverse] = u.name
+        if (u.id) map[u.id] = u.name
+      }
+      universeNames.value = map
       const match = universes.find(u => u.currentUniverse === e.currentUniverse || u.id === e.currentUniverse)
       universeName.value = match?.name || e.currentUniverse
     } catch { universeName.value = e.currentUniverse }
   }
+}
+
+function universeDisplay(key) {
+  return universeNames.value[key] || key
 }
 
 // Find the traitsetting ID that owns a given SFX
@@ -677,7 +714,13 @@ function startEdit(t) {
   editDice.value = (t.dice && t.dice.length ? [...t.dice] : [t.dieType || 'd6']).map(d => d.toLowerCase())
   editStatement.value = t.statement || ''
   editSfxIds.value = [...(t.sfxIds || [])]
-  editEgo.value = !!t.ego
+  const isMorph = t.fromType === 'projection' || t.ego === false
+  editIsEgo.value = !isMorph
+  editProjectionId.value =
+    (t.fromType === 'projection' && t.projectionId) ||
+    (isMorph ? (entity.value?.currentProjection || entity.value?.projections?.[0]?.id) : null) ||
+    null
+  showProjectionPicker.value = false
   showDiePicker.value = false
 }
 
@@ -751,11 +794,18 @@ async function deleteTrait(t) {
   }
 }
 
+function ensureEditProjection() {
+  if (!editIsEgo.value && !editProjectionId.value) {
+    editProjectionId.value = entity.value?.currentProjection || entity.value?.projections?.[0]?.id || null
+  }
+}
+
 async function doSave() {
   if (!editingTraitId.value) return
+  ensureEditProjection()
   const newDice = editDice.value.map(d => d.toUpperCase())
-  const query = `mutation($id: ID!, $dice: [DieType!], $statement: String, $sfxIds: [ID!], $ego: Boolean) {
-    updateTraitSetting(id: $id, input: { dice: $dice, statement: $statement, sfxIds: $sfxIds, ego: $ego }) { id }
+  const query = `mutation($id: ID!, $dice: [DieType!], $statement: String, $sfxIds: [ID!], $ego: Boolean, $fromType: String, $projectionId: ID) {
+    updateTraitSetting(id: $id, input: { dice: $dice, statement: $statement, sfxIds: $sfxIds, ego: $ego, fromType: $fromType, projectionId: $projectionId }) { id }
   }`
   await fetch('/api/v1/graphql', {
     method: 'POST',
@@ -767,7 +817,9 @@ async function doSave() {
         dice: newDice,
         statement: editStatement.value ?? null,
         sfxIds: editSfxIds.value,
-        ego: editEgo.value,
+        ego: editIsEgo.value,
+        fromType: editIsEgo.value ? 'entity' : 'projection',
+        projectionId: editIsEgo.value ? null : editProjectionId.value,
       },
     }),
   })
@@ -779,14 +831,30 @@ async function doSave() {
       t.rating = null  // force fallback to dice display
       t.sfxIds = [...editSfxIds.value]
       t.statement = editStatement.value
-      t.ego = editEgo.value
+      t.ego = editIsEgo.value
+      t.fromType = editIsEgo.value ? 'entity' : 'projection'
+      t.projectionId = editIsEgo.value ? null : editProjectionId.value
       break
     }
   }
 }
 
 function toggleEgo() {
-  editEgo.value = !editEgo.value
+  editIsEgo.value = !editIsEgo.value
+  if (!editIsEgo.value) {
+    editProjectionId.value = entity.value?.currentProjection || entity.value?.projections?.[0]?.id || null
+  }
+  showProjectionPicker.value = false
+  doSave()
+}
+
+function toggleProjectionPicker() {
+  showProjectionPicker.value = !showProjectionPicker.value
+}
+
+function selectProjection(p) {
+  editProjectionId.value = p.id
+  showProjectionPicker.value = false
   doSave()
 }
 
@@ -1437,6 +1505,62 @@ watch(() => props.externalPoolSources, (sources) => {
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(255, 255, 255, 0.06);
+}
+.edit-projection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  position: relative;
+}
+.edit-projection-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.projection-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-dim);
+  background: rgba(64, 136, 212, 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+.projection-chip:hover {
+  border-color: var(--accent);
+}
+.projection-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  margin-top: 4px;
+  min-width: 160px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+.projection-option {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.projection-option:hover {
+  background: var(--bg-hover);
+}
+.projection-option.selected {
+  color: var(--accent);
+  background: rgba(64, 136, 212, 0.12);
 }
 .razmerit {
   display: flex;

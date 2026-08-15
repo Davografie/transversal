@@ -325,6 +325,8 @@ class TraitSetting:
     statement: str
     negative: bool
     ego: bool
+    from_type: str = "entity"  # "entity" | "projection" | "relationship"
+    projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID]
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
 
@@ -421,6 +423,8 @@ class TraitSettingInput:
     statement: str = ""
     negative: bool = False
     ego: bool = False
+    from_type: Optional[str] = None  # "entity" | "projection"
+    projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
 
 
@@ -432,6 +436,8 @@ class TraitSettingUpdateInput:
     statement: Optional[str] = None
     negative: Optional[bool] = None
     ego: Optional[bool] = None
+    from_type: Optional[str] = None  # "entity" | "projection"
+    projection_id: Optional[strawberry.ID] = None
     sfx_ids: Optional[list[strawberry.ID]] = None
     known_to: Optional[list[strawberry.ID]] = None
 
@@ -569,7 +575,8 @@ class Entity:
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
                 statement=s.statement, negative=s.negative,
-                ego=s.ego, sfx_ids=s.sfx_ids,
+                ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+                sfx_ids=s.sfx_ids,
                 known_to=s.known_to,
             )
             for s in settings
@@ -587,7 +594,8 @@ class Entity:
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
                 statement=s.statement, negative=s.negative,
-                ego=s.ego, sfx_ids=s.sfx_ids,
+                ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+                sfx_ids=s.sfx_ids,
                 known_to=s.known_to,
             )
             for s in settings
