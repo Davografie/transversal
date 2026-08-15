@@ -576,6 +576,11 @@ class Mutation:
         return _entity_to_gql(updated)
 
     @strawberry.mutation
+    def remove_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str) -> Entity:
+        updated = _em(info).remove_projection(str(entity_id), universe)
+        return _entity_to_gql(updated)
+
+    @strawberry.mutation
     def update_entity(self, info: strawberry.Info, input: UpdateEntityInput) -> Entity:
         e = _em(info).get(str(input.id))
         if input.name is not None:

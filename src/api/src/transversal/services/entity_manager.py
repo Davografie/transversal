@@ -154,7 +154,7 @@ class EntityManager:
     ) -> Entity:
         existing = self.repo.get_projections_for_entity(entity.id)
         for p in existing:
-            if p.universe == universe:
+            if p.id == f"{entity.id}:{universe}":
                 raise ValueError(f"Entity already has a projection in '{universe}'")
 
         proj = Projection(
@@ -169,6 +169,17 @@ class EntityManager:
         entity.current_universe = universe
         entity.current_projection = proj.id
         return self.repo.update_entity(entity)
+
+    def remove_projection(self, entity_id: str, universe: str) -> Entity:
+        entity = self.repo.get_entity(entity_id)
+        if entity is None:
+            raise EntityNotFoundError(f"Entity '{entity_id}' not found")
+        proj_id = f"{entity_id}:{universe}"
+        self.repo.delete_projection(proj_id)
+        if entity.current_projection == proj_id:
+            entity.current_projection = None
+            self.repo.update_entity(entity)
+        return entity
 
     def get_projections(self, entity_id: str) -> list[Projection]:
         return self.repo.get_projections_for_entity(entity_id)

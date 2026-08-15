@@ -35,6 +35,29 @@
         </div>
       </div>
     </div>
+    <div v-if="isOccupant" class="projections-section">
+      <div class="gallery-header">
+        <h4>Projections</h4>
+      </div>
+      <div v-if="!projections.length" class="gallery-empty">No projections yet.</div>
+      <div v-else class="projection-list">
+        <div v-for="p in projections" :key="p.id" class="projection-row">
+          <span class="proj-name">{{ p.name || selected?.name }}</span>
+          <span class="proj-universe">{{ p.originUniverse }}<template v-if="p.universe !== p.originUniverse"> → {{ p.universe }}</template></span>
+          <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
+          <button class="proj-remove" @click="removeProjection(p.originUniverse)" title="Remove projection">✕</button>
+        </div>
+      </div>
+      <div class="projection-add">
+        <input v-model="newProjUniverse" placeholder="universe key (e.g. three_realms)" class="proj-input" @keyup.enter="addProjectionLocal" />
+        <select v-model="newProjType" class="proj-type-select">
+          <option value="NATIVE">native</option>
+          <option value="CONSCIOUSNESS">consciousness</option>
+          <option value="INAPPOSITE">inapposite</option>
+        </select>
+        <button class="section-btn proj-add-btn" @click="addProjectionLocal">+ Add</button>
+      </div>
+    </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
       <button class="section-btn" @click="openLoraConfig">🖼 LoRA Configuration</button>
       <button class="section-btn" @click="openLifePaths">📋 Life Paths <span v-if="lifePaths.length" class="section-count">{{ lifePaths.length }}</span></button>
@@ -74,9 +97,20 @@ const panel = usePanel()
 const bus = usePanelBus()
 
 // ── Composables: shared state with GmPanel ──────────
-const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob } = useEntityCrud()
+const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { paths: lifePaths, loading: loadingLifepaths, fetchLifePaths } = useLifePaths()
+
+const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.value?.type))
+const newProjUniverse = ref('')
+const newProjType = ref('NATIVE')
+
+async function addProjectionLocal() {
+  const universe = newProjUniverse.value.trim()
+  if (!universe) return
+  await addProjection(universe, newProjType.value)
+  newProjUniverse.value = ''
+}
 
 const props = defineProps({
   entityId: { type: String, default: null },
@@ -264,4 +298,18 @@ defineExpose({ refresh: loadImages })
 }
 .section-btn:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
 .section-count { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
+
+.projections-section { margin-top: 12px; }
+.projection-list { display: flex; flex-direction: column; gap: 4px; }
+.projection-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02); }
+.proj-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-universe { font-size: 11px; color: var(--text-dim); }
+.proj-type { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: rgba(255,255,255,0.04); }
+.proj-type.active { color: #93c5fd; background: rgba(64,136,212,0.18); }
+.proj-remove { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; }
+.proj-remove:hover { color: #e06060; }
+.projection-add { display: flex; gap: 6px; margin-top: 8px; }
+.proj-input { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
+.proj-type-select { padding: 6px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
+.proj-add-btn { flex: 0 0 auto; padding: 6px 10px; }
 </style>

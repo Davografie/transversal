@@ -9,6 +9,8 @@ const editing = ref(false)
 const creating = ref(false)
 const saving = ref(false)
 const form = ref({})
+const projections = ref([])
+const currentProjection = ref(null)
 
 // ── Imagen job state ─────────────────────────────────
 const jobStatuses = ref({})  // {entity_id: {type, status, percent, message}}
@@ -22,8 +24,11 @@ export function useEntityCrud() {
   // ── Queries ────────────────────────────────────────
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
-      id type name razmerit currentUniverse currentLocation
+      id type name razmerit currentUniverse currentLocation currentProjection
       hidden backgroundImage loraConfig
+      projections {
+        id originUniverse universe name backgroundImage currentLocation transversalType
+      }
       traitSettings {
         id name dieType rating ratingType statement ego sfxIds traitsetName universe
       }
@@ -53,6 +58,8 @@ export function useEntityCrud() {
     const data = await graphql(ENTITY_QUERY, { id: e.id })
     if (data?.entity) {
       selected.value = data.entity
+      projections.value = data.entity.projections || []
+      currentProjection.value = data.entity.currentProjection || null
       selectedId.value = e.id
       editing.value = true
       form.value = {
@@ -142,6 +149,41 @@ export function useEntityCrud() {
     saving.value = false
     creating.value = false
     await fetchEntities()
+  }
+
+  // ── Projections ────────────────────────────────────
+  async function addProjection(universe, type = 'NATIVE') {
+    const result = await graphql(
+      `mutation($entityId: ID!, $universe: String!, $type: TransversalType!) {
+        addProjection(entityId: $entityId, universe: $universe, type: $type) {
+          id currentProjection
+          projections { id originUniverse universe name backgroundImage currentLocation transversalType }
+        }
+      }`,
+      { entityId: selected.value.id, universe, type }
+    )
+    if (result?.addProjection) {
+      projections.value = result.addProjection.projections || []
+      currentProjection.value = result.addProjection.currentProjection || null
+    }
+    return result?.addProjection || null
+  }
+
+  async function removeProjection(universe) {
+    const result = await graphql(
+      `mutation($entityId: ID!, $universe: String!) {
+        removeProjection(entityId: $entityId, universe: $universe) {
+          id currentProjection
+          projections { id originUniverse universe name backgroundImage currentLocation transversalType }
+        }
+      }`,
+      { entityId: selected.value.id, universe }
+    )
+    if (result?.removeProjection) {
+      projections.value = result.removeProjection.projections || []
+      currentProjection.value = result.removeProjection.currentProjection || null
+    }
+    return result?.removeProjection || null
   }
 
   // ── Image upload ───────────────────────────────────
@@ -245,6 +287,8 @@ export function useEntityCrud() {
     creating,
     saving,
     form,
+    projections,
+    currentProjection,
     // Imagen
     jobStatuses,
     imagenJob,
@@ -256,6 +300,8 @@ export function useEntityCrud() {
     saveEntity,
     deleteEntity,
     createEntity,
+    addProjection,
+    removeProjection,
     uploadBgImage,
     // Imagen actions
     pollJobs,
