@@ -61,7 +61,8 @@
           @dragleave="onProjDragLeave(p)"
           @drop.prevent="onProjDrop(p, $event)"
         >
-          <img v-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
+          <video v-if="p.backgroundImage && isProjectionVideo(p)" :src="p.backgroundImage" class="proj-thumb" autoplay loop muted playsinline />
+          <img v-else-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
           <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
           <span class="proj-name">{{ p.name || form?.name }}</span>
           <span class="proj-universe">{{ p.originUniverse }}<template v-if="p.universe !== p.originUniverse"> → {{ p.universe }}</template></span>
@@ -140,13 +141,17 @@ async function addProjectionLocal() {
   newProjLocation.value = null
 }
 
+function isProjectionVideo(p) {
+  return !!p?.backgroundImage && /\.(webm|mp4)(\?|$)/i.test(p.backgroundImage)
+}
+
 // ── Image → projection drag-and-drop (HTML5 + touch longpress) ──
 const dropTarget = ref(null)
 const touchImageDrag = ref(null)
 
 function onImageDragStart(e, img) {
   e.dataTransfer.effectAllowed = 'copy'
-  e.dataTransfer.setData('text/plain', JSON.stringify({ path: img.path_large || img.path_animated }))
+  e.dataTransfer.setData('text/plain', JSON.stringify({ path: img.path_animated || img.path_large }))
 }
 
 function onProjDragOver(p) { dropTarget.value = p.id }
@@ -162,7 +167,7 @@ function onProjDrop(p, e) {
 
 function onImageTouchStart(e, img) {
   const touch = e.touches[0]
-  touchImageDrag.value = { path: img.path_large || img.path_animated, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
+  touchImageDrag.value = { path: img.path_animated || img.path_large, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
   touchImageDrag.value._timer = setTimeout(() => {
     if (!touchImageDrag.value) return
     touchImageDrag.value.engaged = true
