@@ -36,12 +36,13 @@ import { useLocationTree } from '@/composables/useLocationTree.js'
 const props = defineProps({
   modelValue: { type: String, default: '' },
   placeholder: { type: String, default: 'Search location…' },
+  universe: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'select'])
 const { locationTree, fetchLocationTree } = useLocationTree({})
 
-const filterUniverse = ref('')
+const filterUniverse = ref(props.universe || '')
 const search = ref('')
 const open = ref(false)
 

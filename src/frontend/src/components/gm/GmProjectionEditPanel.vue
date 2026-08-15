@@ -15,7 +15,7 @@
       </div>
 
       <label>Current Location</label>
-      <GmLocationPicker v-model="currentLocation" placeholder="Search location…" @select="onLocationSelect" />
+      <GmLocationPicker v-model="currentLocation" placeholder="Search location…" :universe="projection.universe" @select="onLocationSelect" />
 
       <div class="readonly-row">
         <span>Origin: {{ projection.originUniverse }}</span>
