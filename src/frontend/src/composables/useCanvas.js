@@ -103,6 +103,15 @@ const DX = 240
 const DY = 140
 const HX_SIBLING_STEP = 90 // sibling spacing when the hierarchy runs left→right
 
+// Occupant grid dimensions used to estimate a location node's rendered height
+// in horizontal layout, so sibling nodes can be spaced without measuring the DOM.
+const OCC_TILE = 32
+const OCC_GAP = 6
+const OCC_MARGIN = 8
+const OCC_COLS = 3
+const LOC_BASE_H = 60
+const HX_SIBLING_GAP = 16
+
 // ── Orientation helpers ───────────────────────────────
 
 function isHorizontal() {
@@ -643,6 +652,49 @@ export function useCanvas() {
     return { parentOf, childrenOf, hierarchyIds, roots }
   }
 
+  function estimatedNodeHeight(id) {
+    const node = nodes.value.find((n) => n.id === id)
+    const occCount = node?.data?.occupants?.length || 0
+    if (!occCount) return LOC_BASE_H
+    const rows = Math.ceil(occCount / OCC_COLS)
+    return LOC_BASE_H + OCC_MARGIN + rows * OCC_TILE + (rows - 1) * OCC_GAP
+  }
+
+  function relayoutHorizontalSiblings(positions, parentOf, childrenOf, roots) {
+    const gap = HX_SIBLING_GAP
+    const h = (id) => estimatedNodeHeight(id)
+
+    function subtreeExtent(id, top) {
+      positions[id].y = top
+      const kh = h(id)
+      const kids = childrenOf[id] || []
+      if (!kids.length) return { min: top, max: top + kh }
+      const total = kids.reduce((s, k) => s + h(k), 0) + gap * (kids.length - 1)
+      let childTop = top + kh / 2 - total / 2
+      let min = top
+      let max = top + kh
+      for (const k of kids) {
+        const e = subtreeExtent(k, childTop)
+        min = Math.min(min, e.min)
+        max = Math.max(max, e.max)
+        childTop += h(k) + gap
+      }
+      return { min, max }
+    }
+
+    function shiftSubtree(id, dy) {
+      positions[id].y += dy
+      for (const k of childrenOf[id] || []) shiftSubtree(k, dy)
+    }
+
+    const extents = roots.map((r) => subtreeExtent(r, 0))
+    let cursor = 0
+    extents.forEach((ext, i) => {
+      shiftSubtree(roots[i], cursor - ext.min)
+      cursor += (ext.max - ext.min) + gap
+    })
+  }
+
   function layoutLocationForest({ includeUniverse = false, centerId = null } = {}) {
     const { parentOf, childrenOf, hierarchyIds, roots } = buildLocationHierarchy(includeUniverse)
 
@@ -748,6 +800,14 @@ export function useCanvas() {
       }
     } else {
       for (const rootId of roots) walk(rootId, 0)
+    }
+
+    if (isHorizontal()) {
+      relayoutHorizontalSiblings(positions, parentOf, childrenOf, roots)
+      if (centerId && positions[centerId]) {
+        const c = positions[centerId]
+        for (const id of Object.keys(positions)) positions[id].y -= c.y
+      }
     }
 
     applyPositions(positions)
