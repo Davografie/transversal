@@ -50,6 +50,7 @@ The second keystone is **contest wiring** — drive the existing `resolve_contes
 - Style the dice pool per test / contest / challenger / defendant / roll-table.
 
 ### 3. Effects actually fire
+- **SFX owner model** — SFX gain an `owner` (trait / trait set / entity / projection / table / GM) so system moves become authored SFX. Today SFX attach only to traits; "push" is hardcoded in the contest tracker and "buy a hitch" isn't built.
 - SFX triggers fire in the roll/contest flow (`on_roll` / `on_complication` / `on_success` / `on_botch`).
 - Razmerit loop closes: hitches/botches earn razmerit that **persists** (today it's computed and discarded).
 - Two new effect primitives required by the consequences layer (below):
@@ -82,6 +83,7 @@ The second keystone is **contest wiring** — drive the existing `resolve_contes
 - **Troupe rotation** stays soft; spotlight aid is an ordered "who last played their main" recency list (not a hard rule).
 - **Support cast** = two tiers: authored companion GMCs + disposable grogs from roll tables.
 - **`modify_roll` / `modify_outcome`** = defer (above).
+- **SFX owner** — every SFX has one of six owners: `trait`, `trait set`, `entity` (characters, locations, factions, GMCs, assets, universes), `projection` (body), `table` (everyone), `GM`. System moves are SFX too — "push a contest" (table) and "buy a hitch" (GM) — not hardcoded rules. Universes are entities, so a universe move is just an entity SFX.
 
 ## Open questions / stubs
 
