@@ -111,13 +111,6 @@ async def locations_canvas(
     return _repo().location_canvas(root=root, depth=depth, focus=focus, faction=faction)
 
 
-@router.get("/locations/{location_id}/occupants")
-async def location_occupants(location_id: str, faction: str | None = None):
-    """Return a location's occupants (optionally faction-filtered) plus their
-    relations, for on-demand occupant reveal in the canvas."""
-    return _repo().location_occupants(location_id, faction=faction)
-
-
 @router.get("/locations/{location_id}/canvas")
 async def location_canvas(location_id: str):
     """Return a location's neighborhood for the relational canvas."""

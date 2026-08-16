@@ -1475,6 +1475,26 @@ class EntityRepository:
         """
         return list(self.db.aql.execute(query, bind_vars={"fid": faction_id}))
 
+    def _navdot_urls(self, entity_ids: list[str]) -> dict[str, str]:
+        """Resolve one navdot image URL per entity, newest first."""
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR img IN {ENTITY_IMAGES}
+            FILTER img.entity_id IN @ids AND 'navdot' IN img.roles
+            SORT img.created_at DESC
+            RETURN {{ entity_id: img.entity_id, image_type: img.image_type, universe: img.universe, filename: img.filename, extension: img.extension }}
+        """
+        result: dict = {}
+        for row in self.db.aql.execute(query, bind_vars={"ids": entity_ids}):
+            if row["entity_id"] in result:
+                continue
+            if row["image_type"] == "animated":
+                result[row["entity_id"]] = f"/media/animated/{row['entity_id']}/{row['universe']}/{row['filename']}.{row['extension']}"
+            else:
+                result[row["entity_id"]] = f"/media/imagen/{row['entity_id']}/{row['universe']}/{row['filename']}_Large.{row['extension']}"
+        return result
+
     def _occupants_for_locations(self, location_ids: list[str], faction_id: str | None = None) -> dict:
         """Map location key → occupant dicts, optionally filtered to a faction."""
         if not location_ids:
@@ -1495,7 +1515,7 @@ class EntityRepository:
                 FILTER e.type IN ['character', 'gmc', 'asset']
                   AND e.current_location IN @lids
                   {member_filter}
-                RETURN {{ id: e._key, name: e.name, type: e.type, image: e.background_image, location_id: e.current_location }}
+                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: e.current_location }}
             )
             LET projected = (
                 FOR p IN {PROJECTIONS}
@@ -1503,7 +1523,7 @@ class EntityRepository:
                 FOR e IN {ENTITIES}
                 FILTER e._key == p.entity_id AND e.type IN ['character', 'gmc', 'asset']
                   {member_filter}
-                RETURN {{ id: e._key, name: e.name, type: e.type, image: e.background_image, location_id: p.current_location }}
+                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: p.current_location }}
             )
             FOR o IN UNION(direct, projected)
             RETURN o
@@ -1520,9 +1540,11 @@ class EntityRepository:
             result.setdefault(row["location_id"], []).append(row)
 
         occupant_ids = [row["id"] for loc_rows in result.values() for row in loc_rows]
+        navdots = self._navdot_urls(occupant_ids)
         memberships = self._faction_memberships_for(occupant_ids)
         for loc_rows in result.values():
             for row in loc_rows:
+                row["image"] = navdots.get(row["id"])
                 row["factions"] = memberships.get(row["id"], [])
         return result
 
@@ -1587,9 +1609,7 @@ class EntityRepository:
         included_super = [e for e in super_edges if e["child"] in included and e["parent"] in included]
         included_transversal = [t for t in transversal_edges if t["from"] in included and t["to"] in included]
 
-        occupants: dict[str, list[dict]] = {}
-        if focus and focus in included:
-            occupants = self._occupants_for_locations([focus], faction)
+        occupants = self._occupants_for_locations(sorted(included), faction)
 
         occupant_relations: list[dict] = []
         if occupants:
@@ -1611,15 +1631,6 @@ class EntityRepository:
             "transversal_edges": included_transversal,
             "occupants": occupants,
             "occupant_relations": occupant_relations,
-        }
-
-    def location_occupants(self, location_id: str, faction: str | None = None) -> dict:
-        """Return a location's occupants plus their relations, for on-demand reveal."""
-        occupants = self._occupants_for_locations([location_id], faction).get(location_id, [])
-        occupant_ids = [o["id"] for o in occupants]
-        return {
-            "occupants": occupants,
-            "occupant_relations": self._relations_between(occupant_ids),
         }
 
     def navigate_from(self, location_id: str) -> dict:
