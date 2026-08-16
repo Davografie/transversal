@@ -55,7 +55,16 @@
     >
       <Background :gap="24" />
       <Controls v-if="fullscreen" />
-      <MiniMap v-if="fullscreen" />
+      <MiniMap
+        v-if="fullscreen"
+        :width="minimapSize.width"
+        :height="minimapSize.height"
+        :node-color="nodeColorFn"
+        node-stroke-color="#0a0a0f"
+        :node-stroke-width="1"
+        mask-color="rgba(10, 10, 15, 0.10)"
+        mask-stroke-color="#0a0a0f"
+      />
     </VueFlow>
 
     <div v-if="linkMenu" class="link-menu" :style="{ left: linkMenu.x + 'px', top: linkMenu.y + 'px' }">
@@ -113,6 +122,40 @@ const canvas = useCanvas()
 const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation, setHighlightedOccupant, setFactionFilter } = canvas
 const nodes = canvas.nodes
 const edges = canvas.edges
+
+function nodeColorFn(node) {
+  switch (node.type) {
+    case 'location': return '#4ea1ff'
+    case 'universe': return '#a86bf0'
+    case 'occupant': return '#e88830'
+    case 'rolltable': return '#40b860'
+    default: return '#c0c0d0'
+  }
+}
+
+const minimapSize = computed(() => {
+  const list = nodes.value || []
+  if (!list.length) return { width: 180, height: 120 }
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const n of list) {
+    const w = n.type === 'universe' ? 160 : n.type === 'location' ? 220 : 180
+    const occ = n.data?.occupants?.length || 0
+    const rows = Math.ceil(occ / 3)
+    const h = 60 + (occ ? 8 + rows * 32 + (rows - 1) * 6 : 0)
+    minX = Math.min(minX, n.position.x)
+    minY = Math.min(minY, n.position.y)
+    maxX = Math.max(maxX, n.position.x + w)
+    maxY = Math.max(maxY, n.position.y + h)
+  }
+  const bw = Math.max(1, maxX - minX)
+  const bh = Math.max(1, maxY - minY)
+  const maxDim = 180
+  const scale = Math.min(maxDim / bw, maxDim / bh)
+  return { width: Math.max(60, Math.round(bw * scale)), height: Math.max(60, Math.round(bh * scale)) }
+})
 
 const selectedFaction = ref('')
 const pendingLink = ref(null)
