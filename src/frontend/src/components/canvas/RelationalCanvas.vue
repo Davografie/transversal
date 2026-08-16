@@ -1,11 +1,13 @@
 <template>
   <div class="relational-canvas" :class="{ fullscreen }">
     <div class="canvas-toolbar">
-      <div class="canvas-title">{{ title || 'Relational Canvas' }}</div>
+      <div class="canvas-title">
+        {{ title || 'Relational Canvas' }}
+        <span v-if="lifePathFactions.length" class="canvas-faction-badges">
+          <span v-for="f in lifePathFactions" :key="f" class="canvas-faction-badge">{{ f }}</span>
+        </span>
+      </div>
       <div class="canvas-controls">
-        <select class="edge-select" :value="edgePath" title="Edge path style" @change="setEdgePath($event.target.value)">
-          <option v-for="o in EDGE_PATH_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
         <select
           v-if="mode !== 'life-path'"
           v-model="selectedFaction"
@@ -64,7 +66,6 @@ import '@vue-flow/minimap/dist/style.css'
 import { useCanvas } from '@/composables/useCanvas.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { usePanel } from '@/composables/usePanel.js'
-import { edgePath, EDGE_PATH_OPTIONS, setEdgePath } from '@/composables/useEdgeStyle.js'
 import LocationNode from '@/components/canvas/nodes/LocationNode.vue'
 import OccupantNode from '@/components/canvas/nodes/OccupantNode.vue'
 import RollTableNode from '@/components/canvas/nodes/RollTableNode.vue'
@@ -92,6 +93,12 @@ const nodes = canvas.nodes
 const edges = canvas.edges
 
 const selectedFaction = ref('')
+const lifePathFactions = computed(() => {
+  if (mode.value !== 'life-path') return []
+  const ids = props.initialLifePath?.factionIds || []
+  const byId = new Map(factions.value.map((f) => [f.id, f.name]))
+  return ids.map((id) => byId.get(id) || id).filter(Boolean)
+})
 const flowRef = ref(null)
 
 function fitView() {
@@ -169,7 +176,7 @@ async function resetLayout() {
 }
 
 onMounted(async () => {
-  if (!props.initialLifePath) canvas.loadFactions()
+  canvas.loadFactions()
   if (props.initialFactionId) {
     await canvas.loadFaction(props.initialFactionId)
   } else if (props.initialGmcId) {
@@ -196,12 +203,13 @@ onMounted(async () => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .canvas-title { font-size: 13px; font-weight: 700; }
+.canvas-faction-badges { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
+.canvas-faction-badge {
+  font-size: 9px; font-weight: 500; padding: 1px 6px; border-radius: 3px;
+  background: rgba(232, 136, 48, 0.2); color: #e88830; white-space: nowrap;
+}
 .canvas-controls { display: flex; align-items: center; gap: 6px; }
 .faction-select {
-  background: var(--bg-panel); color: var(--text); border: 1px solid var(--accent-dim);
-  border-radius: 5px; padding: 3px 6px; font-size: 11px;
-}
-.edge-select {
   background: var(--bg-panel); color: var(--text); border: 1px solid var(--accent-dim);
   border-radius: 5px; padding: 3px 6px; font-size: 11px;
 }

@@ -53,7 +53,7 @@
 <script setup>
 import { computed } from 'vue'
 import { EdgeLabelRenderer } from '@vue-flow/core'
-import { edgePathData } from '@/composables/useEdgeStyle.js'
+import { asymmetricBezierPath } from '@/composables/useEdgeStyle.js'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -70,7 +70,7 @@ const gradientId = computed(() => `gradient-${props.id.replace(/[^a-zA-Z0-9-]/g,
 const arrowId = computed(() => `${gradientId.value}-arrow`)
 
 const pathData = computed(() =>
-  edgePathData({
+  asymmetricBezierPath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     sourcePosition: props.sourcePosition,

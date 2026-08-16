@@ -1,28 +1,6 @@
-import { ref } from 'vue'
-import {
-  Position,
-  getSmoothStepPath,
-  getStraightPath,
-  getSimpleBezierPath,
-} from '@vue-flow/core'
+import { Position } from '@vue-flow/core'
 
-// A/B switch for the edge path generator used by the canvas's custom edges.
-// Lives at module level so the toolbar switch and every edge render share the
-// same reactive value — changing the dropdown re-shapes edges live.
-export const edgePath = ref('bezier')
-
-export const EDGE_PATH_OPTIONS = [
-  { value: 'bezier', label: 'Bezier (S-curve)' },
-  { value: 'smoothstep', label: 'Smooth step' },
-  { value: 'straight', label: 'Straight' },
-  { value: 'simplebezier', label: 'Simple bezier' },
-]
-
-export function setEdgePath(value) {
-  edgePath.value = value
-}
-
-// ── Asymmetric S-curve (used by the "bezier" option) ──────────────────────
+// Asymmetric S-curve for the canvas's custom edges.
 //
 // A faithful copy of @vue-flow/core's getBezierPath internals, but with
 // separate source/target curvature so the two ends can be tuned independently.
@@ -51,7 +29,7 @@ function controlWithCurvature({ pos, x1, y1, x2, y2, c }) {
   }
 }
 
-function asymmetricBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition }) {
+export function asymmetricBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition }) {
   const [scx, scy] = controlWithCurvature({
     pos: sourcePosition,
     x1: sourceX,
@@ -73,21 +51,4 @@ function asymmetricBezierPath({ sourceX, sourceY, sourcePosition, targetX, targe
   const labelX = sourceX * 0.125 + scx * 0.375 + tcx * 0.375 + targetX * 0.125
   const labelY = sourceY * 0.125 + scy * 0.375 + tcy * 0.375 + targetY * 0.125
   return [path, labelX, labelY, 0, 0]
-}
-
-// Compute `[path, labelX, labelY, offsetX, offsetY]` using the currently
-// selected generator. The "bezier" option uses our asymmetric S-curve; the
-// rest are stock library generators for comparison.
-export function edgePathData(params) {
-  switch (edgePath.value) {
-    case 'smoothstep':
-      return getSmoothStepPath({ ...params, borderRadius: 8 })
-    case 'straight':
-      return getStraightPath(params)
-    case 'simplebezier':
-      return getSimpleBezierPath(params)
-    case 'bezier':
-    default:
-      return asymmetricBezierPath(params)
-  }
 }

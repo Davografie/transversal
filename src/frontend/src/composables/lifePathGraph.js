@@ -13,6 +13,7 @@ export const LP_DY = 340 // vertical spacing between layers
 // the table's entry rows.
 export const RT_WIDTH = 250
 export const RT_HEADER_H = 40
+export const RT_SUBTITLE_H = 16
 export const RT_META_H = 20
 export const RT_ROW_H = 26
 
@@ -156,7 +157,7 @@ function computePositions(links, backEdges, reachable) {
 //
 // `path`  — { id, name, entryTableId }
 // `tables`— RollTable[] (full entries + effects, as returned by GraphQL)
-export function buildLifePathGraph(path, tables) {
+export function buildLifePathGraph(path, tables, opts = {}) {
   const { byId, links } = collectLinks(tables || [])
 
   if (!path?.entryTableId || !byId.has(path.entryTableId)) {
@@ -208,6 +209,8 @@ export function buildLifePathGraph(path, tables) {
         die: t.die,
         rollSource: t.rollSource,
         tableNames: Object.fromEntries(tableNames),
+        lifePathName: path.name || '',
+        factionNames: opts.factionNames || [],
         rows,
       },
     })
@@ -225,7 +228,7 @@ export function buildLifePathGraph(path, tables) {
         const first = g.rowIndexes[0]
         const last = g.rowIndexes[g.rowIndexes.length - 1]
         const centerRow = (first + last) / 2
-        const rowCenterY = pos.y + RT_HEADER_H + RT_META_H + centerRow * RT_ROW_H + RT_ROW_H / 2
+        const rowCenterY = pos.y + RT_HEADER_H + RT_SUBTITLE_H + RT_META_H + centerRow * RT_ROW_H + RT_ROW_H / 2
 
         nodes.push({
           id: bundlerId,

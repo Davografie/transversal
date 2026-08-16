@@ -5,6 +5,10 @@
       <span class="rt-name">{{ data.name }}</span>
       <button class="rt-edit" title="Open table" @click.stop="data.onOpenTable?.(data.entityId)">✎</button>
     </div>
+    <div class="rt-subtitle">
+      <span v-if="data.lifePathName">{{ data.lifePathName }}</span>
+      <span v-if="data.factionNames?.length" class="rt-sub-faction">{{ data.factionNames.join(' + ') }}</span>
+    </div>
     <div class="rt-meta">
       <span class="rt-chip">{{ data.scheme }}</span>
       <span class="rt-chip">{{ data.die }}</span>
@@ -39,7 +43,7 @@
 import { onMounted } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useEffectActions } from '@/composables/useEffectActions.js'
-import { RT_HEADER_H, RT_META_H, RT_ROW_H } from '@/composables/lifePathGraph.js'
+import { RT_HEADER_H, RT_SUBTITLE_H, RT_META_H, RT_ROW_H } from '@/composables/lifePathGraph.js'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -52,7 +56,7 @@ onMounted(() => { loadEffectActions() })
 
 // Absolute Y of a row's center within the node, matching the fixed CSS heights.
 function rowCenter(index) {
-  return RT_HEADER_H + RT_META_H + index * RT_ROW_H + RT_ROW_H / 2
+  return RT_HEADER_H + RT_SUBTITLE_H + RT_META_H + index * RT_ROW_H + RT_ROW_H / 2
 }
 
 function resolve(target) {
@@ -93,6 +97,14 @@ function rowTooltip(row) {
 .rt-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rt-edit { font-size: 12px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); cursor: pointer; flex-shrink: 0; }
 .rt-edit:hover { background: var(--accent); color: #fff; }
+.rt-subtitle {
+  height: 16px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  font-size: 9px; color: var(--text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  white-space: nowrap; overflow: hidden;
+}
+.rt-sub-faction { color: #e88830; }
 .rt-meta {
   height: 20px; box-sizing: border-box;
   display: flex; align-items: center; gap: 4px; padding: 0 8px;

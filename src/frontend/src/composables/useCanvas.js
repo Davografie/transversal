@@ -19,6 +19,7 @@ const error = ref(null)
 // Lets expand/collapse lazily add nodes without refetching already-known ones.
 const entityCache = new Map()
 const factions = ref([])
+let factionsLoaded = false
 
 // ── Node/edge factories ───────────────────────────────
 
@@ -158,7 +159,11 @@ export function useCanvas() {
       }
 
       const tables = data.data?.rollTables || []
-      const graph = buildLifePathGraph(lifePath, tables)
+      await loadFactions()
+      const factionNames = (lifePath.factionIds || [])
+        .map((id) => factions.value.find((f) => f.id === id)?.name)
+        .filter(Boolean)
+      const graph = buildLifePathGraph(lifePath, tables, { factionNames })
       nodes.value = graph.nodes
       edges.value = graph.edges
       if (!tables.length) {
@@ -559,6 +564,7 @@ export function useCanvas() {
   }
 
   async function loadFactions() {
+    if (factionsLoaded) return
     try {
       const r = await fetch(`${API_BASE}/graphql`, {
         method: 'POST',
@@ -567,6 +573,7 @@ export function useCanvas() {
       })
       const data = await r.json()
       factions.value = (data.data?.entities || []).filter((e) => e.type === 'FACTION')
+      factionsLoaded = true
     } catch {
       // non-fatal — faction dropdown just stays empty
     }
