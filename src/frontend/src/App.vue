@@ -220,6 +220,7 @@
   />
   <RelationalCanvas
     v-if="fullCanvas"
+    :key="fullCanvas.mode + ':' + fullCanvas.entityId"
     class="fullscreen-canvas"
     fullscreen
     :location-id="fullCanvas.mode === 'location' ? fullCanvas.entityId : (fullCanvas.mode === 'life-path' ? '' : currentLocationId)"
