@@ -145,16 +145,23 @@ function openFull() {
 }
 
 async function onConnect(connection) {
-  // Only the lateral handles (right → left) create transversal links.
-  if (connection.sourceHandle !== 'right' || connection.targetHandle !== 'left') return
-  const fromId = connection.source?.replace('loc:', '')
-  const toId = connection.target?.replace('loc:', '')
-  if (!fromId || !toId || fromId === toId) return
+  if (!connection.source || !connection.target || connection.source === connection.target) return
   const fromNode = nodes.value.find((n) => n.id === connection.source)
   const toNode = nodes.value.find((n) => n.id === connection.target)
-  // Only allow location → location transversal links.
-  if (fromNode?.type !== 'location' || toNode?.type !== 'location') return
-  await canvas.createTransversal(fromId, toId)
+  if (!fromNode || !toNode) return
+
+  // Location → location transversal links (lateral handles only).
+  if (fromNode.type === 'location' && toNode.type === 'location') {
+    if (connection.sourceHandle !== 'right' || connection.targetHandle !== 'left') return
+    await canvas.createTransversal(fromNode.data.entityId, toNode.data.entityId)
+    return
+  }
+
+  // Occupant → occupant directed relationships.
+  if (fromNode.type === 'occupant' && toNode.type === 'occupant') {
+    if (!connection.sourceHandle?.startsWith('source-') || !connection.targetHandle?.startsWith('target-')) return
+    await canvas.createRelation(fromNode.data.entityId, toNode.data.entityId)
+  }
 }
 
 function onEdgeClick({ edge }) {

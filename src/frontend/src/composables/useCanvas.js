@@ -699,6 +699,27 @@ export function useCanvas() {
     }
   }
 
+  async function createRelation(fromId, toId) {
+    try {
+      const r = await fetch(`${API_BASE}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation($input: CreateRelationshipInput!){ createRelationship(input:$input){ id } }`,
+          variables: { input: { fromEntityId: fromId, toEntityId: toId, type: 'associate', description: '' } },
+        }),
+      })
+      const data = await r.json()
+      if (!r.ok || data.errors) throw new Error((data.errors && data.errors[0]?.message) || `HTTP ${r.status}`)
+      edges.value = [...edges.value, makeRelationEdge(nodeId('occ', fromId), nodeId('occ', toId), '')]
+      routeEdges()
+      return true
+    } catch (e) {
+      error.value = e.message
+      return false
+    }
+  }
+
   async function toggleTransversalEdge(edge) {
     if (edge?.data?.kind !== 'transversal') return
     const fromId = edge.source.replace('loc:', '')
@@ -795,6 +816,7 @@ export function useCanvas() {
     toggleRelations,
     showFaction,
     createTransversal,
+    createRelation,
     toggleTransversalEdge,
     setFocus,
     updateNodePosition,
