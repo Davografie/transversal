@@ -747,9 +747,18 @@ export function useCanvas() {
       const children = (childrenOf[nodeId] || []).filter((cid) => hierarchyIds.has(cid))
 
       occupants.forEach((oid, i) => {
-        positions[oid] = {
-          x: pos.x + DX * 0.55 + (i - (occupants.length - 1) / 2) * (DX / 2),
-          y: pos.y + DY * 0.7,
+        if (isHorizontal()) {
+          // In horizontal layout, occupants stack vertically below their
+          // location instead of fanning out along the depth axis.
+          positions[oid] = {
+            x: pos.x,
+            y: pos.y + DY * 0.7 + i * 56,
+          }
+        } else {
+          positions[oid] = {
+            x: pos.x + DX * 0.55 + (i - (occupants.length - 1) / 2) * (DX / 2),
+            y: pos.y + DY * 0.7,
+          }
         }
       })
 
