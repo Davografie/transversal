@@ -425,6 +425,7 @@ export function useCanvas() {
     const locNodeIds = new Set(nodes.value.filter((n) => n.type === 'location').map((n) => n.id))
     const roots = [...locNodeIds].filter((id) => !parentOf[id])
 
+    // d3.tree computes horizontal positions (DX spacing).
     const buildData = (id) => ({
       id,
       children: (childrenOf[id] || []).filter((cid) => locNodeIds.has(cid)).map(buildData),
@@ -432,7 +433,7 @@ export function useCanvas() {
 
     const positions = {}
     let offsetX = 0
-    const layout = tree().nodeSize([DX * 1.3, DY])
+    const layout = tree().nodeSize([DX, DY])
     for (const rootId of roots) {
       const root = hierarchy(buildData(rootId))
       layout(root)
@@ -444,32 +445,64 @@ export function useCanvas() {
       })
       const center = (minX + maxX) / 2
       root.each((d) => {
-        positions[d.data.id] = { x: d.x - center + offsetX, y: d.y }
+        positions[d.data.id] = { x: d.x - center + offsetX, y: 0 }
       })
-      offsetX += (maxX - minX) + DX * 1.3
+      offsetX += (maxX - minX) + DX
     }
 
-    // Center the focus at the origin.
+    // Center the focus horizontally.
     const fp = positions[focus.id]
     if (fp) {
-      for (const id of Object.keys(positions)) {
-        positions[id] = { x: positions[id].x - fp.x, y: positions[id].y - fp.y }
+      for (const id of Object.keys(positions)) positions[id].x -= fp.x
+    }
+
+    // Occupants per location (located edge: source=location, target=occupant).
+    const occupantsOf = {}
+    for (const e of edges.value) {
+      if (e.data?.kind === 'located') {
+        occupantsOf[e.source] = occupantsOf[e.source] || []
+        occupantsOf[e.source].push(e.target)
       }
     }
 
-    // Occupants sit below their location, shifted right so sub-locations can
-    // spread out beneath them without crowding.
-    for (const n of nodes.value) {
-      if (n.type !== 'location') continue
-      const base = positions[n.id]
-      if (!base) continue
-      const occupants = edges.value.filter((e) => e.source === n.id && e.data?.kind === 'located').map((e) => e.target)
+    // Vertical walk: occupants sit below their location; sub-locations go
+    // further down when occupants are present so nothing gets squeezed.
+    const seen = new Set()
+    function walkY(nodeId, y) {
+      if (seen.has(nodeId)) return
+      seen.add(nodeId)
+      positions[nodeId].y = y
+
+      const occupants = occupantsOf[nodeId] || []
+      const children = (childrenOf[nodeId] || []).filter((cid) => locNodeIds.has(cid))
+
       occupants.forEach((oid, i) => {
         positions[oid] = {
-          x: base.x + DX * 0.55 + (i - (occupants.length - 1) / 2) * (DX / 2),
-          y: base.y + DY * 0.7,
+          x: positions[nodeId].x + DX * 0.55 + (i - (occupants.length - 1) / 2) * (DX / 2),
+          y: y + DY * 0.7,
         }
       })
+
+      const childY = y + (occupants.length ? DY * 1.7 : DY)
+      children.forEach((cid) => walkY(cid, childY))
+    }
+
+    // Walk the focus's own tree (highest visible ancestor down), then center
+    // the focus at y=0. Lateral roots (transversal peers) sit at focus level.
+    const chain = []
+    let cur = focus.id
+    while (parentOf[cur]) {
+      chain.push(parentOf[cur])
+      cur = parentOf[cur]
+    }
+    const mainRoot = chain.length ? chain[chain.length - 1] : focus.id
+    walkY(mainRoot, 0)
+
+    const fy = positions[focus.id]?.y ?? 0
+    for (const id of Object.keys(positions)) positions[id].y -= fy
+
+    for (const rootId of roots) {
+      if (!seen.has(rootId)) walkY(rootId, 0)
     }
 
     applyPositions(positions)
