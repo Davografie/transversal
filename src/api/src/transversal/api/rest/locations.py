@@ -23,6 +23,12 @@ async def location_tree():
     return _repo().location_tree()
 
 
+@router.get("/locations/graph")
+async def location_graph():
+    """Return the full location hierarchy plus transversal edges for the canvas."""
+    return _repo().location_graph()
+
+
 @router.get("/locations/{location_id}/navigate")
 async def navigate(location_id: str):
     """Return navigation options from a location.

@@ -1420,6 +1420,21 @@ class EntityRepository:
 
         return result
 
+    def location_graph(self) -> dict:
+        """Full location hierarchy plus all transversal edges, for the overview canvas."""
+        tree = self.location_tree()
+        rel_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'transversal'
+            RETURN {{
+                from: PARSE_IDENTIFIER(r._from).key,
+                to: PARSE_IDENTIFIER(r._to).key,
+                transversal_type: r.transversal_type
+            }}
+        """
+        transversal = list(self.db.aql.execute(rel_query))
+        return {"tree": tree, "transversal": transversal}
+
     def navigate_from(self, location_id: str) -> dict:
         """Return navigation options from a location.
 
