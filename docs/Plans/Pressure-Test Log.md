@@ -34,6 +34,23 @@ Found during the pre-scenario code walkthrough; not surfaced by any single scena
 4. **[[SFX and Effects]] top half stale** — "Anatomy of an SFX" / "SFX Categories" / "Effect Types" still describe the old model (singular `effect`, `cost`, `modify_roll`/`modify_outcome`/`create_entity`), while its own "Unified Effect Model" section is correct.
 5. **MCP tooling doc drift** — `mcp/server.py` docstring lists `manage_session` and `generate_from_table`; [[API Contract]] says "session management" is among the 5 tools. Neither exists (actual tools: `create_entity`, `create_npc`, `roll_dice`, `get_entity`, `query_entities`).
 
+## Macro design decisions (locked, ongoing)
+
+From the scenarios 1–2 discussion, beyond per-scenario findings:
+
+- **Tether** — relationship trait to the origin *universe* (challenge, negative). Generalizes the old "earth-bond" so it's not an Earth special case.
+- **Origin** — a *distinction* that is also relationship-anchored (points at a location edge). A trait can be both: "distinction" is its *kind* (`traitset_id` + ego + statement + SFX), "relationship" is its *anchor* (`from_type`). The model already separates these axes; it needs a small refactor (stop hardcoding `ts-relations`, give relationship traits a real anchor field, fold them into character assembly).
+- **Relationship traits** — inline in the character sheet, grouped by trait set (no separate relations set/tab). Character sheet = trait settings from the character *or* from relationships originating from the character.
+- **Base traits** — a background roll table (skill packages), not Archetype template entities.
+- **Appearance** — a morph trait (per-universe); model already supports it.
+- **Duplicates** — need a `duplicates_allowed` flag back (per trait-set/trait): two melee weapons OK, two strengths not. Currently impossible (ID collision + picker hides owned traits).
+- **Empty/descriptive traits** (pronouns, nickname, appearance) — a distinct "profile" surface, not the dice editor. *(open — lean yes)*
+
+### Open
+
+- **Prime trait sets** (Cortex rule: which sets always contribute a die to a pool) — unexplored in Transversal; relevant to dice-pool assembly.
+- **Trait editor is the convergence point** — must handle direct / relationship / sub-trait attachment, the empty-trait profile, and the duplicates flag.
+
 ## Scenario list
 
 1. GM preps a session
