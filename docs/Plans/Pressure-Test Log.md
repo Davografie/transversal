@@ -113,4 +113,22 @@ Setting: new player "Sam" joins the Krasnoyarsk session with no character yet.
 
 ---
 
-*Scenarios 3–7 pending.*
+## Scenario 3 — A simple test
+
+Setting: Kael hacks a security terminal in Krasnoyarsk-45.
+
+### Verified solid ✅
+- Pool assembly from the character's traits (the sheet feeds the roller via `addFromSheet`).
+- Rolling (both pipelines) + effect-die picking (pool) + result display (total / effect die / hitches / botch).
+
+### Gaps
+- **Opposition is never sent** — `doRoll()` calls `/roll` with no opposition; there's no static difficulty / GMC / challenge pool in the test flow, even though the backend resolver supports all three and `useApi.roll()` accepts an `opposition` argument.
+- **Razmerit on hitches is computed but discarded** — `razmerit_earned` is returned but never persisted to the character.
+- **Effect die does nothing** — picked in the pool pipeline but no wizard applies it (step down a challenge, create a complication, etc.).
+- **SFX don't fire** — `on_roll` / `on_complication` / `on_success` / `on_botch` are not wired into the roll flow.
+
+Headline: a "test" is currently "roll dice and see a number" — the difficulty, the consequence, and the economy are all missing.
+
+---
+
+*Scenarios 4–7 pending.*
