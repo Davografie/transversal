@@ -82,14 +82,12 @@ Setting: Krasnoyarsk-45. Party gets a tip, pokes around a rail yard, draws heat.
 Setting: new player "Sam" joins the Krasnoyarsk session with no character yet.
 
 ### Verified solid ✅
-- Player sign-in / find-or-create by name (no auth, as decided).
-- Claim agency over an existing entity (seeded Kael / Elena claimable).
-- Bare entity creation.
+- **Player onboarding exists and is player-facing** (the settings overlay): sign in / find-or-create by name, Player↔Architect mode toggle, "+ New character", claim & relinquish agency, "Find character" search, switch player by name.
 - Life-path wizard (grants career traits via roll tables).
 
 ### Gaps
-- **No starter-character template** — base attributes/skills are hand-added trait-by-trait; nothing grants the standard spread (the seed characters are hand-written the same way). *(new)*
-- **Character creation is GM-side only** — no player-facing "make my character" onboarding; a new player has to ask the GM. *(new)*
+- **Onboarding produces a bare shell** — "+ New character" creates a `CHARACTER` entity with name + type + universe only (no location, no traits), then claims it. The "fill in the character" work is still manual / GM-side. *(corrected — earlier logged as "GM-side only")*
+- **No starter-character template** — base attributes/skills are hand-added trait-by-trait; nothing grants the standard spread (the seed characters are hand-written the same way).
 - **Life path grants career traits, not base traits** — two separate manual jobs, not one flow.
 - **Social web manual** — relationships added one edge at a time; relationship *traits* have no UI (carried from Scenario 1).
 - **Starter location spawn** — missing (carried).
