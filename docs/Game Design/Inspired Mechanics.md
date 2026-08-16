@@ -195,32 +195,9 @@ When a character uses a trait in a dice pool, they may also add a **matching sub
 
 Sub-traits can also be used for organizational purposes only — grouping related traits without mechanical triggers. The `elements` sub-trait set is both: it organizes five element dice under spiritual power, and provides the matching rule for techniques.
 
-## Attunement (Location Spoofing)
+## Attunement
 
-Attunement is not a persistent entity property. It is a **temporary SFX-triggered effect** — when activated, the entity's current location spoofs another universe for trait availability purposes.
-
-### How It Works
-
-1. An entity activates an SFX that provides attunement (e.g., the jian's "Law Bridge")
-2. The effects system applies a **location spoof**: for the SFX duration, `get_effective_traitsettings()` treats the entity as being in the attuned universe
-3. Morph traits from the attuned universe become available alongside ego traits
-4. When the SFX expires (end of scene, end of beat, etc.), the spoof ends
-
-```yaml
-# The jian's Law Bridge SFX
-sfx:
-  name: "Law Bridge"
-  trigger: "on_activate"
-  timing: "end_of_scene"
-  cost: 1
-  effects:
-    - type: "spoof_location"
-      target: "wielder"
-      universe: "three_realms"
-      strength: "d8"           # how many trait sets become available
-```
-
-The spoof mechanic replaces the old permanent attunement model. No entity carries an `attunements` list — attunement is always an active SFX effect, not a passive state.
+Attunement is a **temporary SFX-triggered effect** that adds a universe to a character's `effective_universes` — morph traits from that universe become available without moving the body. It is never a passive state; it always has a cost and duration. See [[Projections and Transversal#Attunement]] for the canonical model.
 
 ## The Conspyramid
 

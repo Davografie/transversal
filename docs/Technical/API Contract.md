@@ -305,7 +305,7 @@ Response:
 {
   "applied": true,
   "cost": 1,
-  "effects": [{ "type": "spoof_location", "action": "enable", "target": "wielder", "result": "three_realms:d8" }],
+  "effects": [{ "type": "attune", "action": "enable", "target": "wielder", "result": "three_realms:d8" }],
   "scheduled": [],
   "new_razmerit_balance": 4
 }

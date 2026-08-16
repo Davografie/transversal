@@ -253,20 +253,23 @@ SFX (Special Effect) registry. Defines named abilities with triggers, costs, and
 | `trigger` | string | ✅ | When the SFX can activate: `on_activate`, `on_roll`, `on_complication`, `on_botch`, `on_location_change`, `on_trait_change`, `on_contest_win`, `on_contest_loss`, `on_success`, `on_failure` |
 | `timing` | EffectTiming | | When effects fire (default `immediate`) |
 | `cost` | int | | Razmerit cost to activate (default `0`) |
-| `effects` | EffectAction[] | | List of declarative effect actions |
+| `effects` | Effect[] | | List of declarative effects |
 
 **ID convention:** `sfx-{slug}` (e.g. `sfx-hinder`, `sfx-law-bridge`)
 
-### EffectAction (sub-document of SFX)
+### Effect (sub-document of SFX and life-path entries)
 
-Declarative effect — describes *what* changes, not *how*.
+Declarative effect — describes *what* changes, not *how*. Shared by SFX and life-path consequences. The canonical spec and full `type`/`action` vocabulary are in [[SFX and Effects#Unified Effect Model]].
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | string | Effect category: `modify_roll`, `modify_trait`, `modify_outcome`, `create_entity`, `transfer_razmerit`, `spoof_location` |
-| `action` | string | What to do: `step_up_die`, `step_down`, `reroll_die`, `split_die`, `convert_complication`, `earn`, `spend`, `enable`, `create_asset` |
-| `target` | string | What to affect: `highest_trait_die`, `the_hitch_die`, `primary`, `self`, `wielder` |
-| `result` | string? | Additional parameter (e.g. `"1"` for amount, `"three_realms:d8"` for spoof target, `"after_resolution"` for timing) |
+| `timing` | string | `immediate`, `end_of_beat`, `end_of_scene`, `end_of_session`, `after_beats`, `on_condition` |
+| `type` | string | Effect type (e.g. `modify_trait`, `transfer_razmerit`, `life_path`, `relationship`) |
+| `action` | string | What to do (e.g. `gain`, `step_up`, `gain_or_step_up`, `step_down`, `set`, `earn`, `spend`, `next_step`) |
+| `target` | string | An id, `"self"`, or a `{choose_*}` placeholder |
+| `result` | string? | Die, integer, relationship type, or "" |
+| `target_scope` | string? | Optional narrowing for target choice |
+| `context` | object? | Optional dict (e.g. relationship description) |
 
 ### `relationships` (edge)
 
