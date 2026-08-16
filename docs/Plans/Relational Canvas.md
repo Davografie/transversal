@@ -10,6 +10,7 @@ aliases:
   - Canvas
   - Location Map
   - Faction Map
+status: working
 ---
 
 # Relational Canvas

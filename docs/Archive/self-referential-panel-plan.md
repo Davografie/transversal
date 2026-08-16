@@ -1,3 +1,7 @@
+---
+status: superseded
+---
+
 # Panel — Self-referential Component Plan
 
 > [!warning] Superseded

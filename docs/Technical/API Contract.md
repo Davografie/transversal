@@ -9,6 +9,7 @@ aliases:
   - API
   - Endpoints
   - GraphQL Schema
+status: canonical
 ---
 
 # API Contract

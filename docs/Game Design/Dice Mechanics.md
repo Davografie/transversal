@@ -10,6 +10,7 @@ aliases:
   - Rolling
   - Dice Pool Resolution
   - Resolution Pipelines
+status: canonical
 ---
 
 # Dice Mechanics

@@ -11,7 +11,7 @@ aliases:
   - Transversal Spec
   - Projection Model
   - Effective Universes
-status: working
+status: superseded
 ---
 
 # Transversal Mechanics — Working Plan

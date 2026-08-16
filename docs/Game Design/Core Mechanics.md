@@ -8,6 +8,7 @@ tags:
 aliases:
   - Rules
   - Game Mechanics
+status: canonical
 ---
 
 # Core Mechanics
@@ -58,7 +59,7 @@ Traits can also be unrated (no die) — meaning the character simply doesn't hav
 
 ## Trait Sets
 
-A **trait set** is a category of traits that together describe an aspect of an entity. Each entity can have multiple trait sets. Trait sets are **universe-specific** — the sets available on Earth (Attributes, Skills, Distinctions) differ from those in the Three Realms (Cultivation, Combat Arts, Distinctions). An entity's active trait sets depend on their current universe and any razmerit attunements they hold.
+A **trait set** is a category of traits that together describe an aspect of an entity. Each entity can have multiple trait sets. Trait sets are **universe-specific** — the sets available on Earth (Attributes, Skills, Distinctions) differ from those in the Three Realms (Cultivation, Combat Arts, Distinctions). An entity's active trait sets depend on their `effective_universes` — the active projection's universe plus any unexpired attunements.
 
 For example, a character on Earth might have:
 
@@ -70,7 +71,7 @@ That same character in the Three Realms has a separate projection with cultivati
 
 Each trait within a set receives its own die rating. When building a dice pool for an action, the player (or system) picks one trait from each relevant trait set available in the current universe.
 
-See [[Entities and Traits]] for the full data model, including universe laws, projections, attunements, and sub-traits.
+See [[Entities and Traits]] for the trait registry and entity types, [[Projections and Transversal]] for projections and attunement, and [[Inspired Mechanics#Sub-Traits]] for sub-traits.
 
 ### Sub-Traits
 
@@ -190,31 +191,10 @@ Transversal organizes time into three nested units.
 
 ## Advancement
 
-Characters advance by solving **challenge sub-traits** attached to their traits. Each trait that can be advanced has challenge sub-traits tagged with a level (L1–L5) and a die rating (d4–d12).
+Characters grow through **life paths** — sect, guild, career, or way-of-life terms — plus **trait transfer** (teach / gift / take) and **rated relationships**. See [[Character Growth]] for the full system.
 
-```yaml
-qi_reserves:
-  type: resource
-  rating: 4d4 + 7d6
-  advancement:
-    - level: L3
-      challenge: 1d8    # roll against this to advance from current level
-```
-
-### Procedure
-
-1. The player declares they are attempting to advance a trait
-2. They roll against the challenge sub-trait using the standard challenge pool procedure (see [[Inspired Mechanics#Rolling Against Challenge Pools]])
-3. Success reduces the challenge die. Failure does **not** step it up — advancement challenges only count down
-4. When the challenge pool is fully reduced (all dice removed), the trait steps up one die rating
-5. The next L-level challenge appears (or the trait is at maximum)
-
-> [!note] Advancement vs. Active Challenges
-> Advancement challenges are distinct from active challenge pools (doom pools, project clocks). Advancement challenges only count down — they represent personal growth, not external pressure. Failing an advancement roll sets you back in time, not in capability.
-
-### Gated Advancement
-
-Some traits require narrative conditions before their advancement challenge becomes available. A cultivator must reach a certain cultivation stage before attempting to step up qi_reserves. The GM or system enforces these gates.
+> [!note] Superseded
+> The older "advancement challenge pools" model is retired. Life paths are now the single training mechanic — there is no separate per-trait advancement challenge.
 
 ## Negative Traits
 
@@ -249,6 +229,7 @@ Everything else is conversation.
 ## Next
 
 - [[Dice Mechanics]] — The full rolling procedure, conflict structure, and negative trait mechanics
-- [[Entities and Traits]] — How the backend models the world
+- [[Character Growth]] — Life paths, trait transfer, and relationship ratings
+- [[Entities and Traits]] — The entity system and trait registry
 - [[SFX and Effects]] — How exceptions and automation work
-- [[Inspired Mechanics]] — Advancement challenges, Entanglements lifepaths, and more
+- [[Inspired Mechanics]] — Conspyramid, zones, sub-traits, challenge pools

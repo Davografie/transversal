@@ -9,6 +9,7 @@ tags:
 aliases:
   - Entities
   - Entity System
+status: canonical
 ---
 
 # Entities and Traits
@@ -17,7 +18,7 @@ The Transversal backend manages the multiverse through **entities** spread acros
 
 ## Data Model Overview
 
-Transversal's data model uses eight ArangoDB collections in a property graph — entities, traits, settings, and SFXs live in separate collections connected by edges. The full schema, field definitions, edge patterns, enums, and ID conventions are documented in [[Data Model]].
+Transversal's data model uses thirteen ArangoDB collections in a property graph — entities, traits, settings, and SFXs live in separate collections connected by edges. The full schema, field definitions, edge patterns, enums, and ID conventions are documented in [[Data Model]].
 
 The graph path: `entity → traitsetting → trait → traitset → sfx`. "Find all entities with qi_reserves d8+" is a graph traversal, not a nested array scan.
 
@@ -72,12 +73,11 @@ zones:
 A **character** stores only metadata. Their traits are `TraitSetting` edges pointing into the trait registry, connected by `entity_id`.
 
 ```yaml
-# Entity document
+# Entity document (occupant — universe/location derive from the active projection)
 type: character
 name: "Kael Drift"
 razmerit: 3
-current_universe: three_realms
-current_location: "Valley of Ascension"
+current_projection: "kael-1:three_realms"
 ```
 
 ```yaml
@@ -178,31 +178,19 @@ Not all traits are universe-gated. **Ego traits** represent personality, core id
 | **Ego** (`ego: true`) | Yes — always available | Curious d8, Antisocial d6, "Answered Antonov's Call" d8 |
 | **Morph** (`ego: false`) | No — only in the trait's native universe | Hacking d10 (Earth only), qi_reserves d6 (Three Realms only) |
 
-When the dice resolver assembles a pool for Kael in the Three Realms, it calls `get_effective_traitsettings(kael-1, "three_realms")`, which returns:
-- All morph traits whose registry trait has `universe: three_realms` (cultivation, combat)
-- All ego traits regardless of universe (curious, antisocial, distinctions)
+When the resolver assembles a pool for Kael, it returns:
+- All ego traits, always (curious, antisocial, distinctions)
+- Morph traits whose `origin_universe` is in Kael's `effective_universes` — his active projection's universe plus any unexpired attunements
 
-Kael's hacking stays on Earth. His curiosity follows him everywhere.
+Kael's hacking stays on Earth. His curiosity follows him everywhere. See [[Projections and Transversal]] for the gating rule.
 
 ## Projections
 
-A **projection** is a per-universe body record — not a container for traits, but a marker that the entity has a presence in that universe. See [[Data Model#projections]] for the field schema.
+A **projection** is a per-universe body — a first-class container for name, image, location, and morph traits. Projections, consciousness/inapposite travel, attunement, and the Earth-bond are documented in [[Projections and Transversal]]. See [[Data Model#projections]] for the field schema.
 
-Projections are separate documents in the `projections` collection. An entity has one projection per universe they've visited. Creating a new projection (via consciousness transversal to a new universe) creates a projection document and a set of baseline trait settings from that universe's registry.
+## Attunement
 
-## Location Spoofing (Attunement)
-
-Attunement is not a persistent entity field. It is a **temporary SFX-triggered effect** that makes the entity's current location pretend to be in another universe for trait availability purposes.
-
-**How it works:**
-1. Kael is on Earth, holding the jian
-2. He activates the jian's SFX "Law Bridge" (cost: 1 razmerit)
-3. The effects system applies a **location spoof**: Kael's effective universe becomes `three_realms` for the duration
-4. `get_effective_traitsettings` now returns Three Realms morph traits + ego traits
-5. Kael can use qi_reserves and sword_intent on Earth
-6. When the SFX expires (end of scene), the spoof ends — cultivation traits go dormant
-
-The jian doesn't permanently attune Kael to the Three Realms. It gives him a temporary window. Want cultivation to work longer? Find more razmerit, maintain the SFX, or develop inapposite technology that doesn't require spoofing.
+Attunement is a **temporary SFX-triggered effect** that adds a universe to a character's `effective_universes` — letting morph traits from that universe become available without moving the body. It is never a passive state; it always has a cost and duration. See [[Projections and Transversal#Attunement]] for the canonical model.
 
 ## Razmerit
 

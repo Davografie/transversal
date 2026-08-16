@@ -7,6 +7,7 @@ tags:
 aliases:
   - Roadmap
   - Milestones
+status: canonical
 ---
 
 # Project Roadmap

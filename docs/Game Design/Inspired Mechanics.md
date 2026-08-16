@@ -8,6 +8,7 @@ tags:
 aliases:
   - Advanced Mechanics
   - Subsystems
+status: canonical
 ---
 
 # Inspired Mechanics
@@ -403,6 +404,8 @@ zones:
 
 **Troupe play** is a session structure where players rotate between their main character and companion GMCs. Inspired by Ars Magica.
 
+The persistent home is **Earth** — every main character originates there and carries a stake in it (see [[Projections and Transversal#The Earth-Bond]]). Rotation is **soft**: the GM gauges who hasn't been in the spotlight, and players can ask. A last-played **recency list** (ordered "who last played their main") surfaces who has been quiet, but it never forces rotation.
+
 ### The Scattering Effect
 
 When a group consciousness-transverses to a new universe without razmerit stabilization, their arrival points **scatter**. Each player's main character materializes in a different zone or location within the target universe. They cannot immediately reunite — the scattering is a property of cheap transversal.
@@ -432,6 +435,11 @@ sfx: "Offer Tea — when Elder Yun serves tea to a guest, both step up their nex
 ```
 
 GMCs do not have projections, razmerit balances, or complex trait sets. They exist for the scene and are controlled by whichever player is not in the spotlight.
+
+Support cast comes in two tiers:
+
+- **Companions** — authored, named, recurring GMCs (Elder Yun, a librarian, a hunter). They carry relationships and history.
+- **Grogs** — disposable scene-filler, instantiated on demand from **archetype roll tables**: a roll-table entry is a batch of `gain` traits, so "instantiate" applies an entry's effects to a fresh GMC placed at the current location. A grog who recurs can be promoted to a companion by running it through a life path (see [[Character Growth]]).
 
 ### Reunification
 

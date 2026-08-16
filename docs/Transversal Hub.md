@@ -7,6 +7,7 @@ tags:
 aliases:
   - Hub
   - Main
+status: canonical
 ---
 
 # Transversal Hub
@@ -26,7 +27,8 @@ aliases:
 
 - [[Setting and Narrative]] — The story: Earth, the Three Realms, the jian, Antonov, and the multiverse
 - [[Core Mechanics]] — Cortex Prime foundation, trait rating types, dice pools, and the resolution engine
-- [[Entities and Traits]] — The entity system: universe-specific projections, attunements, razmerit, sub-traits
+- [[Entities and Traits]] — The entity system: trait registry, ego/morph traits, entity types
+- [[Projections and Transversal]] — Projections, consciousness/inapposite travel, attunement, and the Earth-bond
 - [[Dice Mechanics]] — Dual-pipeline resolution: simplified (1–2 dice) and dice pool (3+), hitches, botches, challenge pools
 - [[SFX and Effects]] — SFX as rule exceptions, the automated effects system
 - [[Inspired Mechanics]] — Conspyramid, Entanglements, zones, troupe play, career paths, random generation

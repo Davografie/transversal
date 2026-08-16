@@ -10,6 +10,7 @@ aliases:
   - SFX
   - Special Effects
   - Effects System
+status: canonical
 ---
 
 # SFX and Effects
@@ -47,7 +48,7 @@ sfx:
 | **Modify Roll** | Change dice in the pool before or after rolling | Step up a die, reroll a die, add a die |
 | **Modify Outcome** | Change the result after resolution | Increase effect die, add a raise, negate a complication |
 | **Create/Modify Entity** | Add, remove, or change traits/assets | Create a temporary asset, step up a trait |
-| **Spoof Location** | Temporarily change the effective universe for trait availability | Activate the jian to access Three Realms traits on Earth |
+| **Attunement** | Temporarily add a universe for trait availability | Activate the jian to access Three Realms traits on Earth |
 | **Narrative** | Declare a story fact | "You recognize this technology from your home dimension" |
 
 ## The Effects System
@@ -86,7 +87,35 @@ Effects can target many parts of the application:
 | `relationship` | Create, modify, or remove a relationship between entities |
 | `known_to` | Reveal hidden entities by adding to `known_to` lists |
 | `projection` | Create or modify a universe projection |
-| `location_spoof` | Apply a temporary universe spoof for trait availability |
+| `effective_universes` | Temporarily add a universe (attunement) for trait availability |
+
+### Unified Effect Model
+
+One canonical effect spec is shared by SFX **and** life-path consequences — see [[Unified Effects Plan]] for the full model:
+
+```
+Effect:
+  timing        (immediate | end_of_beat | end_of_scene | end_of_session | after_beats | on_condition)
+  type          (modify_trait | transfer_razmerit | life_path | relationship | modify_roll | modify_outcome | ...)
+  action        (gain | step_up | gain_or_step_up | step_down | set | earn | spend | ...)
+  target        (id | "self" | {choose_trait} | "")
+  result        (die | integer | rel_type | "")
+  target_scope  (optional narrowing for target choice)
+  context       (optional dict)
+```
+
+There is **no `polarity` field** — whether an effect is a cost or a benefit is derived from its `(type, action)` category. An effect is an effect regardless of which surface authored it, and **checks are roll tables**: a life path is a graph of roll tables whose entries execute these effects (see [[Character Growth]]).
+
+Additional vocabulary beyond the per-type tables below:
+
+| Type | Actions | Meaning |
+|------|---------|---------|
+| `modify_trait` | `gain`, `step_up`, `gain_or_step_up`, `step_down`, `gain_complication`, `set` | Create / raise / lower / remove a trait |
+| `transfer_razmerit` | `earn`, `spend`, `transfer` | Move razmerit |
+| `life_path` | `discover`, `next_step`, `draft`, `force_muster` | Advance a life-path term |
+| `relationship` | `create` | Create a relationship edge (`result` = relationship type) |
+
+`step_up` and `gain_or_step_up` both mean "step up the smallest die, capped at d12."
 
 ### Effect Types
 
@@ -140,25 +169,26 @@ effect:
 
 #### modify_trait
 
-Changes an existing trait on any entity.
+Changes a trait on any entity.
 
 | Action | Description |
 |--------|-------------|
-| `step_up` | Increase a trait die by one step |
-| `step_down` | Decrease a trait die by one step |
-| `set` | Set a trait to a specific die value |
-| `add` | Add a new trait to a trait set |
-| `remove` | Remove a trait |
+| `gain` | Create the trait at `result` if absent |
+| `step_up` | Step up the smallest die, capped at d12 |
+| `gain_or_step_up` | Create at `result` if absent, else step up |
+| `step_down` | Step down the die |
+| `gain_complication` | Add a complication trait at `result` |
+| `set` | Set the trait to a specific die value |
 
 #### transfer_razmerit
 
-Moves razmerit between entities.
+Moves razmerit between an entity and the pool.
 
 | Action | Description |
 |--------|-------------|
-| `pay` | Deduct from source, add to pool |
 | `earn` | Add to target from the system pool |
-| `transfer` | Move from source entity to target entity |
+| `spend` | Deduct from the entity |
+| `transfer` | Move from one entity to another |
 
 ### Trigger System
 

@@ -13,6 +13,7 @@ aliases:
   - Editor Wizard Plan
   - Life Path Editor
   - Life Path Wizard
+status: working
 ---
 
 # Life Path Editor and Wizard Plan

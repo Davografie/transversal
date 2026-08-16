@@ -11,6 +11,7 @@ aliases:
   - Panel Development
   - GM Panels
   - Panel Conventions
+status: canonical
 ---
 
 # GM Panel Development

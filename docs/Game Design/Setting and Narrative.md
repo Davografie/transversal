@@ -10,6 +10,7 @@ aliases:
   - Setting
   - Lore
   - Story
+status: canonical
 ---
 
 # Setting and Narrative

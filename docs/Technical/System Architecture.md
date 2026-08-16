@@ -9,6 +9,7 @@ tags:
 aliases:
   - Architecture
   - Tech Design
+status: canonical
 ---
 
 # System Architecture

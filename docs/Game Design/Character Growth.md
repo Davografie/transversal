@@ -11,6 +11,7 @@ aliases:
   - Growth
   - Advancement
   - Entanglements
+status: canonical
 ---
 
 # Character Growth

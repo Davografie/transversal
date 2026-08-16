@@ -11,6 +11,7 @@ aliases:
   - Schema
   - Database Schema
   - Collections
+status: canonical
 ---
 
 # Data Model
@@ -27,13 +28,18 @@ The Transversal backend uses **ArangoDB 3.12** — a graph + document database. 
 | Collection | Type | Purpose | Edge `_from` → `_to` |
 |-----------|------|---------|----------------------|
 | `entities` | Document | Core entity metadata | — |
-| `projections` | Document | Per-universe body grouping | — |
+| `entity_images` | Document | Entity/projection images (background, sheet, navdot) | — |
+| `historical_records` | Document | Blue Book — change log and history | — |
+| `life_paths` | Document | Life-path catalog (sect, guild, career terms) | — |
+| `messages` | Document | In-fiction messages / log entries | — |
+| `players` | Document | Player identity for session persistence | — |
+| `projections` | Document | Per-universe body — name, image, location, morph traits | — |
+| `relationships` | **Edge** | Entity → Entity connections | `entities/{from}` → `entities/{to}` |
+| `roll_tables` | Document | Reusable roll tables; entries execute effects | — |
+| `sfxs` | Document | SFX registry — trigger, timing, cost, effects | — |
 | `traits` | Document | Trait registry — what traits exist per universe | — |
 | `traitsets` | Document | Trait grouping registry (attributes, skills, cultivation, etc.) | — |
-| `traitsettings` | **Edge** | Entity → Trait, carries dice array + rating type + statement | `entities/{id}` → `traits/{id}` |
-| `sfxs` | Document | SFX registry — trigger, timing, cost, effects | — |
-| `relationships` | **Edge** | Entity → Entity connections | `entities/{from}` → `entities/{to}` |
-| `players` | Document | Player identity for session persistence | — |
+| `traitsettings` | **Edge** | Trait assignment (ego→entity, morph→projection, relation→relationship) | entity / projection / relationship → trait |
 
 **Graph traversal path:** `entity →(traitsetting)→ trait → traitset →(possible_sfx_ids)→ sfx`
 
@@ -58,9 +64,9 @@ The Transversal backend uses **ArangoDB 3.12** — a graph + document database. 
 
 | Value | Meaning |
 |-------|---------|
-| `native` | Entity is native to this universe (original body/physical form) |
-| `consciousness` | Entity's consciousness projects here (like Kael in Three Realms) |
-| `inapposite` | Entity cannot naturally exist here (requires spoofing) |
+| `native` | Permanent body — the return target for consciousness travel |
+| `consciousness` | Transient projection — consciousness inhabits a foreign body |
+| `inapposite` | Physically relocated body — full physical transport, position mutates in place |
 
 ### DieType
 
@@ -388,22 +394,18 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 | TraitSetting | `{entity}:{trait}` | `kael-1:trait-hacking-7f2a` |
 | SFX | `sfx-{slug}` | `sfx-hinder` |
 | Relationship | `edge:{from}:{to}:{type}` | `edge:loc-platform:loc-valley:super` |
-| Projection | `{entity}:{universe}` | `kael-1:three_realms` |
+| Projection | `{entity}:{origin_universe}` | `kael-1:three_realms` |
 
 ---
 
 ## Effective Trait Resolution
 
-When assembling a character for a given universe, the repository resolves traits settings as:
+Traits resolve from `effective_universes` — the active projection's universe plus any unexpired attunements:
 
-1. **Morph traits** — `traitsettings` where the registry trait's `universes` includes the current universe AND `ego` is `false`
-2. **Ego traits** — `traitsettings` where `ego` is `true` (always included, regardless of universe)
+1. **Ego traits** — always available (`from_type = entity`)
+2. **Morph traits** — available iff the trait's `origin_universe` is in `effective_universes` (`from_type = projection`)
 
-The `get_effective_traitsettings(entity_id, universe)` query returns the union of both sets.
-
-## Location Spoofing
-
-Attunement (e.g. using the jian's "Law Bridge" SFX) temporarily changes the effective universe for trait resolution. The SFX system applies a `spoof_location` effect — the entity's location is treated as if it were in another universe for trait availability, without actually moving the entity.
+See [[Projections and Transversal]] for the canonical model and [[Entities and Traits#Ego and Morph]] for the ego/morph split.
 
 ---
 

@@ -14,6 +14,7 @@ aliases:
   - Effect Spec
   - Effects Unification
   - RollTable
+status: working
 ---
 
 # Unified Effects Plan
