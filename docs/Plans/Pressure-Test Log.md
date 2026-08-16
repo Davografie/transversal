@@ -24,6 +24,16 @@ status: working
 - Verify against code, not docs — a step is "built" only if it works end-to-end.
 - Bugs and decisions are logged here; the build order consumes them later.
 
+## Backend inventory — known implementation gaps
+
+Found during the pre-scenario code walkthrough; not surfaced by any single scenario.
+
+1. **Attunement expiry unwired** — `attune enable` adds an `Attunement` with `until=<timing>`, and `disable` removes it, but nothing schedules the matching `disable` when the boundary fires. Attunements may never auto-expire.
+2. **`effective_universes` divergence** — the code unions "all NATIVE projection universes when the entity has >1" (a multiversal-being rule) that [[Projections and Transversal]] doesn't mention.
+3. **`fire_contest_sfx` dead code** — defined but never called; contests don't auto-fire SFX (feeds the "triggers fire in the roll/contest flow" release item).
+4. **[[SFX and Effects]] top half stale** — "Anatomy of an SFX" / "SFX Categories" / "Effect Types" still describe the old model (singular `effect`, `cost`, `modify_roll`/`modify_outcome`/`create_entity`), while its own "Unified Effect Model" section is correct.
+5. **MCP tooling doc drift** — `mcp/server.py` docstring lists `manage_session` and `generate_from_table`; [[API Contract]] says "session management" is among the 5 tools. Neither exists (actual tools: `create_entity`, `create_npc`, `roll_dice`, `get_entity`, `query_entities`).
+
 ## Scenario list
 
 1. GM preps a session
