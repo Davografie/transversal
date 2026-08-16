@@ -9,7 +9,7 @@
       </div>
       <div class="canvas-controls">
         <select
-          v-if="mode !== 'life-path' && mode !== 'location-tree'"
+          v-if="mode === 'location'"
           v-model="selectedFaction"
           class="faction-select"
           @change="onFactionChange"
@@ -18,11 +18,17 @@
           <option v-for="f in factions" :key="f.id" :value="f.id">{{ f.name }}</option>
         </select>
         <button
-          v-if="mode === 'location' || mode === 'location-tree'"
+          v-if="mode === 'location'"
           class="tool-btn"
           :title="layoutOrientation === 'horizontal' ? 'Switch to vertical layout' : 'Pivot to horizontal layout'"
           @click="toggleLayoutOrientation"
         >⇄</button>
+        <button
+          v-if="mode === 'location'"
+          class="tool-btn"
+          title="Show/hide all occupants"
+          @click="revealAllOccupants"
+        >👥</button>
         <button v-if="mode === 'faction' || mode === 'gmc-web'" class="tool-btn" @click="backToLocation">← Location</button>
         <button v-if="mode === 'life-path'" class="tool-btn" title="Reset layout" @click="resetLayout">↺</button>
         <button v-if="!fullscreen" class="tool-btn" title="Open fullscreen" @click="openFull">⛶</button>
@@ -31,7 +37,7 @@
       </div>
     </div>
     <div v-if="mode === 'life-path'" class="canvas-hint">Roll tables linked by next_step effects · dashed orange edges loop back · click ✎ to open a table</div>
-    <div v-else class="canvas-hint">Drag right handle (→) to left handle (←) to create a transversal link · click a transversal edge to toggle inapposite/consciousness · click ⊕ to expand</div>
+    <div v-else class="canvas-hint">Drag → to ← to create a transversal link · click a transversal edge to toggle · ⊕/⊖ collapse subtree · 👥 reveal occupants</div>
 
     <div v-if="loading" class="canvas-status">Loading…</div>
     <div v-else-if="error" class="canvas-status error">{{ error }}</div>
@@ -110,7 +116,7 @@ const bus = usePanelBus()
 const panel = usePanel()
 
 const canvas = useCanvas()
-const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation } = canvas
+const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation, revealAllOccupants, setFactionFilter } = canvas
 const nodes = canvas.nodes
 const edges = canvas.edges
 
@@ -141,19 +147,18 @@ const displayNodes = computed(() =>
       onCollapse: (id) => canvas.collapseLocation(id),
       onFocus: (id) => canvas.setFocus(id),
       onToggleExpand: (id) => canvas.toggleUniverseExpand(id),
+      onToggleOccupants: (id) => canvas.revealOccupants(id),
       onToggleRelations: (id) => canvas.toggleRelations(id),
       onShowFaction: (id) => canvas.showFaction(id),
       onInspect: (id) => bus.emit('canvas:inspect', id),
-      onOpenFull: (id) => bus.emit('canvas:open-full', { mode: 'location', entityId: id }),
+      onOpenFull: (id) => bus.emit('canvas:open-full', { mode: 'location', entityId: id, scope: 'focus' }),
       onOpenTable: (id) => openTable(id),
     },
   })),
 )
 
 function onFactionChange() {
-  if (selectedFaction.value) {
-    canvas.loadFaction(selectedFaction.value)
-  }
+  setFactionFilter(selectedFaction.value)
 }
 
 function openTable(tableId) {
@@ -164,6 +169,7 @@ function openTable(tableId) {
 
 function openFull() {
   const payload = { mode: mode.value, entityId: canvas.focusId.value }
+  if (mode.value === 'location') payload.scope = 'focus'
   if (mode.value === 'life-path') payload.lifePath = props.initialLifePath
   bus.emit('canvas:open-full', payload)
   panel.close()

@@ -22,9 +22,18 @@ const entityCache = new Map()
 const factions = ref([])
 let factionsLoaded = false
 let currentLifePath = null
-let locationTreeData = null
-const expandedUniverses = new Set()
+
+// Unified location-canvas state. ``locationGraph`` is the single cache for the
+// scoped graph; ``nodes``/``edges`` are re-derived from it on every change.
+let locationGraph = null
+let currentLocationScope = null
 let currentUniverse = ''
+const collapsedUniverses = new Set()
+const collapsedLocations = new Set()
+const revealedOccupants = new Set()
+let showAllOccupants = false
+const loadedChildren = new Set()
+const knownLeaves = new Set()
 
 // ── Node/edge factories ───────────────────────────────
 
@@ -45,8 +54,9 @@ function makeLocationNode(entity, opts = {}) {
       universe: entity.current_universe,
       isFocus: !!opts.isFocus,
       expanded: !!opts.expanded,
+      isLeaf: !!opts.isLeaf,
+      occupantsRevealed: !!opts.occupantsRevealed,
       isScaffolding: !!opts.isScaffolding,
-      treeMode: !!opts.treeMode,
     },
   }
 }
@@ -128,22 +138,7 @@ function mapTreeCoords(sibling, depth) {
 
 export function useCanvas() {
   async function loadLocation(locationId) {
-    loading.value = true
-    error.value = null
-    try {
-      const r = await fetch(`${API_BASE}/locations/${locationId}/canvas`)
-      if (!r.ok) throw new Error(await r.text())
-      const data = await r.json()
-      if (!data.location) throw new Error('Location not found')
-      mode.value = 'location'
-      focusId.value = locationId
-      title.value = data.location.name
-      buildLocationGraph(data)
-    } catch (e) {
-      error.value = e.message
-    } finally {
-      loading.value = false
-    }
+    await loadLocationCanvas({ root: `location:${locationId}`, depth: 1, focus: locationId })
   }
 
   async function loadFaction(factionId) {
@@ -237,26 +232,69 @@ export function useCanvas() {
     }
   }
 
-  async function loadLocationTree(universe) {
+  async function loadLocationCanvas(scope) {
     loading.value = true
     error.value = null
     try {
-      mode.value = 'location-tree'
-      currentUniverse = universe || ''
-      focusId.value = null
-      title.value = 'Location Tree'
+      mode.value = 'location'
+      const params = new URLSearchParams()
+      if (scope.root) params.set('root', scope.root)
+      if (scope.depth != null) params.set('depth', String(scope.depth))
+      if (scope.focus) params.set('focus', scope.focus)
+      if (scope.faction) params.set('faction', scope.faction)
 
-      const r = await fetch(`${API_BASE}/locations/graph`)
+      const r = await fetch(`${API_BASE}/locations/canvas?${params}`)
       if (!r.ok) throw new Error(await r.text())
       const data = await r.json()
-      locationTreeData = data
 
-      expandedUniverses.clear()
-      for (const uni of data.tree || []) {
-        if (uni.node_type === 'universe' && uni.universe === currentUniverse) expandedUniverses.add(uni.id)
+      currentLocationScope = scope
+      currentUniverse = scope.universe || ''
+      locationGraph = {
+        focus: data.focus || null,
+        faction: data.faction || null,
+        universes: data.universes || [],
+        locations: new Map((data.locations || []).map((l) => [l.id, l])),
+        superEdges: data.super_edges || [],
+        transversalEdges: data.transversal_edges || [],
+        occupants: new Map(Object.entries(data.occupants || {})),
+        occupantRelations: data.occupant_relations || [],
       }
 
-      buildLocationTreeGraph()
+      focusId.value = data.focus || null
+      title.value = data.focus
+        ? (locationGraph.locations.get(data.focus)?.name || 'Location')
+        : 'Location Tree'
+
+      collapsedUniverses.clear()
+      if (data.universes?.length && scope.universe) {
+        for (const u of data.universes) {
+          if (u.universe !== scope.universe && u.id !== scope.universe) collapsedUniverses.add(u.universe)
+        }
+      }
+
+      collapsedLocations.clear()
+      revealedOccupants.clear()
+      if (data.focus) revealedOccupants.add(data.focus)
+      showAllOccupants = false
+
+      const parentOf = {}
+      const childrenOf = {}
+      for (const e of locationGraph.superEdges) {
+        parentOf[e.child] = e.parent
+        ;(childrenOf[e.parent] ||= []).push(e.child)
+      }
+      loadedChildren.clear()
+      knownLeaves.clear()
+      if (scope.depth === -1) {
+        for (const id of locationGraph.locations.keys()) {
+          loadedChildren.add(id)
+          if (!childrenOf[id] || !childrenOf[id].length) knownLeaves.add(id)
+        }
+      } else if (data.focus) {
+        loadedChildren.add(data.focus)
+      }
+
+      renderLocationGraph()
     } catch (e) {
       error.value = e.message
     } finally {
@@ -264,72 +302,235 @@ export function useCanvas() {
     }
   }
 
-  function toggleUniverseExpand(universeId) {
-    if (!locationTreeData) return
-    if (expandedUniverses.has(universeId)) expandedUniverses.delete(universeId)
-    else expandedUniverses.add(universeId)
-    buildLocationTreeGraph()
+  async function loadLocationTree(universe) {
+    await loadLocationCanvas({ root: 'all', depth: -1, universe })
   }
 
-  function buildLocationTreeGraph() {
-    if (!locationTreeData) return
+  function toggleUniverseExpand(universeId) {
+    if (!locationGraph) return
+    const u = locationGraph.universes.find((x) => x.id === universeId)
+    if (!u) return
+    if (collapsedUniverses.has(u.universe)) collapsedUniverses.delete(u.universe)
+    else collapsedUniverses.add(u.universe)
+    renderLocationGraph()
+  }
+
+  function renderLocationGraph() {
+    if (!locationGraph) {
+      nodes.value = []
+      edges.value = []
+      return
+    }
+    const g = locationGraph
+    const parentOf = {}
+    const childrenOf = {}
+    for (const e of g.superEdges) {
+      parentOf[e.child] = e.parent
+      ;(childrenOf[e.parent] ||= []).push(e.child)
+    }
+
+    const visible = new Set()
+    function walk(id) {
+      if (!g.locations.has(id) || visible.has(id)) return
+      const loc = g.locations.get(id)
+      if (loc.universe && collapsedUniverses.has(loc.universe)) return
+      visible.add(id)
+      if (collapsedLocations.has(id)) return
+      for (const c of childrenOf[id] || []) walk(c)
+    }
+    for (const id of g.locations.keys()) {
+      if (!parentOf[id]) walk(id)
+    }
+
     const newNodes = []
     const newEdges = []
 
-    for (const node of locationTreeData.tree || []) {
-      if (node.node_type === 'universe') {
-        const expanded = expandedUniverses.has(node.id)
-        newNodes.push(makeUniverseNode(node, { isCurrent: node.universe === currentUniverse, expanded }))
-        if (expanded) {
-          for (const loc of node.children || []) {
-            addLocationSubtree(loc, nodeId('uni', node.id), newNodes, newEdges)
-          }
-        }
-      } else {
-        // Orphan location (no matching universe) rendered as a top-level node.
-        addLocationSubtree(node, null, newNodes, newEdges)
+    for (const u of g.universes) {
+      newNodes.push(makeUniverseNode(u, {
+        isCurrent: u.universe === currentUniverse,
+        expanded: !collapsedUniverses.has(u.universe),
+      }))
+    }
+
+    for (const id of g.locations.keys()) {
+      if (!visible.has(id)) continue
+      const loc = g.locations.get(id)
+      const children = childrenOf[id] || []
+      const collapsed = collapsedLocations.has(id)
+      const isLoaded = loadedChildren.has(id)
+      const isLeaf = knownLeaves.has(id) || (isLoaded && children.length === 0)
+      const expanded = isLoaded && !collapsed && children.length > 0
+      newNodes.push(makeLocationNode(
+        { _key: id, name: loc.name, current_universe: loc.universe },
+        {
+          isFocus: id === g.focus,
+          expanded,
+          isLeaf,
+          occupantsRevealed: showAllOccupants || revealedOccupants.has(id),
+        },
+      ))
+    }
+
+    for (const e of g.superEdges) {
+      if (visible.has(e.child) && visible.has(e.parent)) {
+        newEdges.push(makeSuperEdge(nodeId('loc', e.child), nodeId('loc', e.parent)))
+      }
+    }
+    for (const id of g.locations.keys()) {
+      if (!visible.has(id) || parentOf[id]) continue
+      const loc = g.locations.get(id)
+      const uni = g.universes.find((u) => u.universe === loc.universe)
+      if (uni) newEdges.push(makeSuperEdge(nodeId('loc', id), nodeId('uni', uni.id)))
+    }
+
+    for (const t of g.transversalEdges) {
+      if (visible.has(t.from) && visible.has(t.to)) {
+        newEdges.push(makeTransversalEdge(nodeId('loc', t.from), nodeId('loc', t.to), t.transversal_type))
       }
     }
 
-    const locIds = new Set(newNodes.filter((n) => n.type === 'location').map((n) => n.data.entityId))
-    for (const t of locationTreeData.transversal || []) {
-      if (locIds.has(t.from) && locIds.has(t.to)) {
-        newEdges.push(makeTransversalEdge(nodeId('loc', t.from), nodeId('loc', t.to), t.transversal_type))
+    const renderedOccupants = new Set()
+    for (const id of g.locations.keys()) {
+      if (!visible.has(id)) continue
+      if (!showAllOccupants && !revealedOccupants.has(id)) continue
+      for (const occ of g.occupants.get(id) || []) {
+        newNodes.push(makeOccupantNode(occ, { factions: occ.factions || [] }))
+        newEdges.push(makeLocatedEdge(nodeId('loc', id), nodeId('occ', occ.id)))
+        renderedOccupants.add(occ.id)
+      }
+    }
+
+    for (const rel of g.occupantRelations) {
+      if (renderedOccupants.has(rel.from) && renderedOccupants.has(rel.to)) {
+        newEdges.push(makeRelationEdge(nodeId('occ', rel.from), nodeId('occ', rel.to), rel.description))
       }
     }
 
     nodes.value = newNodes
     edges.value = newEdges
-    layoutLocationTreeNodes()
-  }
 
-  function addLocationSubtree(loc, parentId, newNodes, newEdges) {
-    const id = nodeId('loc', loc.id)
-    newNodes.push(makeLocationNode({ _key: loc.id, name: loc.name, current_universe: loc.universe }, { expanded: true, treeMode: true }))
-    if (parentId) newEdges.push(makeSuperEdge(id, parentId))
-    for (const child of loc.children || []) {
-      addLocationSubtree(child, id, newNodes, newEdges)
-    }
-  }
-
-  function layoutLocationTreeNodes() {
-    layoutLocationForest({ includeUniverse: true })
+    const includeUniverse = g.universes.length > 0
+    const centerId = g.focus ? nodeId('loc', g.focus) : null
+    layoutLocationForest({ includeUniverse, centerId })
   }
 
   async function expandLocation(locationId) {
+    if (collapsedLocations.has(locationId)) {
+      collapsedLocations.delete(locationId)
+      renderLocationGraph()
+      return
+    }
+    await deepenLocation(locationId)
+  }
+
+  async function deepenLocation(locationId) {
     loading.value = true
     error.value = null
     try {
-      const r = await fetch(`${API_BASE}/locations/${locationId}/canvas`)
+      const params = new URLSearchParams({ root: `location:${locationId}`, depth: '1' })
+      if (currentLocationScope?.faction) params.set('faction', currentLocationScope.faction)
+      const r = await fetch(`${API_BASE}/locations/canvas?${params}`)
       if (!r.ok) throw new Error(await r.text())
       const data = await r.json()
-      if (!data.location) throw new Error('Location not found')
-      mergeLocationGraph(data, locationId)
+      mergeLocationCanvas(data)
+      loadedChildren.add(locationId)
+      if (!locationGraph.superEdges.some((e) => e.parent === locationId)) {
+        knownLeaves.add(locationId)
+      }
+      renderLocationGraph()
     } catch (e) {
       error.value = e.message
     } finally {
       loading.value = false
     }
+  }
+
+  function mergeLocationCanvas(data) {
+    if (!locationGraph) return
+    const g = locationGraph
+    for (const loc of data.locations || []) {
+      if (!g.locations.has(loc.id)) g.locations.set(loc.id, loc)
+    }
+    const superSet = new Set(g.superEdges.map((e) => `${e.child}|${e.parent}`))
+    for (const e of data.super_edges || []) {
+      const key = `${e.child}|${e.parent}`
+      if (!superSet.has(key)) { superSet.add(key); g.superEdges.push(e) }
+    }
+    const transSet = new Set(g.transversalEdges.map((e) => `${e.from}|${e.to}`))
+    for (const t of data.transversal_edges || []) {
+      const key = `${t.from}|${t.to}`
+      if (!transSet.has(key)) { transSet.add(key); g.transversalEdges.push(t) }
+    }
+    for (const [locId, occs] of Object.entries(data.occupants || {})) {
+      if (!g.occupants.has(locId)) g.occupants.set(locId, occs)
+    }
+    const relSet = new Set(g.occupantRelations.map((r) => `${r.from}|${r.to}|${r.type}|${r.description}`))
+    for (const rel of data.occupant_relations || []) {
+      const key = `${rel.from}|${rel.to}|${rel.type}|${rel.description}`
+      if (!relSet.has(key)) { relSet.add(key); g.occupantRelations.push(rel) }
+    }
+  }
+
+  async function revealOccupants(locationId) {
+    if (revealedOccupants.has(locationId) && !showAllOccupants) {
+      revealedOccupants.delete(locationId)
+      renderLocationGraph()
+      return
+    }
+    revealedOccupants.add(locationId)
+    if (!locationGraph.occupants.has(locationId)) {
+      await fetchOccupants(locationId)
+    }
+    renderLocationGraph()
+  }
+
+  async function fetchOccupants(locationId) {
+    try {
+      const params = new URLSearchParams()
+      if (currentLocationScope?.faction) params.set('faction', currentLocationScope.faction)
+      const r = await fetch(`${API_BASE}/locations/${locationId}/occupants?${params}`)
+      if (!r.ok) return
+      const data = await r.json()
+      if (!locationGraph.occupants.has(locationId)) {
+        locationGraph.occupants.set(locationId, data.occupants || [])
+      }
+      mergeLocationCanvas({ occupant_relations: data.occupant_relations || [] })
+    } catch (e) {
+      error.value = e.message
+    }
+  }
+
+  async function revealAllOccupants() {
+    showAllOccupants = !showAllOccupants
+    if (showAllOccupants && locationGraph) {
+      const missing = visibleLocationIds().filter((id) => !locationGraph.occupants.has(id))
+      await Promise.all(missing.map((id) => fetchOccupants(id)))
+    }
+    renderLocationGraph()
+  }
+
+  function visibleLocationIds() {
+    if (!locationGraph) return []
+    const g = locationGraph
+    const parentOf = {}
+    const childrenOf = {}
+    for (const e of g.superEdges) {
+      parentOf[e.child] = e.parent
+      ;(childrenOf[e.parent] ||= []).push(e.child)
+    }
+    const visible = new Set()
+    function walk(id) {
+      if (!g.locations.has(id) || visible.has(id)) return
+      const loc = g.locations.get(id)
+      if (loc.universe && collapsedUniverses.has(loc.universe)) return
+      visible.add(id)
+      if (collapsedLocations.has(id)) return
+      for (const c of childrenOf[id] || []) walk(c)
+    }
+    for (const id of g.locations.keys()) {
+      if (!parentOf[id]) walk(id)
+    }
+    return [...visible]
   }
 
   function clear() {
@@ -339,110 +540,22 @@ export function useCanvas() {
     focusId.value = null
     title.value = ''
     error.value = null
+    locationGraph = null
+    currentLocationScope = null
+    collapsedUniverses.clear()
+    collapsedLocations.clear()
+    revealedOccupants.clear()
+    showAllOccupants = false
+    loadedChildren.clear()
+    knownLeaves.clear()
   }
 
   function toggleLayoutOrientation() {
     layoutOrientation.value = isHorizontal() ? 'vertical' : 'horizontal'
-    if (mode.value === 'location-tree') layoutLocationTreeNodes()
-    else if (mode.value === 'location') layoutLocationNodes()
+    if (mode.value === 'location') renderLocationGraph()
   }
 
   // ── Graph builders ─────────────────────────────────
-
-  function buildLocationGraph(data) {
-    const newNodes = []
-    const newEdges = []
-
-    const focus = makeLocationNode(data.location, { isFocus: true, expanded: true })
-    newNodes.push(focus)
-
-    // Parent (above) + super edge
-    if (data.parent) {
-      const parent = makeLocationNode(data.parent, { expanded: false })
-      newNodes.push(parent)
-      newEdges.push(makeSuperEdge(focus.id, parent.id))
-    }
-
-    // Children (below) + super edges
-    for (const child of data.children || []) {
-      const c = makeLocationNode(child, { expanded: false })
-      newNodes.push(c)
-      newEdges.push(makeSuperEdge(c.id, focus.id))
-    }
-
-    // Transversal peers (lateral) + transversal edges
-    for (const peer of data.transversal || []) {
-      const p = makeLocationNode(peer, { expanded: false })
-      newNodes.push(p)
-      newEdges.push(makeTransversalEdge(focus.id, p.id, peer.transversal_type))
-    }
-
-    // Occupants at the focus location
-    const memberships = data.faction_memberships || {}
-    for (const occ of data.occupants || []) {
-      const o = makeOccupantNode(occ, { factions: memberships[occ.id] || [] })
-      newNodes.push(o)
-      newEdges.push(makeLocatedEdge(focus.id, o.id))
-    }
-
-    // Occupant-to-occupant relations (visible in faction mode / on toggle)
-    for (const rel of data.occupant_relations || []) {
-      newEdges.push(makeRelationEdge(nodeId('occ', rel.from), nodeId('occ', rel.to), rel.description))
-    }
-
-    nodes.value = newNodes
-    edges.value = newEdges
-    layoutLocationNodes()
-  }
-
-  function mergeLocationGraph(data, expandedId) {
-    // Add newly expanded location's neighborhood to the existing graph.
-    const existingIds = new Set(nodes.value.map((n) => n.id))
-    const newNodes = []
-    const newEdges = []
-
-    const expandedLocId = nodeId('loc', data.location._key || data.location.id)
-
-    if (data.parent && !existingIds.has(nodeId('loc', data.parent._key))) {
-      const p = makeLocationNode(data.parent, { expanded: false })
-      newNodes.push(p)
-      newEdges.push(makeSuperEdge(expandedLocId, p.id))
-    }
-    for (const child of data.children || []) {
-      const cid = nodeId('loc', child._key || child.id)
-      if (!existingIds.has(cid)) {
-        const c = makeLocationNode(child, { expanded: false })
-        newNodes.push(c)
-        newEdges.push(makeSuperEdge(c.id, expandedLocId))
-      }
-    }
-    for (const peer of data.transversal || []) {
-      const pid = nodeId('loc', peer._key || peer.id)
-      if (!existingIds.has(pid)) {
-        const p = makeLocationNode(peer, { expanded: false })
-        newNodes.push(p)
-        newEdges.push(makeTransversalEdge(expandedLocId, p.id, peer.transversal_type))
-      }
-    }
-    const memberships = data.faction_memberships || {}
-    for (const occ of data.occupants || []) {
-      const oid = nodeId('occ', occ.id)
-      if (!existingIds.has(oid)) {
-        const o = makeOccupantNode(occ, { factions: memberships[occ.id] || [] })
-        newNodes.push(o)
-        newEdges.push(makeLocatedEdge(expandedLocId, o.id))
-      }
-    }
-
-    nodes.value = [...nodes.value, ...newNodes]
-    edges.value = [...edges.value, ...newEdges]
-
-    // Mark the expanded node as expanded
-    const target = nodes.value.find((n) => n.id === expandedLocId)
-    if (target) target.data.expanded = true
-
-    layoutLocationNodes()
-  }
 
   function buildFactionGraph(data) {
     const newNodes = []
@@ -827,54 +940,8 @@ export function useCanvas() {
   }
 
   function collapseLocation(locationId) {
-    const id = nodeId('loc', locationId)
-
-    // Pin the focus node and its ancestor chain.
-    const pinned = new Set()
-    const focusNode = nodes.value.find((n) => n.data.isFocus)
-    if (focusNode) {
-      pinned.add(focusNode.id)
-      let current = focusNode.id
-      let guard = 0
-      while (current && guard++ < 50) {
-        const parentEdge = edges.value.find((e) => e.source === current && e.data?.kind === 'super')
-        if (!parentEdge) break
-        pinned.add(parentEdge.target)
-        current = parentEdge.target
-      }
-    }
-
-    // Collect descendants of the collapsed location via super edges.
-    const descendants = new Set()
-    const stack = [id]
-    while (stack.length) {
-      const cur = stack.pop()
-      for (const e of edges.value) {
-        if (e.target === cur && e.data?.kind === 'super' && !descendants.has(e.source)) {
-          descendants.add(e.source)
-          stack.push(e.source)
-        }
-      }
-    }
-
-    const removeIds = new Set()
-    for (const d of descendants) {
-      if (!pinned.has(d)) removeIds.add(d)
-    }
-    const removedLocEntityIds = new Set(
-      nodes.value.filter((n) => removeIds.has(n.id) && n.type === 'location').map((n) => n.data.entityId),
-    )
-    for (const n of nodes.value) {
-      if (n.type === 'occupant' && n.data.locationId && removedLocEntityIds.has(n.data.locationId)) {
-        removeIds.add(n.id)
-      }
-    }
-
-    nodes.value = nodes.value.map((n) => (n.id === id ? { ...n, data: { ...n.data, expanded: false } } : n))
-    nodes.value = nodes.value.filter((n) => !removeIds.has(n.id))
-    edges.value = edges.value.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target))
-
-    layoutLocationNodes()
+    collapsedLocations.add(locationId)
+    renderLocationGraph()
   }
 
   async function toggleRelations(occId) {
@@ -937,8 +1004,15 @@ export function useCanvas() {
         body: JSON.stringify({ type: 'transversal' }),
       })
       if (!r.ok) throw new Error(await r.text())
-      edges.value = [...edges.value, makeTransversalEdge(nodeId('loc', fromId), nodeId('loc', toId))]
-      layoutLocationNodes()
+      if (locationGraph) {
+        if (!locationGraph.transversalEdges.some((e) => e.from === fromId && e.to === toId)) {
+          locationGraph.transversalEdges.push({ from: fromId, to: toId, transversal_type: 'inapposite' })
+        }
+        renderLocationGraph()
+      } else {
+        edges.value = [...edges.value, makeTransversalEdge(nodeId('loc', fromId), nodeId('loc', toId))]
+        layoutLocationNodes()
+      }
       return true
     } catch (e) {
       error.value = e.message
@@ -958,8 +1032,15 @@ export function useCanvas() {
       })
       const data = await r.json()
       if (!r.ok || data.errors) throw new Error((data.errors && data.errors[0]?.message) || `HTTP ${r.status}`)
-      edges.value = [...edges.value, makeRelationEdge(nodeId('occ', fromId), nodeId('occ', toId), '')]
-      routeEdges()
+      if (locationGraph) {
+        if (!locationGraph.occupantRelations.some((rel) => rel.from === fromId && rel.to === toId)) {
+          locationGraph.occupantRelations.push({ from: fromId, to: toId, type: 'associate', description: '' })
+        }
+        renderLocationGraph()
+      } else {
+        edges.value = [...edges.value, makeRelationEdge(nodeId('occ', fromId), nodeId('occ', toId), '')]
+        routeEdges()
+      }
       return true
     } catch (e) {
       error.value = e.message
@@ -1035,7 +1116,14 @@ export function useCanvas() {
         body: JSON.stringify({ type: 'transversal', transversal_type: next }),
       })
       if (!r.ok) throw new Error(await r.text())
-      edges.value = edges.value.map((e) => e.id === edge.id ? makeTransversalEdge(e.source, e.target, next) : e)
+      if (locationGraph) {
+        for (const t of locationGraph.transversalEdges) {
+          if (t.from === fromId && t.to === toId) t.transversal_type = next
+        }
+        renderLocationGraph()
+      } else {
+        edges.value = edges.value.map((e) => e.id === edge.id ? makeTransversalEdge(e.source, e.target, next) : e)
+      }
     } catch (e) {
       error.value = e.message
     }
@@ -1100,6 +1188,12 @@ export function useCanvas() {
     if (isTable && parentId) persistTablePosition(parentId, position.x, position.y)
   }
 
+  async function setFactionFilter(factionId) {
+    if (!currentLocationScope) return
+    const next = { ...currentLocationScope, faction: factionId || undefined }
+    await loadLocationCanvas(next)
+  }
+
   return {
     nodes,
     edges,
@@ -1112,6 +1206,7 @@ export function useCanvas() {
     layoutOrientation,
     toggleLayoutOrientation,
     loadLocation,
+    loadLocationCanvas,
     loadFaction,
     loadGmcWeb,
     loadLifePath,
@@ -1120,6 +1215,9 @@ export function useCanvas() {
     expandLocation,
     loadFactions,
     collapseLocation,
+    revealOccupants,
+    revealAllOccupants,
+    setFactionFilter,
     toggleRelations,
     showFaction,
     createTransversal,

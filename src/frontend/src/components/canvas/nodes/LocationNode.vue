@@ -8,19 +8,19 @@
       <span class="loc-badge">LOC</span>
       <span class="loc-name">{{ data.name }}</span>
     </div>
-    <div v-if="!data.treeMode" class="loc-actions" @click.stop>
+    <div class="loc-actions" @click.stop>
       <button
-        v-if="!data.expanded"
+        v-if="!data.isLeaf"
         class="loc-btn"
-        title="Expand (load neighbors)"
-        @click.stop="data.onExpand?.(data.entityId)"
-      >⊕</button>
+        :title="data.expanded ? 'Collapse' : 'Expand'"
+        @click.stop="data.expanded ? data.onCollapse?.(data.entityId) : data.onExpand?.(data.entityId)"
+      >{{ data.expanded ? '⊖' : '⊕' }}</button>
       <button
-        v-else
         class="loc-btn"
-        title="Collapse"
-        @click.stop="data.onCollapse?.(data.entityId)"
-      >⊖</button>
+        :class="{ active: data.occupantsRevealed }"
+        title="Toggle occupants"
+        @click.stop="data.onToggleOccupants?.(data.entityId)"
+      >👥</button>
       <button
         class="loc-btn"
         :class="{ active: data.isFocus }"

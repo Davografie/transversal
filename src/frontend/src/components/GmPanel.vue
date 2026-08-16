@@ -177,7 +177,7 @@ function startCreate() {
 }
 
 function openLocationTreeCanvas() {
-  bus.emit('canvas:open-full', { mode: 'location-tree', entityId: props.universe })
+  bus.emit('canvas:open-full', { mode: 'location', entityId: props.universe, scope: 'tree' })
 }
 
 function openFullFactionCanvas(factionId) {

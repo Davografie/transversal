@@ -269,7 +269,7 @@ function openCanvas() {
   if (!props.entityId) return
   const type = form.value?.type
   if (type === 'LOCATION') {
-    bus.emit('canvas:open-full', { mode: 'location', entityId: props.entityId })
+    bus.emit('canvas:open-full', { mode: 'location', entityId: props.entityId, scope: 'focus' })
   } else if (type === 'GMC') {
     bus.emit('canvas:open-full', { mode: 'gmc-web', entityId: props.entityId })
   }

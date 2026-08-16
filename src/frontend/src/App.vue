@@ -223,11 +223,11 @@
     :key="fullCanvas.mode + ':' + fullCanvas.entityId"
     class="fullscreen-canvas"
     fullscreen
-    :location-id="fullCanvas.mode === 'location' ? fullCanvas.entityId : (fullCanvas.mode === 'life-path' || fullCanvas.mode === 'location-tree' ? '' : currentLocationId)"
+    :location-id="fullCanvas.mode === 'location' && fullCanvas.scope === 'focus' ? fullCanvas.entityId : (fullCanvas.mode === 'faction' || fullCanvas.mode === 'gmc-web' ? currentLocationId : '')"
     :initial-faction-id="fullCanvas.mode === 'faction' ? fullCanvas.entityId : ''"
     :initial-gmc-id="fullCanvas.mode === 'gmc-web' ? fullCanvas.entityId : ''"
     :initial-life-path="fullCanvas.mode === 'life-path' ? fullCanvas.lifePath : null"
-    :initial-universe="fullCanvas.mode === 'location-tree' ? fullCanvas.entityId : ''"
+    :initial-universe="fullCanvas.mode === 'location' && fullCanvas.scope === 'tree' ? fullCanvas.entityId : ''"
     @close-full="fullCanvas = null"
   />
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
