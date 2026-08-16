@@ -135,7 +135,7 @@ Headline: a "test" is currently "roll dice and see a number" — the difficulty,
 - **Two tiers**: full Cortex roll (3+ dice) beats the GM's threshold; simple roll (1–2 dice) just yields a tier, no target number.
 - **Consequence menu** after a success: "proceed the narrative" / "increase the doom pool" (effect die lands there) / "create a scene trait" at effect-die rating.
 - **Hitch trading**: the player spends the GM's hitches via SFX; the GM buys the player's hitches (doom pool).
-- Note: the resolver supports GMC opposition + both pipelines, but does **not** compute the opposition's effect die ("stakes") — that's a small backend addition, and the "GM rolls first" sequence is a frontend flow change (today both sides roll atomically).
+- Note: "stakes" is just the opponent's effect die (standard Cortex — winner applies their effect die, loser eats the opponent's). The resolver already computes the player's effect die, but does **not** return the opposition's — so the fix is "also return the opponent's effect die," a small mechanical gap, not a new mechanic. The "GM rolls first" sequence is a frontend flow change (today both sides roll atomically).
 
 ---
 
