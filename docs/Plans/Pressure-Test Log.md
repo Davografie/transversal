@@ -129,6 +129,14 @@ Setting: Kael hacks a security terminal in Krasnoyarsk-45.
 
 Headline: a "test" is currently "roll dice and see a number" — the difficulty, the consequence, and the economy are all missing.
 
+### Target design (user's read — the Phase 1 spec)
+
+- **Opposition = a location/GMC's own traits**, rolled by the GM *first*: default 2d6 + the relevant location trait (e.g. "digital security d6") = 3d6. The GM's total is the threshold; the GM's effect die is the **stakes**.
+- **Two tiers**: full Cortex roll (3+ dice) beats the GM's threshold; simple roll (1–2 dice) just yields a tier, no target number.
+- **Consequence menu** after a success: "proceed the narrative" / "increase the doom pool" (effect die lands there) / "create a scene trait" at effect-die rating.
+- **Hitch trading**: the player spends the GM's hitches via SFX; the GM buys the player's hitches (doom pool).
+- Note: the resolver supports GMC opposition + both pipelines, but does **not** compute the opposition's effect die ("stakes") — that's a small backend addition, and the "GM rolls first" sequence is a frontend flow change (today both sides roll atomically).
+
 ---
 
 *Scenarios 4–7 pending.*
