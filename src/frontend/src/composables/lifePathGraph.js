@@ -197,6 +197,11 @@ export function buildLifePathGraph(path, tables, opts = {}) {
       }
     })
 
+    const external = t.lifePath !== path.id
+    const hasOutgoing = (links.get(id)?.size || 0) > 0
+    const pathMeta = opts.pathMeta || {}
+    const meta = pathMeta[t.lifePath] || {}
+
     nodes.push({
       id: `rt:${id}`,
       type: 'rolltable',
@@ -209,8 +214,10 @@ export function buildLifePathGraph(path, tables, opts = {}) {
         die: t.die,
         rollSource: t.rollSource,
         tableNames: Object.fromEntries(tableNames),
-        lifePathName: path.name || '',
-        factionNames: opts.factionNames || [],
+        lifePathName: meta.name || '',
+        factionNames: meta.factionNames || [],
+        external,
+        terminal: external && !hasOutgoing,
         rows,
       },
     })

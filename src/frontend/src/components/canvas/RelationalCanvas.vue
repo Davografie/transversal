@@ -42,6 +42,8 @@
       fit-view-on-init
       class="canvas-flow"
       @connect="onConnect"
+      @connect-start="onConnectStart"
+      @connect-end="onConnectEnd"
       @node-drag-stop="onNodeDragStop"
       @edge-click="onEdgeClick"
     >
@@ -49,6 +51,17 @@
       <Controls v-if="fullscreen" />
       <MiniMap v-if="fullscreen" />
     </VueFlow>
+
+    <div v-if="linkMenu" class="link-menu" :style="{ left: linkMenu.x + 'px', top: linkMenu.y + 'px' }">
+      <div class="link-menu-title">Link to roll table</div>
+      <GmRollTablePicker
+        model-value=""
+        placeholder="Search roll table…"
+        :exclude-ids="[linkMenu.sourceTableId]"
+        @update:model-value="onLinkPicked"
+      />
+      <button class="link-menu-close" title="Cancel" @click="linkMenu = null">✕</button>
+    </div>
   </div>
 </template>
 
@@ -73,6 +86,7 @@ import BundlerNode from '@/components/canvas/nodes/BundlerNode.vue'
 import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
 import LifePathEdge from '@/components/canvas/edges/LifePathEdge.vue'
 import GmRollTableDetailPanel from '@/components/gm/GmRollTableDetailPanel.vue'
+import GmRollTablePicker from '@/components/gm/GmRollTablePicker.vue'
 
 const props = defineProps({
   locationId: { type: String, default: '' },
@@ -93,6 +107,8 @@ const nodes = canvas.nodes
 const edges = canvas.edges
 
 const selectedFaction = ref('')
+const pendingLink = ref(null)
+const linkMenu = ref(null)
 const lifePathFactions = computed(() => {
   if (mode.value !== 'life-path') return []
   const ids = props.initialLifePath?.factionIds || []
@@ -145,6 +161,7 @@ function openFull() {
 }
 
 async function onConnect(connection) {
+  pendingLink.value = null
   if (!connection.source || !connection.target || connection.source === connection.target) return
   const fromNode = nodes.value.find((n) => n.id === connection.source)
   const toNode = nodes.value.find((n) => n.id === connection.target)
@@ -166,6 +183,37 @@ async function onConnect(connection) {
 
 function onEdgeClick({ edge }) {
   canvas.toggleTransversalEdge(edge)
+}
+
+function onConnectStart({ nodeId, handleId }) {
+  if (handleId?.startsWith('row-')) {
+    const sourceNode = nodes.value.find((n) => n.id === nodeId)
+    pendingLink.value = {
+      sourceTableId: sourceNode?.data?.entityId,
+      rowIndex: parseInt(handleId.slice(4), 10),
+    }
+  } else {
+    pendingLink.value = null
+  }
+}
+
+function onConnectEnd(event) {
+  const link = pendingLink.value
+  pendingLink.value = null
+  if (!link?.sourceTableId) return
+  const touch = event?.changedTouches?.[0]
+  linkMenu.value = {
+    ...link,
+    x: event?.clientX ?? touch?.clientX ?? 0,
+    y: event?.clientY ?? touch?.clientY ?? 0,
+  }
+}
+
+async function onLinkPicked(tableId) {
+  if (!linkMenu.value || !tableId) return
+  const { sourceTableId, rowIndex } = linkMenu.value
+  linkMenu.value = null
+  await canvas.linkRollTable(sourceTableId, rowIndex, tableId)
 }
 
 function onNodeDragStop({ node }) {
@@ -231,6 +279,17 @@ onMounted(async () => {
 .canvas-status.error { color: #e86a6a; }
 .canvas-hint { padding: 4px 8px; font-size: 10px; color: var(--text-dim); background: rgba(20,20,35,0.9); border-bottom: 1px solid rgba(255,255,255,0.06); }
 .canvas-flow { flex: 1; }
+.link-menu {
+  position: fixed; z-index: 30; width: 260px;
+  background: #1a1a2e; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+  padding: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+.link-menu-title { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.link-menu-close {
+  position: absolute; top: 4px; right: 4px; font-size: 12px; line-height: 1;
+  padding: 2px 4px; background: none; border: none; color: var(--text-dim); cursor: pointer;
+}
+.link-menu-close:hover { color: #e06060; }
 </style>
 
 <style>

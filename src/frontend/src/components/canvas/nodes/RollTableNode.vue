@@ -1,5 +1,8 @@
 <template>
-  <div class="rolltable-node">
+  <div
+    class="rolltable-node"
+    :class="{ 'external-terminal': data.terminal, 'external-middle': data.external && !data.terminal }"
+  >
     <div class="rt-header">
       <span class="rt-badge">TBL</span>
       <span class="rt-name">{{ data.name }}</span>
@@ -85,6 +88,8 @@ function rowTooltip(row) {
   overflow: visible;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
+.rolltable-node.external-terminal { border-color: #e88830; }
+.rolltable-node.external-middle { border-color: #40b860; }
 .rt-header {
   height: 40px; box-sizing: border-box;
   display: flex; align-items: center; gap: 6px; padding: 0 8px;

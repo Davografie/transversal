@@ -20,6 +20,7 @@ const error = ref(null)
 const entityCache = new Map()
 const factions = ref([])
 let factionsLoaded = false
+let currentLifePath = null
 
 // ── Node/edge factories ───────────────────────────────
 
@@ -137,6 +138,7 @@ export function useCanvas() {
       mode.value = 'life-path'
       focusId.value = lifePath?.id || null
       title.value = lifePath?.name || 'Life Path'
+      currentLifePath = lifePath || null
 
       if (!lifePath?.entryTableId) {
         nodes.value = []
@@ -149,8 +151,7 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query($lp:String){ rollTables(lifePathId:$lp){ id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type target value narrative } effects { timing type action target result targetScope context } } } }`,
-          variables: { lp: lifePath.id },
+          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type target value narrative } effects { timing type action target result targetScope context } } } lifePaths { id name factionIds } }`,
         }),
       })
       const data = await r.json()
@@ -159,11 +160,16 @@ export function useCanvas() {
       }
 
       const tables = data.data?.rollTables || []
+      const lifePaths = data.data?.lifePaths || []
       await loadFactions()
-      const factionNames = (lifePath.factionIds || [])
-        .map((id) => factions.value.find((f) => f.id === id)?.name)
-        .filter(Boolean)
-      const graph = buildLifePathGraph(lifePath, tables, { factionNames })
+      const pathMeta = {}
+      for (const lp of lifePaths) {
+        const factionNames = (lp.factionIds || [])
+          .map((id) => factions.value.find((f) => f.id === id)?.name)
+          .filter(Boolean)
+        pathMeta[lp.id] = { name: lp.name, factionNames }
+      }
+      const graph = buildLifePathGraph(lifePath, tables, { pathMeta })
       nodes.value = graph.nodes
       edges.value = graph.edges
       if (!tables.length) {
@@ -720,6 +726,62 @@ export function useCanvas() {
     }
   }
 
+  async function linkRollTable(sourceTableId, rowIndex, targetTableId) {
+    try {
+      // Fetch the full source table so we can modify one entry without guessing.
+      const fr = await fetch(`${API_BASE}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { label description minValue maxValue weight tier conditions { type target value narrative } effects { timing type action target result targetScope context } } } }`,
+          variables: { id: sourceTableId },
+        }),
+      })
+      const fd = await fr.json()
+      if (!fr.ok || fd.errors) throw new Error((fd.errors && fd.errors[0]?.message) || `HTTP ${fr.status}`)
+
+      const table = fd.data?.rollTable
+      const entry = table?.entries?.[rowIndex]
+      if (!table || !entry) return false
+
+      const nextEffect = { timing: 'IMMEDIATE', type: 'life_path', action: 'next_step', target: targetTableId, result: null, targetScope: null, context: {} }
+      const entries = table.entries.map((e, i) => (
+        i === rowIndex ? { ...e, effects: [...(e.effects || []), nextEffect] } : e
+      ))
+
+      const sr = await fetch(`${API_BASE}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation($input: RollTableInput!){ saveRollTable(input:$input){ id } }`,
+          variables: {
+            input: {
+              id: table.id,
+              name: table.name,
+              universe: table.universe,
+              lifePath: table.lifePath,
+              scheme: table.scheme,
+              rollSource: table.rollSource,
+              traitDiceCount: table.traitDiceCount,
+              die: table.die,
+              check: table.check,
+              entries,
+            },
+          },
+        }),
+      })
+      const sd = await sr.json()
+      if (!sr.ok || sd.errors) throw new Error((sd.errors && sd.errors[0]?.message) || `HTTP ${sr.status}`)
+
+      // Reload so the new link (and any out-of-path target) renders.
+      if (currentLifePath) await loadLifePath(currentLifePath)
+      return true
+    } catch (e) {
+      error.value = e.message
+      return false
+    }
+  }
+
   async function toggleTransversalEdge(edge) {
     if (edge?.data?.kind !== 'transversal') return
     const fromId = edge.source.replace('loc:', '')
@@ -817,6 +879,7 @@ export function useCanvas() {
     showFaction,
     createTransversal,
     createRelation,
+    linkRollTable,
     toggleTransversalEdge,
     setFocus,
     updateNodePosition,

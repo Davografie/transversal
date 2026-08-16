@@ -52,6 +52,7 @@ const props = defineProps({
   faction: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   placeholder: { type: String, default: 'Search roll table…' },
+  excludeIds: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -151,6 +152,7 @@ const filtered = computed(() => {
   return tables.value
     .filter(t => {
       if (t.id === props.modelValue) return false
+      if (props.excludeIds.includes(t.id)) return false
       if (uFilter && t.universe !== uFilter) return false
       if (lpFilter && t.lifePath !== lpFilter) return false
       if (facFilter && !facPathIds.has(t.lifePath)) return false
