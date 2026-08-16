@@ -1435,6 +1435,193 @@ class EntityRepository:
         transversal = list(self.db.aql.execute(rel_query))
         return {"tree": tree, "transversal": transversal}
 
+    def _universe_docs(self) -> list[dict]:
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'universe'
+            RETURN {{ id: e._key, name: e.name, universe: e.current_universe }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _all_location_docs(self) -> list[dict]:
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'location'
+            RETURN {{ id: e._key, name: e.name, universe: e.current_universe }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _all_super_edges(self) -> list[dict]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'super'
+            RETURN {{ child: PARSE_IDENTIFIER(r._from).key, parent: PARSE_IDENTIFIER(r._to).key }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _all_transversal_edges(self) -> list[dict]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'transversal'
+            RETURN {{ from: PARSE_IDENTIFIER(r._from).key, to: PARSE_IDENTIFIER(r._to).key, transversal_type: r.transversal_type }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _faction_member_ids(self, faction_id: str) -> list[str]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'membership' AND PARSE_IDENTIFIER(r._to).key == @fid
+            RETURN PARSE_IDENTIFIER(r._from).key
+        """
+        return list(self.db.aql.execute(query, bind_vars={"fid": faction_id}))
+
+    def _occupants_for_locations(self, location_ids: list[str], faction_id: str | None = None) -> dict:
+        """Map location key → occupant dicts, optionally filtered to a faction."""
+        if not location_ids:
+            return {}
+
+        binds: dict = {"lids": location_ids}
+        member_filter = ""
+        if faction_id:
+            member_ids = self._faction_member_ids(faction_id)
+            if not member_ids:
+                return {}
+            binds["mids"] = member_ids
+            member_filter = " AND e._key IN @mids"
+
+        query = f"""
+            LET direct = (
+                FOR e IN {ENTITIES}
+                FILTER e.type IN ['character', 'gmc', 'asset']
+                  AND e.current_location IN @lids
+                  {member_filter}
+                RETURN {{ id: e._key, name: e.name, type: e.type, image: e.background_image, location_id: e.current_location }}
+            )
+            LET projected = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.current_location IN @lids
+                FOR e IN {ENTITIES}
+                FILTER e._key == p.entity_id AND e.type IN ['character', 'gmc', 'asset']
+                  {member_filter}
+                RETURN {{ id: e._key, name: e.name, type: e.type, image: e.background_image, location_id: p.current_location }}
+            )
+            FOR o IN UNION(direct, projected)
+            RETURN o
+        """
+        rows = list(self.db.aql.execute(query, bind_vars=binds))
+
+        result: dict = {}
+        seen: set = set()
+        for row in rows:
+            key = (row["location_id"], row["id"])
+            if key in seen:
+                continue
+            seen.add(key)
+            result.setdefault(row["location_id"], []).append(row)
+
+        occupant_ids = [row["id"] for loc_rows in result.values() for row in loc_rows]
+        memberships = self._faction_memberships_for(occupant_ids)
+        for loc_rows in result.values():
+            for row in loc_rows:
+                row["factions"] = memberships.get(row["id"], [])
+        return result
+
+    def location_canvas(self, root: str = "all", depth: int = -1, focus: str | None = None, faction: str | None = None) -> dict:
+        """Return a scoped location graph for the unified relational canvas."""
+        universes = self._universe_docs()
+        locations = self._all_location_docs()
+        super_edges = self._all_super_edges()
+        transversal_edges = self._all_transversal_edges()
+
+        location_by_id = {l["id"]: l for l in locations}
+        parent_of = {e["child"]: e["parent"] for e in super_edges}
+        children_of: dict[str, list[str]] = {}
+        for e in super_edges:
+            children_of.setdefault(e["parent"], []).append(e["child"])
+
+        included: set[str] = set()
+        universe_docs: list[dict] = []
+
+        def walk_children(lid: str, remaining: int) -> None:
+            if lid in included or lid not in location_by_id:
+                return
+            included.add(lid)
+            if remaining == 0:
+                return
+            next_remaining = remaining - 1 if remaining > 0 else -1
+            for child in children_of.get(lid, []):
+                walk_children(child, next_remaining)
+
+        if root.startswith("location:"):
+            loc_id = root.split(":", 1)[1]
+            if loc_id in location_by_id:
+                included.add(loc_id)
+                if loc_id in parent_of and parent_of[loc_id] in location_by_id:
+                    included.add(parent_of[loc_id])
+                for child in children_of.get(loc_id, []):
+                    walk_children(child, depth)
+                for t in transversal_edges:
+                    if t["from"] == loc_id and t["to"] in location_by_id:
+                        included.add(t["to"])
+                    elif t["to"] == loc_id and t["from"] in location_by_id:
+                        included.add(t["from"])
+            universe_docs = []
+        else:
+            if root.startswith("universe:"):
+                uni_key = root.split(":", 1)[1]
+                universe_docs = [u for u in universes if u["id"] == uni_key or u["universe"] == uni_key]
+            else:
+                universe_docs = universes
+
+            uni_keys = {u["universe"] for u in universe_docs}
+            all_uni_keys = {u["universe"] for u in universes}
+            for loc in locations:
+                if loc["id"] in parent_of:
+                    continue
+                if loc["universe"] in uni_keys:
+                    walk_children(loc["id"], depth)
+                elif root == "all" and loc["universe"] not in all_uni_keys:
+                    walk_children(loc["id"], depth)
+
+        included = {lid for lid in included if lid in location_by_id}
+        included_super = [e for e in super_edges if e["child"] in included and e["parent"] in included]
+        included_transversal = [t for t in transversal_edges if t["from"] in included and t["to"] in included]
+
+        occupants: dict[str, list[dict]] = {}
+        if focus and focus in included:
+            occupants = self._occupants_for_locations([focus], faction)
+
+        occupant_relations: list[dict] = []
+        if occupants:
+            occupant_ids = [o["id"] for loc_rows in occupants.values() for o in loc_rows]
+            occupant_relations = self._relations_between(occupant_ids)
+
+        faction_doc = None
+        if faction:
+            f = self.get_entity(faction)
+            if f:
+                faction_doc = {"id": f.id, "name": f.name}
+
+        return {
+            "focus": focus if focus in included else None,
+            "faction": faction_doc,
+            "universes": universe_docs,
+            "locations": [location_by_id[lid] for lid in sorted(included)],
+            "super_edges": included_super,
+            "transversal_edges": included_transversal,
+            "occupants": occupants,
+            "occupant_relations": occupant_relations,
+        }
+
+    def location_occupants(self, location_id: str, faction: str | None = None) -> dict:
+        """Return a location's occupants plus their relations, for on-demand reveal."""
+        occupants = self._occupants_for_locations([location_id], faction).get(location_id, [])
+        occupant_ids = [o["id"] for o in occupants]
+        return {
+            "occupants": occupants,
+            "occupant_relations": self._relations_between(occupant_ids),
+        }
+
     def navigate_from(self, location_id: str) -> dict:
         """Return navigation options from a location.
 

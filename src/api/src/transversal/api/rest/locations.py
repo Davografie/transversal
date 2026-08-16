@@ -94,6 +94,30 @@ async def navigate(location_id: str):
 
 # ── Relational Canvas ───────────────────────────────
 
+@router.get("/locations/canvas")
+async def locations_canvas(
+    root: str = "all",
+    depth: int = -1,
+    focus: str | None = None,
+    faction: str | None = None,
+):
+    """Return a scoped location graph for the unified relational canvas.
+
+    ``root`` is ``all``, ``universe:<id>``, or ``location:<id>``.  ``depth``
+    limits how many location levels below the root are included (-1 = all).
+    ``focus`` marks a location as the focal node (its occupants are included
+    up front); ``faction`` filters occupants to that faction's members.
+    """
+    return _repo().location_canvas(root=root, depth=depth, focus=focus, faction=faction)
+
+
+@router.get("/locations/{location_id}/occupants")
+async def location_occupants(location_id: str, faction: str | None = None):
+    """Return a location's occupants (optionally faction-filtered) plus their
+    relations, for on-demand occupant reveal in the canvas."""
+    return _repo().location_occupants(location_id, faction=faction)
+
+
 @router.get("/locations/{location_id}/canvas")
 async def location_canvas(location_id: str):
     """Return a location's neighborhood for the relational canvas."""
