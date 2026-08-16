@@ -110,7 +110,10 @@ function initials(name) {
   font-size: 8px; text-transform: uppercase; padding: 1px 5px; border-radius: 3px;
   background: #40b860; color: #0a0a0f; font-weight: 700;
 }
-.loc-name { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.loc-name {
+  font-size: 13px; font-weight: 600; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
 .loc-actions { display: flex; gap: 4px; margin-top: 6px; }
 .loc-btn {
   flex: 1; padding: 3px 0; font-size: 12px; border-radius: 5px;
