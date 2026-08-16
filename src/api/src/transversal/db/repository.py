@@ -1475,6 +1475,28 @@ class EntityRepository:
         """
         return list(self.db.aql.execute(query, bind_vars={"fid": faction_id}))
 
+    def _faction_member_locations(self, faction_id: str) -> set[str]:
+        """Location keys where a faction's members are occupants (direct or projected)."""
+        member_ids = self._faction_member_ids(faction_id)
+        if not member_ids:
+            return set()
+        query = f"""
+            LET direct = (
+                FOR e IN {ENTITIES}
+                FILTER e._key IN @mids AND e.type IN ['character', 'gmc', 'asset']
+                RETURN e.current_location
+            )
+            LET projected = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.entity_id IN @mids
+                RETURN p.current_location
+            )
+            FOR loc IN UNION(direct, projected)
+            FILTER loc != null
+            RETURN DISTINCT loc
+        """
+        return set(self.db.aql.execute(query, bind_vars={"mids": member_ids}))
+
     def _navdot_urls(self, entity_ids: list[str]) -> dict[str, str]:
         """Resolve one navdot image URL per entity, newest first."""
         if not entity_ids:
@@ -1606,6 +1628,25 @@ class EntityRepository:
                     walk_children(loc["id"], depth)
 
         included = {lid for lid in included if lid in location_by_id}
+
+        # When filtering by faction in a full-tree/universe scope, prune the
+        # location set to member locations plus their ancestors.
+        if faction and not root.startswith("location:"):
+            member_locs = self._faction_member_locations(faction)
+            keep: set[str] = set()
+            for lid in member_locs:
+                if lid not in location_by_id:
+                    continue
+                cur: str | None = lid
+                while cur is not None and cur in location_by_id and cur not in keep:
+                    keep.add(cur)
+                    cur = parent_of.get(cur)
+            included = {lid for lid in included if lid in keep}
+            universe_docs = [
+                u for u in universe_docs
+                if any(location_by_id[lid]["universe"] == u["universe"] for lid in included)
+            ]
+
         included_super = [e for e in super_edges if e["child"] in included and e["parent"] in included]
         included_transversal = [t for t in transversal_edges if t["from"] in included and t["to"] in included]
 

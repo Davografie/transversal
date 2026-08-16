@@ -273,7 +273,7 @@ export function useCanvas() {
       focusId.value = data.focus || null
       title.value = data.focus
         ? (locationGraph.locations.get(data.focus)?.name || 'Location')
-        : 'Location Tree'
+        : (data.faction?.name || 'Location Tree')
 
       collapsedUniverses.clear()
       if (data.universes?.length && scope.universe) {
