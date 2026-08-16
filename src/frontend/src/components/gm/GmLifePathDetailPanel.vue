@@ -3,8 +3,7 @@
     <div class="lpd-header">
       <span class="lpd-name">{{ lp.name }}</span>
       <span class="lpd-type">{{ lp.universe }}</span>
-      <button class="lpd-canvas" title="Open in canvas" @click="openCanvas">🗺</button>
-      <button class="lpd-canvas" title="Open fullscreen" @click="openFullCanvas">⛶</button>
+      <button class="lpd-canvas" title="Open in canvas" @click="openFullCanvas">🗺</button>
       <button class="lpd-edit" @click="editPath">✎ Edit</button>
     </div>
     <p class="lpd-desc">{{ lp.description || 'No description' }}</p>
@@ -50,7 +49,6 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
-import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -86,10 +84,6 @@ function addTable() {
 
 function editPath() {
   panel.open({ component: GmLifePathEditPanel, title: 'Edit ' + props.lp.name, props: { lp: props.lp } })
-}
-
-function openCanvas() {
-  panel.open({ component: RelationalCanvas, title: props.lp.name + ' — Canvas', props: { initialLifePath: props.lp } })
 }
 
 function openFullCanvas() {

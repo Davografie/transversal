@@ -135,7 +135,6 @@ import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
-import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const panel = usePanel()
@@ -270,17 +269,9 @@ function openCanvas() {
   if (!props.entityId) return
   const type = form.value?.type
   if (type === 'LOCATION') {
-    panel.open({
-      component: RelationalCanvas,
-      title: 'Location Canvas',
-      props: { locationId: props.entityId },
-    })
+    bus.emit('canvas:open-full', { mode: 'location', entityId: props.entityId })
   } else if (type === 'GMC') {
-    panel.open({
-      component: RelationalCanvas,
-      title: 'GMC Relations',
-      props: { initialGmcId: props.entityId },
-    })
+    bus.emit('canvas:open-full', { mode: 'gmc-web', entityId: props.entityId })
   }
 }
 

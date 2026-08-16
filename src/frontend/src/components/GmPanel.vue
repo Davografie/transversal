@@ -36,16 +36,14 @@
       </div>
       <button class="create-btn" @click="startCreate">+ New Entity</button>
       <div class="canvas-btn-row">
-        <button class="create-btn canvas-btn" @click="openCanvas">🗺 Canvas</button>
-        <button class="create-btn canvas-btn" @click="openFullLocationCanvas">⛶ Full</button>
+        <button class="create-btn canvas-btn" @click="openFullLocationCanvas">🗺 Canvas</button>
       </div>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
         <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
         <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
-        <button class="faction-canvas-btn" title="Show in embedded canvas" @click.stop="openFactionCanvas(e.id)">🗺</button>
-        <button class="faction-canvas-btn" title="Show in full canvas" @click.stop="openFullFactionCanvas(e.id)">⛶</button>
+        <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
       </div>
       <button class="create-btn" style="margin-top:8px" @click="openTraitsConfig">Manage Traits</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
@@ -68,7 +66,6 @@ import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
-import RelationalCanvas from '@/components/canvas/RelationalCanvas.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 const { graphql } = useApi()
@@ -176,22 +173,6 @@ function startCreate() {
     title: 'New Entity',
     props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value, entityTypes: ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
     listeners: { 'create': createEntity },
-  })
-}
-
-function openCanvas() {
-  panel.open({
-    component: RelationalCanvas,
-    title: 'Relational Canvas',
-    props: { locationId: props.currentLocationId },
-  })
-}
-
-function openFactionCanvas(factionId) {
-  panel.open({
-    component: RelationalCanvas,
-    title: 'Faction Canvas',
-    props: { locationId: props.currentLocationId, initialFactionId: factionId },
   })
 }
 
