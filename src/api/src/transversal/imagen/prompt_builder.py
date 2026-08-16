@@ -145,7 +145,7 @@ def build_imagen_prompt(
     Returns a dict with all the parameters needed by the ComfyUI workflow:
         prompt, negative, loras, steps, width, height
     """
-    trait_settings = repository.get_effective_traitsettings(entity.id, universe)
+    trait_settings = repository.get_effective_traitsettings(entity.id, [universe])
     prompt, negative, loras, steps = _build_entity_prompt(
         entity, trait_settings, universe
     )

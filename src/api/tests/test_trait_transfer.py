@@ -123,8 +123,8 @@ class InMemoryRepository(EntityRepository):
     def delete_traitsetting(self, tsid: str) -> bool:
         return self._traitsettings.pop(tsid, None) is not None
 
-    def get_effective_traitsettings(self, eid: str, universe: str) -> list[TraitSetting]:
-        universe_trait_ids = {tid for tid, d in self._traits.items() if universe in d["universes"]}
+    def get_effective_traitsettings(self, eid: str, universes: list[str]) -> list[TraitSetting]:
+        universe_trait_ids = {tid for tid, d in self._traits.items() if any(u in d["universes"] for u in universes)}
         return [
             TraitSetting.model_validate(d)
             for d in self._traitsettings.values()

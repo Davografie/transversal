@@ -35,11 +35,15 @@
         </div>
       </div>
       <button class="create-btn" @click="startCreate">+ New Entity</button>
-      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
+      <div class="canvas-btn-row">
+        <button class="create-btn canvas-btn" @click="openLocationTreeCanvas">🗺 Canvas</button>
+      </div>
+      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
         <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
         <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
+        <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
       </div>
       <button class="create-btn" style="margin-top:8px" @click="openTraitsConfig">Manage Traits</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
@@ -55,6 +59,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
 import { useEntityFilter } from '@/composables/useEntityFilter.js'
 import { usePanel } from '@/composables/usePanel.js'
+import { usePanelBus } from '@/composables/usePanelBus.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
@@ -65,6 +70,8 @@ import ImageViewer from '@/components/gm/ImageViewer.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()
+const bus = usePanelBus()
+let offCanvasInspect = null
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -169,6 +176,14 @@ function startCreate() {
   })
 }
 
+function openLocationTreeCanvas() {
+  bus.emit('canvas:open-full', { mode: 'location', entityId: props.universe, scope: 'tree' })
+}
+
+function openFullFactionCanvas(factionId) {
+  bus.emit('canvas:open-full', { mode: 'faction', entityId: factionId })
+}
+
 async function openTraitsConfig() {
   editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
   if (traitsets.value.length === 0 || allSfxs.value.length === 0) await fetchTraitsConfig()
@@ -189,9 +204,49 @@ function onImageOpen(img) {
 }
 
 // ── Drag-drop move ──────────────────────────────────
+const rejectedUniverseId = ref(null)
+
 async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
   if (entityKind === 'occupant') {
-    await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentLocation } }`, { input: { id: entityId, currentLocation: targetId } })
+    const data = await graphql(
+      `query($id: ID!) { entity(id: $id) { projections { id originUniverse universe currentLocation } } }`,
+      { id: entityId }
+    )
+    const projections = data?.entity?.projections || []
+    const proj = projections.find((p) => p.universe === targetUniverse || p.originUniverse === targetUniverse)
+
+    if (targetKind === 'universe') {
+      if (proj) {
+        await graphql(
+          `mutation($entityId: ID!, $projectionId: ID!) { activateProjection(entityId: $entityId, projectionId: $projectionId) { id } }`,
+          { entityId, projectionId: proj.id }
+        )
+        const next = { ...expandedNodes.value }
+        next[targetId] = true
+        if (proj.currentLocation) {
+          const path = []
+          if (findAncestorIds(locationTree.value, proj.currentLocation, path)) {
+            for (const id of path) next[id] = true
+          }
+        }
+        expandedNodes.value = next
+      } else {
+        rejectedUniverseId.value = targetId
+        setTimeout(() => { if (rejectedUniverseId.value === targetId) rejectedUniverseId.value = null }, 700)
+      }
+    } else if (proj) {
+      // Location drop with a projection in that universe: assume it and move it.
+      await graphql(
+        `mutation($entityId: ID!, $projectionId: ID!, $location: ID) { activateProjection(entityId: $entityId, projectionId: $projectionId, location: $location) { id } }`,
+        { entityId, projectionId: proj.id, location: targetId }
+      )
+    } else {
+      // No projection in that universe → inapposite: relocate the current projection.
+      await graphql(
+        `mutation($entityId: ID!, $location: ID!) { inappositeTravel(entityId: $entityId, location: $location) { id } }`,
+        { entityId, location: targetId }
+      )
+    }
   } else if (entityKind === 'location') {
     if (targetUniverse) {
       try { await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentUniverse } }`, { input: { id: entityId, currentUniverse: targetUniverse } }) } catch {}
@@ -231,8 +286,14 @@ watch([locationTree, () => props.currentLocationId], () => {
 })
 
 // ── Lifecycle ───────────────────────────────────────
-onMounted(() => { fetchEntities(); fetchLocationTree(); startJobPolling() })
-onUnmounted(() => { stopJobPolling() })
+onMounted(() => {
+  fetchEntities(); fetchLocationTree(); startJobPolling()
+  offCanvasInspect = bus.on('canvas:inspect', (id) => toggleEntity({ id }))
+})
+onUnmounted(() => {
+  stopJobPolling()
+  if (offCanvasInspect) offCanvasInspect()
+})
 </script>
 
 <style scoped>
@@ -268,6 +329,12 @@ onUnmounted(() => { stopJobPolling() })
 
 .create-btn { width: 100%; font-size: 12px; padding: 8px; margin-bottom: 8px; background: var(--accent-dim); color: var(--text); }
 .create-btn:hover { background: var(--accent); }
+.canvas-btn { background: rgba(64, 136, 212, 0.3); border: 1px dashed var(--accent-dim); }
+.canvas-btn:hover { background: var(--accent); border-color: var(--accent); }
+.canvas-btn-row { display: flex; gap: 6px; }
+.canvas-btn-row .create-btn { flex: 1; }
+.faction-canvas-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
+.faction-canvas-btn:hover { background: var(--accent); }
 
 .entity-row { margin-bottom: 4px; }
 .factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }

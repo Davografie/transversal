@@ -7,7 +7,17 @@
         <label>Name</label>
         <input v-model="form.name" />
         <label>Universes</label>
-        <ChipInput v-model="form.universes" :options="universeOptions" placeholder="Add universe…" />
+        <div class="universe-chips">
+          <button
+            v-for="u in allowedUniverses"
+            :key="u.value"
+            type="button"
+            class="universe-chip"
+            :class="{ enabled: form.universes.includes(u.value) }"
+            :title="form.universes.includes(u.value) ? 'Enabled — click to disable' : 'Disabled — click to enable'"
+            @click="toggleUniverse(u.value)"
+          >{{ u.label }}</button>
+        </div>
         <label>Default Die Type</label>
         <select v-model="form.defaultDieType">
           <option value="D4">d4</option><option value="D6">d6</option><option value="D8">d8</option><option value="D10">d10</option><option value="D12">d12</option>
@@ -17,6 +27,10 @@
           <option value="STATIC">Static</option><option value="RESOURCE">Resource</option><option value="CHALLENGE">Challenge</option><option value="EMPTY">Empty</option>
         </select>
         <label class="checkbox-label"><input type="checkbox" v-model="form.locationRestricted" /> Location Restricted</label>
+        <div class="default-ego-row">
+          <span class="field-label">Default</span>
+          <button type="button" class="ego-toggle" :class="{ 'is-ego': form.defaultEgo }" @click="form.defaultEgo = !form.defaultEgo">{{ form.defaultEgo ? 'ego' : 'morph' }}</button>
+        </div>
       </div>
 
       <!-- Display Names (read-only list → opens editor panel) -->
@@ -132,6 +146,13 @@ const universeOptions = [
   { label: 'Three Realms', value: 'three_realms' },
 ]
 
+// Only universes the trait's own trait set is enabled in — traits can't widen scope.
+const allowedUniverses = computed(() => {
+  const ts = (traitsets.value || []).find(ts => ts.id === trait.value?.traitsetId)
+  if (!ts) return []
+  return (ts.universes || []).map(u => universeOptions.find(o => o.value === u) || { label: u, value: u })
+})
+
 // ── Edit mode form ──
 const form = reactive({
   name: '',
@@ -139,6 +160,7 @@ const form = reactive({
   defaultDieType: 'D6',
   defaultRatingType: 'STATIC',
   locationRestricted: false,
+  defaultEgo: false,
   possibleSfxIds: [],
   defaultSfxIds: [],
 })
@@ -183,13 +205,23 @@ function syncDisplayNamesFromTrait(t) {
   }
 }
 
+function toggleUniverse(value) {
+  const idx = form.universes.indexOf(value)
+  if (idx === -1) form.universes.push(value)
+  else form.universes.splice(idx, 1)
+}
+
 watch(trait, (t) => {
   if (t) {
     form.name = t.name || ''
-    form.universes = [...(t.universes || [])]
+    form.universes = (t.universes || []).filter(u => {
+      const ts = (traitsets.value || []).find(ts => ts.id === t.traitsetId)
+      return !ts || (ts.universes || []).includes(u)
+    })
     form.defaultDieType = t.defaultDieType || 'D6'
     form.defaultRatingType = t.defaultRatingType || 'STATIC'
     form.locationRestricted = t.locationRestricted || false
+    form.defaultEgo = t.defaultEgo || false
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
     syncDisplayNamesFromTrait(t)
@@ -199,7 +231,7 @@ watch(trait, (t) => {
 let saveTimer = null
 watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
-  () => form.defaultRatingType, () => form.locationRestricted,
+  () => form.defaultRatingType, () => form.locationRestricted, () => form.defaultEgo,
   () => [...form.possibleSfxIds], () => [...form.defaultSfxIds],
 ], () => {
   if (!trait.value) return
@@ -221,11 +253,11 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
-    defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted,
+    defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo,
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
   })
@@ -346,6 +378,43 @@ async function onDelete() {
 .trait-id { font-family: monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: none; cursor: pointer; }
 .checkbox-label input { width: auto; }
+.default-ego-row { display: flex; align-items: center; gap: 8px; }
+.field-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.ego-toggle {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--text-dim);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.ego-toggle.is-ego {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+.universe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.universe-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.universe-chip.enabled {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(64, 136, 212, 0.12);
+}
+.universe-chip:not(.enabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(212, 64, 64, 0.10);
+}
 .sfx-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .sfx-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; background: rgba(255,255,255,0.04); }
 .sfx-row:hover { background: rgba(255,255,255,0.08); }

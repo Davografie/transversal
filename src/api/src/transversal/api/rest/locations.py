@@ -23,6 +23,12 @@ async def location_tree():
     return _repo().location_tree()
 
 
+@router.get("/locations/graph")
+async def location_graph():
+    """Return the full location hierarchy plus transversal edges for the canvas."""
+    return _repo().location_graph()
+
+
 @router.get("/locations/{location_id}/navigate")
 async def navigate(location_id: str):
     """Return navigation options from a location.
@@ -86,6 +92,52 @@ async def navigate(location_id: str):
     return result
 
 
+# ── Relational Canvas ───────────────────────────────
+
+@router.get("/locations/canvas")
+async def locations_canvas(
+    root: str = "all",
+    depth: int = -1,
+    focus: str | None = None,
+    faction: str | None = None,
+):
+    """Return a scoped location graph for the unified relational canvas.
+
+    ``root`` is ``all``, ``universe:<id>``, or ``location:<id>``.  ``depth``
+    limits how many location levels below the root are included (-1 = all).
+    ``focus`` marks a location as the focal node (its occupants are included
+    up front); ``faction`` filters occupants to that faction's members.
+    """
+    return _repo().location_canvas(root=root, depth=depth, focus=focus, faction=faction)
+
+
+@router.get("/locations/{location_id}/canvas")
+async def location_canvas(location_id: str):
+    """Return a location's neighborhood for the relational canvas."""
+    result = _repo().canvas_neighborhood(location_id)
+    if result["location"] is None:
+        raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
+    return result
+
+
+@router.get("/factions/{faction_id}/canvas")
+async def faction_canvas(faction_id: str):
+    """Return a faction's conspyramid data for the relational canvas."""
+    result = _repo().canvas_faction(faction_id)
+    if result["faction"] is None:
+        raise HTTPException(status_code=404, detail=f"Faction '{faction_id}' not found")
+    return result
+
+
+@router.get("/gmcs/{gmc_id}/web")
+async def gmc_web(gmc_id: str):
+    """Return a GMC's relational web for the relational canvas."""
+    result = _repo().canvas_gmc_web(gmc_id)
+    if result["gmc"] is None:
+        raise HTTPException(status_code=404, detail=f"GMC '{gmc_id}' not found")
+    return result
+
+
 from pydantic import BaseModel
 
 
@@ -96,6 +148,7 @@ class MoveRequest(BaseModel):
 
 class EdgeRequest(BaseModel):
     type: str  # "super" or "transversal"
+    transversal_type: str | None = None  # "consciousness" | "inapposite" (transversal edges only)
 
 
 @router.post("/entities/{entity_id}/move")
@@ -107,6 +160,25 @@ async def move_entity(entity_id: str, body: MoveRequest):
     result = em.move_to(entity, body.location, body.universe)
 
     # Get the display name of the target location
+    loc = repo.get_entity(body.location)
+    location_name = loc.name if loc else body.location
+
+    return {
+        "entity_id": result.id,
+        "name": result.name,
+        "location": location_name,
+        "location_id": result.current_location,
+        "universe": result.current_universe,
+    }
+
+
+@router.post("/entities/{entity_id}/consciousness-travel")
+async def consciousness_travel(entity_id: str, body: MoveRequest):
+    """Transfer an entity's consciousness to a projection at the target location."""
+    em = _em()
+    repo = _repo()
+    result = em.consciousness_travel(entity_id, body.location)
+
     loc = repo.get_entity(body.location)
     location_name = loc.name if loc else body.location
 
@@ -132,25 +204,38 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
     edge_key = f"edge:{from_id}:{to_id}:{body.type}"
 
     if repo._relationships.has(edge_key):
+        # Upsert the transversal type on existing transversal edges.
+        if body.type == "transversal":
+            repo._relationships.update({"_key": edge_key, "transversal_type": body.transversal_type})
+            rev_key = f"edge:{to_id}:{from_id}:{body.type}"
+            if repo._relationships.has(rev_key):
+                repo._relationships.update({"_key": rev_key, "transversal_type": body.transversal_type})
+            return {"status": "updated", "key": edge_key}
         return {"status": "exists", "key": edge_key}
 
-    repo._relationships.insert({
+    edge_doc = {
         "_key": edge_key,
         "_from": f"entities/{from_id}",
         "_to": f"entities/{to_id}",
         "type": body.type,
-    })
+    }
+    if body.type == "transversal" and body.transversal_type:
+        edge_doc["transversal_type"] = body.transversal_type
+    repo._relationships.insert(edge_doc)
 
     # For transversal edges, also create the reverse
     if body.type == "transversal":
         rev_key = f"edge:{to_id}:{from_id}:{body.type}"
         if not repo._relationships.has(rev_key):
-            repo._relationships.insert({
+            rev_doc = {
                 "_key": rev_key,
                 "_from": f"entities/{to_id}",
                 "_to": f"entities/{from_id}",
                 "type": body.type,
-            })
+            }
+            if body.transversal_type:
+                rev_doc["transversal_type"] = body.transversal_type
+            repo._relationships.insert(rev_doc)
 
     return {"status": "created", "key": edge_key}
 

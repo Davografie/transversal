@@ -96,11 +96,51 @@ def _register_core_handlers(em, raz):
             razmerit=ctx.get("razmerit", 0),
         ))
 
-    # Location operations
-    effect_registry.register("spoof_location", "enable",
-        lambda a, eid, u, ctx: None)  # handled by resolver reading effective traits
-    effect_registry.register("spoof_location", "disable",
-        lambda a, eid, u, ctx: None)
+    # Attunement (temporary effective-universe additions)
+    def _attune(a, eid, u, ctx):
+        from transversal.domain import Attunement, AttunementScope
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        scope = AttunementScope(ctx.get("scope", "self"))
+        universe = a.result or u
+        if a.action == "enable":
+            if not any(x.universe == universe and x.scope == scope for x in entity.attunements):
+                entity.attunements.append(Attunement(
+                    universe=universe, scope=scope, until=a.timing,
+                    source_sfx_id=ctx.get("sfx_id"),
+                ))
+        else:  # disable
+            entity.attunements = [
+                x for x in entity.attunements
+                if not (x.universe == universe and x.scope == scope)
+            ]
+        em.repo.update_entity(entity)
+
+    effect_registry.register("attune", "enable", _attune)
+    effect_registry.register("attune", "disable", _attune)
+
+    # Travel — move the entity across a universal boundary.
+    #
+    # ``inapposite`` relocates the active projection in place (key stays
+    # "{entity_id}:{origin_universe}"). ``consciousness`` leaves the body behind
+    # and spawns/reuses a projection at the destination.
+    def _travel(a, eid, u, ctx):
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        target_location = a.result or ctx.get("location")
+        if not target_location:
+            return
+        if em.repo.get_entity(target_location) is None:
+            return
+        travel_type = (a.context or {}).get("transversal_type") or ctx.get("transversal_type") or "inapposite"
+        if travel_type == "consciousness":
+            em.consciousness_travel(eid, target_location)
+        else:
+            em.inapposite_travel(eid, target_location)
+
+    effect_registry.register("travel", "move", _travel)
 
     # Dice pool operations (handled by resolver, not state changes)
     effect_registry.register("modify_roll", "*",
@@ -206,6 +246,8 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     traitset_id = _resolve_traitset_id(trait_id, repo)
     if not traitset_id and negative:
         traitset_id = "ts-complications"
+    trait = repo.get_trait(trait_id)
+    ego = getattr(trait, "default_ego", False) if trait else False
     return TraitSetting(
         id=f"{owner_id}:{trait_id}{':complication' if negative else ''}",
         entity_id=owner_id,
@@ -214,6 +256,7 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
         from_type=from_type,
         dice=[die],
         negative=negative,
+        ego=ego,
         source_type="effect",
     )
 

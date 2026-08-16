@@ -4,6 +4,8 @@ import pytest
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
+    Attunement,
+    AttunementScope,
     CharacterView,
     DieType,
     Entity,
@@ -65,7 +67,7 @@ class InMemoryRepository(EntityRepository):
     def get_projections_for_entity(self, eid: str) -> list[Projection]:
         return [Projection.model_validate(d) for d in self._projections.values() if d["entity_id"] == eid]
     def update_projection(self, p: Projection) -> Projection:
-        self._projections[p.id] = p.model_dump()
+        self._store(self._projections, p.id, p.model_dump())
         return p
 
     # traits registry
@@ -111,8 +113,8 @@ class InMemoryRepository(EntityRepository):
         return self._traitsettings.pop(tsid, None) is not None
 
     # effective traits
-    def get_effective_traitsettings(self, eid: str, universe: str) -> list[TraitSetting]:
-        universe_trait_ids = {tid for tid, d in self._traits.items() if universe in d["universes"]}
+    def get_effective_traitsettings(self, eid: str, universes: list[str]) -> list[TraitSetting]:
+        universe_trait_ids = {tid for tid, d in self._traits.items() if any(u in d["universes"] for u in universes)}
         return [
             TraitSetting.model_validate(d)
             for d in self._traitsettings.values()
@@ -190,6 +192,15 @@ class TestProjections:
     def test_duplicate_rejected(self, em, kael):
         with pytest.raises(ValueError, match="already has"):
             em.add_projection(kael, "earth")
+
+    def test_effective_universes(self, em, repo, kael):
+        # base = active projection's universe
+        assert repo.effective_universes(kael) == ["earth"]
+
+        # a self attunement adds its universe
+        kael.attunements.append(Attunement(universe="three_realms", scope=AttunementScope.SELF))
+        repo.update_entity(kael)
+        assert repo.effective_universes(kael) == ["earth", "three_realms"]
 
 
 class TestTraitSettings:
@@ -284,13 +295,13 @@ class TestEgoTraits:
         ))
 
         # On Earth: both available
-        earth_traits = em.get_effective_traitsettings(kael.id, "earth")
+        earth_traits = em.get_effective_traitsettings(kael.id, ["earth"])
         earth_names = {repo.get_trait(ts.trait_id).name for ts in earth_traits}
         assert "hacking" in earth_names
         assert "curious" in earth_names
 
         # In Three Realms: only curious (ego), not hacking (Earth morph)
-        realm_traits = em.get_effective_traitsettings(kael.id, "three_realms")
+        realm_traits = em.get_effective_traitsettings(kael.id, ["three_realms"])
         realm_names = {repo.get_trait(ts.trait_id).name for ts in realm_traits}
         assert "hacking" not in realm_names
         assert "curious" in realm_names
@@ -302,3 +313,24 @@ class TestLocation:
         updated = em.get(kael.id)
         assert updated.current_location == "Valley of Ascension"
         assert updated.current_universe == "three_realms"
+
+    def test_consciousness_travel(self, em, kael):
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        result = em.consciousness_travel(kael.id, loc.id)
+        assert result.current_projection == f"{kael.id}:three_realms"
+        assert result.current_universe == "three_realms"
+        assert result.current_location == loc.id
+        proj = em.repo.get_projection(f"{kael.id}:three_realms")
+        assert proj is not None
+        assert proj.transversal_type == TransversalType.CONSCIOUSNESS
+        assert proj.origin_universe == "three_realms"
+
+    def test_inapposite_travel(self, em, kael):
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        result = em.inapposite_travel(kael.id, loc.id)
+        # key stays origin-earth even though the body is now in three_realms
+        assert result.current_projection == f"{kael.id}:earth"
+        proj = em.repo.get_projection(f"{kael.id}:earth")
+        assert proj.universe == "three_realms"
+        assert proj.origin_universe == "earth"
+        assert proj.transversal_type == TransversalType.INAPPOSITE

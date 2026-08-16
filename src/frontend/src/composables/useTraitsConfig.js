@@ -19,6 +19,7 @@ export function useTraitsConfig() {
           id name universes entityTypes order limit
           traits {
             id name defaultDieType traitsetId universes
+            locationRestricted defaultEgo
             possibleSfxIds
             displayNames { name universe ratings }
           }

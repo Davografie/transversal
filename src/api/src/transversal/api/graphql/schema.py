@@ -51,6 +51,7 @@ from transversal.api.graphql.types import (
     TraitSettingInput,
     TraitSettingUpdateInput,
     TraitUpdateInput,
+    Attunement,
     TransversalTypeEnum,
     UpdateEntityInput,
     UpdateMessageInput,
@@ -83,12 +84,18 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
     return Entity(
         id=e.id, type=e.type, name=e.name, razmerit=e.razmerit,
         current_universe=e.current_universe, current_location=e.current_location,
+        current_projection=e.current_projection,
         hidden=e.hidden, known_to=e.known_to,
         _background_image=e.background_image, overlay=e.overlay,
         zones=[Zone(name=z.name, background_image=z.background_image, location_id=z.location_id, x=z.x, y=z.y) for z in e.zones],
         map_x=e.map_x, map_y=e.map_y,
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,
+        attunements=[
+            Attunement(universe=a.universe, scope=a.scope.value,
+                       until=a.until, source_sfx_id=a.source_sfx_id)
+            for a in e.attunements
+        ],
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,
     )
 
@@ -100,7 +107,8 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         rating_type=s.rating_type, dice=s.dice,
         polarity=s.polarity,
         statement=s.statement, negative=s.negative,
-        ego=s.ego, sfx_ids=s.sfx_ids,
+        ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+        sfx_ids=s.sfx_ids,
         known_to=s.known_to,
     )
 
@@ -163,6 +171,8 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
             else None
         ),
         entries=[_entry_to_gql(e) for e in t.entries],
+        canvas_x=t.canvas_x,
+        canvas_y=t.canvas_y,
     )
 
 
@@ -231,8 +241,9 @@ class Query:
         return CharacterView(
             entity=_entity_to_gql(cv.entity),
             projections=[
-                Projection(id=p.id, entity_id=p.entity_id, universe=p.universe,
-                           transversal_type=p.transversal_type)
+                Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
+                           universe=p.universe, name=p.name, background_image=p.background_image,
+                           current_location=p.current_location, transversal_type=p.transversal_type)
                 for p in cv.projections.values()
             ],
             trait_settings=[_ts_to_gql(s) for s in cv.trait_settings],
@@ -298,6 +309,7 @@ class Query:
                 possible_sfx_ids=t.possible_sfx_ids,
                 default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
+                default_ego=t.default_ego,
                 display_names=[
                     GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                         ratings=dn.ratings)
@@ -510,6 +522,8 @@ class Mutation:
             statement=input.statement,
             negative=input.negative,
             ego=input.ego,
+            from_type=input.from_type or "entity",
+            projection_id=str(input.projection_id) if input.projection_id else None,
             sfx_ids=[str(s) for s in input.sfx_ids],
         )
         created = _em(info).add_traitsetting(ts)
@@ -559,9 +573,29 @@ class Mutation:
         )
 
     @strawberry.mutation
-    def add_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str, type: TransversalTypeEnum = TransversalTypeEnum.CONSCIOUSNESS) -> Entity:
+    def add_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str, type: TransversalTypeEnum = TransversalTypeEnum.CONSCIOUSNESS, location: Optional[strawberry.ID] = None) -> Entity:
         e = _em(info).get(str(entity_id))
-        updated = _em(info).add_projection(e, universe, type)
+        updated = _em(info).add_projection(e, universe, type, location=str(location) if location else None)
+        return _entity_to_gql(updated)
+
+    @strawberry.mutation
+    def update_projection(self, info: strawberry.Info, projection_id: strawberry.ID, name: Optional[str] = None, background_image: Optional[str] = None, current_location: Optional[strawberry.ID] = None) -> Projection:
+        p = _em(info).update_projection(str(projection_id), name=name, background_image=background_image, current_location=str(current_location) if current_location else None)
+        return Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe, universe=p.universe, name=p.name, background_image=p.background_image, current_location=p.current_location, transversal_type=p.transversal_type)
+
+    @strawberry.mutation
+    def remove_projection(self, info: strawberry.Info, projection_id: strawberry.ID) -> Entity:
+        updated = _em(info).remove_projection(str(projection_id))
+        return _entity_to_gql(updated) if updated else None
+
+    @strawberry.mutation
+    def activate_projection(self, info: strawberry.Info, entity_id: strawberry.ID, projection_id: strawberry.ID, location: Optional[strawberry.ID] = None) -> Entity:
+        updated = _em(info).activate_projection(str(entity_id), str(projection_id), location=str(location) if location else None)
+        return _entity_to_gql(updated)
+
+    @strawberry.mutation
+    def inapposite_travel(self, info: strawberry.Info, entity_id: strawberry.ID, location: strawberry.ID) -> Entity:
+        updated = _em(info).inapposite_travel(str(entity_id), str(location))
         return _entity_to_gql(updated)
 
     @strawberry.mutation
@@ -617,6 +651,22 @@ class Mutation:
             ts.negative = input.negative
         if input.ego is not None:
             ts.ego = input.ego
+        if input.from_type is not None:
+            if input.from_type == "projection":
+                if input.projection_id is None:
+                    raise ValueError("projectionId is required when fromType is 'projection'")
+                proj = _em(info).repo.get_projection(str(input.projection_id))
+                if proj is None or proj.entity_id != ts.entity_id:
+                    raise ValueError(f"Projection '{input.projection_id}' does not belong to this entity")
+                ts.from_type = "projection"
+                ts.projection_id = str(input.projection_id)
+                ts.ego = False
+            elif input.from_type == "entity":
+                ts.from_type = "entity"
+                ts.projection_id = None
+                ts.ego = True
+            else:
+                raise ValueError(f"Unknown fromType '{input.from_type}'")
         if input.sfx_ids is not None:
             ts.sfx_ids = [str(s) for s in input.sfx_ids]
         if input.known_to is not None:
@@ -678,6 +728,7 @@ class Mutation:
             possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
+            default_ego=input.default_ego,
             display_names=[
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
                                        ratings=dn.ratings)
@@ -693,6 +744,7 @@ class Mutation:
             possible_sfx_ids=created.possible_sfx_ids,
             default_sfx_ids=created.default_sfx_ids,
             location_restricted=created.location_restricted,
+            default_ego=created.default_ego,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)
@@ -721,6 +773,8 @@ class Mutation:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.location_restricted is not None:
             existing.location_restricted = input.location_restricted
+        if input.default_ego is not None:
+            existing.default_ego = input.default_ego
         if input.display_names is not None:
             existing.display_names = [
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -736,6 +790,7 @@ class Mutation:
             possible_sfx_ids=updated.possible_sfx_ids,
             default_sfx_ids=updated.default_sfx_ids,
             location_restricted=updated.location_restricted,
+            default_ego=updated.default_ego,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)
@@ -1148,15 +1203,31 @@ class Mutation:
         if not table.id:
             table.id = f"rt-{uuid.uuid4().hex[:8]}"
 
-        if repo.get_roll_table(table.id) is None:
+        existing = repo.get_roll_table(table.id)
+        if existing is None:
             saved = repo.create_roll_table(table)
         else:
+            # Preserve canvas layout positions — they are managed by
+            # set_roll_table_position, not by full-table saves.
+            table.canvas_x = existing.canvas_x
+            table.canvas_y = existing.canvas_y
             saved = repo.update_roll_table(table)
         return _roll_table_to_gql(saved)
 
     @strawberry.mutation
     def delete_roll_table(self, info: strawberry.Info, id: strawberry.ID) -> bool:
         return _em(info).repo.delete_roll_table(str(id))
+
+    @strawberry.mutation
+    def set_roll_table_position(self, info: strawberry.Info, id: strawberry.ID, x: Optional[float] = None, y: Optional[float] = None) -> Optional[RollTable]:
+        """Persist a roll table's canvas position (x/y null clears it)."""
+        t = _em(info).repo.set_roll_table_position(str(id), x, y)
+        return _roll_table_to_gql(t) if t else None
+
+    @strawberry.mutation
+    def clear_roll_table_positions(self, info: strawberry.Info, life_path_id: strawberry.ID) -> int:
+        """Clear all saved canvas positions for a life path's roll tables."""
+        return _em(info).repo.clear_roll_table_positions(str(life_path_id))
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

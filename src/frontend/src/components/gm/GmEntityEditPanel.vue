@@ -5,6 +5,9 @@
       :entity-id="entityId"
       :allow-type-change="false"
     />
+    <div v-if="form.type === 'LOCATION' || form.type === 'GMC'" class="canvas-open-row">
+      <button class="section-btn" @click="openCanvas">🗺 Open in Canvas</button>
+    </div>
     <div class="image-gallery">
       <div class="gallery-header">
         <h4>Images</h4>
@@ -21,7 +24,17 @@
       </div>
       <div v-if="!images.length" class="gallery-empty">No images yet — upload or generate one.</div>
       <div v-else class="gallery-grid">
-        <div v-for="img in images" :key="img.id" class="gallery-item" @click="openImage(img)">
+        <div
+          v-for="img in images"
+          :key="img.id"
+          class="gallery-item"
+          draggable="true"
+          @dragstart="onImageDragStart($event, img)"
+          @touchstart="onImageTouchStart($event, img)"
+          @touchmove="onImageTouchMove"
+          @touchend="onImageTouchEnd"
+          @click="openImage(img)"
+        >
           <video v-if="img.image_type === 'animated'" :src="img.path_animated" class="gallery-thumb-video" autoplay loop muted playsinline />
           <img v-else :src="img.path_large" :alt="img.image_type" loading="lazy" />
           <span class="gallery-label">
@@ -30,6 +43,60 @@
             <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
           </span>
         </div>
+      </div>
+    </div>
+    <div v-if="isOccupant" class="projections-section">
+      <div class="gallery-header">
+        <h4>Projections</h4>
+      </div>
+      <div v-if="!projections.length" class="gallery-empty">No projections yet.</div>
+      <div v-else class="projection-list">
+        <div
+          v-for="p in projections"
+          :key="p.id"
+          class="projection-row"
+          :class="{ 'drag-over': dropTarget === p.id }"
+          :data-projection-id="p.id"
+          @dragover.prevent="onProjDragOver(p)"
+          @dragleave="onProjDragLeave(p)"
+          @drop.prevent="onProjDrop(p, $event)"
+          @click="openProjectionEditor(p)"
+        >
+          <video v-if="p.backgroundImage && isProjectionVideo(p)" :src="p.backgroundImage" class="proj-thumb" autoplay loop muted playsinline />
+          <img v-else-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
+          <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
+          <span class="proj-name">{{ p.name || form?.name }}</span>
+          <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
+          <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
+          <button class="proj-remove" @click.stop="removeProjection(p.id)" title="Remove projection">✕</button>
+        </div>
+      </div>
+      <div class="projection-add">
+        <GmLocationPicker v-model="newProjLocationId" placeholder="Search location…" class="proj-picker" @select="onLocationSelect" />
+        <select v-model="newProjType" class="proj-type-select">
+          <option value="NATIVE">native</option>
+          <option value="CONSCIOUSNESS">consciousness</option>
+          <option value="INAPPOSITE">inapposite</option>
+        </select>
+        <button class="section-btn proj-add-btn" @click="addProjectionLocal">+ Add</button>
+      </div>
+    </div>
+    <div v-if="form.type === 'LOCATION'" class="transversal-links">
+      <div class="gallery-header">
+        <h4>Transversal Links</h4>
+      </div>
+      <div v-if="!transversalLinks.length" class="gallery-empty">No transversal links yet.</div>
+      <div v-else class="transversal-list">
+        <div v-for="link in transversalLinks" :key="link._key" class="transversal-row">
+          <span class="transversal-name">{{ link.name }}</span>
+          <button class="transversal-toggle" :class="link.transversal_type || 'inapposite'" @click="toggleLinkType(link)">
+            {{ link.transversal_type || 'inapposite' }}
+          </button>
+        </div>
+      </div>
+      <div class="transversal-add">
+        <GmLocationPicker v-model="newTransversalLocationId" placeholder="Add link to location…" class="proj-picker" @select="onTransversalLocationSelect" />
+        <button class="section-btn proj-add-btn" @click="createTransversalLinkLocal">+ Add</button>
       </div>
     </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
@@ -58,21 +125,118 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
+import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
+import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
+import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
+import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
 
 // ── Composables: shared state with GmPanel ──────────
-const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob } = useEntityCrud()
+const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, updateProjection, removeProjection } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { paths: lifePaths, loading: loadingLifepaths, fetchLifePaths } = useLifePaths()
+const { name: universeName, load: loadUniverseNames } = useUniverseNames()
+loadUniverseNames()
+
+const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.value?.type))
+const newProjLocationId = ref('')
+const newProjLocation = ref(null)
+const newProjType = ref('NATIVE')
+
+function onLocationSelect(loc) {
+  newProjLocation.value = loc
+}
+
+async function addProjectionLocal() {
+  const loc = newProjLocation.value
+  if (!loc || !loc.universe) return
+  await addProjection(loc.universe, newProjType.value, loc.id)
+  newProjLocationId.value = ''
+  newProjLocation.value = null
+}
+
+function isProjectionVideo(p) {
+  return !!p?.backgroundImage && /\.(webm|mp4)(\?|$)/i.test(p.backgroundImage)
+}
+
+// ── Image → projection drag-and-drop (HTML5 + touch longpress) ──
+const dropTarget = ref(null)
+const touchImageDrag = ref(null)
+
+function onImageDragStart(e, img) {
+  e.dataTransfer.effectAllowed = 'copy'
+  e.dataTransfer.setData('text/plain', JSON.stringify({ path: img.path_animated || img.path_large }))
+}
+
+function onProjDragOver(p) { dropTarget.value = p.id }
+function onProjDragLeave(p) { if (dropTarget.value === p.id) dropTarget.value = null }
+function onProjDrop(p, e) {
+  dropTarget.value = null
+  const raw = e.dataTransfer.getData('text/plain')
+  if (!raw) return
+  let payload
+  try { payload = JSON.parse(raw) } catch { payload = { path: raw } }
+  if (payload.path) updateProjection(p.id, { backgroundImage: payload.path })
+}
+
+function onImageTouchStart(e, img) {
+  const touch = e.touches[0]
+  touchImageDrag.value = { path: img.path_animated || img.path_large, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
+  touchImageDrag.value._timer = setTimeout(() => {
+    if (!touchImageDrag.value) return
+    touchImageDrag.value.engaged = true
+    const ghost = document.createElement('img')
+    ghost.src = touchImageDrag.value.path
+    ghost.style.cssText = 'position:fixed;z-index:100;pointer-events:none;opacity:0.8;width:44px;height:44px;object-fit:cover;border-radius:4px'
+    ghost.style.left = (touch.clientX - 22) + 'px'
+    ghost.style.top = (touch.clientY - 22) + 'px'
+    document.body.appendChild(ghost)
+    touchImageDrag.value.ghost = ghost
+  }, 400)
+}
+
+function onImageTouchMove(e) {
+  if (!touchImageDrag.value) return
+  if (!touchImageDrag.value.engaged) {
+    const t = e.touches[0]
+    if (Math.abs(t.clientX - touchImageDrag.value.sx) > 5 || Math.abs(t.clientY - touchImageDrag.value.sy) > 5) {
+      clearTimeout(touchImageDrag.value._timer)
+      touchImageDrag.value.ghost?.remove()
+      touchImageDrag.value = null
+    }
+    return
+  }
+  const t = e.touches[0]
+  const g = touchImageDrag.value.ghost
+  if (g) { g.style.left = (t.clientX - 22) + 'px'; g.style.top = (t.clientY - 22) + 'px' }
+  const target = document.elementFromPoint(t.clientX, t.clientY)
+  const row = target?.closest('.projection-row')
+  dropTarget.value = row ? (row.dataset.projectionId || null) : null
+}
+
+function onImageTouchEnd(e) {
+  if (!touchImageDrag.value) return
+  clearTimeout(touchImageDrag.value._timer)
+  if (touchImageDrag.value.engaged) {
+    const t = e.changedTouches[0]
+    const target = document.elementFromPoint(t.clientX, t.clientY)
+    const row = target?.closest('.projection-row')
+    const projectionId = row?.dataset.projectionId
+    if (projectionId && touchImageDrag.value.path) updateProjection(projectionId, { backgroundImage: touchImageDrag.value.path })
+    touchImageDrag.value.ghost?.remove()
+  }
+  dropTarget.value = null
+  touchImageDrag.value = null
+}
 
 const props = defineProps({
   entityId: { type: String, default: null },
@@ -101,9 +265,67 @@ function openLifePaths() {
   })
 }
 
+function openCanvas() {
+  if (!props.entityId) return
+  const type = form.value?.type
+  if (type === 'LOCATION') {
+    bus.emit('canvas:open-full', { mode: 'location', entityId: props.entityId, scope: 'focus' })
+  } else if (type === 'GMC') {
+    bus.emit('canvas:open-full', { mode: 'gmc-web', entityId: props.entityId })
+  }
+}
+
+function openProjectionEditor(p) {
+  panel.open({
+    component: GmProjectionEditPanel,
+    title: `Projection: ${p.originUniverse || p.universe}`,
+    props: { projection: p },
+  })
+}
+
 // Load life paths when editing a universe entity
 watch(() => [props.entityId, form.value?.type], ([id, type]) => {
   if (id && type === 'UNIVERSE') fetchLifePaths(form.value.current_universe || props.entityId)
+}, { immediate: true })
+
+// ── Transversal links (location entities) ───────────
+const transversalLinks = ref([])
+const { toggleTransversalType, createTransversalLink } = useTransversalLinks()
+const newTransversalLocationId = ref('')
+const newTransversalLocation = ref(null)
+
+async function loadTransversalLinks() {
+  transversalLinks.value = []
+  if (!props.entityId) return
+  try {
+    const r = await fetch(`/api/v1/locations/${props.entityId}/navigate`)
+    if (r.ok) {
+      const nav = await r.json()
+      transversalLinks.value = nav.transversal || []
+    }
+  } catch {}
+}
+
+function onTransversalLocationSelect(loc) {
+  newTransversalLocation.value = loc
+}
+
+async function createTransversalLinkLocal() {
+  const loc = newTransversalLocation.value
+  if (!loc || !loc.id) return
+  await createTransversalLink(props.entityId, loc.id)
+  newTransversalLocationId.value = ''
+  newTransversalLocation.value = null
+  await loadTransversalLinks()
+}
+
+async function toggleLinkType(link) {
+  const next = await toggleTransversalType(props.entityId, link._key, link.transversal_type)
+  link.transversal_type = next
+}
+
+watch(() => [props.entityId, form.value?.type], ([id, type]) => {
+  if (id && type === 'LOCATION') loadTransversalLinks()
 }, { immediate: true })
 
 // ── Imagen ──────────────────────────────────────────
@@ -232,6 +454,8 @@ defineExpose({ refresh: loadImages })
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;
 }
+.canvas-open-row { margin-top: 12px; }
+.canvas-open-row .section-btn { width: 100%; }
 .section-btn {
   flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.03); color: var(--text); cursor: pointer;
@@ -240,4 +464,30 @@ defineExpose({ refresh: loadImages })
 }
 .section-btn:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
 .section-count { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
+
+.projections-section { margin-top: 12px; }
+.projection-list { display: flex; flex-direction: column; gap: 4px; }
+.projection-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02); }
+.proj-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-universe { font-size: 11px; color: var(--text-dim); }
+.proj-type { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: rgba(255,255,255,0.04); }
+.proj-type.active { color: #93c5fd; background: rgba(64,136,212,0.18); }
+.proj-remove { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; }
+.proj-remove:hover { color: #e06060; }
+.projection-add { display: flex; gap: 6px; margin-top: 8px; }
+.proj-input { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
+.proj-type-select { padding: 6px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
+.proj-add-btn { flex: 0 0 auto; padding: 6px 10px; }
+.proj-picker { flex: 1; min-width: 0; }
+.proj-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); flex: 0 0 auto; }
+.proj-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-dim); background: rgba(255,255,255,0.04); }
+.projection-row.drag-over { border-color: var(--accent); background: rgba(64,136,212,0.12); }
+.transversal-links { margin-top: 12px; }
+.transversal-list { display: flex; flex-direction: column; gap: 4px; }
+.transversal-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02); }
+.transversal-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transversal-toggle { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
+.transversal-toggle.inapposite { background: rgba(139,92,246,0.18); color: #c4b5fd; }
+.transversal-toggle.consciousness { background: rgba(245,158,11,0.18); color: #fcd34d; }
+.transversal-add { display: flex; gap: 6px; margin-top: 8px; }
 </style>

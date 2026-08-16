@@ -257,6 +257,7 @@ class Trait(BaseModel):
     possible_sfx_ids: list[str] = Field(default_factory=list)
     default_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False
+    default_ego: bool = False      # default morph/ego for settings created from this trait
     explanation: str = ""
     random_weight: int = 0
     display_names: list[TraitDisplayName] = Field(default_factory=list)
@@ -276,6 +277,7 @@ class TraitSet(BaseModel):
     order: int = 0
     limit: int = 1
     location_restricted: bool = False
+    default_ego: bool = False
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
     transfer_flags: Optional[TransferFlags] = None
@@ -347,7 +349,8 @@ class TraitSetting(BaseModel):
     id: str
     entity_id: str
     trait_id: str
-    from_type: str = "entity"  # "entity" | "relationship" — which collection _from points to
+    from_type: str = "entity"  # "entity" | "projection" | "relationship" — anchor collection for _from
+    projection_id: Optional[str] = None  # projection anchor id when from_type == "projection"
     traitset_id: str
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)
@@ -376,10 +379,18 @@ class Projection(BaseModel):
     """Per-universe body grouping.
 
     Stored in the `projections` collection.
+
+    ``id`` is immutable and encodes the projection's *origin* universe:
+    ``"{entity_id}:{origin_universe}"``. Inapposite travel mutates ``universe``
+    and ``current_location`` in place — never the key.
     """
     id: str
     entity_id: str
-    universe: str
+    origin_universe: str = ""       # native universe (immutable; equals id suffix)
+    universe: str                   # current universe (mutable)
+    name: str = ""                  # display name; falls back to entity name
+    background_image: Optional[str] = None  # falls back to entity background_image
+    current_location: Optional[str] = None   # where this body currently is
     transversal_type: TransversalType = TransversalType.NATIVE
 
 
@@ -404,6 +415,7 @@ class Entity(BaseModel):
     razmerit: int = 0
     current_universe: str
     current_location: Optional[str] = None
+    current_projection: Optional[str] = None  # active projection id (occupant types)
     hidden: bool = False
     known_to: list[str] = Field(default_factory=list)
     # Location
@@ -420,6 +432,7 @@ class Entity(BaseModel):
     node_ids: list[str] = Field(default_factory=list)
     # Asset
     owned_by: Optional[str] = None
+    attunements: list["Attunement"] = Field(default_factory=list)  # active attunements (effect-managed)
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
     # Life path tracking
@@ -486,6 +499,25 @@ class EffectTiming(str, Enum):
     END_OF_SESSION = "end_of_session"
     AFTER_BEATS = "after_beats"
     ON_CONDITION = "on_condition"
+
+
+class AttunementScope(str, Enum):
+    """Who an attunement affects."""
+    SELF = "self"        # only the entity carrying the attunement
+    DOMAIN = "domain"    # occupants in the entity's location subtree
+
+
+class Attunement(BaseModel):
+    """An active temporary addition of a universe to an entity's effective universes.
+
+    Stored on the entity document (``Entity.attunements``).  Expiry is driven by
+    the effects system: when the ``until`` timing fires, the effects system
+    removes the attunement.
+    """
+    universe: str
+    scope: AttunementScope = AttunementScope.SELF
+    until: Optional[EffectTiming] = None
+    source_sfx_id: Optional[str] = None
 
 
 class Effect(BaseModel):
@@ -599,6 +631,9 @@ class RollTable(BaseModel):
     die: DieType = DieType.D6  # die size for range/index rolls (FIXED_DIE)
     check: Optional[RollTableCheck] = None  # legacy dice-pool check; unused
     entries: list[RollTableEntry] = Field(default_factory=list)
+    # Canvas layout persistence (GM manual arrangement of life-path nodes).
+    canvas_x: Optional[float] = None
+    canvas_y: Optional[float] = None
 
 
 # ── Assembled Views (not stored, built by repo) ───────

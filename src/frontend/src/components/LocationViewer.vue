@@ -52,9 +52,9 @@
       :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name"
       :draggable="editZones"
       :title="z.name"
-      :arrival-x="zoneCache(z.name)?.arriveX"
-      :arrival-y="zoneCache(z.name)?.arriveY"
-      :dest-aspect="zoneCache(z.name)?.destAspect"
+      :arrival-x="zoneCache(z)?.arriveX"
+      :arrival-y="zoneCache(z)?.arriveY"
+      :dest-aspect="zoneCache(z)?.destAspect"
       @click="onDotClick('zone', z)"
       @overlay-click="onExpandedClick('zone', z)"
       @drag-start="(e) => onZoneDragStart(e, z, i)"
@@ -165,6 +165,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import MapDot from './MapDot.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
+import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -180,6 +181,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity'])
+const { toggleTransversalType } = useTransversalLinks()
 
 const currentImage = ref('')
 const videoBgEl = ref(null)
@@ -540,8 +542,11 @@ function loadNavPositions() {
   if (raw) {
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
-      if (parsed.parent) navDotPositions.value.parent = parsed.parent
-      if (parsed.portal) navDotPositions.value.portal = parsed.portal
+      for (const [k, v] of Object.entries(parsed || {})) {
+        if (v && typeof v.x === 'number' && typeof v.y === 'number') {
+          navDotPositions.value[k] = v
+        }
+      }
     } catch {}
   }
 }
@@ -557,13 +562,14 @@ const navDots = computed(() => {
       target: { id: nav.value.parent._key, universe: nav.value.parent.current_universe },
     })
   }
-  if (nav.value.transversal?.length) {
-    const t = nav.value.transversal[0]
-    const pos = navDotPositions.value.portal
+  for (const [i, t] of (nav.value.transversal || []).entries()) {
+    const key = i === 0 ? 'portal' : `portal:${i}`
+    const pos = navDotPositions.value[key] || { x: 90, y: 50 + i * 10 }
     dots.push({
-      key: 'portal', type: 'portal', name: t.name,
+      key, type: 'portal', name: `${t.name} · ${t.transversal_type || 'inapposite'}`,
       image: t.background_image || null,
       x: pos.x, y: pos.y,
+      transversal_type: t.transversal_type || 'inapposite',
       target: { id: t._key, universe: t.current_universe },
     })
   }
@@ -776,7 +782,7 @@ async function onOccDragEnd() {
       if (nd) {
         activeElement.value = { type: 'nav', key: nd.key }
         const fakeZone = { x: nd.x, y: nd.y }
-        const fakeChild = { _key: nd.target.id, current_universe: nd.target.universe }
+        const fakeChild = { _key: nd.target.id, current_universe: nd.target.universe, transversal_type: nd.type === 'portal' ? nd.transversal_type : null }
         travelWithAnimation(fakeZone, fakeChild, nd.image)
         return
       }
@@ -852,6 +858,22 @@ async function moveTo(locationId, universe) {
   } catch { /* silent */ }
 }
 
+async function relocate(locationId, universe, consciousness) {
+  if (consciousness) {
+    try {
+      const r = await fetch(`/api/v1/entities/${props.entityId}/consciousness-travel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location: locationId })
+      })
+      const data = await r.json()
+      emit('moved', data)
+    } catch { /* silent */ }
+    return
+  }
+  await moveTo(locationId, universe)
+}
+
 // ── Child location image lookup ────────────────────
 
 function childForZone(zone) {
@@ -874,8 +896,8 @@ function childId(zone) {
   return child?._key || null
 }
 
-function zoneCache(zoneName) {
-  const cid = childId(zoneName)
+function zoneCache(zone) {
+  const cid = childId(zone)
   return cid ? destNavCache.value[cid] : null
 }
 
@@ -935,8 +957,19 @@ function onNavDragStart(e, nd) {
 
 // ── Two-phase interaction ──────────────────────────
 
+async function togglePortalType(nd) {
+  const t = (nav.value.transversal || []).find(t => t._key === nd.target.id)
+  if (!t) return
+  const next = await toggleTransversalType(props.locationId, t._key, t.transversal_type)
+  t.transversal_type = next
+}
+
 function onDotClick(type, item) {
-  if (props.editZones) return
+  if (props.editZones) {
+    // In edit mode, clicking a portal navdot toggles its transversal type.
+    if (type === 'nav' && item.type === 'portal') togglePortalType(item)
+    return
+  }
   // Never un-pop the player's own character
   if (type === 'occupant' && item.id === props.entityId) return
   // If already popped, dismiss; otherwise pop this one
@@ -956,10 +989,10 @@ function onDotClick(type, item) {
 }
 
 async function travelWithAnimation(zone, child, imageUrl = null) {
-  const img = imageUrl || childImage(zone.name)
+  const img = imageUrl || childImage(zone)
   const sourceId = props.locationId  // remember where we came from
   if (!img) {
-    moveTo(child._key, child.current_universe)
+    relocate(child._key, child.current_universe, child.transversal_type === 'consciousness')
     return
   }
 
@@ -1016,7 +1049,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     imageAspect.value = preload.naturalWidth / preload.naturalHeight
   }
 
-  moveTo(child._key, child.current_universe)
+  relocate(child._key, child.current_universe, child.transversal_type === 'consciousness')
 
   setTimeout(async () => {
     await fetchNav()
@@ -1070,8 +1103,8 @@ function placeCharacterAtSource(sourceId) {
     if (nd && nav.value.parent?._key === sourceId) { nx = nd.x; ny = nd.y }
   }
   if (nx === 50 && ny === 50) {
-    const pd = navDots.value.find(d => d.key === 'portal')
-    if (pd && nav.value.transversal?.some(t => t._key === sourceId)) { nx = pd.x; ny = pd.y }
+    const pd = navDots.value.find(d => d.type === 'portal' && d.target?.id === sourceId)
+    if (pd) { nx = pd.x; ny = pd.y }
   }
 
   // Set position (dot not mounted yet, just update data)
@@ -1096,7 +1129,7 @@ function onExpandedClick(type, item) {
     // Use travel animation for nav dots too
     activeElement.value = { type: 'nav', key: item.key }
     const fakeZone = { x: item.x, y: item.y }
-    const fakeChild = { _key: item.target.id, current_universe: item.target.universe }
+    const fakeChild = { _key: item.target.id, current_universe: item.target.universe, transversal_type: item.type === 'portal' ? item.transversal_type : null }
     travelWithAnimation(fakeZone, fakeChild, item.image)
   } else if (type === 'occupant') {
     emit('inspectEntity', item.id)
@@ -1170,8 +1203,10 @@ async function preloadDestNavCache() {
           }
         }
       } else if (dest.kind === 'portal') {
-        // Portal: use portal dot position on destination
-        const portalPos = loc?.nav_positions?.portal
+        // Portal: use the destination's matching portal dot position
+        const idx = (data.transversal || []).findIndex(t => t._key === currentId)
+        const posKey = idx > 0 ? `portal:${idx}` : 'portal'
+        const portalPos = loc?.nav_positions?.[posKey] || loc?.nav_positions?.portal
         if (portalPos) { arriveX = portalPos.x; arriveY = portalPos.y }
       }
 

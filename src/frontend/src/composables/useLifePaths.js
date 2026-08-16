@@ -8,6 +8,7 @@ const loading = ref(false)
 
 const LIFE_PATH_FIELDS = `
   id name universe description entryTableId
+  factionIds
   discovery { atLocation knowsEntity possessesTrait hasTraitRating hasRelationship }
 `
 

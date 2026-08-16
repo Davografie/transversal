@@ -203,6 +203,7 @@
     </template>
   </div>
   <LocationViewer
+    v-if="!fullCanvas"
     ref="locationRef"
     :location-id="currentLocationId"
     :location-name="locationName"
@@ -216,6 +217,18 @@
     :remote-results="remoteResults"
     @moved="onMoved"
     @inspect-entity="(id) => { viewingEntityId = id; forceSheet = true; sheetVisible = true }"
+  />
+  <RelationalCanvas
+    v-if="fullCanvas"
+    :key="fullCanvas.mode + ':' + fullCanvas.entityId"
+    class="fullscreen-canvas"
+    fullscreen
+    :location-id="fullCanvas.mode === 'location' && fullCanvas.scope === 'focus' ? fullCanvas.entityId : (fullCanvas.mode === 'faction' || fullCanvas.mode === 'gmc-web' ? currentLocationId : '')"
+    :initial-faction-id="fullCanvas.mode === 'faction' ? fullCanvas.entityId : ''"
+    :initial-gmc-id="fullCanvas.mode === 'gmc-web' ? fullCanvas.entityId : ''"
+    :initial-life-path="fullCanvas.mode === 'life-path' ? fullCanvas.lifePath : null"
+    :initial-universe="fullCanvas.mode === 'location' && fullCanvas.scope === 'tree' ? fullCanvas.entityId : ''"
+    @close-full="fullCanvas = null"
   />
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
@@ -260,6 +273,7 @@ import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
 import GmPanel from './components/GmPanel.vue'
 import PanelStack from './components/gm/PanelStack.vue'
+import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
 import { useSSE } from './composables/useSSE.js'
 import { useSessions } from './composables/useSessions.js'
 import { useToasts } from './composables/useToasts.js'
@@ -302,6 +316,7 @@ const gmRootPanel = computed(() => ({
 
 const universe = ref('earth')
 const currentLocationId = ref('loc-krasnoyarsk')
+const fullCanvas = ref(null) // { mode: 'location'|'faction', entityId } or null
 const locationName = ref('Krasnoyarsk-45')
 const locationBgImage = ref('')
 const locationOverlay = ref(null)
@@ -713,6 +728,7 @@ function onRollTableResolved(outcome) {
 
 let offRollTablePrepare = null
 let offRollTableResolved = null
+let offCanvasOpenFull = null
 
 // SSE — live state sync
 const { connected, lastEvent, error } = useSSE(sessionId, entityId)
@@ -765,8 +781,18 @@ watch(lastEvent, (evt) => {
       }
       break
     case 'location_changed':
-      if (eid === entityId.value && evt.data?.to) locationName.value = evt.data.to
-      locationRef.value?.fetchNav()
+      if (eid === entityId.value && evt.data?.to) {
+        currentLocationId.value = evt.data.to
+        if (evt.data?.universe) universe.value = evt.data.universe
+        fetchLocationBg()
+        fetchPeers()
+        fetch(`/api/v1/locations/${evt.data.to}/navigate`)
+          .then(r => r.json())
+          .then(nav => { locationName.value = nav.location?.name || evt.data.to })
+          .catch(() => { locationName.value = evt.data.to })
+      } else {
+        locationRef.value?.fetchNav()
+      }
       if (gmMode.value && foreign && evt.data?.to) {
         nameCache.value[eid] = evt.data.to_name || eid
         addToast(`${name} moved to ${evt.data.to}`, 'move')
@@ -932,6 +958,7 @@ onMounted(() => {
   if (playerId.value) fetchPlayerEntities()
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
   offRollTableResolved = bus.on('roll-table:resolved', onRollTableResolved)
+  offCanvasOpenFull = bus.on('canvas:open-full', (payload) => { fullCanvas.value = payload })
   DIAG.mark('onMounted', { showLoginOverlay: showLoginOverlay.value, playerId: playerId.value, entityId: entityId.value, sessionId: sessionId.value, gmMode: gmMode.value })
   // Dump full diagnostic timeline after init settles
   setTimeout(() => {
@@ -948,6 +975,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (offRollTablePrepare) offRollTablePrepare()
   if (offRollTableResolved) offRollTableResolved()
+  if (offCanvasOpenFull) offCanvasOpenFull()
 })
 
 // Re-sync closed position when sheet visibility changes while wrapper is closed

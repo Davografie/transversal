@@ -29,6 +29,7 @@ from transversal.db.arango import (
     get_db,
 )
 from transversal.domain import (
+    AttunementScope,
     CharacterView,
     Entity,
     EntityImage,
@@ -43,6 +44,8 @@ from transversal.domain import (
     Trait,
     TraitSet,
     TraitSetting,
+    TransversalType,
+    dice_list_to_rating,
 )
 
 
@@ -248,10 +251,16 @@ class EntityRepository:
         return [self._doc_to_entity(doc) for doc in self.db.aql.execute(query)]
 
     def list_entities_by_location(self, location_id: str) -> list[Entity]:
-        """List all entities currently at a given location."""
+        """List all entities currently at a given location (via their projections)."""
         query = f"""
+            LET occupant_ids = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.current_location == @lid
+                RETURN DISTINCT p.entity_id
+            )
             FOR e IN {ENTITIES}
-            FILTER e.current_location == @lid
+            FILTER e.type IN ['character', 'gmc', 'asset']
+            FILTER e._key IN occupant_ids OR e.current_location == @lid
             RETURN e
         """
         return [
@@ -280,6 +289,16 @@ class EntityRepository:
         return [
             Projection.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
+        ]
+
+    def list_all_projections(self) -> list[Projection]:
+        query = f"""
+            FOR p IN {PROJECTIONS}
+            RETURN p
+        """
+        return [
+            Projection.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
         ]
 
     def update_projection(self, projection: Projection) -> Projection:
@@ -338,6 +357,17 @@ class EntityRepository:
         return [
             Trait.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars={"tsid": traitset_id})
+        ]
+
+    def get_all_traits(self) -> list[Trait]:
+        query = f"""
+            FOR t IN {TRAITS}
+            SORT t.name ASC
+            RETURN t
+        """
+        return [
+            Trait.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
         ]
 
     def update_trait(self, trait: Trait) -> Trait:
@@ -474,6 +504,24 @@ class EntityRepository:
         except Exception:
             return False
 
+    def set_roll_table_position(self, table_id: str, x: Optional[float], y: Optional[float]) -> Optional[RollTable]:
+        table = self.get_roll_table(table_id)
+        if table is None:
+            return None
+        table.canvas_x = x
+        table.canvas_y = y
+        self.update_roll_table(table)
+        return table
+
+    def clear_roll_table_positions(self, life_path_id: str) -> int:
+        count = 0
+        for table in self.list_roll_tables(life_path_id):
+            table.canvas_x = None
+            table.canvas_y = None
+            self.update_roll_table(table)
+            count += 1
+        return count
+
     def _cleanup_lifepath_trait_refs(self, trait_id: str) -> None:
         """Remove `trait_id` from every life path that references it.
 
@@ -590,6 +638,8 @@ class EntityRepository:
         doc["_key"] = ts.id
         if ts.from_type == "relationship":
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
+        elif ts.from_type == "projection":
+            doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
@@ -631,6 +681,8 @@ class EntityRepository:
         doc["_key"] = ts.id
         if ts.from_type == "relationship":
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
+        elif ts.from_type == "projection":
+            doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
@@ -688,30 +740,110 @@ class EntityRepository:
             trait_settings=all_settings,
         )
 
-    def get_effective_traitsettings(
-        self, entity_id: str, universe: str
-    ) -> list[TraitSetting]:
-        """Get traitsettings active in a given universe.
+    def _active_universe(self, entity: Entity) -> str:
+        """The entity's active universe — the active projection's current universe.
 
-        Includes: morph traits whose trait is native to `universe`,
-        plus all ego traits (regardless of universe).
+        Falls back to the legacy ``current_universe`` field when the entity has
+        no ``current_projection`` (or its projection is missing).
         """
-        # Get the trait IDs for the given universe
+        if entity.current_projection:
+            proj = self.get_projection(entity.current_projection)
+            if proj and proj.universe:
+                return proj.universe
+        return entity.current_universe
+
+    def _active_location(self, entity: Entity) -> Optional[str]:
+        """The entity's active location — the active projection's current location.
+
+        Falls back to the denormalized ``current_location`` cache when the entity
+        has no active projection (or its projection has no location).
+        """
+        if entity.current_projection:
+            proj = self.get_projection(entity.current_projection)
+            if proj and proj.current_location:
+                return proj.current_location
+        return entity.current_location
+
+    def effective_universes(self, entity: Entity) -> list[str]:
+        """Compute the set of universes governing the entity's trait availability.
+
+        Union of: the active universe (active projection), all NATIVE projection
+        universes when the entity has more than one (a multiversal being — this
+        replaces the removed ``transversal`` flag), self-scoped attunements, and
+        domain-scoped attunements from entities at this entity's location or its
+        ancestors.
+        """
+        result: set[str] = set()
+        active = self._active_universe(entity)
+        if active:
+            result.add(active)
+        native_universes = [
+            p.universe for p in self.get_projections_for_entity(entity.id)
+            if p.transversal_type == TransversalType.NATIVE and p.universe
+        ]
+        if len(native_universes) > 1:
+            result.update(native_universes)
+        for att in entity.attunements:
+            if att.scope == AttunementScope.SELF:
+                result.add(att.universe)
+        result.update(self._domain_attunement_universes(entity))
+        return sorted(result)
+
+    def _domain_attunement_universes(self, entity: Entity) -> set[str]:
+        """Universes from domain-scoped attunements over this entity's active location chain."""
+        location = self._active_location(entity)
+        if not location:
+            return set()
+        chain = [location] + self.get_location_ancestors(location)
         query = f"""
-            LET universe_traits = (
-                FOR t IN {TRAITS}
-                FILTER @universe IN t.universes
-                RETURN t._key
-            )
+            FOR e IN {ENTITIES}
+            FILTER e.current_location IN @chain AND LENGTH(e.attunements) > 0
+            FOR att IN e.attunements
+            FILTER att.scope == 'domain'
+            RETURN DISTINCT att.universe
+        """
+        return set(self.db.aql.execute(query, bind_vars={"chain": chain}))
+
+    def get_effective_traitsettings(
+        self, entity_id: str, universes: list[str]
+    ) -> list[TraitSetting]:
+        """Get trait settings active in a set of universes.
+
+        Ego traits (``ego=True``) are always returned. Entity-anchored morph
+        traits are gated by the trait/trait-set universe intersection.
+        Projection-anchored morph traits are gated by their projection's
+        ``origin_universe`` being in ``universes`` (falling back to the
+        projection key's universe suffix for pre-migration data).
+        """
+        query = f"""
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.entity_id == @eid
-            FILTER ts.trait_id IN universe_traits OR ts.ego == true
+            LET is_projection = (ts.from_type == 'projection')
+            LET proj = is_projection ? DOCUMENT(ts._from) : null
+            LET origin = proj != null
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[-1])
+                : null
+            LET trait = DOCUMENT(ts._to)
+            LET set_doc = (trait.traitset_id != null)
+                ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
+            FILTER ts.ego == true
+                OR (
+                    NOT is_projection
+                    AND LENGTH(INTERSECTION(trait.universes, @universes)) > 0
+                    AND (set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0)
+                )
+                OR (
+                    is_projection AND proj != null
+                    AND origin IN @universes
+                    AND origin IN trait.universes
+                    AND (set_doc == null OR origin IN set_doc.universes)
+                )
             RETURN ts
         """
         return [
             TraitSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(
-                query, bind_vars={"eid": entity_id, "universe": universe}
+                query, bind_vars={"eid": entity_id, "universes": universes}
             )
         ]
 
@@ -1288,6 +1420,260 @@ class EntityRepository:
 
         return result
 
+    def location_graph(self) -> dict:
+        """Full location hierarchy plus all transversal edges, for the overview canvas."""
+        tree = self.location_tree()
+        rel_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'transversal'
+            RETURN {{
+                from: PARSE_IDENTIFIER(r._from).key,
+                to: PARSE_IDENTIFIER(r._to).key,
+                transversal_type: r.transversal_type
+            }}
+        """
+        transversal = list(self.db.aql.execute(rel_query))
+        return {"tree": tree, "transversal": transversal}
+
+    def _universe_docs(self) -> list[dict]:
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'universe'
+            RETURN {{ id: e._key, name: e.name, universe: e.current_universe }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _all_location_docs(self) -> list[dict]:
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'location'
+            RETURN {{ id: e._key, name: e.name, universe: e.current_universe }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _all_super_edges(self) -> list[dict]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'super'
+            RETURN {{ child: PARSE_IDENTIFIER(r._from).key, parent: PARSE_IDENTIFIER(r._to).key }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _all_transversal_edges(self) -> list[dict]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'transversal'
+            RETURN {{ from: PARSE_IDENTIFIER(r._from).key, to: PARSE_IDENTIFIER(r._to).key, transversal_type: r.transversal_type }}
+        """
+        return list(self.db.aql.execute(query))
+
+    def _faction_member_ids(self, faction_id: str) -> list[str]:
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'membership' AND PARSE_IDENTIFIER(r._to).key == @fid
+            RETURN PARSE_IDENTIFIER(r._from).key
+        """
+        return list(self.db.aql.execute(query, bind_vars={"fid": faction_id}))
+
+    def _faction_member_locations(self, faction_id: str) -> set[str]:
+        """Location keys where a faction's members are occupants (direct or projected)."""
+        member_ids = self._faction_member_ids(faction_id)
+        if not member_ids:
+            return set()
+        query = f"""
+            LET direct = (
+                FOR e IN {ENTITIES}
+                FILTER e._key IN @mids AND e.type IN ['character', 'gmc', 'asset']
+                RETURN e.current_location
+            )
+            LET projected = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.entity_id IN @mids
+                RETURN p.current_location
+            )
+            FOR loc IN UNION(direct, projected)
+            FILTER loc != null
+            RETURN DISTINCT loc
+        """
+        return set(self.db.aql.execute(query, bind_vars={"mids": member_ids}))
+
+    def _navdot_urls(self, entity_ids: list[str]) -> dict[str, str]:
+        """Resolve one navdot image URL per entity, newest first."""
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR img IN {ENTITY_IMAGES}
+            FILTER img.entity_id IN @ids AND 'navdot' IN img.roles
+            SORT img.created_at DESC
+            RETURN {{ entity_id: img.entity_id, image_type: img.image_type, universe: img.universe, filename: img.filename, extension: img.extension }}
+        """
+        result: dict = {}
+        for row in self.db.aql.execute(query, bind_vars={"ids": entity_ids}):
+            if row["entity_id"] in result:
+                continue
+            if row["image_type"] == "animated":
+                result[row["entity_id"]] = f"/media/animated/{row['entity_id']}/{row['universe']}/{row['filename']}.{row['extension']}"
+            else:
+                result[row["entity_id"]] = f"/media/imagen/{row['entity_id']}/{row['universe']}/{row['filename']}_Large.{row['extension']}"
+        return result
+
+    def _occupants_for_locations(self, location_ids: list[str], faction_id: str | None = None) -> dict:
+        """Map location key → occupant dicts, optionally filtered to a faction."""
+        if not location_ids:
+            return {}
+
+        binds: dict = {"lids": location_ids}
+        member_filter = ""
+        if faction_id:
+            member_ids = self._faction_member_ids(faction_id)
+            if not member_ids:
+                return {}
+            binds["mids"] = member_ids
+            member_filter = " AND e._key IN @mids"
+
+        query = f"""
+            LET direct = (
+                FOR e IN {ENTITIES}
+                FILTER e.type IN ['character', 'gmc', 'asset']
+                  AND e.current_location IN @lids
+                  {member_filter}
+                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: e.current_location }}
+            )
+            LET projected = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.current_location IN @lids
+                FOR e IN {ENTITIES}
+                FILTER e._key == p.entity_id AND e.type IN ['character', 'gmc', 'asset']
+                  {member_filter}
+                RETURN {{ id: e._key, name: e.name, type: e.type, location_id: p.current_location }}
+            )
+            FOR o IN UNION(direct, projected)
+            RETURN o
+        """
+        rows = list(self.db.aql.execute(query, bind_vars=binds))
+
+        result: dict = {}
+        seen: set = set()
+        for row in rows:
+            key = (row["location_id"], row["id"])
+            if key in seen:
+                continue
+            seen.add(key)
+            result.setdefault(row["location_id"], []).append(row)
+
+        occupant_ids = [row["id"] for loc_rows in result.values() for row in loc_rows]
+        navdots = self._navdot_urls(occupant_ids)
+        memberships = self._faction_memberships_for(occupant_ids)
+        for loc_rows in result.values():
+            for row in loc_rows:
+                row["image"] = navdots.get(row["id"])
+                row["factions"] = memberships.get(row["id"], [])
+        return result
+
+    def location_canvas(self, root: str = "all", depth: int = -1, focus: str | None = None, faction: str | None = None) -> dict:
+        """Return a scoped location graph for the unified relational canvas."""
+        universes = self._universe_docs()
+        locations = self._all_location_docs()
+        super_edges = self._all_super_edges()
+        transversal_edges = self._all_transversal_edges()
+
+        location_by_id = {l["id"]: l for l in locations}
+        parent_of = {e["child"]: e["parent"] for e in super_edges}
+        children_of: dict[str, list[str]] = {}
+        for e in super_edges:
+            children_of.setdefault(e["parent"], []).append(e["child"])
+
+        included: set[str] = set()
+        universe_docs: list[dict] = []
+
+        def walk_children(lid: str, remaining: int) -> None:
+            if lid in included or lid not in location_by_id:
+                return
+            included.add(lid)
+            if remaining == 0:
+                return
+            next_remaining = remaining - 1 if remaining > 0 else -1
+            for child in children_of.get(lid, []):
+                walk_children(child, next_remaining)
+
+        if root.startswith("location:"):
+            loc_id = root.split(":", 1)[1]
+            if loc_id in location_by_id:
+                included.add(loc_id)
+                if loc_id in parent_of and parent_of[loc_id] in location_by_id:
+                    included.add(parent_of[loc_id])
+                for child in children_of.get(loc_id, []):
+                    walk_children(child, depth)
+                for t in transversal_edges:
+                    if t["from"] == loc_id and t["to"] in location_by_id:
+                        included.add(t["to"])
+                    elif t["to"] == loc_id and t["from"] in location_by_id:
+                        included.add(t["from"])
+            universe_docs = []
+        else:
+            if root.startswith("universe:"):
+                uni_key = root.split(":", 1)[1]
+                universe_docs = [u for u in universes if u["id"] == uni_key or u["universe"] == uni_key]
+            else:
+                universe_docs = universes
+
+            uni_keys = {u["universe"] for u in universe_docs}
+            all_uni_keys = {u["universe"] for u in universes}
+            for loc in locations:
+                if loc["id"] in parent_of:
+                    continue
+                if loc["universe"] in uni_keys:
+                    walk_children(loc["id"], depth)
+                elif root == "all" and loc["universe"] not in all_uni_keys:
+                    walk_children(loc["id"], depth)
+
+        included = {lid for lid in included if lid in location_by_id}
+
+        # When filtering by faction in a full-tree/universe scope, prune the
+        # location set to member locations plus their ancestors.
+        if faction and not root.startswith("location:"):
+            member_locs = self._faction_member_locations(faction)
+            keep: set[str] = set()
+            for lid in member_locs:
+                if lid not in location_by_id:
+                    continue
+                cur: str | None = lid
+                while cur is not None and cur in location_by_id and cur not in keep:
+                    keep.add(cur)
+                    cur = parent_of.get(cur)
+            included = {lid for lid in included if lid in keep}
+            universe_docs = [
+                u for u in universe_docs
+                if any(location_by_id[lid]["universe"] == u["universe"] for lid in included)
+            ]
+
+        included_super = [e for e in super_edges if e["child"] in included and e["parent"] in included]
+        included_transversal = [t for t in transversal_edges if t["from"] in included and t["to"] in included]
+
+        occupants = self._occupants_for_locations(sorted(included), faction)
+
+        occupant_relations: list[dict] = []
+        if occupants:
+            occupant_ids = [o["id"] for loc_rows in occupants.values() for o in loc_rows]
+            occupant_relations = self._relations_between(occupant_ids)
+
+        faction_doc = None
+        if faction:
+            f = self.get_entity(faction)
+            if f:
+                faction_doc = {"id": f.id, "name": f.name}
+
+        return {
+            "focus": focus if focus in included else None,
+            "faction": faction_doc,
+            "universes": universe_docs,
+            "locations": [location_by_id[lid] for lid in sorted(included)],
+            "super_edges": included_super,
+            "transversal_edges": included_transversal,
+            "occupants": occupants,
+            "occupant_relations": occupant_relations,
+        }
+
     def navigate_from(self, location_id: str) -> dict:
         """Return navigation options from a location.
 
@@ -1309,12 +1695,17 @@ class EntityRepository:
             LET transversal = (
                 FOR r IN {RELATIONSHIPS}
                 FILTER r._from == @loc_ref AND r.type == 'transversal'
-                RETURN DOCUMENT(r._to)
+                RETURN MERGE(DOCUMENT(r._to), {{ transversal_type: r.transversal_type }})
+            )
+            LET occupant_ids = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.current_location == @lid
+                RETURN DISTINCT p.entity_id
             )
             LET occupants = (
                 FOR e IN {ENTITIES}
-                FILTER e.current_location == @lid
-                  AND e.type IN ['character', 'gmc']
+                FILTER e.type IN ['character', 'gmc', 'asset']
+                FILTER e._key IN occupant_ids OR e.current_location == @lid
                 RETURN {{
                     name: e.name, type: e.type, id: e._key,
                     image: e.background_image,
@@ -1336,6 +1727,186 @@ class EntityRepository:
         results = list(cursor)
         default = {"location": None, "parent": None, "children": [], "transversal": [], "occupants": []}
         return results[0] if results else default
+
+    # ── Relational Canvas ─────────────────────────────
+
+    def canvas_neighborhood(self, location_id: str) -> dict:
+        """Return a location's neighborhood for the relational canvas.
+
+        Extends ``navigate_from`` with faction memberships for occupants and
+        occupant-to-occupant relationship edges (labeled).
+        """
+        result = self.navigate_from(location_id)
+        if result["location"] is None:
+            return result
+
+        occupant_ids = [o["id"] for o in result.get("occupants", [])]
+        result["faction_memberships"] = self._faction_memberships_for(occupant_ids)
+        result["occupant_relations"] = self._relations_between(occupant_ids)
+        return result
+
+    def canvas_faction(self, faction_id: str) -> dict:
+        """Return conspyramid data for a faction.
+
+        Returns members (with rank/role), the locations where members are
+        placed, ancestor scaffolding for the pruned tree, and labeled
+        relations between members.
+        """
+        faction = self.get_entity(faction_id)
+        if faction is None:
+            return {"faction": None, "members": [], "locations": [], "ancestors": [], "location_edges": [], "relations": []}
+
+        member_query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'membership' AND r._to == @faction_ref
+            LET member_key = PARSE_IDENTIFIER(r._from).key
+            FOR e IN {ENTITIES}
+            FILTER e._key == member_key AND e.type IN ['gmc', 'character']
+            RETURN {{ id: e._key, name: e.name, location_id: e.current_location, edge_key: r._key }}
+        """
+        members = list(self.db.aql.execute(
+            member_query, bind_vars={"faction_ref": f"{ENTITIES}/{faction_id}"}
+        ))
+
+        for m in members:
+            m["rank"] = None
+            m["role"] = None
+            for ts in self.get_relationship_traitsettings(m["edge_key"]):
+                if ts.trait_id == "trait-rel-rank" and ts.dice:
+                    m["rank"] = dice_list_to_rating(ts.dice)
+                elif ts.trait_id == "trait-role-cd1b":
+                    m["role"] = ts.statement or ts.trait_id
+            m.pop("edge_key", None)
+
+        member_ids = [m["id"] for m in members]
+        member_locations = [m["location_id"] for m in members if m["location_id"]]
+
+        locations = self._location_dicts(member_locations)
+        location_keys = {l["id"] for l in locations}
+
+        ancestors: set[str] = set()
+        for lid in member_locations:
+            for a in self.get_location_ancestors(lid):
+                ancestors.add(a)
+        ancestor_locations = [
+            l for l in self._location_dicts(list(ancestors))
+            if l["id"] not in location_keys
+        ]
+
+        # Super edges among the pruned location set (member locations + their
+        # ancestors), so the frontend can render the hierarchy as a tree.
+        relevant_ids = list(set(member_locations) | ancestors)
+        location_edges: list[dict] = []
+        if relevant_ids:
+            edge_query = f"""
+                FOR r IN {RELATIONSHIPS}
+                FILTER r.type == 'super'
+                LET child = PARSE_IDENTIFIER(r._from).key
+                LET parent = PARSE_IDENTIFIER(r._to).key
+                FILTER child IN @ids AND parent IN @ids
+                RETURN {{ child: child, parent: parent }}
+            """
+            location_edges = list(self.db.aql.execute(edge_query, bind_vars={"ids": relevant_ids}))
+
+        relations = self._relations_between(member_ids)
+
+        return {
+            "faction": {"id": faction.id, "name": faction.name},
+            "members": members,
+            "locations": locations,
+            "ancestors": ancestor_locations,
+            "location_edges": location_edges,
+            "relations": relations,
+        }
+
+    def canvas_gmc_web(self, gmc_id: str) -> dict:
+        """Return a GMC's relational web: the GMC, its location, and direct
+        relations to other GMCs plus their locations."""
+        gmc = self.get_entity(gmc_id)
+        if gmc is None:
+            return {"gmc": None, "location": None, "relations": []}
+
+        location = self.get_entity(gmc.current_location) if gmc.current_location else None
+
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER (r._from == @gmc_ref OR r._to == @gmc_ref)
+              AND r.type NOT IN ['super', 'membership', 'agency', 'transversal']
+            LET other_key = PARSE_IDENTIFIER(r._from).key == @gid
+                ? PARSE_IDENTIFIER(r._to).key
+                : PARSE_IDENTIFIER(r._from).key
+            FOR e IN {ENTITIES}
+            FILTER e._key == other_key AND e.type IN ['gmc', 'character']
+            RETURN {{
+                from: PARSE_IDENTIFIER(r._from).key,
+                to: PARSE_IDENTIFIER(r._to).key,
+                type: r.type,
+                description: NOT_NULL(r.description, ''),
+                other_id: e._key,
+                other_name: e.name,
+                other_location_id: e.current_location,
+            }}
+        """
+        relations = list(self.db.aql.execute(query, bind_vars={
+            "gmc_ref": f"{ENTITIES}/{gmc_id}",
+            "gid": gmc_id,
+        }))
+
+        loc_ids = {r["other_location_id"] for r in relations if r["other_location_id"]}
+        loc_map = {l["id"]: l["name"] for l in self._location_dicts(list(loc_ids))}
+        for r in relations:
+            r["other_location_name"] = loc_map.get(r["other_location_id"]) if r["other_location_id"] else None
+
+        return {
+            "gmc": {"id": gmc.id, "name": gmc.name},
+            "location": {"id": location.id, "name": location.name} if location else None,
+            "relations": relations,
+        }
+
+    # ── Canvas helpers ────────────────────────────────
+
+    def _faction_memberships_for(self, entity_ids: list[str]) -> dict:
+        """Map entity_id → list of {{id, name}} factions via membership edges."""
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'membership'
+            LET member_key = PARSE_IDENTIFIER(r._from).key
+            FILTER member_key IN @ids
+            FOR f IN {ENTITIES}
+            FILTER f._key == PARSE_IDENTIFIER(r._to).key AND f.type == 'faction'
+            RETURN {{ member: member_key, id: f._key, name: f.name }}
+        """
+        result: dict = {}
+        for row in self.db.aql.execute(query, bind_vars={"ids": entity_ids}):
+            result.setdefault(row["member"], []).append({"id": row["id"], "name": row["name"]})
+        return result
+
+    def _relations_between(self, entity_ids: list[str]) -> list[dict]:
+        """Return non-structural relationships whose endpoints are all in ``entity_ids``."""
+        if len(entity_ids) < 2:
+            return []
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            LET from_key = PARSE_IDENTIFIER(r._from).key
+            LET to_key = PARSE_IDENTIFIER(r._to).key
+            FILTER from_key IN @ids AND to_key IN @ids
+              AND r.type NOT IN ['super', 'membership', 'agency', 'transversal']
+            RETURN {{ from: from_key, to: to_key, type: r.type, description: NOT_NULL(r.description, '') }}
+        """
+        return list(self.db.aql.execute(query, bind_vars={"ids": entity_ids}))
+
+    def _location_dicts(self, location_ids: list[str]) -> list[dict]:
+        """Return light location dicts for a set of location keys."""
+        if not location_ids:
+            return []
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e.type == 'location' AND e._key IN @ids
+            RETURN {{ id: e._key, name: e.name, universe: e.current_universe }}
+        """
+        return list(self.db.aql.execute(query, bind_vars={"ids": location_ids}))
 
     def get_location_ancestors(self, location_id: str) -> list[str]:
         """Return all ancestor location IDs by following 'super' edges upward.

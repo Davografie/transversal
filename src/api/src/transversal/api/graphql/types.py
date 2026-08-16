@@ -67,6 +67,7 @@ class TraitRef:
     possible_sfx_ids: list[strawberry.ID]
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
+    default_ego: bool = False
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
 
@@ -91,6 +92,7 @@ class TraitSetRef:
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
                 location_restricted=t.location_restricted,
+                default_ego=t.default_ego,
                 display_names=[
                     TraitDisplayName(name=dn.name, universe=dn.universe,
                                      ratings=dn.ratings)
@@ -204,6 +206,8 @@ class RollTable:
     die: DieType
     check: Optional[RollTableCheck] = None
     entries: list[RollTableEntry]
+    canvas_x: Optional[float] = None
+    canvas_y: Optional[float] = None
 
 
 @strawberry.input
@@ -289,6 +293,7 @@ class TraitInput:
     possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
+    default_ego: bool = False
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
 
@@ -302,6 +307,7 @@ class TraitUpdateInput:
     possible_sfx_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
+    default_ego: Optional[bool] = None
     display_names: Optional[list[TraitDisplayNameInput]] = None
 
 
@@ -319,6 +325,8 @@ class TraitSetting:
     statement: str
     negative: bool
     ego: bool
+    from_type: str = "entity"  # "entity" | "projection" | "relationship"
+    projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID]
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
 
@@ -415,6 +423,8 @@ class TraitSettingInput:
     statement: str = ""
     negative: bool = False
     ego: bool = False
+    from_type: Optional[str] = None  # "entity" | "projection"
+    projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
 
 
@@ -426,6 +436,8 @@ class TraitSettingUpdateInput:
     statement: Optional[str] = None
     negative: Optional[bool] = None
     ego: Optional[bool] = None
+    from_type: Optional[str] = None  # "entity" | "projection"
+    projection_id: Optional[strawberry.ID] = None
     sfx_ids: Optional[list[strawberry.ID]] = None
     known_to: Optional[list[strawberry.ID]] = None
 
@@ -436,7 +448,11 @@ class TraitSettingUpdateInput:
 class Projection:
     id: strawberry.ID
     entity_id: strawberry.ID
+    origin_universe: str = ""
     universe: str
+    name: str = ""
+    background_image: Optional[str] = None
+    current_location: Optional[str] = None
     transversal_type: TransversalTypeEnum
 
 
@@ -449,6 +465,14 @@ class Zone:
     location_id: Optional[str] = None
     x: float = 50.0
     y: float = 50.0
+
+
+@strawberry.type
+class Attunement:
+    universe: str
+    scope: str
+    until: Optional[EffectTimingEnum] = None
+    source_sfx_id: Optional[str] = None
 
 
 @strawberry.type
@@ -468,6 +492,7 @@ class Entity:
     razmerit: int
     current_universe: str
     current_location: Optional[str] = None
+    current_projection: Optional[str] = None
     hidden: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     _background_image: strawberry.Private[Optional[str]] = None
@@ -479,6 +504,7 @@ class Entity:
     nav_positions: str = "{}"
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
+    attunements: list[Attunement] = strawberry.field(default_factory=list)
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
 
     @strawberry.field
@@ -487,8 +513,9 @@ class Entity:
         em = info.context["entity_manager"]
         projs = em.get_projections(self.id)
         return [
-            Projection(id=p.id, entity_id=p.entity_id, universe=p.universe,
-                       transversal_type=p.transversal_type)
+            Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
+                       universe=p.universe, name=p.name, background_image=p.background_image,
+                       current_location=p.current_location, transversal_type=p.transversal_type)
             for p in projs
         ]
 
@@ -548,7 +575,27 @@ class Entity:
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
                 statement=s.statement, negative=s.negative,
-                ego=s.ego, sfx_ids=s.sfx_ids,
+                ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+                sfx_ids=s.sfx_ids,
+                known_to=s.known_to,
+            )
+            for s in settings
+        ]
+
+    @strawberry.field
+    def effective_trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        settings = em.get_effective_traitsettings(str(self.id))
+        return [
+            TraitSetting(
+                id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
+                traitset_id=s.traitset_id,
+                rating_type=s.rating_type, dice=s.dice,
+                polarity=s.polarity,
+                statement=s.statement, negative=s.negative,
+                ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+                sfx_ids=s.sfx_ids,
                 known_to=s.known_to,
             )
             for s in settings
