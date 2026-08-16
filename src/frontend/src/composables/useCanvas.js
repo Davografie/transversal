@@ -111,6 +111,7 @@ const OCC_MARGIN = 8
 const OCC_COLS = 3
 const LOC_BASE_H = 60
 const HX_SIBLING_GAP = 16
+const HX_DEPTH_GAP = 24
 
 // ── Orientation helpers ───────────────────────────────
 
@@ -132,7 +133,7 @@ function forestSpacing() {
 }
 
 function depthStep() {
-  return isHorizontal() ? DX : DY
+  return isHorizontal() ? DX + HX_DEPTH_GAP : DY
 }
 
 function depthStepExpanded() {
