@@ -8,6 +8,7 @@
       <span class="loc-badge">LOC</span>
       <span class="loc-name">{{ data.name }}</span>
     </div>
+
     <div class="loc-actions" @click.stop>
       <button
         v-if="!data.isLeaf"
@@ -15,12 +16,6 @@
         :title="data.expanded ? 'Collapse' : 'Expand'"
         @click.stop="data.expanded ? data.onCollapse?.(data.entityId) : data.onExpand?.(data.entityId)"
       >{{ data.expanded ? '⊖' : '⊕' }}</button>
-      <button
-        class="loc-btn"
-        :class="{ active: data.occupantsRevealed }"
-        title="Toggle occupants"
-        @click.stop="data.onToggleOccupants?.(data.entityId)"
-      >👥</button>
       <button
         class="loc-btn"
         :class="{ active: data.isFocus }"
@@ -33,6 +28,26 @@
         @click.stop="data.onOpenFull?.(data.entityId)"
       >⛶</button>
     </div>
+
+    <div v-if="data.occupants?.length" class="loc-occupants" @click.stop>
+      <div
+        v-for="occ in data.occupants"
+        :key="occ.id"
+        class="occ-tile"
+        @mouseenter="data.onOccupantHover?.(occ.id)"
+        @mouseleave="data.onOccupantLeave?.()"
+        @click.stop="data.onInspect?.(occ.id)"
+      >
+        <span class="occ-name" :title="occ.name">{{ occ.name }}</span>
+        <div class="occ-navdot">
+          <img v-if="occ.image" :src="occ.image" :alt="occ.name" />
+          <span v-else class="occ-initials">{{ initials(occ.name) }}</span>
+        </div>
+        <Handle :id="`occ-${occ.id}-source`" type="source" :position="Position.Right" class="occ-handle" />
+        <Handle :id="`occ-${occ.id}-target`" type="target" :position="Position.Left" class="occ-handle" />
+      </div>
+    </div>
+
     <Handle id="top" type="source" :position="Position.Top" />
     <Handle id="bottom" type="target" :position="Position.Bottom" />
     <Handle id="bottom-source" type="source" :position="Position.Bottom" :style="{ left: '72%' }" />
@@ -51,12 +66,16 @@ defineProps({
   data: { type: Object, required: true },
   selected: { type: Boolean, default: false },
 })
+
+function initials(name) {
+  return (name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+}
 </script>
 
 <style scoped>
 .canvas-location-node {
   min-width: 150px;
-  max-width: 220px;
+  max-width: 240px;
   padding: 8px 10px;
   border-radius: 12px;
   background: radial-gradient(circle at 50% 30%, rgba(64, 136, 212, 0.35), rgba(20, 20, 35, 0.95));
@@ -87,4 +106,22 @@ defineProps({
 }
 .loc-btn:hover { background: var(--accent); color: #fff; }
 .loc-btn.active { background: var(--accent); color: #fff; }
+.loc-occupants {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.occ-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.occ-name {
+  font-size: 8px; max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-dim);
+}
+.occ-navdot {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-dim); overflow: hidden;
+}
+.occ-navdot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.occ-initials { font-size: 10px; font-weight: 700; color: #fff; }
+.occ-handle { width: 6px; height: 6px; opacity: 0.55; }
 </style>

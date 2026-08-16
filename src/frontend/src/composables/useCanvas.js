@@ -30,8 +30,7 @@ let currentLocationScope = null
 let currentUniverse = ''
 const collapsedUniverses = new Set()
 const collapsedLocations = new Set()
-const revealedOccupants = new Set()
-let showAllOccupants = false
+const highlightedOccupant = ref(null)
 const loadedChildren = new Set()
 const knownLeaves = new Set()
 
@@ -55,7 +54,7 @@ function makeLocationNode(entity, opts = {}) {
       isFocus: !!opts.isFocus,
       expanded: !!opts.expanded,
       isLeaf: !!opts.isLeaf,
-      occupantsRevealed: !!opts.occupantsRevealed,
+      occupants: opts.occupants || [],
       isScaffolding: !!opts.isScaffolding,
     },
   }
@@ -273,9 +272,7 @@ export function useCanvas() {
       }
 
       collapsedLocations.clear()
-      revealedOccupants.clear()
-      if (data.focus) revealedOccupants.add(data.focus)
-      showAllOccupants = false
+      highlightedOccupant.value = null
 
       const parentOf = {}
       const childrenOf = {}
@@ -346,10 +343,12 @@ export function useCanvas() {
     const newEdges = []
 
     for (const u of g.universes) {
-      newNodes.push(makeUniverseNode(u, {
+      const n = makeUniverseNode(u, {
         isCurrent: u.universe === currentUniverse,
         expanded: !collapsedUniverses.has(u.universe),
-      }))
+      })
+      n.zIndex = 10
+      newNodes.push(n)
     }
 
     for (const id of g.locations.keys()) {
@@ -360,15 +359,17 @@ export function useCanvas() {
       const isLoaded = loadedChildren.has(id)
       const isLeaf = knownLeaves.has(id) || (isLoaded && children.length === 0)
       const expanded = isLoaded && !collapsed && children.length > 0
-      newNodes.push(makeLocationNode(
+      const n = makeLocationNode(
         { _key: id, name: loc.name, current_universe: loc.universe },
         {
           isFocus: id === g.focus,
           expanded,
           isLeaf,
-          occupantsRevealed: showAllOccupants || revealedOccupants.has(id),
+          occupants: g.occupants.get(id) || [],
         },
-      ))
+      )
+      n.zIndex = 10
+      newNodes.push(n)
     }
 
     for (const e of g.superEdges) {
@@ -389,21 +390,30 @@ export function useCanvas() {
       }
     }
 
-    const renderedOccupants = new Set()
+    // Map each rendered occupant to its location so relation edges can anchor
+    // to the embedded navdot handles.
+    const occLoc = new Map()
     for (const id of g.locations.keys()) {
       if (!visible.has(id)) continue
-      if (!showAllOccupants && !revealedOccupants.has(id)) continue
-      for (const occ of g.occupants.get(id) || []) {
-        newNodes.push(makeOccupantNode(occ, { factions: occ.factions || [] }))
-        newEdges.push(makeLocatedEdge(nodeId('loc', id), nodeId('occ', occ.id)))
-        renderedOccupants.add(occ.id)
-      }
+      for (const occ of g.occupants.get(id) || []) occLoc.set(occ.id, id)
     }
 
     for (const rel of g.occupantRelations) {
-      if (renderedOccupants.has(rel.from) && renderedOccupants.has(rel.to)) {
-        newEdges.push(makeRelationEdge(nodeId('occ', rel.from), nodeId('occ', rel.to), rel.description))
-      }
+      const fromLoc = occLoc.get(rel.from)
+      const toLoc = occLoc.get(rel.to)
+      if (!fromLoc || !toLoc) continue
+      const highlighted = highlightedOccupant.value === rel.from || highlightedOccupant.value === rel.to
+      newEdges.push({
+        id: `relation:${rel.from}:${rel.to}:${rel.description}`,
+        source: nodeId('loc', fromLoc),
+        target: nodeId('loc', toLoc),
+        sourceHandle: `occ-${rel.from}-source`,
+        targetHandle: `occ-${rel.to}-target`,
+        type: 'gradient',
+        label: rel.description || '',
+        data: { kind: 'relation', from: rel.from, to: rel.to, description: rel.description, highlighted },
+        zIndex: highlighted ? 20 : 0,
+      })
     }
 
     nodes.value = newNodes
@@ -471,66 +481,15 @@ export function useCanvas() {
     }
   }
 
-  async function revealOccupants(locationId) {
-    if (revealedOccupants.has(locationId) && !showAllOccupants) {
-      revealedOccupants.delete(locationId)
-      renderLocationGraph()
-      return
-    }
-    revealedOccupants.add(locationId)
-    if (!locationGraph.occupants.has(locationId)) {
-      await fetchOccupants(locationId)
-    }
-    renderLocationGraph()
-  }
-
-  async function fetchOccupants(locationId) {
-    try {
-      const params = new URLSearchParams()
-      if (currentLocationScope?.faction) params.set('faction', currentLocationScope.faction)
-      const r = await fetch(`${API_BASE}/locations/${locationId}/occupants?${params}`)
-      if (!r.ok) return
-      const data = await r.json()
-      if (!locationGraph.occupants.has(locationId)) {
-        locationGraph.occupants.set(locationId, data.occupants || [])
-      }
-      mergeLocationCanvas({ occupant_relations: data.occupant_relations || [] })
-    } catch (e) {
-      error.value = e.message
-    }
-  }
-
-  async function revealAllOccupants() {
-    showAllOccupants = !showAllOccupants
-    if (showAllOccupants && locationGraph) {
-      const missing = visibleLocationIds().filter((id) => !locationGraph.occupants.has(id))
-      await Promise.all(missing.map((id) => fetchOccupants(id)))
-    }
-    renderLocationGraph()
-  }
-
-  function visibleLocationIds() {
-    if (!locationGraph) return []
-    const g = locationGraph
-    const parentOf = {}
-    const childrenOf = {}
-    for (const e of g.superEdges) {
-      parentOf[e.child] = e.parent
-      ;(childrenOf[e.parent] ||= []).push(e.child)
-    }
-    const visible = new Set()
-    function walk(id) {
-      if (!g.locations.has(id) || visible.has(id)) return
-      const loc = g.locations.get(id)
-      if (loc.universe && collapsedUniverses.has(loc.universe)) return
-      visible.add(id)
-      if (collapsedLocations.has(id)) return
-      for (const c of childrenOf[id] || []) walk(c)
-    }
-    for (const id of g.locations.keys()) {
-      if (!parentOf[id]) walk(id)
-    }
-    return [...visible]
+  function setHighlightedOccupant(occId) {
+    if (highlightedOccupant.value === occId) return
+    highlightedOccupant.value = occId
+    edges.value = edges.value.map((e) => {
+      if (e.data?.kind !== 'relation') return e
+      const highlighted = e.data.from === occId || e.data.to === occId
+      if (highlighted === !!e.data.highlighted) return e
+      return { ...e, data: { ...e.data, highlighted }, zIndex: highlighted ? 20 : 0 }
+    })
   }
 
   function clear() {
@@ -544,8 +503,7 @@ export function useCanvas() {
     currentLocationScope = null
     collapsedUniverses.clear()
     collapsedLocations.clear()
-    revealedOccupants.clear()
-    showAllOccupants = false
+    highlightedOccupant.value = null
     loadedChildren.clear()
     knownLeaves.clear()
   }
@@ -911,6 +869,7 @@ export function useCanvas() {
         return { ...e, sourceHandle: 'top', targetHandle: 'bottom' }
       }
       if (e.data?.kind !== 'relation') return e
+      if (e.source.startsWith('loc:')) return e
       const s = pos[e.source]
       const t = pos[e.target]
       if (!s || !t) return e
@@ -1224,8 +1183,7 @@ export function useCanvas() {
     expandLocation,
     loadFactions,
     collapseLocation,
-    revealOccupants,
-    revealAllOccupants,
+    setHighlightedOccupant,
     setFactionFilter,
     toggleRelations,
     showFaction,
