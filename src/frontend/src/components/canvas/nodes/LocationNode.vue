@@ -48,14 +48,14 @@
           type="source"
           :position="Position.Right"
           class="occ-handle"
-          :style="{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }"
+          :style="{ top: '50%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)', width: '0', height: '0' }"
         />
         <Handle
           :id="`occ-${occ.id}-target`"
           type="target"
           :position="Position.Left"
           class="occ-handle"
-          :style="{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }"
+          :style="{ top: '50%', left: '50%', right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)', width: '0', height: '0' }"
         />
       </div>
     </div>
@@ -122,15 +122,17 @@ function initials(name) {
   display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
 }
 .occ-tile {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  position: relative; width: 32px; height: 32px;
 }
 .occ-name {
-  font-size: 8px; max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--text-dim); opacity: 0; transition: opacity 0.12s;
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  margin-bottom: 2px;
+  font-size: 8px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-dim); opacity: 0; transition: opacity 0.12s; pointer-events: none;
 }
 .occ-tile:hover .occ-name, .occ-tile:focus-within .occ-name { opacity: 1; }
 .occ-navdot {
-  width: 32px; height: 32px; border-radius: 50%;
+  position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   background: var(--accent-dim); overflow: hidden;
 }
