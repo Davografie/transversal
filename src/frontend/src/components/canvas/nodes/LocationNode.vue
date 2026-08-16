@@ -38,6 +38,8 @@
     <Handle id="bottom-source" type="source" :position="Position.Bottom" :style="{ left: '72%' }" />
     <Handle id="right" type="source" :position="Position.Right" />
     <Handle id="left" type="target" :position="Position.Left" />
+    <Handle id="left-source" type="source" :position="Position.Left" />
+    <Handle id="right-target" type="target" :position="Position.Right" />
   </div>
 </template>
 

@@ -12,6 +12,7 @@
       >{{ data.expanded ? '⊖' : '⊕' }}</button>
     </div>
     <Handle id="bottom" type="target" :position="Position.Bottom" />
+    <Handle id="right" type="target" :position="Position.Right" />
   </div>
 </template>
 

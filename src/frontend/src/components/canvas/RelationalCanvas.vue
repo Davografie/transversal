@@ -17,6 +17,12 @@
           <option value="">— Filter by faction —</option>
           <option v-for="f in factions" :key="f.id" :value="f.id">{{ f.name }}</option>
         </select>
+        <button
+          v-if="mode === 'location' || mode === 'location-tree'"
+          class="tool-btn"
+          :title="layoutOrientation === 'horizontal' ? 'Switch to vertical layout' : 'Pivot to horizontal layout'"
+          @click="toggleLayoutOrientation"
+        >⇄</button>
         <button v-if="mode === 'faction' || mode === 'gmc-web'" class="tool-btn" @click="backToLocation">← Location</button>
         <button v-if="mode === 'life-path'" class="tool-btn" title="Reset layout" @click="resetLayout">↺</button>
         <button v-if="!fullscreen" class="tool-btn" title="Open fullscreen" @click="openFull">⛶</button>
@@ -104,7 +110,7 @@ const bus = usePanelBus()
 const panel = usePanel()
 
 const canvas = useCanvas()
-const { mode, title, loading, error, factions } = canvas
+const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation } = canvas
 const nodes = canvas.nodes
 const edges = canvas.edges
 

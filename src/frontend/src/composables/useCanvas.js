@@ -14,6 +14,7 @@ const focusId = ref(null)
 const title = ref('')
 const loading = ref(false)
 const error = ref(null)
+const layoutOrientation = ref('vertical') // 'vertical' | 'horizontal'
 
 // Persistent knowledge of what the canvas has loaded, keyed by entity id.
 // Lets expand/collapse lazily add nodes without refetching already-known ones.
@@ -90,6 +91,33 @@ function makeOccupantNode(entity, opts = {}) {
 
 const DX = 240
 const DY = 140
+
+// ── Orientation helpers ───────────────────────────────
+
+function isHorizontal() {
+  return layoutOrientation.value === 'horizontal'
+}
+
+function orientationNodeSize() {
+  // d3.tree nodeSize uses [sibling-spacing, depth-spacing].
+  return isHorizontal() ? [DY, DX] : [DX, DY]
+}
+
+function forestSpacing() {
+  return isHorizontal() ? DY : DX
+}
+
+function depthStep() {
+  return isHorizontal() ? DX : DY
+}
+
+function depthStepExpanded() {
+  return isHorizontal() ? DX * 1.7 : DY * 1.7
+}
+
+function mapTreeCoords(sibling, depth) {
+  return isHorizontal() ? { x: depth, y: sibling } : { x: sibling, y: depth }
+}
 
 // ── Public API ────────────────────────────────────────
 
@@ -280,43 +308,7 @@ export function useCanvas() {
   }
 
   function layoutLocationTreeNodes() {
-    const parentOf = {}
-    const childrenOf = {}
-    for (const e of edges.value) {
-      if (e.data?.kind === 'super') {
-        parentOf[e.source] = e.target
-        childrenOf[e.target] = childrenOf[e.target] || []
-        childrenOf[e.target].push(e.source)
-      }
-    }
-    const allIds = new Set(nodes.value.map((n) => n.id))
-    const roots = nodes.value.filter((n) => !parentOf[n.id]).map((n) => n.id)
-
-    const buildData = (id) => ({
-      id,
-      children: (childrenOf[id] || []).filter((cid) => allIds.has(cid)).map(buildData),
-    })
-
-    const positions = {}
-    let offsetX = 0
-    const layout = tree().nodeSize([DX, DY])
-    for (const rootId of roots) {
-      const root = hierarchy(buildData(rootId))
-      layout(root)
-      let minX = Infinity
-      let maxX = -Infinity
-      root.each((d) => {
-        minX = Math.min(minX, d.x)
-        maxX = Math.max(maxX, d.x)
-      })
-      const center = (minX + maxX) / 2
-      root.each((d) => {
-        positions[d.data.id] = { x: d.x - center + offsetX, y: d.y }
-      })
-      offsetX += (maxX - minX) + DX
-    }
-
-    applyPositions(positions)
+    layoutLocationForest({ includeUniverse: true })
   }
 
   async function expandLocation(locationId) {
@@ -342,6 +334,12 @@ export function useCanvas() {
     focusId.value = null
     title.value = ''
     error.value = null
+  }
+
+  function toggleLayoutOrientation() {
+    layoutOrientation.value = isHorizontal() ? 'vertical' : 'horizontal'
+    if (mode.value === 'location-tree') layoutLocationTreeNodes()
+    else if (mode.value === 'location') layoutLocationNodes()
   }
 
   // ── Graph builders ─────────────────────────────────
@@ -545,99 +543,124 @@ export function useCanvas() {
   function layoutLocationNodes() {
     const focus = nodes.value.find((n) => n.data.isFocus)
     if (!focus) return
+    layoutLocationForest({ centerId: focus.id })
+  }
 
-    // Build the visible location hierarchy from super edges (child → parent).
+  function buildLocationHierarchy(includeUniverse = false) {
     const parentOf = {}
     const childrenOf = {}
+    const hierarchyIds = new Set(
+      nodes.value
+        .filter((n) => n.type === 'location' || (includeUniverse && n.type === 'universe'))
+        .map((n) => n.id),
+    )
     for (const e of edges.value) {
-      if (e.data?.kind === 'super') {
+      if (e.data?.kind === 'super' && hierarchyIds.has(e.source) && hierarchyIds.has(e.target)) {
         parentOf[e.source] = e.target
         childrenOf[e.target] = childrenOf[e.target] || []
         childrenOf[e.target].push(e.source)
       }
     }
+    const roots = [...hierarchyIds].filter((id) => !parentOf[id])
+    return { parentOf, childrenOf, hierarchyIds, roots }
+  }
 
-    const locNodeIds = new Set(nodes.value.filter((n) => n.type === 'location').map((n) => n.id))
-    const roots = [...locNodeIds].filter((id) => !parentOf[id])
+  function layoutLocationForest({ includeUniverse = false, centerId = null } = {}) {
+    const { parentOf, childrenOf, hierarchyIds, roots } = buildLocationHierarchy(includeUniverse)
 
-    // d3.tree computes horizontal positions (DX spacing).
     const buildData = (id) => ({
       id,
-      children: (childrenOf[id] || []).filter((cid) => locNodeIds.has(cid)).map(buildData),
+      children: (childrenOf[id] || []).filter((cid) => hierarchyIds.has(cid)).map(buildData),
     })
 
+    // d3.tree assigns the sibling coordinate; depth is assigned by the
+    // occupant-aware walk below so sub-locations stay clear of occupants.
     const positions = {}
-    let offsetX = 0
-    const layout = tree().nodeSize([DX, DY])
+    let forestOffset = 0
+    const layout = tree().nodeSize(orientationNodeSize())
     for (const rootId of roots) {
       const root = hierarchy(buildData(rootId))
       layout(root)
-      let minX = Infinity
-      let maxX = -Infinity
+      let minSibling = Infinity
+      let maxSibling = -Infinity
       root.each((d) => {
-        minX = Math.min(minX, d.x)
-        maxX = Math.max(maxX, d.x)
+        minSibling = Math.min(minSibling, d.x)
+        maxSibling = Math.max(maxSibling, d.x)
       })
-      const center = (minX + maxX) / 2
+      const center = (minSibling + maxSibling) / 2
       root.each((d) => {
-        positions[d.data.id] = { x: d.x - center + offsetX, y: 0 }
+        const c = mapTreeCoords(d.x - center + forestOffset, d.y)
+        positions[d.data.id] = { x: c.x, y: c.y }
       })
-      offsetX += (maxX - minX) + DX
+      forestOffset += (maxSibling - minSibling) + forestSpacing()
     }
 
-    // Center the focus horizontally.
-    const fp = positions[focus.id]
-    if (fp) {
-      for (const id of Object.keys(positions)) positions[id].x -= fp.x
+    // Center the focus on the cross axis.
+    if (centerId && positions[centerId]) {
+      const c = positions[centerId]
+      if (isHorizontal()) {
+        for (const id of Object.keys(positions)) positions[id].y -= c.y
+      } else {
+        for (const id of Object.keys(positions)) positions[id].x -= c.x
+      }
     }
 
     // Occupants per location (located edge: source=location, target=occupant).
     const occupantsOf = {}
     for (const e of edges.value) {
-      if (e.data?.kind === 'located') {
+      if (e.data?.kind === 'located' && hierarchyIds.has(e.source)) {
         occupantsOf[e.source] = occupantsOf[e.source] || []
         occupantsOf[e.source].push(e.target)
       }
     }
 
-    // Vertical walk: occupants sit below their location; sub-locations go
-    // further down when occupants are present so nothing gets squeezed.
+    // Walk the hierarchy assigning depth coordinates; occupants sit below
+    // their location, and sub-locations drop further when occupants exist.
     const seen = new Set()
-    function walkY(nodeId, y) {
+    function walk(nodeId, depth) {
       if (seen.has(nodeId)) return
       seen.add(nodeId)
-      positions[nodeId].y = y
+      const pos = positions[nodeId]
+      if (!pos) return
+      if (isHorizontal()) pos.x = depth
+      else pos.y = depth
 
       const occupants = occupantsOf[nodeId] || []
-      const children = (childrenOf[nodeId] || []).filter((cid) => locNodeIds.has(cid))
+      const children = (childrenOf[nodeId] || []).filter((cid) => hierarchyIds.has(cid))
 
       occupants.forEach((oid, i) => {
         positions[oid] = {
-          x: positions[nodeId].x + DX * 0.55 + (i - (occupants.length - 1) / 2) * (DX / 2),
-          y: y + DY * 0.7,
+          x: pos.x + DX * 0.55 + (i - (occupants.length - 1) / 2) * (DX / 2),
+          y: pos.y + DY * 0.7,
         }
       })
 
-      const childY = y + (occupants.length ? DY * 1.7 : DY)
-      children.forEach((cid) => walkY(cid, childY))
+      const childDepth = depth + (occupants.length ? depthStepExpanded() : depthStep())
+      children.forEach((cid) => walk(cid, childDepth))
     }
 
-    // Walk the focus's own tree (highest visible ancestor down), then center
-    // the focus at y=0. Lateral roots (transversal peers) sit at focus level.
-    const chain = []
-    let cur = focus.id
-    while (parentOf[cur]) {
-      chain.push(parentOf[cur])
-      cur = parentOf[cur]
-    }
-    const mainRoot = chain.length ? chain[chain.length - 1] : focus.id
-    walkY(mainRoot, 0)
+    if (centerId) {
+      const chain = []
+      let cur = centerId
+      while (parentOf[cur]) {
+        chain.push(parentOf[cur])
+        cur = parentOf[cur]
+      }
+      const mainRoot = chain.length ? chain[chain.length - 1] : centerId
+      walk(mainRoot, 0)
 
-    const fy = positions[focus.id]?.y ?? 0
-    for (const id of Object.keys(positions)) positions[id].y -= fy
+      const f = positions[centerId]
+      const fDepth = f ? (isHorizontal() ? f.x : f.y) : 0
+      for (const id of Object.keys(positions)) {
+        if (isHorizontal()) positions[id].x -= fDepth
+        else positions[id].y -= fDepth
+      }
 
-    for (const rootId of roots) {
-      if (!seen.has(rootId)) walkY(rootId, 0)
+      for (const rootId of roots) {
+        if (!seen.has(rootId)) walk(rootId, 0)
+      }
+    } else {
+      for (const rootId of roots) walk(rootId, 0)
     }
 
     applyPositions(positions)
@@ -752,6 +775,14 @@ export function useCanvas() {
     }
 
     edges.value = edges.value.map((e) => {
+      if (e.data?.kind === 'super') {
+        if (isHorizontal()) {
+          const targetNode = nodes.value.find((n) => n.id === e.target)
+          const targetHandle = targetNode?.type === 'universe' ? 'right' : 'right-target'
+          return { ...e, sourceHandle: 'left-source', targetHandle }
+        }
+        return { ...e, sourceHandle: 'top', targetHandle: 'bottom' }
+      }
       if (e.data?.kind !== 'relation') return e
       const s = pos[e.source]
       const t = pos[e.target]
@@ -1073,6 +1104,8 @@ export function useCanvas() {
     loading,
     error,
     factions,
+    layoutOrientation,
+    toggleLayoutOrientation,
     loadLocation,
     loadFaction,
     loadGmcWeb,
