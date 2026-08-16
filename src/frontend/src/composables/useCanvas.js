@@ -664,22 +664,10 @@ export function useCanvas() {
     const gap = HX_SIBLING_GAP
     const h = (id) => estimatedNodeHeight(id)
 
-    function subtreeExtent(id, top) {
-      positions[id].y = top
-      const kh = h(id)
-      const kids = childrenOf[id] || []
-      if (!kids.length) return { min: top, max: top + kh }
-      const total = kids.reduce((s, k) => s + h(k), 0) + gap * (kids.length - 1)
-      let childTop = top + kh / 2 - total / 2
-      let min = top
-      let max = top + kh
-      for (const k of kids) {
-        const e = subtreeExtent(k, childTop)
-        min = Math.min(min, e.min)
-        max = Math.max(max, e.max)
-        childTop += h(k) + gap
-      }
-      return { min, max }
+    function subtreeIds(id) {
+      const out = [id]
+      for (const k of childrenOf[id] || []) out.push(...subtreeIds(k))
+      return out
     }
 
     function shiftSubtree(id, dy) {
@@ -687,12 +675,52 @@ export function useCanvas() {
       for (const k of childrenOf[id] || []) shiftSubtree(k, dy)
     }
 
-    const extents = roots.map((r) => subtreeExtent(r, 0))
+    function extentOf(id) {
+      let min = Infinity
+      let max = -Infinity
+      for (const nid of subtreeIds(id)) {
+        min = Math.min(min, positions[nid].y)
+        max = Math.max(max, positions[nid].y + h(nid))
+      }
+      return { min, max }
+    }
+
+    // Lay a subtree out with its root node centered at y=0, then return once
+    // every descendant has a consistent relative position. Children are
+    // stacked bottom-up using their *subtree* extents, so sibling subtrees
+    // never overlap.
+    function layoutSubtree(id) {
+      const kh = h(id)
+      positions[id].y = -kh / 2
+      const kids = childrenOf[id] || []
+      if (!kids.length) return
+
+      kids.forEach((k) => layoutSubtree(k))
+
+      let cursor = 0
+      for (const k of kids) {
+        const e = extentOf(k)
+        const offset = cursor - e.min
+        shiftSubtree(k, offset)
+        cursor = e.max + offset + gap
+      }
+
+      const first = extentOf(kids[0])
+      const last = extentOf(kids[kids.length - 1])
+      const centerShift = -(first.min + last.max) / 2
+      kids.forEach((k) => shiftSubtree(k, centerShift))
+    }
+
+    roots.forEach((r) => layoutSubtree(r))
+
+    // Stack each root forest vertically without overlapping their extents.
     let cursor = 0
-    extents.forEach((ext, i) => {
-      shiftSubtree(roots[i], cursor - ext.min)
-      cursor += (ext.max - ext.min) + gap
-    })
+    for (const r of roots) {
+      const e = extentOf(r)
+      const offset = cursor - e.min
+      shiftSubtree(r, offset)
+      cursor = e.max + offset + gap
+    }
   }
 
   function layoutLocationForest({ includeUniverse = false, centerId = null } = {}) {
