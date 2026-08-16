@@ -751,7 +751,7 @@ export function useCanvas() {
           // In horizontal layout, occupants stack vertically below their
           // location instead of fanning out along the depth axis.
           positions[oid] = {
-            x: pos.x + DX * 0.55,
+            x: pos.x + DX * 0.275,
             y: pos.y + DY * 0.7 + i * 96,
           }
         } else {
