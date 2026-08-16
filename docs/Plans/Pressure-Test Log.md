@@ -139,4 +139,30 @@ Headline: a "test" is currently "roll dice and see a number" — the difficulty,
 
 ---
 
-*Scenarios 4–7 pending.*
+## Scenario 4 — A contest
+
+Setting: Kael sneaks past a guard (stealth vs perception), head-to-head.
+
+### Verified solid ✅
+- Backend contest machinery: `resolve_contest` (pure, 2-party), `ContestTracker` (per-location pools), REST endpoints (add-die / set-opposition / resolve / GET pools).
+- Frontend pool sharing: the DiceRoller builds a pool, App.vue broadcasts `pool_updated` over SSE, LocationViewer renders peers' pools around avatars.
+- The "◆ Next Beat" button exists in the GM panel.
+
+### Gaps
+- **Challenger vs defendant is not modeled** — `set_opposition` stores a unidirectional "opponent"; "ties go to defender" is positional (defender = whoever is the opponent argument), so roles flip depending on who calls resolve.
+- **Test vs contest is not first-class** — two separate backend paths (`/roll` vs the contest tracker), no shared concept; the frontend `mode` flag is UI-only.
+- **Beat button is cosmetic** — `onNextBeat()` only clears dice pools frontend-side; it never calls the backend, and `tick_beat()` (fires `end_of_beat` effects) has no call site.
+- **Opposition/doom dice have no render surface** — character dice render around avatars; location-trait dice and doom-pool dice have no home (the "looming dice" idea is the intended answer, not built).
+- **Contest resolve returns only `{winner, pipeline, pushed}`** — no rolls, no effect dice, so no "stakes".
+- **`fire_contest_sfx` is dead code** — defined but never called (SFX don't fire on contests).
+- **Push has no frontend trigger** — `push_contest` + `pushed_this_beat` exist in the tracker; no UI.
+
+### Open / design
+- **Multiway contests** (3+ parties, winner-takes-all) — deferred; the resolver is 2-party.
+- **Hero dice + margin step-up** (`(winner − loser) / 5 → step up effect die`) — neither is in Transversal's selected Cortex modules ([[Core Mechanics]]); decide explicitly whether to pull them in.
+- **Push as SFX** — "push a contest" is a table-level SFX (owner model), not a hardcoded button; the hardcoded `push_contest` would become that SFX's effect.
+- **Complication expiry** — "suppressed d8 for 2 beats" maps onto existing `after_beats` timing (basically free); "expiry in N dice-pool pushes" is new; severity → default expiry maps to the negative-trait severity table.
+
+---
+
+*Scenarios 5–7 pending.*
