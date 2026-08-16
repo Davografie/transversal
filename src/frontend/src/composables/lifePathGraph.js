@@ -171,6 +171,24 @@ export function buildLifePathGraph(path, tables, opts = {}) {
   const nodes = []
   const edges = []
 
+  // Tables that belong to this life path (as opposed to out-of-path targets).
+  const pathTableIds = new Set()
+  for (const t of tables || []) if (t.lifePath === path.id) pathTableIds.add(t.id)
+
+  // True when following next_step links from `id` can reach back into this path.
+  function canReachPath(id, seen) {
+    seen = seen || new Set()
+    if (pathTableIds.has(id)) return true
+    if (seen.has(id)) return false
+    seen.add(id)
+    const targets = links.get(id)
+    if (!targets) return false
+    for (const tgt of targets.keys()) {
+      if (canReachPath(tgt, seen)) return true
+    }
+    return false
+  }
+
   for (const id of reachable) {
     const t = byId.get(id)
     // Prefer a persisted GM arrangement over the auto-computed DAG position.
@@ -198,7 +216,6 @@ export function buildLifePathGraph(path, tables, opts = {}) {
     })
 
     const external = t.lifePath !== path.id
-    const hasOutgoing = (links.get(id)?.size || 0) > 0
     const pathMeta = opts.pathMeta || {}
     const meta = pathMeta[t.lifePath] || {}
 
@@ -217,7 +234,7 @@ export function buildLifePathGraph(path, tables, opts = {}) {
         lifePathName: meta.name || '',
         factionNames: meta.factionNames || [],
         external,
-        terminal: external && !hasOutgoing,
+        terminal: external && !canReachPath(id),
         rows,
       },
     })
