@@ -15,6 +15,7 @@ const title = ref('')
 const loading = ref(false)
 const error = ref(null)
 const layoutOrientation = ref('vertical') // 'vertical' | 'horizontal'
+const selection = ref([]) // [{ kind: 'location' | 'occupant', id }]
 
 // Persistent knowledge of what the canvas has loaded, keyed by entity id.
 // Lets expand/collapse lazily add nodes without refetching already-known ones.
@@ -271,6 +272,7 @@ export function useCanvas() {
       }
 
       focusId.value = data.focus || null
+      selection.value = data.focus ? [{ kind: 'location', id: data.focus }] : []
       title.value = data.focus
         ? (locationGraph.locations.get(data.focus)?.name || 'Location')
         : (data.faction?.name || 'Location Tree')
@@ -330,6 +332,8 @@ export function useCanvas() {
       return
     }
     const g = locationGraph
+    const selLoc = selectedIds('location')
+    const selOcc = selectedIds('occupant')
     const parentOf = {}
     const childrenOf = {}
     for (const e of g.superEdges) {
@@ -373,11 +377,11 @@ export function useCanvas() {
       const n = makeLocationNode(
         { _key: id, name: loc.name, current_universe: loc.universe },
         {
-          isFocus: id === g.focus,
+          isFocus: selLoc.has(id),
           expanded,
           isLeaf,
           horizontal: isHorizontal(),
-          occupants: g.occupants.get(id) || [],
+          occupants: (g.occupants.get(id) || []).map((o) => ({ ...o, selected: selOcc.has(o.id) })),
         },
       )
       n.zIndex = 10
@@ -414,7 +418,6 @@ export function useCanvas() {
       const fromLoc = occLoc.get(rel.from)
       const toLoc = occLoc.get(rel.to)
       if (!fromLoc || !toLoc) continue
-      const highlighted = highlightedOccupant.value === rel.from || highlightedOccupant.value === rel.to
       newEdges.push({
         id: `relation:${rel.from}:${rel.to}:${rel.description}`,
         source: nodeId('loc', fromLoc),
@@ -423,8 +426,7 @@ export function useCanvas() {
         targetHandle: `occ-${rel.to}-target`,
         type: 'gradient',
         label: rel.description || '',
-        data: { kind: 'relation', from: rel.from, to: rel.to, description: rel.description, highlighted },
-        zIndex: highlighted ? 20 : 0,
+        data: { kind: 'relation', from: rel.from, to: rel.to, description: rel.description },
       })
     }
 
@@ -501,19 +503,64 @@ export function useCanvas() {
     return e.style
   }
 
+  function selectedIds(kind) {
+    return new Set(selection.value.filter((s) => s.kind === kind).map((s) => s.id))
+  }
+
   function updateEdgeEmphasis() {
-    const focusNodeId = focusId.value ? nodeId('loc', focusId.value) : null
-    const occId = highlightedOccupant.value
+    const locIds = selectedIds('location')
+    const occIds = selectedIds('occupant')
+    const hoverOccId = highlightedOccupant.value
+    const locNodeIds = new Set([...locIds].map((id) => nodeId('loc', id)))
+
     edges.value = edges.value.map((e) => {
       let highlighted = false
       if (e.data?.kind === 'relation') {
-        highlighted = occId != null && (e.data.from === occId || e.data.to === occId)
-      } else if (focusNodeId) {
-        highlighted = e.source === focusNodeId || e.target === focusNodeId
+        highlighted = occIds.has(e.data.from) || occIds.has(e.data.to) || (hoverOccId != null && (e.data.from === hoverOccId || e.data.to === hoverOccId))
+      } else {
+        highlighted = locNodeIds.has(e.source) || locNodeIds.has(e.target)
       }
       if (highlighted === !!e.data.highlighted) return e
       return { ...e, data: { ...e.data, highlighted }, zIndex: highlighted ? 20 : 0, style: edgeStyleFor(e, highlighted) }
     })
+  }
+
+  function refreshSelection() {
+    const locIds = selectedIds('location')
+    const occIds = selectedIds('occupant')
+    nodes.value = nodes.value.map((n) => {
+      if (n.type === 'location') {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            isFocus: locIds.has(n.data.entityId),
+            occupants: (n.data.occupants || []).map((o) => ({ ...o, selected: occIds.has(o.id) })),
+          },
+        }
+      }
+      return n
+    })
+    const locs = selection.value.filter((s) => s.kind === 'location')
+    focusId.value = locs.length ? locs[0].id : null
+    updateEdgeEmphasis()
+  }
+
+  function selectEntity(kind, id, additive) {
+    if (additive) {
+      const exists = selection.value.some((s) => s.kind === kind && s.id === id)
+      selection.value = exists
+        ? selection.value.filter((s) => !(s.kind === kind && s.id === id))
+        : [...selection.value, { kind, id }]
+    } else {
+      selection.value = [{ kind, id }]
+    }
+    refreshSelection()
+  }
+
+  function clearSelection() {
+    selection.value = []
+    refreshSelection()
   }
 
   function setHighlightedOccupant(occId) {
@@ -534,6 +581,7 @@ export function useCanvas() {
     collapsedUniverses.clear()
     collapsedLocations.clear()
     highlightedOccupant.value = null
+    selection.value = []
     loadedChildren.clear()
     knownLeaves.clear()
   }
@@ -1236,19 +1284,6 @@ export function useCanvas() {
     }
   }
 
-  function setFocus(locationId) {
-    // Highlight the node without repositioning the graph.
-    const id = nodeId('loc', locationId)
-    nodes.value = nodes.value.map((n) => {
-      if (n.type === 'location') {
-        return { ...n, data: { ...n.data, isFocus: n.id === id } }
-      }
-      return n
-    })
-    focusId.value = locationId
-    updateEdgeEmphasis()
-  }
-
   function updateNodePosition(id, position) {
     const old = nodes.value.find((n) => n.id === id)
     const dx = position.x - (old?.position?.x ?? position.x)
@@ -1294,6 +1329,8 @@ export function useCanvas() {
     loadFactions,
     collapseLocation,
     setHighlightedOccupant,
+    selectEntity,
+    clearSelection,
     setFactionFilter,
     toggleRelations,
     showFaction,
@@ -1301,7 +1338,6 @@ export function useCanvas() {
     createRelation,
     linkRollTable,
     toggleTransversalEdge,
-    setFocus,
     updateNodePosition,
     persistTablePosition,
     clearLifePathPositions,

@@ -2,7 +2,7 @@
   <div
     class="canvas-location-node"
     :class="{ focus: data.isFocus, scaffolding: data.isScaffolding }"
-    @click.stop="data.onFocus?.(data.entityId)"
+    @click.stop="data.onSelect?.(data.entityId, $event)"
   >
     <div class="loc-header">
       <span class="loc-badge">LOC</span>
@@ -20,7 +20,7 @@
         class="loc-btn"
         :class="{ active: data.isFocus }"
         title="Focus here"
-        @click.stop="data.onFocus?.(data.entityId)"
+        @click.stop="data.onSelect?.(data.entityId, $event)"
       >⊙</button>
       <button
         class="loc-btn"
@@ -36,10 +36,11 @@
         class="occ-tile"
         @mouseenter="data.onOccupantHover?.(occ.id)"
         @mouseleave="data.onOccupantLeave?.()"
-        @click.stop="data.onInspect?.(occ.id)"
+        @click.stop="data.onSelectOccupant?.(occ.id, $event)"
+        @dblclick.stop="data.onInspectOccupant?.(occ.id)"
       >
         <span class="occ-name" :title="occ.name">{{ occ.name }}</span>
-        <div class="occ-navdot">
+        <div class="occ-navdot" :class="{ selected: occ.selected }">
           <img v-if="occ.image" :src="occ.image" :alt="occ.name" />
           <span v-else class="occ-initials">{{ initials(occ.name) }}</span>
         </div>
@@ -140,6 +141,9 @@ function initials(name) {
   background: var(--accent-dim); overflow: hidden;
 }
 .occ-navdot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.occ-navdot.selected {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 10px rgba(64, 136, 212, 0.9);
+}
 .occ-initials { font-size: 10px; font-weight: 700; color: #fff; }
 .occ-handle { width: 0; height: 0; min-width: 0; min-height: 0; background: transparent; border: none; }
 </style>

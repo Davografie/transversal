@@ -37,7 +37,7 @@
       :d="path"
       fill="none"
       :stroke="`url(#${gradientId})`"
-      stroke-width="2"
+      :stroke-width="highlighted ? 3 : 2"
       :marker-end="`url(#${arrowId})`"
     />
     <EdgeLabelRenderer>
@@ -64,7 +64,10 @@ const props = defineProps({
   sourcePosition: { type: String, required: true },
   targetPosition: { type: String, required: true },
   label: { type: String, default: '' },
+  data: { type: Object, default: () => ({}) },
 })
+
+const highlighted = computed(() => !!props.data?.highlighted)
 
 const gradientId = computed(() => `gradient-${props.id.replace(/[^a-zA-Z0-9-]/g, '-')}`)
 const arrowId = computed(() => `${gradientId.value}-arrow`)

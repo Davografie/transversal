@@ -52,6 +52,7 @@
       @connect-end="onConnectEnd"
       @node-drag-stop="onNodeDragStop"
       @edge-click="onEdgeClick"
+      @pane-click="clearSelection"
     >
       <Background :gap="24" />
       <Controls v-if="fullscreen" />
@@ -119,7 +120,7 @@ const bus = usePanelBus()
 const panel = usePanel()
 
 const canvas = useCanvas()
-const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation, setHighlightedOccupant, setFactionFilter } = canvas
+const { mode, title, loading, error, factions, layoutOrientation, toggleLayoutOrientation, setHighlightedOccupant, setFactionFilter, selectEntity, clearSelection } = canvas
 const nodes = canvas.nodes
 const edges = canvas.edges
 
@@ -182,7 +183,9 @@ const displayNodes = computed(() =>
       ...n.data,
       onExpand: (id) => canvas.expandLocation(id),
       onCollapse: (id) => canvas.collapseLocation(id),
-      onFocus: (id) => canvas.setFocus(id),
+      onSelect: (id, ev) => selectEntity('location', id, ev?.shiftKey),
+      onSelectOccupant: (id, ev) => selectEntity('occupant', id, ev?.shiftKey),
+      onInspectOccupant: (id) => bus.emit('canvas:inspect', id),
       onToggleExpand: (id) => canvas.toggleUniverseExpand(id),
       onOccupantHover: (id) => setHighlightedOccupant(id),
       onOccupantLeave: () => setHighlightedOccupant(null),
