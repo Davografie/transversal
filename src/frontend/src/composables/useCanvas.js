@@ -410,30 +410,67 @@ export function useCanvas() {
   function layoutLocationNodes() {
     const focus = nodes.value.find((n) => n.data.isFocus)
     if (!focus) return
+
+    // Build the visible location hierarchy from super edges (child → parent).
+    const parentOf = {}
+    const childrenOf = {}
+    for (const e of edges.value) {
+      if (e.data?.kind === 'super') {
+        parentOf[e.source] = e.target
+        childrenOf[e.target] = childrenOf[e.target] || []
+        childrenOf[e.target].push(e.source)
+      }
+    }
+
+    const locNodeIds = new Set(nodes.value.filter((n) => n.type === 'location').map((n) => n.id))
+    const roots = [...locNodeIds].filter((id) => !parentOf[id])
+
+    const buildData = (id) => ({
+      id,
+      children: (childrenOf[id] || []).filter((cid) => locNodeIds.has(cid)).map(buildData),
+    })
+
     const positions = {}
-    positions[focus.id] = { x: 0, y: 0 }
+    let offsetX = 0
+    const layout = tree().nodeSize([DX * 1.3, DY])
+    for (const rootId of roots) {
+      const root = hierarchy(buildData(rootId))
+      layout(root)
+      let minX = Infinity
+      let maxX = -Infinity
+      root.each((d) => {
+        minX = Math.min(minX, d.x)
+        maxX = Math.max(maxX, d.x)
+      })
+      const center = (minX + maxX) / 2
+      root.each((d) => {
+        positions[d.data.id] = { x: d.x - center + offsetX, y: d.y }
+      })
+      offsetX += (maxX - minX) + DX * 1.3
+    }
 
-    // super edges are always child → parent (source=child, target=parent).
-    // The focus location's parent is an edge where the focus is the source.
-    const parentEdge = edges.value.find((e) => e.source === focus.id && e.data?.kind === 'super')
-    // The focus location's children are edges where the focus is the target.
-    const children = edges.value.filter((e) => e.target === focus.id && e.data?.kind === 'super').map((e) => e.source)
-    const transversal = edges.value.filter((e) => e.source === focus.id && e.data?.kind === 'transversal').map((e) => e.target)
-    const occupants = edges.value.filter((e) => e.source === focus.id && e.data?.kind === 'located').map((e) => e.target)
+    // Center the focus at the origin.
+    const fp = positions[focus.id]
+    if (fp) {
+      for (const id of Object.keys(positions)) {
+        positions[id] = { x: positions[id].x - fp.x, y: positions[id].y - fp.y }
+      }
+    }
 
-    if (parentEdge) positions[parentEdge.target] = { x: 0, y: -DY }
-
-    occupants.forEach((id, i) => {
-      positions[id] = { x: (i - (occupants.length - 1) / 2) * (DX / 1.6), y: DY }
-    })
-
-    children.forEach((id, i) => {
-      positions[id] = { x: (i - (children.length - 1) / 2) * DX, y: DY * 1.6 }
-    })
-
-    transversal.forEach((id, i) => {
-      positions[id] = { x: DX * 1.5, y: (i - (transversal.length - 1) / 2) * DY }
-    })
+    // Occupants sit below their location, shifted right so sub-locations can
+    // spread out beneath them without crowding.
+    for (const n of nodes.value) {
+      if (n.type !== 'location') continue
+      const base = positions[n.id]
+      if (!base) continue
+      const occupants = edges.value.filter((e) => e.source === n.id && e.data?.kind === 'located').map((e) => e.target)
+      occupants.forEach((oid, i) => {
+        positions[oid] = {
+          x: base.x + DX * 0.55 + (i - (occupants.length - 1) / 2) * (DX / 2),
+          y: base.y + DY * 0.7,
+        }
+      })
+    }
 
     applyPositions(positions)
   }
