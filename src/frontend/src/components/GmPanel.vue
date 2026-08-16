@@ -36,7 +36,7 @@
       </div>
       <button class="create-btn" @click="startCreate">+ New Entity</button>
       <div class="canvas-btn-row">
-        <button class="create-btn canvas-btn" @click="openFullLocationCanvas">🗺 Canvas</button>
+        <button class="create-btn canvas-btn" @click="openLocationTreeCanvas">🗺 Canvas</button>
       </div>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
@@ -176,8 +176,8 @@ function startCreate() {
   })
 }
 
-function openFullLocationCanvas() {
-  bus.emit('canvas:open-full', { mode: 'location', entityId: props.currentLocationId })
+function openLocationTreeCanvas() {
+  bus.emit('canvas:open-full', { mode: 'location-tree', entityId: props.universe })
 }
 
 function openFullFactionCanvas(factionId) {

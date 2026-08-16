@@ -9,7 +9,7 @@
       </div>
       <div class="canvas-controls">
         <select
-          v-if="mode !== 'life-path'"
+          v-if="mode !== 'life-path' && mode !== 'location-tree'"
           v-model="selectedFaction"
           class="faction-select"
           @change="onFactionChange"
@@ -83,6 +83,7 @@ import LocationNode from '@/components/canvas/nodes/LocationNode.vue'
 import OccupantNode from '@/components/canvas/nodes/OccupantNode.vue'
 import RollTableNode from '@/components/canvas/nodes/RollTableNode.vue'
 import BundlerNode from '@/components/canvas/nodes/BundlerNode.vue'
+import UniverseNode from '@/components/canvas/nodes/UniverseNode.vue'
 import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
 import LifePathEdge from '@/components/canvas/edges/LifePathEdge.vue'
 import GmRollTableDetailPanel from '@/components/gm/GmRollTableDetailPanel.vue'
@@ -93,6 +94,7 @@ const props = defineProps({
   initialFactionId: { type: String, default: '' },
   initialGmcId: { type: String, default: '' },
   initialLifePath: { type: Object, default: null },
+  initialUniverse: { type: String, default: '' },
   fullscreen: { type: Boolean, default: false },
 })
 
@@ -121,7 +123,7 @@ function fitView() {
   flowRef.value?.fitView?.()
 }
 
-const nodeTypes = { location: LocationNode, occupant: OccupantNode, rolltable: RollTableNode, bundler: BundlerNode }
+const nodeTypes = { location: LocationNode, occupant: OccupantNode, rolltable: RollTableNode, bundler: BundlerNode, universe: UniverseNode }
 const edgeTypes = { gradient: GradientEdge, lifepath: LifePathEdge }
 
 const displayNodes = computed(() =>
@@ -132,6 +134,7 @@ const displayNodes = computed(() =>
       onExpand: (id) => canvas.expandLocation(id),
       onCollapse: (id) => canvas.collapseLocation(id),
       onFocus: (id) => canvas.setFocus(id),
+      onToggleExpand: (id) => canvas.toggleUniverseExpand(id),
       onToggleRelations: (id) => canvas.toggleRelations(id),
       onShowFaction: (id) => canvas.showFaction(id),
       onInspect: (id) => bus.emit('canvas:inspect', id),
@@ -238,6 +241,8 @@ onMounted(async () => {
     await canvas.loadGmcWeb(props.initialGmcId)
   } else if (props.initialLifePath) {
     await canvas.loadLifePath(props.initialLifePath)
+  } else if (props.initialUniverse) {
+    await canvas.loadLocationTree(props.initialUniverse)
   } else if (props.locationId) {
     await canvas.loadLocation(props.locationId)
   }

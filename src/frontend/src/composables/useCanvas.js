@@ -21,6 +21,9 @@ const entityCache = new Map()
 const factions = ref([])
 let factionsLoaded = false
 let currentLifePath = null
+let locationTreeData = null
+const expandedUniverses = new Set()
+let currentUniverse = ''
 
 // ── Node/edge factories ───────────────────────────────
 
@@ -42,6 +45,23 @@ function makeLocationNode(entity, opts = {}) {
       isFocus: !!opts.isFocus,
       expanded: !!opts.expanded,
       isScaffolding: !!opts.isScaffolding,
+      treeMode: !!opts.treeMode,
+    },
+  }
+}
+
+function makeUniverseNode(uni, opts = {}) {
+  const id = nodeId('uni', uni.id)
+  return {
+    id,
+    type: 'universe',
+    position: { x: 0, y: 0 },
+    data: {
+      entityId: uni.id,
+      name: uni.name,
+      universe: uni.universe,
+      isCurrent: !!opts.isCurrent,
+      expanded: !!opts.expanded,
     },
   }
 }
@@ -182,6 +202,121 @@ export function useCanvas() {
     } finally {
       loading.value = false
     }
+  }
+
+  async function loadLocationTree(universe) {
+    loading.value = true
+    error.value = null
+    try {
+      mode.value = 'location-tree'
+      currentUniverse = universe || ''
+      focusId.value = null
+      title.value = 'Location Tree'
+
+      const r = await fetch(`${API_BASE}/locations/graph`)
+      if (!r.ok) throw new Error(await r.text())
+      const data = await r.json()
+      locationTreeData = data
+
+      expandedUniverses.clear()
+      for (const uni of data.tree || []) {
+        if (uni.node_type === 'universe' && uni.universe === currentUniverse) expandedUniverses.add(uni.id)
+      }
+
+      buildLocationTreeGraph()
+    } catch (e) {
+      error.value = e.message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function toggleUniverseExpand(universeId) {
+    if (!locationTreeData) return
+    if (expandedUniverses.has(universeId)) expandedUniverses.delete(universeId)
+    else expandedUniverses.add(universeId)
+    buildLocationTreeGraph()
+  }
+
+  function buildLocationTreeGraph() {
+    if (!locationTreeData) return
+    const newNodes = []
+    const newEdges = []
+
+    for (const node of locationTreeData.tree || []) {
+      if (node.node_type === 'universe') {
+        const expanded = expandedUniverses.has(node.id)
+        newNodes.push(makeUniverseNode(node, { isCurrent: node.universe === currentUniverse, expanded }))
+        if (expanded) {
+          for (const loc of node.children || []) {
+            addLocationSubtree(loc, nodeId('uni', node.id), newNodes, newEdges)
+          }
+        }
+      } else {
+        // Orphan location (no matching universe) rendered as a top-level node.
+        addLocationSubtree(node, null, newNodes, newEdges)
+      }
+    }
+
+    const locIds = new Set(newNodes.filter((n) => n.type === 'location').map((n) => n.data.entityId))
+    for (const t of locationTreeData.transversal || []) {
+      if (locIds.has(t.from) && locIds.has(t.to)) {
+        newEdges.push(makeTransversalEdge(nodeId('loc', t.from), nodeId('loc', t.to), t.transversal_type))
+      }
+    }
+
+    nodes.value = newNodes
+    edges.value = newEdges
+    layoutLocationTreeNodes()
+  }
+
+  function addLocationSubtree(loc, parentId, newNodes, newEdges) {
+    const id = nodeId('loc', loc.id)
+    newNodes.push(makeLocationNode({ _key: loc.id, name: loc.name, current_universe: loc.universe }, { expanded: true, treeMode: true }))
+    if (parentId) newEdges.push(makeSuperEdge(id, parentId))
+    for (const child of loc.children || []) {
+      addLocationSubtree(child, id, newNodes, newEdges)
+    }
+  }
+
+  function layoutLocationTreeNodes() {
+    const parentOf = {}
+    const childrenOf = {}
+    for (const e of edges.value) {
+      if (e.data?.kind === 'super') {
+        parentOf[e.source] = e.target
+        childrenOf[e.target] = childrenOf[e.target] || []
+        childrenOf[e.target].push(e.source)
+      }
+    }
+    const allIds = new Set(nodes.value.map((n) => n.id))
+    const roots = nodes.value.filter((n) => !parentOf[n.id]).map((n) => n.id)
+
+    const buildData = (id) => ({
+      id,
+      children: (childrenOf[id] || []).filter((cid) => allIds.has(cid)).map(buildData),
+    })
+
+    const positions = {}
+    let offsetX = 0
+    const layout = tree().nodeSize([DX, DY])
+    for (const rootId of roots) {
+      const root = hierarchy(buildData(rootId))
+      layout(root)
+      let minX = Infinity
+      let maxX = -Infinity
+      root.each((d) => {
+        minX = Math.min(minX, d.x)
+        maxX = Math.max(maxX, d.x)
+      })
+      const center = (minX + maxX) / 2
+      root.each((d) => {
+        positions[d.data.id] = { x: d.x - center + offsetX, y: d.y }
+      })
+      offsetX += (maxX - minX) + DX
+    }
+
+    applyPositions(positions)
   }
 
   async function expandLocation(locationId) {
@@ -942,6 +1077,8 @@ export function useCanvas() {
     loadFaction,
     loadGmcWeb,
     loadLifePath,
+    loadLocationTree,
+    toggleUniverseExpand,
     expandLocation,
     loadFactions,
     collapseLocation,

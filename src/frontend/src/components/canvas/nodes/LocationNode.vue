@@ -8,7 +8,7 @@
       <span class="loc-badge">LOC</span>
       <span class="loc-name">{{ data.name }}</span>
     </div>
-    <div class="loc-actions" @click.stop>
+    <div v-if="!data.treeMode" class="loc-actions" @click.stop>
       <button
         v-if="!data.expanded"
         class="loc-btn"
