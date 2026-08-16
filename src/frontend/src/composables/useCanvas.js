@@ -752,7 +752,7 @@ export function useCanvas() {
           // location instead of fanning out along the depth axis.
           positions[oid] = {
             x: pos.x,
-            y: pos.y + DY * 0.7 + i * 56,
+            y: pos.y + DY * 0.7 + i * 76,
           }
         } else {
           positions[oid] = {
