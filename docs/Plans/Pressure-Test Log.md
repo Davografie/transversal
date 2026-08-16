@@ -77,4 +77,25 @@ Setting: Krasnoyarsk-45. Party gets a tip, pokes around a rail yard, draws heat.
 
 ---
 
-*Scenarios 2–7 pending.*
+## Scenario 2 — Players arrive & make characters
+
+Setting: new player "Sam" joins the Krasnoyarsk session with no character yet.
+
+### Verified solid ✅
+- Player sign-in / find-or-create by name (no auth, as decided).
+- Claim agency over an existing entity (seeded Kael / Elena claimable).
+- Bare entity creation.
+- Life-path wizard (grants career traits via roll tables).
+
+### Gaps
+- **No starter-character template** — base attributes/skills are hand-added trait-by-trait; nothing grants the standard spread (the seed characters are hand-written the same way). *(new)*
+- **Character creation is GM-side only** — no player-facing "make my character" onboarding; a new player has to ask the GM. *(new)*
+- **Life path grants career traits, not base traits** — two separate manual jobs, not one flow.
+- **Social web manual** — relationships added one edge at a time; relationship *traits* have no UI (carried from Scenario 1).
+- **Starter location spawn** — missing (carried).
+- **Earth-bond trait** — not built; will be composed from challenge trait + SFX (carried).
+- **Support characters** — troupe play, deferred (carried).
+
+---
+
+*Scenarios 3–7 pending.*
