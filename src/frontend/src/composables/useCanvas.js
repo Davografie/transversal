@@ -430,6 +430,7 @@ export function useCanvas() {
 
     nodes.value = newNodes
     edges.value = newEdges
+    updateEdgeEmphasis()
 
     const includeUniverse = g.universes.length > 0
     const centerId = g.focus ? nodeId('loc', g.focus) : null
@@ -493,15 +494,32 @@ export function useCanvas() {
     }
   }
 
+  function edgeStyleFor(e, highlighted) {
+    if (!highlighted) return e.style
+    if (e.data?.kind === 'transversal') return { ...(e.style || {}), strokeWidth: 3 }
+    if (e.data?.kind === 'super') return { ...(e.style || {}), stroke: '#7fb0ff', strokeWidth: 3 }
+    return e.style
+  }
+
+  function updateEdgeEmphasis() {
+    const focusNodeId = focusId.value ? nodeId('loc', focusId.value) : null
+    const occId = highlightedOccupant.value
+    edges.value = edges.value.map((e) => {
+      let highlighted = false
+      if (e.data?.kind === 'relation') {
+        highlighted = occId != null && (e.data.from === occId || e.data.to === occId)
+      } else if (focusNodeId) {
+        highlighted = e.source === focusNodeId || e.target === focusNodeId
+      }
+      if (highlighted === !!e.data.highlighted) return e
+      return { ...e, data: { ...e.data, highlighted }, zIndex: highlighted ? 20 : 0, style: edgeStyleFor(e, highlighted) }
+    })
+  }
+
   function setHighlightedOccupant(occId) {
     if (highlightedOccupant.value === occId) return
     highlightedOccupant.value = occId
-    edges.value = edges.value.map((e) => {
-      if (e.data?.kind !== 'relation') return e
-      const highlighted = e.data.from === occId || e.data.to === occId
-      if (highlighted === !!e.data.highlighted) return e
-      return { ...e, data: { ...e.data, highlighted }, zIndex: highlighted ? 20 : 0 }
-    })
+    updateEdgeEmphasis()
   }
 
   function clear() {
@@ -1228,6 +1246,7 @@ export function useCanvas() {
       return n
     })
     focusId.value = locationId
+    updateEdgeEmphasis()
   }
 
   function updateNodePosition(id, position) {
