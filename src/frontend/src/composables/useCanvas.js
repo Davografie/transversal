@@ -91,6 +91,7 @@ function makeOccupantNode(entity, opts = {}) {
 
 const DX = 240
 const DY = 140
+const HX_SIBLING_STEP = 90 // sibling spacing when the hierarchy runs left→right
 
 // ── Orientation helpers ───────────────────────────────
 
@@ -98,9 +99,13 @@ function isHorizontal() {
   return layoutOrientation.value === 'horizontal'
 }
 
+function siblingStep() {
+  return isHorizontal() ? HX_SIBLING_STEP : DX
+}
+
 function orientationNodeSize() {
   // d3.tree nodeSize uses [sibling-spacing, depth-spacing].
-  return isHorizontal() ? [DY, DX] : [DX, DY]
+  return [siblingStep(), depthStep()]
 }
 
 function forestSpacing() {
