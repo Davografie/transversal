@@ -54,6 +54,7 @@ function makeLocationNode(entity, opts = {}) {
       isFocus: !!opts.isFocus,
       expanded: !!opts.expanded,
       isLeaf: !!opts.isLeaf,
+      horizontal: !!opts.horizontal,
       occupants: opts.occupants || [],
       isScaffolding: !!opts.isScaffolding,
     },
@@ -365,6 +366,7 @@ export function useCanvas() {
           isFocus: id === g.focus,
           expanded,
           isLeaf,
+          horizontal: isHorizontal(),
           occupants: g.occupants.get(id) || [],
         },
       )

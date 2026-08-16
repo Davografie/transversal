@@ -43,14 +43,26 @@
           <img v-if="occ.image" :src="occ.image" :alt="occ.name" />
           <span v-else class="occ-initials">{{ initials(occ.name) }}</span>
         </div>
-        <Handle :id="`occ-${occ.id}-source`" type="source" :position="Position.Right" class="occ-handle" />
-        <Handle :id="`occ-${occ.id}-target`" type="target" :position="Position.Left" class="occ-handle" />
+        <Handle
+          :id="`occ-${occ.id}-source`"
+          type="source"
+          :position="Position.Right"
+          class="occ-handle"
+          :style="{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }"
+        />
+        <Handle
+          :id="`occ-${occ.id}-target`"
+          type="target"
+          :position="Position.Left"
+          class="occ-handle"
+          :style="{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }"
+        />
       </div>
     </div>
 
-    <Handle id="top" type="source" :position="Position.Top" />
-    <Handle id="bottom" type="target" :position="Position.Bottom" />
-    <Handle id="bottom-source" type="source" :position="Position.Bottom" :style="{ left: '72%' }" />
+    <Handle v-if="!data.horizontal" id="top" type="source" :position="Position.Top" />
+    <Handle v-if="!data.horizontal" id="bottom" type="target" :position="Position.Bottom" />
+    <Handle v-if="!data.horizontal" id="bottom-source" type="source" :position="Position.Bottom" :style="{ left: '72%' }" />
     <Handle id="right" type="source" :position="Position.Right" />
     <Handle id="left" type="target" :position="Position.Left" />
     <Handle id="left-source" type="source" :position="Position.Left" />
@@ -114,8 +126,9 @@ function initials(name) {
 }
 .occ-name {
   font-size: 8px; max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--text-dim);
+  color: var(--text-dim); opacity: 0; transition: opacity 0.12s;
 }
+.occ-tile:hover .occ-name, .occ-tile:focus-within .occ-name { opacity: 1; }
 .occ-navdot {
   width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -123,5 +136,5 @@ function initials(name) {
 }
 .occ-navdot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .occ-initials { font-size: 10px; font-weight: 700; color: #fff; }
-.occ-handle { width: 6px; height: 6px; opacity: 0.55; }
+.occ-handle { width: 0; height: 0; min-width: 0; min-height: 0; background: transparent; border: none; }
 </style>
