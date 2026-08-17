@@ -38,7 +38,7 @@ Found during the pre-scenario code walkthrough; not surfaced by any single scena
 
 From the scenarios 1–2 discussion, beyond per-scenario findings:
 
-- **Tether** — relationship trait to the origin *universe* (challenge, negative). Generalizes the old "earth-bond" so it's not an Earth special case.
+- **Tether** — a *sub-trait of the Origin distinction* (negative/challenge): the doom-pool countdown. *(revised from "relationship trait to the origin universe" — folds it under Origin and reuses sub-trait machinery.)*
 - **Origin** — a *distinction* that is also relationship-anchored (points at a location edge). A trait can be both: "distinction" is its *kind* (`traitset_id` + ego + statement + SFX), "relationship" is its *anchor* (`from_type`). The model already separates these axes; it needs a small refactor (stop hardcoding `ts-relations`, give relationship traits a real anchor field, fold them into character assembly).
 - **Relationship traits** — inline in the character sheet, grouped by trait set (no separate relations set/tab). Character sheet = trait settings from the character *or* from relationships originating from the character.
 - **Base traits** — a background roll table (skill packages), not Archetype template entities.
@@ -165,4 +165,23 @@ Setting: Kael sneaks past a guard (stealth vs perception), head-to-head.
 
 ---
 
-*Scenarios 5–7 pending.*
+## Scenario 5 — Consequences & stakes
+
+Setting: Krasnoyarsk rail yard; a "regime alert" doom pool; Kael rolls a hitch; a tether is at risk.
+
+### Per-step
+1. **Doom pool data** — challenge trait (negative) on a location. Plumbing: `RatingType.CHALLENGE` + `ChallengePolarity.NEGATIVE` + `TraitSetting.polarity`; seeded (`regime_alert`, `sect_suspicion`). ✅
+2. **Looming dice render** — must be prominent; no frontend challenge/doom rendering exists. ❌
+3. **Buy hitch** — spend a doom die to escalate; no code. ❌
+4. **Effect die vs challenge** — `_resolve_challenge` computes it. ✅ *But it should route through the consequence menu → effect system (the "challenge rating" effect), not resolver-side persistence.*
+5. **Challenge persistence** — stateless today; the write-back belongs to the effect. ❌
+6. **Tether** — a *sub-trait of the Origin distinction* (negative/challenge). Reuses sub-trait machinery rather than a separate relationship trait. 🟡 *(revised)*
+7. **Full-native trigger** — via the event system: "challenge emptied" → SFX → "switch projection type" effect. None exists. ❌
+8. **Full-native consequences** — TBD; missing prerequisites. ❌
+
+### UX note (from the old app)
+`vue/src/components/Rating.vue` + `Trait.vue` show the click semantics are non-trivial: static = add-to-pool; resource = click-to-spend (grouped by distinct die); challenge = left-click deplete / right-click increase, and the GM can add challenges; view modes (Neutral/Viewing/Small/Editing) layer on top. This is the "tangled mess" to get right in Transversal2.
+
+---
+
+*Scenarios 6–7 pending.*
