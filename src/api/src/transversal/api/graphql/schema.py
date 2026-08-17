@@ -14,7 +14,9 @@ from transversal.api.graphql.types import (
     DieType as GqlDieType,
     EffectActionMeta as GqlEffectActionMeta,
     EffectFieldDef as GqlEffectFieldDef,
+    EffectApplicationResult,
     EffectInput,
+    EffectTargetResolutionInput,
     Entity,
     EntityType,
     HistoricalRecord,
@@ -43,6 +45,7 @@ from transversal.api.graphql.types import (
     GiftResult,
     TakeResult,
     TargetCandidate,
+    PendingChoiceRef,
     TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
     TraitInput,
@@ -182,6 +185,16 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, result=e.result, target_scope=e.target_scope,
         context=e.context or {},
+    )
+
+
+def _effects_result_to_gql(result) -> EffectApplicationResult:
+    return EffectApplicationResult(
+        applied=[a.summary for a in result.applied],
+        pending_choices=[
+            PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, effect=_effect_to_gql(c.effect))
+            for i, c in enumerate(result.pending_choices)
+        ],
     )
 
 
@@ -1253,6 +1266,41 @@ class Mutation:
     def clear_roll_table_positions(self, info: strawberry.Info, life_path_id: strawberry.ID) -> int:
         """Clear all saved canvas positions for a life path's roll tables."""
         return _em(info).repo.clear_roll_table_positions(str(life_path_id))
+
+    @strawberry.mutation
+    def apply_effects(self, info: strawberry.Info, entity_id: strawberry.ID,
+                      effects: list[EffectInput]) -> EffectApplicationResult:
+        """Apply a set of effects to an entity in-memory and persist them.
+
+        Returns the applied summaries plus any unresolved ``{choose_*}`` targets
+        the caller must resolve (via :meth:`resolve_effect_targets`).
+        """
+        from transversal.services.effects_commit import commit_effects
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+        domain_effects = [_effect_input_to_domain(e) for e in effects]
+        result = commit_effects(entity, domain_effects, repo)
+        return _effects_result_to_gql(result)
+
+    @strawberry.mutation
+    def resolve_effect_targets(self, info: strawberry.Info, entity_id: strawberry.ID,
+                               resolutions: list[EffectTargetResolutionInput]) -> EffectApplicationResult:
+        """Re-apply previously-pending effects with their resolved targets."""
+        from transversal.services.effects_commit import commit_effects
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+        resolved = [
+            _effect_input_to_domain(r.effect).model_copy(update={"target": r.target})
+            for r in resolutions
+        ]
+        result = commit_effects(entity, resolved, repo)
+        return _effects_result_to_gql(result)
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

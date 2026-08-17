@@ -137,6 +137,29 @@ class TargetCandidate:
 
 
 @strawberry.type
+class PendingChoiceRef:
+    """An effect target that must be resolved before the effect can apply."""
+    index: int
+    kind: str
+    scope: Optional[str] = None
+    effect: Effect
+
+
+@strawberry.type
+class EffectApplicationResult:
+    """Outcome of applying a set of effects, plus any unresolved targets."""
+    applied: list[str]
+    pending_choices: list[PendingChoiceRef] = strawberry.field(default_factory=list)
+
+
+@strawberry.input
+class EffectTargetResolutionInput:
+    """A single resolved target for a previously-pending effect."""
+    effect: EffectInput
+    target: str
+
+
+@strawberry.type
 class SfxRef:
     """SFX reference returned by queries."""
     id: strawberry.ID
