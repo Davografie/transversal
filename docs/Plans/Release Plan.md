@@ -145,6 +145,9 @@ The one primitive everything else hangs off.
 
 - Exact effect list on the full-native SFX (Earth projection decay, Earth-trait step-down) — TBD.
 - Flashback SFX exact fill-in (still a stub in [[Projections and Transversal]]).
+- **Events / trigger-condition-limit unification** — "hooks" became "events" (a condition + effects). Decide whether `trigger` and `condition` are one concept and whether `limit` folds into `condition`. Resolve in Phase 2 (SFX triggers).
+- **`effective_universes` divergence** — the code unions all NATIVE projection universes when the entity has more than one (a "multiversal being" rule) that [[Projections and Transversal]] doesn't document. Decide: document it or revert it.
+- **[[SFX and Effects]] top half is stale** — prune the old `effect`/`cost`/`modify_roll` model; keep the "Unified Effect Model" section.
 
 ## Mapping to to-do
 

@@ -40,6 +40,11 @@ status: canonical
 - [[Relational Canvas]] — GM-only interactive node graph for locations, factions, and relationships
 - [[Life Path Flow and Shared Roll Tables]] — how `next_step` links tables and how shared/unaffiliated tables return control
 
+### 📋 Plans
+
+- [[Release Plan]] — scope, decisions, and the 6-phase **build order** (start here for "what to build next")
+- [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
+
 ## Getting Started
 
 1. Read [[Setting and Narrative]] for the world and story
@@ -55,4 +60,4 @@ status: canonical
 
 ## Project Status
 
-See the [[Project Roadmap]] for current development phase and milestones.
+See the [[Project Roadmap]] for current development phase and milestones. For what to build next, read the [[Release Plan]] (build order) with the evidence in the [[Pressure-Test Log]].
