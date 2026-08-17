@@ -73,14 +73,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** implement the duration-carrying effects from the to-do Effects list: temporary location asset, disable a trait, and step-down (own / target-entity) with a ``duration`` context that schedules the revert.
 - **Done:** these effects are appliable via the effect system and revert (or expire) at their duration boundary through the shared scheduler.
 - **Depends:** P1.1, P6.3 (expiry scheduler)
-- **Load:** to-do "Effects", `services/effects_applier.py` (`_MUTATION_HANDLERS`), `services/effects_engine.py` (`schedule_effect`), `services/effects_commit.py`.
+- **Load:** to-do "Effects", `services/effects_applier.py` (`_MUTATION_HANDLERS`), `services/effects_engine.py` (`schedule_effect`), `services/effects_commit.py`, `services/effect_targets.py`.
 
 ### P1.8 — Backend: effect-die comparison + trait-set limit effects
 - **Status:** pending
 - **What:** implement "set or step up target-trait rating" (set if effect die > target die, step up if ≤) and "increase/set trait set limit".
 - **Done:** both are Effect actions; the comparison one takes the effect die and the target die and applies the correct operation.
 - **Depends:** P1.1, P1.6
-- **Load:** to-do "Effects" (set/step-up target-trait, increase/set trait set limit), `services/effects_applier.py`, `services/dice_resolver.py` (`_resolve_challenge` pattern).
+- **Load:** to-do "Effects" (set/step-up target-trait, increase/set trait set limit), `services/effects_applier.py`, `services/dice_resolver.py` (`_resolve_challenge` pattern), `services/consequence_menu.py` (base moves + `{effect_die}`), `composables/useConsequences.js` (substitution).
 
 ## Phase 2 — Play spine: tests & contests resolve
 
@@ -138,7 +138,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** `on_roll` / `on_complication` / `on_success` / `on_botch` (and contest win/loss) fire automatically.
 - **Done:** a roll/contest fires matching SFX without a manual `/effects/trigger` call.
 - **Depends:** P2.1
-- **Load:** `services/effects_engine.py` (`fire_contest_sfx`, `process_event`), `api/rest/effects.py`, [[Pressure-Test Log]] § Scenario 4.
+- **Load:** `services/effects_engine.py` (`fire_contest_sfx`, `process_event`), `api/rest/effects.py`, `services/effect_targets.py` + `services/effects_applier.py` (`resolve_choice`, pending choices), [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.9 — Backend: condition-based SFX triggers
 - **Status:** pending
@@ -189,7 +189,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** the consequence menu's "challenge rating" option applies effect-die-vs-challenge-die through the effect system, not resolver persistence.
 - **Done:** picking the challenge option steps the doom pool down/up via an effect.
 - **Depends:** P1.5, P3.1
-- **Load:** `services/dice_resolver.py` (`_resolve_challenge`), `services/effects_commit.py`, to-do "challenge rating" effect.
+- **Load:** `services/dice_resolver.py` (`_resolve_challenge`), `services/effects_commit.py`, `services/consequence_menu.py` (base moves), `components/gm/ConsequenceMenu.vue` + `composables/useConsequences.js`, to-do "challenge rating" effect.
 
 ### P3.5 — Backend + frontend: tether = sub-trait of Origin
 - **Status:** pending
@@ -203,7 +203,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** a challenge trait reaching zero fires its SFX; the effect switches `transversal_type`; full-native is authored from these.
 - **Done:** emptying the tether triggers full-native via the event system.
 - **Depends:** P3.5, P2.8
-- **Load:** [[Projections and Transversal]], `services/effects_applier.py` (`_attune`, travel), `domain/__init__.py` (TransversalType).
+- **Load:** [[Projections and Transversal]], `services/effects_applier.py` (registry `_attune`/travel + pure applier), `services/effect_targets.py`, `services/effects_engine.py` (`_trigger_matches`), `domain/__init__.py` (TransversalType).
 
 ## Phase 4 — Character sheet: traits as first-class
 
@@ -270,7 +270,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** traversing to a universe rolls a random starter location (roll table), using P1.2's `random` mode.
 - **Done:** arriving in a new universe spawns at a random starter location.
 - **Depends:** P1.2, P5.2, P5.3
-- **Load:** [[Pressure-Test Log]] § Scenario 6, `services/roll_table.py`.
+- **Load:** [[Pressure-Test Log]] § Scenario 6, `services/roll_table.py`, `services/effect_targets.py` (`resolve_candidates`, random scope).
 
 ### P5.5 — Frontend: shared roll-table authoring UX
 - **Status:** pending
@@ -349,7 +349,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** implement exorcise (send a target's projection to another universe), banish (random inapposite travel), swap (swap two of a character's projections), and create temporary projection (disguise / alternative identity).
 - **Done:** each is an Effect usable from the consequence menu / SFX, with ``{choose_*}`` targets for the involved entities and universes.
 - **Depends:** P1.1, P6.1, P6.2
-- **Load:** to-do "Effects" (exorcise / banish / swap / create temporary projection), `services/effects_applier.py`, `services/entity_manager.py` (travel), `domain/__init__.py` (Projection).
+- **Load:** to-do "Effects" (exorcise / banish / swap / create temporary projection), `services/effects_applier.py` (pure applier + registry), `services/effect_targets.py`, `services/entity_manager.py` (travel), `domain/__init__.py` (Projection).
 
 ## Phase 7 — Polish & backlog
 
