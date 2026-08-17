@@ -99,9 +99,9 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `domain/__init__.py` (`ContestResult.stakes`), `services/dice_resolver.py` (`resolve_contest`), [[Pressure-Test Log]] § Scenarios 3 & 4.
 
 ### P2.3 — Backend: contest resolve returns full rolls + effect dice
-- **Status:** pending
+- **Status:** done
 - **What:** `/locations/{id}/pools/{entity_id}/resolve` returns rolls and effect dice, not just `{winner, pipeline, pushed}`.
-- **Done:** a contest result includes both sides' rolls and effect dice.
+- **Done:** endpoint returns the full `ContestResult` (`response_model=ContestResult`) — both sides' rolls, totals, effect dice, and `stakes`.
 - **Depends:** P2.1
 - **Load:** `api/rest/contest_pools.py`, `services/contest_tracker.py`, `services/dice_resolver.py`.
 

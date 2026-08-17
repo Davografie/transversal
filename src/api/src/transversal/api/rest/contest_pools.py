@@ -8,7 +8,7 @@ all pools at a location via GET.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from transversal.domain import DieType
+from transversal.domain import ContestResult, DieType
 from transversal.services.contest_tracker import (
     broadcast_pool_change,
     get_contest_tracker,
@@ -120,7 +120,7 @@ async def clear_pool(location_id: str, entity_id: str):
     return {"status": "cleared"}
 
 
-@router.post("/{location_id}/pools/{entity_id}/resolve")
+@router.post("/{location_id}/pools/{entity_id}/resolve", response_model=ContestResult)
 async def resolve_contest(location_id: str, entity_id: str):
     """Resolve a contest between an entity and its designated opponent.
 
@@ -151,5 +151,4 @@ async def resolve_contest(location_id: str, entity_id: str):
             },
         ))
 
-    return {"winner": result.winner.value, "pipeline": result.pipeline,
-            "kind": result.kind.value, "pushed": result.pushed}
+    return result
