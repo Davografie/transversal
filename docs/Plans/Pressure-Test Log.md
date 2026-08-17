@@ -184,4 +184,24 @@ Setting: Krasnoyarsk rail yard; a "regime alert" doom pool; Kael rolls a hitch; 
 
 ---
 
-*Scenarios 6–7 pending.*
+## Scenario 6 — Moving around & switching characters
+
+### Per-step
+1. **Move to a nearby location (same universe)** — `/entities/{id}/move` → `move_to`, `location_changed` SSE, LocationViewer `relocate()`. ✅
+2. **Consciousness transversal** — `/entities/{id}/consciousness-travel` → `consciousness_travel`; frontend `relocate(…, consciousness=true)`. ✅
+3. **Inapposite transversal** — backend `inapposite_travel` exists; frontend wires via portal `transversal_type`. 🟡 backend solid, frontend path thinner.
+4. **Attunement** — `attune` effect (enable/disable) + `Attunement` + `effective_universes`. 🟡 expiry unwired (logged).
+5. **Switch which character you control** — player `claim_entity` / `release_entity` + settings-overlay picker. ✅
+6. **Morph traits gated by active projection** — `get_effective_traitsettings` + `effective_universes` + `from_type` gating. ✅
+7. **Troupe rotation / spotlight recency** — none. ❌ deferred.
+
+---
+
+## Scenario 7 — Growth & session close
+
+### Per-step
+1. **Run a life path term** — `start_term` / `resolve_step` GraphQL + `lifepath_executor` + `LifePathWizard`. ✅
+2. **Transfer a trait (teach/gift/take)** — `teach_trait` / `gift_trait` / `take_trait` GraphQL + `trait_transfer.py`. ✅
+3. **Add/remove relationships + relationship traits** — backend done; relationship-trait UI missing (logged). 🟡
+4. **Review the Blue Book** — `BlueBook.vue` + `historical_records`. 🟡 deletion-with-undo and transversal logging are to-do.
+5. **Session persistence** — ArangoDB + sessions API. ✅
