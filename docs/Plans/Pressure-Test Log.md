@@ -195,6 +195,14 @@ Setting: Krasnoyarsk rail yard; a "regime alert" doom pool; Kael rolls a hitch; 
 6. **Morph traits gated by active projection** — `get_effective_traitsettings` + `effective_universes` + `from_type` gating. ✅
 7. **Troupe rotation / spotlight recency** — none. ❌ deferred.
 
+### User read — new gaps
+1. **Projection navdots only render when the entity is present.** Want: GM sees *all* projections; a player sees their *own live* projections, even when the active body is elsewhere.
+2. **No "live" player-entity tracking** — only `agency` edges (ownership), session membership, and the frontend's localStorage `entityId`. No server-side "actively-playing-now" concept.
+3. **No starter-location spawn on transversal arrival** — travel requires an explicit `location`; arriving in a new universe doesn't roll a starter location or prompt a life path.
+4. **Inapposite travel isn't wired into the frontend** — no REST endpoint (only `/move` + `/consciousness-travel`); the UI falls back to `/move` (generic `move_to`), so `INAPPOSITE` semantics are skipped. Reachable only via GraphQL.
+5. **Attunement expiry = manual `attune disable`** (the `Attunement` is stored on the entity; the `disable` handler exists) rather than an auto-scheduler.
+6. **GM scene overview is over-inclusive** — should show only live players' main characters + current-location GMCs, and be reorderable for spotlight recency.
+
 ---
 
 ## Scenario 7 — Growth & session close
