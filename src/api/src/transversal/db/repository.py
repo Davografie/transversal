@@ -268,6 +268,36 @@ class EntityRepository:
             for doc in self.db.aql.execute(query, bind_vars={"lid": location_id})
         ]
 
+    def list_entities_by_locations(self, location_ids: list[str]) -> list[Entity]:
+        """List occupants across multiple locations (character/gmc/asset)."""
+        if not location_ids:
+            return []
+        query = f"""
+            LET occupant_ids = (
+                FOR p IN {PROJECTIONS}
+                FILTER p.current_location IN @lids
+                RETURN DISTINCT p.entity_id
+            )
+            FOR e IN {ENTITIES}
+            FILTER e.type IN ['character', 'gmc', 'asset']
+            FILTER e._key IN occupant_ids OR e.current_location IN @lids
+            RETURN DISTINCT e
+        """
+        return [
+            self._doc_to_entity(doc)
+            for doc in self.db.aql.execute(query, bind_vars={"lids": location_ids})
+        ]
+
+    def get_entities_by_ids(self, entity_ids: list[str]) -> list[Entity]:
+        """Fetch entities by their keys, preserving existence (missing ones dropped)."""
+        if not entity_ids:
+            return []
+        query = f"FOR e IN {ENTITIES} FILTER e._key IN @ids RETURN e"
+        return [
+            self._doc_to_entity(doc)
+            for doc in self.db.aql.execute(query, bind_vars={"ids": entity_ids})
+        ]
+
     # ── Projections ───────────────────────────────────
 
     def create_projection(self, projection: Projection) -> Projection:
@@ -1475,6 +1505,21 @@ class EntityRepository:
         """
         return list(self.db.aql.execute(query, bind_vars={"fid": faction_id}))
 
+    def list_faction_members(self, faction_id: str) -> list[Entity]:
+        """Return member entities (character/gmc) of a faction via membership edges."""
+        member_ids = self._faction_member_ids(faction_id)
+        if not member_ids:
+            return []
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e._key IN @mids AND e.type IN ['character', 'gmc']
+            RETURN e
+        """
+        return [
+            self._doc_to_entity(doc)
+            for doc in self.db.aql.execute(query, bind_vars={"mids": member_ids})
+        ]
+
     def _faction_member_locations(self, faction_id: str) -> set[str]:
         """Location keys where a faction's members are occupants (direct or projected)."""
         member_ids = self._faction_member_ids(faction_id)
@@ -1941,6 +1986,42 @@ class EntityRepository:
                 else:
                     break
             return ancestors
+
+    def list_location_descendants(self, location_id: str) -> list[str]:
+        """Return all descendant location IDs by following 'super' edges downward.
+
+        ``super`` edges point child → parent, so descendants are found by an
+        inbound traversal from the root. Returns location ``_key`` values (the
+        root itself is not included).
+        """
+        if self.db is not None:
+            query = f"""
+                FOR v, e IN 1..10 INBOUND @loc_ref {RELATIONSHIPS}
+                FILTER e.type == 'super'
+                RETURN DISTINCT v._key
+            """
+            cursor = self.db.aql.execute(query, bind_vars={
+                "loc_ref": f"{ENTITIES}/{location_id}",
+            })
+            return list(cursor)
+        else:
+            # In-memory mode: follow child → parent edges in reverse.
+            descendants: list[str] = []
+            frontier = [location_id]
+            for _ in range(10):
+                next_frontier = []
+                for rel in self._relationships:
+                    if rel.get("type") != "super":
+                        continue
+                    child = rel.get("_from", "").replace(f"{ENTITIES}/", "")
+                    parent = rel.get("_to", "").replace(f"{ENTITIES}/", "")
+                    if parent in frontier and child not in descendants and child != location_id:
+                        descendants.append(child)
+                        next_frontier.append(child)
+                if not next_frontier:
+                    break
+                frontier = next_frontier
+            return descendants
 
     # ── Entity Images ─────────────────────────────────
 

@@ -12,7 +12,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from transversal.domain import DieType, Effect, Entity, EntityType, TraitSetting
+from transversal.domain import DieType, Effect, Entity, TraitSetting
+from transversal.services.effect_targets import resolve_candidates
 
 
 # Handler signature: (action, entity_id, universe, context) -> None
@@ -307,30 +308,11 @@ def _parse_placeholder(target: str) -> Optional[tuple[str, Optional[str]]]:
 def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo) -> Optional[str]:
     """Return a random in-scope candidate id for the given target kind.
 
-    ``scope`` is ``Effect.target_scope``; when absent the entity's current
-    universe (or current location for occupants) narrows the candidate set.
-    Returns None when no candidates exist in scope.
+    Delegates to the shared :mod:`effect_targets` resolver so the ``random``
+    target mode and the frontend choose-picker see the same candidates.
     """
-    candidates: list[str] = []
-    if kind == "location":
-        universe = scope or entity.current_universe
-        candidates = [e.id for e in repo.list_entities_by_type(EntityType.LOCATION, universe=universe)]
-    elif kind == "occupant":
-        location_id = scope or entity.current_location
-        if location_id:
-            candidates = [e.id for e in repo.list_entities_by_location(location_id) if e.id != entity.id]
-    elif kind == "entity":
-        universe = scope or entity.current_universe
-        candidates = [e.id for e in repo.list_all_entities(universe=universe)]
-    elif kind == "trait":
-        universe = scope or entity.current_universe
-        candidates = [t.id for t in repo.get_traits_by_universe(universe)]
-    elif kind == "life_path":
-        universe = scope or entity.current_universe
-        candidates = [lp.id for lp in repo.list_lifepaths_by_universe(universe)]
-    elif kind == "roll_table":
-        candidates = [t.id for t in repo.list_roll_tables()]
-    return random.choice(candidates) if candidates else None
+    candidates = resolve_candidates(kind, scope, entity, repo)
+    return random.choice([c.id for c in candidates]) if candidates else None
 
 
 def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind: str, repo) -> Optional[str]:

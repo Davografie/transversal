@@ -12,9 +12,11 @@ from transversal.services.effects_applier import apply_effects, resolve_choice
 
 
 class FakeTrait:
-    def __init__(self, trait_id, traitset_id):
+    def __init__(self, trait_id, traitset_id, name=None):
         self.id = trait_id
         self.traitset_id = traitset_id
+        self.name = name or trait_id
+        self.universes = []
 
 
 class FakeRepo:
