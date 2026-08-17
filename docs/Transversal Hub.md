@@ -38,6 +38,7 @@ status: canonical
 - [[System Architecture]] — Tech stack, core services, UI design, and Docker Compose setup
 - [[API Contract]] — GraphQL schema, REST endpoints, SSE stream, and MCP tools
 - [[Relational Canvas]] — GM-only interactive node graph for locations, factions, and relationships
+- [[Life Path Flow and Shared Roll Tables]] — how `next_step` links tables and how shared/unaffiliated tables return control
 
 ## Getting Started
 
