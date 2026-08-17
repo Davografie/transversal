@@ -101,7 +101,7 @@ A `RollTable` is a reusable data unit: a set of entries, each carrying a label, 
 
 ### Settled decisions for Change 2
 
-- **RollTables are first-class ArangoDB documents** in a new `roll_tables` collection, each with `_key`/`id` and `name`, plus an optional `life_path` field (null = shared/general table). A life path holds an entry-point table id; tables are linked by `next_step` effects whose `target` is the next table's `_key`.
+- **RollTables are first-class ArangoDB documents** in a new `roll_tables` collection, each with `_key`/`id` and `name`, plus an optional `life_path` field (null = shared/general table). A life path holds an entry-point table id; tables are linked by `next_step` effects whose `target` is the next table's `_key`. **Shared tables (`life_path: null`) are reusable across multiple life paths** — e.g. a single `Survive` table referenced by every path's `next_step`.
 - **Checks keep the dice pool.** A check rolls a pool (predetermined trait, combination of traits, or free player choice) against a difficulty; the outcome tier selects a tier-keyed entry. The effect die is degree-of-success, not the pass/fail gate.
 - **Learn is a RollTable** — no separate curriculum logic. `CurriculumItem` dissolves into a table entry + `gain_or_step_up` effect + a `min_rank` condition.
 - **Conditions/limits become a distinct `Condition` data unit**, parallel to `Effect`: `{ type, target, value, narrative }`, evaluated automatically against the entity. `min_rank`, `at_location`, `has_trait`, `has_relationship`, `always`, and `narrative` are the initial types. SFX's narrative `limit` stays as-is for now.
