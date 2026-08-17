@@ -111,9 +111,10 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     botch = _is_botch(rolls)
     razmerit_earned = len(hitches)  # 1 razmerit per hitch
 
-    # Opposition roll (GMC or challenge)
+    # Opposition roll (GMC, challenge, or static difficulty)
     opposition_roll = None
     opposition_rolls: list[DieRoll] = []
+    opposition_total: Optional[int] = None
     challenge_result = None
 
     if request.opposition:
@@ -153,6 +154,9 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
             )
             razmerit_earned = len(hitches)
 
+        elif request.opposition.type == "static_difficulty" and request.opposition.static_difficulty is not None:
+            opposition_total = request.opposition.static_difficulty
+
     return SimplifiedResult(
         kind=request.kind,
         rolls=rolls,
@@ -162,6 +166,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
         hitches=hitches,
         botch=botch,
         opposition_roll=opposition_roll,
+        opposition_total=opposition_total,
         challenge_result=challenge_result,
         razmerit_earned=razmerit_earned,
     )

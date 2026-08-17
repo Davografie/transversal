@@ -206,6 +206,17 @@ class TestSimplifiedPipeline:
         # Can't assert specific hitch count (random), but structure is correct
         assert result.razmerit_earned == len(result.hitches)
 
+    def test_simplified_static_difficulty(self):
+        request = DicePoolRequest(
+            entity_id="test-1",
+            universe="earth",
+            dice=[(DieType.D8, "shooting")],
+            opposition=Opposition(type="static_difficulty", static_difficulty=8),
+        )
+        result = resolve(request)
+        assert isinstance(result, SimplifiedResult)
+        assert result.opposition_total == 8
+
 
 class TestPoolPipeline:
     def test_pool_routes_correctly(self):

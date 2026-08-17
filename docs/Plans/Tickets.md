@@ -121,11 +121,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `components/DiceRoller.vue`, `composables/useApi.js` (`roll` opposition param).
 
 ### P2.5b — Backend + frontend: GM manual test-difficulty selection (two-step)
-- **Status:** pending
+- **Status:** done
 - **What:** the GM rolls the opposition pool, sees the dice, and picks the two that set the difficulty; the player then rolls against that fixed difficulty.
-- **Done:** difficulty is GM-chosen (tap two dice), not auto top-2.
+- **Done:** opposition rolls → GM taps two dice → difficulty sent as `static_difficulty`; simplified pipeline now returns `opposition_total` for static difficulty.
 - **Depends:** P2.5
-- **Load:** `services/dice_resolver.py` (`_resolve_simplified` — add `static_difficulty` handling), `components/DiceRoller.vue`, `composables/useApi.js`.
+- **Load:** `services/dice_resolver.py` (`_resolve_simplified` static_difficulty), `domain/__init__.py` (SimplifiedResult.opposition_total), `components/DiceRoller.vue`.
 
 ### P2.6 — Backend: razmerit persistence
 - **Status:** pending

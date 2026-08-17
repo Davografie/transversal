@@ -152,6 +152,7 @@ class SimplifiedResult(BaseModel):
     hitches: list[DieRoll]
     botch: bool
     opposition_roll: Optional[DieRoll] = None
+    opposition_total: Optional[int] = None
     challenge_result: Optional[ChallengeResult] = None
     razmerit_earned: int = 0
 

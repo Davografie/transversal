@@ -43,6 +43,27 @@
           <button v-for="d in dies" :key="d" class="die-btn" :class="`die-btn-${d}`" @click="addOppositionDie(d)">+{{ d }}</button>
           <button v-if="opposition.dice.length" class="clear-opposition" @click="clearOpposition">Clear</button>
         </div>
+        <div class="opposition-roll">
+          <button v-if="opposition.dice.length" class="roll-btn" @click="rollOpposition" :disabled="loading">
+            {{ loading ? 'Rolling…' : 'Roll opposition' }}
+          </button>
+          <div v-if="oppositionRolls.length" class="opposition-rolled">
+            <div class="roll-dice">
+              <div
+                v-for="(r, i) in oppositionRolls"
+                :key="i"
+                class="difficulty-die"
+                :class="{ 'difficulty-pick': difficultyPicks.includes(i) }"
+                @click="toggleDifficultyPick(i)"
+              >
+                <DieIcon :die="r.die" :result="r.result" :label="r.source" />
+              </div>
+            </div>
+            <div class="difficulty-line">
+              Difficulty: <strong>{{ difficulty ?? 'pick 2 dice' }}</strong>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -197,6 +218,8 @@ const difficultyPresets = [
   { label: 'Hard', die: 'd10' },
   { label: 'Very Hard', die: 'd12' },
 ]
+const oppositionRolls = ref([])  // rolled opposition dice [{die, result, source}]
+const difficultyPicks = ref([])  // indices into oppositionRolls (max 2)
 const panelOpen = ref(false)
 const showConsequences = ref(false)
 const consequenceSide = ref('player')
@@ -284,6 +307,25 @@ function removeOppositionDie(i) {
 
 function clearOpposition() {
   opposition.dice.splice(0, opposition.dice.length)
+  oppositionRolls.value = []
+  difficultyPicks.value = []
+}
+
+async function rollOpposition() {
+  const dice = opposition.dice.map(d => [d.die, d.source])
+  const res = await apiRoll(props.entityId, props.universe, dice)
+  oppositionRolls.value = res?.rolls || []
+  difficultyPicks.value = []
+}
+
+function toggleDifficultyPick(i) {
+  const idx = difficultyPicks.value.indexOf(i)
+  if (idx !== -1) {
+    difficultyPicks.value.splice(idx, 1)
+    return
+  }
+  if (difficultyPicks.value.length >= 2) return
+  difficultyPicks.value.push(i)
 }
 
 function addFromSheet({ die, source, label, tsId }) {
@@ -673,11 +715,16 @@ const beatsOpposition = computed(() => {
   return rollTotal.value > oppositionValue.value
 })
 
+const difficulty = computed(() => {
+  if (difficultyPicks.value.length < 2) return null
+  return difficultyPicks.value.reduce((sum, i) => sum + (oppositionRolls.value[i]?.result || 0), 0)
+})
+
 async function doRoll() {
   setPhase(Phase.ROLLING)
   const dice = pool.map(d => [d.die, d.source])
-  const opp = opposition.dice.length
-    ? { type: 'gmc', dice: opposition.dice.map(d => [d.die, d.source]) }
+  const opp = difficulty.value != null
+    ? { type: 'static_difficulty', static_difficulty: difficulty.value }
     : null
   result.value = await apiRoll(props.entityId, props.universe, dice, opp)
   pool.length = 0
@@ -876,4 +923,11 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .opposition-result strong { color: var(--text); }
 .outcome-success { color: var(--success); font-weight: 700; }
 .outcome-fail { color: var(--danger); font-weight: 700; }
+
+.opposition-roll { display: flex; flex-direction: column; gap: 6px; }
+.opposition-rolled { display: flex; flex-direction: column; gap: 6px; }
+.difficulty-line { font-size: 13px; color: var(--text-dim); }
+.difficulty-line strong { color: var(--warn); font-size: 16px; }
+.difficulty-die { border: 2px solid transparent; border-radius: 8px; padding: 2px; cursor: pointer; }
+.difficulty-die.difficulty-pick { border-color: var(--warn); background: rgba(232,136,48,0.15); }
 </style>
