@@ -441,6 +441,8 @@ class Entity(BaseModel):
     suitable_life_path_ids: list[str] = Field(default_factory=list)  # faction-only: offered paths
     discovered_life_paths: list[str] = Field(default_factory=list)  # _keys of discovered paths
     pending_term: Optional["PendingTerm"] = None  # in-progress term state (checkpoint)
+    # Post-roll consequence menu — location/lair moves authored directly on the entity.
+    consequence_options: list["ConsequenceOption"] = Field(default_factory=list)
 
 
 # ── Life Paths ─────────────────────────────────────────
@@ -532,6 +534,19 @@ class Effect(BaseModel):
     result: Optional[str] = None
     target_scope: Optional[str] = None  # narrowing hint for runtime target choice
     context: dict = Field(default_factory=dict)  # e.g. relationship description
+
+
+class ConsequenceOption(BaseModel):
+    """A selectable entry in the post-roll consequence menu.
+
+    Authored directly on entities (location moves), registered as base moves,
+    or derived from ``on_consequence`` SFX. Choosing one applies its effects.
+    """
+    id: str
+    label: str
+    side: str = "player"  # "player" | "gm" | "either"
+    effects: list[Effect] = Field(default_factory=list)
+    source: str = "base"  # "base" | "entity" | "sfx"
 
 
 class SFX(BaseModel):
