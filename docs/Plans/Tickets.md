@@ -22,7 +22,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 >
 > **Coverage guarantee:** every unchecked item in [[to-do]] maps to a ticket below or to the explicit deferred list at the bottom. Nothing is second-class or silently dropped.
 >
-> **Status values:** `done` · `pending` · `deferred` (the bottom section). Phase 1 (P1.1–P1.6) is `done`; everything later is `pending` until worked.
+> **Status values:** `done` · `pending` · `deferred` (the bottom section) · `abandoned` (superseded or wrong premise). Phase 1 (P1.1–P1.6) is `done`; everything later is `pending` until worked.
 
 ## Phase 1 — Keystone: effect targeting & application
 
@@ -129,11 +129,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `services/dice_resolver.py` (`_resolve_simplified` static_difficulty), `domain/__init__.py` (SimplifiedResult.opposition_total), `components/DiceRoller.vue` (`gmMode`/`difficulty`), `App.vue` (`difficulty_set`), `composables/useSSE.js`.
 
 ### P2.6 — Backend: razmerit persistence
-- **Status:** pending
-- **What:** hitches/botches earn razmerit that is written back (today computed and discarded).
-- **Done:** a hitch increases the character's razmerit balance and publishes an SSE event.
+- **Status:** abandoned
+- **What:** *(superseded)* — razmerit is earned when the GM *buys* a hitch (a GM-owned SFX), not automatically on a hitch.
+- **Done:** —
 - **Depends:** —
-- **Load:** `services/razmerit.py`, `services/effects_commit.py`, [[Pressure-Test Log]] § Scenario 3.
+- **Note:** the persistence (`RazmeritService.earn`) and the `earn_razmerit` effect already exist; the actual work is the buy-hitch SFX in P3.3.
 
 ### P2.7 — Backend + frontend: dice pool persistence
 - **Status:** pending
@@ -200,12 +200,13 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** P3.1
 - **Load:** old `vue/src/components/Trait.vue` (`deplete_challenge`/`increase_challenge`), [[Pressure-Test Log]] § Scenario 5 UX note.
 
-### P3.3 — Backend + frontend: buy-hitch
+### P3.3 — Backend + frontend: buy-hitch (GM SFX)
 - **Status:** pending
-- **What:** GM spends a doom die to buy a player's hitch → escalate → apply a complication.
-- **Done:** a hitch can be bought by spending doom-pool dice, producing a complication on the target.
-- **Depends:** P3.1 (render), P2.8 (hitch trigger)
-- **Load:** [[Pressure-Test Log]] § Scenario 5, `services/effects_applier.py` (complication effects).
+- **What:** a GM-owned SFX that, triggered on a player-rolled hitch, earns the player razmerit and introduces a complication / steps up the doom pool.
+- **Done:** buying a hitch applies `earn_razmerit` (to the player) + a complication effect via the SFX owner model.
+- **Depends:** P3.1 (render), P2.8 (hitch trigger), SFX owner model (Phase 3)
+- **Load:** [[Pressure-Test Log]] § Scenario 5, `services/razmerit.py` (earn), `services/effects_registry.py` (`earn_razmerit`), `services/effects_applier.py` (complication effects).
+- **Note:** rename `dice_resolver.razmerit_earned` → `hitches_count` (or drop it) — it currently encodes the wrong "auto-earn" assumption; hitches are buyable, not earned.
 
 ### P3.4 — Backend + frontend: challenge resolution via effect system
 - **Status:** pending
