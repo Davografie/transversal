@@ -37,25 +37,45 @@
         <div class="ee-help">{{ selectedAction.description }}</div>
         <div v-for="f in visibleFields" :key="f.name" class="ee-field">
           <label>{{ f.label }}</label>
-          <select v-if="f.fieldType === 'die_select' || f.fieldType === 'select'" v-model="newEffect.fields[f.name]">
-            <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
-          </select>
-          <GmTraitPicker
-            v-else-if="isTraitTarget(f)"
-            :model-value="newEffect.fields[f.name] || ''"
-            @update:model-value="newEffect.fields[f.name] = $event"
-            :universe="universe"
-          />
-          <GmRollTablePicker
-            v-else-if="isRollTableTarget(f)"
-            :model-value="newEffect.fields[f.name] || ''"
-            @update:model-value="newEffect.fields[f.name] = $event"
-            :universe="universe"
-            :faction="faction"
-            :life-path="lifePath"
-          />
-          <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" />
-          <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
+
+          <template v-if="isScopedTargetField(f)">
+            <div class="ee-mode-row">
+              <select v-model="newEffect.targetMode">
+                <option value="literal">Pick specific</option>
+                <option value="choose">Choose at runtime</option>
+                <option value="random">Random</option>
+              </select>
+            </div>
+            <template v-if="newEffect.targetMode === 'literal'">
+              <GmTraitPicker
+                v-if="isTraitTarget(f)"
+                :model-value="newEffect.fields[f.name] || ''"
+                @update:model-value="newEffect.fields[f.name] = $event"
+                :universe="universe"
+              />
+              <GmRollTablePicker
+                v-else-if="isRollTableTarget(f)"
+                :model-value="newEffect.fields[f.name] || ''"
+                @update:model-value="newEffect.fields[f.name] = $event"
+                :universe="universe"
+                :faction="faction"
+                :life-path="lifePath"
+              />
+              <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
+            </template>
+            <div v-else class="ee-field">
+              <label>Scope</label>
+              <input v-model="newEffect.scope" type="text" placeholder="universe:earth / faction:mafia / subtree:loc / traitset:ts-…" />
+            </div>
+          </template>
+
+          <template v-else>
+            <select v-if="f.fieldType === 'die_select' || f.fieldType === 'select'" v-model="newEffect.fields[f.name]">
+              <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+            </select>
+            <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" />
+            <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
+          </template>
         </div>
         <label class="ee-timing-label">Timing</label>
         <select v-model="newEffect.timing">
@@ -93,7 +113,7 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: '' })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: '', targetMode: 'literal', scope: '' })
 
 onMounted(() => { load() })
 
@@ -119,9 +139,22 @@ function isRollTableTarget(f) {
   return f.name === 'target' && selectedAction.value?.targetKind === 'roll_table'
 }
 
+function isScopedTargetField(f) {
+  return f.name === 'target' && !!selectedAction.value?.targetKind
+}
+
+function detectTargetMode(eff, meta) {
+  const kind = meta?.targetKind
+  if (kind && eff?.target === `{choose_${kind}}`) return 'choose'
+  if (kind && eff?.target === `{random:${kind}}`) return 'random'
+  return 'literal'
+}
+
 function onActionChange() {
   newEffect.fields = {}
   newEffect.context = ''
+  newEffect.targetMode = 'literal'
+  newEffect.scope = ''
   const meta = selectedAction.value
   if (meta) {
     for (const f of (meta.fields || [])) {
@@ -141,13 +174,18 @@ function parseContext(s) {
 }
 
 function buildEffect(meta) {
+  const kind = meta.targetKind
+  const mode = kind ? (newEffect.targetMode || 'literal') : 'literal'
+  let target = meta.implicitTarget || newEffect.fields.target || ''
+  if (kind && mode === 'choose') target = `{choose_${kind}}`
+  if (kind && mode === 'random') target = `{random:${kind}}`
   return {
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
     action: meta.effectAction,
-    target: meta.implicitTarget || newEffect.fields.target || '',
+    target,
     result: meta.implicitResult || strVal(newEffect.fields.result),
-    targetScope: meta.requiresChoice ? (meta.targetKind || null) : null,
+    targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
     context: parseContext(newEffect.context),
   }
 }
@@ -181,7 +219,11 @@ function editEffect(i) {
   newEffect.actionId = meta?.actionId || ''
   newEffect.timing = eff.timing || 'IMMEDIATE'
   newEffect.fields = {}
-  if (eff.target && eff.target !== (meta?.implicitTarget || '')) newEffect.fields.target = eff.target
+  newEffect.targetMode = detectTargetMode(eff, meta)
+  newEffect.scope = eff.targetScope || ''
+  if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
+    newEffect.fields.target = eff.target
+  }
   if (eff.result && eff.result !== (meta?.implicitResult || '')) newEffect.fields.result = eff.result
   newEffect.context = eff.context && Object.keys(eff.context).length ? JSON.stringify(eff.context) : ''
 }
@@ -193,6 +235,8 @@ function closeEditor() {
   newEffect.fields = {}
   newEffect.timing = 'IMMEDIATE'
   newEffect.context = ''
+  newEffect.targetMode = 'literal'
+  newEffect.scope = ''
 }
 
 function effectCategory(eff) {
@@ -243,6 +287,7 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
 .ee-form textarea { resize: vertical; min-height: 34px; }
 .ee-field { display: flex; flex-direction: column; gap: 2px; }
+.ee-mode-row { display: flex; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
 .ee-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }
