@@ -91,12 +91,12 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** —
 - **Load:** `services/dice_resolver.py`, `api/rest/roll.py`, `services/contest_tracker.py`, [[Pressure-Test Log]] § Scenario 4.
 
-### P2.2 — Backend: return the opponent's effect die (stakes)
+### P2.2 — Backend: return the opponent's effect die (contest stakes only)
 - **Status:** pending
-- **What:** the resolver returns the opposition's effect die alongside the result.
-- **Done:** a GMC/challenge opposition roll reports its effect die (the "stakes").
+- **What:** the resolver returns the opposition's effect die for *contests*; tests don't produce stakes.
+- **Done:** a contest's opponent roll reports its effect die (the "stakes"); a test reports no stakes.
 - **Depends:** P2.1
-- **Load:** `services/dice_resolver.py` (`_resolve_simplified`/`_resolve_pool`), [[Pressure-Test Log]] § Scenario 3.
+- **Load:** `services/dice_resolver.py` (`_resolve_simplified`/`_resolve_pool`), [[Pressure-Test Log]] § Scenarios 3 & 4.
 
 ### P2.3 — Backend: contest resolve returns full rolls + effect dice
 - **Status:** pending
@@ -107,14 +107,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 
 ### P2.4 — Backend: challenger/defendant modeling
 - **Status:** pending
-- **What:** a stored role distinguishes who initiated vs who defends (fixes positional "ties go to defender").
-- **Done:** ties resolve against the modeled defendant, not whoever is the resolve argument.
+- **What:** a stored role distinguishes who initiated vs who defends, so a tie resolves in favor of the *initiator* (Cortex Prime), not the resolve argument.
+- **Done:** ties favor the initiator regardless of which side calls resolve.
 - **Depends:** P2.1
 - **Load:** `services/contest_tracker.py` (`set_opposition`), `domain/__init__.py` (PoolAssembly), [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.5 — Frontend: opposition UI (GM rolls first)
 - **Status:** pending
-- **What:** set static difficulty / GMC / challenge opposition; GM rolls first → threshold + stakes, then player rolls.
+- **What:** GM test difficulty via preset buttons (very easy 2d4 → very hard 2d12) auto-added to the opposition pool, plus trait dice; GM rolls first → threshold, then player rolls. Contests keep the opponent's effect die as stakes.
 - **Done:** a test/contest can be set up with opposition and the GM's roll is a visible first step.
 - **Depends:** P2.2
 - **Load:** `components/DiceRoller.vue`, `components/LocationViewer.vue`, `composables/useApi.js` (`roll` opposition param).
@@ -161,6 +161,20 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** —
 - **Load:** to-do "Rolling dice animation", `components/DieIcon.vue`, `components/DiceRoller.vue`.
 
+### P2.12 — Backend + frontend: exclude hitches from effect-die selection
+- **Status:** pending
+- **What:** auto-selection (resolver + dice-pool UI) never picks a die that rolled a 1 as the effect die.
+- **Done:** the effect die is the largest leftover non-hitch die (d4 fallback when none).
+- **Depends:** —
+- **Load:** `services/dice_resolver.py` (`_resolve_pool` effect-die block), `components/DiceRoller.vue` (result/effect click), `components/DieIcon.vue`.
+
+### P2.13 — Backend + frontend: contest give-in
+- **Status:** pending
+- **What:** a losing initiator can give in on their own terms — define the failure, can't immediately re-initiate against the same opponent, earn the usual reward.
+- **Done:** the give-in option appears in the contest flow and ends the back-and-forth.
+- **Depends:** P2.3
+- **Load:** `services/contest_tracker.py`, `services/dice_resolver.py` (`resolve_contest`), [[Pressure-Test Log]] § Scenario 4.
+
 ## Phase 3 — Stakes & consequences
 
 ### P3.1 — Frontend: looming doom dice render
@@ -204,6 +218,34 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Done:** emptying the tether triggers full-native via the event system.
 - **Depends:** P3.5, P2.8
 - **Load:** [[Projections and Transversal]], `services/effects_applier.py` (registry `_attune`/travel + pure applier), `services/effect_targets.py`, `services/effects_engine.py` (`_trigger_matches`), `domain/__init__.py` (TransversalType).
+
+### P3.7 — Backend + frontend: high-stakes scenes & taken-out *(later)*
+- **Status:** pending
+- **What:** GM flags a scene high-stakes; a winning contest compares effect dice — larger → opponent taken out, else a complication at the winner's effect die (or spend to avoid).
+- **Done:** high-stakes contests produce taken-out or a spend-avoided complication.
+- **Depends:** P2.3
+- **Load:** [[Pressure-Test Log]] § Scenario 4, `services/dice_resolver.py` (`resolve_contest`).
+
+### P3.8 — Backend + frontend: complication stepped beyond d12 = taken out *(later)*
+- **Status:** pending
+- **What:** stepping a complication above d12 automatically takes the character out of the scene.
+- **Done:** a d12 complication stepped up marks the character taken out.
+- **Depends:** P3.7
+- **Load:** `services/effects_applier.py` (step-up complication effect), `domain/__init__.py` (DieType step_up).
+
+### P3.9 — Backend + frontend: contest interference *(later)*
+- **Status:** pending
+- **What:** a third party spends to join a two-way contest; compare against the current total; win stops it, loss hands them a complication.
+- **Done:** a third side can interfere and the contest tracks the interference outcome.
+- **Depends:** P2.4
+- **Load:** [[Pressure-Test Log]] § Scenario 4, `services/contest_tracker.py`.
+
+### P3.10 — Backend + frontend: multiway contests *(later)*
+- **Status:** pending
+- **What:** 3+ parties vie for one goal; highest total wins; those who stay in and lose take a complication.
+- **Done:** a contest accepts N participants and resolves winner-takes-all.
+- **Depends:** P2.4
+- **Load:** [[Pressure-Test Log]] § Scenario 4, `services/contest_tracker.py`.
 
 ## Phase 4 — Character sheet: traits as first-class
 
@@ -484,5 +526,6 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 ## Deferred & out-of-scope
 
 - **"Increase/decrease result/effect limit"** — deferred with `modify_roll` / `modify_outcome` (release-plan locked decision).
+- **Heroic success** (beat by 5+ → step up effect die per 5) — deferred; too swingy, ties-favor-initiator already rewards action. Revisit after the spine is playable.
 - **Foundry integration** — out of this release.
 - **"Other third-party tools?"** — out of this release.

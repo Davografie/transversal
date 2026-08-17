@@ -69,6 +69,7 @@ The second keystone is **contest wiring** — drive the existing `resolve_contes
 ## Deferred (cut / post-release)
 
 - **`modify_roll` / `modify_outcome` effects** — deferred. Also **hide from the editor** until implemented, so content can't author silent no-ops.
+- **Heroic success** (beat the difficulty by 5+ → step up the effect die per 5) — deferred. Core in Cortex Prime, but feels too swingy here; ties-favor-initiator already rewards action. Revisit after the spine is playable.
 - **Controlled transversal (razmerit-tech)** — the player-built technology that overrides random scatter and lets you choose your destination. Post-release; it's the reward the random-scatter default is meant to incentivize.
 - **Troupe play** — spotlight recency list, grog roll tables, companion GMCs, archetype instantiation. See [[Inspired Mechanics]] and the troupe discussion.
 - **Auth / accounts** — out of scope. Not public; GM (architect) + known players only. `players` collection with `role` (`player` / `architect`) is sufficient for now.
@@ -88,8 +89,8 @@ The one primitive everything else hangs off.
 ### Phase 2 — Play spine: tests & contests actually resolve
 
 - **Test vs contest as first-class** — a roll knows which it is (drives styling, SFX triggers, and the consequence menu).
-- **Opposition UI** — static difficulty / GMC / challenge; the GM rolls first → threshold + **stakes** (the opponent's effect die, which the resolver must now return).
-- **Challenger/defendant** modeling (fixes "ties go to defender" being positional).
+- **Opposition UI** — GM test difficulty via preset buttons (**very easy 2d4 → very hard 2d12**) auto-added to the opposition pool, plus trait dice; the GM rolls first → threshold. **Stakes (opponent's effect die) are contest-only.**
+- **Challenger/defendant** modeling — **ties favor the initiator** (Cortex Prime: the opponent must *beat* the initiator's total), so the winner isn't a positional artifact.
 - **Contest resolve returns full rolls + effect dice**, not just `{winner, pipeline, pushed}`.
 - **Razmerit persistence** — hitches/botches earn razmerit that's written back.
 - **Dice pool persistence** — survives refresh / mobile memory eviction.
@@ -140,9 +141,16 @@ The one primitive everything else hangs off.
 - **Support cast** = two tiers: authored companion GMCs + disposable grogs from roll tables.
 - **`modify_roll` / `modify_outcome`** = defer (above).
 - **SFX owner** — every SFX has one of six owners: `trait`, `trait set`, `entity` (characters, locations, factions, GMCs, assets, universes), `projection` (body), `table` (everyone), `GM`. System moves are SFX too — "push a contest" (table) and "buy a hitch" (GM) — not hardcoded rules. Universes are entities, so a universe move is just an entity SFX.
+- **Tests don't create stakes** — a test is pass/fail plus the roller's own effect die sizing the outcome; the opponent's effect die only matters in contests (winner vs loser). We follow Cortex Prime here.
+- **Ties favor the initiator** — the opponent must *beat* the initiator's total, so a tie means the initiator wins (not "ties go to the defender").
+- **Simplified rolling stays** — the 1–2 die → tier pipeline remains for quick rolls; full pools for important beats. Challenge ratings are doom pools (separate Cortex chapter, not yet copied). GM test difficulty = preset buttons (very easy 2d4 → very hard 2d12) auto-added to the opposition pool, plus trait dice.
+- **Heroic success is deferred** (see Deferred) — the beat-by-5 effect-die step-up feels too swingy.
+- **Effect-die auto-selection excludes hitches** — auto-pick the largest leftover die that isn't a hitch, in both the resolver and the dice-pool UI.
+- **Contest outcomes are first-class but phased** — give-in this release; high-stakes/taken-out, interference, multiway, and complication-over-d12-taken-out are later tickets in [[Tickets]].
 
 ## Open questions / stubs
 
+- **`static_difficulty` opposition type** — now a Cortex *mod*, not the default test (preset difficulty dice are). Keep it available or drop it? TBD.
 - Exact effect list on the full-native SFX (Earth projection decay, Earth-trait step-down) — TBD.
 - Flashback SFX exact fill-in (still a stub in [[Projections and Transversal]]).
 - **Events / trigger-condition-limit unification** — "hooks" became "events" (a condition + effects). Decide whether `trigger` and `condition` are one concept and whether `limit` folds into `condition`. Resolve in Phase 2 (SFX triggers).
