@@ -152,4 +152,4 @@ async def resolve_contest(location_id: str, entity_id: str):
         ))
 
     return {"winner": result.winner.value, "pipeline": result.pipeline,
-            "pushed": result.pushed}
+            "kind": result.kind.value, "pushed": result.pushed}

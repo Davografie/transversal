@@ -8,6 +8,7 @@ from transversal.domain import (
     DieType,
     Opposition,
     OutcomeTier,
+    RollKind,
     SimplifiedResult,
     PoolResult,
 )
@@ -16,6 +17,7 @@ from transversal.services.dice_resolver import (
     _is_botch,
     _resolve_challenge,
     resolve,
+    resolve_contest,
 )
 
 
@@ -313,3 +315,54 @@ class TestDieType:
         assert DieType.D4.max_value == 4
         assert DieType.D6.max_value == 6
         assert DieType.D12.max_value == 12
+
+
+class TestRollKind:
+    def test_request_defaults_to_test(self):
+        request = DicePoolRequest(
+            entity_id="test-1",
+            universe="earth",
+            dice=[(DieType.D8, "shooting")],
+        )
+        assert request.kind == RollKind.TEST
+
+    def test_resolve_defaults_to_test(self):
+        request = DicePoolRequest(
+            entity_id="test-1",
+            universe="earth",
+            dice=[(DieType.D8, "shooting")],
+        )
+        result = resolve(request)
+        assert result.kind == RollKind.TEST
+
+    def test_resolve_carries_explicit_kind(self):
+        request = DicePoolRequest(
+            entity_id="test-1",
+            universe="earth",
+            dice=[(DieType.D8, "shooting")],
+            kind=RollKind.ROLL_TABLE,
+        )
+        result = resolve(request)
+        assert result.kind == RollKind.ROLL_TABLE
+
+    def test_contest_forces_contest_kind(self):
+        player = DicePoolRequest(
+            entity_id="kael", universe="earth",
+            dice=[
+                (DieType.D8, "shooting"),
+                (DieType.D6, "distinction"),
+                (DieType.D6, "asset"),
+            ],
+        )
+        opponent = DicePoolRequest(
+            entity_id="guard", universe="earth",
+            dice=[
+                (DieType.D8, "agility"),
+                (DieType.D6, "awareness"),
+                (DieType.D4, "wary"),
+            ],
+        )
+        result = resolve_contest(player, opponent)
+        assert result.kind == RollKind.CONTEST
+        assert result.player_result.kind == RollKind.CONTEST
+        assert result.opponent_result.kind == RollKind.CONTEST

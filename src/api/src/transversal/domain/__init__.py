@@ -113,12 +113,26 @@ class Opposition(BaseModel):
     static_difficulty: Optional[int] = None
 
 
+class RollKind(str, Enum):
+    """What kind of roll a dice pool represents.
+
+    - ``test``: one side rolls against a difficulty/opposition.
+    - ``contest``: two sides roll head-to-head; a winner is declared.
+    - ``roll_table``: reserved for random-table outcomes (resolved via
+      ``resolve_table``, not the dice resolver, today).
+    """
+    TEST = "test"
+    CONTEST = "contest"
+    ROLL_TABLE = "roll_table"
+
+
 class DicePoolRequest(BaseModel):
     entity_id: str
     universe: str
     dice: list[tuple[DieType, str]]
     opposition: Optional[Opposition] = None
     razmerit_spent: int = 0
+    kind: RollKind = RollKind.TEST
 
 
 class ChallengeResult(BaseModel):
@@ -130,6 +144,7 @@ class ChallengeResult(BaseModel):
 
 class SimplifiedResult(BaseModel):
     pipeline: str = "simplified"
+    kind: RollKind = RollKind.TEST
     rolls: list[DieRoll]
     highest: int
     tier: OutcomeTier
@@ -143,6 +158,7 @@ class SimplifiedResult(BaseModel):
 
 class PoolResult(BaseModel):
     pipeline: str = "pool"
+    kind: RollKind = RollKind.TEST
     rolls: list[DieRoll]
     kept: list[DieRoll]
     total: int
@@ -176,6 +192,7 @@ class ContestResult(BaseModel):
     matter for certain SFX or narrative mechanics.
     """
     pipeline: str  # "simplified" or "pool" — which pipeline the contest used
+    kind: RollKind = RollKind.CONTEST
     winner: ContestWinner
     player_result: SimplifiedResult | PoolResult
     opponent_result: SimplifiedResult | PoolResult

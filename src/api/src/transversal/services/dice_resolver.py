@@ -22,6 +22,7 @@ from transversal.domain import (
     Opposition,
     OutcomeTier,
     PoolResult,
+    RollKind,
     RollResult,
     SimplifiedResult,
 )
@@ -153,6 +154,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
             razmerit_earned = len(hitches)
 
     return SimplifiedResult(
+        kind=request.kind,
         rolls=rolls,
         highest=highest,
         tier=tier,
@@ -219,6 +221,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
             opposition_total = request.opposition.static_difficulty
 
     return PoolResult(
+        kind=request.kind,
         rolls=rolls,
         kept=kept,
         total=total,
@@ -313,8 +316,8 @@ def resolve_contest(
 
     Ties always go to the defender (opponent).
     """
-    player_result = resolve(player)
-    opponent_result = resolve(opponent)
+    player_result = resolve(player.model_copy(update={"kind": RollKind.CONTEST}))
+    opponent_result = resolve(opponent.model_copy(update={"kind": RollKind.CONTEST}))
 
     # Determine which pipelines were used
     player_is_pool = isinstance(player_result, PoolResult)
@@ -356,6 +359,7 @@ def resolve_contest(
 
     return ContestResult(
         pipeline=pipeline,
+        kind=RollKind.CONTEST,
         winner=winner,
         player_result=player_result,
         opponent_result=opponent_result,

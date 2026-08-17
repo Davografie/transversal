@@ -85,11 +85,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 ## Phase 2 — Play spine: tests & contests resolve
 
 ### P2.1 — Backend: test vs contest as first-class
-- **Status:** pending
+- **Status:** done
 - **What:** a roll knows its kind (test / contest / roll-table), flowing through the resolver and results.
-- **Done:** the roll/contest path carries an explicit kind, exposed to the UI and SFX triggers.
+- **Done:** `RollKind` (test/contest/roll_table) on `DicePoolRequest` + result models; `resolve()` echoes it, `resolve_contest()` forces `contest`, REST contest response carries `kind`.
 - **Depends:** —
-- **Load:** `services/dice_resolver.py`, `api/rest/roll.py`, `services/contest_tracker.py`, [[Pressure-Test Log]] § Scenario 4.
+- **Load:** `domain/__init__.py` (RollKind), `services/dice_resolver.py`, `api/rest/roll.py`, `api/rest/contest_pools.py`, [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.2 — Backend: return the opponent's effect die (contest stakes only)
 - **Status:** pending
