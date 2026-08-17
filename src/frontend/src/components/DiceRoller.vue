@@ -17,6 +17,35 @@
       </button>
     </div>
 
+    <div v-if="isAdding() && mode !== 'roll_table'" class="opposition-setup">
+      <button class="opposition-toggle" @click="showOpposition = !showOpposition">
+        {{ showOpposition ? 'Hide opposition' : 'Set opposition (GM)' }}
+      </button>
+      <div v-if="showOpposition" class="opposition-panel">
+        <div class="difficulty-presets">
+          <button
+            v-for="p in difficultyPresets"
+            :key="p.die"
+            class="difficulty-btn"
+            :class="`die-btn-${p.die}`"
+            @click="setDifficulty(p.die)"
+          >
+            {{ p.label }} (2{{ p.die }})
+          </button>
+        </div>
+        <div class="opposition-dice">
+          <div v-for="(d, i) in opposition.dice" :key="i" class="die-chip" @click="removeOppositionDie(i)">
+            <DieIcon :die="d.die" :label="d.label || d.die" />
+          </div>
+          <span v-if="!opposition.dice.length" class="opposition-empty">No opposition dice</span>
+        </div>
+        <div class="add-opposition">
+          <button v-for="d in dies" :key="d" class="die-btn" :class="`die-btn-${d}`" @click="addOppositionDie(d)">+{{ d }}</button>
+          <button v-if="opposition.dice.length" class="clear-opposition" @click="clearOpposition">Clear</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="result" class="result panel">
       <!-- Roll-table roll: show the rolled dice + derived value -->
       <template v-if="mode === 'roll_table'">
@@ -94,6 +123,13 @@
         </div>
       </template>
 
+      <div v-if="oppositionValue !== null" class="opposition-result">
+        vs difficulty <strong>{{ oppositionValue }}</strong>
+        <span v-if="!isPicking()" :class="beatsOpposition ? 'outcome-success' : 'outcome-fail'">
+          — {{ beatsOpposition ? 'Success' : 'Failure' }}
+        </span>
+      </div>
+
       <div v-if="result.botch" class="botch">BOTCH</div>
       <div v-if="result.hitches?.length" class="hitches">
         {{ result.hitches.length }} hitch{{ result.hitches.length > 1 ? 'es' : '' }}
@@ -152,6 +188,15 @@ const { loading, error, roll: apiRoll } = useApi()
 const pool = reactive([])
 const result = ref(null)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
+const opposition = reactive({ dice: [] })
+const showOpposition = ref(false)
+const difficultyPresets = [
+  { label: 'Very Easy', die: 'd4' },
+  { label: 'Easy', die: 'd6' },
+  { label: 'Challenging', die: 'd8' },
+  { label: 'Hard', die: 'd10' },
+  { label: 'Very Hard', die: 'd12' },
+]
 const panelOpen = ref(false)
 const showConsequences = ref(false)
 const consequenceSide = ref('player')
@@ -216,6 +261,29 @@ function addDie(die) {
 function removeDie(i) {
   pool.splice(i, 1)
   notifyPool()
+}
+
+function setDifficulty(die) {
+  const traitDice = opposition.dice.filter(d => d.source !== 'difficulty')
+  opposition.dice = [
+    { die, source: 'difficulty', label: `${die} difficulty` },
+    { die, source: 'difficulty', label: `${die} difficulty` },
+    ...traitDice,
+  ]
+  panelOpen.value = true
+}
+
+function addOppositionDie(die) {
+  opposition.dice.push({ die, source: 'scene', label: die })
+  panelOpen.value = true
+}
+
+function removeOppositionDie(i) {
+  opposition.dice.splice(i, 1)
+}
+
+function clearOpposition() {
+  opposition.dice.splice(0, opposition.dice.length)
 }
 
 function addFromSheet({ die, source, label, tsId }) {
@@ -586,10 +654,32 @@ const consequenceEffectDie = computed(() => {
   return result.value.effect_die || ''
 })
 
+const oppositionValue = computed(() => {
+  const r = result.value
+  if (!r) return null
+  if (r.opposition_total != null) return r.opposition_total
+  if (r.opposition_roll && r.opposition_roll.result != null) return r.opposition_roll.result
+  return null
+})
+
+const rollTotal = computed(() => {
+  if (!result.value) return 0
+  if (result.value.pipeline === 'pool') return computedTotal.value
+  return result.value.highest ?? 0
+})
+
+const beatsOpposition = computed(() => {
+  if (oppositionValue.value == null) return null
+  return rollTotal.value > oppositionValue.value
+})
+
 async function doRoll() {
   setPhase(Phase.ROLLING)
   const dice = pool.map(d => [d.die, d.source])
-  result.value = await apiRoll(props.entityId, props.universe, dice)
+  const opp = opposition.dice.length
+    ? { type: 'gmc', dice: opposition.dice.map(d => [d.die, d.source]) }
+    : null
+  result.value = await apiRoll(props.entityId, props.universe, dice, opp)
   pool.length = 0
   notifyPool()
   if (result.value?.pipeline === 'pool' && props.mode !== 'roll_table') {
@@ -771,4 +861,19 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 @keyframes pulse-slot { 0%, 100% { border-color: var(--accent); } 50% { border-color: var(--accent-dim); } }
 .sel-value { color: var(--text-dim); }
 .sel-value strong { color: var(--accent); font-size: 20px; }
+
+.opposition-setup { display: flex; flex-direction: column; gap: 6px; }
+.opposition-toggle { font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 6px; }
+.opposition-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(255,255,255,0.03); }
+.difficulty-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.difficulty-btn { flex: 1; min-width: 56px; padding: 6px 4px; font-size: 11px; font-weight: 700; border-radius: 6px; cursor: pointer; border: 2px solid transparent; background: rgba(255,255,255,0.06); color: var(--text); }
+.difficulty-btn:hover { background: rgba(255,255,255,0.12); border-color: var(--accent-dim); }
+.opposition-dice { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center; }
+.opposition-empty { font-size: 11px; color: var(--text-dim); }
+.add-opposition { display: flex; gap: 6px; }
+.clear-opposition { font-size: 11px; color: var(--danger); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: transparent; }
+.opposition-result { font-size: 14px; color: var(--text-dim); margin-top: 4px; }
+.opposition-result strong { color: var(--text); }
+.outcome-success { color: var(--success); font-weight: 700; }
+.outcome-fail { color: var(--danger); font-weight: 700; }
 </style>

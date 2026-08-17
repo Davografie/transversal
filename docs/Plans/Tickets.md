@@ -112,12 +112,13 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** P2.1
 - **Load:** `services/contest_tracker.py` (`get_contestants`, `set_opposition`), `domain/__init__.py` (ContestWinner, PoolAssembly), `services/dice_resolver.py` (`resolve_contest`), `services/effects_engine.py` (`contest_to_events`), [[Pressure-Test Log]] § Scenario 4.
 
-### P2.5 — Frontend: opposition UI (GM rolls first)
-- **Status:** pending
-- **What:** GM test difficulty via preset buttons (very easy 2d4 → very hard 2d12) auto-added to the opposition pool, plus trait dice; GM rolls first → threshold, then player rolls. Contests keep the opponent's effect die as stakes.
-- **Done:** a test/contest can be set up with opposition and the GM's roll is a visible first step.
+### P2.5 — Frontend: opposition UI (difficulty presets + verdict)
+- **Status:** done
+- **What:** GM test difficulty via preset buttons (very easy 2d4 → very hard 2d12) auto-added to the opposition pool, plus trait dice; the opposition rolls with the player's pool and the result shows the difficulty and a success/failure verdict.
+- **Done:** opposition can be set up (presets + extra dice), sent as `gmc` opposition, and rendered as "vs difficulty N → Success/Failure".
+- **Note:** a literal two-click "GM rolls first, then player rolls" is deferred — the combined `gmc` roll already keeps top-2 as the difficulty; the two-step `static_difficulty` path needs a simplified-pipeline backend gap filled first.
 - **Depends:** P2.2
-- **Load:** `components/DiceRoller.vue`, `components/LocationViewer.vue`, `composables/useApi.js` (`roll` opposition param).
+- **Load:** `components/DiceRoller.vue`, `composables/useApi.js` (`roll` opposition param).
 
 ### P2.6 — Backend: razmerit persistence
 - **Status:** pending
