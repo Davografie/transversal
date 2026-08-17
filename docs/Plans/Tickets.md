@@ -52,6 +52,12 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** P1.3, P1.4
 - **Load:** `components/DiceRoller.vue` (PICKING/RESOLVED), [[Pressure-Test Log]] § Scenario 3 target design.
 
+### P1.6 — Frontend: effect-die application
+- **What:** substitute the roll's effect die into a consequence option's effects before applying (the ``{effect_die}`` placeholder in ``result``).
+- **Done:** "Create a scene trait" / "Apply a complication" / "Give an asset" land at the roll's actual effect-die rating, not a fixed die.
+- **Depends:** P1.5
+- **Load:** `services/consequence_menu.py` (base moves), `composables/useConsequences.js`, `components/gm/ConsequenceMenu.vue`, `components/DiceRoller.vue` (`effectDie`).
+
 ## Phase 2 — Play spine: tests & contests resolve
 
 ### P2.1 — Backend: test vs contest as first-class
