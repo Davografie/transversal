@@ -125,7 +125,7 @@
           <option value="gm">GM</option>
         </select>
       </div>
-      <ConsequenceMenu :entity-id="entityId" :side="consequenceSide" @close="showConsequences = false" />
+      <ConsequenceMenu :entity-id="entityId" :side="consequenceSide" :effect-die="consequenceEffectDie" @close="showConsequences = false" />
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -576,6 +576,14 @@ const effectDie = computed(() => {
   if (!result.value || result.value.pipeline !== 'pool') return null
   const idx = selection.effect.find(i => i !== null)
   return idx !== undefined && idx !== null ? result.value.rolls[idx].die : null
+})
+
+// Effect die for the consequence menu: pool uses the picked die, simplified
+// uses the resolver's effect_die.
+const consequenceEffectDie = computed(() => {
+  if (!result.value) return ''
+  if (result.value.pipeline === 'pool') return effectDie.value || ''
+  return result.value.effect_die || ''
 })
 
 async function doRoll() {

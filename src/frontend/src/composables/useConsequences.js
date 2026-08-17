@@ -26,9 +26,19 @@ export function useConsequences() {
     }
   }
 
-  async function applyOption(entityId, option) {
-    // Applies the option's effects; returns { applied, pendingChoices }.
-    return applyEffects(entityId, option.effects || [])
+  function substituteEffectDie(effects, effectDie) {
+    const die = effectDie || 'd4'
+    return (effects || []).map((e) => ({
+      ...e,
+      result: e.result != null ? e.result.replace('{effect_die}', die) : e.result,
+    }))
+  }
+
+  async function applyOption(entityId, option, effectDie) {
+    // Applies the option's effects with the roll's effect die substituted in.
+    // Returns { applied, pendingChoices }.
+    const effects = substituteEffectDie(option.effects || [], effectDie)
+    return applyEffects(entityId, effects)
   }
 
   return { loading, fetchConsequenceOptions, applyOption, resolveEffectTargets }

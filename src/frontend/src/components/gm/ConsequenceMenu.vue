@@ -47,6 +47,7 @@ import { useConsequences } from '@/composables/useConsequences.js'
 const props = defineProps({
   entityId: { type: String, required: true },
   side: { type: String, default: 'player' },
+  effectDie: { type: String, default: '' },
   title: { type: String, default: 'Consequences' },
 })
 const emit = defineEmits(['applied', 'close'])
@@ -67,7 +68,7 @@ onMounted(load)
 watch(() => [props.entityId, props.side], load)
 
 async function choose(opt) {
-  const result = await applyOption(props.entityId, opt)
+  const result = await applyOption(props.entityId, opt, props.effectDie)
   if (!result) return
   if (result.pendingChoices && result.pendingChoices.length) {
     pendingChoices.value = result.pendingChoices
