@@ -8,10 +8,11 @@ universe-specific modules, or by content plugins.
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from transversal.domain import DieType, Effect, Entity, TraitSetting
+from transversal.domain import DieType, Effect, Entity, EntityType, TraitSetting
 
 
 # Handler signature: (action, entity_id, universe, context) -> None
@@ -267,11 +268,10 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     )
 
 
-# Placeholder suffixes recognised in ``{choose_*}`` targets, mapped to the
-# target kind the frontend picker should present.  A bare ``{choose}`` (or an
+# Target kinds the frontend picker should present.  A bare ``{choose}`` (or an
 # unknown suffix) resolves to None so the caller falls back to the handler's
 # default kind.
-_CHOOSE_KINDS = {
+_TARGET_KINDS = {
     "location": "location",
     "occupant": "occupant",
     "trait": "trait",
@@ -281,28 +281,82 @@ _CHOOSE_KINDS = {
     "roll_table": "roll_table",
 }
 
+_PLACEHOLDER_MODES = {"choose", "random"}
 
-def _parse_choose_kind(target: str) -> Optional[str]:
-    """Extract the target kind from a ``{choose_*}`` placeholder.
 
-    Returns None for a bare ``{choose}``, an unknown suffix, or a target that is
-    not a placeholder at all.
+def _parse_placeholder(target: str) -> Optional[tuple[str, Optional[str]]]:
+    """Parse a ``{mode:kind}`` / ``{mode_kind}`` target placeholder.
+
+    Returns ``(mode, kind)`` for a recognised mode (``choose`` / ``random``).
+    ``kind`` is None for a bare ``{choose}`` / ``{random}``.  Returns None for
+    non-placeholder targets or unknown modes.
     """
-    if not target.startswith("{choose"):
+    if not (target.startswith("{") and target.endswith("}")):
         return None
-    name = target[1:-1].removeprefix("choose").lstrip("_")
-    return _CHOOSE_KINDS.get(name)
+    body = target[1:-1]
+    if ":" in body:
+        mode, _, kind = body.partition(":")
+    else:
+        mode, _, kind = body.partition("_")
+    if mode not in _PLACEHOLDER_MODES:
+        return None
+    kind = kind.strip()
+    return (mode, _TARGET_KINDS.get(kind)) if kind else (mode, None)
 
 
-def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind: str) -> Optional[str]:
-    """Resolve a target to an id, or record a PendingChoice and return None."""
+def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo) -> Optional[str]:
+    """Return a random in-scope candidate id for the given target kind.
+
+    ``scope`` is ``Effect.target_scope``; when absent the entity's current
+    universe (or current location for occupants) narrows the candidate set.
+    Returns None when no candidates exist in scope.
+    """
+    candidates: list[str] = []
+    if kind == "location":
+        universe = scope or entity.current_universe
+        candidates = [e.id for e in repo.list_entities_by_type(EntityType.LOCATION, universe=universe)]
+    elif kind == "occupant":
+        location_id = scope or entity.current_location
+        if location_id:
+            candidates = [e.id for e in repo.list_entities_by_location(location_id) if e.id != entity.id]
+    elif kind == "entity":
+        universe = scope or entity.current_universe
+        candidates = [e.id for e in repo.list_all_entities(universe=universe)]
+    elif kind == "trait":
+        universe = scope or entity.current_universe
+        candidates = [t.id for t in repo.get_traits_by_universe(universe)]
+    elif kind == "life_path":
+        universe = scope or entity.current_universe
+        candidates = [lp.id for lp in repo.list_lifepaths_by_universe(universe)]
+    elif kind == "roll_table":
+        candidates = [t.id for t in repo.list_roll_tables()]
+    return random.choice(candidates) if candidates else None
+
+
+def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind: str, repo) -> Optional[str]:
+    """Resolve a target to an id, record a PendingChoice, or pick a random candidate.
+
+    - ``self`` → the entity's own id.
+    - ``{choose_*}`` / empty → a PendingChoice the caller resolves later.
+    - ``{random:*}`` → a random in-scope candidate (no PendingChoice).
+    - anything else → returned as a literal target id.
+    """
     target = effect.target or ""
     if target == "self":
         return entity.id
-    if target.startswith("{choose") or target == "":
-        choose_kind = _parse_choose_kind(target) or kind
+    parsed = _parse_placeholder(target)
+    if parsed is not None:
+        mode, choose_kind = parsed
+        resolved_kind = choose_kind or kind
+        if mode == "random":
+            return _random_candidate(resolved_kind, effect.target_scope, entity, repo)
         result.pending_choices.append(
-            PendingChoice(effect=effect, kind=choose_kind, scope=effect.target_scope)
+            PendingChoice(effect=effect, kind=resolved_kind, scope=effect.target_scope)
+        )
+        return None
+    if target == "":
+        result.pending_choices.append(
+            PendingChoice(effect=effect, kind=kind, scope=effect.target_scope)
         )
         return None
     return target
@@ -320,7 +374,7 @@ def resolve_choice(choice: PendingChoice, target: str) -> Effect:
 # ── Mutation handlers ────────────────────────────────
 
 def _apply_gain(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait")
+    target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
@@ -334,7 +388,7 @@ def _apply_gain(entity, effect, repo, result):
 
 
 def _apply_gain_or_step_up(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait")
+    target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
@@ -353,7 +407,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
 
 
 def _apply_step_up(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait")
+    target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
@@ -369,7 +423,7 @@ def _apply_step_up(entity, effect, repo, result):
 
 
 def _apply_step_down(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait")
+    target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
@@ -385,7 +439,7 @@ def _apply_step_down(entity, effect, repo, result):
 
 
 def _apply_set(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait")
+    target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
@@ -400,7 +454,7 @@ def _apply_set(entity, effect, repo, result):
 
 
 def _apply_gain_complication(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait")
+    target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
@@ -411,7 +465,7 @@ def _apply_gain_complication(entity, effect, repo, result):
 
 
 def _apply_gain_or_step_up_complication(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait")
+    target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
@@ -442,7 +496,7 @@ def _apply_spend(entity, effect, repo, result):
 
 
 def _apply_transfer(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "entity")
+    target = _resolve_target(entity, effect, result, "entity", repo)
     if target is None:
         return
     amount = int(effect.result or "0")
@@ -457,7 +511,7 @@ def _apply_transfer(entity, effect, repo, result):
 
 
 def _apply_discover(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "life_path")
+    target = _resolve_target(entity, effect, result, "life_path", repo)
     if target is None:
         return
     if entity.discovered_life_paths is None:
@@ -470,7 +524,7 @@ def _apply_discover(entity, effect, repo, result):
 
 
 def _apply_relationship_create(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "entity")
+    target = _resolve_target(entity, effect, result, "entity", repo)
     if target is None:
         return
     rel_type = effect.result or ""

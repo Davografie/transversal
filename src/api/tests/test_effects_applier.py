@@ -33,6 +33,42 @@ class FakeRepo:
         return self.entities.get(entity_id)
 
 
+class RandomRepo:
+    """Minimal repo for ``random`` target resolution — listing methods only."""
+
+    def __init__(self, locations=None, occupants=None, traits=None, entities=None):
+        self._locations = locations or []
+        self._occupants = occupants or []
+        self._traits = traits or []
+        self._entities = entities or []
+
+    def _entity(self, id, entity_type):
+        return Entity(id=id, type=entity_type, name=id, current_universe="earth")
+
+    def list_entities_by_type(self, entity_type, universe=None):
+        if entity_type == EntityType.LOCATION:
+            return [self._entity(l, EntityType.LOCATION) for l in self._locations]
+        return []
+
+    def list_entities_by_location(self, location_id):
+        return [self._entity(o, EntityType.GMC) for o in self._occupants]
+
+    def list_all_entities(self, universe=None):
+        return [self._entity(e, EntityType.GMC) for e in self._entities]
+
+    def get_traits_by_universe(self, universe):
+        return self._traits
+
+    def get_trait(self, trait_id):
+        for t in self._traits:
+            if t.id == trait_id:
+                return t
+        return None
+
+    def get_traitsettings_for_entity(self, entity_id):
+        return []
+
+
 def _entity(**overrides):
     kwargs = dict(id="char-1", type=EntityType.CHARACTER, name="Test", current_universe="earth")
     kwargs.update(overrides)
@@ -307,6 +343,61 @@ def test_resolve_choice_can_be_reapplied():
     assert reapplied.new_relationships == [
         {"from": "char-1", "to": "loc-krasnoyarsk", "type": "linked", "description": ""}
     ]
+
+
+# ── Random target mode ───────────────────────────────
+
+def test_random_location_resolves_to_candidate():
+    repo = RandomRepo(locations=["loc-earth"])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{random:location}", result="linked",
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.pending_choices == []
+    assert result.new_relationships == [
+        {"from": "char-1", "to": "loc-earth", "type": "linked", "description": ""}
+    ]
+
+
+def test_random_location_no_candidates_noops():
+    repo = RandomRepo(locations=[])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{random:location}", result="linked",
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.pending_choices == []
+    assert result.new_relationships == []
+    assert result.applied == []
+
+
+def test_random_occupant_resolves_in_scope():
+    repo = RandomRepo(occupants=["dmitry"])
+    entity = _entity(current_location="railyard")
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{random:occupant}", result="ally", target_scope="railyard",
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.pending_choices == []
+    assert result.new_relationships == [
+        {"from": "char-1", "to": "dmitry", "type": "ally", "description": ""}
+    ]
+
+
+def test_random_trait_resolves_to_candidate():
+    repo = RandomRepo(traits=[FakeTrait("iron-will", "ts-distinctions")])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="{random:trait}", result="d6",
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.pending_choices == []
+    assert [ts.trait_id for ts in result.new_trait_settings] == ["iron-will"]
 
 
 def test_unknown_effect_is_passthrough():
