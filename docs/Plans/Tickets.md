@@ -23,6 +23,8 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 > **Coverage guarantee:** every unchecked item in [[to-do]] maps to a ticket below or to the explicit deferred list at the bottom. Nothing is second-class or silently dropped.
 >
 > **Status values:** `done` · `pending` · `deferred` (the bottom section) · `abandoned` (superseded or wrong premise). Phase 1 (P1.1–P1.6) is `done`; everything later is `pending` until worked.
+>
+> **Current dice/contest conventions (post Phase 2):** a rolled die is a `DieSpec` (`die`, `source_kind`, `source_id`, `label`, `ts_id`) + `result`; `DicePoolRequest.dice` is `list[DieSpec]` (a validator still accepts legacy `(die, source)` tuples). `ContestResult` carries `kind` + `stakes`; `ContestWinner` has no tie value (ties favor the initiator). Pools + difficulty persist in `SceneStateStore` keyed `(location_id, player_id)`; `ContestTracker` still owns contest assembly/resolve.
 
 ## Phase 1 — Keystone: effect targeting & application
 
@@ -148,7 +150,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** `on_roll` / `on_complication` / `on_success` / `on_botch` (and contest win/loss) fire automatically.
 - **Done:** a roll/contest fires matching SFX without a manual `/effects/trigger` call.
 - **Depends:** P2.1
-- **Load:** `services/effects_engine.py` (`fire_contest_sfx`, `process_event`), `api/rest/effects.py`, `services/effect_targets.py` + `services/effects_applier.py` (`resolve_choice`, pending choices), [[Pressure-Test Log]] § Scenario 4.
+- **Load:** `services/effects_engine.py` (`fire_contest_sfx`, `process_event`, `contest_to_events`), `api/rest/effects.py`, `services/effect_targets.py` + `services/effects_applier.py` (`resolve_choice`, pending choices), `domain/__init__.py` (`DieRoll`, `ContestResult.stakes`, `ContestWinner` — no tie), [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.9 — Backend: condition-based SFX triggers
 - **Status:** pending
@@ -162,7 +164,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** the pool is visually distinguished by simple-test / cortex-test / challenger-contest / defendant-contest / roll-table.
 - **Done:** a user can tell at a glance what they're rolling for from the pool styling.
 - **Depends:** P2.1
-- **Load:** to-do "Style dicepool", `components/DiceRoller.vue`, [[Pressure-Test Log]] § Scenario 4.
+- **Load:** to-do "Style dicepool", `components/DiceRoller.vue`, `domain/__init__.py` (`RollKind`: test/contest/roll_table — the five visual kinds are UI-level), [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.11 — Frontend: rolling dice animation
 - **Status:** pending
@@ -176,14 +178,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** auto-selection (resolver + dice-pool UI) never picks a die that rolled a 1 as the effect die.
 - **Done:** the effect die is the largest leftover non-hitch die (d4 fallback when none).
 - **Depends:** —
-- **Load:** `services/dice_resolver.py` (`_resolve_pool` effect-die block), `components/DiceRoller.vue` (result/effect click), `components/DieIcon.vue`.
+- **Load:** `services/dice_resolver.py` (`_resolve_pool` effect-die block), `components/DiceRoller.vue` (result/effect click, `isHitch`), `components/DieIcon.vue`, `domain/__init__.py` (`DieSpec`/`DieRoll` — selection is by die type, not source).
 
 ### P2.13 — Backend + frontend: contest give-in
 - **Status:** pending
 - **What:** a losing initiator can give in on their own terms — define the failure, can't immediately re-initiate against the same opponent, earn the usual reward.
 - **Done:** the give-in option appears in the contest flow and ends the back-and-forth.
 - **Depends:** P2.3
-- **Load:** `services/contest_tracker.py`, `services/dice_resolver.py` (`resolve_contest`), [[Pressure-Test Log]] § Scenario 4.
+- **Load:** `services/contest_tracker.py` (`get_contestants`, `resolve`), `services/dice_resolver.py` (`resolve_contest` — ties favor initiator), [[Pressure-Test Log]] § Scenario 4.
 
 ## Phase 3 — Stakes & consequences
 
@@ -249,14 +251,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **What:** a third party spends to join a two-way contest; compare against the current total; win stops it, loss hands them a complication.
 - **Done:** a third side can interfere and the contest tracks the interference outcome.
 - **Depends:** P2.4
-- **Load:** [[Pressure-Test Log]] § Scenario 4, `services/contest_tracker.py`.
+- **Load:** [[Pressure-Test Log]] § Scenario 4, `services/contest_tracker.py` (`get_contestants`, `resolve`).
 
 ### P3.10 — Backend + frontend: multiway contests *(later)*
 - **Status:** pending
 - **What:** 3+ parties vie for one goal; highest total wins; those who stay in and lose take a complication.
 - **Done:** a contest accepts N participants and resolves winner-takes-all.
 - **Depends:** P2.4
-- **Load:** [[Pressure-Test Log]] § Scenario 4, `services/contest_tracker.py`.
+- **Load:** [[Pressure-Test Log]] § Scenario 4, `services/contest_tracker.py` (`get_contestants`, `resolve`).
 
 ## Phase 4 — Character sheet: traits as first-class
 
