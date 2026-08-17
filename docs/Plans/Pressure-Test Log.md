@@ -213,3 +213,10 @@ Setting: Krasnoyarsk rail yard; a "regime alert" doom pool; Kael rolls a hitch; 
 3. **Add/remove relationships + relationship traits** — backend done; relationship-trait UI missing (logged). 🟡
 4. **Review the Blue Book** — `BlueBook.vue` + `historical_records`. 🟡 deletion-with-undo and transversal logging are to-do.
 5. **Session persistence** — ArangoDB + sessions API. ✅
+
+### User read — new gaps + design decisions
+1. **Generic/unaffiliated roll tables** — the model supports `life_path=None` (shared/general), but creating/using them outside a life path may be incomplete. *(confirm scope)*
+2. **Trait transfer has no real UI** — `teach_trait`/`gift_trait`/`take_trait` exist on the backend, but no proper frontend buttons/flows for giving/taking between characters.
+3. **Trait transfer via effects** — teach/gift/take may be better routed through the effect system (universal mechanism) than three dedicated mutations.
+4. **Relationship traits** — must render the `_to` entity's portrait, and be served by the backend the same way the character's own traits are (folded into the character's trait list, not a separate query).
+5. **Dice pool persistence** — the assembled pool is in-memory (frontend state + `ContestTracker`); must survive refresh/mobile memory eviction. (Already on to-do: "Own dice pool should persist after refresh.")
