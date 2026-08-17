@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -418,6 +418,7 @@ const keepCount = ref(2)
 const effectCount = ref(1)
 const phase = ref('adding')
 const rollerMode = ref('cortex') // 'cortex' | 'roll_table' (driven by CharacterSheet tab)
+const currentDifficulty = ref(null) // GM-set test difficulty (ephemeral, session-scoped)
 
 // Player identity
 const playerId = ref(localStorage.getItem('playerId') || '')
@@ -683,6 +684,11 @@ function shareRoll(result) {
   }
 }
 
+function onDifficultyCommitted(difficulty) {
+  if (sessionId.value === 'session-default') return
+  publishEvent(sessionId.value, 'difficulty_set', { difficulty })
+}
+
 // ── Roll-table wiring (shared roller driven by LifePathWizard via bus) ──
 function onPoolChange(s) {
   if (rollerMode.value === 'roll_table') return
@@ -872,6 +878,14 @@ watch(lastEvent, (evt) => {
         const table = evt.data?.table_name || 'a roll table'
         const entry = evt.data?.entry_label ? `: ${evt.data.entry_label}` : ''
         addToast(`${name} rolled on ${table}${entry}`, 'roll')
+      }
+      break
+    case 'difficulty_set':
+      if (evt.data?.difficulty != null) {
+        currentDifficulty.value = evt.data.difficulty
+        if (!gmMode.value) {
+          addToast(`Difficulty set: ${evt.data.difficulty}`, 'roll')
+        }
       }
       break
   }

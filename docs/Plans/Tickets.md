@@ -116,16 +116,17 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Status:** done
 - **What:** GM test difficulty via preset buttons (very easy 2d4 → very hard 2d12) auto-added to the opposition pool, plus trait dice; the opposition rolls with the player's pool and the result shows the difficulty and a success/failure verdict.
 - **Done:** opposition can be set up (presets + extra dice), sent as `gmc` opposition, and rendered as "vs difficulty N → Success/Failure".
-- **Note:** auto top-2 is a stepping stone — the locked decision is GM *manual* difficulty selection (see P2.5b).
+- **Note:** superseded by P2.5b — the inline `gmc` opposition UI was replaced by a role-aware `DiceRoller` (GM difficulty on the GM's device, player rolls against it on theirs).
 - **Depends:** P2.2
 - **Load:** `components/DiceRoller.vue`, `composables/useApi.js` (`roll` opposition param).
 
 ### P2.5b — Backend + frontend: GM manual test-difficulty selection (two-step)
 - **Status:** done
-- **What:** the GM rolls the opposition pool, sees the dice, and picks the two that set the difficulty; the player then rolls against that fixed difficulty.
-- **Done:** opposition rolls → GM taps two dice → difficulty sent as `static_difficulty`; simplified pipeline now returns `opposition_total` for static difficulty.
+- **What:** the GM rolls the opposition pool, picks the two dice that set the difficulty, and the player rolls against it on their own client (SSE in between).
+- **Done:** `DiceRoller` is role-aware (`gmMode`): GM mode rolls the opposition pool and picks two via the result slots, publishing the difficulty over SSE (`difficulty_set`); player mode receives it and rolls against `static_difficulty`. Simplified pipeline returns `opposition_total` for static difficulty.
+- **Note:** difficulty is ephemeral (session-scoped SSE) until P2.7; a pure 2-die difficulty (no trait die) routes through simplified and won't show the result slots — the Cortex-normal opposition pool is 2 difficulty dice + ≥1 trait die.
 - **Depends:** P2.5
-- **Load:** `services/dice_resolver.py` (`_resolve_simplified` static_difficulty), `domain/__init__.py` (SimplifiedResult.opposition_total), `components/DiceRoller.vue`.
+- **Load:** `services/dice_resolver.py` (`_resolve_simplified` static_difficulty), `domain/__init__.py` (SimplifiedResult.opposition_total), `components/DiceRoller.vue` (`gmMode`/`difficulty`), `App.vue` (`difficulty_set`), `composables/useSSE.js`.
 
 ### P2.6 — Backend: razmerit persistence
 - **Status:** pending
