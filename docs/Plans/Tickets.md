@@ -135,12 +135,13 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** —
 - **Note:** the persistence (`RazmeritService.earn`) and the `earn_razmerit` effect already exist; the actual work is the buy-hitch SFX in P3.3.
 
-### P2.7 — Backend + frontend: dice pool persistence
+### P2.7 — Backend + frontend: dice pool persistence (server-side, in-memory)
 - **Status:** pending
-- **What:** an assembled pool survives refresh / mobile memory eviction (keyed by beat).
-- **Done:** reloading the page shows the dice already added to the pool.
+- **What:** an assembled pool survives refresh and same-user device switch. Server-side in-memory store keyed by `(location_id, player_id)` — not entity. Dice carry a minimal, extensible source (`source_kind` / `source_id` / `label`) so entity/projection/location/difficulty/… dice coexist. Also stores the current difficulty.
+- **Done:** reloading or switching devices restores the pool + difficulty from the server.
 - **Depends:** —
-- **Load:** `services/contest_tracker.py` (in-memory), to-do "Own dice pool should persist after refresh".
+- **Design:** separate the *dice pool* from the *contest state*. `ContestTracker` currently conflates them (`PoolAssembly` bundles dice + opposition + pushed). P2.7 introduces the pool store; the contest tracker should later shrink to opposition/push state that *points* at pools.
+- **Load:** `services/contest_tracker.py` (in-memory pattern), `api/rest/contest_pools.py` (REST pattern), `components/DiceRoller.vue` (`pool`, `difficulty`), to-do "Own dice pool should persist after refresh".
 
 ### P2.8 — Backend: wire SFX triggers into the roll/contest flow
 - **Status:** pending
