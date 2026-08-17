@@ -164,12 +164,14 @@ const props = defineProps({
   effectCount: { type: Number, default: 1 },
   mode: { type: String, default: 'cortex' }, // 'cortex' | 'roll_table'
   gmMode: { type: Boolean, default: false },
-  difficulty: { type: Number, default: null } // received difficulty (player mode)
+  difficulty: { type: Number, default: null }, // received difficulty (player mode)
+  playerId: { type: String, default: '' },
+  locationId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty'])
 
-const { loading, error, roll: apiRoll } = useApi()
+const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool } = useApi()
 const pool = reactive([])
 const result = ref(null)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
@@ -231,12 +233,25 @@ function setUniverse(u) {
   emit('update:universe', u)
 }
 
+function persistPool() {
+  if (props.gmMode || !props.playerId || !props.locationId) return
+  const dice = pool.map(d => ({
+    die: d.die,
+    source_kind: d.sourceKind || 'manual',
+    source_id: d.tsId || d.source || '',
+    label: d.label || d.source || d.die,
+    ts_id: d.tsId || null,
+  }))
+  apiSavePool(props.locationId, props.playerId, dice)
+}
+
 function notifyPool() {
+  persistPool()
   emit('poolChange', pool.map(d => ({ die: d.die, label: d.label || d.source || d.die, tsId: d.tsId })).filter(d => d.label))
 }
 
 function addDie(die) {
-  pool.push({ die, source: '', label: die })
+  pool.push({ die, source: '', label: die, sourceKind: 'manual' })
   notifyPool()
   panelOpen.value = true
 }
@@ -251,8 +266,8 @@ function setDifficulty(die) {
   const traitDice = pool.filter(d => d.source !== 'difficulty')
   pool.splice(0, pool.length)
   pool.push(
-    { die, source: 'difficulty', label: `${die} difficulty` },
-    { die, source: 'difficulty', label: `${die} difficulty` },
+    { die, source: 'difficulty', label: `${die} difficulty`, sourceKind: 'difficulty' },
+    { die, source: 'difficulty', label: `${die} difficulty`, sourceKind: 'difficulty' },
     ...traitDice,
   )
   panelOpen.value = true
@@ -265,7 +280,7 @@ function addFromSheet({ die, source, label, tsId }) {
   if (idx !== -1) {
     pool.splice(idx, 1)
   } else {
-    pool.push({ die, source, label: label || source, tsId: tsId || null })
+    pool.push({ die, source, label: label || source, tsId: tsId || null, sourceKind: 'trait' })
     panelOpen.value = true
   }
   notifyPool()
@@ -292,8 +307,8 @@ function splitDie({ source, label }) {
   const smaller = DIE_STEP[die]
   if (!smaller) return
   pool.splice(idx, 1)
-  pool.push({ die: smaller, source: `${source}-a`, label: `${label} A`, tsId })
-  pool.push({ die: smaller, source: `${source}-b`, label: `${label} B`, tsId })
+  pool.push({ die: smaller, source: `${source}-a`, label: `${label} A`, tsId, sourceKind: 'trait' })
+  pool.push({ die: smaller, source: `${source}-b`, label: `${label} B`, tsId, sourceKind: 'trait' })
   notifyPool()
 }
 
@@ -699,11 +714,32 @@ function clearPool() {
   notifyPool()
 }
 
+async function restorePool() {
+  if (props.gmMode || !props.playerId || !props.locationId) return
+  const res = await apiGetPool(props.locationId, props.playerId)
+  const dice = res?.dice || []
+  pool.splice(0, pool.length)
+  for (const d of dice) {
+    pool.push({
+      die: d.die,
+      source: d.source_id || d.source || '',
+      label: d.label || d.die,
+      tsId: d.ts_id || null,
+      sourceKind: d.source_kind || 'manual',
+    })
+  }
+  notifyPool()
+  if (dice.length) panelOpen.value = true
+}
+
 onMounted(() => {
   console.log('[diag] DiceRoller mounted', { entityId: props.entityId, universe: props.universe })
   document.addEventListener('touchmove', onDocTouchMove, { passive: false })
   document.addEventListener('touchend', onDocTouchEnd)
+  restorePool()
 })
+
+watch([() => props.playerId, () => props.locationId], restorePool)
 onUnmounted(() => {
   document.removeEventListener('touchmove', onDocTouchMove)
   document.removeEventListener('touchend', onDocTouchEnd)

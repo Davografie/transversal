@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -281,7 +281,7 @@ import { useApi } from './composables/useApi.js'
 import { usePanelBus } from './composables/usePanelBus.js'
 import ToastBar from './components/ToastBar.vue'
 
-const { graphql } = useApi()
+const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty } = useApi()
 const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
@@ -687,7 +687,16 @@ function shareRoll(result) {
 function onDifficultyCommitted(difficulty) {
   if (sessionId.value === 'session-default') return
   publishEvent(sessionId.value, 'difficulty_set', { difficulty })
+  apiSetDifficulty(currentLocationId.value, difficulty)
 }
+
+async function refreshDifficulty() {
+  if (!currentLocationId.value) return
+  const res = await apiGetDifficulty(currentLocationId.value)
+  currentDifficulty.value = res?.difficulty ?? null
+}
+
+watch(currentLocationId, refreshDifficulty, { immediate: true })
 
 // ── Roll-table wiring (shared roller driven by LifePathWizard via bus) ──
 function onPoolChange(s) {

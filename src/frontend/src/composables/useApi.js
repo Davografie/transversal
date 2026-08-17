@@ -142,5 +142,55 @@ export function useApi() {
     }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity }
+  // ── Scene state (in-memory server persistence) ──
+  async function savePool(locationId, playerId, dice) {
+    if (!locationId || !playerId) return null
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/players/${playerId}/pool`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dice })
+      })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] savePool', e.message); return null }
+  }
+
+  async function getPool(locationId, playerId) {
+    if (!locationId || !playerId) return null
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/players/${playerId}/pool`)
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] getPool', e.message); return null }
+  }
+
+  async function clearPool(locationId, playerId) {
+    if (!locationId || !playerId) return null
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/players/${playerId}/pool`, { method: 'DELETE' })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] clearPool', e.message); return null }
+  }
+
+  async function setDifficulty(locationId, difficulty) {
+    if (!locationId) return null
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/difficulty`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ difficulty })
+      })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] setDifficulty', e.message); return null }
+  }
+
+  async function getDifficulty(locationId) {
+    if (!locationId) return null
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/difficulty`)
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] getDifficulty', e.message); return null }
+  }
+
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, setDifficulty, getDifficulty }
 }
