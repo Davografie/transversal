@@ -24,7 +24,8 @@ from transversal.domain import (
 
 # Base moves. The doom-pool step-up/down targets are intentionally generic
 # ({choose_trait}); precise doom-pool scoping lands with Phase 3's challenge-pool
-# work. Effect-die substitution into `result` is likewise a follow-up.
+# work. ``result="{effect_die}"`` is a placeholder the frontend substitutes with
+# the roll's actual effect die before applying.
 _BASE_PLAYER = [
     ConsequenceOption(
         id="proceed", label="Proceed the narrative", side="player",
@@ -35,7 +36,7 @@ _BASE_PLAYER = [
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="gain_or_step_up", target="{choose_trait}", result="d6",
+                action="gain_or_step_up", target="{choose_trait}", result="{effect_die}",
             ),
         ],
         source="base",
@@ -70,7 +71,7 @@ _BASE_GM = [
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="gain_complication", target="{choose_trait}", result="d6",
+                action="gain_complication", target="{choose_trait}", result="{effect_die}",
             ),
         ],
         source="base",
@@ -80,7 +81,7 @@ _BASE_GM = [
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="gain", target="{choose_trait}", result="d6",
+                action="gain", target="{choose_trait}", result="{effect_die}",
             ),
         ],
         source="base",

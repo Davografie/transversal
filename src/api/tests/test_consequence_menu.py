@@ -113,3 +113,13 @@ def test_non_on_consequence_sfx_is_ignored():
     repo.sfxs = {"sfx-other": SFX(id="sfx-other", name="Other", trigger="on_roll", effects=[])}
     out = assemble_consequence_menu(_entity(), repo, "player")
     assert "Other" not in _labels(out)
+
+
+def test_base_moves_carry_effect_die_placeholder():
+    repo = MenuRepo()
+    player = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "player")}
+    assert player["create_scene_trait"].effects[0].result == "{effect_die}"
+
+    gm = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "gm")}
+    assert gm["apply_complication"].effects[0].result == "{effect_die}"
+    assert gm["give_asset"].effects[0].result == "{effect_die}"
