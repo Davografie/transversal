@@ -59,7 +59,7 @@ The second keystone is **contest wiring** — drive the existing `resolve_contes
 
 ### 4. Consequences — challenge pools + earth-bond
 - Generic challenge / doom-pool loop (the resolver already compares effect-die vs challenge-die).
-- **Earth-bond**: a trait with a challenge-type rating (negative polarity), with SFX targeting it. When it reaches zero it triggers an SFX whose effect switches the projection type to native (full-native). Composed from the primitives above — no special-purpose code.
+- **Earth-bond / tether**: a *sub-trait of the Origin distinction* (challenge/negative), with SFX targeting it. When it reaches zero it triggers an SFX whose effect switches the projection type to native (full-native). Composed from primitives — no special-purpose code.
 
 ### 5. Prep & content
 - **MCP wrappers** over the existing GraphQL mutations (traits, traitsets, SFX, life paths, roll tables, relationships, projections). Thin, idempotent, no AQL.
@@ -73,9 +73,65 @@ The second keystone is **contest wiring** — drive the existing `resolve_contes
 - **Troupe play** — spotlight recency list, grog roll tables, companion GMCs, archetype instantiation. See [[Inspired Mechanics]] and the troupe discussion.
 - **Auth / accounts** — out of scope. Not public; GM (architect) + known players only. `players` collection with `role` (`player` / `architect`) is sufficient for now.
 
+## Build order
+
+Phases are dependency-ordered; each is a shippable slice. Detailed per-scenario findings live in [[Pressure-Test Log]].
+
+### Phase 1 — Keystone: effect targeting & application
+
+The one primitive everything else hangs off.
+
+- Scoped target pickers: location / occupant / trait / rating-die, filtered by `target_kind` + `target_scope` — plus a **`random` mode** (for starter-location scatter).
+- The **two-sided consequence menu** (the effect-application wizard): player options (proceed / decrease the doom pool / create a scene trait at effect-die rating) vs GM options (increase the doom pool / apply a complication / give a GMC an asset).
+- Unblocks: starter locations, trait transfer, doom pools, and every SFX that applies a consequence.
+
+### Phase 2 — Play spine: tests & contests actually resolve
+
+- **Test vs contest as first-class** — a roll knows which it is (drives styling, SFX triggers, and the consequence menu).
+- **Opposition UI** — static difficulty / GMC / challenge; the GM rolls first → threshold + **stakes** (the opponent's effect die, which the resolver must now return).
+- **Challenger/defendant** modeling (fixes "ties go to defender" being positional).
+- **Contest resolve returns full rolls + effect dice**, not just `{winner, pipeline, pushed}`.
+- **Razmerit persistence** — hitches/botches earn razmerit that's written back.
+- **Dice pool persistence** — survives refresh / mobile memory eviction.
+- **SFX triggers fire** in the roll/contest flow (wire `fire_contest_sfx`; `on_roll` / `on_complication` / `on_success` / `on_botch`).
+
+### Phase 3 — Stakes & consequences: doom pools + earth-bond/tether
+
+- **Looming doom dice** — prominent render + click model (left-click step down, right-click step up; GM can hand a challenge to a player).
+- **Buy-hitch** — GM spends a doom die → escalate → complication.
+- **Challenge resolution routes through the consequence menu → effect system** (the "challenge rating" effect), not resolver persistence.
+- **Earth-bond/tether** — the tether is a *sub-trait of the Origin distinction* (challenge/negative); "challenge emptied" trigger → SFX → "switch projection type" effect → full-native. *(This supersedes the earlier "earth-bond = challenge trait" framing — see [[Pressure-Test Log]].)*
+- Depends on sub-trait authoring (Phase 4) — or seed the tether as content in the meantime.
+
+### Phase 4 — Character sheet: traits as first-class
+
+- **Relationship traits inline** — render the `_to` portrait; the backend serves them like the character's own traits (folded into the character query).
+- **Sub-traits** (the tether depends on this).
+- **Empty/descriptive traits** = a "profile" surface (pronouns, nickname, appearance).
+- **`duplicates_allowed`** flag (per trait-set/trait): two melee weapons OK, two strengths not.
+- **Trait click behavior** — static = add, resource = spend, challenge = oppose; GM = step up/down.
+
+### Phase 5 — Prep & content: GM can build + spawn
+
+- **MCP wrappers** over the existing GraphQL mutations (traits, traitsets, SFX, life paths, roll tables, relationships, projections).
+- **Starter locations** (multiple per universe) + **`location → universe` transversal edges** → random starter-location pipeline (roll table).
+- **Reusable shared (unaffiliated) roll tables** — authoring UX (single-exit only; see [[Life Path Flow and Shared Roll Tables]]).
+- **GM scene overview** — three groups: currently-played (entity + projection, incl. support characters), each player's main character(s), current-location GMCs. Needs **live-player tracking**.
+- Fix create-entity panel bugs (parent context, unconditional razmerit, no universe creation).
+
+### Phase 6 — Movement & projections
+
+- **Projections as first-class** — nav dots render *projections*, not entities; ownership chain `projection → entity → agency → player`; GM sees all, players see live ones.
+- **Live-player tracking** (unblocks Phase 5's GM overview + this).
+- **Inapposite travel: dedicated REST endpoint** (currently only GraphQL; the UI falls back to a generic move).
+- **Attunement expiry** — manual `attune disable` as a patch; the auto-scheduler at timing boundaries is still desired.
+- **Starter-location spawn on arrival** (ties to Phase 5's `location → universe` edges).
+
+---
+
 ## Locked decisions (this session)
 
-- **Earth-bond** is a challenge trait (negative), not a dedicated entity field. Empty → trigger → "switch projection type" effect → native. *(The fuller full-native sequence — Earth projection decay, Earth-anchored traits step down — may be additional effects on the same SFX; TBD, don't over-specify.)*
+- **Earth-bond / tether** is a *sub-trait of the Origin distinction* (challenge/negative), not a dedicated entity field. Empty → trigger → "switch projection type" effect → native. *(The fuller full-native sequence — Earth projection decay, Earth-anchored traits step down — may be additional effects on the same SFX; TBD, don't over-specify.)*
 - **Starter locations**: multiple per universe; **roll-table default** (random scatter). Players invent razmerit technology to control the scatter — deliberate destination is *earned*, not given.
 - **Effect targeting vs roll tables**: targeting = deliberate choice within a scope; roll tables = fixed random entries. Both ship; targeting is the keystone.
 - **Earth-bond as a resource** — rejected. It's a challenge (doom) pool, not a spendable resource.
@@ -89,7 +145,6 @@ The second keystone is **contest wiring** — drive the existing `resolve_contes
 
 - Exact effect list on the full-native SFX (Earth projection decay, Earth-trait step-down) — TBD.
 - Flashback SFX exact fill-in (still a stub in [[Projections and Transversal]]).
-- Whether the release bar includes the full earth-bond loop or only the generic challenge-pool loop + a placeholder earth-bond trait (confirm during build).
 
 ## Mapping to to-do
 
