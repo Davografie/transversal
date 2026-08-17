@@ -689,3 +689,4 @@ The recommended build sequence follows dependency edges:
 - [[Inspired Mechanics]] — Original Entanglements design (superseded by this document)
 - [[Data Model]] — Collection schemas, edge patterns
 - [[API Contract]] — GraphQL schema conventions
+- [[Life Path Flow and Shared Roll Tables]] — Shared roll tables and the return-address flow

@@ -19,7 +19,7 @@ status: working
 # Life Path Editor and Wizard Plan
 
 > [!note] Status
-> Phases 1–4 are complete: roll-table read/write API, editor panels, shared `EffectEditor`/`ConditionEditor`, and the player wizard rebuilt on `startTerm`/`resolveStep` with a roll → highlight → Continue flow. Roll tables now carry a **roll source** (`FIXED_DIE` | `TRAIT_DICE`) and a `trait_dice_count`; the old TIER `check` (difficulty pool) is retired. Phase 5 (target-choice) is deferred. Builds on [[Unified Effects Plan]] and [[SFX and Effects]].
+> Phases 1–4 are complete: roll-table read/write API, editor panels, shared `EffectEditor`/`ConditionEditor`, and the player wizard rebuilt on `startTerm`/`resolveStep` with a roll → highlight → Continue flow. Roll tables now carry a **roll source** (`FIXED_DIE` | `TRAIT_DICE`) and a `trait_dice_count`; the old TIER `check` (difficulty pool) is retired. Phase 5 (target-choice) is deferred. Builds on [[Unified Effects Plan]] and [[SFX and Effects]]; flow mechanics in [[Life Path Flow and Shared Roll Tables]].
 
 ## Goal
 

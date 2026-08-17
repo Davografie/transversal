@@ -215,7 +215,7 @@ Setting: Krasnoyarsk rail yard; a "regime alert" doom pool; Kael rolls a hitch; 
 5. **Session persistence** — ArangoDB + sessions API. ✅
 
 ### User read — new gaps + design decisions
-1. **Life paths reuse unaffiliated (shared) roll tables** — a shared table (e.g. "Survive", `life_path=None`) must be usable as a step in *multiple* life paths. Backend already supports this (`next_step` doesn't enforce ownership; `get_roll_table` fetches by id; `list_roll_tables(life_path=None)` lists shared tables). The remaining piece is making the authoring/linking UX obvious. *(discussed in a prior session; the to-do "Enable linking to roll tables outside of life path" is marked done.)*
+1. **Life paths reuse unaffiliated (shared) roll tables** — a shared table (`life_path=None`) is reusable across paths via the `continuation` return-address stack (`context.return_to` + `next_step("")`). Works for **single-exit** tables (e.g. `Continue`/Muster); **multi-exit** tables (e.g. `Survive`, where injured vs survived diverge) are NOT solved yet. Backend implemented + tested; authoring partial (JSON textarea only); seed not wired. See [[Life Path Flow and Shared Roll Tables]].
 2. **Trait transfer has no real UI** — `teach_trait`/`gift_trait`/`take_trait` exist on the backend, but no proper frontend buttons/flows for giving/taking between characters.
 3. **Trait transfer via effects** — teach/gift/take may be better routed through the effect system (universal mechanism) than three dedicated mutations.
 4. **Relationship traits** — must render the `_to` entity's portrait, and be served by the backend the same way the character's own traits are (folded into the character's trait list, not a separate query).
