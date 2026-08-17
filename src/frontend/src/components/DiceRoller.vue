@@ -34,7 +34,7 @@
       <template v-if="mode === 'roll_table'">
         <div class="roll-dice">
           <div v-for="(r, i) in result.rolls" :key="i" class="roll-die-wrap">
-            <DieIcon :die="r.die" :result="r.result" :label="r.source" />
+            <DieIcon :die="r.die" :result="r.result" :label="r.label || r.source_id || r.die" />
           </div>
         </div>
         <div class="result-line">
@@ -64,7 +64,7 @@
               @touchstart="onDieTouchStart($event, i)"
               @click="toggleDie(i)"
             >
-              <DieIcon :die="r.die" :result="r.result" :is-hitch="isHitch(i)" :label="r.source" />
+              <DieIcon :die="r.die" :result="r.result" :is-hitch="isHitch(i)" :label="r.label || r.source_id || r.die" />
             </div>
           </div>
           <div class="selection-row">
@@ -316,9 +316,8 @@ defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, 
 
 function isHitch(idx) {
   if (!result.value) return false
-  const r = result.value
-  if (!r.hitches || !r.hitches.length) return false
-  return r.hitches.some(h => h.result === r.rolls[idx].result && h.source === r.rolls[idx].source)
+  const r = result.value.rolls[idx]
+  return r ? r.result === 1 : false
 }
 
 function toggleDie(idx) {
@@ -663,7 +662,13 @@ const beatsOpposition = computed(() => {
 
 async function doRoll() {
   setPhase(Phase.ROLLING)
-  const dice = pool.map(d => [d.die, d.source])
+  const dice = pool.map(d => ({
+    die: d.die,
+    source_kind: d.sourceKind || 'manual',
+    source_id: d.tsId || d.source || '',
+    label: d.label || d.source || d.die,
+    ts_id: d.tsId || null,
+  }))
   const opp = (!props.gmMode && props.difficulty != null)
     ? { type: 'static_difficulty', static_difficulty: props.difficulty }
     : null

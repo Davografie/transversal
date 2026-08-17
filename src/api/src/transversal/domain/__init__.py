@@ -16,7 +16,7 @@ Collections:
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Dice ──────────────────────────────────────────────
@@ -100,17 +100,48 @@ class TransversalType(str, Enum):
 
 # ── Die Roll Models ───────────────────────────────────
 
-class DieRoll(BaseModel):
+class DieSpec(BaseModel):
+    """A die awaiting a roll — the shape shared by pools and roll requests.
+
+    ``source_kind`` is extensible (trait / difficulty / manual / entity /
+    projection / location / …); ``source_id`` is the specific identifier;
+    ``label`` is the display name; ``ts_id`` is the trait-setting id.
+    """
     die: DieType
+    source_kind: str = "manual"
+    source_id: str = ""
+    label: str = ""
+    ts_id: Optional[str] = None
+
+
+class DieRoll(DieSpec):
+    """A rolled die — a DieSpec plus its result."""
     result: int
-    source: str
+
+
+def _coerce_die_list(value) -> list[DieSpec]:
+    """Accept both legacy `(die, source)` tuples and DieSpec-like dicts."""
+    out: list[DieSpec] = []
+    for item in value:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            die, source = item
+            src = str(source or "")
+            out.append(DieSpec(die=die, source_kind="manual", source_id=src, label=src))
+        else:
+            out.append(item)
+    return out
 
 
 class Opposition(BaseModel):
     type: str  # "challenge", "gmc", "static_difficulty"
-    dice: list[tuple[DieType, str]] = Field(default_factory=list)
+    dice: list[DieSpec] = Field(default_factory=list)
     challenge_die: Optional[DieType] = None
     static_difficulty: Optional[int] = None
+
+    @field_validator("dice", mode="before")
+    @classmethod
+    def _coerce_dice(cls, v):
+        return _coerce_die_list(v)
 
 
 class RollKind(str, Enum):
@@ -129,10 +160,15 @@ class RollKind(str, Enum):
 class DicePoolRequest(BaseModel):
     entity_id: str
     universe: str
-    dice: list[tuple[DieType, str]]
+    dice: list[DieSpec]
     opposition: Optional[Opposition] = None
     razmerit_spent: int = 0
     kind: RollKind = RollKind.TEST
+
+    @field_validator("dice", mode="before")
+    @classmethod
+    def _coerce_dice(cls, v):
+        return _coerce_die_list(v)
 
 
 class ChallengeResult(BaseModel):

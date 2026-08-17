@@ -18,6 +18,7 @@ from transversal.domain import (
     ContestWinner,
     DicePoolRequest,
     DieRoll,
+    DieSpec,
     DieType,
     Opposition,
     OutcomeTier,
@@ -28,9 +29,9 @@ from transversal.domain import (
 )
 
 
-def _roll_die(die: DieType, source: str) -> DieRoll:
+def _roll_die(spec: DieSpec) -> DieRoll:
     """Roll a single die using cryptographically secure randomness."""
-    return DieRoll(die=die, result=secrets.randbelow(die.max_value) + 1, source=source)
+    return DieRoll(**spec.model_dump(), result=secrets.randbelow(spec.die.max_value) + 1)
 
 
 def _determine_tier(highest: int) -> OutcomeTier:
@@ -104,7 +105,7 @@ def _resolve_challenge(
 
 def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     """Resolve a simplified pipeline roll (1-2 dice)."""
-    rolls = [_roll_die(die, source) for die, source in request.dice]
+    rolls = [_roll_die(spec) for spec in request.dice]
     highest = max(r.result for r in rolls)
     tier = _determine_tier(highest)
     hitches = [r for r in rolls if r.result == 1]
@@ -120,13 +121,13 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     if request.opposition:
         if request.opposition.type == "gmc":
             # Simplified GMC contest: roll GMC's dice, take highest
-            opp_rolls = [_roll_die(die, source) for die, source in request.opposition.dice]
+            opp_rolls = [_roll_die(spec) for spec in request.opposition.dice]
             opposition_rolls = opp_rolls
             if opp_rolls:
                 opposition_roll = max(opp_rolls, key=lambda r: r.result)
 
         elif request.opposition.type == "challenge" and request.opposition.challenge_die:
-            opp_die = _roll_die(request.opposition.challenge_die, "challenge")
+            opp_die = _roll_die(DieSpec(die=request.opposition.challenge_die, source_kind="challenge", label="challenge"))
             opposition_roll = opp_die
             opposition_rolls = [opp_die]
 
@@ -174,7 +175,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
 
 def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     """Resolve a dice pool pipeline roll (3+ dice, Cortex Prime)."""
-    rolls = [_roll_die(die, source) for die, source in request.dice]
+    rolls = [_roll_die(spec) for spec in request.dice]
     hitches = [r for r in rolls if r.result == 1]
     botch = _is_botch(rolls)
     razmerit_earned = len(hitches)
@@ -202,7 +203,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
 
     if request.opposition:
         if request.opposition.type == "gmc":
-            opp_rolls = [_roll_die(die, source) for die, source in request.opposition.dice]
+            opp_rolls = [_roll_die(spec) for spec in request.opposition.dice]
             opposition_rolls = opp_rolls
             opp_sorted = sorted(opp_rolls, key=lambda r: r.result, reverse=True)
             if len(opp_sorted) >= 2:
@@ -211,7 +212,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
                 opposition_total = opp_sorted[0].result
 
         elif request.opposition.type == "challenge" and request.opposition.challenge_die:
-            opp_die = _roll_die(request.opposition.challenge_die, "challenge")
+            opp_die = _roll_die(DieSpec(die=request.opposition.challenge_die, source_kind="challenge", label="challenge"))
             opposition_rolls = [opp_die]
             opposition_total = opp_die.result
 

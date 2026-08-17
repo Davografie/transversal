@@ -102,9 +102,9 @@ class TestTriggerMatching:
         event = GameEvent(
             type="on_roll", entity_id="e1", universe="earth",
             roll_result=SimplifiedResult(
-                rolls=[DieRoll(die=DieType.D8, result=1, source="test")],
+                rolls=[DieRoll(die=DieType.D8, result=1, label="test")],
                 highest=1, tier="fail", effect_die=None,
-                hitches=[DieRoll(die=DieType.D8, result=1, source="test")],
+                hitches=[DieRoll(die=DieType.D8, result=1, label="test")],
                 botch=True, razmerit_earned=1,
             ),
         )
@@ -117,9 +117,9 @@ class TestTriggerMatching:
         event = GameEvent(
             type="on_roll", entity_id="e1", universe="earth",
             roll_result=SimplifiedResult(
-                rolls=[DieRoll(die=DieType.D8, result=1, source="test")],
+                rolls=[DieRoll(die=DieType.D8, result=1, label="test")],
                 highest=1, tier="fail", effect_die=None,
-                hitches=[DieRoll(die=DieType.D8, result=1, source="test")],
+                hitches=[DieRoll(die=DieType.D8, result=1, label="test")],
                 botch=True, razmerit_earned=1,
             ),
         )

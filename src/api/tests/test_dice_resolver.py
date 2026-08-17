@@ -5,6 +5,7 @@ import pytest
 from transversal.domain import (
     ChallengeResult,
     DicePoolRequest,
+    DieSpec,
     DieType,
     Opposition,
     OutcomeTier,
@@ -55,27 +56,27 @@ class TestDetermineTier:
 class TestBotch:
     def test_not_botch(self):
         from transversal.domain import DieRoll
-        rolls = [DieRoll(die=DieType.D8, result=5, source="test")]
+        rolls = [DieRoll(die=DieType.D8, result=5, label="test")]
         assert not _is_botch(rolls)
 
     def test_botch_single(self):
         from transversal.domain import DieRoll
-        rolls = [DieRoll(die=DieType.D8, result=1, source="test")]
+        rolls = [DieRoll(die=DieType.D8, result=1, label="test")]
         assert _is_botch(rolls)
 
     def test_botch_multiple(self):
         from transversal.domain import DieRoll
         rolls = [
-            DieRoll(die=DieType.D8, result=1, source="a"),
-            DieRoll(die=DieType.D6, result=1, source="b"),
+            DieRoll(die=DieType.D8, result=1, label="a"),
+            DieRoll(die=DieType.D6, result=1, label="b"),
         ]
         assert _is_botch(rolls)
 
     def test_not_botch_mixed(self):
         from transversal.domain import DieRoll
         rolls = [
-            DieRoll(die=DieType.D8, result=1, source="a"),
-            DieRoll(die=DieType.D6, result=5, source="b"),
+            DieRoll(die=DieType.D8, result=1, label="a"),
+            DieRoll(die=DieType.D6, result=5, label="b"),
         ]
         assert not _is_botch(rolls)
 
@@ -377,3 +378,27 @@ class TestRollKind:
         assert result.kind == RollKind.CONTEST
         assert result.player_result.kind == RollKind.CONTEST
         assert result.opponent_result.kind == RollKind.CONTEST
+
+
+class TestStructuredDieSource:
+    """A rolled die carries its structured source (a DieSpec + result)."""
+
+    def test_pool_roll_preserves_source(self):
+        request = DicePoolRequest(
+            entity_id="test-1",
+            universe="earth",
+            dice=[
+                DieSpec(die=DieType.D10, source_kind="trait", source_id="ts-hacking", label="Hacking", ts_id="ts-hacking"),
+                DieSpec(die=DieType.D8, source_kind="difficulty", label="2d6"),
+                DieSpec(die=DieType.D6, source_kind="manual", label="d6"),
+            ],
+        )
+        result = resolve(request)
+        assert isinstance(result, PoolResult)
+        by_source_id = {r.source_id: r for r in result.rolls}
+        hacking = by_source_id["ts-hacking"]
+        assert hacking.source_kind == "trait"
+        assert hacking.label == "Hacking"
+        assert hacking.ts_id == "ts-hacking"
+        assert hacking.die == DieType.D10
+        assert isinstance(hacking.result, int)
