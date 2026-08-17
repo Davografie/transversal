@@ -88,3 +88,27 @@ def test_commit_persists_relationship():
     result = commit_effects(entity, [effect], repo)
     assert repo.created_relationships == [("char-1", "char-2", "ally", "old friend")]
     assert len(result.applied) == 1
+
+
+def test_commit_apply_then_resolve_roundtrip():
+    """The two-step flow the effect wizard uses: apply → pending → resolve → re-apply."""
+    from transversal.services.effects_applier import resolve_choice
+
+    repo = RecordingRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{choose_location}", result="linked",
+    )
+
+    # First pass: the choose-target is recorded, nothing applied/persisted.
+    result = commit_effects(entity, [effect], repo)
+    assert len(result.pending_choices) == 1
+    assert result.pending_choices[0].kind == "location"
+    assert repo.created_relationships == []
+
+    # Second pass: resolve the choice to a concrete id and re-apply.
+    resolved = resolve_choice(result.pending_choices[0], "loc-x")
+    result2 = commit_effects(entity, [resolved], repo)
+    assert repo.created_relationships == [("char-1", "loc-x", "linked", "")]
+    assert len(result2.applied) == 1
