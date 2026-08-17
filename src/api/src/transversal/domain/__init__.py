@@ -190,10 +190,14 @@ class ContestResult(BaseModel):
     Effect dies are available for both sides — the winner's effect die
     determines the magnitude of their success; the loser's may still
     matter for certain SFX or narrative mechanics.
+
+    ``stakes`` is the opponent's (defender's) effect die — what's on the
+    line for the initiator. Tests do not carry stakes.
     """
     pipeline: str  # "simplified" or "pool" — which pipeline the contest used
     kind: RollKind = RollKind.CONTEST
     winner: ContestWinner
+    stakes: Optional[DieType] = None
     player_result: SimplifiedResult | PoolResult
     opponent_result: SimplifiedResult | PoolResult
     pushed: bool = False

@@ -92,11 +92,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `domain/__init__.py` (RollKind), `services/dice_resolver.py`, `api/rest/roll.py`, `api/rest/contest_pools.py`, [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.2 — Backend: return the opponent's effect die (contest stakes only)
-- **Status:** pending
+- **Status:** done
 - **What:** the resolver returns the opposition's effect die for *contests*; tests don't produce stakes.
-- **Done:** a contest's opponent roll reports its effect die (the "stakes"); a test reports no stakes.
+- **Done:** `ContestResult.stakes` carries the opponent's effect die (set in `resolve_contest`); single-side tests carry no stakes field.
 - **Depends:** P2.1
-- **Load:** `services/dice_resolver.py` (`_resolve_simplified`/`_resolve_pool`), [[Pressure-Test Log]] § Scenarios 3 & 4.
+- **Load:** `domain/__init__.py` (`ContestResult.stakes`), `services/dice_resolver.py` (`resolve_contest`), [[Pressure-Test Log]] § Scenarios 3 & 4.
 
 ### P2.3 — Backend: contest resolve returns full rolls + effect dice
 - **Status:** pending
