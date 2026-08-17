@@ -137,6 +137,24 @@ class TargetCandidate:
 
 
 @strawberry.type
+class ConsequenceOption:
+    """A selectable entry in the post-roll consequence menu."""
+    id: strawberry.ID
+    label: str
+    side: str = "player"
+    effects: list[Effect] = strawberry.field(default_factory=list)
+    source: str = "base"
+
+
+@strawberry.input
+class ConsequenceOptionInput:
+    id: str
+    label: str
+    side: str = "player"
+    effects: list[EffectInput] = strawberry.field(default_factory=list)
+
+
+@strawberry.type
 class PendingChoiceRef:
     """An effect target that must be resolved before the effect can apply."""
     index: int

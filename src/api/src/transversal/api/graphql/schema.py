@@ -10,6 +10,8 @@ from transversal.api.graphql.types import (
     ConditionInput,
     CreateEntityInput,
     CreateRelationshipInput,
+    ConsequenceOption,
+    ConsequenceOptionInput,
     DeleteRelationshipInput,
     DieType as GqlDieType,
     EffectActionMeta as GqlEffectActionMeta,
@@ -67,6 +69,7 @@ from transversal.domain import TraitSetting as DomainTraitSetting
 from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import Condition as DomainCondition
 from transversal.domain import Effect as DomainEffect
+from transversal.domain import ConsequenceOption as DomainConsequenceOption
 from transversal.domain import RollTable as DomainRollTable
 from transversal.domain import RollTableEntry as DomainRollTableEntry
 from transversal.domain import RollTableCheck as DomainRollTableCheck
@@ -185,6 +188,22 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, result=e.result, target_scope=e.target_scope,
         context=e.context or {},
+    )
+
+
+def _consequence_option_to_gql(o: DomainConsequenceOption) -> ConsequenceOption:
+    return ConsequenceOption(
+        id=o.id, label=o.label, side=o.side,
+        effects=[_effect_to_gql(e) for e in o.effects],
+        source=o.source,
+    )
+
+
+def _consequence_option_input_to_domain(o: ConsequenceOptionInput) -> DomainConsequenceOption:
+    return DomainConsequenceOption(
+        id=o.id, label=o.label, side=o.side,
+        effects=[_effect_input_to_domain(e) for e in o.effects],
+        source="entity",
     )
 
 
@@ -378,6 +397,28 @@ class Query:
         return [
             TargetCandidate(id=c.id, name=c.name, universe=c.universe)
             for c in resolve_candidates(kind, scope, entity, repo)
+        ]
+
+    @strawberry.field
+    def consequence_options(
+        self, info: strawberry.Info,
+        entity_id: strawberry.ID,
+        side: str = "player",
+    ) -> list[ConsequenceOption]:
+        """Assemble the post-roll consequence menu for a side in this context.
+
+        ``side`` is ``"player"`` or ``"gm"``. Options come from base moves,
+        the acting entity's location chain, and ``on_consequence`` SFX.
+        """
+        from transversal.services.consequence_menu import assemble_consequence_menu
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            return []
+        return [
+            _consequence_option_to_gql(o)
+            for o in assemble_consequence_menu(entity, repo, side)
         ]
 
     @strawberry.field
@@ -1301,6 +1342,18 @@ class Mutation:
         ]
         result = commit_effects(entity, resolved, repo)
         return _effects_result_to_gql(result)
+
+    @strawberry.mutation
+    def set_consequence_options(self, info: strawberry.Info, entity_id: strawberry.ID,
+                                options: list[ConsequenceOptionInput]) -> Entity:
+        """Replace an entity's authored consequence options (location moves)."""
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+        entity.consequence_options = [_consequence_option_input_to_domain(o) for o in options]
+        repo.update_entity(entity)
+        return _entity_to_gql(entity)
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
