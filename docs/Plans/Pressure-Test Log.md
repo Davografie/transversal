@@ -195,13 +195,13 @@ Setting: Krasnoyarsk rail yard; a "regime alert" doom pool; Kael rolls a hitch; 
 6. **Morph traits gated by active projection** — `get_effective_traitsettings` + `effective_universes` + `from_type` gating. ✅
 7. **Troupe rotation / spotlight recency** — none. ❌ deferred.
 
-### User read — new gaps
-1. **Projection navdots only render when the entity is present.** Want: GM sees *all* projections; a player sees their *own live* projections, even when the active body is elsewhere.
-2. **No "live" player-entity tracking** — only `agency` edges (ownership), session membership, and the frontend's localStorage `entityId`. No server-side "actively-playing-now" concept.
-3. **No starter-location spawn on transversal arrival** — travel requires an explicit `location`; arriving in a new universe doesn't roll a starter location or prompt a life path.
-4. **Inapposite travel isn't wired into the frontend** — no REST endpoint (only `/move` + `/consciousness-travel`); the UI falls back to `/move` (generic `move_to`), so `INAPPOSITE` semantics are skipped. Reachable only via GraphQL.
-5. **Attunement expiry = manual `attune disable`** (the `Attunement` is stored on the entity; the `disable` handler exists) rather than an auto-scheduler.
-6. **GM scene overview is over-inclusive** — should show only live players' main characters + current-location GMCs, and be reorderable for spotlight recency.
+### User read — new gaps + design refinements
+1. **Projections as first-class units** — nav dots render *projections*, not character entities. Ownership chain: `projection → entity → agency → player`. GM sees all projections; a player sees the projections of "currently playing" players (filtered by live players).
+2. **No "live" player tracking** — no server-side "actively-playing-now" concept (only `agency` + session membership + localStorage `entityId`). Needed by #1 and the GM overview.
+3. **Transversal edges: support `location → universe`** (not just `location → location`). Traversing to a universe triggers the random starter-location pipeline (roll table).
+4. **Inapposite travel: dedicated REST endpoint** — currently only GraphQL; the frontend falls back to generic `/move`, skipping `INAPPOSITE` semantics.
+5. **Attunement expiry** — manual `attune disable` is a *patch* (works without a scheduler); the auto-scheduler at timing boundaries is still a desired mechanic.
+6. **GM scene overview** — three groups: currently-played character (entity + projection, incl. support characters), each player's main character(s), and current-location GMCs.
 
 ---
 
