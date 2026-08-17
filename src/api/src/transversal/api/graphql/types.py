@@ -129,6 +129,14 @@ class EffectInput:
 
 
 @strawberry.type
+class TargetCandidate:
+    """A selectable target returned by the choose/random candidate resolver."""
+    id: strawberry.ID
+    name: str
+    universe: str = ""
+
+
+@strawberry.type
 class SfxRef:
     """SFX reference returned by queries."""
     id: strawberry.ID

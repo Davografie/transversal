@@ -42,6 +42,7 @@ from transversal.api.graphql.types import (
     TeachResult,
     GiftResult,
     TakeResult,
+    TargetCandidate,
     TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
     TraitInput,
@@ -340,6 +341,30 @@ class Query:
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
                 requires_choice=m.requires_choice, target_kind=m.target_kind,
             ) for m in EFFECT_ACTION_REGISTRY
+        ]
+
+    @strawberry.field
+    def target_candidates(
+        self, info: strawberry.Info,
+        kind: str,
+        entity_id: strawberry.ID,
+        scope: Optional[str] = None,
+    ) -> list[TargetCandidate]:
+        """Resolve the selectable targets for a ``choose``/``random`` effect target.
+
+        ``kind`` is one of the target kinds (``location``, ``occupant``, ``trait``,
+        ``rating_die``, ``entity``, ``life_path``, ``roll_table``); ``scope`` is the
+        ``target_scope`` narrowing string (``faction:X``, ``subtree:X``, etc.).
+        """
+        from transversal.services.effect_targets import resolve_candidates
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            return []
+        return [
+            TargetCandidate(id=c.id, name=c.name, universe=c.universe)
+            for c in resolve_candidates(kind, scope, entity, repo)
         ]
 
     @strawberry.field
