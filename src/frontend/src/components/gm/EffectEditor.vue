@@ -287,7 +287,7 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
 .ee-form textarea { resize: vertical; min-height: 34px; }
 .ee-field { display: flex; flex-direction: column; gap: 2px; }
-.ee-mode-row { display: flex; }
+.ee-mode-row { display: flex; margin-top: 2px; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
 .ee-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }
