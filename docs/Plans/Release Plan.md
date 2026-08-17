@@ -75,7 +75,7 @@ The second keystone is **contest wiring** — drive the existing `resolve_contes
 
 ## Build order
 
-Phases are dependency-ordered; each is a shippable slice. Detailed per-scenario findings live in [[Pressure-Test Log]].
+Phases are dependency-ordered; each is a shippable slice. Detailed per-scenario findings live in [[Pressure-Test Log]]; the ticket-level breakdown (with per-ticket dependencies + context to load) lives in [[Tickets]].
 
 ### Phase 1 — Keystone: effect targeting & application
 
