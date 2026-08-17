@@ -54,7 +54,7 @@ class TestResolveEndpoint:
         data = r.json()
 
         assert data["kind"] == "contest"
-        assert data["winner"] in ("player", "opponent", "tie_defender")
+        assert data["winner"] in ("player", "opponent")
         assert "stakes" in data
 
         for side in ("player_result", "opponent_result"):

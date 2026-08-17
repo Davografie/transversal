@@ -177,9 +177,14 @@ RollResult = SimplifiedResult | PoolResult
 
 
 class ContestWinner(str, Enum):
+    """Winner of a two-sided contest.
+
+    ``PLAYER`` is the challenger/initiator (the side that set the
+    difficulty); ``OPPONENT`` is the defendant. Ties favor the initiator,
+    so a tied contest resolves to ``PLAYER``.
+    """
     PLAYER = "player"
     OPPONENT = "opponent"
-    TIE_DEFENDER = "tie_defender"
 
 
 class ContestResult(BaseModel):

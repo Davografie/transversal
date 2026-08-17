@@ -71,15 +71,6 @@ class TestNewTriggers:
                           context={"contest_winner": "opponent"})
         assert engine._trigger_matches(sfx, event)
 
-    def test_on_contest_loss_matches_on_tie_defender(self):
-        """Tie defender means the entity lost (defender wins ties)."""
-        engine = EffectsEngine()
-        sfx = SFX(id="sfx-loss", name="Sore Loser",
-                  trigger="on_contest_loss")
-        event = GameEvent(type="on_roll", entity_id="e1", universe="earth",
-                          context={"contest_winner": "tie_defender"})
-        assert engine._trigger_matches(sfx, event)
-
     def test_on_contest_loss_no_match_when_player_wins(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-loss", name="Sore Loser",
@@ -236,11 +227,11 @@ class TestContestToEvents:
         assert events[0].context["contest_winner"] == "opponent"  # kael lost
         assert events[1].context["contest_winner"] == "player"   # guard won
 
-    def test_tie_defender_context(self):
-        """Tie → defender wins, so player lost."""
+    def test_tie_favors_challenger_context(self):
+        """Tie → challenger (initiator) wins."""
         contest = ContestResult(
             pipeline="pool",
-            winner=ContestWinner.TIE_DEFENDER,
+            winner=ContestWinner.PLAYER,
             player_result=PoolResult(
                 rolls=[DieRoll(die=DieType.D10, result=8, source="a"),
                        DieRoll(die=DieType.D8, result=5, source="b"),
@@ -263,8 +254,8 @@ class TestContestToEvents:
             ),
         )
         events = contest_to_events(contest, "kael", "guard", "earth")
-        assert events[0].context["contest_winner"] == "opponent"  # player lost tie
-        assert events[1].context["contest_winner"] == "player"   # opponent won tie
+        assert events[0].context["contest_winner"] == "player"    # challenger won tie
+        assert events[1].context["contest_winner"] == "opponent"  # defendant lost tie
 
     def test_events_carry_roll_results(self):
         contest = ContestResult(

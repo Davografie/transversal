@@ -265,7 +265,7 @@ def _resolve_contest_winner(
     Priority:
       1. Higher outcome tier wins
       2. Same tier → higher die value wins
-      3. Same tier + same value → defender (opponent) wins
+      3. Same tier + same value → challenger (initiator) wins
     """
     tier_order = list(OutcomeTier)
     player_tier_idx = tier_order.index(player_tier)
@@ -280,7 +280,7 @@ def _resolve_contest_winner(
     elif opponent_highest > player_highest:
         return ContestWinner.OPPONENT
     else:
-        return ContestWinner.TIE_DEFENDER
+        return ContestWinner.PLAYER  # tie favors the initiator
 
 
 def _resolve_contest_winner_pool(
@@ -289,14 +289,14 @@ def _resolve_contest_winner_pool(
 ) -> ContestWinner:
     """Determine the winner of a dice pool contest.
 
-    Higher total wins. Tie goes to defender (opponent).
+    Higher total wins. Tie goes to the challenger (initiator).
     """
     if player_total > opponent_total:
         return ContestWinner.PLAYER
     elif opponent_total > player_total:
         return ContestWinner.OPPONENT
     else:
-        return ContestWinner.TIE_DEFENDER
+        return ContestWinner.PLAYER  # tie favors the initiator
 
 
 def resolve_contest(
@@ -314,7 +314,7 @@ def resolve_contest(
       - Mixed: the pool side uses its total; the simplified side's
         highest die is treated as a single-die total for comparison
 
-    Ties always go to the defender (opponent).
+    Ties favor the challenger (initiator, the first argument).
     """
     player_result = resolve(player.model_copy(update={"kind": RollKind.CONTEST}))
     opponent_result = resolve(opponent.model_copy(update={"kind": RollKind.CONTEST}))

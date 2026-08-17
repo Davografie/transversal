@@ -111,43 +111,72 @@ class ContestTracker:
         opponent_pool = self.get(location_id, entity_pool.opposition_entity_id)
         return (entity_pool, opponent_pool)
 
+    def get_contestants(
+        self, location_id: str, entity_id: str
+    ) -> tuple[Optional[PoolAssembly], Optional[PoolAssembly]]:
+        """Return (challenger_pool, defendant_pool) for the contest that
+        ``entity_id`` is involved in, regardless of which side it is.
+
+        The challenger (initiator) is the entity whose pool carries
+        ``opposition_entity_id``; the defendant is that target. If
+        ``entity_id`` is the defendant, we look up who challenged them.
+        """
+        pools = self._assemblies.get(location_id, {})
+        entity_pool = pools.get(entity_id)
+        if entity_pool is None:
+            return (None, None)
+
+        if entity_pool.opposition_entity_id:
+            challenger = entity_pool
+            defendant = pools.get(entity_pool.opposition_entity_id)
+        else:
+            challenger = next(
+                (pa for pa in pools.values() if pa.opposition_entity_id == entity_id),
+                None,
+            )
+            defendant = entity_pool
+        return (challenger, defendant)
+
     def can_resolve(self, location_id: str, entity_id: str) -> bool:
         """Check if both sides have dice assembled for a contest."""
-        entity_pool, opponent_pool = self.get_opposition_pools(location_id, entity_id)
-        if entity_pool is None or opponent_pool is None:
+        challenger, defendant = self.get_contestants(location_id, entity_id)
+        if challenger is None or defendant is None:
             return False
-        return len(entity_pool.dice) > 0 and len(opponent_pool.dice) > 0
+        return len(challenger.dice) > 0 and len(defendant.dice) > 0
 
     # ── Resolution ──────────────────────────────────────
 
     def resolve(
         self, location_id: str, entity_id: str
     ) -> Optional[ContestResult]:
-        """Resolve a contest between an entity and its designated opponent.
+        """Resolve a contest between a challenger and its defendant.
+
+        ``entity_id`` may be either side; ties favor the challenger
+        (initiator) regardless of which side triggered the resolve.
 
         Returns None if either side hasn't assembled a pool yet.
         """
-        entity_pool, opponent_pool = self.get_opposition_pools(location_id, entity_id)
-        if entity_pool is None or opponent_pool is None:
+        challenger, defendant = self.get_contestants(location_id, entity_id)
+        if challenger is None or defendant is None:
             return None
-        if not entity_pool.dice or not opponent_pool.dice:
+        if not challenger.dice or not defendant.dice:
             return None
 
-        player_req = DicePoolRequest(
-            entity_id=entity_pool.entity_id,
-            universe=entity_pool.universe,
-            dice=list(entity_pool.dice),
-            razmerit_spent=entity_pool.razmerit_spent,
+        challenger_req = DicePoolRequest(
+            entity_id=challenger.entity_id,
+            universe=challenger.universe,
+            dice=list(challenger.dice),
+            razmerit_spent=challenger.razmerit_spent,
         )
-        opponent_req = DicePoolRequest(
-            entity_id=opponent_pool.entity_id,
-            universe=opponent_pool.universe,
-            dice=list(opponent_pool.dice),
-            razmerit_spent=opponent_pool.razmerit_spent,
+        defendant_req = DicePoolRequest(
+            entity_id=defendant.entity_id,
+            universe=defendant.universe,
+            dice=list(defendant.dice),
+            razmerit_spent=defendant.razmerit_spent,
         )
 
-        result = resolve_contest(player_req, opponent_req)
-        result.pushed = entity_pool.pushed_this_beat
+        result = resolve_contest(challenger_req, defendant_req)
+        result.pushed = challenger.pushed_this_beat
 
         return result
 

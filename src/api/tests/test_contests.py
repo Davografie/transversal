@@ -6,7 +6,7 @@ Covers:
   - Pool vs Pool (3+ dice per side)
   - Mixed pipelines (pool vs simplified)
   - Tie-breaking: higher tier beats lower, higher value beats lower,
-    same both → defender wins
+    same both → challenger (initiator) wins
   - Effect die availability for both winner and loser
   - Per-location ContestTracker: assembly, opposition, resolution
   - Beat lifecycle: clear pools after resolution
@@ -67,12 +67,12 @@ class TestContestWinnerSimplified:
         )
         assert winner == ContestWinner.OPPONENT
 
-    def test_same_tier_same_value_defender_wins(self):
-        """Tie on both tier and value → defender (opponent) wins."""
+    def test_same_tier_same_value_challenger_wins(self):
+        """Tie on both tier and value → challenger (initiator) wins."""
         winner = _resolve_contest_winner(
             OutcomeTier.SUCCESS, OutcomeTier.SUCCESS, 7, 7,
         )
-        assert winner == ContestWinner.TIE_DEFENDER
+        assert winner == ContestWinner.PLAYER
 
     def test_fail_loses_to_everything(self):
         for tier in [OutcomeTier.MARGINAL, OutcomeTier.SUCCESS,
@@ -92,8 +92,8 @@ class TestContestWinnerPool:
     def test_lower_total_loses(self):
         assert _resolve_contest_winner_pool(10, 14) == ContestWinner.OPPONENT
 
-    def test_tie_goes_to_defender(self):
-        assert _resolve_contest_winner_pool(13, 13) == ContestWinner.TIE_DEFENDER
+    def test_tie_goes_to_challenger(self):
+        assert _resolve_contest_winner_pool(13, 13) == ContestWinner.PLAYER
 
 
 # ── resolve_contest() integration ──────────────────────
@@ -112,8 +112,7 @@ class TestResolveContestSimplified:
         )
         result = resolve_contest(player, opponent)
         assert result.pipeline == "simplified"
-        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT,
-                                  ContestWinner.TIE_DEFENDER)
+        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT)
         assert isinstance(result.player_result, SimplifiedResult)
         assert isinstance(result.opponent_result, SimplifiedResult)
         assert result.player_result.rolls[0].die == DieType.D8
@@ -268,8 +267,7 @@ class TestResolveContestMixed:
         )
         result = resolve_contest(player, opponent)
         assert result.pipeline == "mixed"
-        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT,
-                                  ContestWinner.TIE_DEFENDER)
+        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT)
 
     def test_player_simplified_vs_opponent_pool(self):
         """Player brings 1 die (simplified), opponent brings 3 dice (pool)."""
@@ -337,10 +335,10 @@ class TestContestResultModel:
         )
         assert result.winner == ContestWinner.OPPONENT
 
-    def test_tie_defender_structure(self):
+    def test_tie_challenger_structure(self):
         result = ContestResult(
             pipeline="pool",
-            winner=ContestWinner.TIE_DEFENDER,
+            winner=ContestWinner.PLAYER,
             player_result=PoolResult(
                 rolls=[DieRoll(die=DieType.D10, result=8, source="a"),
                        DieRoll(die=DieType.D8, result=5, source="b"),
@@ -362,7 +360,7 @@ class TestContestResultModel:
                 hitches=[], botch=False, razmerit_earned=0,
             ),
         )
-        assert result.winner == ContestWinner.TIE_DEFENDER
+        assert result.winner == ContestWinner.PLAYER
         # Both have effect dice even in a tie
         assert result.player_result.effect_die is not None
         assert result.opponent_result.effect_die is not None
@@ -449,8 +447,36 @@ class TestContestTrackerResolution:
         assert result is not None
         assert isinstance(result, ContestResult)
         assert result.pipeline == "pool"
-        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT,
-                                  ContestWinner.TIE_DEFENDER)
+        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT)
+
+    def test_resolve_works_from_defendant_side(self):
+        """Resolving with the defendant's id still resolves the contest."""
+        ct = ContestTracker()
+        ct.add_die("loc-1", "kael", DieType.D10, "intelligence", "earth")
+        ct.add_die("loc-1", "kael", DieType.D8, "hacking", "earth")
+        ct.add_die("loc-1", "kael", DieType.D8, "distinction", "earth")
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        ct.add_die("loc-1", "guard-1", DieType.D8, "agility", "earth")
+        ct.add_die("loc-1", "guard-1", DieType.D6, "alertness", "earth")
+        ct.add_die("loc-1", "guard-1", DieType.D6, "training", "earth")
+
+        result = ct.resolve("loc-1", "guard-1")
+        assert result is not None
+        assert isinstance(result, ContestResult)
+
+    def test_get_contestants_identifies_challenger_from_either_side(self):
+        ct = ContestTracker()
+        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        ct.add_die("loc-1", "guard-1", DieType.D6, "agility", "earth")
+
+        challenger, defendant = ct.get_contestants("loc-1", "kael")
+        assert challenger.entity_id == "kael"
+        assert defendant.entity_id == "guard-1"
+
+        challenger, defendant = ct.get_contestants("loc-1", "guard-1")
+        assert challenger.entity_id == "kael"
+        assert defendant.entity_id == "guard-1"
 
     def test_resolve_returns_none_without_opponent(self):
         ct = ContestTracker()
@@ -547,8 +573,7 @@ class TestBotchInContests:
         if result.player_result.botch:
             assert result.player_result.tier == OutcomeTier.FAIL
         # Structure is always valid
-        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT,
-                                  ContestWinner.TIE_DEFENDER)
+        assert result.winner in (ContestWinner.PLAYER, ContestWinner.OPPONENT)
 
 
 # ── SFX Push (data model) ──────────────────────────────

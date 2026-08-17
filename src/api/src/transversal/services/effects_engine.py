@@ -213,8 +213,8 @@ class EffectsEngine:
         if trigger in ("on_contest_loss", "on_contest_win"):
             contest_winner = event.context.get("contest_winner")
             if trigger == "on_contest_loss":
-                # Entity lost: opponent won or tie (defender wins ties)
-                return contest_winner in ("opponent", "tie_defender")
+                # Entity lost: opponent won (ties favor the initiator)
+                return contest_winner == "opponent"
             elif trigger == "on_contest_win":
                 return contest_winner == "player"
 
@@ -338,15 +338,12 @@ def contest_to_events(
     """
     events: list[GameEvent] = []
 
-    # Determine who won from each side's perspective
+    # Determine who won from each side's perspective.
+    # Ties favor the initiator, so there's no separate tie outcome.
     if contest.winner == "player":
         player_winner = "player"
         opponent_winner = "opponent"
-    elif contest.winner == "opponent":
-        player_winner = "opponent"
-        opponent_winner = "player"
     else:
-        # tie_defender — player lost, opponent won (defender wins ties)
         player_winner = "opponent"
         opponent_winner = "player"
 

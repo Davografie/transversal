@@ -106,11 +106,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `api/rest/contest_pools.py`, `services/contest_tracker.py`, `services/dice_resolver.py`.
 
 ### P2.4 — Backend: challenger/defendant modeling
-- **Status:** pending
+- **Status:** done
 - **What:** a stored role distinguishes who initiated vs who defends, so a tie resolves in favor of the *initiator* (Cortex Prime), not the resolve argument.
-- **Done:** ties favor the initiator regardless of which side calls resolve.
+- **Done:** ties favor the challenger (initiator); `ContestTracker.get_contestants` resolves from either side; `ContestWinner.TIE_DEFENDER` removed; `_trigger_matches`/`contest_to_events` updated.
 - **Depends:** P2.1
-- **Load:** `services/contest_tracker.py` (`set_opposition`), `domain/__init__.py` (PoolAssembly), [[Pressure-Test Log]] § Scenario 4.
+- **Load:** `services/contest_tracker.py` (`get_contestants`, `set_opposition`), `domain/__init__.py` (ContestWinner, PoolAssembly), `services/dice_resolver.py` (`resolve_contest`), `services/effects_engine.py` (`contest_to_events`), [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.5 — Frontend: opposition UI (GM rolls first)
 - **Status:** pending
