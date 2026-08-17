@@ -114,6 +114,18 @@
 
     <div class="controls" v-if="isResolved() && mode !== 'roll_table'">
       <button @click="clearResult" class="roll-btn">New Pool</button>
+      <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
+    </div>
+
+    <div v-if="showConsequences && isResolved()" class="consequence-panel">
+      <div class="consequence-side">
+        <label>Menu</label>
+        <select v-model="consequenceSide">
+          <option value="player">Player</option>
+          <option value="gm">GM</option>
+        </select>
+      </div>
+      <ConsequenceMenu :entity-id="entityId" :side="consequenceSide" @close="showConsequences = false" />
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -124,6 +136,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import DieIcon from './DieIcon.vue'
+import ConsequenceMenu from './gm/ConsequenceMenu.vue'
 
 const props = defineProps({
   entityId: { type: String, default: 'kael-1' },
@@ -140,6 +153,8 @@ const pool = reactive([])
 const result = ref(null)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
 const panelOpen = ref(false)
+const showConsequences = ref(false)
+const consequenceSide = ref('player')
 watch(panelOpen, (v) => emit('panelOpen', v))
 
 let rollerTouchY = 0
@@ -672,6 +687,9 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .die-btn-d12 { color: #40b860; }
 
 .controls { display: flex; gap: 8px; }
+.consequence-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.consequence-side { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); }
+.consequence-side select { font-size: 11px; padding: 3px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; }
 .roll-btn { width: 100%; font-size: 18px; font-weight: 700; padding: 10px; }
 
 .result { text-align: center; }
