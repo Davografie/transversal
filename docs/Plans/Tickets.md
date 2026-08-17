@@ -116,9 +116,16 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Status:** done
 - **What:** GM test difficulty via preset buttons (very easy 2d4 → very hard 2d12) auto-added to the opposition pool, plus trait dice; the opposition rolls with the player's pool and the result shows the difficulty and a success/failure verdict.
 - **Done:** opposition can be set up (presets + extra dice), sent as `gmc` opposition, and rendered as "vs difficulty N → Success/Failure".
-- **Note:** a literal two-click "GM rolls first, then player rolls" is deferred — the combined `gmc` roll already keeps top-2 as the difficulty; the two-step `static_difficulty` path needs a simplified-pipeline backend gap filled first.
+- **Note:** auto top-2 is a stepping stone — the locked decision is GM *manual* difficulty selection (see P2.5b).
 - **Depends:** P2.2
 - **Load:** `components/DiceRoller.vue`, `composables/useApi.js` (`roll` opposition param).
+
+### P2.5b — Backend + frontend: GM manual test-difficulty selection (two-step)
+- **Status:** pending
+- **What:** the GM rolls the opposition pool, sees the dice, and picks the two that set the difficulty; the player then rolls against that fixed difficulty.
+- **Done:** difficulty is GM-chosen (tap two dice), not auto top-2.
+- **Depends:** P2.5
+- **Load:** `services/dice_resolver.py` (`_resolve_simplified` — add `static_difficulty` handling), `components/DiceRoller.vue`, `composables/useApi.js`.
 
 ### P2.6 — Backend: razmerit persistence
 - **Status:** pending
@@ -220,10 +227,10 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** P3.5, P2.8
 - **Load:** [[Projections and Transversal]], `services/effects_applier.py` (registry `_attune`/travel + pure applier), `services/effect_targets.py`, `services/effects_engine.py` (`_trigger_matches`), `domain/__init__.py` (TransversalType).
 
-### P3.7 — Backend + frontend: high-stakes scenes & taken-out *(later)*
+### P3.7 — Backend + frontend: contest effect-die consequences (complication + taken-out) *(later)*
 - **Status:** pending
-- **What:** GM flags a scene high-stakes; a winning contest compares effect dice — larger → opponent taken out, else a complication at the winner's effect die (or spend to avoid).
-- **Done:** high-stakes contests produce taken-out or a spend-avoided complication.
+- **What:** compare winner vs loser effect die to resolve a contest's consequence. Standard: loser takes a complication at the winner's effect die (stepped down one if the loser's effect die is equal or larger). High-stakes (GM flag): winner's effect die larger → loser taken out (or spend to avoid).
+- **Done:** every contest resolves a consequence from the effect-die comparison; high-stakes contests can take a side out.
 - **Depends:** P2.3
 - **Load:** [[Pressure-Test Log]] § Scenario 4, `services/dice_resolver.py` (`resolve_contest`).
 

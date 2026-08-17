@@ -147,6 +147,7 @@ The one primitive everything else hangs off.
 - **Heroic success is deferred** (see Deferred) — the beat-by-5 effect-die step-up feels too swingy.
 - **Effect-die auto-selection excludes hitches** — auto-pick the largest leftover die that isn't a hitch, in both the resolver and the dice-pool UI.
 - **Contest outcomes are first-class but phased** — give-in this release; high-stakes/taken-out, interference, multiway, and complication-over-d12-taken-out are later tickets in [[Tickets]].
+- **GM manual test-difficulty selection** — the GM rolls the opposition pool and *picks* the two dice that set the difficulty (Cortex: "add together two dice from the roll"), rather than auto-keeping the top two. This is the two-step flow, and it needs `static_difficulty` support in the simplified pipeline.
 
 ## Open questions / stubs
 
