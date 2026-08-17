@@ -8,7 +8,7 @@ from transversal.domain import (
     EntityType,
     TraitSetting,
 )
-from transversal.services.effects_applier import apply_effects
+from transversal.services.effects_applier import apply_effects, resolve_choice
 
 
 class FakeTrait:
@@ -233,6 +233,80 @@ def test_empty_required_target_becomes_pending():
     entity = _entity()
     result = apply_effects(entity, [_effect("modify_trait", "gain", "", "d6")], FakeRepo())
     assert len(result.pending_choices) == 1
+    assert result.pending_choices[0].kind == "trait"
+
+
+def test_choose_location_yields_location_kind():
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{choose_location}", result="linked",
+    )
+    result = apply_effects(entity, [effect], FakeRepo())
+    assert len(result.pending_choices) == 1
+    assert result.pending_choices[0].kind == "location"
+
+
+def test_choose_occupant_yields_occupant_kind():
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{choose_occupant}", result="ally",
+    )
+    result = apply_effects(entity, [effect], FakeRepo())
+    assert result.pending_choices[0].kind == "occupant"
+
+
+def test_choose_rating_die_yields_rating_die_kind():
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+        target="{choose_rating_die}",
+    )
+    result = apply_effects(entity, [effect], FakeRepo())
+    assert result.pending_choices[0].kind == "rating_die"
+
+
+def test_target_scope_populates_pending_choice_scope():
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="{choose_trait}", result="d6", target_scope="earth",
+    )
+    result = apply_effects(entity, [effect], FakeRepo())
+    assert len(result.pending_choices) == 1
+    assert result.pending_choices[0].scope == "earth"
+
+
+def test_resolve_choice_returns_reappliable_effect():
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{choose_location}", result="linked",
+    )
+    result = apply_effects(entity, [effect], FakeRepo())
+    resolved = resolve_choice(result.pending_choices[0], "loc-krasnoyarsk")
+    assert resolved.target == "loc-krasnoyarsk"
+    assert resolved.type == "relationship"
+    assert resolved.action == "create"
+    assert resolved.result == "linked"
+
+
+def test_resolve_choice_can_be_reapplied():
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="relationship", action="create",
+        target="{choose_location}", result="linked",
+    )
+    result = apply_effects(entity, [effect], FakeRepo())
+    assert len(result.pending_choices) == 1
+    assert result.new_relationships == []
+
+    resolved = resolve_choice(result.pending_choices[0], "loc-krasnoyarsk")
+    reapplied = apply_effects(entity, [resolved], FakeRepo())
+    assert reapplied.new_relationships == [
+        {"from": "char-1", "to": "loc-krasnoyarsk", "type": "linked", "description": ""}
+    ]
 
 
 def test_unknown_effect_is_passthrough():

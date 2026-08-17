@@ -165,7 +165,13 @@ class AppliedEffect:
 
 @dataclass
 class PendingChoice:
-    """An effect whose target must be resolved by the user at runtime."""
+    """An effect whose target must be resolved by the user at runtime.
+
+    ``kind`` is the target kind the picker should present (``location``,
+    ``occupant``, ``trait``, ``rating_die``, ``entity``, ``life_path``,
+    ``roll_table``).  ``scope`` is the narrowing hint from ``Effect.target_scope``
+    (e.g. a universe or "current location") used to filter candidates.
+    """
     effect: Effect
     kind: str
     scope: Optional[str] = None
@@ -261,15 +267,54 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     )
 
 
+# Placeholder suffixes recognised in ``{choose_*}`` targets, mapped to the
+# target kind the frontend picker should present.  A bare ``{choose}`` (or an
+# unknown suffix) resolves to None so the caller falls back to the handler's
+# default kind.
+_CHOOSE_KINDS = {
+    "location": "location",
+    "occupant": "occupant",
+    "trait": "trait",
+    "entity": "entity",
+    "rating_die": "rating_die",
+    "life_path": "life_path",
+    "roll_table": "roll_table",
+}
+
+
+def _parse_choose_kind(target: str) -> Optional[str]:
+    """Extract the target kind from a ``{choose_*}`` placeholder.
+
+    Returns None for a bare ``{choose}``, an unknown suffix, or a target that is
+    not a placeholder at all.
+    """
+    if not target.startswith("{choose"):
+        return None
+    name = target[1:-1].removeprefix("choose").lstrip("_")
+    return _CHOOSE_KINDS.get(name)
+
+
 def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind: str) -> Optional[str]:
     """Resolve a target to an id, or record a PendingChoice and return None."""
     target = effect.target or ""
     if target == "self":
         return entity.id
     if target.startswith("{choose") or target == "":
-        result.pending_choices.append(PendingChoice(effect=effect, kind=effect.target_scope or kind))
+        choose_kind = _parse_choose_kind(target) or kind
+        result.pending_choices.append(
+            PendingChoice(effect=effect, kind=choose_kind, scope=effect.target_scope)
+        )
         return None
     return target
+
+
+def resolve_choice(choice: PendingChoice, target: str) -> Effect:
+    """Resolve a pending choice to a concrete target, returning a re-appliable effect.
+
+    The returned effect has ``target`` set to the chosen id and can be passed back
+    to :func:`apply_effects` (or ``commit_effects``) to complete the mutation.
+    """
+    return choice.effect.model_copy(update={"target": target})
 
 
 # ── Mutation handlers ────────────────────────────────
