@@ -134,6 +134,17 @@ async def resolve_contest(location_id: str, entity_id: str):
     if result is None:
         raise HTTPException(status_code=409, detail="Could not resolve contest")
 
+    # Fire automatic SFX for both sides (roll/outcome triggers + contest win/loss).
+    challenger, defendant = ct.get_contestants(location_id, entity_id)
+    if challenger is not None and defendant is not None:
+        from transversal.main import _get_engine, _get_repo
+        from transversal.services.roll_orchestrator import fire_contest_sfx_auto
+
+        fire_contest_sfx_auto(
+            _get_engine(), _get_repo(), result,
+            challenger.entity_id, defendant.entity_id, challenger.universe,
+        )
+
     # Broadcast the resolution
     from transversal.api.sse.bus import StreamEvent, event_bus
     from transversal.services.session_manager import session_manager
