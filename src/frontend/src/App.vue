@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -667,13 +667,6 @@ const shareCount = ref(0)
 const lastSent = ref('')
 const lastEvtDebug = ref('')
 
-function sharePool(sources) {
-  if (sessionId.value === 'session-default') return
-  shareCount.value++
-  lastSent.value = JSON.stringify(sources)
-  publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, dice: sources, phase: phase.value })
-}
-
 function sharePhase() {
   if (sessionId.value === 'session-default') return
   lastSent.value = `phase:${phase.value}`
@@ -687,7 +680,6 @@ function shareRoll(result) {
 
 function onDifficultyCommitted(difficulty) {
   if (sessionId.value === 'session-default') return
-  publishEvent(sessionId.value, 'difficulty_set', { difficulty })
   apiSetDifficulty(currentLocationId.value, difficulty)
 }
 
@@ -705,7 +697,6 @@ function onPoolChange(s) {
   const labels = s.map(d => d.label || '').filter(Boolean)
   currentPoolSources.value = labels
   sheetRef.value?.setPoolSources(s)
-  sharePool(s)
 }
 
 function onDiceRolled(result) {
@@ -839,7 +830,7 @@ watch(lastEvent, (evt) => {
       break
     case 'pool_updated':
       lastEvtDebug.value = `pid=${pid} eid=${eid} phase=${evt.data.phase} dice=${JSON.stringify(evt.data.dice)} mypid=${playerId.value}`
-      if (pid !== playerId.value && eid) {
+      if (eid && eid !== entityId.value) {
         const phase = evt.data.phase || 'adding'
         remotePools.value = { ...remotePools.value, [eid]: { dice: evt.data.dice || [], player_id: pid, phase } }
         if (phase === 'adding' && (!evt.data.dice || evt.data.dice.length === 0)) {
@@ -847,7 +838,7 @@ watch(lastEvent, (evt) => {
           remoteResults.value = rest
         }
       }
-      if (gmMode.value && foreign && eid) {
+      if (gmMode.value && eid && eid !== entityId.value) {
         const phase = evt.data.phase || 'adding'
         const dice = evt.data.dice || []
         if (phase === 'adding') {

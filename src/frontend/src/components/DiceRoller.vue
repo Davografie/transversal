@@ -1,5 +1,18 @@
 <template>
   <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd">
+    <div class="pool-tabs" v-if="tabEntities.length > 1">
+      <button
+        v-for="e in tabEntities"
+        :key="e.id"
+        class="pool-tab"
+        :class="{ active: activeId === e.id }"
+        @click="switchTab(e.id)"
+      >
+        {{ e.id === entityId ? 'You' : e.name }}
+      </button>
+    </div>
+
+    <template v-if="isSelf">
     <div class="dice-pool" v-if="isAdding()">
       <div
         v-for="(die, i) in pool"
@@ -27,6 +40,24 @@
       <button v-for="d in dies" :key="d" class="die-btn" :class="`die-btn-${d}`" @click="addDie(d)">
         {{ d }}
       </button>
+    </div>
+
+    <div v-if="!gmMode && isAdding() && mode !== 'roll_table' && tabEntities.length > 1" class="contest-setup">
+      <div class="contest-row">
+        <label>Opponent</label>
+        <select v-model="opponentId">
+          <option value="" disabled>Choose…</option>
+          <option v-for="e in tabEntities.filter(e => e.id !== entityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
+        </select>
+        <button class="roll-btn contest-btn" :disabled="!opponentId || pool.length === 0" @click="doResolveContest">Resolve contest</button>
+      </div>
+      <div v-if="contestError" class="error">{{ contestError }}</div>
+      <div v-if="contestResult" class="contest-result">
+        <strong>{{ contestResult.winner === 'player' ? 'You win' : `${opponentName} wins` }}</strong>
+        <div>You: total {{ contestResult.player_result.total ?? contestResult.player_result.highest }} · effect {{ contestResult.player_result.effect_die || '—' }}</div>
+        <div>{{ opponentName }}: total {{ contestResult.opponent_result.total ?? contestResult.opponent_result.highest }} · effect {{ contestResult.opponent_result.effect_die || '—' }}</div>
+        <div v-if="contestResult.stakes">Stakes: {{ contestResult.stakes }}</div>
+      </div>
     </div>
 
     <div v-if="result" class="result panel">
@@ -158,6 +189,19 @@
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
+    </template>
+
+    <template v-else>
+      <div class="peer-pool">
+        <div class="peer-pool-title">{{ activeName }}</div>
+        <div class="dice-pool">
+          <div v-for="(die, i) in viewPool" :key="i" class="die-chip">
+            <DieIcon :die="die.die" :label="die.label || die.source_id || die.die" />
+          </div>
+          <div v-if="!viewPool.length" class="empty-pool">No dice assembled</div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -180,11 +224,12 @@ const props = defineProps({
   playerId: { type: String, default: '' },
   locationId: { type: String, default: '' },
   sfxChoiceRequest: { type: Array, default: () => [] }, // pending {choose_*} auto-fired SFX choices
+  peers: { type: Array, default: () => [] }, // [{ id, name }] other entities at the location
 })
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved'])
 
-const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool } = useApi()
+const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, resolveContest: apiResolveContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -199,6 +244,60 @@ const difficultyPresets = [
 const panelOpen = ref(false)
 const showConsequences = ref(false)
 const consequenceSide = ref('player')
+
+// ── GM roll purpose + per-entity pool tabs ───────────
+const poolPurpose = ref(null) // GM mode: 'difficulty' | 'gmc' | null
+const activeId = ref(props.entityId)
+const viewPool = ref([])
+const opponentId = ref('')
+const contestResult = ref(null)
+const contestError = ref('')
+
+const tabEntities = computed(() => {
+  const seen = new Set([props.entityId])
+  const list = [{ id: props.entityId, name: 'You' }]
+  for (const p of (props.peers || [])) {
+    if (p && p.id && !seen.has(p.id)) {
+      seen.add(p.id)
+      list.push({ id: p.id, name: p.name || p.id })
+    }
+  }
+  return list
+})
+const isSelf = computed(() => activeId.value === props.entityId)
+const activeName = computed(() => tabEntities.value.find(e => e.id === activeId.value)?.name || activeId.value)
+const opponentName = computed(() => tabEntities.value.find(e => e.id === opponentId.value)?.name || 'Opponent')
+
+function markPurpose(kind) {
+  if (pool.length === 0) poolPurpose.value = kind
+}
+
+async function switchTab(id) {
+  activeId.value = id
+  if (id === props.entityId) return
+  viewPool.value = []
+  if (!props.locationId) return
+  const res = await apiGetPool(props.locationId, id)
+  viewPool.value = res?.dice || []
+}
+
+watch(() => props.entityId, (id) => {
+  activeId.value = id
+})
+
+async function doResolveContest() {
+  if (!opponentId.value) return
+  contestError.value = ''
+  contestResult.value = null
+  if (!props.locationId) return
+  await apiSetOpposition(props.locationId, props.entityId, opponentId.value, props.universe)
+  const res = await apiResolveContest(props.locationId, props.entityId)
+  if (res?.error) {
+    contestError.value = res.error
+    return
+  }
+  contestResult.value = res
+}
 
 async function resolveSfxChoices(resolutions) {
   await resolveEffectTargets(props.entityId, resolutions)
@@ -256,7 +355,7 @@ function setUniverse(u) {
 }
 
 function persistPool() {
-  if (props.gmMode || !props.playerId || !props.locationId) return
+  if (props.gmMode || !props.entityId || !props.locationId) return
   const dice = pool.map(d => ({
     die: d.die,
     source_kind: d.sourceKind || 'manual',
@@ -264,7 +363,7 @@ function persistPool() {
     label: d.label || d.source || d.die,
     ts_id: d.tsId || null,
   }))
-  apiSavePool(props.locationId, props.playerId, dice)
+  apiSavePool(props.locationId, props.entityId, dice)
 }
 
 function notifyPool() {
@@ -273,6 +372,7 @@ function notifyPool() {
 }
 
 function addDie(die) {
+  markPurpose('difficulty')
   pool.push({ die, source: '', label: die, sourceKind: 'manual' })
   notifyPool()
   panelOpen.value = true
@@ -285,6 +385,7 @@ function removeDie(i) {
 
 function setDifficulty(die) {
   // GM difficulty: replace the two difficulty dice, keep any trait dice.
+  poolPurpose.value = 'difficulty'
   const traitDice = pool.filter(d => d.source !== 'difficulty')
   pool.splice(0, pool.length)
   pool.push(
@@ -302,6 +403,7 @@ function addFromSheet({ die, source, label, tsId }) {
   if (idx !== -1) {
     pool.splice(idx, 1)
   } else {
+    markPurpose('gmc')
     pool.push({ die, source, label: label || source, tsId: tsId || null, sourceKind: 'trait' })
     panelOpen.value = true
   }
@@ -694,7 +796,8 @@ async function doRoll() {
   const opp = (!props.gmMode && props.difficulty != null)
     ? { type: 'static_difficulty', static_difficulty: props.difficulty }
     : null
-  result.value = await apiRoll(props.entityId, props.universe, dice, opp)
+  const pipeline = (props.gmMode && poolPurpose.value === 'difficulty') ? 'pool' : null
+  result.value = await apiRoll(props.entityId, props.universe, dice, opp, pipeline)
   pool.length = 0
   notifyPool()
   if (result.value?.pipeline === 'pool' && props.mode !== 'roll_table') {
@@ -737,13 +840,16 @@ function clearPool() {
   result.value = null
   selection.total = []
   selection.effect = []
+  poolPurpose.value = null
+  contestResult.value = null
+  contestError.value = ''
   setPhase(Phase.ADDING)
   notifyPool()
 }
 
 async function restorePool() {
-  if (props.gmMode || !props.playerId || !props.locationId) return
-  const res = await apiGetPool(props.locationId, props.playerId)
+  if (props.gmMode || !props.entityId || !props.locationId) return
+  const res = await apiGetPool(props.locationId, props.entityId)
   const dice = res?.dice || []
   pool.splice(0, pool.length)
   for (const d of dice) {
@@ -766,7 +872,7 @@ onMounted(() => {
   restorePool()
 })
 
-watch([() => props.playerId, () => props.locationId], restorePool)
+watch([() => props.entityId, () => props.locationId], restorePool)
 onUnmounted(() => {
   document.removeEventListener('touchmove', onDocTouchMove)
   document.removeEventListener('touchend', onDocTouchEnd)
@@ -805,6 +911,25 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .commit-btn { background: var(--success) !important; color: #0a0a0f !important; }
 
 .dice-pool { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+
+.pool-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.pool-tab {
+  padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 8px;
+  cursor: pointer; border: 1px solid transparent; background: rgba(255,255,255,0.06);
+  color: var(--text-dim);
+}
+.pool-tab.active { background: var(--accent, #7aa2f7); color: #0a0a0f; }
+
+.contest-setup { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
+.contest-row { display: flex; gap: 6px; align-items: center; }
+.contest-row label { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.contest-row select { flex: 1; padding: 6px; border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.15); }
+.contest-btn { flex: 0 0 auto; padding: 6px 10px; font-size: 12px; }
+.contest-result { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+
+.peer-pool { display: flex; flex-direction: column; gap: 8px; }
+.peer-pool-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
+.empty-pool { font-size: 12px; color: var(--text-dim); opacity: 0.7; }
 
 .die-chip {
   cursor: pointer; transition: opacity 0.2s;
