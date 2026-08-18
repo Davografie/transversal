@@ -1,14 +1,15 @@
 <template>
   <div class="sd-root">
     <input
+      ref="inputEl"
       v-model="search"
       class="sd-input"
       :placeholder="selectedLabel || placeholder"
-      @focus="open = true"
+      @focus="openDrop"
       @blur="scheduleClose"
       @input="open = true"
     />
-    <div v-if="open" class="sd-drop">
+    <div v-if="open" class="sd-drop" :class="{ 'sd-drop-up': dropUp }">
       <div v-if="!filtered.length" class="sd-empty">No matches</div>
       <div
         v-for="opt in filtered"
@@ -23,7 +24,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onUnmounted } from 'vue'
 
 const props = defineProps({
   options: { type: Array, default: () => [] },
@@ -42,6 +43,8 @@ const emit = defineEmits(['select'])
 
 const search = ref('')
 const open = ref(false)
+const dropUp = ref(false)
+const inputEl = ref(null)
 let closeTimer = null
 
 const selectedLabel = computed(() => {
@@ -69,6 +72,18 @@ function pick(opt) {
   open.value = false
 }
 
+async function openDrop() {
+  open.value = true
+  await nextTick()
+  const rect = inputEl.value?.getBoundingClientRect()
+  if (!rect) {
+    dropUp.value = false
+    return
+  }
+  // Dropdown max-height is 140px; flip upward when there's not enough room below.
+  dropUp.value = (window.innerHeight - rect.bottom) < 160
+}
+
 function scheduleClose() {
   clearTimeout(closeTimer)
   closeTimer = setTimeout(() => { open.value = false }, 150)
@@ -89,6 +104,7 @@ onUnmounted(() => clearTimeout(closeTimer))
   max-height: 140px; overflow-y: auto;
   background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 3px;
 }
+.sd-drop-up { top: auto; bottom: 100%; }
 .sd-item {
   font-size: 10px; padding: 4px 8px; cursor: pointer; color: var(--text);
 }

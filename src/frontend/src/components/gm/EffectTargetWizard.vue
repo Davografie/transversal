@@ -6,6 +6,10 @@
         <span class="etw-step-count">Target {{ stepIndex + 1 }} / {{ pendingChoices.length }}</span>
         <span class="etw-kind">kind: {{ current.kind }}<template v-if="current.scope"> · {{ current.scope }}</template></span>
       </div>
+      <div v-if="current.sfx_name" class="etw-sfx">
+        <div class="etw-sfx-name">{{ current.sfx_name }}</div>
+        <div v-if="current.sfx_description" class="etw-sfx-desc">{{ current.sfx_description }}</div>
+      </div>
       <ScopedTargetPicker
         :model-value="targets[current.index] || ''"
         :kind="current.kind"
@@ -65,6 +69,9 @@ function apply() {
 .etw-step-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 9px; color: var(--text-dim); }
 .etw-step-count { font-weight: 600; color: var(--text); }
 .etw-kind { font-family: monospace; }
+.etw-sfx { display: flex; flex-direction: column; gap: 2px; }
+.etw-sfx-name { font-size: 10px; font-weight: 600; color: var(--accent); }
+.etw-sfx-desc { font-size: 9px; color: var(--text-dim); }
 .etw-empty { font-size: 10px; color: var(--text-dim); }
 .etw-actions { display: flex; gap: 6px; }
 .etw-btn { font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); }
