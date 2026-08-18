@@ -93,7 +93,13 @@
                 </div>
                 <div class="trait-right">
                   <div v-if="traitDice(t).length" class="trait-die-icons">
-                    <DieIcon v-for="(die, i) in traitDice(t)" :key="i" :die="die" class="trait-die-icon" />
+                    <DieIcon
+                      v-for="(die, i) in traitDice(t)"
+                      :key="i"
+                      :die="die"
+                      class="trait-die-icon"
+                      :style="i ? { marginLeft: '-12px', marginTop: `${i * 4}px` } : null"
+                    />
                   </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
                   <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
@@ -1707,7 +1713,7 @@ watch(() => props.externalPoolSources, (sources) => {
 
 .trait-die-icons {
   display: flex;
-  gap: 2px;
+  align-items: flex-start;
 }
 .trait-die-icon {
   width: 32px;
