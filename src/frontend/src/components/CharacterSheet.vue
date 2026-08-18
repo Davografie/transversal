@@ -92,14 +92,16 @@
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
                 </div>
                 <div class="trait-right">
-                  <div v-if="traitDice(t).length" class="trait-die-icons">
-                    <DieIcon
-                      v-for="(die, i) in traitDice(t)"
-                      :key="i"
-                      :die="die"
-                      class="trait-die-icon"
-                      :style="i ? { marginLeft: '-12px', marginTop: `${i * 4}px` } : null"
-                    />
+                  <div v-if="traitDiceGroups(t).length" class="trait-die-groups">
+                    <div v-for="(group, gi) in traitDiceGroups(t)" :key="gi" class="trait-die-group">
+                      <DieIcon
+                        v-for="(die, i) in group"
+                        :key="i"
+                        :die="die"
+                        class="trait-die-icon"
+                        :style="i ? { marginLeft: '-12px', marginTop: `${i * 4}px` } : null"
+                      />
+                    </div>
                   </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
                   <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
@@ -470,14 +472,24 @@ function resourceDisplay(t) {
   return t.rating || (t.dice ? t.dice.join(', ') : '')
 }
 
-function traitDice(t) {
-  // Die types to render as DieIcon. Resources/empty keep their text form
-  // (resources are committed/rolled separately — see P2.16).
+function traitDiceGroups(t) {
+  // Group the trait's dice by type so each type forms its own little
+  // staircase (e.g. 3d4 + 2d6 → [['d4','d4','d4'], ['d6','d6']]).
+  // Resources/empty keep their text form (resources — see P2.16).
   if (t.ratingType === 'RESOURCE' || t.ratingType === 'EMPTY') return []
-  const dice = t.dice || []
-  if (dice.length) return dice.map(d => d.toLowerCase())
-  if (t.dieType) return [t.dieType.toLowerCase()]
-  return []
+  const dice = t.dice && t.dice.length ? t.dice : (t.dieType ? [t.dieType] : [])
+  const groups = []
+  const byType = new Map()
+  for (const d of dice) {
+    const die = d.toLowerCase()
+    if (!byType.has(die)) {
+      const group = []
+      byType.set(die, group)
+      groups.push(group)
+    }
+    byType.get(die).push(die)
+  }
+  return groups
 }
 
 function isResourceDepleted(t) {
@@ -1711,7 +1723,12 @@ watch(() => props.externalPoolSources, (sources) => {
 .die-d10 { color: #4088d4; }
 .die-d12 { color: #40b860; }
 
-.trait-die-icons {
+.trait-die-groups {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.trait-die-group {
   display: flex;
   align-items: flex-start;
 }
