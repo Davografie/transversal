@@ -90,7 +90,10 @@
       <template v-else-if="result.pipeline === 'simplified'">
         <div class="result-line">
           {{ result.highest }} → <strong>{{ result.tier }}</strong>
-          <span v-if="result.effect_die"> (effect: {{ result.effect_die }})</span>
+          <span v-if="result.effect_die" class="effect-result">
+            <span class="effect-result-label">effect</span>
+            <DieIcon :die="result.effect_die" class="effect-result-icon" />
+          </span>
         </div>
       </template>
 
@@ -1190,6 +1193,9 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .result-line { font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .result-line strong { font-size: 24px; color: var(--accent); }
 .result-eff-icon { width: 28px; height: 32px; }
+.effect-result { display: flex; align-items: center; gap: 4px; }
+.effect-result-label { font-size: 11px; color: var(--text-dim); }
+.effect-result-icon { width: 24px; height: 26px; }
 
 .resolved-result {
   display: flex; align-items: center; justify-content: center; gap: 16px; padding: 8px 0;
