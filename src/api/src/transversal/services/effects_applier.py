@@ -305,6 +305,20 @@ def _parse_placeholder(target: str) -> Optional[tuple[str, Optional[str]]]:
     return (mode, _TARGET_KINDS.get(kind)) if kind else (mode, None)
 
 
+def is_choose_target(target: str) -> bool:
+    """True if ``target`` is a ``{choose_*}`` placeholder needing user resolution."""
+    parsed = _parse_placeholder(target or "")
+    return parsed is not None and parsed[0] == "choose"
+
+
+def choose_kind(target: str) -> Optional[str]:
+    """Return the picker kind for a ``{choose_kind}`` placeholder, or None."""
+    parsed = _parse_placeholder(target or "")
+    if parsed is None or parsed[0] != "choose":
+        return None
+    return parsed[1]
+
+
 def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo) -> Optional[str]:
     """Return a random in-scope candidate id for the given target kind.
 

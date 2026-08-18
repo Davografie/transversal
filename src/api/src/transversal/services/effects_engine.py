@@ -55,6 +55,18 @@ class ScheduledEffect:
     context: dict = field(default_factory=dict)
 
 
+@dataclass
+class EventOutcome:
+    """Result of processing an event through the effects engine.
+
+    ``applied`` are immediately-applied effects. ``pending`` are immediate
+    effects with a ``{choose_*}`` target that were skipped and need user
+    resolution before they can be applied.
+    """
+    applied: list[Effect] = field(default_factory=list)
+    pending: list[Effect] = field(default_factory=list)
+
+
 # ── Effect Application ───────────────────────────────
 
 EffectApplier = Callable[[Effect, str, str, dict], None]
@@ -97,17 +109,25 @@ class EffectsEngine:
         available_sfx_ids: list[str],
         razmerit_balance: int,
     ) -> list[Effect]:
-        """Process a game event against available SFXs.
+        """Process a game event, returning immediately-applied effects.
 
-        Args:
-            event: What happened (roll, complication, etc.)
-            available_sfx_ids: Which SFXs the entity has unlocked
-            razmerit_balance: Current razmerit for cost checking
-
-        Returns:
-            Immediately applied effects (deferred ones are queued internally).
+        Backward-compatible wrapper around :meth:`process_event_outcome`.
         """
-        applied: list[Effect] = []
+        return self.process_event_outcome(event, available_sfx_ids, razmerit_balance).applied
+
+    def process_event_outcome(
+        self,
+        event: GameEvent,
+        available_sfx_ids: list[str],
+        razmerit_balance: int,
+    ) -> EventOutcome:
+        """Process a game event, returning applied + pending effects.
+
+        Immediate effects with a ``{choose_*}`` target are not applied — they
+        are returned in ``outcome.pending`` so the caller can surface a choice.
+        Deferred effects are queued internally as before.
+        """
+        outcome = EventOutcome()
 
         for sfx_id in available_sfx_ids:
             sfx = self._sfx_registry.get(sfx_id)
@@ -132,7 +152,7 @@ class EffectsEngine:
                 if effect.type == "attune" and effect.action == "enable":
                     _effects_applier.effect_registry.apply(
                         effect, event.entity_id, event.universe, event.context)
-                    applied.append(effect)
+                    outcome.applied.append(effect)
                     if effect.timing != EffectTiming.IMMEDIATE:
                         disable = Effect(
                             timing=effect.timing, type="attune", action="disable",
@@ -151,8 +171,11 @@ class EffectsEngine:
                         ))
                     continue
                 if effect.timing == EffectTiming.IMMEDIATE:
-                    _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
-                    applied.append(effect)
+                    if _effects_applier.is_choose_target(effect.target or ""):
+                        outcome.pending.append(effect)
+                    else:
+                        _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
+                        outcome.applied.append(effect)
                 else:
                     self._schedule.append(
                         ScheduledEffect(
@@ -167,7 +190,7 @@ class EffectsEngine:
                         )
                     )
 
-        return applied
+        return outcome
 
     def _trigger_matches(self, sfx: SFX, event: GameEvent) -> bool:
         """Check if an SFX's trigger matches the event.

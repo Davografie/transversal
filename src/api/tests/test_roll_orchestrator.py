@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import transversal.services.roll_orchestrator as roll_orchestrator
+
 from transversal.domain import (
     ContestResult,
     ContestWinner,
@@ -13,7 +15,8 @@ from transversal.domain import (
     SFX,
     SimplifiedResult,
 )
-from transversal.services.effects_engine import EffectsEngine
+from transversal.services.effects_applier import choose_kind, is_choose_target
+from transversal.services.effects_engine import EffectsEngine, GameEvent
 from transversal.services.roll_orchestrator import fire_contest_sfx_auto, fire_roll_sfx
 
 
@@ -105,3 +108,44 @@ def test_fire_contest_sfx_auto_fires_per_side():
 
     applied = fire_contest_sfx_auto(engine, repo, result, "challenger", "defendant", "earth")
     assert sorted(a.action for a in applied) == ["step_down_die", "step_up_die"]
+
+
+def test_process_event_outcome_returns_pending_for_choose_target():
+    engine = EffectsEngine()
+    engine.register(SFX(
+        id="sfx-choose", name="Choose", trigger="on_success",
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                        action="gain", target="{choose_trait}")],
+    ))
+    event = GameEvent(type="on_roll", entity_id="e1", universe="earth", roll_result=_simplified())
+
+    outcome = engine.process_event_outcome(event, ["sfx-choose"], 10)
+    assert outcome.applied == []
+    assert [e.target for e in outcome.pending] == ["{choose_trait}"]
+
+
+def test_fire_roll_sfx_emits_choose_target_instead_of_applying(monkeypatch):
+    repo = Repo({"e1": SimpleNamespace(razmerit=10, sfx_ids=["sfx-choose"], current_projection=None)})
+    engine = EffectsEngine()
+    engine.register(SFX(
+        id="sfx-choose", name="Choose", trigger="on_success",
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                        action="gain", target="{choose_trait}")],
+    ))
+    emitted = []
+    monkeypatch.setattr(
+        roll_orchestrator, "_emit_pending_choices",
+        lambda entity_id, universe, effects: emitted.extend(effects),
+    )
+
+    applied = fire_roll_sfx(engine, repo, "e1", "earth", _simplified())
+    assert applied == []
+    assert [e.target for e in emitted] == ["{choose_trait}"]
+
+
+def test_is_choose_target_and_choose_kind():
+    assert is_choose_target("{choose_trait}") is True
+    assert is_choose_target("{random:location}") is False
+    assert is_choose_target("self") is False
+    assert choose_kind("{choose_trait}") == "trait"
+    assert choose_kind("self") is None

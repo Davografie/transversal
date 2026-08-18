@@ -4,16 +4,19 @@ The dice resolver stays stateless; these functions run *after* resolution and
 drive the effects engine using each entity's current SFX ownership + razmerit.
 
 Automatic SFX apply immediately (synchronously), before any consequence menu
-or next phase appears.
+or next phase appears. Immediate effects with a ``{choose_*}`` target are not
+applied blindly — they are emitted as a ``sfx_choice_required`` SSE event so the
+frontend can prompt the user and re-apply once resolved.
 """
 
 from __future__ import annotations
 
 from transversal.domain import ContestResult, RollResult
+from transversal.services import effects_applier
 from transversal.services.effects_engine import (
     EffectsEngine,
     GameEvent,
-    fire_contest_sfx as _effects_fire_contest_sfx,
+    contest_to_events,
 )
 from transversal.services.sfx_owner import get_available_sfx_ids
 
@@ -24,6 +27,34 @@ def _entity_sfx_context(repo, entity_id: str, universe: str) -> tuple[list[str],
     if entity is None:
         return [], 0
     return get_available_sfx_ids(entity_id, universe, repo), entity.razmerit
+
+
+def _emit_pending_choices(entity_id: str, universe: str, effects: list) -> None:
+    """Broadcast a ``sfx_choice_required`` SSE event for unresolved effects."""
+    if not effects:
+        return
+
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    choices = [
+        {
+            "kind": effects_applier.choose_kind(effect.target),
+            "scope": effect.target_scope,
+            "effect": effect.model_dump(),
+        }
+        for effect in effects
+    ]
+    for session in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="sfx_choice_required",
+            session_id=session.id,
+            data={
+                "entity_id": entity_id,
+                "universe": universe,
+                "choices": choices,
+            },
+        ))
 
 
 def fire_roll_sfx(
@@ -41,7 +72,9 @@ def fire_roll_sfx(
         universe=universe,
         roll_result=roll_result,
     )
-    return engine.process_event(event, sfx_ids, razmerit)
+    outcome = engine.process_event_outcome(event, sfx_ids, razmerit)
+    _emit_pending_choices(entity_id, universe, outcome.pending)
+    return outcome.applied
 
 
 def fire_contest_sfx_auto(
@@ -60,14 +93,21 @@ def fire_contest_sfx_auto(
     challenger_sfx, challenger_raz = _entity_sfx_context(repo, challenger_id, universe)
     defendant_sfx, defendant_raz = _entity_sfx_context(repo, defendant_id, universe)
 
-    return _effects_fire_contest_sfx(
-        engine,
-        result,
-        player_id=challenger_id,
-        opponent_id=defendant_id,
-        universe=universe,
-        player_sfx_ids=challenger_sfx,
-        opponent_sfx_ids=defendant_sfx,
-        player_razmerit=challenger_raz,
-        opponent_razmerit=defendant_raz,
-    )
+    applied: list = []
+    pending_by_entity: dict[str, list] = {}
+
+    for event in contest_to_events(result, challenger_id, defendant_id, universe):
+        if event.entity_id == challenger_id:
+            sfx_ids, raz = challenger_sfx, challenger_raz
+        else:
+            sfx_ids, raz = defendant_sfx, defendant_raz
+
+        outcome = engine.process_event_outcome(event, sfx_ids, raz)
+        applied.extend(outcome.applied)
+        if outcome.pending:
+            pending_by_entity.setdefault(event.entity_id, []).extend(outcome.pending)
+
+    for eid, effects in pending_by_entity.items():
+        _emit_pending_choices(eid, universe, effects)
+
+    return applied
