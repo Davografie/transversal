@@ -160,6 +160,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** P2.1, P2.7b
 - **Load:** `services/effects_engine.py` (`fire_contest_sfx`, `process_event`, `contest_to_events`), `api/rest/effects.py`, `services/effect_targets.py` + `services/effects_applier.py` (`resolve_choice`, pending choices), `domain/__init__.py` (`DieRoll`, `ContestResult.stakes`, `ContestWinner` — no tie), [[Pressure-Test Log]] § Scenario 4.
 
+### P2.8b — Backend + frontend: auto-fired `{choose_*}` SFX prompt
+- **Status:** pending
+- **What:** an auto-fired SFX whose effect has a `{choose_*}` target doesn't apply blindly — it surfaces a pending choice. Backend captures the `PendingChoice` and emits an SSE event (e.g. `sfx_choice_required`) for the acting entity; the effect is re-applied once the choice is resolved. Frontend listens for that SSE event and opens the existing choice dialog inline in the relevant component (DiceRoller / consequence surface), interrupting the user's flow.
+- **Done:** a `{choose_*}`-targeted auto-fired SFX produces an SSE prompt on the acting player's device; choosing a target resolves the pending choice and applies the effect — no manual `/effects/trigger` and no blind apply.
+- **Depends:** P2.8, P1.1, P1.3, P1.4
+- **Load:** `services/effects_applier.py` (`apply_effects`, `_resolve_target`, `PendingChoice`, `resolve_choice`), `services/roll_orchestrator.py` (`fire_roll_sfx`, `fire_contest_sfx_auto`), `api/sse/bus.py` + `stream.py` (add `sfx_choice_required`), `App.vue` / `components/DiceRoller.vue` + `composables/useSSE.js` (receive + prompt), `components/gm/EffectTargetWizard.vue` (reuse picker).
+- **Note:** the prompt must be asynchronous (SSE), not block the roll response — the player is on a separate device.
+
 ### P2.9 — Backend: condition-based SFX triggers
 - **Status:** pending
 - **What:** state-change triggers from the to-do Triggers list fire SFX: visiting a specified-location, creating a specified-relation, gaining a specified-trait, gaining from a specified-traitset, reaching a specified-rating.
