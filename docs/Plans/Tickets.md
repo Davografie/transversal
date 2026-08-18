@@ -154,7 +154,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** `TraitSetSetting` carries only `sfx_ids` here; its limit/sort-order/order fields are Phase 4, not this ticket. `ContestTracker.push_contest` becomes a `table`-owned SFX (follow-on). P3.3 (buy-hitch) consumes the `gm` owner.
 
 ### P2.8 — Backend: wire SFX triggers into the roll/contest flow
-- **Status:** pending
+- **Status:** done
 - **What:** `on_roll` / `on_complication` / `on_success` / `on_botch` (and contest win/loss) fire automatically.
 - **Done:** a roll/contest fires matching SFX without a manual `/effects/trigger` call.
 - **Depends:** P2.1, P2.7b
