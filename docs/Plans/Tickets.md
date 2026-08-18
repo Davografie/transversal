@@ -192,6 +192,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** folds P2.14. Give-in is available to either side once challenged and before resolution (the conceding side defines its own loss; an initiator give-in also blocks immediate re-initiation against the same opponent and earns the usual reward). Pool dice are **live references** to their source trait during assembly — a trait step up/down (e.g. an initiator SFX stepping the opponent's trait) re-syncs the matching die already in the open pool; once a side rolls/sets, the committed roll is frozen. `trait_updated` SSE must carry the trait-setting id + new rating so the client can re-sync.
 - **Load:** `services/contest_tracker.py` (contest phase/state + SSE), `api/rest/contest_pools.py` (`challenge`/`set`/`give-in`/`resolve`), `api/sse/*`, `components/DiceRoller.vue` (phase machine, tabs as the acting entity, set/give-in buttons), `App.vue`, `composables/useApi.js`, [[Pressure-Test Log]] § Scenario 4.
 
+### P2.10c — Backend + frontend: multi-die static traits
+- **Status:** pending
+- **What:** a static trait with a multi-die rating (e.g. `TraitSetting.dice = [d10, d10]`, like "Law of the Dao") contributes **all** of its dice to the pool, not just the first. Add/remove toggles all dice of that trait-setting id as a group, and the trait→pool re-sync updates every matching die together.
+- **Done:** adding a `[d10, d10]` static trait puts two `d10` pool dice in the pool (one `DieSpec` each, same `ts_id`); toggling removes both; a step up/down re-syncs the matching dice as a group.
+- **Depends:** P2.10b (pool/trait model), P2.7 (SceneStateStore + `resync_trait_die`)
+- **Note:** a pool die is a single `DieSpec` (per-die), so this is **not** a "string → array" change to the pool die. The work is: (1) `CharacterSheet.onTraitClick` emits the trait's full `dice` array; (2) `DiceRoller.addFromSheet`/`removeByTsId` toggle all dice sharing a `ts_id`; (3) `resync_trait_die`/`resyncTraitDie` re-sync all matching dice (and `trait_updated` should carry `new_dice`, not just `new_rating`). Resources remain P2.16.
+- **Load:** `components/CharacterSheet.vue` (`onTraitClick`, `resolvedDieType`), `components/DiceRoller.vue` (`addFromSheet`, `removeByTsId`, `resyncTraitDie`), `App.vue` (`trait_updated` routing), `services/scene_state.py` (`resync_trait_die` + `resync_pool_dice_for_trait`), `services/effects_commit.py` / `entity_manager.py` (`trait_updated` payload).
+
 ### P2.11 — Frontend: dice-pool styling per roll kind
 - **Status:** pending
 - **What:** the pool is visually distinguished by simple-test / cortex-test / challenger-contest / defendant-contest / roll-table.
