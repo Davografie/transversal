@@ -169,11 +169,12 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** the prompt must be asynchronous (SSE), not block the roll response — the player is on a separate device. The test-side prompt works today (test flow is live from P2.5b); the contest-side prompt is only exercisable end-to-end after P2.10 (play flow) — a sequencing note, not a hard build blocker, since the SSE handler + dialog are the same for both kinds.
 
 ### P2.9 — Backend: condition-based SFX triggers
-- **Status:** pending
+- **Status:** done
 - **What:** state-change triggers from the to-do Triggers list fire SFX: visiting a specified-location, creating a specified-relation, gaining a specified-trait, gaining from a specified-traitset, reaching a specified-rating.
 - **Done:** each condition is authored and evaluated via the existing `Condition` machinery, firing matching SFX on the state change.
 - **Depends:** P2.8
 - **Load:** to-do "Triggers", `services/conditions.py`, `domain/__init__.py` (`Condition`, `ConditionType`), `services/effects_engine.py` (`_trigger_matches`).
+- **Note:** trigger = event (`on_location_change` / `on_trait_change` / `on_relationship_create`); condition = filter (`AT_LOCATION` / `HAS_TRAIT` / `HAS_TRAIT_IN_TRAITSET` / `HAS_RELATIONSHIP` / `TRAIT_RATING` / `NARRATIVE`). `SFX.limit` folded into a NARRATIVE condition. Deferred: GraphQL `SfxInput`/`SfxRef` don't expose `conditions` yet (authoring still edits `limit`); direct `add_traitsetting` and `lifepath_executor` trait gains don't route through `fire_state_sfx`.
 
 ### P2.10 — Frontend: test & contest play flow (opponent + resolve wiring)
 - **Status:** pending
