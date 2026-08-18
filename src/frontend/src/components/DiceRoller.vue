@@ -482,7 +482,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -905,6 +905,20 @@ function clearPool() {
   challenged.value = false
   setPhase(Phase.ADDING)
   notifyPool()
+}
+
+function resyncTraitDie(traitSettingId, newRating) {
+  // After a trait step up/down, re-sync any open pool die that references it.
+  // Server is authoritative; this keeps the client's local pool in lockstep.
+  if (!/^d(4|6|8|10|12)$/.test(newRating || '')) return
+  let changed = false
+  for (const d of pool) {
+    if (d.tsId && d.tsId === traitSettingId && d.die !== newRating) {
+      d.die = newRating
+      changed = true
+    }
+  }
+  if (changed) notifyPool()
 }
 
 async function restorePool() {
