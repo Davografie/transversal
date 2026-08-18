@@ -383,13 +383,15 @@ class EntityManager:
         result = self.repo.update_traitsetting(ts)
         change_log.record(ts.entity_id, f"traitsetting.{ts.id}.dice", old_rating, dice_list_to_rating(ts.dice), session_id or "")
 
+        new_dice = [d.value for d in ts.dice]
         _publish_to_sessions(StreamEvent(
             event="trait_updated",
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
                   "trait_setting_id": ts.id, "old_rating": old_rating,
-                  "new_rating": dice_list_to_rating(ts.dice)},
+                  "new_rating": dice_list_to_rating(ts.dice),
+                  "new_dice": new_dice},
         ))
-        resync_pool_dice_for_trait(ts.entity_id, ts.id, dice_list_to_rating(ts.dice))
+        resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
         fire_state_sfx(ts.entity_id, None, "trait_updated",
                        {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
@@ -405,13 +407,15 @@ class EntityManager:
         result = self.repo.update_traitsetting(ts)
         change_log.record(ts.entity_id, f"traitsetting.{ts.id}.dice", old_rating, dice_list_to_rating(ts.dice), session_id or "")
 
+        new_dice = [d.value for d in ts.dice]
         _publish_to_sessions(StreamEvent(
             event="trait_updated",
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
                   "trait_setting_id": ts.id, "old_rating": old_rating,
-                  "new_rating": dice_list_to_rating(ts.dice)},
+                  "new_rating": dice_list_to_rating(ts.dice),
+                  "new_dice": new_dice},
         ))
-        resync_pool_dice_for_trait(ts.entity_id, ts.id, dice_list_to_rating(ts.dice))
+        resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
         fire_state_sfx(ts.entity_id, None, "trait_updated",
                        {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 

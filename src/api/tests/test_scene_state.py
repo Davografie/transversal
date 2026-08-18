@@ -70,7 +70,7 @@ class TestTraitResync:
             {"die": "d8", "source_kind": "trait", "source_id": "ts-x", "label": "Hacking", "ts_id": "ts-x"},
             {"die": "d6", "source_kind": "manual", "source_id": "", "label": "d6", "ts_id": None},
         ])
-        touched = store.resync_trait_die("kael-1", "ts-x", "d10")
+        touched = store.resync_trait_die("kael-1", "ts-x", ["d10"])
         assert touched == [("loc-1", "kael-1")]
         assert store.get_pool("loc-1", "kael-1")[0]["die"] == "d10"
         assert store.get_pool("loc-1", "kael-1")[1]["die"] == "d6"
@@ -78,15 +78,36 @@ class TestTraitResync:
     def test_resync_skips_other_entities(self, store):
         store.save_pool("loc-1", "kael-1", [{"die": "d8", "ts_id": "ts-x"}])
         store.save_pool("loc-1", "guard-1", [{"die": "d8", "ts_id": "ts-x"}])
-        touched = store.resync_trait_die("kael-1", "ts-x", "d10")
+        touched = store.resync_trait_die("kael-1", "ts-x", ["d10"])
         assert touched == [("loc-1", "kael-1")]
         assert store.get_pool("loc-1", "guard-1")[0]["die"] == "d8"
 
-    def test_resync_skips_multi_die_ratings(self, store):
+    def test_resync_multi_die_updates_each_matching_die_positionally(self, store):
         ss_module._store = store
-        store.save_pool("loc-1", "kael-1", [{"die": "d8", "ts_id": "ts-x"}])
-        ss_module.resync_pool_dice_for_trait("kael-1", "ts-x", "2d8 + 1d6")
-        assert store.get_pool("loc-1", "kael-1")[0]["die"] == "d8"
+        store.save_pool("loc-1", "kael-1", [
+            {"die": "d8", "ts_id": "ts-x"},
+            {"die": "d8", "ts_id": "ts-x"},
+        ])
+        ss_module.resync_pool_dice_for_trait("kael-1", "ts-x", ["d10", "d8"])
+        assert [d["die"] for d in store.get_pool("loc-1", "kael-1")] == ["d10", "d8"]
+
+    def test_resync_multi_die_maps_mixed_ratings(self, store):
+        ss_module._store = store
+        store.save_pool("loc-1", "kael-1", [
+            {"die": "d10", "ts_id": "ts-x"},
+            {"die": "d8", "ts_id": "ts-x"},
+        ])
+        ss_module.resync_pool_dice_for_trait("kael-1", "ts-x", ["d8", "d10"])
+        assert [d["die"] for d in store.get_pool("loc-1", "kael-1")] == ["d8", "d10"]
+
+    def test_resync_ignores_extra_matching_dice(self, store):
+        ss_module._store = store
+        store.save_pool("loc-1", "kael-1", [
+            {"die": "d8", "ts_id": "ts-x"},
+            {"die": "d8", "ts_id": "ts-x"},
+        ])
+        ss_module.resync_pool_dice_for_trait("kael-1", "ts-x", ["d10"])
+        assert [d["die"] for d in store.get_pool("loc-1", "kael-1")] == ["d10", "d8"]
 
 
 class TestSceneStateEndpoints:

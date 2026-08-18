@@ -867,7 +867,7 @@ watch(lastEvent, (evt) => {
     case 'trait_updated':
       // local patch handles display; SSE sync deferred
       if (evt.data?.entity_id === entityId.value && evt.data?.trait_setting_id) {
-        diceRef.value?.resyncTraitDie(evt.data.trait_setting_id, evt.data.new_rating)
+        diceRef.value?.resyncTraitDie(evt.data.trait_setting_id, evt.data.new_dice ?? [evt.data.new_rating])
       }
       if (gmMode.value && foreign) {
         const tName = evt.data?.trait_name || evt.data?.name || 'a trait'

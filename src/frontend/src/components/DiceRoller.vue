@@ -506,16 +506,21 @@ function setDifficulty(die) {
   notifyPool()
 }
 
-function addFromSheet({ die, source, label, tsId }) {
-  // Toggle: if the trait is in the pool, remove it; otherwise add it
-  const idx = pool.findIndex(d => d.tsId && d.tsId === tsId)
-  if (idx !== -1) {
-    pool.splice(idx, 1)
-  } else {
-    markPurpose('gmc')
-    pool.push({ die, source, label: label || source, tsId: tsId || null, sourceKind: 'trait' })
-    panelOpen.value = true
+function addFromSheet(payload) {
+  // Accept a single-die { die } payload or a multi-die { dice: [...] } payload.
+  const { source, label, tsId } = payload || {}
+  const dice = Array.isArray(payload?.dice) ? payload.dice : (payload?.die ? [payload.die] : [])
+  if (!dice.length) return
+  // Toggle: if the trait is already in the pool, remove all of its dice.
+  if (tsId != null && pool.some(d => d.tsId === tsId)) {
+    removeByTsId(tsId)
+    return
   }
+  markPurpose('gmc')
+  for (const die of dice) {
+    pool.push({ die, source, label: label || source, tsId: tsId ?? null, sourceKind: 'trait' })
+  }
+  panelOpen.value = true
   notifyPool()
 }
 
@@ -526,8 +531,14 @@ function removeBySource(source) {
 
 function removeByTsId(tsId) {
   if (!tsId) return
-  const idx = pool.findIndex(d => d.tsId === tsId)
-  if (idx !== -1) { pool.splice(idx, 1); notifyPool() }
+  let removed = false
+  for (let i = pool.length - 1; i >= 0; i--) {
+    if (pool[i].tsId === tsId) {
+      pool.splice(i, 1)
+      removed = true
+    }
+  }
+  if (removed) notifyPool()
 }
 
 const DIE_STEP = { d12: 'd10', d10: 'd8', d8: 'd6', d6: 'd4', d4: null }
@@ -975,15 +986,22 @@ function clearPool() {
   notifyPool()
 }
 
-function resyncTraitDie(traitSettingId, newRating) {
-  // After a trait step up/down, re-sync any open pool die that references it.
+function resyncTraitDie(traitSettingId, newDice) {
+  // After a trait step up/down, re-sync any open pool dice that reference it.
   // Server is authoritative; this keeps the client's local pool in lockstep.
-  if (!/^d(4|6|8|10|12)$/.test(newRating || '')) return
+  // `newDice` is the full post-change die array, mapped positionally so a
+  // multi-die static trait (e.g. [d10, d10]) re-syncs every matching die.
+  const dice = (Array.isArray(newDice) ? newDice : [newDice]).filter(d => /^d(4|6|8|10|12)$/.test(d || ''))
+  if (!dice.length) return
   let changed = false
+  let idx = 0
   for (const d of pool) {
-    if (d.tsId && d.tsId === traitSettingId && d.die !== newRating) {
-      d.die = newRating
-      changed = true
+    if (d.tsId && d.tsId === traitSettingId) {
+      if (idx < dice.length && d.die !== dice[idx]) {
+        d.die = dice[idx]
+        changed = true
+      }
+      idx++
     }
   }
   if (changed) notifyPool()

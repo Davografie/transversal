@@ -22,15 +22,17 @@ def _publish(event: str, data: dict) -> None:
 
 
 def _publish_trait_changed(ts, universe: str) -> None:
-    """Publish an enriched trait_updated + re-sync any assembled pool die."""
+    """Publish an enriched trait_updated + re-sync any assembled pool dice."""
     new_rating = dice_list_to_rating(ts.dice)
+    new_dice = [d.value for d in ts.dice]
     _publish("trait_updated", {
         "entity_id": ts.entity_id,
         "trait_id": ts.trait_id,
         "trait_setting_id": ts.id,
         "new_rating": new_rating,
+        "new_dice": new_dice,
     })
-    resync_pool_dice_for_trait(ts.entity_id, ts.id, new_rating)
+    resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
     fire_state_sfx(ts.entity_id, universe, "trait_updated",
                    {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 

@@ -435,6 +435,12 @@ async function onTraitClick(t) {
     fetchEntity()
   }
 
+  // Multi-die static traits contribute one pool die per rating entry.
+  if (t.ratingType === 'STATIC' && (t.dice || []).length > 1) {
+    emit('addToPool', { dice: t.dice.map(d => d.toLowerCase()), source: t.name, label: displayName(t.name), tsId: t.id })
+    return
+  }
+
   emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id })
 }
 

@@ -43,24 +43,32 @@ class SceneStateStore:
         """Clear every pool at a location (end of beat), keep difficulty."""
         self._pools.pop(location_id, None)
 
-    def resync_trait_die(self, entity_id: str, trait_setting_id: str, new_die: str) -> list[tuple[str, str]]:
-        """Update any assembled pool die referencing ``trait_setting_id``.
+    def resync_trait_die(self, entity_id: str, trait_setting_id: str, new_dice: list[str]) -> list[tuple[str, str]]:
+        """Update assembled pool dice referencing ``trait_setting_id``.
 
         A pool die is a live reference to its source trait until it is rolled.
         When the trait setting's rating changes, this re-syncs the still-open
-        pool die to ``new_die``.  Returns the (location_id, entity_id) pairs
-        that changed so the caller can broadcast.
+        pool dice to ``new_dice`` — positionally, so a multi-die static trait
+        (``[d10, d10]``) maps each new rating onto its matching pool die in
+        order.  Returns the (location_id, entity_id) pairs that changed so the
+        caller can broadcast.
         """
+        new_dice = [d for d in new_dice if _SINGLE_DIE.match(d or "")]
+        if not new_dice:
+            return []
         touched: list[tuple[str, str]] = []
         for location_id, pools in self._pools.items():
             dice = pools.get(entity_id)
             if not dice:
                 continue
+            idx = 0
             for d in dice:
-                if d.get("ts_id") == trait_setting_id and d.get("die") != new_die:
-                    d["die"] = new_die
-                    if (location_id, entity_id) not in touched:
-                        touched.append((location_id, entity_id))
+                if d.get("ts_id") == trait_setting_id:
+                    if idx < len(new_dice) and d.get("die") != new_dice[idx]:
+                        d["die"] = new_dice[idx]
+                        if (location_id, entity_id) not in touched:
+                            touched.append((location_id, entity_id))
+                    idx += 1
         return touched
 
     def list_entities(self, location_id: str) -> list[str]:
@@ -102,18 +110,17 @@ def get_scene_store() -> SceneStateStore:
 _SINGLE_DIE = re.compile(r"^d(4|6|8|10|12)$")
 
 
-def resync_pool_dice_for_trait(entity_id: str, trait_setting_id: str, new_rating: str) -> None:
+def resync_pool_dice_for_trait(entity_id: str, trait_setting_id: str, new_dice: list[str]) -> None:
     """Re-sync assembled pool dice after a trait setting's rating changes.
 
-    Server-authoritative: when a trait steps up/down, the matching die already
-    in a pool must follow.  Only single-die ratings (static traits) are handled
-    here — resource/multi-die ratings are a separate concern.  Broadcasts
-    ``pool_updated`` for each touched (location, entity) so clients re-sync.
+    Server-authoritative: when a trait steps up/down, the matching dice already
+    in a pool must follow.  ``new_dice`` is the full post-change die array (one
+    entry per pool die the trait contributes), mapped positionally onto the
+    pool dice sharing ``trait_setting_id``.  Broadcasts ``pool_updated`` for
+    each touched (location, entity) so clients re-sync.
     """
-    if not _SINGLE_DIE.match(new_rating or ""):
-        return
     store = get_scene_store()
-    touched = store.resync_trait_die(entity_id, trait_setting_id, new_rating)
+    touched = store.resync_trait_die(entity_id, trait_setting_id, new_dice)
     for location_id, eid in touched:
         from transversal.services.contest_tracker import broadcast_pool_change
         broadcast_pool_change(location_id, eid, dice=store.get_pool(location_id, eid), phase="adding")
