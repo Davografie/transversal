@@ -7,6 +7,7 @@ from transversal.domain import (
     CommittedResult,
     ContestWinner,
     DicePoolRequest,
+    DieRoll,
     DieSpec,
     DieType,
     Opposition,
@@ -273,6 +274,29 @@ class TestPoolPipeline:
         assert result.hitches == []
         assert result.botch is False
         assert result.razmerit_earned == 0
+
+    def test_pool_effect_die_skips_hitches(self, monkeypatch):
+        """A rolled-1 die (hitch) can't be auto-selected as the effect die."""
+        from transversal.services import dice_resolver as dr
+
+        rolls = iter([6, 7, 1])  # d8=6, d10=7, d12=1 → the d12 is a hitch
+        monkeypatch.setattr(
+            dr, "_roll_die",
+            lambda spec: DieRoll(**spec.model_dump(), result=next(rolls)),
+        )
+        request = DicePoolRequest(
+            entity_id="test-1",
+            universe="three_realms",
+            dice=[
+                (DieType.D8, "hacking"),
+                (DieType.D10, "intelligence"),
+                (DieType.D12, "distinction"),
+            ],
+        )
+        result = resolve(request)
+        assert isinstance(result, PoolResult)
+        # The d12 rolled a 1, so no non-hitch unused die remains → d4 fallback.
+        assert result.effect_die == DieType.D4
 
 
 class TestCompareCommitted:

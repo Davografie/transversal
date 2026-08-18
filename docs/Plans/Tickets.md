@@ -216,7 +216,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** to-do "Rolling dice animation" + "Replace [dX] with DieIcon.vue", `components/DieIcon.vue`, `components/DiceRoller.vue`, `components/CharacterSheet.vue`.
 
 ### P2.13 — Backend + frontend: exclude hitches from effect-die selection
-- **Status:** pending
+- **Status:** done
 - **What:** auto-selection (resolver + dice-pool UI) never picks a die that rolled a 1 as the effect die.
 - **Done:** the effect die can be chosen from leftover non-hitch dice (d4 fallback when none).
 - **Depends:** —

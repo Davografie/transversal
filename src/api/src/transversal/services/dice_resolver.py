@@ -187,10 +187,13 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     total = sum(r.result for r in kept)
     unused = sorted_rolls[2:]
 
-    # Effect die: choose from unused dice, preferring largest die type
-    if unused:
-        # Pick the largest die type from unused as effect die
-        effect_roll = max(unused, key=lambda r: r.die.max_value)
+    # Effect die: choose from unused dice, preferring the largest die type.
+    # Hitches (rolled 1s) can never be used as the effect die.
+    effect_candidates = unused
+    if request.hitches_apply:
+        effect_candidates = [r for r in unused if r.result != 1]
+    if effect_candidates:
+        effect_roll = max(effect_candidates, key=lambda r: r.die.max_value)
         effect_die = effect_roll.die
         effect_die_value = effect_roll.result
     else:
