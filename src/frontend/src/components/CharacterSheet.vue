@@ -464,6 +464,8 @@ function isInPool(t) {
 }
 
 function isKnown(t) {
+  // The GM sees every trait — fog of war (knownTo) only applies to players.
+  if (props.gmMode) return true
   if (!props.overrideEntityId || !props.viewerEntityId) return true
   if (props.overrideEntityId === props.entityId) return true
   return (t.knownTo || []).includes(props.viewerEntityId)

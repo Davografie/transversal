@@ -281,7 +281,7 @@ import { useApi } from './composables/useApi.js'
 import { usePanelBus } from './composables/usePanelBus.js'
 import ToastBar from './components/ToastBar.vue'
 
-const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat } = useApi()
+const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, listPools: apiListPools } = useApi()
 const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
@@ -689,7 +689,19 @@ async function refreshDifficulty() {
   currentDifficulty.value = res?.difficulty ?? null
 }
 
+async function seedRemotePools() {
+  if (!currentLocationId.value) return
+  const res = await apiListPools(currentLocationId.value)
+  const pools = res?.pools || {}
+  for (const [eid, dice] of Object.entries(pools)) {
+    if (eid !== entityId.value && dice && dice.length) {
+      remotePools.value = { ...remotePools.value, [eid]: { dice, player_id: eid, phase: 'adding' } }
+    }
+  }
+}
+
 watch(currentLocationId, refreshDifficulty, { immediate: true })
+watch(currentLocationId, seedRemotePools, { immediate: true })
 
 // ── Roll-table wiring (shared roller driven by LifePathWizard via bus) ──
 function onPoolChange(s) {
