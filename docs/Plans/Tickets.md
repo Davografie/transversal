@@ -24,7 +24,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 >
 > **Status values:** `done` · `pending` · `deferred` (the bottom section) · `abandoned` (superseded or wrong premise). Phase 1 (P1.1–P1.6) is `done`; everything later is `pending` until worked.
 >
-> **Current dice/contest conventions (post Phase 2):** a rolled die is a `DieSpec` (`die`, `source_kind`, `source_id`, `label`, `ts_id`) + `result`; `DicePoolRequest.dice` is `list[DieSpec]` (a validator still accepts legacy `(die, source)` tuples). `ContestResult` carries `kind` + `stakes`; `ContestWinner` has no tie value (ties favor the initiator). Pools + difficulty persist in `SceneStateStore` keyed `(location_id, player_id)`; `ContestTracker` still owns contest assembly/resolve.
+> **Current dice/contest conventions (post Phase 2):** a rolled die is a `DieSpec` (`die`, `source_kind`, `source_id`, `label`, `ts_id`) + `result`; `DicePoolRequest.dice` is `list[DieSpec]` (a validator still accepts legacy `(die, source)` tuples) and `DicePoolRequest.pipeline` can force `pool`/`simplified`. `ContestResult` carries `kind` + `stakes`; `ContestWinner` has no tie value (ties favor the initiator). Pools + difficulty persist in `SceneStateStore` keyed `(location_id, entity_id)`; `ContestTracker` holds only contest metadata (opposition/push/razmerit) and resolves by reading those pools. `pool_updated` / `difficulty_set` broadcast server-side on mutation.
 
 ## Phase 1 — Keystone: effect targeting & application
 
@@ -126,7 +126,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Status:** done
 - **What:** the GM rolls the opposition pool, picks the two dice that set the difficulty, and the player rolls against it on their own client (SSE in between).
 - **Done:** `DiceRoller` is role-aware (`gmMode`): GM mode rolls the opposition pool and picks two via the result slots, publishing the difficulty over SSE (`difficulty_set`); player mode receives it and rolls against `static_difficulty`. Simplified pipeline returns `opposition_total` for static difficulty.
-- **Note:** difficulty is ephemeral (session-scoped SSE) until P2.7; a pure 2-die difficulty (no trait die) routes through simplified and won't show the result slots — the Cortex-normal opposition pool is 2 difficulty dice + ≥1 trait die.
+- **Note:** difficulty is ephemeral (session-scoped) until P2.7. A pure 2-die difficulty now forces the pool pipeline via `DicePoolRequest.pipeline` (option A) so the GM always gets the keep-two result slots; the GM's roll purpose is chosen by how the pool starts (generic dice → difficulty, trait → GMC roll).
 - **Depends:** P2.5
 - **Load:** `services/dice_resolver.py` (`_resolve_simplified` static_difficulty), `domain/__init__.py` (SimplifiedResult.opposition_total), `components/DiceRoller.vue` (`gmMode`/`difficulty`), `App.vue` (`difficulty_set`), `composables/useSSE.js`.
 
@@ -139,10 +139,10 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 
 ### P2.7 — Backend + frontend: dice pool persistence (server-side, in-memory)
 - **Status:** done
-- **What:** an assembled pool survives refresh and same-user device switch. Server-side in-memory store keyed by `(location_id, player_id)` — not entity. Dice carry a minimal, extensible source (`source_kind` / `source_id` / `label`). Also stores the current difficulty.
+- **What:** an assembled pool survives refresh and same-user device switch. Server-side in-memory store keyed by `(location_id, entity_id)`. Dice carry a minimal, extensible source (`source_kind` / `source_id` / `label`). Also stores the current difficulty.
 - **Done:** `SceneStateStore` + REST (`scene_state.py`) hold pools + difficulty; the roller saves on change and restores on mount/reconnect; App.vue round-trips the difficulty.
 - **Depends:** —
-- **Design:** separate the *dice pool* from the *contest state*. `ContestTracker` still conflates them (`PoolAssembly` bundles dice + opposition + pushed); later contest work should shrink it to opposition/push pointers into this store.
+- **Note:** keying flipped from player to entity in P2.10 (per-entity tabs + entity-vs-entity contests require it; cross-device continuity still holds via the stable player→entity claim). `ContestTracker` now holds only contest metadata (opposition / push / razmerit) and reads dice from this store — the earlier `PoolAssembly` conflation was removed.
 - **Load:** `services/scene_state.py`, `api/rest/scene_state.py`, `components/DiceRoller.vue` (`persistPool`/`restorePool`), `App.vue` (`refreshDifficulty`), `composables/useApi.js`.
 
 ### P2.7b — Backend: SFX ownership model
@@ -177,11 +177,12 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** trigger = event (`on_location_change` / `on_trait_change` / `on_relationship_create`); condition = filter (`AT_LOCATION` / `HAS_TRAIT` / `HAS_TRAIT_IN_TRAITSET` / `HAS_RELATIONSHIP` / `TRAIT_RATING` / `NARRATIVE`). `SFX.limit` folded into a NARRATIVE condition. Deferred: GraphQL `SfxInput`/`SfxRef` don't expose `conditions` yet (authoring still edits `limit`); direct `add_traitsetting` and `lifepath_executor` trait gains don't route through `fire_state_sfx`.
 
 ### P2.10 — Frontend: test & contest play flow (opponent + resolve wiring)
-- **Status:** pending
-- **What:** the client runs both roll kinds end-to-end. Tests: GM sets difficulty on their device → player rolls against it on theirs → verdict (P2.5b landed the two-device flow; this ticket verifies it round-trips with P2.7 persistence and resolves the pure 2-die picker edge case). Contests: a challenger designates an opponent, both sides assemble a pool, the client calls `/resolve`, and the verdict (winner, both totals, effect dice, `stakes`) renders with a give-in hook. Wires the contest-tracker REST (`set-opposition`, `resolve`) into `useApi.js` and the DiceRoller/App flow — the client has no contest methods today.
-- **Done:** a player can run a test against a GM-set difficulty and a two-sided contest against a designated opponent entirely through the client (no manual REST/GraphQL).
+- **Status:** done
+- **What:** the client runs both roll kinds end-to-end. Tests: GM sets difficulty on their device → player rolls against it on theirs → verdict (a pure 2-die difficulty now forces the pool pipeline so the GM always gets keep-two). Contests: a challenger designates an opponent, both sides assemble a pool, the client calls `/resolve`, and the verdict (winner, both totals, effect dice, `stakes`) renders.
+- **Done:** a player can run a test against a GM-set difficulty and a two-sided contest against a designated opponent entirely through the client (no manual REST/GraphQL). DiceRoller gains per-entity pool tabs (read-only others), a contest opponent dropdown + resolve + verdict, and entity-keyed persistence; `pool_updated` / `difficulty_set` broadcast server-side.
 - **Depends:** P2.4, P2.5b
-- **Load:** `composables/useApi.js` (contest-tracker methods — none exist yet), `api/rest/contest_pools.py` (`set-opposition`, `resolve`, 409 guard), `services/contest_tracker.py` (`can_resolve`, `get_contestants`, `resolve`), `components/DiceRoller.vue`, `App.vue` (SSE `roll_result`, difficulty round-trip).
+- **Note:** follow-ons — the defendant sees the contest verdict only via the `roll_result` SSE summary (full cross-device verdict render is polish); GM-as-contestant (rolling a specific GMC) is not yet wired; give-in is P2.14; test `roll_result` is still client-published (a server-side roll broadcast can land separately).
+- **Load:** `composables/useApi.js` (`setOpposition`/`resolveContest`/`listPools`), `api/rest/contest_pools.py` + `scene_state.py`, `services/contest_tracker.py` + `scene_state.py`, `services/dice_resolver.py` (`pipeline` hint), `components/DiceRoller.vue`, `App.vue`.
 
 ### P2.11 — Frontend: dice-pool styling per roll kind
 - **Status:** pending
