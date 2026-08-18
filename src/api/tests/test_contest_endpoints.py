@@ -1,9 +1,4 @@
-"""Tests for the contest-pool REST endpoints.
-
-Verifies the resolve endpoint returns the full ContestResult (rolls +
-effect dice + stakes), not a stripped summary.  Pools are stored via the
-scene-state endpoint; contest endpoints own opposition + resolution.
-"""
+"""Tests for the manual contest REST endpoints (challenge / set / give-in)."""
 
 import pytest
 from fastapi import FastAPI
@@ -28,8 +23,7 @@ def client():
     return TestClient(app)
 
 
-def _add_dice(client, location_id, entity_id, dice):
-    """Save a full pool via the scene-state endpoint."""
+def _save_pool(client, location_id, entity_id, dice):
     wire = [
         {"die": die, "source_kind": "manual", "source_id": source, "label": source, "ts_id": None}
         for die, source in dice
@@ -38,44 +32,42 @@ def _add_dice(client, location_id, entity_id, dice):
     assert r.status_code == 200, r.text
 
 
-class TestResolveEndpoint:
-    def test_resolve_returns_full_rolls_and_effect_dice(self, client):
-        _add_dice(client, "loc-1", "kael", [
-            ("d10", "intelligence"),
-            ("d8", "hacking"),
-            ("d8", "distinction"),
-        ])
-        _add_dice(client, "loc-1", "guard", [
-            ("d8", "agility"),
-            ("d6", "awareness"),
-            ("d6", "wary"),
-        ])
-        r = client.post(
-            "/api/v1/locations/loc-1/pools/kael/set-opposition",
-            json={"opponent_id": "guard"},
-        )
+class TestManualContestFlow:
+    def test_challenge_then_set_both_resolves(self, client):
+        _save_pool(client, "loc-1", "kael", [("d10", "intelligence"), ("d8", "hacking"), ("d8", "distinction")])
+        _save_pool(client, "loc-1", "guard", [("d8", "agility"), ("d6", "awareness"), ("d6", "wary")])
+
+        r = client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
         assert r.status_code == 200, r.text
 
-        r = client.post("/api/v1/locations/loc-1/pools/kael/resolve")
+        # Challenger commits first → waiting.
+        r = client.post("/api/v1/locations/loc-1/pools/kael/set", json={"total": 15, "effect_die": "d8", "pipeline": "pool"})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"status": "waiting"}
+
+        # Defendant commits → auto-resolves.
+        r = client.post("/api/v1/locations/loc-1/pools/guard/set", json={"total": 10, "effect_die": "d6", "pipeline": "pool"})
         assert r.status_code == 200, r.text
         data = r.json()
+        assert data["winner"] == "player"  # 15 > 10, challenger wins
+        assert data["challenger"]["total"] == 15
+        assert data["defendant"]["total"] == 10
+        assert data["stakes"] == "d6"
 
-        assert data["kind"] == "contest"
-        assert data["winner"] in ("player", "opponent")
-        assert "stakes" in data
+    def test_give_in(self, client):
+        _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
+        _save_pool(client, "loc-1", "guard", [("d8", "agility")])
+        client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
 
-        for side in ("player_result", "opponent_result"):
-            side_data = data[side]
-            assert side_data["pipeline"] == "pool"
-            assert len(side_data["rolls"]) == 3
-            assert side_data["total"] is not None
-            assert side_data["effect_die"] in ("d4", "d6", "d8", "d10", "d12")
+        r = client.post("/api/v1/locations/loc-1/pools/guard/give-in")
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["winner"] == "player"  # defendant gave in → challenger wins
+        assert data["gave_in"] == "opponent"
 
-    def test_resolve_409_without_both_pools(self, client):
-        _add_dice(client, "loc-1", "kael", [("d10", "intelligence")])
-        client.post(
-            "/api/v1/locations/loc-1/pools/kael/set-opposition",
-            json={"opponent_id": "guard"},
-        )
-        r = client.post("/api/v1/locations/loc-1/pools/kael/resolve")
-        assert r.status_code == 409
+    def test_set_without_challenge_returns_waiting(self, client):
+        _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
+        r = client.post("/api/v1/locations/loc-1/pools/kael/set", json={"total": 9, "pipeline": "pool"})
+        assert r.status_code == 200, r.text
+        # No opponent designated → still waiting (can't resolve).
+        assert r.json() == {"status": "waiting"}

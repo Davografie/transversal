@@ -14,6 +14,7 @@ from typing import Optional
 
 from transversal.domain import (
     ChallengeResult,
+    CommittedResult,
     ContestResult,
     ContestWinner,
     DicePoolRequest,
@@ -380,3 +381,28 @@ def resolve_contest(
         player_result=player_result,
         opponent_result=opponent_result,
     )
+
+
+def compare_committed(
+    challenger: CommittedResult,
+    defendant: CommittedResult,
+) -> ContestWinner:
+    """Compare two committed contest results and declare a winner.
+
+    No dice are rolled — both sides already rolled and picked on their own
+    clients.  Ties favor the challenger (initiator).
+    """
+    challenger_pool = challenger.pipeline == "pool"
+    defendant_pool = defendant.pipeline == "pool"
+
+    if challenger_pool and defendant_pool:
+        return _resolve_contest_winner_pool(challenger.total, defendant.total)
+    if not challenger_pool and not defendant_pool:
+        return _resolve_contest_winner(
+            challenger.tier or OutcomeTier.FAIL,
+            defendant.tier or OutcomeTier.FAIL,
+            challenger.total,
+            defendant.total,
+        )
+    # Mixed: the simplified side's highest is already stored in ``total``.
+    return _resolve_contest_winner_pool(challenger.total, defendant.total)

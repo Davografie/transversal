@@ -4,6 +4,8 @@ import pytest
 
 from transversal.domain import (
     ChallengeResult,
+    CommittedResult,
+    ContestWinner,
     DicePoolRequest,
     DieSpec,
     DieType,
@@ -17,6 +19,7 @@ from transversal.services.dice_resolver import (
     _determine_tier,
     _is_botch,
     _resolve_challenge,
+    compare_committed,
     resolve,
     resolve_contest,
 )
@@ -270,6 +273,28 @@ class TestPoolPipeline:
         assert result.hitches == []
         assert result.botch is False
         assert result.razmerit_earned == 0
+
+
+class TestCompareCommitted:
+    def test_pool_higher_total_wins(self):
+        challenger = CommittedResult(total=15, effect_die=DieType.D8, pipeline="pool")
+        defendant = CommittedResult(total=10, effect_die=DieType.D6, pipeline="pool")
+        assert compare_committed(challenger, defendant) == ContestWinner.PLAYER
+
+    def test_pool_tie_favors_challenger(self):
+        challenger = CommittedResult(total=12, pipeline="pool")
+        defendant = CommittedResult(total=12, pipeline="pool")
+        assert compare_committed(challenger, defendant) == ContestWinner.PLAYER
+
+    def test_simplified_higher_tier_wins(self):
+        challenger = CommittedResult(total=8, tier=OutcomeTier.SUCCESS, pipeline="simplified")
+        defendant = CommittedResult(total=9, tier=OutcomeTier.MARGINAL, pipeline="simplified")
+        assert compare_committed(challenger, defendant) == ContestWinner.PLAYER
+
+    def test_mixed_pool_vs_simplified(self):
+        challenger = CommittedResult(total=7, pipeline="pool")
+        defendant = CommittedResult(total=9, tier=OutcomeTier.SUCCESS, pipeline="simplified")
+        assert compare_committed(challenger, defendant) == ContestWinner.OPPONENT
 
     def test_pool_effect_die_from_unused(self):
         request = DicePoolRequest(

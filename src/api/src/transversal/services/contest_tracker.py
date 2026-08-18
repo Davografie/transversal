@@ -11,8 +11,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from transversal.domain import ContestResult, DicePoolRequest
-from transversal.services.dice_resolver import resolve_contest
+from transversal.domain import (
+    CommittedResult,
+    ContestOutcome,
+    ContestResult,
+    ContestWinner,
+    DicePoolRequest,
+)
+from transversal.services.dice_resolver import compare_committed, resolve_contest
 
 
 @dataclass
@@ -20,7 +26,8 @@ class ContestState:
     """Contest metadata for one entity at one location.
 
     The actual dice are stored in the scene store under the same
-    ``(location_id, entity_id)`` key.
+    ``(location_id, entity_id)`` key.  ``committed`` is this side's frozen
+    result once they roll + pick and press Set.
     """
 
     entity_id: str
@@ -29,6 +36,8 @@ class ContestState:
     opposition_entity_id: Optional[str] = None
     pushed_this_beat: bool = False
     razmerit_spent: int = 0
+    committed: Optional[CommittedResult] = None
+    gave_in: bool = False
 
 
 @dataclass
@@ -66,9 +75,14 @@ class ContestTracker:
     def set_opposition(
         self, location_id: str, entity_id: str, opponent_id: str, universe: str
     ) -> ContestState:
-        """Designate an opponent for the entity at this location."""
+        """Designate an opponent for the entity at this location (the challenge).
+
+        Ensures the defendant has a contest state too, so either side can
+        later commit a result or give in.
+        """
         state = self.get_or_create(location_id, entity_id, universe)
         state.opposition_entity_id = opponent_id
+        self.get_or_create(location_id, opponent_id, universe)
         return state
 
     def set_pushed(self, location_id: str, entity_id: str) -> None:
@@ -183,6 +197,66 @@ class ContestTracker:
         result = resolve_contest(challenger_req, defendant_req)
         result.pushed = challenger.pushed_this_beat
         return result
+
+    # ── Manual (concurrent) contest flow ────────────────
+
+    def set_result(
+        self,
+        location_id: str,
+        entity_id: str,
+        committed: CommittedResult,
+    ) -> Optional[ContestOutcome]:
+        """Commit one side's rolled+picked result.
+
+        When both sides have committed, returns the outcome; otherwise None
+        (waiting for the other side).  The committed result is frozen.
+        """
+        challenger, defendant = self.get_contestants(location_id, entity_id)
+        if challenger is None or defendant is None:
+            return None
+
+        if entity_id == challenger.entity_id:
+            challenger.committed = committed
+        else:
+            defendant.committed = committed
+
+        if challenger.committed is not None and defendant.committed is not None:
+            return self._outcome(challenger, defendant, gave_in=None)
+        return None
+
+    def give_in(self, location_id: str, entity_id: str) -> Optional[ContestOutcome]:
+        """Concede the contest — the other side wins."""
+        challenger, defendant = self.get_contestants(location_id, entity_id)
+        if challenger is None or defendant is None:
+            return None
+        if entity_id == challenger.entity_id:
+            return self._outcome(challenger, defendant, gave_in=ContestWinner.PLAYER)
+        return self._outcome(challenger, defendant, gave_in=ContestWinner.OPPONENT)
+
+    def _outcome(
+        self,
+        challenger: ContestState,
+        defendant: ContestState,
+        gave_in: Optional[ContestWinner],
+    ) -> ContestOutcome:
+        if gave_in == ContestWinner.PLAYER:
+            challenger.gave_in = True
+            winner = ContestWinner.OPPONENT
+        elif gave_in == ContestWinner.OPPONENT:
+            defendant.gave_in = True
+            winner = ContestWinner.PLAYER
+        else:
+            winner = compare_committed(challenger.committed, defendant.committed)  # type: ignore[arg-type]
+
+        stakes = defendant.committed.effect_die if defendant.committed else None
+        return ContestOutcome(
+            winner=winner,
+            challenger=challenger.committed,
+            defendant=defendant.committed,
+            stakes=stakes,
+            gave_in=gave_in,
+            pushed=challenger.pushed_this_beat,
+        )
 
     def push_contest(
         self, location_id: str, entity_id: str, scene_store, new_dice: list[dict]

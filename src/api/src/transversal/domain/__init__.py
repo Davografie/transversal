@@ -248,6 +248,33 @@ class ContestResult(BaseModel):
     push_cost: int = 1
 
 
+class CommittedResult(BaseModel):
+    """One side's committed contest result (after rolling + picking).
+
+    ``total`` is the pool total, or the highest die for a simplified side.
+    ``tier`` is the outcome tier for simplified sides.  A committed result
+    is frozen — further trait changes don't touch it.
+    """
+    total: int
+    effect_die: Optional[DieType] = None
+    tier: Optional[OutcomeTier] = None
+    pipeline: str = "pool"  # "pool" | "simplified"
+
+
+class ContestOutcome(BaseModel):
+    """The outcome of a manual contest after both sides commit (or give in).
+
+    ``gave_in`` records which side conceded (``ContestWinner.PLAYER`` means
+    the challenger gave in); the other side is the winner.
+    """
+    winner: ContestWinner
+    challenger: Optional[CommittedResult] = None
+    defendant: Optional[CommittedResult] = None
+    stakes: Optional[DieType] = None
+    gave_in: Optional[ContestWinner] = None
+    pushed: bool = False
+
+
 # ── Registry: Traits ──────────────────────────────────
 
 class SubTraitRef(BaseModel):
