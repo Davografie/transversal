@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :remote-pools="remotePools" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -404,7 +404,8 @@ function onMoved(data) {
   fetchPeers()
 }
 
-const entityId = ref(localStorage.getItem('entityId') || 'kael-1')
+const selfEntityId = ref(localStorage.getItem('entityId') || 'kael-1')  // stable identity (SSE/login); for GM this is not a "main" entity
+const entityId = ref(selfEntityId.value)  // perspective entity; null = GM free-roam view
 const editZones = ref(false)
 
 // When switching entities, update location (players only — for GM, entityId
@@ -711,10 +712,47 @@ function onPoolChange(s) {
   sheetRef.value?.setPoolSources(s)
 }
 
+async function switchPerspective(id) {
+  if (!id) return
+  let targetLoc = null
+  try {
+    const data = await graphql(`query($id: ID!) { entity(id: $id) { currentLocation } }`, { id })
+    targetLoc = data?.entity?.currentLocation || null
+  } catch {}
+  const sameLocation = targetLoc != null && targetLoc === currentLocationId.value
+  entityId.value = id
+  actingEntityId.value = id
+  if (!sameLocation) await initLocation()
+}
+
+async function setViewLocation(locId) {
+  if (!locId) return
+  currentLocationId.value = locId
+  locationName.value = locId
+  try {
+    const r = await fetch(`/api/v1/locations/${locId}/navigate`)
+    const nav = await r.json()
+    locationName.value = nav.location?.name || locId
+  } catch {}
+  fetchLocationBg()
+  fetchPeers()
+}
+
+async function switchViewLocation(locId) {
+  if (!locId) return
+  entityId.value = null
+  actingEntityId.value = null
+  await setViewLocation(locId)
+}
+
+function returnToSelf() {
+  entityId.value = selfEntityId.value
+  actingEntityId.value = null
+}
+
 function onInspectEntity(id) {
   if (gmMode.value) {
-    entityId.value = id
-    actingEntityId.value = id
+    switchPerspective(id)
   } else {
     viewingEntityId.value = id
   }
@@ -724,13 +762,8 @@ function onInspectEntity(id) {
 
 function onPeerClick(id) {
   if (gmMode.value) {
-    if (actingEntityId.value === id) {
-      actingEntityId.value = null
-      entityId.value = selfEntityId.value
-    } else {
-      actingEntityId.value = id
-      entityId.value = id
-    }
+    if (actingEntityId.value === id) returnToSelf()
+    else switchPerspective(id)
   } else {
     viewingEntityId.value = (viewingEntityId.value === id) ? null : id
   }
@@ -739,13 +772,8 @@ function onPeerClick(id) {
 
 function onActingEntityChange(id) {
   if (!gmMode.value) return
-  if (id) {
-    actingEntityId.value = id
-    entityId.value = id
-  } else {
-    actingEntityId.value = null
-    entityId.value = selfEntityId.value
-  }
+  if (id) switchPerspective(id)
+  else returnToSelf()
 }
 
 function onDiceRolled(result) {
@@ -785,9 +813,11 @@ function onRollTableResolved(outcome) {
 let offRollTablePrepare = null
 let offRollTableResolved = null
 let offCanvasOpenFull = null
+let offSwitchPerspective = null
+let offSwitchViewLocation = null
 
-// SSE — live state sync
-const { connected, lastEvent, error } = useSSE(sessionId, entityId)
+// SSE — live state sync (subscribe with the stable identity; free-roam has no perspective entity)
+const { connected, lastEvent, error } = useSSE(sessionId, computed(() => entityId.value || selfEntityId.value))
 
 // Architect toast notifications
 const { toasts, addToast, dismissToast } = useToasts()
@@ -994,8 +1024,7 @@ let closeTimer = null
 
 const currentPoolSources = ref([])
 const viewingEntityId = ref(null)
-const actingEntityId = ref(null)  // GM: entity being acted as (null = difficulty roller)
-const selfEntityId = ref(localStorage.getItem('entityId') || 'kael-1')  // GM's fallback perspective
+const actingEntityId = ref(null)  // GM: entity being acted as (null = difficulty/free-roam)
 const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')
@@ -1055,6 +1084,8 @@ onMounted(() => {
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
   offRollTableResolved = bus.on('roll-table:resolved', onRollTableResolved)
   offCanvasOpenFull = bus.on('canvas:open-full', (payload) => { fullCanvas.value = payload })
+  offSwitchPerspective = bus.on('switch-perspective', (id) => switchPerspective(id))
+  offSwitchViewLocation = bus.on('switch-view-location', (locId) => switchViewLocation(locId))
   DIAG.mark('onMounted', { showLoginOverlay: showLoginOverlay.value, playerId: playerId.value, entityId: entityId.value, sessionId: sessionId.value, gmMode: gmMode.value })
   // Dump full diagnostic timeline after init settles
   setTimeout(() => {
@@ -1072,6 +1103,8 @@ onUnmounted(() => {
   if (offRollTablePrepare) offRollTablePrepare()
   if (offRollTableResolved) offRollTableResolved()
   if (offCanvasOpenFull) offCanvasOpenFull()
+  if (offSwitchPerspective) offSwitchPerspective()
+  if (offSwitchViewLocation) offSwitchViewLocation()
 })
 
 // Re-sync closed position when sheet visibility changes while wrapper is closed

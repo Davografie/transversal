@@ -611,6 +611,7 @@ const QUERY = `
 
 async function fetchEntity() {
   const id = props.overrideEntityId || props.entityId
+  if (!id) return
   const data = await graphql(QUERY, { id })
   if (data?.entity) {
     entity.value = data.entity

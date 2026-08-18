@@ -235,6 +235,7 @@ const props = defineProps({
   sfxChoiceRequest: { type: Array, default: () => [] }, // pending {choose_*} auto-fired SFX choices
   peers: { type: Array, default: () => [] }, // [{ id, name }] other entities at the location
   actingEntityId: { type: String, default: '' }, // entity being acted on (GM switchable; player = self)
+  fallbackEntityId: { type: String, default: '' }, // GM's stable identity for difficulty/free-roam rolls
   remotePools: { type: Object, default: () => ({}) }, // entity_id → { dice, phase } from SSE
 })
 
@@ -288,7 +289,7 @@ const tabEntities = computed(() => {
   }
   return list
 })
-const editingEntityId = computed(() => props.actingEntityId || props.entityId)
+const editingEntityId = computed(() => props.actingEntityId || props.fallbackEntityId || props.entityId)
 const isEditing = computed(() => {
   if (props.gmMode) {
     return props.actingEntityId

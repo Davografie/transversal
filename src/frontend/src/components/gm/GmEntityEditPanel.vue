@@ -7,6 +7,7 @@
     />
     <div v-if="form.type === 'LOCATION' || form.type === 'GMC'" class="canvas-open-row">
       <button class="section-btn" @click="openCanvas">🗺 Open in Canvas</button>
+      <button v-if="form.type === 'LOCATION'" class="section-btn" @click="emit('go-to-location')">📍 Go to this location</button>
     </div>
     <div class="image-gallery">
       <div class="gallery-header">
@@ -242,7 +243,7 @@ const props = defineProps({
   entityId: { type: String, default: null },
 })
 
-const emit = defineEmits(['switch-to-sheet', 'image-open'])
+const emit = defineEmits(['switch-to-sheet', 'image-open', 'go-to-location'])
 
 // ── Sub-panel openers ───────────────────────────────
 function openLoraConfig() {

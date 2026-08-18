@@ -143,6 +143,7 @@ function openEntityEdit() {
     listeners: {
       'switch-to-sheet': switchToSheet,
       'image-open': onImageOpen,
+      'go-to-location': () => bus.emit('switch-view-location', selectedId.value),
     },
   })
 }
@@ -158,12 +159,8 @@ function switchToSheet() {
 }
 
 function inspectEntity(id) {
-  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
-  panel.open({
-    component: CharacterSheet,
-    title: 'Character Sheet',
-    props: { entityId: id, universe: props.universe, embedded: true, gmMode: true },
-  })
+  // Scene overview click → assume this character (perspective switch), not a sheet peek.
+  bus.emit('switch-perspective', id)
 }
 
 function startCreate() {
