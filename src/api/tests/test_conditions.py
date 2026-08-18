@@ -59,6 +59,18 @@ def test_has_trait():
     assert not evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT, target="medicine"), repo)
 
 
+def test_has_trait_in_traitset():
+    repo = FakeRepo(traitsettings=[_ts("iron-will")])  # _ts uses traitset_id "ts-x"
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT_IN_TRAITSET, target="ts-x"), repo)
+    assert not evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT_IN_TRAITSET, target="ts-y"), repo)
+
+
+def test_trait_rating_reached():
+    repo = FakeRepo(traitsettings=[_ts("iron-will")])  # d6
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.TRAIT_RATING, target="iron-will", value="d6"), repo)
+    assert not evaluate_condition(_entity(), Condition(type=ConditionType.TRAIT_RATING, target="iron-will", value="d8"), repo)
+
+
 def test_has_relationship():
     repo = FakeRepo(related=[{"id": "char-2"}])
     assert evaluate_condition(_entity(), Condition(type=ConditionType.HAS_RELATIONSHIP, target="char-2"), repo)

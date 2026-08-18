@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import transversal.services.roll_orchestrator as roll_orchestrator
 
 from transversal.domain import (
+    Condition,
+    ConditionType,
     ContestResult,
     ContestWinner,
     DieRoll,
@@ -149,3 +151,20 @@ def test_is_choose_target_and_choose_kind():
     assert is_choose_target("self") is False
     assert choose_kind("{choose_trait}") == "trait"
     assert choose_kind("self") is None
+
+
+def test_fire_roll_sfx_gated_by_condition():
+    repo = Repo({"e1": SimpleNamespace(razmerit=10, sfx_ids=["sfx-cond"], current_projection=None, current_location="loc-a")})
+    engine = EffectsEngine()
+    engine.register(SFX(
+        id="sfx-cond", name="Cond", trigger="on_success",
+        conditions=[Condition(type=ConditionType.AT_LOCATION, target="loc-a")],
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                        action="step_up_die", target="next")],
+    ))
+
+    assert len(fire_roll_sfx(engine, repo, "e1", "earth", _simplified())) == 1
+
+    # Wrong location -> condition gates it out.
+    repo.entities["e1"].current_location = "loc-b"
+    assert fire_roll_sfx(engine, repo, "e1", "earth", _simplified()) == []

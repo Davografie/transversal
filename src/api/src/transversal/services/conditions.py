@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from transversal.domain import Condition, ConditionType, Entity
+from transversal.domain import Condition, ConditionType, DieType, Entity
 
 if TYPE_CHECKING:
     from transversal.db.repository import EntityRepository
@@ -22,6 +22,22 @@ def evaluate_condition(entity: Entity, condition: Condition, repo: "EntityReposi
         for ts in repo.get_traitsettings_for_entity(entity.id):
             if ts.trait_id == condition.target:
                 return True
+        return False
+
+    if condition.type == ConditionType.HAS_TRAIT_IN_TRAITSET:
+        for ts in repo.get_traitsettings_for_entity(entity.id):
+            if ts.traitset_id == condition.target:
+                return True
+        return False
+
+    if condition.type == ConditionType.TRAIT_RATING:
+        threshold = DieType(condition.value) if condition.value else None
+        if threshold is None:
+            return False
+        for ts in repo.get_traitsettings_for_entity(entity.id):
+            if ts.trait_id == condition.target and ts.dice:
+                if any(d.max_value >= threshold.max_value for d in ts.dice):
+                    return True
         return False
 
     if condition.type == ConditionType.HAS_RELATIONSHIP:

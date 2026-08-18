@@ -74,7 +74,7 @@ def fire_roll_sfx(
         universe=universe,
         roll_result=roll_result,
     )
-    outcome = engine.process_event_outcome(event, sfx_ids, razmerit)
+    outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
     _emit_pending_choices(entity_id, universe, outcome.pending)
     return outcome.applied
 
@@ -104,7 +104,7 @@ def fire_contest_sfx_auto(
         else:
             sfx_ids, raz = defendant_sfx, defendant_raz
 
-        outcome = engine.process_event_outcome(event, sfx_ids, raz)
+        outcome = engine.process_event_outcome(event, sfx_ids, raz, repo=repo)
         applied.extend(outcome.applied)
         if outcome.pending:
             pending_by_entity.setdefault(event.entity_id, []).extend(outcome.pending)

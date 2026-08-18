@@ -16,7 +16,7 @@ Collections:
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Dice ──────────────────────────────────────────────
@@ -637,14 +637,37 @@ class ConsequenceOption(BaseModel):
 class SFX(BaseModel):
     """SFX registry entry.
 
-    Stored in the `sfxs` collection.
+    Stored in the `sfxs` collection. ``trigger`` names the event; ``conditions``
+    filter which instance of that event applies (target/threshold/narrative).
     """
     id: str
     name: str
     description: str = ""
-    limit: str = ""          # narrative condition / restriction (markdown)
     trigger: str
     effects: list[Effect] = Field(default_factory=list)
+    conditions: list["Condition"] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fold_legacy_limit(cls, data):
+        """Migrate the old ``limit`` string into a NARRATIVE condition."""
+        if isinstance(data, dict) and data.get("limit"):
+            limit = data["limit"]
+            data = {**data}
+            data.pop("limit", None)
+            if not data.get("conditions"):
+                data["conditions"] = [
+                    Condition(type=ConditionType.NARRATIVE, narrative=limit)
+                ]
+        return data
+
+    @property
+    def limit(self) -> str:
+        """Backward-compatible read of the narrative limit."""
+        for c in self.conditions:
+            if c.type == ConditionType.NARRATIVE and c.narrative:
+                return c.narrative
+        return ""
 
 
 class SfxOwner(BaseModel):
@@ -666,7 +689,9 @@ class ConditionType(str, Enum):
     ALWAYS = "always"
     AT_LOCATION = "at_location"          # target = location entity id
     HAS_TRAIT = "has_trait"              # target = trait id
+    HAS_TRAIT_IN_TRAITSET = "has_trait_in_traitset"  # target = traitset id
     HAS_RELATIONSHIP = "has_relationship"  # target = related entity id
+    TRAIT_RATING = "trait_rating"        # target = trait id; value = rating threshold (e.g. d8)
     NARRATIVE = "narrative"              # human-readable only, never auto-blocks
 
 

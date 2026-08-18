@@ -24,6 +24,7 @@ from transversal.domain import (
     SFX,
 )
 import transversal.services.effects_applier as _effects_applier
+from transversal.services.conditions import evaluate_conditions
 
 
 # ── Event Types ──────────────────────────────────────
@@ -128,12 +129,16 @@ class EffectsEngine:
         event: GameEvent,
         available_sfx_ids: list[str],
         razmerit_balance: int,
+        repo=None,
     ) -> EventOutcome:
         """Process a game event, returning applied + pending effects.
 
         Immediate effects with a ``{choose_*}`` target are not applied — they
         are returned in ``outcome.pending`` so the caller can surface a choice.
         Deferred effects are queued internally as before.
+
+        When ``repo`` is provided, SFX with ``conditions`` are gated on the
+        entity's current state (evaluate_conditions).
         """
         outcome = EventOutcome()
 
@@ -145,6 +150,12 @@ class EffectsEngine:
             # Trigger match
             if not self._trigger_matches(sfx, event):
                 continue
+
+            # Condition gate (only when a repo is available to evaluate state)
+            if sfx.conditions and repo is not None:
+                entity = repo.get_entity(event.entity_id)
+                if entity is None or not evaluate_conditions(entity, sfx.conditions, repo):
+                    continue
 
             # Cost check: sum razmerit costs from spend effects
             total_razmerit_cost = 0
@@ -242,6 +253,10 @@ class EffectsEngine:
 
         # on_trait_change
         if trigger == "on_trait_change" and event.type == "trait_updated":
+            return True
+
+        # on_relationship_create
+        if trigger == "on_relationship_create" and event.type == "relationship_created":
             return True
 
         # on_contest_loss / on_contest_win (from context)
