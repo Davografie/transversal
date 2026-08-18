@@ -68,7 +68,7 @@
     </div>
 
     <div v-if="isRolling()" class="rolling-dice">
-      <div v-for="(f, i) in rollingFaces" :key="i" class="rolling-die">
+      <div v-for="(f, i) in rollingFaces" :key="i" class="rolling-die" :class="{ locked: f.locked }">
         <DieIcon :die="f.die" :result="f.face" />
       </div>
     </div>
@@ -940,16 +940,34 @@ const beatsOpposition = computed(() => {
   return rollTotal.value > oppositionValue.value
 })
 
+const FIRST_LOCK_MS = 900
+const LOCK_STAGGER_MS = 1000
+const FINAL_HOLD_MS = 300
+
 function rollFace(die) {
   const sides = Number(die.replace(/^d/, '')) || 6
   return Math.floor(Math.random() * sides) + 1
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 function startRollAnimation(dice) {
-  rollingFaces.value = dice.map(d => ({ die: d.die, face: rollFace(d.die) }))
+  rollingFaces.value = dice.map(d => ({ die: d.die, face: rollFace(d.die), locked: false }))
   return setInterval(() => {
-    for (const f of rollingFaces.value) f.face = rollFace(f.die)
+    for (const f of rollingFaces.value) {
+      if (!f.locked) f.face = rollFace(f.die)
+    }
   }, 70)
+}
+
+function lockDie(i, result_) {
+  const f = rollingFaces.value[i]
+  if (!f) return
+  f.locked = true
+  const rolled = result_?.rolls?.[i]
+  f.face = rolled ? rolled.result : rollFace(f.die)
 }
 
 async function doRoll() {
@@ -968,12 +986,19 @@ async function doRoll() {
   const pipeline = isDifficulty ? 'pool' : null
   const hitchesApply = !isDifficulty
 
-  // Blink random faces while the roll request is in flight (minimum ~900ms).
+  // Blink random faces while the request is in flight, then lock each die
+  // left-to-right so the player can see the numbers fall into place.
+  const t0 = Date.now()
   const anim = startRollAnimation(dice)
-  const [result_] = await Promise.all([
-    apiRoll(editingEntityId.value, props.universe, dice, opp, pipeline, hitchesApply),
-    new Promise(resolve => setTimeout(resolve, 900)),
-  ])
+  const result_ = await apiRoll(editingEntityId.value, props.universe, dice, opp, pipeline, hitchesApply)
+
+  await sleep(Math.max(0, FIRST_LOCK_MS - (Date.now() - t0)))
+  for (let i = 0; i < rollingFaces.value.length; i++) {
+    lockDie(i, result_)
+    if (i < rollingFaces.value.length - 1) await sleep(LOCK_STAGGER_MS)
+  }
+  await sleep(FINAL_HOLD_MS)
+
   clearInterval(anim)
   rollingFaces.value = []
 
@@ -1337,6 +1362,13 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 @keyframes roll-pop {
   0% { transform: scale(0.92); }
   50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.rolling-die.locked {
+  animation: die-lock 0.2s ease-out;
+}
+@keyframes die-lock {
+  0% { transform: scale(1.18); }
   100% { transform: scale(1); }
 }
 </style>
