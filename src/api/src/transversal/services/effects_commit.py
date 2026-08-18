@@ -9,8 +9,9 @@ entities by id, so the in-memory entity stays authoritative.
 from __future__ import annotations
 
 from transversal.api.sse.bus import StreamEvent, event_bus
-from transversal.domain import Effect, Entity
+from transversal.domain import Effect, Entity, dice_list_to_rating
 from transversal.services.effects_applier import EffectsResult, apply_effects
+from transversal.services.scene_state import resync_pool_dice_for_trait
 from transversal.services.session_manager import session_manager
 from transversal.services.state_events import fire_state_sfx
 
@@ -18,6 +19,20 @@ from transversal.services.state_events import fire_state_sfx
 def _publish(event: str, data: dict) -> None:
     for s in session_manager.list_active():
         event_bus.publish(StreamEvent(event=event, session_id=s.id, data=data))
+
+
+def _publish_trait_changed(ts, universe: str) -> None:
+    """Publish an enriched trait_updated + re-sync any assembled pool die."""
+    new_rating = dice_list_to_rating(ts.dice)
+    _publish("trait_updated", {
+        "entity_id": ts.entity_id,
+        "trait_id": ts.trait_id,
+        "trait_setting_id": ts.id,
+        "new_rating": new_rating,
+    })
+    resync_pool_dice_for_trait(ts.entity_id, ts.id, new_rating)
+    fire_state_sfx(ts.entity_id, universe, "trait_updated",
+                   {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
 
 def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult:
@@ -60,14 +75,10 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     # Trait settings produced by the applier.
     for ts in result.new_trait_settings:
         repo.create_traitsetting(ts)
-        _publish("trait_updated", {"entity_id": ts.entity_id, "trait_id": ts.trait_id})
-        fire_state_sfx(ts.entity_id, entity.current_universe, "trait_updated",
-                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
+        _publish_trait_changed(ts, entity.current_universe)
     for ts in result.updated_trait_settings:
         repo.update_traitsetting(ts)
-        _publish("trait_updated", {"entity_id": ts.entity_id, "trait_id": ts.trait_id})
-        fire_state_sfx(ts.entity_id, entity.current_universe, "trait_updated",
-                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
+        _publish_trait_changed(ts, entity.current_universe)
 
     # Relationship edges produced by the applier.
     for rel in result.new_relationships:

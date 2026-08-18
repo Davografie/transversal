@@ -10,6 +10,7 @@ from typing import Optional
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
 from transversal.services.change_log import change_log
+from transversal.services.scene_state import resync_pool_dice_for_trait
 from transversal.services.session_manager import session_manager
 from transversal.services.state_events import fire_state_sfx
 
@@ -385,8 +386,10 @@ class EntityManager:
         _publish_to_sessions(StreamEvent(
             event="trait_updated",
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
-                  "old_rating": old_rating, "new_rating": dice_list_to_rating(ts.dice)},
+                  "trait_setting_id": ts.id, "old_rating": old_rating,
+                  "new_rating": dice_list_to_rating(ts.dice)},
         ))
+        resync_pool_dice_for_trait(ts.entity_id, ts.id, dice_list_to_rating(ts.dice))
         fire_state_sfx(ts.entity_id, None, "trait_updated",
                        {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
@@ -405,8 +408,10 @@ class EntityManager:
         _publish_to_sessions(StreamEvent(
             event="trait_updated",
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
-                  "old_rating": old_rating, "new_rating": dice_list_to_rating(ts.dice)},
+                  "trait_setting_id": ts.id, "old_rating": old_rating,
+                  "new_rating": dice_list_to_rating(ts.dice)},
         ))
+        resync_pool_dice_for_trait(ts.entity_id, ts.id, dice_list_to_rating(ts.dice))
         fire_state_sfx(ts.entity_id, None, "trait_updated",
                        {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
