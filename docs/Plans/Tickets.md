@@ -184,6 +184,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** follow-ons — the defendant sees the contest verdict only via the `roll_result` SSE summary (full cross-device verdict render is polish); GM-as-contestant (rolling a specific GMC) is not yet wired; give-in is P2.14; test `roll_result` is still client-published (a server-side roll broadcast can land separately).
 - **Load:** `composables/useApi.js` (`setOpposition`/`resolveContest`/`listPools`), `api/rest/contest_pools.py` + `scene_state.py`, `services/contest_tracker.py` + `scene_state.py`, `services/dice_resolver.py` (`pipeline` hint), `components/DiceRoller.vue`, `App.vue`.
 
+### P2.10b — Backend + frontend: manual concurrent contest flow (challenge / set / give-in)
+- **Status:** pending
+- **What:** replace the auto "Resolve contest" button with a manual, concurrent contest. Each side assembles independently (concurrency allowed); the initiator designates the opponent (challenge); either side commits its final total/effect with "Set"; once both sides have set, the backend compares and declares a winner; either side may give in before resolution (folds P2.14). The opponent's tab live-shows the initiator's pool/SFX unfolding via SSE. Contestants are entities, so PC-vs-PC, PC-vs-GMC, and GMC-vs-GMC are the same flow — the GM acts as a specific entity through the tab they're editing.
+- **Done:** a two-sided contest runs challenge → concurrent assembly → set/set or give-in → resolved entirely through the client, with SFX cross-effects (e.g. an initiator SFX stepping an opponent's trait) still applying regardless of assembly order.
+- **Depends:** P2.10, P2.4, P2.7b
+- **Note:** folds P2.14. Give-in is available to either side once challenged and before resolution (the conceding side defines its own loss; an initiator give-in also blocks immediate re-initiation against the same opponent and earns the usual reward). Concurrency does not break cross-effects — the effects engine applies statefully and independently of turn order.
+- **Load:** `services/contest_tracker.py` (contest phase/state + SSE), `api/rest/contest_pools.py` (`challenge`/`set`/`give-in`/`resolve`), `api/sse/*`, `components/DiceRoller.vue` (phase machine, tabs as the acting entity, set/give-in buttons), `App.vue`, `composables/useApi.js`, [[Pressure-Test Log]] § Scenario 4.
+
 ### P2.11 — Frontend: dice-pool styling per roll kind
 - **Status:** pending
 - **What:** the pool is visually distinguished by simple-test / cortex-test / challenger-contest / defendant-contest / roll-table.
@@ -206,11 +214,19 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `services/dice_resolver.py` (`_resolve_pool` effect-die block), `components/DiceRoller.vue` (result/effect click, `isHitch`), `components/DieIcon.vue`, `domain/__init__.py` (`DieSpec`/`DieRoll` — selection is by die type, not source).
 
 ### P2.14 — Backend + frontend: contest give-in
+- **Status:** abandoned
+- **What:** *(folded into P2.10b)* — give-in is part of the manual concurrent contest flow.
+- **Done:** —
+- **Depends:** —
+- **Note:** see P2.10b for give-in semantics and the manual contest state machine.
+
+### P2.15 — Frontend: role-aware toast system
 - **Status:** pending
-- **What:** a losing initiator can give in on their own terms — define the failure, can't immediately re-initiate against the same opponent, earn the usual reward.
-- **Done:** the give-in option appears in the contest flow and ends the back-and-forth.
-- **Depends:** P2.3, P2.10
-- **Load:** `services/contest_tracker.py` (`get_contestants`, `resolve`), `services/dice_resolver.py` (`resolve_contest` — ties favor initiator), [[Pressure-Test Log]] § Scenario 4.
+- **What:** make the toast system available to all roles and filter which messages surface to whom. Each `addToast` declares an audience/scope (GM-only / player-only / all).
+- **Done:** a player sees player-relevant toasts (e.g. "Difficulty set: N") and the GM sees GM-relevant toasts, without a second notification system.
+- **Depends:** —
+- **Note:** supersedes the temporary inline "Difficulty set" flash in `DiceRoller.vue`; `ToastBar` is currently gated `v-if="gmMode"`.
+- **Load:** `components/ToastBar.vue`, `App.vue` (`addToast`/`toasts`), `components/DiceRoller.vue` (difficulty flash).
 
 ## Phase 3 — Stakes & consequences
 
