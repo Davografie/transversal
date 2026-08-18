@@ -78,11 +78,18 @@ class ContestTracker:
         """Designate an opponent for the entity at this location (the challenge).
 
         Ensures the defendant has a contest state too, so either side can
-        later commit a result or give in.
+        later commit a result or give in.  A challenge always starts a fresh
+        contest: any committed result or give-in from a prior contest is
+        cleared on both sides so it can't leak into the new one.
         """
         state = self.get_or_create(location_id, entity_id, universe)
         state.opposition_entity_id = opponent_id
-        self.get_or_create(location_id, opponent_id, universe)
+        state.committed = None
+        state.gave_in = False
+
+        opponent = self.get_or_create(location_id, opponent_id, universe)
+        opponent.committed = None
+        opponent.gave_in = False
         return state
 
     def set_pushed(self, location_id: str, entity_id: str) -> None:
