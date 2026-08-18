@@ -67,6 +67,12 @@
       </div>
     </div>
 
+    <div v-if="isRolling()" class="rolling-dice">
+      <div v-for="(f, i) in rollingFaces" :key="i" class="rolling-die">
+        <DieIcon :die="f.die" :result="f.face" />
+      </div>
+    </div>
+
     <div v-if="result" class="result panel">
       <!-- Roll-table roll: show the rolled dice + derived value -->
       <template v-if="mode === 'roll_table'">
@@ -244,6 +250,7 @@ const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPoo
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
+const rollingFaces = ref([]) // [{ die, face }] animated faces during ROLLING
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
 const difficultyPresets = [
   { label: 'Very Easy', die: 'd4' },
@@ -930,6 +937,18 @@ const beatsOpposition = computed(() => {
   return rollTotal.value > oppositionValue.value
 })
 
+function rollFace(die) {
+  const sides = Number(die.replace(/^d/, '')) || 6
+  return Math.floor(Math.random() * sides) + 1
+}
+
+function startRollAnimation(dice) {
+  rollingFaces.value = dice.map(d => ({ die: d.die, face: rollFace(d.die) }))
+  return setInterval(() => {
+    for (const f of rollingFaces.value) f.face = rollFace(f.die)
+  }, 70)
+}
+
 async function doRoll() {
   setPhase(Phase.ROLLING)
   const dice = pool.map(d => ({
@@ -945,7 +964,17 @@ async function doRoll() {
   const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
   const pipeline = isDifficulty ? 'pool' : null
   const hitchesApply = !isDifficulty
-  result.value = await apiRoll(editingEntityId.value, props.universe, dice, opp, pipeline, hitchesApply)
+
+  // Blink random faces while the roll request is in flight (minimum ~900ms).
+  const anim = startRollAnimation(dice)
+  const [result_] = await Promise.all([
+    apiRoll(editingEntityId.value, props.universe, dice, opp, pipeline, hitchesApply),
+    new Promise(resolve => setTimeout(resolve, 900)),
+  ])
+  clearInterval(anim)
+  rollingFaces.value = []
+
+  result.value = result_
   pool.length = 0
   notifyPool()
   if (result.value?.pipeline === 'pool' && props.mode !== 'roll_table') {
@@ -1280,5 +1309,23 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .give-in-btn:hover {
   background: rgba(216,64,64,0.2);
   color: var(--danger);
+}
+
+.rolling-dice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+  min-height: 48px;
+}
+.rolling-die {
+  cursor: default;
+  animation: roll-pop 0.09s ease-in-out;
+}
+@keyframes roll-pop {
+  0% { transform: scale(0.92); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
 }
 </style>

@@ -92,7 +92,10 @@
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
                 </div>
                 <div class="trait-right">
-                  <span class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
+                  <div v-if="traitDice(t).length" class="trait-die-icons">
+                    <DieIcon v-for="(die, i) in traitDice(t)" :key="i" :die="die" class="trait-die-icon" />
+                  </div>
+                  <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
                   <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
                   <button
                     v-for="sfxId in t.sfxIds"
@@ -194,6 +197,7 @@ import { useApi } from '../composables/useApi.js'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
+import DieIcon from './DieIcon.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -458,6 +462,16 @@ function resourceDisplay(t) {
     return t.rating || 'empty'
   }
   return t.rating || (t.dice ? t.dice.join(', ') : '')
+}
+
+function traitDice(t) {
+  // Die types to render as DieIcon. Resources/empty keep their text form
+  // (resources are committed/rolled separately — see P2.16).
+  if (t.ratingType === 'RESOURCE' || t.ratingType === 'EMPTY') return []
+  const dice = t.dice || []
+  if (dice.length) return dice.map(d => d.toLowerCase())
+  if (t.dieType) return [t.dieType.toLowerCase()]
+  return []
 }
 
 function isResourceDepleted(t) {
@@ -1690,6 +1704,15 @@ watch(() => props.externalPoolSources, (sources) => {
 .die-d8  { color: #d44040; }
 .die-d10 { color: #4088d4; }
 .die-d12 { color: #40b860; }
+
+.trait-die-icons {
+  display: flex;
+  gap: 2px;
+}
+.trait-die-icon {
+  width: 20px;
+  height: 22px;
+}
 
 .polarity-badge {
   font-size: 10px;

@@ -208,16 +208,17 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** to-do "Style dicepool", `components/DiceRoller.vue`, `domain/__init__.py` (`RollKind`: test/contest/roll_table — the five visual kinds are UI-level), [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.12 — Frontend: rolling dice animation
-- **Status:** pending
-- **What:** a short animation on roll (blinking random faces or an infinite-scroll feel).
-- **Done:** dice visibly animate before settling on the result.
+- **Status:** done
+- **What:** a short animation on roll (blinking random faces), plus folding in the ``[dX]`` → ``DieIcon`` trait-rating replacement.
+- **Done:** dice blink random faces (~900ms) during ROLLING before settling on results; trait ratings in the character sheet render as `DieIcon` instead of ``[dX]`` text (resources/empty keep text).
 - **Depends:** —
-- **Load:** to-do "Rolling dice animation", `components/DieIcon.vue`, `components/DiceRoller.vue`.
+- **Note:** folds the ``[dX]`` → ``DieIcon`` item out of P7.1. Resource dice stay text (P2.16).
+- **Load:** to-do "Rolling dice animation" + "Replace [dX] with DieIcon.vue", `components/DieIcon.vue`, `components/DiceRoller.vue`, `components/CharacterSheet.vue`.
 
 ### P2.13 — Backend + frontend: exclude hitches from effect-die selection
 - **Status:** pending
 - **What:** auto-selection (resolver + dice-pool UI) never picks a die that rolled a 1 as the effect die.
-- **Done:** the effect die is the largest leftover non-hitch die (d4 fallback when none).
+- **Done:** the effect die can be chosen from leftover non-hitch dice (d4 fallback when none).
 - **Depends:** —
 - **Load:** `services/dice_resolver.py` (`_resolve_pool` effect-die block), `components/DiceRoller.vue` (result/effect click, `isHitch`), `components/DieIcon.vue`, `domain/__init__.py` (`DieSpec`/`DieRoll` — selection is by die type, not source).
 
@@ -469,7 +470,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 
 ### P7.1 — Frontend: trait rendering & polarity polish
 - **Status:** pending
-- **What:** empty traits not greyed out, morph traits highlighted (not ego), negative-polarity styling, hidden/visible trait hint, and ``[dX]`` → ``DieIcon``.
+- **What:** empty traits not greyed out, morph traits highlighted (not ego), negative-polarity styling, hidden/visible trait hint. (The ``[dX]`` → ``DieIcon`` item was folded into P2.12.)
 - **Done:** each rendering/affordance behaves as listed.
 - **Depends:** P4.3
 - **Load:** to-do "Character Sheet & Traits", `components/CharacterSheet.vue`, `components/DieIcon.vue`.
