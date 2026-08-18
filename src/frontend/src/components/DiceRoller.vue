@@ -27,24 +27,6 @@
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
     <div v-if="!gmMode && difficultyFlash" class="difficulty-flash">{{ difficultyFlash }}</div>
-    <div class="dice-pool" v-if="isAdding()">
-      <div
-        v-for="(die, i) in pool"
-        :key="i"
-        class="die-chip"
-        @click="removeDie(i)"
-      >
-        <DieIcon :die="die.die" :label="die.label || die.source" />
-      </div>
-      <button
-        v-if="mode !== 'roll_table'"
-        class="add-die-toggle"
-        :class="{ active: showDiePicker }"
-        :title="showDiePicker ? 'Hide dice' : 'Add die'"
-        @click="showDiePicker = !showDiePicker"
-      >{{ showDiePicker ? '×' : '+' }}</button>
-    </div>
-
     <div v-if="isAdding() && mode !== 'roll_table' && gmMode && !actingEntityId" class="difficulty-presets">
       <button
         v-for="p in difficultyPresets"
@@ -74,99 +56,46 @@
       </div>
     </div>
 
-    <div v-if="isRolling()" class="rolling-dice">
-      <div v-for="(f, i) in rollingFaces" :key="i" class="rolling-die" :class="{ locked: f.locked }">
-        <DieIcon :die="f.die" :result="f.face" />
+    <!-- Picking: total/effect selection slots live above the dice -->
+    <div v-if="result && isPicking()" class="pool-result">
+      <div class="selection-row">
+        <span class="sel-label" @click="assignBestTotal">Total:</span>
+        <span
+          v-for="(idx, i) in selection.total" :key="'t'+i"
+          class="sel-slot total-slot"
+          :class="{ empty: idx === null, selected: selectedSlot?.type === 'total' && selectedSlot?.index === i }"
+          @dragover.prevent
+          @drop="onSlotDrop('total', i, $event)"
+          @click="idx !== null ? clearSlot('total', i) : selectSlot('total', i)"
+        >
+          {{ idx !== null ? result.rolls[idx].result : '' }}
+        </span>
+        <span class="sel-value">= <strong>{{ computedTotal }}</strong></span>
+      </div>
+      <div class="selection-row" v-if="!gmMode">
+        <span class="sel-label" @click="assignBestEffect">Effect:</span>
+        <span
+          v-for="(idx, i) in selection.effect" :key="'e'+i"
+          class="sel-slot effect-slot"
+          :class="{ empty: idx === null, filled: idx !== null, selected: selectedSlot?.type === 'effect' && selectedSlot?.index === i }"
+          @dragover.prevent
+          @drop="onSlotDrop('effect', i, $event)"
+          @click="idx !== null ? clearSlot('effect', i) : selectSlot('effect', i)"
+        >
+          <DieIcon v-if="idx !== null" :die="result.rolls[idx].die" class="effect-die-icon" />
+          <span v-else class="empty-text"></span>
+        </span>
       </div>
     </div>
 
-    <div v-if="result" class="result panel">
-      <!-- Roll-table roll: show the rolled dice + derived value -->
-      <template v-if="mode === 'roll_table'">
-        <div class="roll-dice">
-          <div v-for="(r, i) in result.rolls" :key="i" class="roll-die-wrap">
-            <DieIcon :die="r.die" :result="r.result" :label="r.label || r.source_id || r.die" />
-          </div>
-        </div>
-        <div class="result-line">
-          highest <strong>{{ rollTableHighest }}</strong>
-          <span v-if="result.rolls.length > 1"> · sum <strong>{{ rollTableSum }}</strong></span>
-        </div>
-      </template>
-      <!-- Simplified result -->
-      <template v-else-if="result.pipeline === 'simplified'">
-        <div class="result-line">
-          {{ result.highest }} → <strong>{{ result.tier }}</strong>
-          <span v-if="result.effect_die" class="effect-result">
-            <span class="effect-result-label">effect</span>
-            <DieIcon :die="result.effect_die" class="effect-result-icon" />
-          </span>
-        </div>
-      </template>
-
-      <!-- Dice Pool: picking phase (interactive) -->
-      <template v-else-if="isPicking()">
-        <div class="pool-result">
-          <div class="roll-dice">
-            <div
-              v-for="(r, i) in result.rolls"
-              :key="i"
-              class="roll-die-wrap"
-              :class="[rollClass(i)]"
-              :draggable="!isHitch(i)"
-              @dragstart="onDieDragStart($event, i)"
-              @touchstart="onDieTouchStart($event, i)"
-              @click="toggleDie(i)"
-            >
-              <DieIcon :die="r.die" :result="r.result" :is-hitch="isHitch(i)" :label="r.label || r.source_id || r.die" />
-            </div>
-          </div>
-          <div class="selection-row">
-            <span class="sel-label" @click="assignBestTotal">Total:</span>
-            <span
-              v-for="(idx, i) in selection.total" :key="'t'+i"
-              class="sel-slot total-slot"
-              :class="{ empty: idx === null, selected: selectedSlot?.type === 'total' && selectedSlot?.index === i }"
-              @dragover.prevent
-              @drop="onSlotDrop('total', i, $event)"
-              @click="idx !== null ? clearSlot('total', i) : selectSlot('total', i)"
-            >
-              {{ idx !== null ? result.rolls[idx].result : '' }}
-            </span>
-            <span class="sel-value">= <strong>{{ computedTotal }}</strong></span>
-          </div>
-          <div class="selection-row" v-if="!gmMode">
-            <span class="sel-label" @click="assignBestEffect">Effect:</span>
-            <span
-              v-for="(idx, i) in selection.effect" :key="'e'+i"
-              class="sel-slot effect-slot"
-              :class="{ empty: idx === null, filled: idx !== null, selected: selectedSlot?.type === 'effect' && selectedSlot?.index === i }"
-              @dragover.prevent
-              @drop="onSlotDrop('effect', i, $event)"
-              @click="idx !== null ? clearSlot('effect', i) : selectSlot('effect', i)"
-            >
-              <DieIcon v-if="idx !== null" :die="result.rolls[idx].die" class="effect-die-icon" />
-              <span v-else class="empty-text"></span>
-            </span>
-          </div>
-        </div>
-      </template>
-
-      <!-- Dice Pool: resolved phase (read-only) -->
-      <template v-else>
-        <div class="resolved-result">
-          <strong class="resolved-total">{{ computedTotal }}</strong>
-          <DieIcon v-if="effectDie" :die="effectDie" class="resolved-eff-die" />
-        </div>
-      </template>
-
+    <!-- Resolved status lines live above the dice -->
+    <div v-if="result" class="result-status">
       <div v-if="oppositionValue !== null" class="opposition-result">
         vs difficulty <strong>{{ oppositionValue }}</strong>
         <span v-if="!isPicking()" :class="beatsOpposition ? 'outcome-success' : 'outcome-fail'">
           — {{ beatsOpposition ? 'Success' : 'Failure' }}
         </span>
       </div>
-
       <div v-if="result.botch" class="botch">BOTCH</div>
       <div v-if="result.hitches?.length" class="hitches">
         {{ result.hitches.length }} hitch{{ result.hitches.length > 1 ? 'es' : '' }}
@@ -174,6 +103,77 @@
       <div v-if="result.challenge_result" class="challenge">
         Challenge: {{ result.challenge_result.outcome }}
       </div>
+    </div>
+
+    <!-- DICE STAGE — same slot in every phase, centered -->
+    <div class="dice-stage">
+      <div v-if="isAdding()" class="dice-pool">
+        <div
+          v-for="(die, i) in pool"
+          :key="i"
+          class="die-chip"
+          @click="removeDie(i)"
+        >
+          <DieIcon :die="die.die" :label="die.label || die.source" />
+        </div>
+        <button
+          v-if="mode !== 'roll_table'"
+          class="add-die-toggle"
+          :class="{ active: showDiePicker }"
+          :title="showDiePicker ? 'Hide dice' : 'Add die'"
+          @click="showDiePicker = !showDiePicker"
+        >{{ showDiePicker ? '×' : '+' }}</button>
+      </div>
+
+      <div v-else-if="isRolling()" class="rolling-dice">
+        <div v-for="(f, i) in rollingFaces" :key="i" class="rolling-die" :class="{ locked: f.locked }">
+          <DieIcon :die="f.die" :result="f.face" />
+        </div>
+      </div>
+
+      <div v-else-if="result && isPicking()" class="roll-dice">
+        <div
+          v-for="(r, i) in result.rolls"
+          :key="i"
+          class="roll-die-wrap"
+          :class="[rollClass(i)]"
+          :draggable="!isHitch(i)"
+          @dragstart="onDieDragStart($event, i)"
+          @touchstart="onDieTouchStart($event, i)"
+          @click="toggleDie(i)"
+        >
+          <DieIcon :die="r.die" :result="r.result" :is-hitch="isHitch(i)" :label="r.label || r.source_id || r.die" />
+        </div>
+      </div>
+
+      <template v-else-if="result">
+        <template v-if="mode === 'roll_table'">
+          <div class="roll-dice">
+            <div v-for="(r, i) in result.rolls" :key="i" class="roll-die-wrap">
+              <DieIcon :die="r.die" :result="r.result" :label="r.label || r.source_id || r.die" />
+            </div>
+          </div>
+          <div class="result-line">
+            highest <strong>{{ rollTableHighest }}</strong>
+            <span v-if="result.rolls.length > 1"> · sum <strong>{{ rollTableSum }}</strong></span>
+          </div>
+        </template>
+        <template v-else-if="result.pipeline === 'simplified'">
+          <div class="result-line">
+            {{ result.highest }} → <strong>{{ result.tier }}</strong>
+            <span v-if="result.effect_die" class="effect-result">
+              <span class="effect-result-label">effect</span>
+              <DieIcon :die="result.effect_die" class="effect-result-icon" />
+            </span>
+          </div>
+        </template>
+        <template v-else>
+          <div class="resolved-result">
+            <strong class="resolved-total">{{ computedTotal }}</strong>
+            <DieIcon v-if="effectDie" :die="effectDie" class="resolved-eff-die" />
+          </div>
+        </template>
+      </template>
     </div>
 
     <div class="controls" v-if="isAdding() || isPicking()">
@@ -1166,7 +1166,8 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 
 .commit-btn { background: var(--success) !important; color: #0a0a0f !important; }
 
-.dice-pool { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+.dice-pool { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+.dice-stage { display: flex; flex-direction: column; gap: var(--gap); min-height: 48px; }
 
 .pool-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .pool-tab {
@@ -1247,6 +1248,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .roll-btn { width: 100%; font-size: 18px; font-weight: 700; padding: 10px; }
 
 .result { text-align: center; }
+.result-status { text-align: center; }
 .result-line { font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .result-line strong { font-size: 24px; color: var(--accent); }
 .result-eff-icon { width: 28px; height: 32px; }
@@ -1299,7 +1301,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .roll-die-wrap.unused { opacity: 0.3; }
 
 .selection-row {
-  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; font-size: 13px;
 }
 .sel-label { color: var(--text-dim); min-width: 42px; cursor: pointer; }
 .sel-label:hover { color: var(--accent); }
