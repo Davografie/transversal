@@ -46,21 +46,26 @@
       </button>
     </div>
 
-    <div v-if="!gmMode && isAdding() && mode !== 'roll_table' && tabEntities.length > 1" class="contest-setup">
-      <div class="contest-row">
+    <div v-if="!gmMode && mode !== 'roll_table' && tabEntities.length > 1 && (challenged || isAdding() || isPicking())" class="contest-setup">
+      <div class="contest-row" v-if="!challenged && !contestResult">
         <label>Opponent</label>
         <select v-model="opponentId">
           <option value="" disabled>Choose…</option>
           <option v-for="e in tabEntities.filter(e => e.id !== entityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
-        <button class="roll-btn contest-btn" :disabled="!opponentId || pool.length === 0" @click="doResolveContest">Resolve contest</button>
+        <button class="roll-btn contest-btn" :disabled="!opponentId" @click="doChallenge">Challenge</button>
+      </div>
+      <div class="contest-row" v-else-if="challenged && !contestResult">
+        <span class="contest-status">vs {{ opponentName }}</span>
+        <button class="roll-btn contest-btn" @click="doGiveIn">Give in</button>
       </div>
       <div v-if="contestError" class="error">{{ contestError }}</div>
       <div v-if="contestResult" class="contest-result">
         <strong>{{ contestResult.winner === 'player' ? 'You win' : `${opponentName} wins` }}</strong>
-        <div>You: total {{ contestResult.player_result.total ?? contestResult.player_result.highest }} · effect {{ contestResult.player_result.effect_die || '—' }}</div>
-        <div>{{ opponentName }}: total {{ contestResult.opponent_result.total ?? contestResult.opponent_result.highest }} · effect {{ contestResult.opponent_result.effect_die || '—' }}</div>
+        <div v-if="contestResult.challenger">You: total {{ contestResult.challenger.total }} · effect {{ contestResult.challenger.effect_die || '—' }}</div>
+        <div v-if="contestResult.defendant">{{ opponentName }}: total {{ contestResult.defendant.total }} · effect {{ contestResult.defendant.effect_die || '—' }}</div>
         <div v-if="contestResult.stakes">Stakes: {{ contestResult.stakes }}</div>
+        <div v-if="contestResult.gave_in">Gave in</div>
       </div>
     </div>
 
@@ -161,8 +166,8 @@
       <button v-if="isAdding()" @click="doRoll" :disabled="loading || pool.length === 0" class="roll-btn">
         {{ loading ? 'Rolling…' : 'Roll' }}
       </button>
-      <button v-if="isPicking()" @click="commitPicks" class="roll-btn commit-btn">
-        Done
+      <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
+        {{ challenged ? 'Set' : 'Done' }}
       </button>
     </div>
 
@@ -233,7 +238,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved'])
 
-const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, resolveContest: apiResolveContest } = useApi()
+const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -256,6 +261,7 @@ const viewPool = ref([])
 const opponentId = ref('')
 const contestResult = ref(null)
 const contestError = ref('')
+const challenged = ref(false)
 const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
@@ -299,18 +305,44 @@ watch(() => props.difficulty, (v) => {
   }, 3000)
 })
 
-async function doResolveContest() {
-  if (!opponentId.value) return
+async function doChallenge() {
+  if (!opponentId.value || !props.locationId) return
   contestError.value = ''
   contestResult.value = null
-  if (!props.locationId) return
   await apiSetOpposition(props.locationId, props.entityId, opponentId.value, props.universe)
-  const res = await apiResolveContest(props.locationId, props.entityId)
-  if (res?.error) {
-    contestError.value = res.error
-    return
+  challenged.value = true
+}
+
+function committedResult() {
+  const r = result.value
+  if (!r) return null
+  if (r.pipeline === 'pool') {
+    const total = selection.total.reduce((sum, idx) => sum + (idx !== null ? r.rolls[idx].result : 0), 0)
+    const effIdx = selection.effect[0]
+    const effectDie = effIdx !== null ? r.rolls[effIdx].die : 'd4'
+    return { total, effect_die: effectDie, pipeline: 'pool' }
   }
-  contestResult.value = res
+  return { total: r.highest, effect_die: r.effect_die || null, tier: r.tier || null, pipeline: 'simplified' }
+}
+
+async function doSetResult() {
+  const committed = committedResult()
+  if (!committed || !props.locationId) return
+  setPhase(Phase.RESOLVED)
+  contestError.value = ''
+  const res = await apiSetResult(props.locationId, props.entityId, committed)
+  if (res && res.winner) {
+    contestResult.value = res
+  } else if (res && res.status === 'waiting') {
+    contestError.value = 'Waiting for opponent…'
+  }
+}
+
+async function doGiveIn() {
+  if (!props.locationId) return
+  contestError.value = ''
+  const res = await apiGiveIn(props.locationId, props.entityId)
+  if (res && res.winner) contestResult.value = res
 }
 
 async function resolveSfxChoices(resolutions) {
@@ -847,6 +879,14 @@ function commitPicks() {
   }
 }
 
+function onPickCommit() {
+  if (challenged.value) {
+    doSetResult()
+  } else {
+    commitPicks()
+  }
+}
+
 function clearResult() {
   result.value = null
   selection.total = []
@@ -862,6 +902,7 @@ function clearPool() {
   poolPurpose.value = null
   contestResult.value = null
   contestError.value = ''
+  challenged.value = false
   setPhase(Phase.ADDING)
   notifyPool()
 }
@@ -950,6 +991,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .contest-setup { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
 .contest-row { display: flex; gap: 6px; align-items: center; }
 .contest-row label { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.contest-status { font-size: 12px; color: var(--text-dim); }
 .contest-row select { flex: 1; padding: 6px; border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.15); }
 .contest-btn { flex: 0 0 auto; padding: 6px 10px; font-size: 12px; }
 .contest-result { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }

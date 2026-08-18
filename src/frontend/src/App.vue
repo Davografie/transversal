@@ -894,6 +894,19 @@ watch(lastEvent, (evt) => {
         }
       }
       break
+    case 'contest_challenged':
+      if (gmMode.value) addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
+      else if (evt.data?.opponent_id === entityId.value) addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice')
+      break
+    case 'contest_set':
+      if (gmMode.value) addToast(`${name} set their result (${evt.data?.total})`, 'roll')
+      break
+    case 'contest_give_in':
+      if (gmMode.value) addToast(`${name} gave in`, 'roll')
+      break
+    case 'contest_resolved':
+      addToast('Contest resolved', 'roll')
+      break
     case 'sfx_choice_required':
       if (evt.data?.entity_id === entityId.value) {
         sfxChoiceRequest.value = (evt.data.choices || []).map((c, i) => ({ ...c, index: i }))

@@ -194,13 +194,22 @@ export function useApi() {
     } catch (e) { console.error('[API] setOpposition', e.message); return null }
   }
 
-  async function resolveContest(locationId, entityId) {
+  async function setResult(locationId, entityId, committed) {
     try {
-      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/resolve`, { method: 'POST' })
-      if (r.status === 409) return { error: 'Both sides must have dice assembled' }
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/set`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(committed)
+      })
       if (!r.ok) throw new Error(await r.text())
       return await r.json()
-    } catch (e) { console.error('[API] resolveContest', e.message); return null }
+    } catch (e) { console.error('[API] setResult', e.message); return null }
+  }
+
+  async function giveIn(locationId, entityId) {
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/give-in`, { method: 'POST' })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] giveIn', e.message); return null }
   }
 
   async function clearContest(locationId, entityId) {
@@ -240,5 +249,5 @@ export function useApi() {
     } catch (e) { console.error('[API] nextBeat', e.message); return null }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, resolveContest, clearContest, setDifficulty, getDifficulty, nextBeat }
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, clearContest, setDifficulty, getDifficulty, nextBeat }
 }
