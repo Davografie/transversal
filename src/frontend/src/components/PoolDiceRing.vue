@@ -89,7 +89,7 @@ const positionedEffectDice = computed(() => {
 })
 </script>
 
-<style>
+<style scoped>
 .pool-dice-container {
   position: absolute;
   z-index: 22;
