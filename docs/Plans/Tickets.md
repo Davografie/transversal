@@ -223,9 +223,9 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `services/dice_resolver.py` (`_resolve_pool` effect-die block), `components/DiceRoller.vue` (result/effect click, `isHitch`), `components/DieIcon.vue`, `domain/__init__.py` (`DieSpec`/`DieRoll` — selection is by die type, not source).
 
 ### P2.14 — Backend + frontend: contest give-in
-- **Status:** abandoned
+- **Status:** done
 - **What:** *(folded into P2.10b)* — give-in is part of the manual concurrent contest flow.
-- **Done:** —
+- **Done:** either side can give in before resolution; the backend records `gave_in`, the other side wins, and the conceding side earns the give-in reward.
 - **Depends:** —
 - **Note:** see P2.10b for give-in semantics and the manual contest state machine.
 
