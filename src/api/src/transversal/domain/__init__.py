@@ -436,6 +436,26 @@ class TraitSetting(BaseModel):
     stolen: bool = False  # trait was taken — may have narrative consequences
 
 
+# ── Per-Entity: Trait Set Settings ───────────────────
+
+class TraitSetSetting(BaseModel):
+    """Entity-specific configuration of a trait set.
+
+    Stored as an edge in the `traitsetsettings` collection.
+    _from → entity (or projection), _to → traitset (registry).
+
+    This is the set-level sibling of `TraitSetting`. It carries SFX that apply
+    to the trait set *as a unit* (not per-trait) for a specific entity/projection.
+    limit/sort-order/order fields are Phase 4, not modeled yet.
+    """
+    id: str
+    entity_id: str
+    traitset_id: str
+    from_type: str = "entity"  # "entity" | "projection" — anchor collection for _from
+    projection_id: Optional[str] = None  # projection anchor id when from_type == "projection"
+    sfx_ids: list[str] = Field(default_factory=list)
+
+
 # ── Projections ───────────────────────────────────────
 
 class Projection(BaseModel):
@@ -455,6 +475,7 @@ class Projection(BaseModel):
     background_image: Optional[str] = None  # falls back to entity background_image
     current_location: Optional[str] = None   # where this body currently is
     transversal_type: TransversalType = TransversalType.NATIVE
+    sfx_ids: list[str] = Field(default_factory=list)  # SFX owned by this body
 
 
 # ── Entities ──────────────────────────────────────────
@@ -496,6 +517,7 @@ class Entity(BaseModel):
     # Asset
     owned_by: Optional[str] = None
     attunements: list["Attunement"] = Field(default_factory=list)  # active attunements (effect-managed)
+    sfx_ids: list[str] = Field(default_factory=list)  # SFX owned directly by this entity
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
     # Life path tracking
@@ -623,6 +645,18 @@ class SFX(BaseModel):
     limit: str = ""          # narrative condition / restriction (markdown)
     trigger: str
     effects: list[Effect] = Field(default_factory=list)
+
+
+class SfxOwner(BaseModel):
+    """A named SFX owner bucket.
+
+    Stored in the `sfx_owners` collection. Ownership lives on the owner side:
+    these buckets collect SFX ids that are available by category rather than by
+    a single entity/trait/projection. Seeded with `table` (everyone) and `gm`
+    (GM-context only).
+    """
+    id: str
+    sfx_ids: list[str] = Field(default_factory=list)
 
 
 # ── Conditions ──────────────────────────────────────

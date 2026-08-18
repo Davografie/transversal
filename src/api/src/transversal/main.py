@@ -107,12 +107,14 @@ async def get_context(request: Request) -> dict:
 async def on_startup():
     """Wire core services. Seed data runs via `python -m transversal seed`."""
     from transversal.services.effects_applier import _register_core_handlers
+    from transversal.services.sfx_owner import ensure_sfx_owners
 
     _register_core_handlers(_get_em(), _get_raz())
 
     # Load SFXs from database into the in-memory effects engine
     repo = _get_repo()
     engine = _get_engine()
+    ensure_sfx_owners(repo)
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:
         engine.register(s)

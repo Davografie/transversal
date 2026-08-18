@@ -24,6 +24,18 @@ class MenuRepo:
     def get_traitsettings_for_entity(self, entity_id):
         return self.trait_settings
 
+    def get_effective_traitsettings(self, entity_id, universes):
+        return self.trait_settings
+
+    def get_effective_traitsetsettings(self, entity_id, universes):
+        return getattr(self, "traitset_settings", [])
+
+    def get_sfx_owner(self, owner_id):
+        return getattr(self, "sfx_owners", {}).get(owner_id)
+
+    def get_projection(self, projection_id):
+        return getattr(self, "projections", {}).get(projection_id)
+
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
 

@@ -22,6 +22,9 @@ from transversal.domain import (
 )
 
 
+from transversal.services.sfx_owner import get_available_sfx_ids
+
+
 # Base moves. The doom-pool step-up/down targets are intentionally generic
 # ({choose_trait}); precise doom-pool scoping lands with Phase 3's challenge-pool
 # work. ``result="{effect_die}"`` is a placeholder the frontend substitutes with
@@ -94,22 +97,6 @@ BASE_CONSEQUENCE_OPTIONS: dict[str, list[ConsequenceOption]] = {
 }
 
 
-def _entity_sfx_ids(entity: Entity, repo) -> set[str]:
-    """Collect SFX ids available to an entity via its trait settings.
-
-    Includes each trait setting's explicit ``sfx_ids`` plus the trait's
-    ``default_sfx_ids``. This is the pre-owner-model approximation; the SFX
-    owner model (Phase 3) replaces it with owner scoping.
-    """
-    ids: set[str] = set()
-    for ts in repo.get_traitsettings_for_entity(entity.id):
-        ids.update(ts.sfx_ids)
-        trait = repo.get_trait(ts.trait_id)
-        if trait is not None:
-            ids.update(trait.default_sfx_ids)
-    return ids
-
-
 def assemble_consequence_menu(entity: Entity, repo, side: str) -> list[ConsequenceOption]:
     """Return the consequence options offered to ``side`` in this context."""
     options: list[ConsequenceOption] = list(BASE_CONSEQUENCE_OPTIONS.get(side, []))
@@ -127,7 +114,7 @@ def assemble_consequence_menu(entity: Entity, repo, side: str) -> list[Consequen
                 options.append(option)
 
     # SFX moves: on_consequence SFX available to the acting entity (player side).
-    for sfx_id in sorted(_entity_sfx_ids(entity, repo)):
+    for sfx_id in get_available_sfx_ids(entity.id, entity.current_universe, repo):
         sfx = repo.get_sfx(sfx_id)
         if sfx is None or sfx.trigger != "on_consequence":
             continue

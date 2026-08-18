@@ -22,9 +22,11 @@ from transversal.db.arango import (
     RELATIONSHIPS,
     ROLL_TABLES,
     SFXS,
+    SFX_OWNERS,
     TRAITS,
     TRAITSETS,
     TRAITSETTINGS,
+    TRAITSETSETTINGS,
     MESSAGES,
     get_db,
 )
@@ -41,8 +43,10 @@ from transversal.domain import (
     Projection,
     RollTable,
     SFX,
+    SfxOwner,
     Trait,
     TraitSet,
+    TraitSetSetting,
     TraitSetting,
     TransversalType,
     dice_list_to_rating,
@@ -63,7 +67,9 @@ class EntityRepository:
         self._traits = self.db.collection(TRAITS)
         self._traitsets = self.db.collection(TRAITSETS)
         self._traitsettings = self.db.collection(TRAITSETTINGS)
+        self._traitsetsettings = self.db.collection(TRAITSETSETTINGS)
         self._sfxs = self.db.collection(SFXS)
+        self._sfx_owners = self.db.collection(SFX_OWNERS)
         self._life_paths = self.db.collection(LIFE_PATHS)
         self._roll_tables = self.db.collection(ROLL_TABLES)
         self._relationships = self.db.collection(RELATIONSHIPS)
@@ -725,6 +731,106 @@ class EntityRepository:
             return True
         except Exception:
             return False
+
+    # ── Trait Set Settings ─────────────────────────────
+
+    def create_traitsetsetting(self, tss: TraitSetSetting) -> TraitSetSetting:
+        doc = tss.model_dump()
+        doc["_key"] = tss.id
+        if tss.from_type == "projection":
+            doc["_from"] = f"{PROJECTIONS}/{tss.projection_id or tss.entity_id}"
+        else:
+            doc["_from"] = f"{ENTITIES}/{tss.entity_id}"
+        doc["_to"] = f"{TRAITSETS}/{tss.traitset_id}"
+        self._traitsetsettings.insert(doc)
+        return tss
+
+    def get_traitsetsetting(self, tss_id: str) -> Optional[TraitSetSetting]:
+        doc = self._traitsetsettings.get(tss_id)
+        return TraitSetSetting.model_validate({**doc, "id": doc["_key"]}) if doc else None
+
+    def get_traitsetsettings_for_entity(self, entity_id: str) -> list[TraitSetSetting]:
+        query = f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            FILTER tss.entity_id == @eid
+            RETURN tss
+        """
+        return [
+            TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
+        ]
+
+    def get_effective_traitsetsettings(
+        self, entity_id: str, universes: list[str]
+    ) -> list[TraitSetSetting]:
+        """Trait set settings active in a set of universes.
+
+        Entity-anchored settings are gated by the trait set's universes
+        intersecting ``universes``. Projection-anchored settings are gated by
+        their projection's ``origin_universe`` (falling back to the key suffix).
+        """
+        query = f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            FILTER tss.entity_id == @eid
+            LET is_projection = (tss.from_type == 'projection')
+            LET proj = is_projection ? DOCUMENT(tss._from) : null
+            LET origin = proj != null
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[-1])
+                : null
+            LET set_doc = DOCUMENT(CONCAT('{TRAITSETS}/', tss.traitset_id))
+            FILTER (
+                NOT is_projection
+                AND (set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0)
+            )
+            OR (
+                is_projection AND proj != null
+                AND origin IN @universes
+                AND (set_doc == null OR origin IN set_doc.universes)
+            )
+            RETURN tss
+        """
+        return [
+            TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(
+                query, bind_vars={"eid": entity_id, "universes": universes}
+            )
+        ]
+
+    def update_traitsetsetting(self, tss: TraitSetSetting) -> TraitSetSetting:
+        doc = tss.model_dump()
+        doc["_key"] = tss.id
+        if tss.from_type == "projection":
+            doc["_from"] = f"{PROJECTIONS}/{tss.projection_id or tss.entity_id}"
+        else:
+            doc["_from"] = f"{ENTITIES}/{tss.entity_id}"
+        doc["_to"] = f"{TRAITSETS}/{tss.traitset_id}"
+        self._traitsetsettings.replace(doc)
+        return tss
+
+    def delete_traitsetsetting(self, tss_id: str) -> bool:
+        try:
+            self._traitsetsettings.delete(tss_id)
+            return True
+        except Exception:
+            return False
+
+    # ── SFX Owners ───────────────────────────────────
+
+    def get_sfx_owner(self, owner_id: str) -> Optional[SfxOwner]:
+        doc = self._sfx_owners.get(owner_id)
+        return SfxOwner.model_validate({**doc, "id": doc["_key"]}) if doc else None
+
+    def create_sfx_owner(self, owner: SfxOwner) -> SfxOwner:
+        doc = owner.model_dump()
+        doc["_key"] = owner.id
+        self._sfx_owners.insert(doc)
+        return owner
+
+    def update_sfx_owner(self, owner: SfxOwner) -> SfxOwner:
+        doc = owner.model_dump()
+        doc["_key"] = owner.id
+        self._sfx_owners.replace(doc)
+        return owner
 
     def get_relationship_traitsettings(self, edge_key: str) -> list[TraitSetting]:
         """Get trait settings attached to a relationship edge."""

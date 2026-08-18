@@ -50,6 +50,8 @@ PROJECTIONS = "projections"
 TRAITS = "traits"
 TRAITSETS = "traitsets"
 TRAITSETTINGS = "traitsettings"    # edge collection
+TRAITSETSETTINGS = "traitsetsettings"  # edge collection: entity → traitset
+SFX_OWNERS = "sfx_owners"           # document: named SFX owner buckets (table, gm)
 SFXS = "sfxs"
 PLAYERS = "players"
 RELATIONSHIPS = "relationships"    # edge collection
@@ -65,6 +67,8 @@ COLLECTIONS = {
     TRAITS: False,
     TRAITSETS: False,
     TRAITSETTINGS: True,  # edge
+    TRAITSETSETTINGS: True,  # edge
+    SFX_OWNERS: False,    # document
     SFXS: False,
     PLAYERS: False,
     RELATIONSHIPS: True,  # edge
@@ -124,6 +128,10 @@ def _ensure_indexes(db) -> None:
     _add_hash_index(db, TRAITSETTINGS, ["entity_id"])
     _add_hash_index(db, TRAITSETTINGS, ["trait_id"])
     _add_hash_index(db, TRAITSETTINGS, ["traitset_id"])
+
+    # traitsetsettings (edge)
+    _add_hash_index(db, TRAITSETSETTINGS, ["entity_id"])
+    _add_hash_index(db, TRAITSETSETTINGS, ["traitset_id"])
 
     # sfxs
     _add_hash_index(db, SFXS, ["name"], unique=True)
