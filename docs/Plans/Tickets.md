@@ -145,11 +145,19 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Design:** separate the *dice pool* from the *contest state*. `ContestTracker` still conflates them (`PoolAssembly` bundles dice + opposition + pushed); later contest work should shrink it to opposition/push pointers into this store.
 - **Load:** `services/scene_state.py`, `api/rest/scene_state.py`, `components/DiceRoller.vue` (`persistPool`/`restorePool`), `App.vue` (`refreshDifficulty`), `composables/useApi.js`.
 
+### P2.7b — Backend: SFX ownership model
+- **Status:** pending
+- **What:** SFX stay pure definitions; ownership lives on the owner side. Add `sfx_ids` to `Entity` and `Projection`, add a new `TraitSetSetting` edge (entity↔traitset, `sfx_ids` only) in a `traitsetsettings` collection, and add `table`/`gm` singleton owners in a new `sfx_owners` collection. Add a resolver `get_available_sfx_ids(entity_id, universe)` that unions all owner surfaces — `table`, `entity`, active `projection`, trait-level (`TraitSetting.sfx_ids` + `Trait.default_sfx_ids`), and set-as-unit (`TraitSetSetting.sfx_ids`) — universe-gated.
+- **Done:** given an entity + universe, `get_available_sfx_ids` returns the full set of SFX ids the entity can use, and P2.8 consumes it. `consequence_menu._entity_sfx_ids` is retired in favor of the resolver.
+- **Depends:** —
+- **Load:** `domain/__init__.py` (new `TraitSetSetting`; new `Entity.sfx_ids`/`Projection.sfx_ids`; existing `TraitSetting.sfx_ids`, `Trait.default_sfx_ids`), `db/repository.py` (`get_all_sfxs`, `get_effective_traitsettings`, `get_projections_for_entity`; new `traitsetsettings` + `sfx_owners` collections/CRUD), `services/consequence_menu.py` (`_entity_sfx_ids` — replace), `services/effects_engine.py` (`process_event` signature), `db/seed.py` (seed `table`/`gm` owners), [[Release Plan]] § "Effects actually fire" (locked six-owner decision).
+- **Note:** `TraitSetSetting` carries only `sfx_ids` here; its limit/sort-order/order fields are Phase 4, not this ticket. `ContestTracker.push_contest` becomes a `table`-owned SFX (follow-on). P3.3 (buy-hitch) consumes the `gm` owner.
+
 ### P2.8 — Backend: wire SFX triggers into the roll/contest flow
 - **Status:** pending
 - **What:** `on_roll` / `on_complication` / `on_success` / `on_botch` (and contest win/loss) fire automatically.
 - **Done:** a roll/contest fires matching SFX without a manual `/effects/trigger` call.
-- **Depends:** P2.1
+- **Depends:** P2.1, P2.7b
 - **Load:** `services/effects_engine.py` (`fire_contest_sfx`, `process_event`, `contest_to_events`), `api/rest/effects.py`, `services/effect_targets.py` + `services/effects_applier.py` (`resolve_choice`, pending choices), `domain/__init__.py` (`DieRoll`, `ContestResult.stakes`, `ContestWinner` — no tie), [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.9 — Backend: condition-based SFX triggers
@@ -159,32 +167,39 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** P2.8
 - **Load:** to-do "Triggers", `services/conditions.py`, `domain/__init__.py` (`Condition`, `ConditionType`), `services/effects_engine.py` (`_trigger_matches`).
 
-### P2.10 — Frontend: dice-pool styling per roll kind
+### P2.10 — Frontend: test & contest play flow (opponent + resolve wiring)
+- **Status:** pending
+- **What:** the client runs both roll kinds end-to-end. Tests: GM sets difficulty on their device → player rolls against it on theirs → verdict (P2.5b landed the two-device flow; this ticket verifies it round-trips with P2.7 persistence and resolves the pure 2-die picker edge case). Contests: a challenger designates an opponent, both sides assemble a pool, the client calls `/resolve`, and the verdict (winner, both totals, effect dice, `stakes`) renders with a give-in hook. Wires the contest-tracker REST (`set-opposition`, `resolve`) into `useApi.js` and the DiceRoller/App flow — the client has no contest methods today.
+- **Done:** a player can run a test against a GM-set difficulty and a two-sided contest against a designated opponent entirely through the client (no manual REST/GraphQL).
+- **Depends:** P2.4, P2.5b
+- **Load:** `composables/useApi.js` (contest-tracker methods — none exist yet), `api/rest/contest_pools.py` (`set-opposition`, `resolve`, 409 guard), `services/contest_tracker.py` (`can_resolve`, `get_contestants`, `resolve`), `components/DiceRoller.vue`, `App.vue` (SSE `roll_result`, difficulty round-trip).
+
+### P2.11 — Frontend: dice-pool styling per roll kind
 - **Status:** pending
 - **What:** the pool is visually distinguished by simple-test / cortex-test / challenger-contest / defendant-contest / roll-table.
 - **Done:** a user can tell at a glance what they're rolling for from the pool styling.
 - **Depends:** P2.1
 - **Load:** to-do "Style dicepool", `components/DiceRoller.vue`, `domain/__init__.py` (`RollKind`: test/contest/roll_table — the five visual kinds are UI-level), [[Pressure-Test Log]] § Scenario 4.
 
-### P2.11 — Frontend: rolling dice animation
+### P2.12 — Frontend: rolling dice animation
 - **Status:** pending
 - **What:** a short animation on roll (blinking random faces or an infinite-scroll feel).
 - **Done:** dice visibly animate before settling on the result.
 - **Depends:** —
 - **Load:** to-do "Rolling dice animation", `components/DieIcon.vue`, `components/DiceRoller.vue`.
 
-### P2.12 — Backend + frontend: exclude hitches from effect-die selection
+### P2.13 — Backend + frontend: exclude hitches from effect-die selection
 - **Status:** pending
 - **What:** auto-selection (resolver + dice-pool UI) never picks a die that rolled a 1 as the effect die.
 - **Done:** the effect die is the largest leftover non-hitch die (d4 fallback when none).
 - **Depends:** —
 - **Load:** `services/dice_resolver.py` (`_resolve_pool` effect-die block), `components/DiceRoller.vue` (result/effect click, `isHitch`), `components/DieIcon.vue`, `domain/__init__.py` (`DieSpec`/`DieRoll` — selection is by die type, not source).
 
-### P2.13 — Backend + frontend: contest give-in
+### P2.14 — Backend + frontend: contest give-in
 - **Status:** pending
 - **What:** a losing initiator can give in on their own terms — define the failure, can't immediately re-initiate against the same opponent, earn the usual reward.
 - **Done:** the give-in option appears in the contest flow and ends the back-and-forth.
-- **Depends:** P2.3
+- **Depends:** P2.3, P2.10
 - **Load:** `services/contest_tracker.py` (`get_contestants`, `resolve`), `services/dice_resolver.py` (`resolve_contest` — ties favor initiator), [[Pressure-Test Log]] § Scenario 4.
 
 ## Phase 3 — Stakes & consequences
@@ -207,7 +222,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Status:** pending
 - **What:** a GM-owned SFX that, triggered on a player-rolled hitch, earns the player razmerit and introduces a complication / steps up the doom pool.
 - **Done:** buying a hitch applies `earn_razmerit` (to the player) + a complication effect via the SFX owner model.
-- **Depends:** P3.1 (render), P2.8 (hitch trigger), SFX owner model (Phase 3)
+- **Depends:** P3.1 (render), P2.8 (hitch trigger), P2.7b (SFX owner model)
 - **Load:** [[Pressure-Test Log]] § Scenario 5, `services/razmerit.py` (earn), `services/effects_registry.py` (`earn_razmerit`), `services/effects_applier.py` (complication effects).
 - **Note:** rename `dice_resolver.razmerit_earned` → `hitches_count` (or drop it) — it currently encodes the wrong "auto-earn" assumption; hitches are buyable, not earned.
 
