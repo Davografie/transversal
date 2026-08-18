@@ -228,6 +228,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** supersedes the temporary inline "Difficulty set" flash in `DiceRoller.vue`; `ToastBar` is currently gated `v-if="gmMode"`.
 - **Load:** `components/ToastBar.vue`, `App.vue` (`addToast`/`toasts`), `components/DiceRoller.vue` (difficulty flash).
 
+### P2.16 — Backend + frontend: resource dice (spend / roll / recover)
+- **Status:** pending
+- **What:** resource traits are pools of dice that are committed to a test/contest and rolled *separately* from the main pool. Per the manual: players choose how many resource dice to roll; after they're rolled those dice are spent; if more than one is spent, only the highest applies and its result is added to the total; resources recover at session start, during downtime, or via one-for-one spend.
+- **Done:** a resource trait's dice can be committed, rolled (highest applies, added to the total), spent, and recovered per the above rules.
+- **Depends:** P2.10b (pool/trait model), P2.13 (effect-die/hitch interplay)
+- **Note:** multi-die ratings are the *resource* case — a pool die is a single `DieSpec` (per-die), so there is no "string → array" change to pool dice; the work is the resource commit/roll-separately/recover mechanics and the trait-setting re-sync for multi-die arrays.
+- **Load:** `domain/__init__.py` (`TraitSetting.dice`, `RatingType.RESOURCE`), `services/dice_resolver.py`, `services/entity_manager.py` (spend/recover), `api/rest/resource_pool.py`, `components/CharacterSheet.vue` (resource display/spend), `components/DiceRoller.vue`.
+
 ## Phase 3 — Stakes & consequences
 
 ### P3.1 — Frontend: looming doom dice render
