@@ -36,6 +36,13 @@
       >
         <DieIcon :die="die.die" :label="die.label || die.source" />
       </div>
+      <button
+        v-if="mode !== 'roll_table'"
+        class="add-die-toggle"
+        :class="{ active: showDiePicker }"
+        :title="showDiePicker ? 'Hide dice' : 'Add die'"
+        @click="showDiePicker = !showDiePicker"
+      >{{ showDiePicker ? '×' : '+' }}</button>
     </div>
 
     <div v-if="isAdding() && mode !== 'roll_table' && gmMode && !actingEntityId" class="difficulty-presets">
@@ -50,7 +57,7 @@
       </button>
     </div>
 
-    <div class="add-die" v-if="isAdding() && mode !== 'roll_table'">
+    <div class="add-die" v-if="isAdding() && mode !== 'roll_table' && showDiePicker">
       <button v-for="d in dies" :key="d" class="die-btn" :class="`die-btn-${d}`" @click="addDie(d)">
         <DieIcon :die="d" class="add-die-icon" />
       </button>
@@ -254,6 +261,7 @@ const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
 const rollingFaces = ref([]) // [{ die, face }] animated faces during ROLLING
+const showDiePicker = ref(false)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
 const difficultyPresets = [
   { label: 'Very Easy', die: 'd4' },
@@ -1056,6 +1064,7 @@ function resetEditor() {
   challenged.value = false
   isChallenger.value = false
   opponentId.value = ''
+  showDiePicker.value = false
 }
 
 function clearPool() {
@@ -1188,6 +1197,29 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 .die-chip:hover { opacity: 0.7; }
 
+.add-die-toggle {
+  width: 36px;
+  height: 40px;
+  border-radius: 8px;
+  border: 2px dashed rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.add-die-toggle:hover,
+.add-die-toggle.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(64,136,212,0.12);
+}
+
 .add-die { display: flex; gap: 6px; justify-content: center; }
 .die-btn {
   flex: 1; padding: 4px;
@@ -1220,7 +1252,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .result-eff-icon { width: 28px; height: 32px; }
 .effect-result { display: flex; align-items: center; gap: 4px; }
 .effect-result-label { font-size: 11px; color: var(--text-dim); }
-.effect-result-icon { width: 24px; height: 26px; }
+.effect-result-icon { width: 32px; height: 36px; }
 
 .resolved-result {
   display: flex; align-items: center; justify-content: center; gap: 16px; padding: 8px 0;
