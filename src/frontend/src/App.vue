@@ -245,7 +245,7 @@
         class="embedded-sheet"
         :class="{ 'sheet-hidden': !sheetVisible }"
         :entity-id="entityId"
-        :override-entity-id="gmMode ? actingEntityId : viewingEntityId"
+        :override-entity-id="viewingEntityId"
         :viewer-entity-id="entityId"
         :player-owned-entity-ids="ownedEntityIds"
         :universe="universe"
@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :remote-pools="remotePools" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="(id) => actingEntityId = id" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :remote-pools="remotePools" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -407,12 +407,12 @@ function onMoved(data) {
 const entityId = ref(localStorage.getItem('entityId') || 'kael-1')
 const editZones = ref(false)
 
-// When switching entities, update location
+// When switching entities, update location (players only — for GM, entityId
+// is a freely-switchable perspective and must not re-init location or persist).
 watch(entityId, () => {
-  if (entityId.value) {
-    localStorage.setItem('entityId', entityId.value)
-    initLocation()
-  }
+  if (!entityId.value || gmMode.value) return
+  localStorage.setItem('entityId', entityId.value)
+  initLocation()
 })
 const keepCount = ref(2)
 const effectCount = ref(1)
@@ -713,6 +713,7 @@ function onPoolChange(s) {
 
 function onInspectEntity(id) {
   if (gmMode.value) {
+    entityId.value = id
     actingEntityId.value = id
   } else {
     viewingEntityId.value = id
@@ -723,11 +724,28 @@ function onInspectEntity(id) {
 
 function onPeerClick(id) {
   if (gmMode.value) {
-    actingEntityId.value = (actingEntityId.value === id) ? null : id
+    if (actingEntityId.value === id) {
+      actingEntityId.value = null
+      entityId.value = selfEntityId.value
+    } else {
+      actingEntityId.value = id
+      entityId.value = id
+    }
   } else {
     viewingEntityId.value = (viewingEntityId.value === id) ? null : id
   }
   forceSheet.value = true
+}
+
+function onActingEntityChange(id) {
+  if (!gmMode.value) return
+  if (id) {
+    actingEntityId.value = id
+    entityId.value = id
+  } else {
+    actingEntityId.value = null
+    entityId.value = selfEntityId.value
+  }
 }
 
 function onDiceRolled(result) {
@@ -977,6 +995,7 @@ let closeTimer = null
 const currentPoolSources = ref([])
 const viewingEntityId = ref(null)
 const actingEntityId = ref(null)  // GM: entity being acted as (null = difficulty roller)
+const selfEntityId = ref(localStorage.getItem('entityId') || 'kael-1')  // GM's fallback perspective
 const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')

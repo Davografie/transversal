@@ -8,7 +8,7 @@
         :class="{ active: activeId === e.id }"
         @click="switchTab(e.id)"
       >
-        {{ e.id === entityId ? (gmMode ? 'Difficulty' : 'You') : e.name }}
+        {{ e.name }}
       </button>
     </div>
 
@@ -257,8 +257,9 @@ const showConsequences = ref(false)
 const consequenceSide = ref('player')
 
 // ── GM roll purpose + per-entity pool tabs ───────────
+const DIFFICULTY_TAB = '__difficulty__'
 const poolPurpose = ref(null) // GM mode: 'difficulty' | 'gmc' | null
-const activeId = ref(props.entityId)
+const activeId = ref(props.gmMode ? DIFFICULTY_TAB : props.entityId)
 const viewPool = ref([])
 const opponentId = ref('')
 const contestResult = ref(null)
@@ -268,24 +269,34 @@ const isChallenger = ref(false)
 const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
-  // Self/difficulty tab always present; peers only when they have an active pool.
-  const list = [{ id: props.entityId, name: props.gmMode ? 'Difficulty' : 'You' }]
-  const seen = new Set([props.entityId])
+  // Difficulty/You tab always present; peers only when they have an active pool.
+  const list = props.gmMode
+    ? [{ id: DIFFICULTY_TAB, name: 'Difficulty' }]
+    : [{ id: props.entityId, name: 'You' }]
+  const seen = new Set(list.map(e => e.id))
+  if (props.actingEntityId && !seen.has(props.actingEntityId)) {
+    seen.add(props.actingEntityId)
+    const name = (props.peers || []).find(p => p.id === props.actingEntityId)?.name || props.actingEntityId
+    list.push({ id: props.actingEntityId, name })
+  }
   for (const [eid, rp] of Object.entries(props.remotePools || {})) {
-    if (eid === props.entityId || seen.has(eid)) continue
+    if (seen.has(eid)) continue
     if (!rp || !rp.dice || !rp.dice.length) continue
     seen.add(eid)
     const name = (props.peers || []).find(p => p.id === eid)?.name || eid
     list.push({ id: eid, name })
   }
-  if (props.actingEntityId && !seen.has(props.actingEntityId)) {
-    const name = (props.peers || []).find(p => p.id === props.actingEntityId)?.name || props.actingEntityId
-    list.push({ id: props.actingEntityId, name })
-  }
   return list
 })
 const editingEntityId = computed(() => props.actingEntityId || props.entityId)
-const isEditing = computed(() => activeId.value === editingEntityId.value)
+const isEditing = computed(() => {
+  if (props.gmMode) {
+    return props.actingEntityId
+      ? activeId.value === props.actingEntityId
+      : activeId.value === DIFFICULTY_TAB
+  }
+  return activeId.value === props.entityId
+})
 const activeName = computed(() => tabEntities.value.find(e => e.id === activeId.value)?.name || activeId.value)
 const opponentName = computed(() => tabEntities.value.find(e => e.id === opponentId.value)?.name || 'Opponent')
 const winnerLabel = computed(() => {
@@ -304,8 +315,8 @@ function markPurpose(kind) {
 async function switchTab(id) {
   activeId.value = id
   if (props.gmMode) {
-    // GM: switching tab = acting as that entity (or back to difficulty on self).
-    emit('actingEntityChange', id === props.entityId ? null : id)
+    // GM: Difficulty tab = transient difficulty roller; entity tab = act as that entity.
+    emit('actingEntityChange', id === DIFFICULTY_TAB ? null : id)
     return
   }
   // Player: only self is editable; peers are read-only.
@@ -318,7 +329,7 @@ async function switchTab(id) {
 }
 
 watch(() => props.entityId, (id) => {
-  activeId.value = id
+  if (!props.gmMode) activeId.value = id
 })
 
 watch(() => props.actingEntityId, async (id) => {
@@ -327,7 +338,7 @@ watch(() => props.actingEntityId, async (id) => {
     activeId.value = id
     await loadPoolIntoEditor(id)
   } else {
-    activeId.value = props.entityId
+    activeId.value = DIFFICULTY_TAB
     resetEditor()
   }
 })
