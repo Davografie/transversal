@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -419,6 +419,7 @@ const effectCount = ref(1)
 const phase = ref('adding')
 const rollerMode = ref('cortex') // 'cortex' | 'roll_table' (driven by CharacterSheet tab)
 const currentDifficulty = ref(null) // GM-set test difficulty (ephemeral, session-scoped)
+const sfxChoiceRequest = ref(null) // pending {choose_*} auto-fired SFX choices for this player
 
 // Player identity
 const playerId = ref(localStorage.getItem('playerId') || '')
@@ -895,6 +896,11 @@ watch(lastEvent, (evt) => {
         if (!gmMode.value) {
           addToast(`Difficulty set: ${evt.data.difficulty}`, 'roll')
         }
+      }
+      break
+    case 'sfx_choice_required':
+      if (evt.data?.entity_id === entityId.value) {
+        sfxChoiceRequest.value = (evt.data.choices || []).map((c, i) => ({ ...c, index: i }))
       }
       break
   }

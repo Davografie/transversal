@@ -147,6 +147,16 @@
       <ConsequenceMenu :entity-id="entityId" :side="consequenceSide" :effect-die="consequenceEffectDie" @close="showConsequences = false" />
     </div>
 
+    <div v-if="!gmMode && sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
+      <EffectTargetWizard
+        :entity-id="entityId"
+        :pending-choices="sfxChoiceRequest"
+        title="SFX choice"
+        @resolve="resolveSfxChoices"
+        @cancel="clearSfxChoices"
+      />
+    </div>
+
     <div v-if="error" class="error">{{ error }}</div>
   </div>
 </template>
@@ -154,8 +164,10 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
+import { useEffectApplication } from '../composables/useEffectApplication.js'
 import DieIcon from './DieIcon.vue'
 import ConsequenceMenu from './gm/ConsequenceMenu.vue'
+import EffectTargetWizard from './gm/EffectTargetWizard.vue'
 
 const props = defineProps({
   entityId: { type: String, default: 'kael-1' },
@@ -167,11 +179,13 @@ const props = defineProps({
   difficulty: { type: Number, default: null }, // received difficulty (player mode)
   playerId: { type: String, default: '' },
   locationId: { type: String, default: '' },
+  sfxChoiceRequest: { type: Array, default: () => [] }, // pending {choose_*} auto-fired SFX choices
 })
 
-const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty'])
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved'])
 
 const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool } = useApi()
+const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
 const dies = ['d4', 'd6', 'd8', 'd10', 'd12']
@@ -185,6 +199,14 @@ const difficultyPresets = [
 const panelOpen = ref(false)
 const showConsequences = ref(false)
 const consequenceSide = ref('player')
+
+async function resolveSfxChoices(resolutions) {
+  await resolveEffectTargets(props.entityId, resolutions)
+  emit('sfx-choice-resolved')
+}
+function clearSfxChoices() {
+  emit('sfx-choice-resolved')
+}
 watch(panelOpen, (v) => emit('panelOpen', v))
 
 let rollerTouchY = 0
@@ -805,6 +827,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 
 .controls { display: flex; gap: 8px; }
 .consequence-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.sfx-choice-panel { margin-top: 8px; }
 .consequence-side { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); }
 .consequence-side select { font-size: 11px; padding: 3px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; }
 .roll-btn { width: 100%; font-size: 18px; font-weight: 700; padding: 10px; }
