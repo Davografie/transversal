@@ -23,6 +23,15 @@
         <span v-else class="contest-status">⚔️ {{ opponentName }}</span>
       </div>
     </div>
+    <div v-if="!gmMode && sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
+      <EffectTargetWizard
+        :entity-id="entityId"
+        :pending-choices="sfxChoiceRequest"
+        title="SFX choice"
+        @resolve="resolveSfxChoices"
+        @cancel="clearSfxChoices"
+      />
+    </div>
     <div v-if="!gmMode && difficulty != null" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
@@ -176,9 +185,9 @@
       </template>
     </div>
 
-    <div class="controls" v-if="isAdding() || isPicking()">
-      <button v-if="isAdding() && (pool.length > 0 || loading)" @click="doRoll" :disabled="loading" class="roll-btn">
-        {{ loading ? 'Rolling…' : 'Roll' }}
+    <div class="controls" v-if="isAdding() || isPicking() || isRolling()">
+      <button v-if="(isAdding() || isRolling()) && (pool.length > 0 || loading)" @click="doRoll" :disabled="loading || isRolling()" class="roll-btn">
+        {{ loading || isRolling() ? 'Rolling…' : 'Roll' }}
       </button>
       <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
         {{ challenged ? 'Set' : 'Done' }}
@@ -200,16 +209,6 @@
         </select>
       </div>
       <ConsequenceMenu :entity-id="entityId" :side="consequenceSide" :effect-die="consequenceEffectDie" @close="showConsequences = false" />
-    </div>
-
-    <div v-if="!gmMode && sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
-      <EffectTargetWizard
-        :entity-id="entityId"
-        :pending-choices="sfxChoiceRequest"
-        title="SFX choice"
-        @resolve="resolveSfxChoices"
-        @cancel="clearSfxChoices"
-      />
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
