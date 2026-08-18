@@ -983,9 +983,7 @@ function onPickCommit() {
 }
 
 function clearResult() {
-  result.value = null
-  selection.total = []
-  selection.effect = []
+  resetEditor()
   setPhase(Phase.ADDING)
 }
 
@@ -998,6 +996,7 @@ function resetEditor() {
   contestError.value = ''
   challenged.value = false
   isChallenger.value = false
+  opponentId.value = ''
 }
 
 function clearPool() {
