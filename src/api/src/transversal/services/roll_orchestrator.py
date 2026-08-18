@@ -39,11 +39,13 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list) -> None:
 
     choices = [
         {
-            "kind": effects_applier.choose_kind(effect.target),
-            "scope": effect.target_scope,
-            "effect": effect.model_dump(),
+            "kind": effects_applier.choose_kind(p.effect.target),
+            "scope": p.effect.target_scope,
+            "sfx_name": p.sfx_name,
+            "sfx_description": p.sfx_description,
+            "effect": p.effect.model_dump(),
         }
-        for effect in effects
+        for p in effects
     ]
     for session in session_manager.list_active():
         event_bus.publish(StreamEvent(

@@ -56,6 +56,14 @@ class ScheduledEffect:
 
 
 @dataclass
+class PendingSfxEffect:
+    """A pending ``{choose_*}`` effect plus its source SFX for display."""
+    effect: Effect
+    sfx_name: str
+    sfx_description: str = ""
+
+
+@dataclass
 class EventOutcome:
     """Result of processing an event through the effects engine.
 
@@ -64,7 +72,7 @@ class EventOutcome:
     resolution before they can be applied.
     """
     applied: list[Effect] = field(default_factory=list)
-    pending: list[Effect] = field(default_factory=list)
+    pending: list[PendingSfxEffect] = field(default_factory=list)
 
 
 # ── Effect Application ───────────────────────────────
@@ -172,7 +180,11 @@ class EffectsEngine:
                     continue
                 if effect.timing == EffectTiming.IMMEDIATE:
                     if _effects_applier.is_choose_target(effect.target or ""):
-                        outcome.pending.append(effect)
+                        outcome.pending.append(PendingSfxEffect(
+                            effect=effect,
+                            sfx_name=sfx.name,
+                            sfx_description=sfx.description,
+                        ))
                     else:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
                         outcome.applied.append(effect)

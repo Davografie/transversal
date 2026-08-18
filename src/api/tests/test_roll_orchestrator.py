@@ -121,7 +121,7 @@ def test_process_event_outcome_returns_pending_for_choose_target():
 
     outcome = engine.process_event_outcome(event, ["sfx-choose"], 10)
     assert outcome.applied == []
-    assert [e.target for e in outcome.pending] == ["{choose_trait}"]
+    assert [p.effect.target for p in outcome.pending] == ["{choose_trait}"]
 
 
 def test_fire_roll_sfx_emits_choose_target_instead_of_applying(monkeypatch):
@@ -140,7 +140,7 @@ def test_fire_roll_sfx_emits_choose_target_instead_of_applying(monkeypatch):
 
     applied = fire_roll_sfx(engine, repo, "e1", "earth", _simplified())
     assert applied == []
-    assert [e.target for e in emitted] == ["{choose_trait}"]
+    assert [p.effect.target for p in emitted] == ["{choose_trait}"]
 
 
 def test_is_choose_target_and_choose_kind():
