@@ -12,6 +12,7 @@ from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.domain import Effect, Entity
 from transversal.services.effects_applier import EffectsResult, apply_effects
 from transversal.services.session_manager import session_manager
+from transversal.services.state_events import fire_state_sfx
 
 
 def _publish(event: str, data: dict) -> None:
@@ -60,14 +61,20 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     for ts in result.new_trait_settings:
         repo.create_traitsetting(ts)
         _publish("trait_updated", {"entity_id": ts.entity_id, "trait_id": ts.trait_id})
+        fire_state_sfx(ts.entity_id, entity.current_universe, "trait_updated",
+                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
     for ts in result.updated_trait_settings:
         repo.update_traitsetting(ts)
         _publish("trait_updated", {"entity_id": ts.entity_id, "trait_id": ts.trait_id})
+        fire_state_sfx(ts.entity_id, entity.current_universe, "trait_updated",
+                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
     # Relationship edges produced by the applier.
     for rel in result.new_relationships:
         repo.create_relationship(
             rel["from"], rel["to"], rel["type"], rel.get("description", ""),
         )
+        fire_state_sfx(rel["from"], entity.current_universe, "relationship_created",
+                       {"target": rel["to"], "type": rel["type"]})
 
     return result

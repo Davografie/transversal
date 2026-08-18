@@ -37,6 +37,8 @@ class InMemoryRepository(EntityRepository):
         self._traits: dict[str, dict] = {}
         self._traitsets: dict[str, dict] = {}
         self._traitsettings: dict[str, dict] = {}
+        self._traitsetsettings: dict[str, dict] = {}
+        self._sfx_owners: dict[str, dict] = {}
         self.db = None
 
     def _store(self, coll: dict, key: str, doc: dict) -> dict:
@@ -120,6 +122,9 @@ class InMemoryRepository(EntityRepository):
             for d in self._traitsettings.values()
             if d["entity_id"] == eid and (d["trait_id"] in universe_trait_ids or d.get("ego", False))
         ]
+
+    def get_effective_traitsetsettings(self, eid: str, universes: list[str]) -> list:
+        return []
 
     # assembly
     def assemble_character(self, eid: str):

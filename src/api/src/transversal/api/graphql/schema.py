@@ -68,6 +68,7 @@ from transversal.domain import EntityType as DomainEntityType
 from transversal.domain import TraitSetting as DomainTraitSetting
 from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import Condition as DomainCondition
+from transversal.domain import ConditionType as DomainConditionType
 from transversal.domain import Effect as DomainEffect
 from transversal.domain import ConsequenceOption as DomainConsequenceOption
 from transversal.domain import RollTable as DomainRollTable
@@ -934,7 +935,14 @@ class Mutation:
         if input.description is not None:
             existing.description = input.description
         if input.limit is not None:
-            existing.limit = input.limit
+            existing.conditions = [
+                c for c in (existing.conditions or [])
+                if c.type != DomainConditionType.NARRATIVE
+            ]
+            if input.limit:
+                existing.conditions.append(
+                    DomainCondition(type=DomainConditionType.NARRATIVE, narrative=input.limit)
+                )
         if input.trigger is not None:
             existing.trigger = input.trigger
         if input.effects is not None:

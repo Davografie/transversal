@@ -11,6 +11,7 @@ from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
 from transversal.services.change_log import change_log
 from transversal.services.session_manager import session_manager
+from transversal.services.state_events import fire_state_sfx
 
 
 def _publish_to_sessions(event: StreamEvent) -> None:
@@ -29,6 +30,7 @@ def _publish_location_changed(entity: Entity, old_location: Optional[str], old_u
         data={"entity_id": entity.id, "from": old_location or "",
               "to": entity.current_location or "", "universe": entity.current_universe},
     ))
+    fire_state_sfx(entity.id, entity.current_universe, "location_changed")
 from transversal.domain import (
     CharacterView,
     Entity,
@@ -385,6 +387,8 @@ class EntityManager:
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
                   "old_rating": old_rating, "new_rating": dice_list_to_rating(ts.dice)},
         ))
+        fire_state_sfx(ts.entity_id, None, "trait_updated",
+                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
         return result
 
@@ -403,6 +407,8 @@ class EntityManager:
             data={"entity_id": ts.entity_id, "trait_id": ts.trait_id,
                   "old_rating": old_rating, "new_rating": dice_list_to_rating(ts.dice)},
         ))
+        fire_state_sfx(ts.entity_id, None, "trait_updated",
+                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
         return result
 
