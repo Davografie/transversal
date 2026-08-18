@@ -193,7 +193,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `services/contest_tracker.py` (contest phase/state + SSE), `api/rest/contest_pools.py` (`challenge`/`set`/`give-in`/`resolve`), `api/sse/*`, `components/DiceRoller.vue` (phase machine, tabs as the acting entity, set/give-in buttons), `App.vue`, `composables/useApi.js`, [[Pressure-Test Log]] § Scenario 4.
 
 ### P2.10c — Backend + frontend: multi-die static traits
-- **Status:** pending
+- **Status:** done
 - **What:** a static trait with a multi-die rating (e.g. `TraitSetting.dice = [d10, d10]`, like "Law of the Dao") contributes **all** of its dice to the pool, not just the first. Add/remove toggles all dice of that trait-setting id as a group, and the trait→pool re-sync updates every matching die together.
 - **Done:** adding a `[d10, d10]` static trait puts two `d10` pool dice in the pool (one `DieSpec` each, same `ts_id`); toggling removes both; a step up/down re-syncs the matching dice as a group.
 - **Depends:** P2.10b (pool/trait model), P2.7 (SceneStateStore + `resync_trait_die`)
@@ -201,7 +201,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `components/CharacterSheet.vue` (`onTraitClick`, `resolvedDieType`), `components/DiceRoller.vue` (`addFromSheet`, `removeByTsId`, `resyncTraitDie`), `App.vue` (`trait_updated` routing), `services/scene_state.py` (`resync_trait_die` + `resync_pool_dice_for_trait`), `services/effects_commit.py` / `entity_manager.py` (`trait_updated` payload).
 
 ### P2.11 — Frontend: dice-pool styling per roll kind
-- **Status:** pending
+- **Status:** done
 - **What:** the pool is visually distinguished by simple-test / cortex-test / challenger-contest / defendant-contest / roll-table.
 - **Done:** a user can tell at a glance what they're rolling for from the pool styling.
 - **Depends:** P2.1

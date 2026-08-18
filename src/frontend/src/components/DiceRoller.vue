@@ -1,5 +1,5 @@
 <template>
-  <div class="dice-roller panel" :class="{ open: panelOpen }" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd">
+  <div class="dice-roller panel" :class="[{ open: panelOpen }, `kind-${rollKind}`]" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd">
     <div class="pool-tabs" v-if="tabEntities.length > 1">
       <button
         v-for="e in tabEntities"
@@ -13,6 +13,7 @@
     </div>
 
     <template v-if="isEditing">
+    <div v-if="rollKindLabel" class="roll-kind-badge">{{ rollKindLabel }}</div>
     <div v-if="!gmMode && difficulty != null" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
@@ -308,6 +309,26 @@ const winnerLabel = computed(() => {
 })
 const challengerLabel = computed(() => isChallenger.value ? 'You' : opponentName.value)
 const defendantLabel = computed(() => isChallenger.value ? opponentName.value : 'You')
+
+// ── Roll kind (P2.11: visual pool styling per roll kind) ───────────
+const ROLL_KIND_LABELS = {
+  'simple-test': 'Simple Test',
+  'cortex-test': 'Cortex Test',
+  'challenger-contest': 'Challenger',
+  'defendant-contest': 'Defendant',
+  'roll-table': 'Roll Table',
+  'difficulty': 'Difficulty',
+}
+const rollKind = computed(() => {
+  if (props.mode === 'roll_table') return 'roll-table'
+  if (challenged.value) return isChallenger.value ? 'challenger-contest' : 'defendant-contest'
+  if (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) return 'difficulty'
+  // Test: use the rolled pipeline when known, else predict from assembled size
+  // (the resolver routes ≤2 dice to simplified, 3+ to pool).
+  const pipeline = result.value?.pipeline ?? (pool.length > 2 ? 'pool' : 'simplified')
+  return pipeline === 'pool' ? 'cortex-test' : 'simple-test'
+})
+const rollKindLabel = computed(() => ROLL_KIND_LABELS[rollKind.value] || '')
 
 function markPurpose(kind) {
   if (pool.length === 0) poolPurpose.value = kind
@@ -1054,6 +1075,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
+  border-top: 3px solid var(--kind-accent, transparent);
 }
 
 .phase-bar {
@@ -1212,4 +1234,22 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .opposition-result strong { color: var(--text); }
 .outcome-success { color: var(--success); font-weight: 700; }
 .outcome-fail { color: var(--danger); font-weight: 700; }
+
+/* ── Roll kind styling (P2.11) ─────────────────────── */
+.kind-simple-test { --kind-accent: #e0e0e0; }
+.kind-cortex-test { --kind-accent: #4088d4; }
+.kind-challenger-contest { --kind-accent: #e88830; }
+.kind-defendant-contest { --kind-accent: #d44040; }
+.kind-roll-table { --kind-accent: #40b860; }
+.kind-difficulty { --kind-accent: #b080d4; }
+
+.roll-kind-badge {
+  align-self: flex-start;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.5px;
+  padding: 3px 10px; border-radius: 999px;
+  color: var(--kind-accent);
+  border: 1px solid var(--kind-accent);
+  background: rgba(255,255,255,0.04);
+}
 </style>
