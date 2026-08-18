@@ -52,7 +52,7 @@
 
     <div class="add-die" v-if="isAdding() && mode !== 'roll_table'">
       <button v-for="d in dies" :key="d" class="die-btn" :class="`die-btn-${d}`" @click="addDie(d)">
-        {{ d }}
+        <DieIcon :die="d" class="add-die-icon" />
       </button>
     </div>
 
@@ -1162,10 +1162,15 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 
 .add-die { display: flex; gap: 6px; justify-content: center; }
 .die-btn {
-  flex: 1; padding: 8px 4px; font-size: 14px; font-weight: 700;
+  flex: 1; padding: 4px;
   border-radius: 8px; cursor: pointer; transition: all 0.15s;
   border: 2px solid transparent; background: rgba(255,255,255,0.06);
   color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+}
+.add-die-icon {
+  width: 28px;
+  height: 30px;
 }
 .die-btn:hover { background: rgba(255,255,255,0.12); border-color: var(--accent-dim); }
 .die-btn-d4  { color: #e88830; }

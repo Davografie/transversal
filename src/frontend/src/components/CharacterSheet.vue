@@ -1710,8 +1710,8 @@ watch(() => props.externalPoolSources, (sources) => {
   gap: 2px;
 }
 .trait-die-icon {
-  width: 20px;
-  height: 22px;
+  width: 28px;
+  height: 30px;
 }
 
 .polarity-badge {
