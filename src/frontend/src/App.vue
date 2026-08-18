@@ -216,7 +216,7 @@
     :remote-pools="remotePools"
     :remote-results="remoteResults"
     @moved="onMoved"
-    @inspect-entity="(id) => { viewingEntityId = id; forceSheet = true; sheetVisible = true }"
+    @inspect-entity="onInspectEntity"
   />
   <RelationalCanvas
     v-if="fullCanvas"
@@ -233,19 +233,19 @@
   <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="wrapperOpen && peers.length" class="peers-bar">
-        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: viewingEntityId === p.id || (!viewingEntityId && entityId === p.id) }" @click.stop="viewingEntityId = p.id === entityId ? null : (viewingEntityId === p.id ? null : p.id); forceSheet = true" :title="p.name">
+        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: (gmMode ? actingEntityId : viewingEntityId) === p.id || (!(gmMode ? actingEntityId : viewingEntityId) && entityId === p.id) }" @click.stop="onPeerClick(p.id)" :title="p.name">
           <img v-if="p.backgroundImage" :src="p.backgroundImage" class="peer-img" />
           <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
           <span class="peer-label">{{ p.name }}</span>
         </button>
       </div>
       <CharacterSheet
-        v-show="sheetVisible && !gmMode && (phase === 'adding' || forceSheet)"
+        v-show="sheetVisible && (phase === 'adding' || forceSheet) && (!gmMode || actingEntityId)"
         ref="sheetRef"
         class="embedded-sheet"
         :class="{ 'sheet-hidden': !sheetVisible }"
         :entity-id="entityId"
-        :override-entity-id="viewingEntityId"
+        :override-entity-id="gmMode ? actingEntityId : viewingEntityId"
         :viewer-entity-id="entityId"
         :player-owned-entity-ids="ownedEntityIds"
         :universe="universe"
@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :remote-pools="remotePools" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="(id) => actingEntityId = id" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -699,6 +699,25 @@ function onPoolChange(s) {
   sheetRef.value?.setPoolSources(s)
 }
 
+function onInspectEntity(id) {
+  if (gmMode.value) {
+    actingEntityId.value = id
+  } else {
+    viewingEntityId.value = id
+  }
+  forceSheet.value = true
+  sheetVisible.value = true
+}
+
+function onPeerClick(id) {
+  if (gmMode.value) {
+    actingEntityId.value = (actingEntityId.value === id) ? null : id
+  } else {
+    viewingEntityId.value = (viewingEntityId.value === id) ? null : id
+  }
+  forceSheet.value = true
+}
+
 function onDiceRolled(result) {
   if (rollerMode.value === 'roll_table') {
     bus.emit('roll-table:rolled', result)
@@ -899,7 +918,10 @@ watch(lastEvent, (evt) => {
       break
     case 'contest_challenged':
       if (gmMode.value) addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
-      else if (evt.data?.opponent_id === entityId.value) addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice')
+      else if (evt.data?.opponent_id === entityId.value) {
+        diceRef.value?.onChallenged(evt.data.challenger_id)
+        addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice')
+      }
       break
     case 'contest_set':
       if (gmMode.value) addToast(`${name} set their result (${evt.data?.total})`, 'roll')
@@ -908,6 +930,7 @@ watch(lastEvent, (evt) => {
       if (gmMode.value) addToast(`${name} gave in`, 'roll')
       break
     case 'contest_resolved':
+      diceRef.value?.setContestOutcome(evt.data)
       addToast('Contest resolved', 'roll')
       break
     case 'sfx_choice_required':
@@ -941,6 +964,7 @@ let closeTimer = null
 
 const currentPoolSources = ref([])
 const viewingEntityId = ref(null)
+const actingEntityId = ref(null)  // GM: entity being acted as (null = difficulty roller)
 const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')

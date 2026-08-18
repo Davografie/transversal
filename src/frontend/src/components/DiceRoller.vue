@@ -8,11 +8,11 @@
         :class="{ active: activeId === e.id }"
         @click="switchTab(e.id)"
       >
-        {{ e.id === entityId ? 'You' : e.name }}
+        {{ e.id === entityId ? (gmMode ? 'Difficulty' : 'You') : e.name }}
       </button>
     </div>
 
-    <template v-if="isSelf">
+    <template v-if="isEditing">
     <div v-if="!gmMode && difficulty != null" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
@@ -28,7 +28,7 @@
       </div>
     </div>
 
-    <div v-if="isAdding() && mode !== 'roll_table' && gmMode" class="difficulty-presets">
+    <div v-if="isAdding() && mode !== 'roll_table' && gmMode && !actingEntityId" class="difficulty-presets">
       <button
         v-for="p in difficultyPresets"
         :key="p.die"
@@ -46,12 +46,12 @@
       </button>
     </div>
 
-    <div v-if="!gmMode && mode !== 'roll_table' && tabEntities.length > 1 && (challenged || isAdding() || isPicking())" class="contest-setup">
+    <div v-if="(!gmMode || actingEntityId) && mode !== 'roll_table' && peers.length > 1 && (challenged || isAdding() || isPicking())" class="contest-setup">
       <div class="contest-row" v-if="!challenged && !contestResult">
         <label>Opponent</label>
         <select v-model="opponentId">
           <option value="" disabled>Choose…</option>
-          <option v-for="e in tabEntities.filter(e => e.id !== entityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
+          <option v-for="e in peers.filter(e => e.id !== editingEntityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
         <button class="roll-btn contest-btn" :disabled="!opponentId" @click="doChallenge">Challenge</button>
       </div>
@@ -61,9 +61,9 @@
       </div>
       <div v-if="contestError" class="error">{{ contestError }}</div>
       <div v-if="contestResult" class="contest-result">
-        <strong>{{ contestResult.winner === 'player' ? 'You win' : `${opponentName} wins` }}</strong>
-        <div v-if="contestResult.challenger">You: total {{ contestResult.challenger.total }} · effect {{ contestResult.challenger.effect_die || '—' }}</div>
-        <div v-if="contestResult.defendant">{{ opponentName }}: total {{ contestResult.defendant.total }} · effect {{ contestResult.defendant.effect_die || '—' }}</div>
+        <strong>{{ winnerLabel }}</strong>
+        <div v-if="contestResult.challenger">{{ challengerLabel }}: total {{ contestResult.challenger.total }} · effect {{ contestResult.challenger.effect_die || '—' }}</div>
+        <div v-if="contestResult.defendant">{{ defendantLabel }}: total {{ contestResult.defendant.total }} · effect {{ contestResult.defendant.effect_die || '—' }}</div>
         <div v-if="contestResult.stakes">Stakes: {{ contestResult.stakes }}</div>
         <div v-if="contestResult.gave_in">Gave in</div>
       </div>
@@ -234,9 +234,11 @@ const props = defineProps({
   locationId: { type: String, default: '' },
   sfxChoiceRequest: { type: Array, default: () => [] }, // pending {choose_*} auto-fired SFX choices
   peers: { type: Array, default: () => [] }, // [{ id, name }] other entities at the location
+  actingEntityId: { type: String, default: '' }, // entity being acted on (GM switchable; player = self)
+  remotePools: { type: Object, default: () => ({}) }, // entity_id → { dice, phase } from SSE
 })
 
-const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved'])
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
 const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
@@ -262,22 +264,38 @@ const opponentId = ref('')
 const contestResult = ref(null)
 const contestError = ref('')
 const challenged = ref(false)
+const isChallenger = ref(false)
 const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
+  // Self/difficulty tab always present; peers only when they have an active pool.
+  const list = [{ id: props.entityId, name: props.gmMode ? 'Difficulty' : 'You' }]
   const seen = new Set([props.entityId])
-  const list = [{ id: props.entityId, name: 'You' }]
-  for (const p of (props.peers || [])) {
-    if (p && p.id && !seen.has(p.id)) {
-      seen.add(p.id)
-      list.push({ id: p.id, name: p.name || p.id })
-    }
+  for (const [eid, rp] of Object.entries(props.remotePools || {})) {
+    if (eid === props.entityId || seen.has(eid)) continue
+    if (!rp || !rp.dice || !rp.dice.length) continue
+    seen.add(eid)
+    const name = (props.peers || []).find(p => p.id === eid)?.name || eid
+    list.push({ id: eid, name })
+  }
+  if (props.actingEntityId && !seen.has(props.actingEntityId)) {
+    const name = (props.peers || []).find(p => p.id === props.actingEntityId)?.name || props.actingEntityId
+    list.push({ id: props.actingEntityId, name })
   }
   return list
 })
-const isSelf = computed(() => activeId.value === props.entityId)
+const editingEntityId = computed(() => props.actingEntityId || props.entityId)
+const isEditing = computed(() => activeId.value === editingEntityId.value)
 const activeName = computed(() => tabEntities.value.find(e => e.id === activeId.value)?.name || activeId.value)
 const opponentName = computed(() => tabEntities.value.find(e => e.id === opponentId.value)?.name || 'Opponent')
+const winnerLabel = computed(() => {
+  if (!contestResult.value) return ''
+  const challengerWon = contestResult.value.winner === 'player'
+  if (challengerWon) return isChallenger.value ? 'You win' : `${opponentName.value} wins`
+  return isChallenger.value ? `${opponentName.value} wins` : 'You win'
+})
+const challengerLabel = computed(() => isChallenger.value ? 'You' : opponentName.value)
+const defendantLabel = computed(() => isChallenger.value ? opponentName.value : 'You')
 
 function markPurpose(kind) {
   if (pool.length === 0) poolPurpose.value = kind
@@ -285,6 +303,12 @@ function markPurpose(kind) {
 
 async function switchTab(id) {
   activeId.value = id
+  if (props.gmMode) {
+    // GM: switching tab = acting as that entity (or back to difficulty on self).
+    emit('actingEntityChange', id === props.entityId ? null : id)
+    return
+  }
+  // Player: only self is editable; peers are read-only.
   if (id === props.entityId) return
   viewPool.value = []
   if (!props.locationId) return
@@ -295,6 +319,17 @@ async function switchTab(id) {
 
 watch(() => props.entityId, (id) => {
   activeId.value = id
+})
+
+watch(() => props.actingEntityId, async (id) => {
+  if (!props.gmMode) return
+  if (id) {
+    activeId.value = id
+    await loadPoolIntoEditor(id)
+  } else {
+    activeId.value = props.entityId
+    resetEditor()
+  }
 })
 
 watch(() => props.difficulty, (v) => {
@@ -309,8 +344,22 @@ async function doChallenge() {
   if (!opponentId.value || !props.locationId) return
   contestError.value = ''
   contestResult.value = null
-  await apiSetOpposition(props.locationId, props.entityId, opponentId.value, props.universe)
+  await apiSetOpposition(props.locationId, editingEntityId.value, opponentId.value, props.universe)
   challenged.value = true
+  isChallenger.value = true
+}
+
+function onChallenged(challengerId) {
+  challenged.value = true
+  opponentId.value = challengerId
+  isChallenger.value = false
+  contestResult.value = null
+  contestError.value = ''
+}
+
+function setContestOutcome(outcome) {
+  contestResult.value = outcome
+  contestError.value = ''
 }
 
 function committedResult() {
@@ -330,7 +379,7 @@ async function doSetResult() {
   if (!committed || !props.locationId) return
   setPhase(Phase.RESOLVED)
   contestError.value = ''
-  const res = await apiSetResult(props.locationId, props.entityId, committed)
+  const res = await apiSetResult(props.locationId, editingEntityId.value, committed)
   if (res && res.winner) {
     contestResult.value = res
   } else if (res && res.status === 'waiting') {
@@ -341,7 +390,7 @@ async function doSetResult() {
 async function doGiveIn() {
   if (!props.locationId) return
   contestError.value = ''
-  const res = await apiGiveIn(props.locationId, props.entityId)
+  const res = await apiGiveIn(props.locationId, editingEntityId.value)
   if (res && res.winner) contestResult.value = res
 }
 
@@ -401,7 +450,9 @@ function setUniverse(u) {
 }
 
 function persistPool() {
-  if (props.gmMode || !props.entityId || !props.locationId) return
+  // Persist only when editing a real entity pool (player self, or GM acting as an entity).
+  // GM difficulty mode (no acting entity) is transient.
+  if (!props.actingEntityId || !props.locationId) return
   const dice = pool.map(d => ({
     die: d.die,
     source_kind: d.sourceKind || 'manual',
@@ -409,7 +460,7 @@ function persistPool() {
     label: d.label || d.source || d.die,
     ts_id: d.tsId || null,
   }))
-  apiSavePool(props.locationId, props.entityId, dice)
+  apiSavePool(props.locationId, editingEntityId.value, dice)
 }
 
 function notifyPool() {
@@ -482,13 +533,13 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
   // When the GM is rolling to set difficulty, a 1 is an ordinary die —
   // hitches only apply to actual rolls, not difficulty determination.
-  if (props.gmMode && poolPurpose.value === 'difficulty') return false
+  if (props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty') return false
   const r = result.value.rolls[idx]
   return r ? r.result === 1 : false
 }
@@ -845,10 +896,10 @@ async function doRoll() {
   const opp = (!props.gmMode && props.difficulty != null)
     ? { type: 'static_difficulty', static_difficulty: props.difficulty }
     : null
-  const isDifficulty = props.gmMode && poolPurpose.value === 'difficulty'
+  const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
   const pipeline = isDifficulty ? 'pool' : null
   const hitchesApply = !isDifficulty
-  result.value = await apiRoll(props.entityId, props.universe, dice, opp, pipeline, hitchesApply)
+  result.value = await apiRoll(editingEntityId.value, props.universe, dice, opp, pipeline, hitchesApply)
   pool.length = 0
   notifyPool()
   if (result.value?.pipeline === 'pool' && props.mode !== 'roll_table') {
@@ -862,12 +913,12 @@ async function doRoll() {
 
 function commitPicks() {
   setPhase(Phase.RESOLVED)
-  if (props.gmMode) {
+  if (props.gmMode && !props.actingEntityId) {
     // GM difficulty roll: the picked total is the difficulty.
     emit('difficulty', computedTotal.value)
     return
   }
-  // Player: emit final picked result for sharing
+  // Player (or GM acting as an entity): emit final picked result for sharing
   if (result.value?.pipeline === 'pool') {
     const r = result.value.rolls
     const total = selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0)
@@ -894,8 +945,7 @@ function clearResult() {
   setPhase(Phase.ADDING)
 }
 
-function clearPool() {
-  pool.splice(0, pool.length)
+function resetEditor() {
   result.value = null
   selection.total = []
   selection.effect = []
@@ -903,6 +953,12 @@ function clearPool() {
   contestResult.value = null
   contestError.value = ''
   challenged.value = false
+  isChallenger.value = false
+}
+
+function clearPool() {
+  pool.splice(0, pool.length)
+  resetEditor()
   setPhase(Phase.ADDING)
   notifyPool()
 }
@@ -921,9 +977,9 @@ function resyncTraitDie(traitSettingId, newRating) {
   if (changed) notifyPool()
 }
 
-async function restorePool() {
-  if (props.gmMode || !props.entityId || !props.locationId) return
-  const res = await apiGetPool(props.locationId, props.entityId)
+async function loadPoolIntoEditor(id) {
+  if (!props.locationId || !id) return
+  const res = await apiGetPool(props.locationId, id)
   const dice = res?.dice || []
   pool.splice(0, pool.length)
   for (const d of dice) {
@@ -935,8 +991,15 @@ async function restorePool() {
       sourceKind: d.source_kind || 'manual',
     })
   }
+  resetEditor()
+  setPhase(Phase.ADDING)
   notifyPool()
   if (dice.length) panelOpen.value = true
+}
+
+async function restorePool() {
+  if (props.gmMode && !props.actingEntityId) return  // GM difficulty mode: transient
+  await loadPoolIntoEditor(editingEntityId.value)
 }
 
 onMounted(() => {
