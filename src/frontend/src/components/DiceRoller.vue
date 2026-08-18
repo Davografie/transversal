@@ -161,7 +161,7 @@
     </div>
 
     <div class="controls" v-if="isAdding() || isPicking()">
-      <button v-if="isAdding()" @click="doRoll" :disabled="loading || pool.length === 0" class="roll-btn">
+      <button v-if="isAdding() && (pool.length > 0 || loading)" @click="doRoll" :disabled="loading" class="roll-btn">
         {{ loading ? 'Rolling…' : 'Roll' }}
       </button>
       <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
