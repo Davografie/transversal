@@ -38,6 +38,10 @@ class SceneStateStore:
     def clear_pool(self, location_id: str, entity_id: str) -> None:
         self._pools.get(location_id, {}).pop(entity_id, None)
 
+    def clear_pools(self, location_id: str) -> None:
+        """Clear every pool at a location (end of beat), keep difficulty."""
+        self._pools.pop(location_id, None)
+
     def list_entities(self, location_id: str) -> list[str]:
         """Return entity ids with a saved pool at a location."""
         return list(self._pools.get(location_id, {}).keys())

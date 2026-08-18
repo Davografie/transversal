@@ -254,6 +254,23 @@ class TestPoolPipeline:
         assert len(result.kept) == 2
         assert result.total == sum(r.result for r in result.kept)
 
+    def test_difficulty_hitches_do_not_apply(self):
+        """GM difficulty rolls suppress hitch/botch semantics (1s are dice)."""
+        request = DicePoolRequest(
+            entity_id="gm",
+            universe="earth",
+            dice=[
+                (DieType.D4, "difficulty"),
+                (DieType.D4, "difficulty"),
+            ],
+            pipeline="pool",
+            hitches_apply=False,
+        )
+        result = resolve(request)
+        assert result.hitches == []
+        assert result.botch is False
+        assert result.razmerit_earned == 0
+
     def test_pool_effect_die_from_unused(self):
         request = DicePoolRequest(
             entity_id="test-1",

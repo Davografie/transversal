@@ -30,11 +30,11 @@ export function useApi() {
     }
   }
 
-  async function roll(entityId, universe, dice, opposition = null, pipeline = null) {
+  async function roll(entityId, universe, dice, opposition = null, pipeline = null, hitchesApply = true) {
     loading.value = true
     error.value = null
     try {
-      const body = { entity_id: entityId, universe, dice, opposition }
+      const body = { entity_id: entityId, universe, dice, opposition, hitches_apply: hitchesApply }
       if (pipeline) body.pipeline = pipeline
       const r = await fetch(`${API_BASE}/roll`, {
         method: 'POST',
@@ -231,5 +231,14 @@ export function useApi() {
     } catch (e) { console.error('[API] getDifficulty', e.message); return null }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, resolveContest, clearContest, setDifficulty, getDifficulty }
+  async function nextBeat(locationId) {
+    if (!locationId) return null
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/next-beat`, { method: 'POST' })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] nextBeat', e.message); return null }
+  }
+
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, resolveContest, clearContest, setDifficulty, getDifficulty, nextBeat }
 }

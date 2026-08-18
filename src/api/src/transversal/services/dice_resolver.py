@@ -108,8 +108,8 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     rolls = [_roll_die(spec) for spec in request.dice]
     highest = max(r.result for r in rolls)
     tier = _determine_tier(highest)
-    hitches = [r for r in rolls if r.result == 1]
-    botch = _is_botch(rolls)
+    hitches = [r for r in rolls if r.result == 1] if request.hitches_apply else []
+    botch = _is_botch(rolls) if request.hitches_apply else False
     razmerit_earned = len(hitches)  # 1 razmerit per hitch
 
     # Opposition roll (GMC, challenge, or static difficulty)
@@ -176,8 +176,8 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
 def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     """Resolve a dice pool pipeline roll (3+ dice, Cortex Prime)."""
     rolls = [_roll_die(spec) for spec in request.dice]
-    hitches = [r for r in rolls if r.result == 1]
-    botch = _is_botch(rolls)
+    hitches = [r for r in rolls if r.result == 1] if request.hitches_apply else []
+    botch = _is_botch(rolls) if request.hitches_apply else False
     razmerit_earned = len(hitches)
 
     # Sort by result descending; keep two highest

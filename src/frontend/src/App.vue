@@ -281,7 +281,7 @@ import { useApi } from './composables/useApi.js'
 import { usePanelBus } from './composables/usePanelBus.js'
 import ToastBar from './components/ToastBar.vue'
 
-const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty } = useApi()
+const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat } = useApi()
 const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
@@ -780,6 +780,11 @@ watch(lastEvent, (evt) => {
     case 'razmerit_changed':
       // local patch handles display; SSE sync deferred
       break
+    case 'beat_end':
+      diceRef.value?.clearPool()
+      remotePools.value = {}
+      remoteResults.value = {}
+      break
     case 'trait_updated':
       // local patch handles display; SSE sync deferred
       if (gmMode.value && foreign) {
@@ -1015,15 +1020,15 @@ function onSfxToggled(e) {
 
 // ── GM shortcuts ─────────────────────────────────
 
-function onNextBeat() {
+async function onNextBeat() {
   // Clear local pool
   diceRef.value?.clearPool()
   // Clear remote pools and results
   remotePools.value = {}
   remoteResults.value = {}
-  // Broadcast empty pool to session
-  if (sessionId.value !== 'session-default') {
-    publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, dice: [], phase: 'adding' })
+  // Clear every pool at the location server-side (broadcasts beat_end to all)
+  if (currentLocationId.value) {
+    await apiNextBeat(currentLocationId.value)
   }
 }
 

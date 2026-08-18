@@ -80,3 +80,22 @@ async def set_difficulty(location_id: str, req: DifficultyRequest):
 async def get_difficulty(location_id: str):
     """Return the current test difficulty for a location (null if unset)."""
     return {"difficulty": get_scene_store().get_difficulty(location_id)}
+
+
+@router.post("/{location_id}/next-beat")
+async def next_beat(location_id: str):
+    """End the beat: clear every pool at the location and broadcast beat_end."""
+    store = get_scene_store()
+    cleared = store.list_entities(location_id)
+    store.clear_pools(location_id)
+
+    from transversal.services.contest_tracker import get_contest_tracker
+    get_contest_tracker().clear_location(location_id)
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="beat_end",
+            session_id=s.id,
+            data={"location_id": location_id, "cleared_entities": cleared},
+        ))
+    return {"cleared": len(cleared)}

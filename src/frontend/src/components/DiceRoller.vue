@@ -13,6 +13,10 @@
     </div>
 
     <template v-if="isSelf">
+    <div v-if="!gmMode && difficulty != null" class="difficulty-target">
+      Target difficulty: <strong>{{ difficulty }}</strong>
+    </div>
+    <div v-if="!gmMode && difficultyFlash" class="difficulty-flash">{{ difficultyFlash }}</div>
     <div class="dice-pool" v-if="isAdding()">
       <div
         v-for="(die, i) in pool"
@@ -252,6 +256,7 @@ const viewPool = ref([])
 const opponentId = ref('')
 const contestResult = ref(null)
 const contestError = ref('')
+const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
   const seen = new Set([props.entityId])
@@ -278,11 +283,20 @@ async function switchTab(id) {
   viewPool.value = []
   if (!props.locationId) return
   const res = await apiGetPool(props.locationId, id)
+  console.log('[diag] switchTab fetched pool', { id, locationId: props.locationId, diceCount: res?.dice?.length || 0 })
   viewPool.value = res?.dice || []
 }
 
 watch(() => props.entityId, (id) => {
   activeId.value = id
+})
+
+watch(() => props.difficulty, (v) => {
+  if (v == null) return
+  difficultyFlash.value = `Difficulty set: ${v}`
+  setTimeout(() => {
+    if (difficultyFlash.value === `Difficulty set: ${v}`) difficultyFlash.value = ''
+  }, 3000)
 })
 
 async function doResolveContest() {
@@ -440,6 +454,9 @@ defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, 
 
 function isHitch(idx) {
   if (!result.value) return false
+  // When the GM is rolling to set difficulty, a 1 is an ordinary die —
+  // hitches only apply to actual rolls, not difficulty determination.
+  if (props.gmMode && poolPurpose.value === 'difficulty') return false
   const r = result.value.rolls[idx]
   return r ? r.result === 1 : false
 }
@@ -796,8 +813,10 @@ async function doRoll() {
   const opp = (!props.gmMode && props.difficulty != null)
     ? { type: 'static_difficulty', static_difficulty: props.difficulty }
     : null
-  const pipeline = (props.gmMode && poolPurpose.value === 'difficulty') ? 'pool' : null
-  result.value = await apiRoll(props.entityId, props.universe, dice, opp, pipeline)
+  const isDifficulty = props.gmMode && poolPurpose.value === 'difficulty'
+  const pipeline = isDifficulty ? 'pool' : null
+  const hitchesApply = !isDifficulty
+  result.value = await apiRoll(props.entityId, props.universe, dice, opp, pipeline, hitchesApply)
   pool.length = 0
   notifyPool()
   if (result.value?.pipeline === 'pool' && props.mode !== 'roll_table') {
@@ -919,6 +938,14 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   color: var(--text-dim);
 }
 .pool-tab.active { background: var(--accent, #7aa2f7); color: #0a0a0f; }
+
+.difficulty-target {
+  text-align: center; font-size: 13px; color: var(--text-dim);
+}
+.difficulty-target strong { color: var(--text); font-size: 15px; }
+.difficulty-flash {
+  text-align: center; font-size: 12px; color: var(--accent, #7aa2f7);
+}
 
 .contest-setup { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
 .contest-row { display: flex; gap: 6px; align-items: center; }

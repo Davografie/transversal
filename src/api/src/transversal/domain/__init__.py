@@ -165,6 +165,7 @@ class DicePoolRequest(BaseModel):
     razmerit_spent: int = 0
     kind: RollKind = RollKind.TEST
     pipeline: Optional[str] = None  # "simplified" | "pool" | None (auto by size)
+    hitches_apply: bool = True  # False for GM difficulty rolls (1s are just dice)
 
     @field_validator("dice", mode="before")
     @classmethod
