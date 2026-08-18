@@ -1164,13 +1164,13 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .die-btn {
   flex: 1; padding: 4px;
   border-radius: 8px; cursor: pointer; transition: all 0.15s;
-  border: 2px solid transparent; background: rgba(255,255,255,0.06);
+  border: 2px solid transparent; background: rgba(255,255,255,0.02);
   color: var(--text);
   display: flex; align-items: center; justify-content: center;
 }
 .add-die-icon {
-  width: 28px;
-  height: 30px;
+  width: 40px;
+  height: 44px;
 }
 .die-btn:hover { background: rgba(255,255,255,0.12); border-color: var(--accent-dim); }
 .die-btn-d4  { color: #e88830; }
