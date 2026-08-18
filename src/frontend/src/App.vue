@@ -703,7 +703,7 @@ watch(currentLocationId, refreshDifficulty, { immediate: true })
 function onPoolChange(s) {
   if (rollerMode.value === 'roll_table') return
   const labels = s.map(d => d.label || '').filter(Boolean)
-  currentPoolSources = labels
+  currentPoolSources.value = labels
   sheetRef?.setPoolSources(s)
   sharePool(s)
 }
