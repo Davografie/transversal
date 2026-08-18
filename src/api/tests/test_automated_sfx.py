@@ -410,50 +410,61 @@ class TestFireContestSFX:
 class TestPushContest:
     """Push mechanic: spend 1 razmerit to reassemble and reroll."""
 
+    @staticmethod
+    def _die(die, source):
+        return {"die": die, "source_kind": "manual", "source_id": source, "label": source, "ts_id": None}
+
     def test_push_returns_new_result(self):
         from transversal.services.contest_tracker import ContestTracker
+        from transversal.services.scene_state import SceneStateStore
 
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D10, "int", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "skill", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "dist", "earth")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [
+            self._die("d10", "int"), self._die("d8", "skill"), self._die("d8", "dist"),
+        ])
         ct.set_opposition("loc-1", "kael", "guard", "earth")
-        ct.add_die("loc-1", "guard", DieType.D8, "agi", "earth")
-        ct.add_die("loc-1", "guard", DieType.D6, "ale", "earth")
-        ct.add_die("loc-1", "guard", DieType.D6, "tra", "earth")
+        scene.save_pool("loc-1", "guard", [
+            self._die("d8", "agi"), self._die("d6", "ale"), self._die("d6", "tra"),
+        ])
 
         # Push with new dice
-        result = ct.push_contest("loc-1", "kael", [
-            (DieType.D10, "int"), (DieType.D10, "skill"), (DieType.D8, "dist"),
+        result = ct.push_contest("loc-1", "kael", scene, [
+            self._die("d10", "int"), self._die("d10", "skill"), self._die("d8", "dist"),
         ])
         assert result is not None
         assert result.pushed is True
-        assert len(ct.get("loc-1", "kael").dice) == 3
+        assert len(scene.get_pool("loc-1", "kael")) == 3
 
     def test_push_blocked_when_already_pushed(self):
         from transversal.services.contest_tracker import ContestTracker
+        from transversal.services.scene_state import SceneStateStore
 
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D10, "int", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "skill", "earth")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [
+            self._die("d10", "int"), self._die("d8", "skill"),
+        ])
         ct.set_opposition("loc-1", "kael", "guard", "earth")
-        ct.add_die("loc-1", "guard", DieType.D8, "agi", "earth")
+        scene.save_pool("loc-1", "guard", [self._die("d8", "agi")])
 
         # Set push flag
         ct.set_pushed("loc-1", "kael")
 
         # Try to push again — should be blocked
-        result = ct.push_contest("loc-1", "kael", [
-            (DieType.D10, "int"), (DieType.D10, "skill"),
+        result = ct.push_contest("loc-1", "kael", scene, [
+            self._die("d10", "int"), self._die("d10", "skill"),
         ])
         assert result is None
 
     def test_push_returns_none_without_opponent(self):
         from transversal.services.contest_tracker import ContestTracker
+        from transversal.services.scene_state import SceneStateStore
 
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D10, "int", "earth")
-        result = ct.push_contest("loc-1", "kael", [
-            (DieType.D10, "int"),
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [self._die("d10", "int")])
+        result = ct.push_contest("loc-1", "kael", scene, [
+            self._die("d10", "int"),
         ])
         assert result is None

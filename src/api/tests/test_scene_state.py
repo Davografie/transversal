@@ -30,19 +30,26 @@ def _die(die="d8", kind="trait", sid="ts-hacking", label="Hacking", ts_id="ts-ha
 class TestSceneStateStore:
     def test_pool_save_get_roundtrip(self, store):
         dice = [_die(), _die(die="d6", kind="difficulty", label="2d6", ts_id=None)]
-        store.save_pool("loc-1", "player-1", dice)
-        assert store.get_pool("loc-1", "player-1") == dice
-        assert store.get_pool("loc-1", "player-2") == []
+        store.save_pool("loc-1", "kael-1", dice)
+        assert store.get_pool("loc-1", "kael-1") == dice
+        assert store.get_pool("loc-1", "kael-2") == []
 
-    def test_pool_is_keyed_by_player_not_entity(self, store):
-        store.save_pool("loc-1", "player-1", [_die()])
-        # Same location, different player → empty
-        assert store.get_pool("loc-1", "player-2") == []
+    def test_pool_is_keyed_by_entity(self, store):
+        store.save_pool("loc-1", "kael-1", [_die()])
+        # Same location, different entity → empty
+        assert store.get_pool("loc-1", "kael-2") == []
+
+    def test_list_entities_and_get_pools_at(self, store):
+        store.save_pool("loc-1", "kael-1", [_die()])
+        store.save_pool("loc-1", "guard-1", [_die(die="d6")])
+        assert set(store.list_entities("loc-1")) == {"kael-1", "guard-1"}
+        assert set(store.get_pools_at("loc-1").keys()) == {"kael-1", "guard-1"}
+        assert store.get_pools_at("loc-2") == {}
 
     def test_clear_pool(self, store):
-        store.save_pool("loc-1", "player-1", [_die()])
-        store.clear_pool("loc-1", "player-1")
-        assert store.get_pool("loc-1", "player-1") == []
+        store.save_pool("loc-1", "kael-1", [_die()])
+        store.clear_pool("loc-1", "kael-1")
+        assert store.get_pool("loc-1", "kael-1") == []
 
     def test_difficulty_roundtrip(self, store):
         assert store.get_difficulty("loc-1") is None
@@ -50,27 +57,34 @@ class TestSceneStateStore:
         assert store.get_difficulty("loc-1") == 11
 
     def test_clear_location(self, store):
-        store.save_pool("loc-1", "player-1", [_die()])
+        store.save_pool("loc-1", "kael-1", [_die()])
         store.set_difficulty("loc-1", 9)
         store.clear_location("loc-1")
-        assert store.get_pool("loc-1", "player-1") == []
+        assert store.get_pool("loc-1", "kael-1") == []
         assert store.get_difficulty("loc-1") is None
 
 
 class TestSceneStateEndpoints:
     def test_pool_save_and_get(self, client):
         dice = [_die()]
-        r = client.put("/api/v1/locations/loc-1/players/player-1/pool", json={"dice": dice})
+        r = client.put("/api/v1/locations/loc-1/pools/kael-1", json={"dice": dice})
         assert r.status_code == 200, r.text
 
-        r = client.get("/api/v1/locations/loc-1/players/player-1/pool")
+        r = client.get("/api/v1/locations/loc-1/pools/kael-1")
         assert r.status_code == 200, r.text
         assert r.json()["dice"] == dice
 
-    def test_pool_is_player_scoped(self, client):
-        client.put("/api/v1/locations/loc-1/players/player-1/pool", json={"dice": [_die()]})
-        r = client.get("/api/v1/locations/loc-1/players/player-2/pool")
+    def test_pool_is_entity_scoped(self, client):
+        client.put("/api/v1/locations/loc-1/pools/kael-1", json={"dice": [_die()]})
+        r = client.get("/api/v1/locations/loc-1/pools/kael-2")
         assert r.json()["dice"] == []
+
+    def test_list_pools(self, client):
+        client.put("/api/v1/locations/loc-1/pools/kael-1", json={"dice": [_die()]})
+        client.put("/api/v1/locations/loc-1/pools/guard-1", json={"dice": [_die(die="d6")]})
+        r = client.get("/api/v1/locations/loc-1/pools")
+        assert r.status_code == 200, r.text
+        assert set(r.json()["pools"].keys()) == {"kael-1", "guard-1"}
 
     def test_difficulty_save_and_get(self, client):
         r = client.put("/api/v1/locations/loc-1/difficulty", json={"difficulty": 12})

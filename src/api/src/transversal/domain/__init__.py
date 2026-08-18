@@ -164,6 +164,7 @@ class DicePoolRequest(BaseModel):
     opposition: Optional[Opposition] = None
     razmerit_spent: int = 0
     kind: RollKind = RollKind.TEST
+    pipeline: Optional[str] = None  # "simplified" | "pool" | None (auto by size)
 
     @field_validator("dice", mode="before")
     @classmethod
@@ -244,24 +245,6 @@ class ContestResult(BaseModel):
     opponent_result: SimplifiedResult | PoolResult
     pushed: bool = False
     push_cost: int = 1
-
-
-# ── Per-Location Dice Pool Tracking ───────────────────
-
-class PoolAssembly(BaseModel):
-    """A dice pool being assembled for a contest at a specific location.
-
-    Tracks which dice an entity has added to their pool for the current
-    beat at a given location.  Pools are location-scoped so a player can
-    build pools in different scenes independently.
-    """
-    entity_id: str
-    location_id: str
-    universe: str
-    dice: list[tuple[DieType, str]] = Field(default_factory=list)
-    opposition_entity_id: Optional[str] = None
-    pushed_this_beat: bool = False
-    razmerit_spent: int = 0
 
 
 # ── Registry: Traits ──────────────────────────────────

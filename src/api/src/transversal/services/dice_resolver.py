@@ -248,7 +248,16 @@ def resolve(request: DicePoolRequest) -> RollResult:
 
     Pool size is determined AFTER all modifiers (SFX, razmerit spends).
     The caller must assemble the final dice list before calling resolve().
+
+    A ``pipeline`` hint overrides the size heuristic — used by the GM's
+    difficulty roll, which must keep-and-sum even when the opposition pool
+    is only two dice.
     """
+    if request.pipeline == "pool":
+        return _resolve_pool(request)
+    if request.pipeline == "simplified":
+        return _resolve_simplified(request)
+
     pool_size = len(request.dice)
 
     if pool_size <= 2:

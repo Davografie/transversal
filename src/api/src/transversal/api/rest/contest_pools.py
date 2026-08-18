@@ -1,32 +1,22 @@
-"""REST endpoints for per-location contest pool assembly.
+"""REST endpoints for per-location contest assembly and resolution.
 
-Players add/remove dice from their pool at a location.  Other players
-see pool dice via SSE (broadcast after every mutation) and can query
-all pools at a location via GET.
+Dice pool CRUD lives in :mod:`transversal.api.rest.scene_state`.  This
+router owns the contest-specific actions: designating an opponent and
+resolving.  The tracker holds only contest metadata; dice are read from
+the shared scene store.
 """
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from transversal.domain import ContestResult, DieType
+from transversal.domain import ContestResult
 from transversal.services.contest_tracker import (
     broadcast_pool_change,
     get_contest_tracker,
 )
+from transversal.services.scene_state import get_scene_store
 
 router = APIRouter(prefix="/api/v1/locations", tags=["contest-pools"])
-
-
-# ── Request models ────────────────────────────────────
-
-class AddDieRequest(BaseModel):
-    die: str  # "d4", "d6", "d8", "d10", "d12"
-    source: str  # trait name or label
-    universe: str = "earth"
-
-
-class RemoveDieRequest(BaseModel):
-    index: int
 
 
 class SetOppositionRequest(BaseModel):
@@ -34,89 +24,28 @@ class SetOppositionRequest(BaseModel):
     universe: str = "earth"
 
 
-# ── Response helpers ──────────────────────────────────
-
-def _pool_response(pa) -> dict:
-    if pa is None:
-        return {"dice": []}
-    return {
-        "entity_id": pa.entity_id,
-        "location_id": pa.location_id,
-        "universe": pa.universe,
-        "dice": [{"die": d.value, "source": s, "index": i}
-                 for i, (d, s) in enumerate(pa.dice)],
-        "opposition_entity_id": pa.opposition_entity_id,
-        "pushed_this_beat": pa.pushed_this_beat,
-        "razmerit_spent": pa.razmerit_spent,
-    }
-
-
 # ── Endpoints ─────────────────────────────────────────
-
-@router.get("/{location_id}/pools")
-async def get_pools(location_id: str):
-    """Return all pool assemblies at a location.
-
-    Used by clients entering a location to see existing dice pools.
-    """
-    ct = get_contest_tracker()
-    pools = ct.get_pools_at(location_id)
-    result: dict[str, dict] = {}
-    for eid, pa in pools.items():
-        result[eid] = _pool_response(pa)
-    return {"location_id": location_id, "pools": result}
-
-
-@router.get("/{location_id}/pools/{entity_id}")
-async def get_pool(location_id: str, entity_id: str):
-    """Return one entity's pool assembly at a location."""
-    ct = get_contest_tracker()
-    pa = ct.get(location_id, entity_id)
-    return _pool_response(pa)
-
-
-@router.post("/{location_id}/pools/{entity_id}/add-die")
-async def add_die(location_id: str, entity_id: str, body: AddDieRequest):
-    """Add a die to an entity's pool at a location."""
-    try:
-        die = DieType(body.die)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid die type: {body.die}")
-
-    ct = get_contest_tracker()
-    pa = ct.add_die(location_id, entity_id, die, body.source, body.universe)
-    broadcast_pool_change(location_id, entity_id)
-    return _pool_response(pa)
-
-
-@router.post("/{location_id}/pools/{entity_id}/remove-die")
-async def remove_die(location_id: str, entity_id: str, body: RemoveDieRequest):
-    """Remove a die from an entity's pool by index."""
-    ct = get_contest_tracker()
-    try:
-        pa = ct.remove_die(location_id, entity_id, body.index)
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-    broadcast_pool_change(location_id, entity_id)
-    return _pool_response(pa)
-
 
 @router.post("/{location_id}/pools/{entity_id}/set-opposition")
 async def set_opposition(location_id: str, entity_id: str, body: SetOppositionRequest):
-    """Designate an opponent for an entity's pool at this location."""
+    """Designate an opponent for an entity's contest at this location."""
     ct = get_contest_tracker()
-    pa = ct.set_opposition(location_id, entity_id, body.opponent_id, body.universe)
+    ct.set_opposition(location_id, entity_id, body.opponent_id, body.universe)
     broadcast_pool_change(location_id, entity_id)
-    return _pool_response(pa)
+    return {
+        "entity_id": entity_id,
+        "location_id": location_id,
+        "opposition_entity_id": body.opponent_id,
+    }
 
 
 @router.post("/{location_id}/pools/{entity_id}/clear")
 async def clear_pool(location_id: str, entity_id: str):
-    """Reset an entity's pool at a location (end of beat)."""
+    """Reset an entity's contest + pool at a location (end of beat)."""
     ct = get_contest_tracker()
+    get_scene_store().clear_pool(location_id, entity_id)
     ct.clear_pool(location_id, entity_id)
-    broadcast_pool_change(location_id, entity_id)
+    broadcast_pool_change(location_id, entity_id, dice=[], phase="adding")
     return {"status": "cleared"}
 
 
@@ -127,10 +56,11 @@ async def resolve_contest(location_id: str, entity_id: str):
     Returns the ContestResult or 409 if pools aren't ready.
     """
     ct = get_contest_tracker()
-    if not ct.can_resolve(location_id, entity_id):
+    scene = get_scene_store()
+    if not ct.can_resolve(location_id, entity_id, scene):
         raise HTTPException(status_code=409, detail="Both sides must have dice assembled")
 
-    result = ct.resolve(location_id, entity_id)
+    result = ct.resolve(location_id, entity_id, scene)
     if result is None:
         raise HTTPException(status_code=409, detail="Could not resolve contest")
 

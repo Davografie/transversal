@@ -1,8 +1,9 @@
-"""Per-location contest pool tracker.
+"""Per-location contest state tracker.
 
-Dice pools are assembled per location/scene so players can build a contest
-in one location, navigate elsewhere, and return to continue assembling.
-Each (location_id, entity_id) pair has one active PoolAssembly.
+Dice pools live in :mod:`transversal.services.scene_state` (the single
+source of truth for pools).  This tracker owns only the *contest*
+metadata — who is opposing whom, whether a side has pushed this beat, and
+razmerit spent.  Resolution reads dice from the shared scene store.
 """
 
 from __future__ import annotations
@@ -10,179 +11,181 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from transversal.domain import (
-    ContestResult,
-    DicePoolRequest,
-    DieType,
-    PoolAssembly,
-)
+from transversal.domain import ContestResult, DicePoolRequest
 from transversal.services.dice_resolver import resolve_contest
 
 
 @dataclass
-class ContestTracker:
-    """Tracks dice pool assemblies per location.
+class ContestState:
+    """Contest metadata for one entity at one location.
 
-    Thread-safe for a single session.  Not persisted across server restarts
-    — pools are beat-scoped and ephemeral by design.
+    The actual dice are stored in the scene store under the same
+    ``(location_id, entity_id)`` key.
     """
 
-    _assemblies: dict[str, dict[str, PoolAssembly]] = field(default_factory=dict)
-    #                  location_id → {entity_id → PoolAssembly}
+    entity_id: str
+    location_id: str
+    universe: str
+    opposition_entity_id: Optional[str] = None
+    pushed_this_beat: bool = False
+    razmerit_spent: int = 0
 
-    # ── Assembly management ─────────────────────────────
+
+@dataclass
+class ContestTracker:
+    """Tracks contest metadata per location.
+
+    Thread-safe for a single session.  Not persisted across server restarts
+    — contests are beat-scoped and ephemeral by design.
+    """
+
+    _contests: dict[str, dict[str, ContestState]] = field(default_factory=dict)
+    #                  location_id → {entity_id → ContestState}
+
+    # ── Metadata management ────────────────────────────
 
     def get_or_create(
         self, location_id: str, entity_id: str, universe: str
-    ) -> PoolAssembly:
-        """Return the existing assembly for (location, entity) or create one."""
-        if location_id not in self._assemblies:
-            self._assemblies[location_id] = {}
-        loc = self._assemblies[location_id]
+    ) -> ContestState:
+        """Return the existing contest state for (location, entity) or create one."""
+        if location_id not in self._contests:
+            self._contests[location_id] = {}
+        loc = self._contests[location_id]
         if entity_id not in loc:
-            loc[entity_id] = PoolAssembly(
+            loc[entity_id] = ContestState(
                 entity_id=entity_id,
                 location_id=location_id,
                 universe=universe,
             )
         return loc[entity_id]
 
-    def get(self, location_id: str, entity_id: str) -> Optional[PoolAssembly]:
-        """Return the assembly if it exists, None otherwise."""
-        return self._assemblies.get(location_id, {}).get(entity_id)
+    def get(self, location_id: str, entity_id: str) -> Optional[ContestState]:
+        """Return the contest state if it exists, None otherwise."""
+        return self._contests.get(location_id, {}).get(entity_id)
 
-    def add_die(
-        self, location_id: str, entity_id: str, die: DieType, source: str, universe: str
-    ) -> PoolAssembly:
-        """Add a die to an entity's pool at a location."""
-        pa = self.get_or_create(location_id, entity_id, universe)
-        pa.dice.append((die, source))
-        return pa
+    def set_opposition(
+        self, location_id: str, entity_id: str, opponent_id: str, universe: str
+    ) -> ContestState:
+        """Designate an opponent for the entity at this location."""
+        state = self.get_or_create(location_id, entity_id, universe)
+        state.opposition_entity_id = opponent_id
+        return state
 
-    def remove_die(
-        self, location_id: str, entity_id: str, index: int
-    ) -> PoolAssembly:
-        """Remove a die by index from an entity's pool."""
-        pa = self._assemblies.get(location_id, {}).get(entity_id)
-        if pa is None:
-            raise KeyError(f"No pool assembly for entity '{entity_id}' at location '{location_id}'")
-        if 0 <= index < len(pa.dice):
-            pa.dice.pop(index)
-        return pa
+    def set_pushed(self, location_id: str, entity_id: str) -> None:
+        """Mark that the entity has pushed this beat."""
+        state = self._contests.get(location_id, {}).get(entity_id)
+        if state:
+            state.pushed_this_beat = True
 
     def clear_pool(self, location_id: str, entity_id: str) -> None:
-        """Reset an entity's pool at a location (end of beat)."""
-        loc = self._assemblies.get(location_id)
+        """Remove contest metadata for an entity at a location."""
+        loc = self._contests.get(location_id)
         if loc and entity_id in loc:
             del loc[entity_id]
 
     def clear_location(self, location_id: str) -> None:
-        """Reset all pools at a location (scene end)."""
-        self._assemblies.pop(location_id, None)
+        """Remove all contest metadata at a location (scene end)."""
+        self._contests.pop(location_id, None)
 
-    def set_opposition(
-        self, location_id: str, entity_id: str, opponent_id: str, universe: str
-    ) -> PoolAssembly:
-        """Designate an opponent for the entity's pool at this location."""
-        pa = self.get_or_create(location_id, entity_id, universe)
-        pa.opposition_entity_id = opponent_id
-        return pa
+    # ── Metadata queries ───────────────────────────────
 
-    def set_pushed(self, location_id: str, entity_id: str) -> None:
-        """Mark that the entity has pushed this beat."""
-        loc = self._assemblies.get(location_id, {})
-        pa = loc.get(entity_id)
-        if pa:
-            pa.pushed_this_beat = True
-
-    # ── Assembly queries ────────────────────────────────
-
-    def get_pools_at(self, location_id: str) -> dict[str, PoolAssembly]:
-        """Return all pool assemblies at a location."""
-        return dict(self._assemblies.get(location_id, {}))
-
-    def get_opposition_pools(
-        self, location_id: str, entity_id: str
-    ) -> tuple[Optional[PoolAssembly], Optional[PoolAssembly]]:
-        """Return (entity_pool, opponent_pool) for a potential contest."""
-        entity_pool = self.get(location_id, entity_id)
-        if entity_pool is None or entity_pool.opposition_entity_id is None:
-            return (entity_pool, None)
-        opponent_pool = self.get(location_id, entity_pool.opposition_entity_id)
-        return (entity_pool, opponent_pool)
+    def get_contests_at(self, location_id: str) -> dict[str, ContestState]:
+        """Return all contest states at a location."""
+        return dict(self._contests.get(location_id, {}))
 
     def get_contestants(
         self, location_id: str, entity_id: str
-    ) -> tuple[Optional[PoolAssembly], Optional[PoolAssembly]]:
-        """Return (challenger_pool, defendant_pool) for the contest that
-        ``entity_id`` is involved in, regardless of which side it is.
+    ) -> tuple[Optional[ContestState], Optional[ContestState]]:
+        """Return (challenger, defendant) for the contest that ``entity_id``
+        is involved in, regardless of which side it is.
 
-        The challenger (initiator) is the entity whose pool carries
-        ``opposition_entity_id``; the defendant is that target. If
-        ``entity_id`` is the defendant, we look up who challenged them.
+        The challenger (initiator) is the entity whose contest state
+        carries ``opposition_entity_id``; the defendant is that target.
+        If ``entity_id`` is the defendant, we look up who challenged them.
         """
-        pools = self._assemblies.get(location_id, {})
-        entity_pool = pools.get(entity_id)
-        if entity_pool is None:
+        states = self._contests.get(location_id, {})
+        entity_state = states.get(entity_id)
+
+        # ``entity_id`` is the challenger.
+        if entity_state is not None and entity_state.opposition_entity_id:
+            opp_id = entity_state.opposition_entity_id
+            defendant = states.get(opp_id) or ContestState(
+                entity_id=opp_id,
+                location_id=location_id,
+                universe=entity_state.universe,
+            )
+            return (entity_state, defendant)
+
+        # ``entity_id`` is (or may be) the defendant — find its challenger.
+        challenger = next(
+            (s for s in states.values() if s.opposition_entity_id == entity_id),
+            None,
+        )
+        if challenger is None:
+            if entity_state is not None:
+                return (entity_state, None)
             return (None, None)
 
-        if entity_pool.opposition_entity_id:
-            challenger = entity_pool
-            defendant = pools.get(entity_pool.opposition_entity_id)
-        else:
-            challenger = next(
-                (pa for pa in pools.values() if pa.opposition_entity_id == entity_id),
-                None,
-            )
-            defendant = entity_pool
+        defendant = entity_state or ContestState(
+            entity_id=entity_id,
+            location_id=location_id,
+            universe=challenger.universe,
+        )
         return (challenger, defendant)
 
-    def can_resolve(self, location_id: str, entity_id: str) -> bool:
+    def can_resolve(
+        self, location_id: str, entity_id: str, scene_store
+    ) -> bool:
         """Check if both sides have dice assembled for a contest."""
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
             return False
-        return len(challenger.dice) > 0 and len(defendant.dice) > 0
+        return bool(
+            scene_store.get_pool(location_id, challenger.entity_id)
+            and scene_store.get_pool(location_id, defendant.entity_id)
+        )
 
     # ── Resolution ──────────────────────────────────────
 
     def resolve(
-        self, location_id: str, entity_id: str
+        self, location_id: str, entity_id: str, scene_store
     ) -> Optional[ContestResult]:
         """Resolve a contest between a challenger and its defendant.
 
         ``entity_id`` may be either side; ties favor the challenger
         (initiator) regardless of which side triggered the resolve.
 
-        Returns None if either side hasn't assembled a pool yet.
+        Dice are read from ``scene_store``.  Returns None if either side
+        hasn't assembled a pool yet.
         """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
             return None
-        if not challenger.dice or not defendant.dice:
+
+        challenger_dice = scene_store.get_pool(location_id, challenger.entity_id)
+        defendant_dice = scene_store.get_pool(location_id, defendant.entity_id)
+        if not challenger_dice or not defendant_dice:
             return None
 
         challenger_req = DicePoolRequest(
             entity_id=challenger.entity_id,
             universe=challenger.universe,
-            dice=list(challenger.dice),
+            dice=challenger_dice,
             razmerit_spent=challenger.razmerit_spent,
         )
         defendant_req = DicePoolRequest(
             entity_id=defendant.entity_id,
             universe=defendant.universe,
-            dice=list(defendant.dice),
+            dice=defendant_dice,
             razmerit_spent=defendant.razmerit_spent,
         )
 
         result = resolve_contest(challenger_req, defendant_req)
         result.pushed = challenger.pushed_this_beat
-
         return result
 
     def push_contest(
-        self, location_id: str, entity_id: str,
-        new_dice: list[tuple[DieType, str]],
+        self, location_id: str, entity_id: str, scene_store, new_dice: list[dict]
     ) -> Optional[ContestResult]:
         """Push after a failed/tied contest: reassemble and reroll.
 
@@ -192,19 +195,18 @@ class ContestTracker:
         Args:
             location_id: Where the contest is happening.
             entity_id: The pushing entity.
-            new_dice: The reassembled dice pool (can differ from original).
+            scene_store: The shared pool store.
+            new_dice: The reassembled dice pool (DieSpec wire dicts).
         """
-        entity_pool, opponent_pool = self.get_opposition_pools(location_id, entity_id)
-        if entity_pool is None or opponent_pool is None:
+        state = self.get(location_id, entity_id)
+        if state is None:
             return None
-        if entity_pool.pushed_this_beat:
+        if state.pushed_this_beat:
             return None  # already pushed this beat
 
-        # Update the entity's pool with new dice
-        entity_pool.dice = list(new_dice)
-        entity_pool.pushed_this_beat = True
-
-        return self.resolve(location_id, entity_id)
+        scene_store.save_pool(location_id, entity_id, list(new_dice))
+        state.pushed_this_beat = True
+        return self.resolve(location_id, entity_id, scene_store)
 
 
 # Singleton for the session
@@ -220,38 +222,28 @@ def get_contest_tracker() -> ContestTracker:
 
 # ── SSE Broadcasting ──────────────────────────────────
 
-def _pool_to_dict(pa: PoolAssembly) -> dict:
-    """Serialize a PoolAssembly for SSE broadcast."""
-    return {
-        "entity_id": pa.entity_id,
-        "location_id": pa.location_id,
-        "universe": pa.universe,
-        "dice": [{"die": d.value, "source": s} for d, s in pa.dice],
-        "opposition_entity_id": pa.opposition_entity_id,
-        "pushed_this_beat": pa.pushed_this_beat,
-        "razmerit_spent": pa.razmerit_spent,
-    }
-
-
-def broadcast_pool_change(location_id: str, entity_id: str) -> None:
+def broadcast_pool_change(
+    location_id: str,
+    entity_id: str,
+    dice: Optional[list[dict]] = None,
+    phase: str = "adding",
+) -> None:
     """Publish a pool_updated SSE event to all active sessions.
 
-    Call this after any mutation to the contest tracker so clients can
-    update their pool-dice display near character avatars.
+    ``dice`` is the DieSpec wire shape (list of dicts).  When omitted, the
+    current pool is read from the shared scene store.
 
-    Payload format matches the frontend's existing pool_updated handler:
+    Payload matches the frontend's pool_updated handler:
       { player_id, entity_id, dice, phase, location_id }
     """
     from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.scene_state import get_scene_store
     from transversal.services.session_manager import session_manager
 
-    tracker = get_contest_tracker()
-    pa = tracker.get(location_id, entity_id)
+    if dice is None:
+        dice = get_scene_store().get_pool(location_id, entity_id)
 
-    if pa and pa.dice:
-        dice = [d.value for d, _ in pa.dice]
-    else:
-        dice = []
+    wire_dice = [d if isinstance(d, dict) else {"die": str(d)} for d in dice]
 
     for s in session_manager.list_active():
         event_bus.publish(StreamEvent(
@@ -260,8 +252,8 @@ def broadcast_pool_change(location_id: str, entity_id: str) -> None:
             data={
                 "player_id": entity_id,
                 "entity_id": entity_id,
-                "dice": dice,
-                "phase": "adding",
+                "dice": wire_dice,
+                "phase": phase,
                 "location_id": location_id,
             },
         ))

@@ -22,7 +22,6 @@ from transversal.domain import (
     DieType,
     OutcomeTier,
     Opposition,
-    PoolAssembly,
     PoolResult,
     SimplifiedResult,
 )
@@ -33,6 +32,7 @@ from transversal.services.dice_resolver import (
     resolve_contest,
 )
 from transversal.services.contest_tracker import ContestTracker
+from transversal.services.scene_state import SceneStateStore
 
 
 # ── Contest Winner Helpers ──────────────────────────────
@@ -368,10 +368,21 @@ class TestContestResultModel:
 
 # ── Per-Location ContestTracker ────────────────────────
 
-class TestContestTrackerAssembly:
-    """Pool assembly — adding dice, setting opposition."""
+def _pool_die(die, source):
+    """Build a DieSpec wire dict for the scene store."""
+    return {
+        "die": die,
+        "source_kind": "manual",
+        "source_id": source,
+        "label": source,
+        "ts_id": None,
+    }
 
-    def test_get_or_create_returns_same_assembly(self):
+
+class TestContestTrackerAssembly:
+    """Contest metadata — opposition, push, and resolution gating."""
+
+    def test_get_or_create_returns_same_state(self):
         ct = ContestTracker()
         a1 = ct.get_or_create("loc-1", "kael", "earth")
         a2 = ct.get_or_create("loc-1", "kael", "earth")
@@ -379,71 +390,67 @@ class TestContestTrackerAssembly:
 
     def test_different_locations_independent(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
-        ct.add_die("loc-2", "kael", DieType.D10, "persuasion", "earth")
-        assert len(ct.get("loc-1", "kael").dice) == 1
-        assert len(ct.get("loc-2", "kael").dice) == 1
-        # They are separate assemblies
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        ct.set_opposition("loc-2", "kael", "guard-2", "earth")
+        assert ct.get("loc-1", "kael").opposition_entity_id == "guard-1"
+        assert ct.get("loc-2", "kael").opposition_entity_id == "guard-2"
         assert ct.get("loc-1", "kael") is not ct.get("loc-2", "kael")
-
-    def test_add_and_remove_dice(self):
-        ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
-        ct.add_die("loc-1", "kael", DieType.D6, "distinction", "earth")
-        assert len(ct.get("loc-1", "kael").dice) == 2
-        ct.remove_die("loc-1", "kael", 0)
-        assert len(ct.get("loc-1", "kael").dice) == 1
 
     def test_set_opposition(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "agility", "earth")
         assert ct.get("loc-1", "kael").opposition_entity_id == "guard-1"
 
     def test_can_resolve_false_without_both_pools(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
-        assert not ct.can_resolve("loc-1", "kael")
+        scene = SceneStateStore()
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        scene.save_pool("loc-1", "kael", [_pool_die("d8", "shooting")])
+        assert not ct.can_resolve("loc-1", "kael", scene)
 
     def test_can_resolve_true_with_both_pools(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
+        scene = SceneStateStore()
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "agility", "earth")
-        assert ct.can_resolve("loc-1", "kael")
+        scene.save_pool("loc-1", "kael", [_pool_die("d8", "shooting")])
+        scene.save_pool("loc-1", "guard-1", [_pool_die("d6", "agility")])
+        assert ct.can_resolve("loc-1", "kael", scene)
 
     def test_clear_pool(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
         ct.clear_pool("loc-1", "kael")
         assert ct.get("loc-1", "kael") is None
 
     def test_clear_location(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "agility", "earth")
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        ct.set_opposition("loc-2", "kael", "guard-2", "earth")
         ct.clear_location("loc-1")
-        assert ct.get_pools_at("loc-1") == {}
+        assert ct.get_contests_at("loc-1") == {}
         # Other locations unaffected
-        ct.add_die("loc-2", "kael", DieType.D10, "persuasion", "earth")
         assert ct.get("loc-2", "kael") is not None
 
 
 class TestContestTrackerResolution:
-    """Resolving contests through the tracker."""
+    """Resolving contests through the tracker (dice from the scene store)."""
 
     def test_resolve_returns_contest_result(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D10, "intelligence", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "hacking", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "distinction", "earth")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [
+            _pool_die("d10", "intelligence"),
+            _pool_die("d8", "hacking"),
+            _pool_die("d8", "distinction"),
+        ])
+        scene.save_pool("loc-1", "guard-1", [
+            _pool_die("d8", "agility"),
+            _pool_die("d6", "alertness"),
+            _pool_die("d6", "training"),
+        ])
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D8, "agility", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "alertness", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "training", "earth")
 
-        result = ct.resolve("loc-1", "kael")
+        result = ct.resolve("loc-1", "kael", scene)
         assert result is not None
         assert isinstance(result, ContestResult)
         assert result.pipeline == "pool"
@@ -452,23 +459,26 @@ class TestContestTrackerResolution:
     def test_resolve_works_from_defendant_side(self):
         """Resolving with the defendant's id still resolves the contest."""
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D10, "intelligence", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "hacking", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "distinction", "earth")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [
+            _pool_die("d10", "intelligence"),
+            _pool_die("d8", "hacking"),
+            _pool_die("d8", "distinction"),
+        ])
+        scene.save_pool("loc-1", "guard-1", [
+            _pool_die("d8", "agility"),
+            _pool_die("d6", "alertness"),
+            _pool_die("d6", "training"),
+        ])
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D8, "agility", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "alertness", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "training", "earth")
 
-        result = ct.resolve("loc-1", "guard-1")
+        result = ct.resolve("loc-1", "guard-1", scene)
         assert result is not None
         assert isinstance(result, ContestResult)
 
     def test_get_contestants_identifies_challenger_from_either_side(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "agility", "earth")
 
         challenger, defendant = ct.get_contestants("loc-1", "kael")
         assert challenger.entity_id == "kael"
@@ -480,42 +490,45 @@ class TestContestTrackerResolution:
 
     def test_resolve_returns_none_without_opponent(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
-        result = ct.resolve("loc-1", "kael")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [_pool_die("d8", "shooting")])
+        result = ct.resolve("loc-1", "kael", scene)
         assert result is None
 
     def test_resolve_returns_none_with_empty_opponent(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [_pool_die("d8", "shooting")])
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
         # guard-1 has no dice yet
-        result = ct.resolve("loc-1", "kael")
+        result = ct.resolve("loc-1", "kael", scene)
         assert result is None
 
     def test_pool_survives_location_switch(self):
         """Build pool at loc-1, check it's still there after 'traveling'."""
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D10, "intelligence", "earth")
-        ct.add_die("loc-1", "kael", DieType.D8, "hacking", "earth")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [
+            _pool_die("d10", "intelligence"),
+            _pool_die("d8", "hacking"),
+        ])
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D8, "agility", "earth")
 
         # Travel to loc-2, build different pool
-        ct.add_die("loc-2", "kael", DieType.D10, "persuasion", "earth")
+        scene.save_pool("loc-2", "kael", [_pool_die("d10", "persuasion")])
 
         # Return to loc-1 — pool still there
-        pool = ct.get("loc-1", "kael")
-        assert pool is not None
-        assert len(pool.dice) == 2
-        assert pool.opposition_entity_id == "guard-1"
+        assert len(scene.get_pool("loc-1", "kael")) == 2
+        assert ct.get("loc-1", "kael").opposition_entity_id == "guard-1"
 
     def test_push_flag(self):
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
+        scene = SceneStateStore()
+        scene.save_pool("loc-1", "kael", [_pool_die("d8", "shooting")])
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "agility", "earth")
+        scene.save_pool("loc-1", "guard-1", [_pool_die("d6", "agility")])
         ct.set_pushed("loc-1", "kael")
-        result = ct.resolve("loc-1", "kael")
+        result = ct.resolve("loc-1", "kael", scene)
         assert result is not None
         assert result.pushed is True
 
@@ -625,9 +638,7 @@ class TestSFXPushDataModel:
     def test_only_one_push_per_beat(self):
         """Tracker enforces single push per beat."""
         ct = ContestTracker()
-        ct.add_die("loc-1", "kael", DieType.D8, "shooting", "earth")
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
-        ct.add_die("loc-1", "guard-1", DieType.D6, "agility", "earth")
         ct.set_pushed("loc-1", "kael")
         assert ct.get("loc-1", "kael").pushed_this_beat is True
 

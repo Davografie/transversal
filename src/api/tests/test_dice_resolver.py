@@ -237,6 +237,23 @@ class TestPoolPipeline:
         assert len(result.kept) == 2
         assert result.total == sum(r.result for r in result.kept)
 
+    def test_forced_pool_pipeline_on_two_dice(self):
+        """A GM difficulty roll with only two dice still keeps-and-sums."""
+        request = DicePoolRequest(
+            entity_id="gm",
+            universe="earth",
+            dice=[
+                (DieType.D8, "difficulty"),
+                (DieType.D8, "difficulty"),
+            ],
+            pipeline="pool",
+        )
+        result = resolve(request)
+        assert isinstance(result, PoolResult)
+        assert result.pipeline == "pool"
+        assert len(result.kept) == 2
+        assert result.total == sum(r.result for r in result.kept)
+
     def test_pool_effect_die_from_unused(self):
         request = DicePoolRequest(
             entity_id="test-1",
