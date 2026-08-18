@@ -166,7 +166,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Done:** a `{choose_*}`-targeted auto-fired SFX produces an SSE prompt on the acting player's device; choosing a target resolves the pending choice and applies the effect — no manual `/effects/trigger` and no blind apply.
 - **Depends:** P2.8, P1.1, P1.3, P1.4
 - **Load:** `services/effects_applier.py` (`apply_effects`, `_resolve_target`, `PendingChoice`, `resolve_choice`), `services/roll_orchestrator.py` (`fire_roll_sfx`, `fire_contest_sfx_auto`), `api/sse/bus.py` + `stream.py` (add `sfx_choice_required`), `App.vue` / `components/DiceRoller.vue` + `composables/useSSE.js` (receive + prompt), `components/gm/EffectTargetWizard.vue` (reuse picker).
-- **Note:** the prompt must be asynchronous (SSE), not block the roll response — the player is on a separate device.
+- **Note:** the prompt must be asynchronous (SSE), not block the roll response — the player is on a separate device. The test-side prompt works today (test flow is live from P2.5b); the contest-side prompt is only exercisable end-to-end after P2.10 (play flow) — a sequencing note, not a hard build blocker, since the SSE handler + dialog are the same for both kinds.
 
 ### P2.9 — Backend: condition-based SFX triggers
 - **Status:** pending
