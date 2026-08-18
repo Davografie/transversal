@@ -704,7 +704,7 @@ function onPoolChange(s) {
   if (rollerMode.value === 'roll_table') return
   const labels = s.map(d => d.label || '').filter(Boolean)
   currentPoolSources.value = labels
-  sheetRef?.setPoolSources(s)
+  sheetRef.value?.setPoolSources(s)
   sharePool(s)
 }
 
