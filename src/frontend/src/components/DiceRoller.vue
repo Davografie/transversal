@@ -13,7 +13,16 @@
     </div>
 
     <template v-if="isEditing">
-    <div v-if="rollKindLabel" class="roll-kind-badge">{{ rollKindLabel }}</div>
+    <div class="roll-kind-row">
+      <div v-if="rollKindLabel" class="roll-kind-badge">{{ rollKindLabel }}</div>
+      <div v-if="showContest && !contestResult" class="challenge-target">
+        <select v-if="!challenged" v-model="opponentId" @change="doChallenge" class="challenge-select">
+          <option value="" disabled>Challenge target</option>
+          <option v-for="e in peers.filter(e => e.id !== editingEntityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
+        </select>
+        <span v-else class="contest-status">⚔️ {{ opponentName }}</span>
+      </div>
+    </div>
     <div v-if="!gmMode && difficulty != null" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
@@ -47,19 +56,7 @@
       </button>
     </div>
 
-    <div v-if="(!gmMode || actingEntityId) && mode !== 'roll_table' && peers.length > 1 && (challenged || isAdding() || isPicking())" class="contest-setup">
-      <div class="contest-row" v-if="!challenged && !contestResult">
-        <label>Opponent</label>
-        <select v-model="opponentId">
-          <option value="" disabled>Choose…</option>
-          <option v-for="e in peers.filter(e => e.id !== editingEntityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
-        </select>
-        <button class="roll-btn contest-btn" :disabled="!opponentId" @click="doChallenge">Challenge</button>
-      </div>
-      <div class="contest-row" v-else-if="challenged && !contestResult">
-        <span class="contest-status">vs {{ opponentName }}</span>
-        <button class="roll-btn contest-btn" @click="doGiveIn">Give in</button>
-      </div>
+    <div v-if="showContest" class="contest-setup">
       <div v-if="contestError" class="error">{{ contestError }}</div>
       <div v-if="contestResult" class="contest-result">
         <strong>{{ winnerLabel }}</strong>
@@ -170,6 +167,7 @@
       <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
         {{ challenged ? 'Set' : 'Done' }}
       </button>
+      <button v-if="challenged && !contestResult" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
     </div>
 
     <div class="controls" v-if="isResolved() && mode !== 'roll_table'">
@@ -329,6 +327,10 @@ const rollKind = computed(() => {
   return pipeline === 'pool' ? 'cortex-test' : 'simple-test'
 })
 const rollKindLabel = computed(() => ROLL_KIND_LABELS[rollKind.value] || '')
+
+// Contest UI is relevant for players (or a GM acting as an entity) at a
+// location with at least one peer, during assembly/picking or once challenged.
+const showContest = computed(() => (!props.gmMode || props.actingEntityId) && props.mode !== 'roll_table' && props.peers.length > 1 && (challenged.value || isAdding() || isPicking()))
 
 function markPurpose(kind) {
   if (pool.length === 0) poolPurpose.value = kind
@@ -1117,11 +1119,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 
 .contest-setup { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
-.contest-row { display: flex; gap: 6px; align-items: center; }
-.contest-row label { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
 .contest-status { font-size: 12px; color: var(--text-dim); }
-.contest-row select { flex: 1; padding: 6px; border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.15); }
-.contest-btn { flex: 0 0 auto; padding: 6px 10px; font-size: 12px; }
 .contest-result { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
 
 .peer-pool { display: flex; flex-direction: column; gap: 8px; }
@@ -1243,12 +1241,44 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .kind-difficulty { --kind-accent: #b080d4; }
 
 .roll-kind-badge {
-  align-self: flex-start;
   font-size: 10px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 1.5px;
   padding: 3px 10px; border-radius: 999px;
   color: var(--kind-accent);
   border: 1px solid var(--kind-accent);
   background: rgba(255,255,255,0.04);
+}
+
+.roll-kind-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.challenge-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.challenge-select {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.15);
+  max-width: 180px;
+}
+
+.give-in-btn {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background: rgba(216,64,64,0.08);
+}
+.give-in-btn:hover {
+  background: rgba(216,64,64,0.2);
+  color: var(--danger);
 }
 </style>
