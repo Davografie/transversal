@@ -216,9 +216,13 @@
       <button v-if="challenged && !contestResult && !contestCompare && giveInAllowed" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
     </div>
 
-    <div class="controls" v-if="isResolved() && mode !== 'roll_table' && !decisionPending">
+    <div class="controls" v-if="isResolved() && mode !== 'roll_table' && !decisionPending && !isWaitingForDecision">
       <button @click="clearResult" class="roll-btn">New Pool</button>
       <button v-if="!gmMode" @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
+    </div>
+
+    <div class="controls" v-if="isWaitingForDecision">
+      <span class="waiting-state">Waiting for {{ opponentName }} to decide…</span>
     </div>
 
     <div class="controls" v-if="decisionPending">
@@ -361,6 +365,7 @@ const tabEntities = computed(() => {
 })
 const editingEntityId = computed(() => props.actingEntityId || props.fallbackEntityId || props.entityId)
 const decisionPending = computed(() => !!contestCompare.value && contestCompare.value.pending === editingEntityId.value)
+const isWaitingForDecision = computed(() => !!contestCompare.value && contestCompare.value.pending !== editingEntityId.value)
 const isEditing = computed(() => {
   if (props.gmMode) {
     return props.actingEntityId
@@ -1499,6 +1504,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .die-btn-d12 { color: #40b860; }
 
 .controls { display: flex; gap: 8px; }
+.waiting-state { flex: 1; text-align: center; font-size: 14px; color: var(--text-dim); padding: 10px; }
 .consequence-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .sfx-choice-panel { margin-top: 8px; }
 .consequence-side { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); }
