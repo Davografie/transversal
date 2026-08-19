@@ -5,11 +5,31 @@
         v-for="e in tabEntities"
         :key="e.id"
         class="pool-tab"
-        :class="{ active: activeId === e.id }"
+        :class="{ active: activeId === e.id, self: e.id === selfTabId }"
         @click="switchTab(e.id)"
       >
         {{ e.name }}
       </button>
+    </div>
+
+    <div v-if="contestResult && (!gmMode || actingEntityId)" class="contest-result-widget">
+      <div class="contest-winner">
+        <span class="winner-crown">🏆</span>
+        <span class="winner-text">{{ winnerLabel }}</span>
+        <span v-if="gaveInLabel" class="contest-gave-in">{{ gaveInLabel }}</span>
+      </div>
+      <div class="contest-sides">
+        <div class="contest-side" :class="{ winner: challengerWon }">
+          <span class="side-name">{{ challengerLabel }}</span>
+          <span v-if="contestResult.challenger" class="side-sum">{{ sumLabel }} <strong>{{ contestResult.challenger.total }}</strong></span>
+          <span v-if="contestResult.challenger?.effect_die" class="side-effect">effect {{ contestResult.challenger.effect_die }}</span>
+        </div>
+        <div class="contest-side" :class="{ winner: !challengerWon }">
+          <span class="side-name">{{ defendantLabel }}</span>
+          <span v-if="contestResult.defendant" class="side-sum">{{ sumLabel }} <strong>{{ contestResult.defendant.total }}</strong></span>
+          <span v-if="contestResult.defendant?.effect_die" class="side-effect">effect {{ contestResult.defendant.effect_die }}</span>
+        </div>
+      </div>
     </div>
 
     <template v-if="isEditing">
@@ -57,13 +77,6 @@
     <div v-if="showContest" class="contest-setup">
       <div v-if="contestError" class="error">{{ contestError }}</div>
       <div v-if="contestNotice" class="contest-notice">{{ contestNotice }}</div>
-      <div v-if="contestResult" class="contest-result">
-        <strong>{{ winnerLabel }}</strong>
-        <div v-if="contestResult.challenger">{{ challengerLabel }}: {{ sumLabel }} {{ contestResult.challenger.total }} · effect {{ contestResult.challenger.effect_die || '—' }}</div>
-        <div v-if="contestResult.defendant">{{ defendantLabel }}: {{ sumLabel }} {{ contestResult.defendant.total }} · effect {{ contestResult.defendant.effect_die || '—' }}</div>
-        <div v-if="contestResult.stakes">Stakes: {{ contestResult.stakes }}</div>
-        <div v-if="contestResult.gave_in">{{ gaveInLabel }}</div>
-      </div>
     </div>
 
     <!-- Picking: total/effect selection slots live above the dice -->
@@ -313,13 +326,13 @@ const tabEntities = computed(() => {
     ? [{ id: DIFFICULTY_TAB, name: 'Difficulty' }]
     : [{ id: props.entityId, name: 'You' }]
   const seen = new Set(list.map(e => e.id))
-  const pushEntity = (id, label) => {
+  const pushEntity = (id) => {
     if (!id || seen.has(id)) return
     seen.add(id)
-    const name = label || (props.peers || []).find(p => p.id === id)?.name || id
+    const name = (props.peers || []).find(p => p.id === id)?.name || id
     list.push({ id, name })
   }
-  if (props.actingEntityId) pushEntity(props.actingEntityId, props.gmMode ? 'You' : '')
+  if (props.actingEntityId) pushEntity(props.actingEntityId)
   if (challenged.value) pushEntity(opponentId.value)
   for (const [eid, rp] of Object.entries(props.remotePools || {})) {
     if (seen.has(eid)) continue
@@ -341,6 +354,7 @@ const isEditing = computed(() => {
   return activeId.value === props.entityId
 })
 const activeName = computed(() => tabEntities.value.find(e => e.id === activeId.value)?.name || activeId.value)
+const selfTabId = computed(() => props.gmMode ? (props.actingEntityId || DIFFICULTY_TAB) : props.entityId)
 const opponentName = computed(() =>
   (props.peers || []).find(p => p.id === opponentId.value)?.name ||
   tabEntities.value.find(e => e.id === opponentId.value)?.name ||
@@ -353,6 +367,7 @@ const winnerLabel = computed(() => {
   if (challengerWon) return isChallenger.value ? 'You win' : `${opponentName.value} wins`
   return isChallenger.value ? `${opponentName.value} wins` : 'You win'
 })
+const challengerWon = computed(() => contestResult.value?.winner === 'player')
 const challengerLabel = computed(() => isChallenger.value ? 'You' : opponentName.value)
 const defendantLabel = computed(() => isChallenger.value ? opponentName.value : 'You')
 const gaveInLabel = computed(() => {
@@ -375,11 +390,13 @@ const ROLL_KIND_LABELS = {
   'defendant-contest': 'Defendant',
   'roll-table': 'Roll Table',
   'difficulty': 'Difficulty',
+  'empty-pool': 'Empty Dicepool',
 }
 const rollKind = computed(() => {
   if (props.mode === 'roll_table') return 'roll-table'
   if (challenged.value) return isChallenger.value ? 'challenger-contest' : 'defendant-contest'
   if (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) return 'difficulty'
+  if (isAdding() && pool.length === 0) return 'empty-pool'
   // Test: use the rolled pipeline when known, else predict from assembled size
   // (the resolver routes ≤2 dice to simplified, 3+ to pool).
   const pipeline = result.value?.pipeline ?? (pool.length > 2 ? 'pool' : 'simplified')
@@ -1256,6 +1273,8 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   color: var(--text-dim);
 }
 .pool-tab.active { background: var(--accent, #7aa2f7); color: #0a0a0f; }
+.pool-tab.self { border-color: var(--accent, #7aa2f7); }
+.pool-tab.self:not(.active) { color: var(--text); background: rgba(64,136,212,0.12); }
 
 .difficulty-target {
   text-align: center; font-size: 13px; color: var(--text-dim);
@@ -1269,6 +1288,31 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .contest-status { font-size: 12px; color: var(--text-dim); }
 .contest-notice { font-size: 12px; color: var(--accent, #7aa2f7); }
 .contest-result { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+
+.contest-result-widget {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.contest-winner { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: var(--text); }
+.winner-crown { font-size: 16px; }
+.winner-text { flex: 1; }
+.contest-gave-in { font-size: 11px; color: var(--text-dim); font-weight: 400; }
+.contest-sides { display: flex; gap: 8px; }
+.contest-side {
+  flex: 1; padding: 8px; border-radius: 8px;
+  background: rgba(0,0,0,0.2); border: 1px solid transparent;
+  display: flex; flex-direction: column; gap: 2px; font-size: 12px;
+}
+.contest-side.winner { border-color: var(--success, #40b860); background: rgba(64,184,96,0.12); }
+.side-name { font-weight: 600; color: var(--text); }
+.side-sum { color: var(--text); }
+.side-sum strong { font-size: 18px; color: var(--accent, #7aa2f7); }
+.contest-side.winner .side-sum strong { color: var(--success, #40b860); }
+.side-effect { color: var(--text-dim); }
 
 .peer-pool { display: flex; flex-direction: column; gap: 8px; }
 .peer-pool-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
