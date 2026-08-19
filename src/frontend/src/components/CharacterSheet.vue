@@ -217,6 +217,7 @@ const props = defineProps({
   overrideEntityId: { type: String, default: null },
   viewerEntityId: { type: String, default: null },
   playerOwnedEntityIds: { type: Array, default: () => [] },
+  visible: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'openSettings', 'sheetViewChange'])
@@ -314,6 +315,14 @@ function toggleSet(name) {
   expandedSets.value = s
   localStorage.setItem('expandedSets', JSON.stringify([...s]))
 }
+
+// Collapse every trait set when the sheet is hidden, so it re-opens clean.
+watch(() => props.visible, (v) => {
+  if (!v && expandedSets.value.size) {
+    expandedSets.value = new Set()
+    localStorage.setItem('expandedSets', '[]')
+  }
+})
 
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})

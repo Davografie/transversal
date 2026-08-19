@@ -101,6 +101,8 @@
           </div>
         </div>
 
+        <p v-if="needsCharacterPick" class="switch-error">Pick one of your characters to play.</p>
+
         <div v-if="loadingPlayerEntities" class="settings-section">
           <label class="settings-label">Your characters</label>
           <div class="char-list">
@@ -199,7 +201,7 @@
       </template>
 
       <p v-if="switchError" class="switch-error">{{ switchError }}</p>
-      <button class="cancel-btn" @click="showLoginOverlay = false">Back to game</button>
+      <button class="cancel-btn" @click="dismissOverlay">Back to game</button>
     </template>
   </div>
   <LocationViewer
@@ -250,6 +252,7 @@
         :player-owned-entity-ids="ownedEntityIds"
         :universe="universe"
         :phase="phase"
+        :visible="sheetVisible"
         embedded
         :gm-mode="gmMode"
         @open-settings="openSettings"
@@ -279,9 +282,11 @@ import { useSessions } from './composables/useSessions.js'
 import { useToasts } from './composables/useToasts.js'
 import { useApi } from './composables/useApi.js'
 import { usePanelBus } from './composables/usePanelBus.js'
+import { useEntityCrud } from './composables/useEntityCrud.js'
 import ToastBar from './components/ToastBar.vue'
 
 const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, listPools: apiListPools } = useApi()
+const { fetchEntities: prefetchEntities } = useEntityCrud()
 const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
@@ -315,7 +320,8 @@ const gmRootPanel = computed(() => ({
 }))
 
 const universe = ref('earth')
-const currentLocationId = ref('loc-krasnoyarsk')
+const currentLocationId = ref(localStorage.getItem('currentLocationId') || 'loc-krasnoyarsk')
+watch(currentLocationId, (v) => { if (v) localStorage.setItem('currentLocationId', v) })
 const fullCanvas = ref(null) // { mode: 'location'|'faction', entityId } or null
 const locationName = ref('Krasnoyarsk-45')
 const locationBgImage = ref('')
@@ -450,6 +456,11 @@ const locationNames = ref({})
 let locationNamesLoaded = false
 
 const ownedEntityIds = computed(() => playerEntities.value.map(e => e.id))
+// True when playing as a non-GM but the current perspective entity isn't one
+// the player owns — the settings overlay must stay open until they pick one.
+const needsCharacterPick = computed(() =>
+  !gmMode.value && !!playerId.value && !ownedEntityIds.value.includes(entityId.value)
+)
 
 const newCharName = ref('')
 const creatingChar = ref(false)
@@ -1090,6 +1101,7 @@ onMounted(() => {
   document.addEventListener('dragstart', () => { documentDragging.value = true })
   document.addEventListener('dragend', () => { documentDragging.value = false })
   if (playerId.value) fetchPlayerEntities()
+  if (gmMode.value) prefetchEntities()  // warm scene-overview cache before panel opens
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
   offRollTableResolved = bus.on('roll-table:resolved', onRollTableResolved)
   offCanvasOpenFull = bus.on('canvas:open-full', (payload) => { fullCanvas.value = payload })
@@ -1184,6 +1196,7 @@ function openSettings() {
 
 function dismissOverlay() {
   if (playerId.value) {
+    if (needsCharacterPick.value) return  // must pick an owned character first
     switchEditing.value = false
     switchStatus.value = ''
     switchPending.value = null
@@ -1469,6 +1482,7 @@ function confirmChar() {
 watch(gmMode, (v) => {
   const role = v ? 'architect' : 'player'
   localStorage.setItem('architectMode', v ? 'true' : 'false')
+  if (v) prefetchEntities()  // warm scene-overview cache when entering GM mode
   if (playerId.value) {
     fetch(`/api/v1/players/${playerId.value}/role`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
