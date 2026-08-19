@@ -33,7 +33,13 @@
 
     <template v-if="isEditing">
     <div class="roll-kind-row">
-      <div v-if="rollKindLabel" class="roll-kind-badge">{{ rollKindLabel }}</div>
+      <div
+        v-if="rollKindLabel"
+        class="roll-kind-badge"
+        :class="{ 'high-stakes': highStakes, toggleable: gmMode && challenged }"
+        :title="gmMode && challenged ? 'Toggle high stakes' : ''"
+        @click="gmMode && challenged && toggleStakes()"
+      >{{ rollKindLabel }}</div>
       <div v-if="showContest && !contestResult" class="challenge-target">
         <select v-if="!challenged" v-model="opponentId" @change="doChallenge" class="challenge-select">
           <option value="" disabled>Challenge target</option>
@@ -46,10 +52,6 @@
             <DieIcon v-if="opponentCommitted.effect_die" :die="opponentCommitted.effect_die" class="opponent-effect-die" />
           </span>
         </span>
-        <label v-if="challenged" class="stakes-toggle">
-          <input type="checkbox" :checked="highStakes" @change="toggleStakes" />
-          High stakes
-        </label>
       </div>
     </div>
     <div v-if="!gmMode && sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
@@ -1376,7 +1378,7 @@ function setHighStakes(v) {
 }
 
 async function toggleStakes() {
-  if (!props.locationId) return
+  if (!props.gmMode || !props.locationId) return
   highStakes.value = !highStakes.value
   await apiSetStakes(props.locationId, editingEntityId.value, highStakes.value)
 }
@@ -1664,6 +1666,18 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   border: 1px solid var(--kind-accent);
   background: rgba(255,255,255,0.04);
 }
+.roll-kind-badge.toggleable { cursor: pointer; }
+.roll-kind-badge.high-stakes {
+  color: #ff8a3d;
+  border-color: #ff5a1f;
+  background: linear-gradient(135deg, rgba(255,90,31,0.28), rgba(255,180,40,0.16));
+  text-shadow: 0 0 6px rgba(255,120,40,0.85);
+  animation: stakes-flicker 1.15s ease-in-out infinite;
+}
+@keyframes stakes-flicker {
+  0%, 100% { box-shadow: 0 0 4px rgba(255,90,31,0.35); }
+  50% { box-shadow: 0 0 13px 3px rgba(255,150,40,0.85); transform: scale(1.04); }
+}
 
 .roll-kind-row {
   display: flex;
@@ -1678,8 +1692,6 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   gap: 6px;
   flex-shrink: 0;
 }
-.stakes-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
-.stakes-toggle input { accent-color: var(--accent, #7aa2f7); }
 .challenge-select {
   padding: 4px 10px;
   font-size: 12px;
