@@ -216,9 +216,13 @@
       <button v-if="challenged && !contestResult && !contestCompare && giveInAllowed" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
     </div>
 
-    <div class="controls" v-if="isResolved() && mode !== 'roll_table' && !decisionPending && !isWaitingForDecision">
+    <div class="controls" v-if="isResolved() && mode !== 'roll_table' && !challenged">
       <button @click="clearResult" class="roll-btn">New Pool</button>
       <button v-if="!gmMode" @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
+    </div>
+
+    <div class="controls" v-if="contestResult && iWon && (!gmMode || actingEntityId)">
+      <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
     </div>
 
     <div class="controls" v-if="isWaitingForDecision">
@@ -564,7 +568,10 @@ function onOpponentCommitted(data) {
   if (!challenged.value || !data) return
   if (data.entity_id === opponentId.value) {
     opponentCommitted.value = { total: data.total, effect_die: data.effect_die }
-    if (!isChallenger.value) giveInAllowed.value = true  // initiator has now committed
+    if (!isChallenger.value) {
+      giveInAllowed.value = true  // initiator has now committed
+      contestNotice.value = `Your turn — roll to beat ${opponentName.value}`
+    }
   }
 }
 

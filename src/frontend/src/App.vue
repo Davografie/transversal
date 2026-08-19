@@ -683,7 +683,7 @@ const lastEvtDebug = ref('')
 function sharePhase() {
   if (sessionId.value === 'session-default') return
   lastSent.value = `phase:${phase.value}`
-  publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, dice: [], phase: phase.value })
+  publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, phase: phase.value })
 }
 function shareRoll(result) {
   if (sessionId.value !== 'session-default') {
@@ -946,8 +946,12 @@ watch(lastEvent, (evt) => {
       lastEvtDebug.value = `pid=${pid} eid=${eid} phase=${evt.data.phase} dice=${JSON.stringify(evt.data.dice)} mypid=${playerId.value}`
       if (eid && eid !== entityId.value) {
         const phase = evt.data.phase || 'adding'
-        remotePools.value = { ...remotePools.value, [eid]: { dice: evt.data.dice || [], player_id: pid, phase } }
-        if (phase === 'adding' && (!evt.data.dice || evt.data.dice.length === 0)) {
+        const hasDice = Array.isArray(evt.data.dice)
+        remotePools.value = { ...remotePools.value, [eid]: {
+          dice: hasDice ? evt.data.dice : (remotePools.value[eid]?.dice || []),
+          player_id: pid, phase,
+        }}
+        if (phase === 'adding' && hasDice && evt.data.dice.length === 0) {
           const { [eid]: _, ...rest } = remoteResults.value
           remoteResults.value = rest
         }
