@@ -213,12 +213,17 @@
       <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
         {{ challenged ? 'Set' : 'Done' }}
       </button>
-      <button v-if="challenged && !contestResult && giveInAllowed" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
+      <button v-if="challenged && !contestResult && !contestCompare && giveInAllowed" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
     </div>
 
-    <div class="controls" v-if="isResolved() && mode !== 'roll_table'">
+    <div class="controls" v-if="isResolved() && mode !== 'roll_table' && !decisionPending">
       <button @click="clearResult" class="roll-btn">New Pool</button>
       <button v-if="!gmMode" @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
+    </div>
+
+    <div class="controls" v-if="decisionPending">
+      <button @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
+      <button @click="doPush" class="roll-btn push-btn">Push</button>
     </div>
 
     <div v-if="showConsequences && isResolved()" class="consequence-panel">
@@ -288,7 +293,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn, getContest: apiGetContest } = useApi()
+const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn, push: apiPush, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -321,6 +326,7 @@ const viewPoolDice = computed(() => {
 })
 const opponentId = ref('')
 const contestResult = ref(null)
+const contestCompare = ref(null)
 const contestError = ref('')
 const contestNotice = ref('')
 const challenged = ref(false)
@@ -354,6 +360,7 @@ const tabEntities = computed(() => {
   return list
 })
 const editingEntityId = computed(() => props.actingEntityId || props.fallbackEntityId || props.entityId)
+const decisionPending = computed(() => !!contestCompare.value && contestCompare.value.pending === editingEntityId.value)
 const isEditing = computed(() => {
   if (props.gmMode) {
     return props.actingEntityId
@@ -476,6 +483,7 @@ async function doChallenge() {
   contestError.value = ''
   contestNotice.value = ''
   contestResult.value = null
+  contestCompare.value = null
   giveInAllowed.value = false
   opponentCommitted.value = null
   await apiSetOpposition(props.locationId, editingEntityId.value, opponentId.value, props.universe)
@@ -488,6 +496,7 @@ function onChallenged(challengerId) {
   opponentId.value = challengerId
   isChallenger.value = false
   contestResult.value = null
+  contestCompare.value = null
   contestError.value = ''
   contestNotice.value = ''
   giveInAllowed.value = false
@@ -496,15 +505,47 @@ function onChallenged(challengerId) {
 
 function setContestOutcome(outcome) {
   contestResult.value = outcome
+  contestCompare.value = null
   contestError.value = ''
   contestNotice.value = ''
   challenged.value = true
+  giveInAllowed.value = false
   // Self-describing outcome: reconcile which side we are from the payload
   // instead of trusting possibly-stale local challenge state.
   const me = editingEntityId.value
   if (outcome?.challenger_id && outcome?.defendant_id && me) {
     isChallenger.value = outcome.challenger_id === me
     opponentId.value = isChallenger.value ? outcome.defendant_id : outcome.challenger_id
+  }
+}
+
+function setContestCompare(compare) {
+  contestCompare.value = compare
+  contestError.value = ''
+  challenged.value = true
+  const me = editingEntityId.value
+  if (compare?.challenger_id && compare?.defendant_id && me) {
+    isChallenger.value = compare.challenger_id === me
+    opponentId.value = isChallenger.value ? compare.defendant_id : compare.challenger_id
+  }
+  giveInAllowed.value = false
+  if (compare?.pending === me) {
+    contestNotice.value = "You're behind — give in or push"
+  } else {
+    contestNotice.value = `${opponentName.value} must give in or push`
+  }
+}
+
+function onContestCompare(data) {
+  if (!challenged.value || !data) return
+  setContestCompare(data)
+}
+
+function onContestPush(data) {
+  if (!challenged.value || !data) return
+  if (data.entity_id === opponentId.value) {
+    contestCompare.value = null
+    contestNotice.value = `${opponentName.value} is pushing…`
   }
 }
 
@@ -541,10 +582,14 @@ async function doSetResult() {
   setPhase(Phase.RESOLVED)
   contestError.value = ''
   const res = await apiSetResult(props.locationId, editingEntityId.value, committed)
-  if (res && isChallenger.value) giveInAllowed.value = true  // initiator can now concede
-  if (res && res.winner) {
+  if (res && res.status === 'compare') {
+    setContestCompare(res)
+  } else if (res && res.winner) {
     contestResult.value = res
+    contestCompare.value = null
+    giveInAllowed.value = false
   } else if (res && res.status === 'waiting') {
+    if (isChallenger.value) giveInAllowed.value = true  // challenger may still give in early
     contestError.value = 'Waiting for opponent…'
   }
 }
@@ -553,8 +598,37 @@ async function doGiveIn() {
   if (!props.locationId) return
   contestError.value = ''
   const res = await apiGiveIn(props.locationId, editingEntityId.value)
-  if (res && res.winner) contestResult.value = res
-  else if (res && res.status === 'not_ready') contestError.value = 'Initiator must set their result first'
+  if (res && res.winner) {
+    contestResult.value = res
+    contestCompare.value = null
+    giveInAllowed.value = false
+  } else if (res && res.status === 'not_ready') {
+    contestError.value = 'Initiator must set their result first'
+  }
+}
+
+async function doPush() {
+  if (!props.locationId) return
+  contestError.value = ''
+  const res = await apiPush(props.locationId, editingEntityId.value)
+  if (res && res.status === 'pushed') {
+    contestResult.value = null
+    contestCompare.value = null
+    contestNotice.value = 'Push! Build a new pool and roll again.'
+    giveInAllowed.value = false
+    result.value = null
+    selection.total = []
+    selection.effect = []
+    poolPurpose.value = null
+    showDiePicker.value = false
+    pool.splice(0, pool.length)
+    notifyPool()
+    setPhase(Phase.ADDING)
+  } else if (res && res.status === 'not_allowed') {
+    contestError.value = 'Push unavailable (already pushed or not your turn)'
+  } else {
+    contestError.value = 'Push unavailable'
+  }
 }
 
 async function resolveSfxChoices(resolutions) {
@@ -709,7 +783,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onOpponentCommitted, onOpponentGiveIn, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -1172,6 +1246,7 @@ function resetEditor() {
   selection.effect = []
   poolPurpose.value = null
   contestResult.value = null
+  contestCompare.value = null
   contestError.value = ''
   contestNotice.value = ''
   challenged.value = false
@@ -1239,9 +1314,25 @@ async function syncContestState() {
   challenged.value = true
   isChallenger.value = res.challenger_id === me
   opponentId.value = isChallenger.value ? res.defendant_id : res.challenger_id
-  giveInAllowed.value = !!res.challenger_result  // initiator has committed?
+  giveInAllowed.value = !!res.challenger_result && !res.pending  // early decline only
   const opp = isChallenger.value ? res.defendant_result : res.challenger_result
   opponentCommitted.value = opp ? { total: opp.total, effect_die: opp.effect_die } : null
+  if (res.pending) {
+    contestCompare.value = {
+      status: 'compare',
+      pending: res.pending,
+      initiative: res.initiative,
+      challenger_id: res.challenger_id,
+      defendant_id: res.defendant_id,
+      challenger: res.challenger_result,
+      defendant: res.defendant_result,
+      margin: 0,
+    }
+    if (res.pending === me) contestNotice.value = "You're behind — give in or push"
+    else contestNotice.value = `${opponentName.value} must give in or push`
+  } else {
+    contestCompare.value = null
+  }
 }
 
 async function restorePool() {

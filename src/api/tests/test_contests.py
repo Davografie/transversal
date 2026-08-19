@@ -641,3 +641,11 @@ class TestSFXPushDataModel:
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
         ct.set_pushed("loc-1", "kael")
         assert ct.get("loc-1", "kael").pushed_this_loop is True
+
+    def test_new_opposition_resets_push_flag(self):
+        """A fresh challenge must not leak a prior contest's push flag."""
+        ct = ContestTracker()
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        ct.set_pushed("loc-1", "kael")
+        ct.set_opposition("loc-1", "kael", "guard-2", "earth")
+        assert ct.get("loc-1", "kael").pushed_this_loop is False

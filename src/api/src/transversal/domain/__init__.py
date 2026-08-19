@@ -271,6 +271,22 @@ class ContestOutcome(BaseModel):
     pushed: bool = False
 
 
+class ContestCompare(BaseModel):
+    """Provisional contest comparison after both sides commit.
+
+    Produced instead of a final outcome when the attacker beats the current
+    difficulty: the now-losing side must give in or push (continue) once.
+    """
+    status: str = "compare"
+    pending: str                       # entity_id that must give in or push
+    initiative: str                    # entity_id holding the current difficulty
+    challenger_id: str
+    defendant_id: str
+    challenger: Optional[CommittedResult] = None
+    defendant: Optional[CommittedResult] = None
+    margin: int = 0                    # attacker total - difficulty total (positive)
+
+
 # ── Registry: Traits ──────────────────────────────────
 
 class SubTraitRef(BaseModel):

@@ -15,12 +15,13 @@ from typing import Optional
 
 from transversal.domain import (
     CommittedResult,
+    ContestCompare,
     ContestOutcome,
     ContestResult,
     ContestWinner,
     DicePoolRequest,
 )
-from transversal.services.dice_resolver import compare_committed, resolve_contest
+from transversal.services.dice_resolver import resolve_contest
 
 logger = logging.getLogger("transversal.contest_tracker")
 
@@ -39,6 +40,7 @@ class ContestState:
     universe: str
     opposition_entity_id: Optional[str] = None
     initiative: Optional[str] = None  # entity_id holding the current difficulty to beat
+    pending_decision: Optional[str] = None  # entity_id that must give in or push
     pushed_this_loop: bool = False
     razmerit_spent: int = 0
     committed: Optional[CommittedResult] = None
@@ -92,12 +94,14 @@ class ContestTracker:
         state.committed = None
         state.gave_in = False
         state.initiative = None
+        state.pending_decision = None
         state.pushed_this_loop = False
 
         opponent = self.get_or_create(location_id, opponent_id, universe)
         opponent.committed = None
         opponent.gave_in = False
         opponent.initiative = None
+        opponent.pending_decision = None
         opponent.pushed_this_loop = False
         return state
 
@@ -221,11 +225,15 @@ class ContestTracker:
         location_id: str,
         entity_id: str,
         committed: CommittedResult,
-    ) -> Optional[ContestOutcome]:
+    ) -> ContestOutcome | ContestCompare | None:
         """Commit one side's rolled+picked result.
 
-        When both sides have committed, returns the outcome; otherwise None
-        (waiting for the other side).  The committed result is frozen.
+        Returns:
+          - ``ContestOutcome`` when both sides have committed and the
+            attacker failed to beat the difficulty (the contest is over).
+          - ``ContestCompare`` when the attacker beat the difficulty and the
+            now-losing side must give in or push.
+          - ``None`` while still waiting for the other side.
         """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
@@ -242,45 +250,100 @@ class ContestTracker:
             f"challenger_committed={challenger.committed is not None} defendant_committed={defendant.committed is not None}"
         )
         if challenger.committed is not None and defendant.committed is not None:
-            outcome = self._outcome(challenger, defendant, gave_in=None)
-            logger.info(f"[contest] set_result resolved winner={outcome.winner.value}")
-            return outcome
+            return self._compare(challenger, defendant)
         return None
+
+    def _set_initiative(
+        self, challenger: ContestState, defendant: ContestState, holder_id: str
+    ) -> None:
+        challenger.initiative = holder_id
+        defendant.initiative = holder_id
+
+    def _compare(
+        self, challenger: ContestState, defendant: ContestState
+    ) -> ContestOutcome | ContestCompare:
+        """Compare two committed results against the initiative model.
+
+        The side holding initiative set the current difficulty; the other
+        side (the attacker) must *strictly* beat it.  Ties go to the holder.
+        """
+        holder_id = challenger.initiative or challenger.entity_id  # round 1: challenger
+        holder = challenger if holder_id == challenger.entity_id else defendant
+        attacker = defendant if holder is challenger else challenger
+
+        assert attacker.committed is not None
+        assert holder.committed is not None
+        attacker_total = attacker.committed.total
+        holder_total = holder.committed.total
+
+        if attacker_total > holder_total:
+            # Attacker beat the difficulty: initiative flips, holder must decide.
+            self._set_initiative(challenger, defendant, attacker.entity_id)
+            pending = holder.entity_id
+            challenger.pending_decision = pending
+            defendant.pending_decision = pending
+            logger.info(f"[contest] compare beat loc={challenger.location_id} pending={pending}")
+            return ContestCompare(
+                pending=pending,
+                initiative=attacker.entity_id,
+                challenger_id=challenger.entity_id,
+                defendant_id=defendant.entity_id,
+                challenger=challenger.committed,
+                defendant=defendant.committed,
+                margin=attacker_total - holder_total,
+            )
+
+        winner = ContestWinner.PLAYER if holder is challenger else ContestWinner.OPPONENT
+        challenger.pending_decision = None
+        defendant.pending_decision = None
+        logger.info(f"[contest] compare resolved loc={challenger.location_id} winner={winner.value}")
+        return ContestOutcome(
+            winner=winner,
+            challenger=challenger.committed,
+            defendant=defendant.committed,
+            gave_in=None,
+            pushed=challenger.pushed_this_loop,
+        )
 
     def give_in(self, location_id: str, entity_id: str) -> Optional[ContestOutcome]:
         """Concede the contest — the other side wins.
 
-        Gated: give-in is only allowed once the initiator has committed.
+        Post-compare, only the side that is pending may give in.  Before a
+        compare (declining to oppose), the initiator must have committed.
         """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
             logger.info(f"[contest] give_in no-contestants loc={location_id} entity={entity_id}")
             return None
-        if challenger.committed is None:
+
+        pending = challenger.pending_decision
+        if pending is not None:
+            if entity_id != pending:
+                logger.info(f"[contest] give_in blocked (not pending) loc={location_id} entity={entity_id}")
+                return None
+        elif challenger.committed is None:
             logger.info(f"[contest] give_in blocked (initiator not committed) loc={location_id} entity={entity_id}")
-            return None  # initiator must set before anyone may give in
-        if entity_id == challenger.entity_id:
-            outcome = self._outcome(challenger, defendant, gave_in=ContestWinner.PLAYER)
-        else:
-            outcome = self._outcome(challenger, defendant, gave_in=ContestWinner.OPPONENT)
+            return None
+
+        gave_in = ContestWinner.PLAYER if entity_id == challenger.entity_id else ContestWinner.OPPONENT
+        outcome = self._give_in_outcome(challenger, defendant, gave_in)
         logger.info(f"[contest] give_in resolved loc={location_id} entity={entity_id} winner={outcome.winner.value}")
         return outcome
 
-    def _outcome(
+    def _give_in_outcome(
         self,
         challenger: ContestState,
         defendant: ContestState,
-        gave_in: Optional[ContestWinner],
+        gave_in: ContestWinner,
     ) -> ContestOutcome:
         if gave_in == ContestWinner.PLAYER:
             challenger.gave_in = True
             winner = ContestWinner.OPPONENT
-        elif gave_in == ContestWinner.OPPONENT:
+        else:
             defendant.gave_in = True
             winner = ContestWinner.PLAYER
-        else:
-            winner = compare_committed(challenger.committed, defendant.committed)  # type: ignore[arg-type]
-
+        challenger.pending_decision = None
+        defendant.pending_decision = None
         return ContestOutcome(
             winner=winner,
             challenger=challenger.committed,
@@ -288,6 +351,31 @@ class ContestTracker:
             gave_in=gave_in,
             pushed=challenger.pushed_this_loop,
         )
+
+    def push(self, location_id: str, entity_id: str) -> Optional[dict]:
+        """Start a push (continue): the pending side rebuilds and rerolls.
+
+        Free (no razmerit), once per side per contest.  Clears the pusher's
+        committed result so they can assemble and set a new one; the other
+        side's committed result remains the difficulty to beat.
+        """
+        challenger, defendant = self.get_contestants(location_id, entity_id)
+        if challenger is None or defendant is None:
+            return None
+        pending = challenger.pending_decision
+        if pending is None or entity_id != pending:
+            logger.info(f"[contest] push blocked (not pending) loc={location_id} entity={entity_id}")
+            return None
+        state = challenger if entity_id == challenger.entity_id else defendant
+        if state.pushed_this_loop:
+            logger.info(f"[contest] push blocked (already pushed) loc={location_id} entity={entity_id}")
+            return None
+        state.pushed_this_loop = True
+        state.committed = None
+        challenger.pending_decision = None
+        defendant.pending_decision = None
+        logger.info(f"[contest] push started loc={location_id} entity={entity_id}")
+        return {"status": "pushed", "entity_id": entity_id}
 
     def push_contest(
         self, location_id: str, entity_id: str, scene_store, new_dice: list[dict]

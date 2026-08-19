@@ -212,6 +212,14 @@ export function useApi() {
     } catch (e) { console.error('[API] giveIn', e.message); return null }
   }
 
+  async function push(locationId, entityId) {
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/push`, { method: 'POST' })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] push', e.message); return null }
+  }
+
   async function getContest(locationId, entityId) {
     try {
       const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/contest`)
@@ -257,5 +265,5 @@ export function useApi() {
     } catch (e) { console.error('[API] nextBeat', e.message); return null }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, getContest, clearContest, setDifficulty, getDifficulty, nextBeat }
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, push, getContest, clearContest, setDifficulty, getDifficulty, nextBeat }
 }

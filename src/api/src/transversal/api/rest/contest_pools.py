@@ -12,7 +12,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 
-from transversal.domain import CommittedResult, DieType, OutcomeTier
+from transversal.domain import CommittedResult, ContestCompare, ContestOutcome, DieType, OutcomeTier
 from transversal.services.contest_tracker import (
     broadcast_pool_change,
     get_contest_tracker,
@@ -81,10 +81,11 @@ async def set_opposition(location_id: str, entity_id: str, body: SetOppositionRe
 async def set_result(location_id: str, entity_id: str, body: SetRequest):
     """Commit one side's rolled+picked result.
 
-    Returns the outcome when both sides have set; otherwise a waiting flag.
+    Returns a provisional compare or final outcome when both sides have set;
+    otherwise a waiting flag.
     """
     ct = get_contest_tracker()
-    outcome = ct.set_result(location_id, entity_id, _to_committed(body))
+    result = ct.set_result(location_id, entity_id, _to_committed(body))
 
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None
@@ -99,16 +100,19 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
         "defendant_id": defendant_id,
     })
 
-    if outcome is not None:
+    if isinstance(result, ContestCompare):
+        _broadcast("contest_compare", location_id, entity_id, result.model_dump())
+        return result
+    if isinstance(result, ContestOutcome):
         _broadcast("contest_resolved", location_id, entity_id, {
-            "winner": outcome.winner.value,
-            "gave_in": outcome.gave_in.value if outcome.gave_in else None,
-            "challenger": outcome.challenger.model_dump() if outcome.challenger else None,
-            "defendant": outcome.defendant.model_dump() if outcome.defendant else None,
+            "winner": result.winner.value,
+            "gave_in": result.gave_in.value if result.gave_in else None,
+            "challenger": result.challenger.model_dump() if result.challenger else None,
+            "defendant": result.defendant.model_dump() if result.defendant else None,
             "challenger_id": challenger_id,
             "defendant_id": defendant_id,
         })
-        return outcome
+        return result
 
     return {"status": "waiting"}
 
@@ -163,6 +167,22 @@ async def give_in(location_id: str, entity_id: str):
     return outcome
 
 
+@router.post("/{location_id}/pools/{entity_id}/push")
+async def push(location_id: str, entity_id: str):
+    """Start a push: the pending side rebuilds and rerolls (free, once)."""
+    ct = get_contest_tracker()
+    result = ct.push(location_id, entity_id)
+    if result is None:
+        return {"status": "not_allowed"}
+    from transversal.services.state_events import fire_state_sfx
+    fire_state_sfx(entity_id, "", "on_push", {"pushed": True})
+    _broadcast("contest_push", location_id, entity_id, {
+        "entity_id": entity_id,
+        "status": "pushed",
+    })
+    return result
+
+
 @router.get("/{location_id}/pools/{entity_id}/contest")
 async def get_contest(location_id: str, entity_id: str):
     """Return the current contest state for an entity (perspective re-sync)."""
@@ -185,6 +205,10 @@ async def get_contest(location_id: str, entity_id: str):
         "defendant_id": defendant.entity_id,
         "challenger_result": challenger.committed.model_dump() if challenger.committed else None,
         "defendant_result": defendant.committed.model_dump() if defendant.committed else None,
+        "initiative": challenger.initiative,
+        "pending": challenger.pending_decision,
+        "challenger_pushed": challenger.pushed_this_loop,
+        "defendant_pushed": defendant.pushed_this_loop,
     }
 
 
