@@ -49,6 +49,7 @@ const props = defineProps({
   side: { type: String, default: 'player' },
   effectDie: { type: String, default: '' },
   title: { type: String, default: 'Consequences' },
+  excludeIds: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['applied', 'close'])
 
@@ -61,11 +62,12 @@ const pendingChoices = ref([])
 
 async function load() {
   phase.value = 'menu'
-  options.value = await fetchConsequenceOptions(props.entityId, props.side)
+  const all = await fetchConsequenceOptions(props.entityId, props.side)
+  options.value = all.filter(o => !props.excludeIds.includes(o.id))
 }
 
 onMounted(load)
-watch(() => [props.entityId, props.side], load)
+watch(() => [props.entityId, props.side, props.excludeIds], load)
 
 async function choose(opt) {
   const result = await applyOption(props.entityId, opt, props.effectDie)

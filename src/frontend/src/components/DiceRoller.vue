@@ -19,7 +19,13 @@
           <span class="side-name">{{ challengerName }}</span>
           <span v-if="contestResult.challenger" class="side-sum"><strong class="result-num">{{ contestResult.challenger.total }}</strong></span>
           <span v-else class="side-empty">gave in</span>
-          <span v-if="sideIsWinner('challenger') && appliedEffectDie" class="side-effect">effect {{ appliedEffectDie }}</span>
+          <span v-if="sideIsWinner('challenger') && appliedEffectDie" class="side-effect">
+            <template v-if="steppedDown && winnerOriginalEffectDie">
+              <DieIcon :die="winnerOriginalEffectDie" class="side-effect-die original" />
+              <span class="step-arrow">↓</span>
+            </template>
+            <DieIcon :die="appliedEffectDie" class="side-effect-die" />
+          </span>
           <span v-else-if="!sideIsWinner('challenger') && loserTakenOut" class="side-effect">taken out</span>
         </div>
         <div class="contest-side" :class="sideClasses('defendant')">
@@ -27,7 +33,13 @@
           <span class="side-name">{{ defendantName }}</span>
           <span v-if="contestResult.defendant" class="side-sum"><strong class="result-num">{{ contestResult.defendant.total }}</strong></span>
           <span v-else class="side-empty">gave in</span>
-          <span v-if="sideIsWinner('defendant') && appliedEffectDie" class="side-effect">effect {{ appliedEffectDie }}</span>
+          <span v-if="sideIsWinner('defendant') && appliedEffectDie" class="side-effect">
+            <template v-if="steppedDown && winnerOriginalEffectDie">
+              <DieIcon :die="winnerOriginalEffectDie" class="side-effect-die original" />
+              <span class="step-arrow">↓</span>
+            </template>
+            <DieIcon :die="appliedEffectDie" class="side-effect-die" />
+          </span>
           <span v-else-if="!sideIsWinner('defendant') && loserTakenOut" class="side-effect">taken out</span>
         </div>
       </div>
@@ -184,7 +196,7 @@
         </div>
       </div>
 
-      <template v-else-if="result">
+      <template v-else-if="result && !contestResult">
         <template v-if="mode === 'roll_table'">
           <div class="roll-dice">
             <div v-for="(r, i) in result.rolls" :key="i" class="roll-die-wrap">
@@ -233,6 +245,10 @@
       <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
     </div>
 
+    <div class="controls" v-if="contestResult && iGaveIn && (!gmMode || actingEntityId)">
+      <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide' : 'Take complication' }}</button>
+    </div>
+
     <div class="controls" v-if="isWaitingForDecision">
       <span class="waiting-state">Waiting for {{ opponentName }} to decide…</span>
     </div>
@@ -242,7 +258,7 @@
       <button @click="doPush" class="roll-btn push-btn">Push</button>
     </div>
 
-    <div v-if="showConsequences && isResolved()" class="consequence-panel">
+    <div v-if="showConsequences && (isResolved() || contestResult)" class="consequence-panel">
       <div class="consequence-side">
         <label>Menu</label>
         <select v-model="consequenceSide">
@@ -250,7 +266,7 @@
           <option value="gm">GM</option>
         </select>
       </div>
-      <ConsequenceMenu :entity-id="entityId" :side="consequenceSide" :effect-die="consequenceEffectDie" @close="showConsequences = false" />
+      <ConsequenceMenu :entity-id="consequenceTargetId" :side="consequenceSide" :effect-die="consequenceEffectDie" :exclude-ids="consequenceExcludeIds" @close="showConsequences = false" />
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -421,6 +437,28 @@ function sideIsWinner(side) {
   const challengerWon = contestResult.value.winner === 'player'
   return (side === 'challenger') === challengerWon
 }
+const winnerOriginalEffectDie = computed(() => {
+  if (!contestResult.value) return null
+  const side = contestResult.value.winner === 'player' ? 'challenger' : 'defendant'
+  return contestResult.value[side]?.effect_die || null
+})
+const steppedDown = computed(() => !!appliedEffectDie.value && !!winnerOriginalEffectDie.value && appliedEffectDie.value !== winnerOriginalEffectDie.value)
+const iGaveIn = computed(() => {
+  if (!contestResult.value?.gave_in) return false
+  return isChallenger.value ? contestResult.value.gave_in === 'player' : contestResult.value.gave_in === 'opponent'
+})
+const consequenceTargetId = computed(() => {
+  if (contestResult.value) return iWon.value ? opponentId.value : editingEntityId.value
+  return editingEntityId.value
+})
+// Contest complication SFX surface as menu options (id ``sfx:<sfx-id>``).
+// Show only the one that matches this end of the contest pipeline:
+// winner → apply to opponent; conceder → take on self; non-contest → neither.
+const consequenceExcludeIds = computed(() => {
+  if (iWon.value) return ['sfx:take-complication']
+  if (iGaveIn.value) return ['sfx:apply-complication']
+  return ['sfx:apply-complication', 'sfx:take-complication']
+})
 const sumLabel = computed(() =>
   (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) ? 'difficulty' : 'result'
 )
@@ -514,6 +552,7 @@ async function doChallenge() {
   contestResult.value = null
   contestCompare.value = null
   giveInAllowed.value = false
+  showConsequences.value = false
   opponentCommitted.value = null
   const res = await apiSetOpposition(props.locationId, editingEntityId.value, opponentId.value, props.universe)
   if (res && res.status === 'blocked') {
@@ -1148,6 +1187,7 @@ const effectDie = computed(() => {
 // Effect die for the consequence menu: pool uses the picked die, simplified
 // uses the resolver's effect_die.
 const consequenceEffectDie = computed(() => {
+  if (contestResult.value) return appliedEffectDie.value || ''
   if (!result.value) return ''
   if (result.value.pipeline === 'pool') return effectDie.value || ''
   return result.value.effect_die || ''
@@ -1294,6 +1334,7 @@ function resetEditor() {
   giveInAllowed.value = false
   youTabBlink.value = false
   highStakes.value = false
+  showConsequences.value = false
   opponentCommitted.value = null
   showDiePicker.value = false
 }
@@ -1502,7 +1543,10 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .side-sum .result-num { font-size: 22px; }
 .contest-side.mine.winner .side-sum .result-num { color: var(--success, #40b860); }
 .contest-side.mine.loser .side-sum .result-num { color: var(--danger, #d44040); }
-.side-effect { color: var(--text-dim); }
+.side-effect { color: var(--text-dim); display: flex; align-items: center; gap: 4px; }
+.side-effect-die { width: 26px; height: 30px; }
+.side-effect-die.original { opacity: 0.35; filter: grayscale(0.6); }
+.step-arrow { font-weight: 700; color: var(--text-dim); }
 .side-empty { color: var(--text-dim); font-style: italic; }
 
 .peer-pool { display: flex; flex-direction: column; gap: 8px; }
