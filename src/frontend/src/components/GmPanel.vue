@@ -8,7 +8,7 @@
     <template v-if="mode === 'play'">
       <div class="gm-shortcuts">
         <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
-        <button class="shortcut-btn scene-btn" @click="viewSceneSummary = !viewSceneSummary">◈ Scene</button>
+        <button class="shortcut-btn scene-btn" @click="advanceScene">◈ Scene</button>
         <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
         <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
       </div>
@@ -78,7 +78,7 @@ const props = defineProps({
   currentLocationId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['next-beat', 'start-session', 'end-session', 'add-to-pool'])
+const emit = defineEmits(['next-beat', 'advance-scene', 'start-session', 'end-session', 'add-to-pool'])
 
 // ── Composables ─────────────────────────────────────
 const {
@@ -98,6 +98,7 @@ const viewSceneSummary = ref(true)
 const sessionActive = ref(false)
 
 function nextBeat() { emit('next-beat') }
+function advanceScene() { viewSceneSummary.value = true; emit('advance-scene') }
 function startSession() { sessionActive.value = true; emit('start-session') }
 function endSession() { sessionActive.value = false; emit('end-session') }
 

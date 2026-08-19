@@ -285,7 +285,7 @@ import { usePanelBus } from './composables/usePanelBus.js'
 import { useEntityCrud } from './composables/useEntityCrud.js'
 import ToastBar from './components/ToastBar.vue'
 
-const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, listPools: apiListPools } = useApi()
+const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listPools: apiListPools } = useApi()
 const { fetchEntities: prefetchEntities } = useEntityCrud()
 const bus = usePanelBus()
 
@@ -313,6 +313,7 @@ const gmRootPanel = computed(() => ({
   },
   listeners: {
     'next-beat': () => onNextBeat(),
+    'advance-scene': () => onAdvanceScene(),
     'start-session': () => onStartSession(),
     'end-session': () => onEndSession(),
     'add-to-pool': (d) => diceRef?.addFromSheet(d),
@@ -736,8 +737,29 @@ async function switchPerspective(id) {
   if (!sameLocation) await initLocation()
 }
 
+async function isAdjacentLocation(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return true
+  try {
+    const r = await fetch(`/api/v1/locations/${fromId}/navigate`)
+    const nav = await r.json()
+    const parentId = nav.parent?._key || nav.parent?.id
+    if (toId === parentId) return true
+    const children = nav.children || []
+    if (children.some(c => (c._key || c.id) === toId)) return true
+  } catch {}
+  return false
+}
+
+async function maybeAdvanceScene(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return
+  if (!(await isAdjacentLocation(fromId, toId))) {
+    await apiAdvanceScene()
+  }
+}
+
 async function setViewLocation(locId) {
   if (!locId) return
+  await maybeAdvanceScene(currentLocationId.value, locId)
   currentLocationId.value = locId
   locationName.value = locId
   try {
@@ -1162,6 +1184,11 @@ async function onNextBeat() {
   if (currentLocationId.value) {
     await apiNextBeat(currentLocationId.value)
   }
+}
+
+async function onAdvanceScene() {
+  const res = await apiAdvanceScene()
+  if (res) addToast('Scene advanced', 'scene')
 }
 
 function onStartSession() {

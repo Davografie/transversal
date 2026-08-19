@@ -274,5 +274,13 @@ export function useApi() {
     } catch (e) { console.error('[API] nextBeat', e.message); return null }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat }
+  async function advanceScene() {
+    try {
+      const r = await fetch(`${API_BASE}/scenes/advance`, { method: 'POST' })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] advanceScene', e.message); return null }
+  }
+
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }
