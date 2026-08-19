@@ -66,6 +66,26 @@ class TestManualContestFlow:
         data = r.json()
         assert data["winner"] == "player"  # defendant gave in → challenger wins
         assert data["gave_in"] == "opponent"
+        # Conceding still carries the winner's effect die for the complication.
+        assert data["effect_die"] == "d8"
+        assert data["taken_out"] is False
+
+    def test_give_in_steps_down_effect_when_not_larger(self, client):
+        _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
+        _save_pool(client, "loc-1", "guard", [("d8", "agility")])
+        client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
+
+        # Both commit (post-compare give-in), then the defendant concedes.
+        client.post("/api/v1/locations/loc-1/pools/kael/set", json={"total": 10, "effect_die": "d8", "pipeline": "pool"})
+        client.post("/api/v1/locations/loc-1/pools/guard/set", json={"total": 14, "effect_die": "d8", "pipeline": "pool"})
+        r = client.post("/api/v1/locations/loc-1/pools/kael/give-in")
+        assert r.status_code == 200, r.text
+        data = r.json()
+        # Winner (guard) d8 is not strictly larger than the conceder's d8,
+        # so low-stakes step-down applies: the complication lands at d6.
+        assert data["winner"] == "opponent"
+        assert data["gave_in"] == "player"
+        assert data["effect_die"] == "d6"
 
     def test_give_in_blocked_before_initiator_sets(self, client):
         _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])

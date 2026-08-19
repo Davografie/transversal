@@ -200,6 +200,9 @@ async def give_in(location_id: str, entity_id: str):
         "defendant": outcome.defendant.model_dump() if outcome.defendant else None,
         "challenger_id": challenger_id,
         "defendant_id": defendant_id,
+        "high_stakes": outcome.high_stakes,
+        "effect_die": outcome.effect_die.value if outcome.effect_die else None,
+        "taken_out": outcome.taken_out,
     })
     return outcome
 

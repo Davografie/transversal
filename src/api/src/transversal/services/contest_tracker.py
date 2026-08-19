@@ -390,17 +390,28 @@ class ContestTracker:
         if gave_in == ContestWinner.PLAYER:
             challenger.gave_in = True
             winner = ContestWinner.OPPONENT
+            winner_state, loser_state = defendant, challenger
         else:
             defendant.gave_in = True
             winner = ContestWinner.PLAYER
+            winner_state, loser_state = challenger, defendant
         challenger.pending_decision = None
         defendant.pending_decision = None
+        # Conceding still applies a complication at the winner's effect die
+        # (house rule): step down for low stakes when the winner's effect is
+        # not strictly larger than the conceder's. Giving in never takes out.
+        effect_die, _ = self._resolve_ramifications(
+            winner_state, loser_state, challenger.high_stakes
+        )
         return ContestOutcome(
             winner=winner,
             challenger=challenger.committed,
             defendant=defendant.committed,
             gave_in=gave_in,
             pushed=challenger.pushed_this_loop,
+            high_stakes=challenger.high_stakes,
+            effect_die=effect_die,
+            taken_out=False,
         )
 
     def push(self, location_id: str, entity_id: str) -> Optional[dict]:
