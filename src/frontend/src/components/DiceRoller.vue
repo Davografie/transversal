@@ -37,7 +37,7 @@
       <div v-if="showContest && !contestResult" class="challenge-target">
         <select v-if="!challenged" v-model="opponentId" @change="doChallenge" class="challenge-select">
           <option value="" disabled>Challenge target</option>
-          <option v-for="e in peers.filter(e => e.id !== editingEntityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
+          <option v-for="e in peers.filter(e => e.id !== editingEntityId && !bannedTargetIds.includes(e.id))" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
         <span v-else class="contest-status">
           ⚔️ {{ opponentName }}
@@ -297,7 +297,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn, push: apiPush, getContest: apiGetContest } = useApi()
+const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -337,6 +337,7 @@ const challenged = ref(false)
 const isChallenger = ref(false)
 const giveInAllowed = ref(false)
 const opponentCommitted = ref(null) // { total, effect_die } once the opponent has set
+const bannedTargetIds = ref([])     // entity ids the acting entity cannot currently challenge
 const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
@@ -469,6 +470,7 @@ watch(() => props.actingEntityId, async (id) => {
     activeId.value = id
     await loadPoolIntoEditor(id)
     await syncContestState()
+    await loadTargetingBans()
   } else {
     activeId.value = DIFFICULTY_TAB
     resetEditor()
@@ -491,7 +493,11 @@ async function doChallenge() {
   contestCompare.value = null
   giveInAllowed.value = false
   opponentCommitted.value = null
-  await apiSetOpposition(props.locationId, editingEntityId.value, opponentId.value, props.universe)
+  const res = await apiSetOpposition(props.locationId, editingEntityId.value, opponentId.value, props.universe)
+  if (res && res.status === 'blocked') {
+    contestError.value = res.reason || "You can't target that entity yet"
+    return
+  }
   challenged.value = true
   isChallenger.value = true
 }
@@ -607,6 +613,7 @@ async function doGiveIn() {
     contestResult.value = res
     contestCompare.value = null
     giveInAllowed.value = false
+    await loadTargetingBans()
   } else if (res && res.status === 'not_ready') {
     contestError.value = 'Initiator must set their result first'
   }
@@ -1340,10 +1347,16 @@ async function syncContestState() {
   }
 }
 
+async function loadTargetingBans() {
+  const res = await apiGetTargetingBans(editingEntityId.value)
+  bannedTargetIds.value = (res?.bans || []).map(b => b.target_id)
+}
+
 async function restorePool() {
   if (props.gmMode && !props.actingEntityId) return  // GM difficulty mode: transient
   await loadPoolIntoEditor(editingEntityId.value)
   await syncContestState()
+  await loadTargetingBans()
 }
 
 onMounted(() => {

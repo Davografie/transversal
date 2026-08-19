@@ -26,7 +26,7 @@ def ensure_sfx_owners(repo) -> None:
     reward; ``gm`` = GM-context SFX (not entity-derived; P3.3 buy-hitch);
     ``players`` = player-facing SFX bucket (reserved, currently empty).
     """
-    defaults = {"table": ["sfx-give-in-get-razmerit"], "gm": [], "players": []}
+    defaults = {"table": ["sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban"], "gm": [], "players": []}
     for owner_id, sfx_ids in defaults.items():
         owner = repo.get_sfx_owner(owner_id)
         if owner is None:
@@ -55,6 +55,29 @@ def ensure_give_in_sfx(repo) -> None:
                 type="transfer_razmerit",
                 action="earn",
                 target="self",
+                result="1",
+            ),
+        ],
+    ))
+
+
+def ensure_targeting_ban_sfx(repo) -> None:
+    """Create the give-in targeting-ban SFX if missing. Idempotent."""
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    if repo.get_sfx("sfx-give-in-targeting-ban") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="sfx-give-in-targeting-ban",
+        name="Give In — Keep Your Distance",
+        description="When you give in, you can't target that opponent for the rest of the scene",
+        trigger="on_give_in",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="entity",
+                action="targeting_ban",
+                target="",
                 result="1",
             ),
         ],

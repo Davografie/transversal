@@ -17,6 +17,7 @@ from transversal.api.rest.locations import router as locations_router
 from transversal.api.rest.media import router as media_router
 from transversal.api.rest.resource_pool import router as resource_pool_router
 from transversal.api.rest.contest_pools import router as contest_pools_router
+from transversal.api.rest.targeting_bans import router as targeting_bans_router
 from transversal.api.rest.scene_state import router as scene_state_router
 from transversal.api.rest.sessions import router as sessions_router
 from transversal.api.rest.imagen import router as imagen_router
@@ -112,7 +113,7 @@ async def get_context(request: Request) -> dict:
 async def on_startup():
     """Wire core services. Seed data runs via `python -m transversal seed`."""
     from transversal.services.effects_applier import _register_core_handlers
-    from transversal.services.sfx_owner import ensure_sfx_owners, ensure_give_in_sfx
+    from transversal.services.sfx_owner import ensure_sfx_owners, ensure_give_in_sfx, ensure_targeting_ban_sfx
 
     _register_core_handlers(_get_em(), _get_raz())
 
@@ -121,6 +122,7 @@ async def on_startup():
     engine = _get_engine()
     ensure_sfx_owners(repo)
     ensure_give_in_sfx(repo)
+    ensure_targeting_ban_sfx(repo)
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:
         engine.register(s)
@@ -139,6 +141,7 @@ app.include_router(locations_router)
 app.include_router(media_router)
 app.include_router(resource_pool_router)
 app.include_router(contest_pools_router)
+app.include_router(targeting_bans_router)
 app.include_router(scene_state_router)
 app.include_router(sessions_router)
 app.include_router(imagen_router)

@@ -122,6 +122,22 @@ def _register_core_handlers(em, raz):
     effect_registry.register("attune", "enable", _attune)
     effect_registry.register("attune", "disable", _attune)
 
+    # Targeting ban (directional, scene-counted): the owner may not target the
+    # resolved opponent again until the ban expires.
+    def _targeting_ban(a, eid, u, ctx):
+        from transversal.services.targeting_bans import apply_targeting_ban
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        target = ctx.get("opponent_id") or (a.target or "")
+        if not target or target == "self":
+            return
+        scenes = int(a.result) if str(a.result or "1").isdigit() else 1
+        apply_targeting_ban(entity, target, scenes)
+        em.repo.update_entity(entity)
+
+    effect_registry.register("entity", "targeting_ban", _targeting_ban)
+
     # Travel — move the entity across a universal boundary.
     #
     # ``inapposite`` relocates the active projection in place (key stays

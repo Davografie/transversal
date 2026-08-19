@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from transversal.services.sfx_owner import (
     ensure_give_in_sfx,
     ensure_sfx_owners,
+    ensure_targeting_ban_sfx,
     get_available_sfx_ids,
 )
 
@@ -144,7 +145,7 @@ def test_ensure_sfx_owners_creates_buckets_and_table_reward():
     repo = SetupRepo()
     ensure_sfx_owners(repo)
     assert set(repo.owners.keys()) == {"table", "gm", "players"}
-    assert repo.owners["table"].sfx_ids == ["sfx-give-in-get-razmerit"]
+    assert set(repo.owners["table"].sfx_ids) == {"sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban"}
     assert repo.owners["gm"].sfx_ids == []
     assert repo.owners["players"].sfx_ids == []
 
@@ -154,6 +155,7 @@ def test_ensure_sfx_owners_merges_into_existing_table():
     repo.owners["table"] = SimpleNamespace(id="table", sfx_ids=["sfx-other"])
     ensure_sfx_owners(repo)
     assert "sfx-give-in-get-razmerit" in repo.owners["table"].sfx_ids
+    assert "sfx-give-in-targeting-ban" in repo.owners["table"].sfx_ids
     assert "sfx-other" in repo.owners["table"].sfx_ids
 
 
@@ -166,4 +168,16 @@ def test_ensure_give_in_sfx_creates_once():
     assert sfx.effects[0].action == "earn"
     assert sfx.effects[0].result == "1"
     ensure_give_in_sfx(repo)
+    assert len(repo.sfxs) == 1
+
+
+def test_ensure_targeting_ban_sfx_creates_once():
+    repo = SetupRepo()
+    ensure_targeting_ban_sfx(repo)
+    sfx = repo.sfxs["sfx-give-in-targeting-ban"]
+    assert sfx.trigger == "on_give_in"
+    assert sfx.effects[0].type == "entity"
+    assert sfx.effects[0].action == "targeting_ban"
+    assert sfx.effects[0].result == "1"
+    ensure_targeting_ban_sfx(repo)
     assert len(repo.sfxs) == 1

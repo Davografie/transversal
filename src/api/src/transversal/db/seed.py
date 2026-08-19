@@ -273,6 +273,18 @@ def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
                          target="self", result="1"),
             ],
         ),
+        SFX(
+            id="sfx-give-in-targeting-ban",
+            name="Give In — Keep Your Distance",
+            description="When you give in, you can't target that opponent for the rest of the scene",
+            limit="",
+            trigger="on_give_in",
+            effects=[
+                Effect(timing=EffectTiming.IMMEDIATE,
+                         type="entity", action="targeting_ban",
+                         target="", result="1"),
+            ],
+        ),
     ]
 
     # Persist to database

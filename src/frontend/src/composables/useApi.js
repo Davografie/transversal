@@ -220,6 +220,15 @@ export function useApi() {
     } catch (e) { console.error('[API] push', e.message); return null }
   }
 
+  async function getTargetingBans(entityId) {
+    if (!entityId) return { bans: [] }
+    try {
+      const r = await fetch(`${API_BASE}/entities/${entityId}/targeting-bans`)
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] getTargetingBans', e.message); return { bans: [] } }
+  }
+
   async function getContest(locationId, entityId) {
     try {
       const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/contest`)
@@ -265,5 +274,5 @@ export function useApi() {
     } catch (e) { console.error('[API] nextBeat', e.message); return null }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, push, getContest, clearContest, setDifficulty, getDifficulty, nextBeat }
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat }
 }

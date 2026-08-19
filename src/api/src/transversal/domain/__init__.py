@@ -511,6 +511,14 @@ class Zone(BaseModel):
     y: float = 50.0   # percentage position on background image (0–100)
 
 
+class TargetingBan(BaseModel):
+    """A directional, scene-counted ban: the owning entity may not target
+    ``target_id`` (e.g. initiate a contest) until ``scenes_remaining`` is zero.
+    """
+    target_id: str
+    scenes_remaining: int = 1
+
+
 class Entity(BaseModel):
     """Core entity metadata.
 
@@ -540,6 +548,7 @@ class Entity(BaseModel):
     # Asset
     owned_by: Optional[str] = None
     attunements: list["Attunement"] = Field(default_factory=list)  # active attunements (effect-managed)
+    targeting_bans: list["TargetingBan"] = Field(default_factory=list)  # directional contest-target bans
     sfx_ids: list[str] = Field(default_factory=list)  # SFX owned directly by this entity
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}

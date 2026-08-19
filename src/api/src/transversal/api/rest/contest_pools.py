@@ -63,6 +63,13 @@ def _to_committed(body: SetRequest) -> CommittedResult:
 @router.post("/{location_id}/pools/{entity_id}/set-opposition")
 async def set_opposition(location_id: str, entity_id: str, body: SetOppositionRequest):
     """Challenge: designate an opponent for an entity's contest here."""
+    from transversal.main import _get_repo
+    from transversal.services.targeting_bans import has_targeting_ban
+
+    challenger = _get_repo().get_entity(entity_id)
+    if has_targeting_ban(challenger, body.opponent_id):
+        return {"status": "blocked", "reason": "You can't target that entity yet"}
+
     ct = get_contest_tracker()
     ct.set_opposition(location_id, entity_id, body.opponent_id, body.universe)
     broadcast_pool_change(location_id, entity_id)
@@ -142,9 +149,10 @@ async def give_in(location_id: str, entity_id: str):
         return {"status": "no_contest"}
     logger.info(f"[contest] give_in -> resolved winner={outcome.winner.value} loc={location_id} entity={entity_id}")
 
-    # Fire automatic SFX for the conceding side (give-in → +1 razmerit).
+    # Fire automatic SFX for the conceding side (give-in → +1 razmerit + ban).
     from transversal.services.state_events import fire_state_sfx
-    fire_state_sfx(entity_id, "", "on_give_in", {"gave_in": True})
+    opponent_id = defendant.entity_id if entity_id == challenger.entity_id else challenger.entity_id
+    fire_state_sfx(entity_id, "", "on_give_in", {"gave_in": True, "opponent_id": opponent_id})
 
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None
