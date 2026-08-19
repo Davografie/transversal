@@ -210,10 +210,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 
 #### P2.10d working plan (updated 2026-08-19)
 - **Landed:** initiative compare, push/give-in loop, waiting state, give-in razmerit + targeting ban, scene-advance trigger + toasts.
-- **Next — G4 effect resolution:** after the final winner, compare winner vs loser effect dice. Low stakes (default) → if winner's effect ≤ loser's, step it down one, then apply as a complication. High stakes → loser is taken out unless they spend razmerit. Needs a GM `high_stakes` toggle (default low). Heroic success is deferred and will be optional.
+- **Landed — G4 effect resolution:** after the final winner, compare winner vs loser effect dice. Low stakes (default) → if winner's effect ≤ loser's, step it down one, then apply as a complication. High stakes → loser is taken out (spend-to-avoid is still a consequence-menu/SFX concern). GM `high_stakes` toggle lives on the roll-kind badge (fiery, GM-only).
+- **Landed — P6 (folded into G4):** result widget shows the final (possibly stepped-down) effect via `DieIcon` (original die dimmed + `↓` + applied die), plus `taken out` on the loser for high-stakes takeout.
+- **Landed — consequence menu:** complications are manual menu choices, not an auto-fired SFX (`sfx-contest-loss-complication` removed from seed/owners). Two `on_consequence` SFX owned by `table` (`apply-complication` / `take-complication`, identical `gain_complication` effect): the winner sees “Apply a complication” (applies to the opponent), the conceder sees “Take a complication” (applies to self), both at the winner's effect die. The frontend filters them by which end of the contest you're on.
 - **Then — G5 resolver decomposition:** split `dice_resolver` into callables (`roll_pool`, `detect_hitches`, `pick_total`, `pick_effect_die`, `compare_totals`, effect step up/down). `/roll` returns rolled dice + hitch data only; result/effect selection and hitch-buying become client actions. Retire the interactive auto-`resolve` path; keep a thin MCP facade.
-- **Then — P6 (folded into G4):** result widget shows the final (possibly stepped-down) effect instead of raw both-side effect dice.
-- **Deferred/optional:** heroic success; high-stakes takeout path can land after the low-stakes path.
+- **Deferred/optional:** heroic success; high-stakes spend-to-avoid takeout.
 - **Related open tickets:** P2.15 (role-aware toasts), P2.16 (resource dice), P3.3 (buy-hitch).
 
 ### P2.11 — Frontend: dice-pool styling per roll kind
