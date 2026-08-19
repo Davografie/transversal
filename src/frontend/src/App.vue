@@ -1188,8 +1188,7 @@ async function onNextBeat() {
 }
 
 async function onAdvanceScene() {
-  const res = await apiAdvanceScene()
-  if (res) addToast('Scene advanced', 'scene')
+  await apiAdvanceScene()
 }
 
 function onStartSession() {
