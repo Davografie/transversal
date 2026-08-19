@@ -19,14 +19,16 @@
           <span class="side-name">{{ challengerName }}</span>
           <span v-if="contestResult.challenger" class="side-sum"><strong class="result-num">{{ contestResult.challenger.total }}</strong></span>
           <span v-else class="side-empty">gave in</span>
-          <span v-if="contestResult.challenger?.effect_die" class="side-effect">effect {{ contestResult.challenger.effect_die }}</span>
+          <span v-if="sideIsWinner('challenger') && appliedEffectDie" class="side-effect">effect {{ appliedEffectDie }}</span>
+          <span v-else-if="!sideIsWinner('challenger') && loserTakenOut" class="side-effect">taken out</span>
         </div>
         <div class="contest-side" :class="sideClasses('defendant')">
           <span class="side-icon">{{ sideIcon('defendant') }}</span>
           <span class="side-name">{{ defendantName }}</span>
           <span v-if="contestResult.defendant" class="side-sum"><strong class="result-num">{{ contestResult.defendant.total }}</strong></span>
           <span v-else class="side-empty">gave in</span>
-          <span v-if="contestResult.defendant?.effect_die" class="side-effect">effect {{ contestResult.defendant.effect_die }}</span>
+          <span v-if="sideIsWinner('defendant') && appliedEffectDie" class="side-effect">effect {{ appliedEffectDie }}</span>
+          <span v-else-if="!sideIsWinner('defendant') && loserTakenOut" class="side-effect">taken out</span>
         </div>
       </div>
     </div>
@@ -411,6 +413,13 @@ function sideIcon(side) { return sideIsMine(side) ? (iWon.value ? '🏆' : '💀
 function sideClasses(side) {
   const mine = sideIsMine(side)
   return { mine, winner: mine && iWon.value, loser: mine && !iWon.value }
+}
+const appliedEffectDie = computed(() => contestResult.value?.effect_die || null)
+const loserTakenOut = computed(() => !!contestResult.value?.taken_out)
+function sideIsWinner(side) {
+  if (!contestResult.value) return false
+  const challengerWon = contestResult.value.winner === 'player'
+  return (side === 'challenger') === challengerWon
 }
 const sumLabel = computed(() =>
   (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) ? 'difficulty' : 'result'
