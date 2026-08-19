@@ -44,6 +44,9 @@ app.add_middleware(
 
 import logging
 
+# Ensure our diagnostic INFO logs (contest flow, etc.) are emitted.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
 class _NoisyPathFilter(logging.Filter):
     """Suppress access logs for paths that generate constant poll traffic."""
     _quiet = {"/api/v1/imagen/jobs", "/health"}

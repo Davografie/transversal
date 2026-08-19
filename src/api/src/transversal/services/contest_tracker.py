@@ -8,6 +8,8 @@ razmerit spent.  Resolution reads dice from the shared scene store.
 
 from __future__ import annotations
 
+import logging
+
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -19,6 +21,8 @@ from transversal.domain import (
     DicePoolRequest,
 )
 from transversal.services.dice_resolver import compare_committed, resolve_contest
+
+logger = logging.getLogger("transversal.contest_tracker")
 
 
 @dataclass
@@ -220,6 +224,7 @@ class ContestTracker:
         """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
+            logger.info(f"[contest] set_result no-contestants loc={location_id} entity={entity_id}")
             return None
 
         if entity_id == challenger.entity_id:
@@ -227,8 +232,14 @@ class ContestTracker:
         else:
             defendant.committed = committed
 
+        logger.info(
+            f"[contest] set_result loc={location_id} entity={entity_id} total={committed.total} "
+            f"challenger_committed={challenger.committed is not None} defendant_committed={defendant.committed is not None}"
+        )
         if challenger.committed is not None and defendant.committed is not None:
-            return self._outcome(challenger, defendant, gave_in=None)
+            outcome = self._outcome(challenger, defendant, gave_in=None)
+            logger.info(f"[contest] set_result resolved winner={outcome.winner.value}")
+            return outcome
         return None
 
     def give_in(self, location_id: str, entity_id: str) -> Optional[ContestOutcome]:
@@ -238,12 +249,17 @@ class ContestTracker:
         """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
+            logger.info(f"[contest] give_in no-contestants loc={location_id} entity={entity_id}")
             return None
         if challenger.committed is None:
+            logger.info(f"[contest] give_in blocked (initiator not committed) loc={location_id} entity={entity_id}")
             return None  # initiator must set before anyone may give in
         if entity_id == challenger.entity_id:
-            return self._outcome(challenger, defendant, gave_in=ContestWinner.PLAYER)
-        return self._outcome(challenger, defendant, gave_in=ContestWinner.OPPONENT)
+            outcome = self._outcome(challenger, defendant, gave_in=ContestWinner.PLAYER)
+        else:
+            outcome = self._outcome(challenger, defendant, gave_in=ContestWinner.OPPONENT)
+        logger.info(f"[contest] give_in resolved loc={location_id} entity={entity_id} winner={outcome.winner.value}")
+        return outcome
 
     def _outcome(
         self,

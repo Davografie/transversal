@@ -6,6 +6,8 @@ a side's rolled result (set), give in, and clear.  Resolution is implicit —
 when both sides have set, the tracker compares and declares a winner.
 """
 
+import logging
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
@@ -16,6 +18,8 @@ from transversal.services.contest_tracker import (
     get_contest_tracker,
 )
 from transversal.services.scene_state import get_scene_store
+
+logger = logging.getLogger("transversal.contest_pools")
 
 router = APIRouter(prefix="/api/v1/locations", tags=["contest-pools"])
 
@@ -118,14 +122,22 @@ async def give_in(location_id: str, entity_id: str):
     """
     ct = get_contest_tracker()
     challenger, defendant = ct.get_contestants(location_id, entity_id)
+    logger.info(
+        f"[contest] give_in loc={location_id} entity={entity_id} "
+        f"challenger={challenger.entity_id if challenger else None} defendant={defendant.entity_id if defendant else None}"
+    )
     if challenger is None or defendant is None:
+        logger.info(f"[contest] give_in -> no_contest loc={location_id} entity={entity_id}")
         return {"status": "no_contest"}
     if challenger.committed is None:
+        logger.info(f"[contest] give_in -> not_ready (initiator not committed) loc={location_id} entity={entity_id}")
         return {"status": "not_ready", "reason": "Initiator has not set a result yet"}
 
     outcome = ct.give_in(location_id, entity_id)
     if outcome is None:
+        logger.info(f"[contest] give_in -> no_contest (tracker) loc={location_id} entity={entity_id}")
         return {"status": "no_contest"}
+    logger.info(f"[contest] give_in -> resolved winner={outcome.winner.value} loc={location_id} entity={entity_id}")
 
     # Fire automatic SFX for the conceding side (give-in → +1 razmerit).
     from transversal.services.state_events import fire_state_sfx
@@ -158,8 +170,17 @@ async def get_contest(location_id: str, entity_id: str):
     """Return the current contest state for an entity (perspective re-sync)."""
     ct = get_contest_tracker()
     challenger, defendant = ct.get_contestants(location_id, entity_id)
+    logger.info(
+        f"[contest] get_contest loc={location_id} entity={entity_id} "
+        f"challenger={challenger.entity_id if challenger else None} defendant={defendant.entity_id if defendant else None}"
+    )
     if challenger is None or defendant is None:
+        logger.info(f"[contest] get_contest -> no_contest loc={location_id} entity={entity_id}")
         return {"status": "no_contest"}
+    logger.info(
+        f"[contest] get_contest -> active challenger_committed={challenger.committed is not None} "
+        f"defendant_committed={defendant.committed is not None}"
+    )
     return {
         "status": "active",
         "challenger_id": challenger.entity_id,
