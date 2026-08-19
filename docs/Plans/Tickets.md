@@ -201,12 +201,20 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `components/CharacterSheet.vue` (`onTraitClick`, `resolvedDieType`), `components/DiceRoller.vue` (`addFromSheet`, `removeByTsId`, `resyncTraitDie`), `App.vue` (`trait_updated` routing), `services/scene_state.py` (`resync_trait_die` + `resync_pool_dice_for_trait`), `services/effects_commit.py` / `entity_manager.py` (`trait_updated` payload).
 
 ### P2.10d — Backend + frontend: contest push loop (roll & compare)
-- **Status:** pending
-- **What:** after both sides set, do not auto-finalize. Compare provisionally; the side that is behind may either **give in** (+1 razmerit) or **push** (spend 1 razmerit, re-roll, re-compare). Only one push per beat. Follows the "roll and compare loop" in [[Cortex Flowcharts]].
-- **Done:** a losing side is offered give-in/push after compare; pushing spends razmerit, re-rolls, and re-compares, looping until someone gives in or wins.
+- **Status:** in progress
+- **What:** after both sides set, do not auto-finalize. Compare provisionally against the initiative holder (strictly-beat; tie → holder); the losing side may **give in** (+1 razmerit, plus a scene-scoped directional targeting ban) or **push** (free, once per side, rebuild/roll/set again). Loops until someone gives in or fails to beat.
+- **Done:** initiative-based `ContestCompare`, `push` endpoint + `on_push` trigger, give-in gating, a waiting state for the holder, give-in → razmerit + `entity_targeting_ban` (1 scene), and a scene-advance trigger (GM `[Scene]` button + non-adjacent navigation) with SSE toasts.
 - **Depends:** P2.10b
-- **Note:** `ContestTracker.push_contest` exists but targets the retired `resolve()` path — rework it for the manual `set_result` flow. Razmerit spend should route through the effects engine / `razmerit_spent` on `ContestState`.
-- **Load:** `services/contest_tracker.py` (`set_result`, `give_in`, `push_contest`, `pushed_this_beat`), `api/rest/contest_pools.py` (`set` / `give-in` / `push`), `components/DiceRoller.vue` (push / give-in choice), `services/effects_engine.py` (razmerit spend).
+- **Note:** push is free (house ruling from Cortex "continue"); `pushed_this_beat` → `pushed_this_loop`. `razmerit_spent`/`push_cost` are stale leftovers of the old paid-push model. `push_contest` is dead code (retired `resolve()` path) — superseded by `ContestTracker.push`.
+- **Load:** `services/contest_tracker.py` (`set_result`, `_compare`, `give_in`, `push`), `api/rest/contest_pools.py` (`set`/`give-in`/`push`), `api/rest/targeting_bans.py`, `services/targeting_bans.py`, `services/effects_applier.py` (`entity.targeting_ban`), `services/sfx_owner.py`, `db/seed.py`, `components/DiceRoller.vue`, `components/GmPanel.vue`, `App.vue`.
+
+#### P2.10d working plan (updated 2026-08-19)
+- **Landed:** initiative compare, push/give-in loop, waiting state, give-in razmerit + targeting ban, scene-advance trigger + toasts.
+- **Next — G4 effect resolution:** after the final winner, compare winner vs loser effect dice. Low stakes (default) → if winner's effect ≤ loser's, step it down one, then apply as a complication. High stakes → loser is taken out unless they spend razmerit. Needs a GM `high_stakes` toggle (default low). Heroic success is deferred and will be optional.
+- **Then — G5 resolver decomposition:** split `dice_resolver` into callables (`roll_pool`, `detect_hitches`, `pick_total`, `pick_effect_die`, `compare_totals`, effect step up/down). `/roll` returns rolled dice + hitch data only; result/effect selection and hitch-buying become client actions. Retire the interactive auto-`resolve` path; keep a thin MCP facade.
+- **Then — P6 (folded into G4):** result widget shows the final (possibly stepped-down) effect instead of raw both-side effect dice.
+- **Deferred/optional:** heroic success; high-stakes takeout path can land after the low-stakes path.
+- **Related open tickets:** P2.15 (role-aware toasts), P2.16 (resource dice), P3.3 (buy-hitch).
 
 ### P2.11 — Frontend: dice-pool styling per roll kind
 - **Status:** done
