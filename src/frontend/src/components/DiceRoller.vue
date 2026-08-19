@@ -5,7 +5,7 @@
         v-for="e in tabEntities"
         :key="e.id"
         class="pool-tab"
-        :class="{ active: activeId === e.id, self: e.id === selfTabId }"
+        :class="{ active: activeId === e.id, self: e.id === selfTabId, blink: e.id === selfTabId && youTabBlink }"
         @click="switchTab(e.id)"
       >
         {{ e.name }}
@@ -261,7 +261,7 @@
           </div>
         </div>
         <div v-else class="dice-pool">
-          <div v-for="(die, i) in viewPoolDice" :key="i" class="die-chip">
+          <div v-for="(die, i) in viewPoolDice" :key="i" class="die-chip" :class="{ 'peer-rolling': remotePhase === 'rolling' }" :style="remotePhase === 'rolling' ? { animationDelay: (i * 90) + 'ms' } : null">
             <DieIcon :die="die.die" :label="die.label || die.source_id || die.die" />
           </div>
           <div v-if="!viewPoolDice.length" class="empty-pool">No dice assembled</div>
@@ -327,6 +327,7 @@ const viewPool = ref([])
 // Live remote view for the read-only peer tab: prefer rolled/committed state,
 // then the live assembled pool, then the fetched snapshot.
 const remoteView = computed(() => props.remoteResults?.[activeId.value] || null)
+const remotePhase = computed(() => props.remotePools?.[activeId.value]?.phase || 'adding')
 const viewPoolDice = computed(() => {
   const rp = props.remotePools?.[activeId.value]
   if (rp && Array.isArray(rp.dice)) return rp.dice
@@ -342,6 +343,7 @@ const isChallenger = ref(false)
 const giveInAllowed = ref(false)
 const opponentCommitted = ref(null) // { total, effect_die } once the opponent has set
 const bannedTargetIds = ref([])     // entity ids the acting entity cannot currently challenge
+const youTabBlink = ref(false)      // nudge: it's your turn to roll
 const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
@@ -570,6 +572,7 @@ function onOpponentCommitted(data) {
     opponentCommitted.value = { total: data.total, effect_die: data.effect_die }
     if (!isChallenger.value) {
       giveInAllowed.value = true  // initiator has now committed
+      youTabBlink.value = true
       contestNotice.value = `Your turn — roll to beat ${opponentName.value}`
     }
   }
@@ -802,7 +805,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -1184,6 +1187,7 @@ function lockDie(i, result_) {
 }
 
 async function doRoll() {
+  youTabBlink.value = false
   setPhase(Phase.ROLLING)
   const dice = pool.map(d => ({
     die: d.die,
@@ -1272,6 +1276,7 @@ function resetEditor() {
   isChallenger.value = false
   opponentId.value = ''
   giveInAllowed.value = false
+  youTabBlink.value = false
   opponentCommitted.value = null
   showDiePicker.value = false
 }
@@ -1424,6 +1429,8 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .pool-tab.active { background: var(--accent, #7aa2f7); color: #0a0a0f; }
 .pool-tab.self { border-color: var(--accent, #7aa2f7); }
 .pool-tab.self:not(.active) { color: var(--text); background: rgba(64,136,212,0.12); }
+.pool-tab.blink { animation: tab-blink 0.9s ease-in-out infinite; }
+@keyframes tab-blink { 0%, 100% { box-shadow: 0 0 0 rgba(64,136,212,0); } 50% { box-shadow: 0 0 10px 2px rgba(64,136,212,0.9); } }
 
 .difficulty-target {
   text-align: center; font-size: 13px; color: var(--text-dim);
@@ -1480,6 +1487,8 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   cursor: pointer; transition: opacity 0.2s;
 }
 .die-chip:hover { opacity: 0.7; }
+.die-chip.peer-rolling { animation: die-pulse 0.7s ease-in-out infinite; }
+@keyframes die-pulse { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.12); filter: brightness(1.5); } }
 
 .add-die-toggle {
   width: 36px;

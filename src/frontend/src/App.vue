@@ -737,29 +737,8 @@ async function switchPerspective(id) {
   if (!sameLocation) await initLocation()
 }
 
-async function isAdjacentLocation(fromId, toId) {
-  if (!fromId || !toId || fromId === toId) return true
-  try {
-    const r = await fetch(`/api/v1/locations/${fromId}/navigate`)
-    const nav = await r.json()
-    const parentId = nav.parent?._key || nav.parent?.id
-    if (toId === parentId) return true
-    const children = nav.children || []
-    if (children.some(c => (c._key || c.id) === toId)) return true
-  } catch {}
-  return false
-}
-
-async function maybeAdvanceScene(fromId, toId) {
-  if (!fromId || !toId || fromId === toId) return
-  if (!(await isAdjacentLocation(fromId, toId))) {
-    await apiAdvanceScene()
-  }
-}
-
 async function setViewLocation(locId) {
   if (!locId) return
-  await maybeAdvanceScene(currentLocationId.value, locId)
   currentLocationId.value = locId
   locationName.value = locId
   try {
@@ -890,7 +869,9 @@ watch(lastEvent, (evt) => {
 
   switch (evt.type) {
     case 'razmerit_changed':
-      // local patch handles display; SSE sync deferred
+      if (evt.data?.entity_id === entityId.value && evt.data?.new_balance != null) {
+        sheetRef.value?.setRazmerit(evt.data.new_balance)
+      }
       break
     case 'beat_end':
       diceRef.value?.clearPool()
@@ -941,6 +922,10 @@ watch(lastEvent, (evt) => {
       if (gmMode.value) {
         addToast(evt.data?.to_location ? `Scene: ${evt.data.to_location}` : 'Scene advanced', 'scene')
       }
+      diceRef.value?.clearPool()
+      remotePools.value = {}
+      remoteResults.value = {}
+      diceRef.value?.loadTargetingBans()
       break
     case 'pool_updated':
       lastEvtDebug.value = `pid=${pid} eid=${eid} phase=${evt.data.phase} dice=${JSON.stringify(evt.data.dice)} mypid=${playerId.value}`

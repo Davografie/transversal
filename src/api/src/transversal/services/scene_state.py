@@ -43,6 +43,11 @@ class SceneStateStore:
         """Clear every pool at a location (end of beat), keep difficulty."""
         self._pools.pop(location_id, None)
 
+    def clear_all(self) -> None:
+        """Clear every location's pools and difficulty (scene end)."""
+        self._pools.clear()
+        self._difficulty.clear()
+
     def resync_trait_die(self, entity_id: str, trait_setting_id: str, new_dice: list[str]) -> list[tuple[str, str]]:
         """Update assembled pool dice referencing ``trait_setting_id``.
 

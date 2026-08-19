@@ -30,6 +30,11 @@ async def advance_scene():
     _get_engine().tick_scene()
     changed = decrement_scene_bans(_get_repo())
 
+    from transversal.services.scene_state import get_scene_store
+    from transversal.services.contest_tracker import get_contest_tracker
+    get_scene_store().clear_all()
+    get_contest_tracker().clear_all()
+
     from transversal.api.sse.bus import StreamEvent, event_bus
     from transversal.services.session_manager import session_manager
     for s in session_manager.list_active():

@@ -576,7 +576,7 @@ function setPoolSources(sources) {
   }
 }
 
-defineExpose({ resetSfxCounts, setPoolSources, fetchEntity })
+defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, fetchEntity })
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0
@@ -822,6 +822,13 @@ async function adjustRazmerit(delta) {
   const data = await resp.json()
   const balance = data?.data?.[mutation]?.fromBalance
   if (balance != null) entity.value.razmerit = balance
+}
+
+function setRazmerit(balance) {
+  // Live-patch the sheet when the SSE razmerit_changed event arrives for this entity.
+  if (entity.value && entity.value.id === props.entityId) {
+    entity.value.razmerit = balance
+  }
 }
 
 async function deleteTrait(t) {

@@ -121,6 +121,10 @@ class ContestTracker:
         """Remove all contest metadata at a location (scene end)."""
         self._contests.pop(location_id, None)
 
+    def clear_all(self) -> None:
+        """Remove all contest metadata everywhere (scene end)."""
+        self._contests.clear()
+
     # ── Metadata queries ───────────────────────────────
 
     def get_contests_at(self, location_id: str) -> dict[str, ContestState]:
