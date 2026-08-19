@@ -373,11 +373,9 @@ function onSelfDragStart(e) {
 }
 
 function onSelfClick() {
-  if (selfDragging) { selfDragging = false; return }
+  if (occSuppressClick) { occSuppressClick = false; return }
   emit('inspectEntity', props.entityId)
 }
-
-let selfDragging = false
 
 function parallaxOffset() {
   const self = occupants.value.find(o => o.id === props.entityId)
@@ -682,12 +680,14 @@ const poolPhaseFor = (eid) => props.remotePools[eid]?.phase || 'adding'
 // ── Occupant drag ──────────────────────────────────
 
 const occDragging = ref(null)  // { index }
+let occDragMoved = false       // pointer moved past the tap threshold
+let occSuppressClick = false   // suppress the synthesized click after a real drag
 let dragTarget = null  // non-reactive: nearest target during self-drag
 const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
 
 function onOccupantDragStart(e, occupant, index) {
   if (!canDragOccupant(occupant)) return
-  e.preventDefault()
+  occDragMoved = false
   const el = viewerEl.value
   if (!el) return
   const rect = el.getBoundingClientRect()
@@ -709,15 +709,20 @@ function onOccupantDragStart(e, occupant, index) {
 
 function onOccDragMove(e) {
   if (!occDragging.value) return
-  e.preventDefault()
   const el = viewerEl.value
   if (!el) return
-  const rect = el.getBoundingClientRect()
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
-  const dx = ((clientX - occDragging.value.startX) / rect.width) * 100
-  const dy = ((clientY - occDragging.value.startY) / rect.height) * 100
-  const occ = occupants.value[occDragging.value.index]
+  const start = occDragging.value
+  if (!occDragMoved) {
+    if (Math.hypot(clientX - start.startX, clientY - start.startY) < 6) return
+    occDragMoved = true
+  }
+  e.preventDefault()
+  const rect = el.getBoundingClientRect()
+  const dx = ((clientX - start.startX) / rect.width) * 100
+  const dy = ((clientY - start.startY) / rect.height) * 100
+  const occ = occupants.value[start.index]
   if (occ) {
     const viewX = occDragging.value.origX + dx
     const viewY = occDragging.value.origY + dy
@@ -728,7 +733,6 @@ function onOccDragMove(e) {
 
   // Track nearest target — all positions now image-relative
   if (occ && occ.id === props.entityId) {
-    selfDragging = true
     const px = occ.map_x, py = occ.map_y
     let nearest = null, nearestDist = 12
     for (const z of zones.value) {
@@ -758,8 +762,13 @@ async function onOccDragEnd() {
   hoveredDot.value = ''
   if (!occDragging.value) return
   const occ = occupants.value[occDragging.value.index]
+  const wasMoved = occDragMoved
   occDragging.value = null
+  occDragMoved = false
   if (!occ) return
+  if (!wasMoved) return  // tap — the synthesized click handles inspect/pop
+
+  occSuppressClick = true
 
   // If player dropped near a target, trigger interaction
   if (occ.id === props.entityId && dragTarget && !props.editZones) {
@@ -965,6 +974,7 @@ async function togglePortalType(nd) {
 }
 
 function onDotClick(type, item) {
+  if (occSuppressClick) { occSuppressClick = false; return }
   if (props.editZones) {
     // In edit mode, clicking a portal navdot toggles its transversal type.
     if (type === 'nav' && item.type === 'portal') togglePortalType(item)
@@ -1119,6 +1129,7 @@ function placeCharacterAtSource(sourceId) {
 }
 
 function onExpandedClick(type, item) {
+  if (occSuppressClick) { occSuppressClick = false; return }
   if (props.editZones) return
   if (type === 'zone') {
     const child = childForZone(item)

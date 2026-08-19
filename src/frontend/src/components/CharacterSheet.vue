@@ -99,7 +99,7 @@
                         :key="i"
                         :die="die"
                         class="trait-die-icon"
-                        :style="i ? { marginLeft: '-12px', marginTop: `${i * 4}px` } : null"
+                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
                       />
                     </div>
                   </div>

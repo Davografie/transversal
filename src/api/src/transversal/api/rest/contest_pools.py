@@ -82,11 +82,17 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
     ct = get_contest_tracker()
     outcome = ct.set_result(location_id, entity_id, _to_committed(body))
 
+    challenger, defendant = ct.get_contestants(location_id, entity_id)
+    challenger_id = challenger.entity_id if challenger else None
+    defendant_id = defendant.entity_id if defendant else None
+
     _broadcast("contest_set", location_id, entity_id, {
         "total": body.total,
         "effect_die": body.effect_die,
         "tier": body.tier,
         "pipeline": body.pipeline,
+        "challenger_id": challenger_id,
+        "defendant_id": defendant_id,
     })
 
     if outcome is not None:
@@ -96,6 +102,8 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
             "gave_in": outcome.gave_in.value if outcome.gave_in else None,
             "challenger": outcome.challenger.model_dump() if outcome.challenger else None,
             "defendant": outcome.defendant.model_dump() if outcome.defendant else None,
+            "challenger_id": challenger_id,
+            "defendant_id": defendant_id,
         })
         return outcome
 
@@ -114,9 +122,15 @@ async def give_in(location_id: str, entity_id: str):
     from transversal.services.state_events import fire_state_sfx
     fire_state_sfx(entity_id, "", "on_give_in", {"gave_in": True})
 
+    challenger, defendant = ct.get_contestants(location_id, entity_id)
+    challenger_id = challenger.entity_id if challenger else None
+    defendant_id = defendant.entity_id if defendant else None
+
     _broadcast("contest_give_in", location_id, entity_id, {
         "gave_in": outcome.gave_in.value if outcome.gave_in else None,
         "winner": outcome.winner.value,
+        "challenger_id": challenger_id,
+        "defendant_id": defendant_id,
     })
     _broadcast("contest_resolved", location_id, entity_id, {
         "winner": outcome.winner.value,
@@ -124,6 +138,8 @@ async def give_in(location_id: str, entity_id: str):
         "gave_in": outcome.gave_in.value if outcome.gave_in else None,
         "challenger": outcome.challenger.model_dump() if outcome.challenger else None,
         "defendant": outcome.defendant.model_dump() if outcome.defendant else None,
+        "challenger_id": challenger_id,
+        "defendant_id": defendant_id,
     })
     return outcome
 

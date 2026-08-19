@@ -56,19 +56,20 @@
 
     <div v-if="showContest" class="contest-setup">
       <div v-if="contestError" class="error">{{ contestError }}</div>
+      <div v-if="contestNotice" class="contest-notice">{{ contestNotice }}</div>
       <div v-if="contestResult" class="contest-result">
         <strong>{{ winnerLabel }}</strong>
-        <div v-if="contestResult.challenger">{{ challengerLabel }}: total {{ contestResult.challenger.total }} · effect {{ contestResult.challenger.effect_die || '—' }}</div>
-        <div v-if="contestResult.defendant">{{ defendantLabel }}: total {{ contestResult.defendant.total }} · effect {{ contestResult.defendant.effect_die || '—' }}</div>
+        <div v-if="contestResult.challenger">{{ challengerLabel }}: {{ sumLabel }} {{ contestResult.challenger.total }} · effect {{ contestResult.challenger.effect_die || '—' }}</div>
+        <div v-if="contestResult.defendant">{{ defendantLabel }}: {{ sumLabel }} {{ contestResult.defendant.total }} · effect {{ contestResult.defendant.effect_die || '—' }}</div>
         <div v-if="contestResult.stakes">Stakes: {{ contestResult.stakes }}</div>
-        <div v-if="contestResult.gave_in">Gave in</div>
+        <div v-if="contestResult.gave_in">{{ gaveInLabel }}</div>
       </div>
     </div>
 
     <!-- Picking: total/effect selection slots live above the dice -->
     <div v-if="result && isPicking()" class="pool-result">
       <div class="selection-row">
-        <span class="sel-label" @click="assignBestTotal">Total:</span>
+        <span class="sel-label" @click="assignBestTotal">{{ sumLabel }}:</span>
         <span
           v-for="(idx, i) in selection.total" :key="'t'+i"
           class="sel-slot total-slot"
@@ -81,7 +82,7 @@
         </span>
         <span class="sel-value">= <strong>{{ computedTotal }}</strong></span>
       </div>
-      <div class="selection-row" v-if="!gmMode">
+      <div class="selection-row" v-if="!gmMode || actingEntityId">
         <span class="sel-label" @click="assignBestEffect">Effect:</span>
         <span
           v-for="(idx, i) in selection.effect" :key="'e'+i"
@@ -217,12 +218,23 @@
     <template v-else>
       <div class="peer-pool">
         <div class="peer-pool-title">{{ activeName }}</div>
-        <div class="dice-pool">
-          <div v-for="(die, i) in viewPool" :key="i" class="die-chip">
+        <div v-if="remoteView?.committed" class="peer-committed">
+          Set: {{ sumLabel }} <strong>{{ remoteView.committed.total }}</strong>
+          <DieIcon v-if="remoteView.committed.effect_die" :die="remoteView.committed.effect_die" class="peer-effect-die" />
+        </div>
+        <div v-else-if="remoteView?.rolls?.length" class="roll-dice">
+          <div v-for="(r, i) in remoteView.rolls" :key="i" class="roll-die-wrap">
+            <DieIcon :die="r.die" :result="r.result" :label="r.label || r.source_id || r.die" />
+          </div>
+        </div>
+        <div v-else class="dice-pool">
+          <div v-for="(die, i) in viewPoolDice" :key="i" class="die-chip">
             <DieIcon :die="die.die" :label="die.label || die.source_id || die.die" />
           </div>
-          <div v-if="!viewPool.length" class="empty-pool">No dice assembled</div>
+          <div v-if="!viewPoolDice.length" class="empty-pool">No dice assembled</div>
         </div>
+        <div v-if="remoteView?.botch" class="botch">BOTCH</div>
+        <div v-if="remoteView?.hitches?.length" class="hitches">{{ remoteView.hitches.length }} hitch{{ remoteView.hitches.length > 1 ? 'es' : '' }}</div>
       </div>
     </template>
   </div>
@@ -251,6 +263,7 @@ const props = defineProps({
   actingEntityId: { type: String, default: '' }, // entity being acted on (GM switchable; player = self)
   fallbackEntityId: { type: String, default: '' }, // GM's stable identity for difficulty/free-roam rolls
   remotePools: { type: Object, default: () => ({}) }, // entity_id → { dice, phase } from SSE
+  remoteResults: { type: Object, default: () => ({}) }, // entity_id → { rolls, committed, ... } from SSE
 })
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
@@ -278,9 +291,18 @@ const DIFFICULTY_TAB = '__difficulty__'
 const poolPurpose = ref(null) // GM mode: 'difficulty' | 'gmc' | null
 const activeId = ref(props.gmMode ? DIFFICULTY_TAB : props.entityId)
 const viewPool = ref([])
+// Live remote view for the read-only peer tab: prefer rolled/committed state,
+// then the live assembled pool, then the fetched snapshot.
+const remoteView = computed(() => props.remoteResults?.[activeId.value] || null)
+const viewPoolDice = computed(() => {
+  const rp = props.remotePools?.[activeId.value]
+  if (rp && Array.isArray(rp.dice)) return rp.dice
+  return viewPool.value
+})
 const opponentId = ref('')
 const contestResult = ref(null)
 const contestError = ref('')
+const contestNotice = ref('')
 const challenged = ref(false)
 const isChallenger = ref(false)
 const difficultyFlash = ref('')
@@ -291,17 +313,21 @@ const tabEntities = computed(() => {
     ? [{ id: DIFFICULTY_TAB, name: 'Difficulty' }]
     : [{ id: props.entityId, name: 'You' }]
   const seen = new Set(list.map(e => e.id))
-  if (props.actingEntityId && !seen.has(props.actingEntityId)) {
-    seen.add(props.actingEntityId)
-    const name = (props.peers || []).find(p => p.id === props.actingEntityId)?.name || props.actingEntityId
-    list.push({ id: props.actingEntityId, name })
+  const pushEntity = (id, label) => {
+    if (!id || seen.has(id)) return
+    seen.add(id)
+    const name = label || (props.peers || []).find(p => p.id === id)?.name || id
+    list.push({ id, name })
   }
+  if (props.actingEntityId) pushEntity(props.actingEntityId, props.gmMode ? 'You' : '')
+  if (challenged.value) pushEntity(opponentId.value)
   for (const [eid, rp] of Object.entries(props.remotePools || {})) {
     if (seen.has(eid)) continue
-    if (!rp || !rp.dice || !rp.dice.length) continue
-    seen.add(eid)
-    const name = (props.peers || []).find(p => p.id === eid)?.name || eid
-    list.push({ id: eid, name })
+    const rr = props.remoteResults?.[eid]
+    const hasPool = rp && Array.isArray(rp.dice) && rp.dice.length > 0
+    const hasResult = rr && (rr.rolls?.length || rr.committed)
+    if (!hasPool && !hasResult) continue
+    pushEntity(eid)
   }
   return list
 })
@@ -315,7 +341,12 @@ const isEditing = computed(() => {
   return activeId.value === props.entityId
 })
 const activeName = computed(() => tabEntities.value.find(e => e.id === activeId.value)?.name || activeId.value)
-const opponentName = computed(() => tabEntities.value.find(e => e.id === opponentId.value)?.name || 'Opponent')
+const opponentName = computed(() =>
+  (props.peers || []).find(p => p.id === opponentId.value)?.name ||
+  tabEntities.value.find(e => e.id === opponentId.value)?.name ||
+  opponentId.value ||
+  'Opponent'
+)
 const winnerLabel = computed(() => {
   if (!contestResult.value) return ''
   const challengerWon = contestResult.value.winner === 'player'
@@ -324,6 +355,17 @@ const winnerLabel = computed(() => {
 })
 const challengerLabel = computed(() => isChallenger.value ? 'You' : opponentName.value)
 const defendantLabel = computed(() => isChallenger.value ? opponentName.value : 'You')
+const gaveInLabel = computed(() => {
+  const g = contestResult.value?.gave_in
+  if (!g) return ''
+  const youGaveIn = isChallenger.value ? g === 'player' : g === 'opponent'
+  return youGaveIn ? 'You gave in' : `${opponentName.value} gave in`
+})
+const sumLabel = computed(() =>
+  (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB)
+    ? '∑difficulty'
+    : '∑result'
+)
 
 // ── Roll kind (P2.11: visual pool styling per roll kind) ───────────
 const ROLL_KIND_LABELS = {
@@ -353,11 +395,22 @@ function markPurpose(kind) {
   if (pool.length === 0) poolPurpose.value = kind
 }
 
+function ensureSelfTab() {
+  if (props.mode === 'roll_table') return
+  const selfId = props.gmMode ? (props.actingEntityId || DIFFICULTY_TAB) : props.entityId
+  if (activeId.value !== selfId) activeId.value = selfId
+}
+
 async function switchTab(id) {
   activeId.value = id
   if (props.gmMode) {
-    // GM: Difficulty tab = transient difficulty roller; entity tab = act as that entity.
-    emit('actingEntityChange', id === DIFFICULTY_TAB ? null : id)
+    // GM: tabs are a pool viewer only — never switch the acting entity.
+    // Perspective switching stays on the scene overview / peers bar.
+    if (id === DIFFICULTY_TAB) return
+    viewPool.value = []
+    if (!props.locationId) return
+    const res = await apiGetPool(props.locationId, id)
+    viewPool.value = res?.dice || []
     return
   }
   // Player: only self is editable; peers are read-only.
@@ -395,6 +448,7 @@ watch(() => props.difficulty, (v) => {
 async function doChallenge() {
   if (!opponentId.value || !props.locationId) return
   contestError.value = ''
+  contestNotice.value = ''
   contestResult.value = null
   await apiSetOpposition(props.locationId, editingEntityId.value, opponentId.value, props.universe)
   challenged.value = true
@@ -407,11 +461,35 @@ function onChallenged(challengerId) {
   isChallenger.value = false
   contestResult.value = null
   contestError.value = ''
+  contestNotice.value = ''
 }
 
 function setContestOutcome(outcome) {
   contestResult.value = outcome
   contestError.value = ''
+  contestNotice.value = ''
+  challenged.value = true
+  // Self-describing outcome: reconcile which side we are from the payload
+  // instead of trusting possibly-stale local challenge state.
+  const me = editingEntityId.value
+  if (outcome?.challenger_id && outcome?.defendant_id && me) {
+    isChallenger.value = outcome.challenger_id === me
+    opponentId.value = isChallenger.value ? outcome.defendant_id : outcome.challenger_id
+  }
+}
+
+function onOpponentCommitted(data) {
+  if (!challenged.value || !data) return
+  if (data.entity_id === opponentId.value) {
+    contestNotice.value = `${opponentName.value} committed (∑result ${data.total}) — waiting on you`
+  }
+}
+
+function onOpponentGiveIn(data) {
+  if (!challenged.value || !data) return
+  if (data.entity_id === opponentId.value) {
+    contestNotice.value = `${opponentName.value} gave in — you win`
+  }
 }
 
 function committedResult() {
@@ -521,6 +599,7 @@ function notifyPool() {
 }
 
 function addDie(die) {
+  ensureSelfTab()
   markPurpose('difficulty')
   pool.push({ die, source: '', label: die, sourceKind: 'manual' })
   notifyPool()
@@ -547,6 +626,7 @@ function setDifficulty(die) {
 }
 
 function addFromSheet(payload) {
+  ensureSelfTab()
   // Accept a single-die { die } payload or a multi-die { dice: [...] } payload.
   const { source, label, tsId } = payload || {}
   const dice = Array.isArray(payload?.dice) ? payload.dice : (payload?.die ? [payload.die] : [])
@@ -596,7 +676,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onOpponentCommitted, onOpponentGiveIn, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -986,7 +1066,7 @@ async function doRoll() {
     label: d.label || d.source || d.die,
     ts_id: d.tsId || null,
   }))
-  const opp = (!props.gmMode && props.difficulty != null)
+  const opp = (!props.gmMode && props.difficulty != null && !challenged.value)
     ? { type: 'static_difficulty', static_difficulty: props.difficulty }
     : null
   const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
@@ -1060,6 +1140,7 @@ function resetEditor() {
   poolPurpose.value = null
   contestResult.value = null
   contestError.value = ''
+  contestNotice.value = ''
   challenged.value = false
   isChallenger.value = false
   opponentId.value = ''
@@ -1186,10 +1267,13 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 
 .contest-setup { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
 .contest-status { font-size: 12px; color: var(--text-dim); }
+.contest-notice { font-size: 12px; color: var(--accent, #7aa2f7); }
 .contest-result { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
 
 .peer-pool { display: flex; flex-direction: column; gap: 8px; }
 .peer-pool-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
+.peer-committed { font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.peer-effect-die { width: 32px; height: 36px; }
 .empty-pool { font-size: 12px; color: var(--text-dim); opacity: 0.7; }
 
 .die-chip {

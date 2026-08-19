@@ -260,7 +260,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
@@ -897,16 +897,9 @@ watch(lastEvent, (evt) => {
       locationRef.value?.fetchNavWithLerp()
       break
     case 'entity_moved':
+      // Position-only change (map drag/reposition): re-sync nav dots, no toast.
       if (evt.data?.current_location === currentLocationId.value) {
         locationRef.value?.fetchNavWithLerp()
-      }
-      if (gmMode.value && foreign) {
-        const loc = evt.data?.current_location
-        if (loc === currentLocationId.value) {
-          addToast(`${name} arrived here`, 'move')
-        } else {
-          addToast(`${name} left for ${loc || 'elsewhere'}`, 'move')
-        }
       }
       break
     case 'scene_change':
@@ -950,6 +943,7 @@ watch(lastEvent, (evt) => {
           tier: res.tier || existing.tier,
           botch: res.botch ?? existing.botch,
           pipeline: res.pipeline || existing.pipeline,
+          hitches: res.hitches || existing.hitches || [],
           rolls: (res.rolls && res.rolls.length) ? res.rolls : (existing.rolls || []),
         }}
       }
@@ -978,16 +972,31 @@ watch(lastEvent, (evt) => {
       break
     case 'contest_challenged':
       if (gmMode.value) addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
-      else if (evt.data?.opponent_id === entityId.value) {
+      if (evt.data?.opponent_id === entityId.value) {
         diceRef.value?.onChallenged(evt.data.challenger_id)
-        addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice')
+        if (!gmMode.value) addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice')
       }
       break
     case 'contest_set':
-      if (gmMode.value) addToast(`${name} set their result (${evt.data?.total})`, 'roll')
+      if (eid && eid !== entityId.value) {
+        const existing = remoteResults.value[eid] || {}
+        remoteResults.value = { ...remoteResults.value, [eid]: {
+          ...existing,
+          committed: { total: evt.data?.total, effect_die: evt.data?.effect_die, tier: evt.data?.tier, pipeline: evt.data?.pipeline },
+        }}
+        diceRef.value?.onOpponentCommitted(evt.data)
+      }
+      if (gmMode.value) {
+        addToast(`${name} set their result (${evt.data?.total})`, 'roll')
+      }
       break
     case 'contest_give_in':
-      if (gmMode.value) addToast(`${name} gave in`, 'roll')
+      if (gmMode.value) {
+        addToast(`${name} gave in`, 'roll')
+      }
+      if (eid && eid !== entityId.value) {
+        diceRef.value?.onOpponentGiveIn(evt.data)
+      }
       break
     case 'contest_resolved':
       diceRef.value?.setContestOutcome(evt.data)
