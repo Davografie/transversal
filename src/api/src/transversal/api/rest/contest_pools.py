@@ -112,8 +112,17 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
 
 @router.post("/{location_id}/pools/{entity_id}/give-in")
 async def give_in(location_id: str, entity_id: str):
-    """Concede the contest — the other side wins."""
+    """Concede the contest — the other side wins.
+
+    Gated: the initiator must have committed a result first.
+    """
     ct = get_contest_tracker()
+    challenger, defendant = ct.get_contestants(location_id, entity_id)
+    if challenger is None or defendant is None:
+        return {"status": "no_contest"}
+    if challenger.committed is None:
+        return {"status": "not_ready", "reason": "Initiator has not set a result yet"}
+
     outcome = ct.give_in(location_id, entity_id)
     if outcome is None:
         return {"status": "no_contest"}
@@ -142,6 +151,22 @@ async def give_in(location_id: str, entity_id: str):
         "defendant_id": defendant_id,
     })
     return outcome
+
+
+@router.get("/{location_id}/pools/{entity_id}/contest")
+async def get_contest(location_id: str, entity_id: str):
+    """Return the current contest state for an entity (perspective re-sync)."""
+    ct = get_contest_tracker()
+    challenger, defendant = ct.get_contestants(location_id, entity_id)
+    if challenger is None or defendant is None:
+        return {"status": "no_contest"}
+    return {
+        "status": "active",
+        "challenger_id": challenger.entity_id,
+        "defendant_id": defendant.entity_id,
+        "challenger_result": challenger.committed.model_dump() if challenger.committed else None,
+        "defendant_result": defendant.committed.model_dump() if defendant.committed else None,
+    }
 
 
 @router.post("/{location_id}/pools/{entity_id}/clear")

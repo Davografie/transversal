@@ -232,10 +232,15 @@ class ContestTracker:
         return None
 
     def give_in(self, location_id: str, entity_id: str) -> Optional[ContestOutcome]:
-        """Concede the contest — the other side wins."""
+        """Concede the contest — the other side wins.
+
+        Gated: give-in is only allowed once the initiator has committed.
+        """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
             return None
+        if challenger.committed is None:
+            return None  # initiator must set before anyone may give in
         if entity_id == challenger.entity_id:
             return self._outcome(challenger, defendant, gave_in=ContestWinner.PLAYER)
         return self._outcome(challenger, defendant, gave_in=ContestWinner.OPPONENT)

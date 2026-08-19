@@ -59,11 +59,25 @@ class TestManualContestFlow:
         _save_pool(client, "loc-1", "guard", [("d8", "agility")])
         client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
 
+        # Give-in is gated on the initiator having committed.
+        client.post("/api/v1/locations/loc-1/pools/kael/set", json={"total": 15, "effect_die": "d8", "pipeline": "pool"})
         r = client.post("/api/v1/locations/loc-1/pools/guard/give-in")
         assert r.status_code == 200, r.text
         data = r.json()
         assert data["winner"] == "player"  # defendant gave in → challenger wins
         assert data["gave_in"] == "opponent"
+
+    def test_give_in_blocked_before_initiator_sets(self, client):
+        _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
+        _save_pool(client, "loc-1", "guard", [("d8", "agility")])
+        client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
+
+        r = client.post("/api/v1/locations/loc-1/pools/guard/give-in")
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "not_ready"
+        r = client.post("/api/v1/locations/loc-1/pools/kael/give-in")
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "not_ready"
 
     def test_new_challenge_resets_stale_committed(self, client):
         _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
@@ -76,11 +90,7 @@ class TestManualContestFlow:
         client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
         r = client.post("/api/v1/locations/loc-1/pools/kael/give-in")
         assert r.status_code == 200, r.text
-        data = r.json()
-        assert data["winner"] == "opponent"  # challenger gave in
-        assert data["gave_in"] == "player"
-        assert data["challenger"] is None
-        assert data["defendant"] is None
+        assert r.json()["status"] == "not_ready"  # stale committed was cleared
 
     def test_set_without_challenge_returns_waiting(self, client):
         _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])

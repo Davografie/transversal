@@ -39,7 +39,13 @@
           <option value="" disabled>Challenge target</option>
           <option v-for="e in peers.filter(e => e.id !== editingEntityId)" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
-        <span v-else class="contest-status">⚔️ {{ opponentName }}</span>
+        <span v-else class="contest-status">
+          ⚔️ {{ opponentName }}
+          <span v-if="opponentCommitted" class="opponent-result-badge">
+            <strong class="result-num">{{ opponentCommitted.total }}</strong>
+            <DieIcon v-if="opponentCommitted.effect_die" :die="opponentCommitted.effect_die" class="opponent-effect-die" />
+          </span>
+        </span>
       </div>
     </div>
     <div v-if="!gmMode && sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
@@ -207,7 +213,7 @@
       <button v-if="isPicking()" @click="onPickCommit" class="roll-btn commit-btn">
         {{ challenged ? 'Set' : 'Done' }}
       </button>
-      <button v-if="challenged && !contestResult" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
+      <button v-if="challenged && !contestResult && giveInAllowed" @click="doGiveIn" class="roll-btn give-in-btn">Give in</button>
     </div>
 
     <div class="controls" v-if="isResolved() && mode !== 'roll_table'">
@@ -282,7 +288,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn } = useApi()
+const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -319,6 +325,8 @@ const contestError = ref('')
 const contestNotice = ref('')
 const challenged = ref(false)
 const isChallenger = ref(false)
+const giveInAllowed = ref(false)
+const opponentCommitted = ref(null) // { total, effect_die } once the opponent has set
 const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
@@ -448,6 +456,7 @@ watch(() => props.actingEntityId, async (id) => {
   if (id) {
     activeId.value = id
     await loadPoolIntoEditor(id)
+    await syncContestState()
   } else {
     activeId.value = DIFFICULTY_TAB
     resetEditor()
@@ -467,6 +476,8 @@ async function doChallenge() {
   contestError.value = ''
   contestNotice.value = ''
   contestResult.value = null
+  giveInAllowed.value = false
+  opponentCommitted.value = null
   await apiSetOpposition(props.locationId, editingEntityId.value, opponentId.value, props.universe)
   challenged.value = true
   isChallenger.value = true
@@ -479,6 +490,8 @@ function onChallenged(challengerId) {
   contestResult.value = null
   contestError.value = ''
   contestNotice.value = ''
+  giveInAllowed.value = false
+  opponentCommitted.value = null
 }
 
 function setContestOutcome(outcome) {
@@ -498,7 +511,8 @@ function setContestOutcome(outcome) {
 function onOpponentCommitted(data) {
   if (!challenged.value || !data) return
   if (data.entity_id === opponentId.value) {
-    contestNotice.value = `${opponentName.value} committed (${data.total}) — waiting on you`
+    opponentCommitted.value = { total: data.total, effect_die: data.effect_die }
+    if (!isChallenger.value) giveInAllowed.value = true  // initiator has now committed
   }
 }
 
@@ -527,6 +541,7 @@ async function doSetResult() {
   setPhase(Phase.RESOLVED)
   contestError.value = ''
   const res = await apiSetResult(props.locationId, editingEntityId.value, committed)
+  if (res && isChallenger.value) giveInAllowed.value = true  // initiator can now concede
   if (res && res.winner) {
     contestResult.value = res
   } else if (res && res.status === 'waiting') {
@@ -539,6 +554,7 @@ async function doGiveIn() {
   contestError.value = ''
   const res = await apiGiveIn(props.locationId, editingEntityId.value)
   if (res && res.winner) contestResult.value = res
+  else if (res && res.status === 'not_ready') contestError.value = 'Initiator must set their result first'
 }
 
 async function resolveSfxChoices(resolutions) {
@@ -1161,6 +1177,8 @@ function resetEditor() {
   challenged.value = false
   isChallenger.value = false
   opponentId.value = ''
+  giveInAllowed.value = false
+  opponentCommitted.value = null
   showDiePicker.value = false
 }
 
@@ -1210,6 +1228,20 @@ async function loadPoolIntoEditor(id) {
   setPhase(Phase.ADDING)
   notifyPool()
   if (dice.length) panelOpen.value = true
+}
+
+async function syncContestState() {
+  // Re-sync contest role after the GM takes over a contested entity.
+  if (!props.locationId || !editingEntityId.value) return
+  const res = await apiGetContest(props.locationId, editingEntityId.value)
+  if (!res || res.status !== 'active' || !res.challenger_id || !res.defendant_id) return
+  const me = editingEntityId.value
+  challenged.value = true
+  isChallenger.value = res.challenger_id === me
+  opponentId.value = isChallenger.value ? res.defendant_id : res.challenger_id
+  giveInAllowed.value = !!res.challenger_result  // initiator has committed?
+  const opp = isChallenger.value ? res.defendant_result : res.challenger_result
+  opponentCommitted.value = opp ? { total: opp.total, effect_die: opp.effect_die } : null
 }
 
 async function restorePool() {
@@ -1285,7 +1317,14 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 
 .contest-setup { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
-.contest-status { font-size: 12px; color: var(--text-dim); }
+.contest-status { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.opponent-result-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 6px; border-radius: 6px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+}
+.opponent-result-badge .result-num { font-size: 16px; color: var(--text); }
+.opponent-effect-die { width: 20px; height: 22px; }
 .contest-notice { font-size: 12px; color: var(--accent, #7aa2f7); }
 .contest-result { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
 
