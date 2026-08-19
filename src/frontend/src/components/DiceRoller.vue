@@ -13,20 +13,19 @@
     </div>
 
     <div v-if="contestResult && (!gmMode || actingEntityId)" class="contest-result-widget">
-      <div class="contest-winner">
-        <span class="winner-crown">🏆</span>
-        <span class="winner-text">{{ winnerLabel }}</span>
-        <span v-if="gaveInLabel" class="contest-gave-in">{{ gaveInLabel }}</span>
-      </div>
       <div class="contest-sides">
-        <div class="contest-side" :class="{ winner: challengerWon }">
-          <span class="side-name">{{ challengerLabel }}</span>
-          <span v-if="contestResult.challenger" class="side-sum">{{ sumLabel }} <strong>{{ contestResult.challenger.total }}</strong></span>
+        <div class="contest-side" :class="sideClasses('challenger')">
+          <span class="side-icon">{{ sideIcon('challenger') }}</span>
+          <span class="side-name">{{ challengerName }}</span>
+          <span v-if="contestResult.challenger" class="side-sum"><strong class="result-num">{{ contestResult.challenger.total }}</strong></span>
+          <span v-else class="side-empty">gave in</span>
           <span v-if="contestResult.challenger?.effect_die" class="side-effect">effect {{ contestResult.challenger.effect_die }}</span>
         </div>
-        <div class="contest-side" :class="{ winner: !challengerWon }">
-          <span class="side-name">{{ defendantLabel }}</span>
-          <span v-if="contestResult.defendant" class="side-sum">{{ sumLabel }} <strong>{{ contestResult.defendant.total }}</strong></span>
+        <div class="contest-side" :class="sideClasses('defendant')">
+          <span class="side-icon">{{ sideIcon('defendant') }}</span>
+          <span class="side-name">{{ defendantName }}</span>
+          <span v-if="contestResult.defendant" class="side-sum"><strong class="result-num">{{ contestResult.defendant.total }}</strong></span>
+          <span v-else class="side-empty">gave in</span>
           <span v-if="contestResult.defendant?.effect_die" class="side-effect">effect {{ contestResult.defendant.effect_die }}</span>
         </div>
       </div>
@@ -83,17 +82,19 @@
     <div v-if="result && isPicking()" class="pool-result">
       <div class="selection-row">
         <span class="sel-label" @click="assignBestTotal">{{ sumLabel }}:</span>
-        <span
-          v-for="(idx, i) in selection.total" :key="'t'+i"
-          class="sel-slot total-slot"
-          :class="{ empty: idx === null, selected: selectedSlot?.type === 'total' && selectedSlot?.index === i }"
-          @dragover.prevent
-          @drop="onSlotDrop('total', i, $event)"
-          @click="idx !== null ? clearSlot('total', i) : selectSlot('total', i)"
-        >
-          {{ idx !== null ? result.rolls[idx].result : '' }}
-        </span>
-        <span class="sel-value">= <strong>{{ computedTotal }}</strong></span>
+        <template v-for="(idx, i) in selection.total" :key="'t'+i">
+          <span v-if="i > 0" class="slot-plus">+</span>
+          <span
+            class="sel-slot total-slot"
+            :class="{ empty: idx === null, selected: selectedSlot?.type === 'total' && selectedSlot?.index === i }"
+            @dragover.prevent
+            @drop="onSlotDrop('total', i, $event)"
+            @click="idx !== null ? clearSlot('total', i) : selectSlot('total', i)"
+          >
+            {{ idx !== null ? result.rolls[idx].result : '' }}
+          </span>
+        </template>
+        <span class="sel-value">= <strong class="result-num">{{ computedTotal }}</strong></span>
       </div>
       <div class="selection-row" v-if="!gmMode || actingEntityId">
         <span class="sel-label" @click="assignBestEffect">Effect:</span>
@@ -183,7 +184,7 @@
         </template>
         <template v-else-if="result.pipeline === 'simplified'">
           <div class="result-line">
-            {{ result.highest }} → <strong>{{ result.tier }}</strong>
+            <span class="result-num">{{ result.highest }}</span> → <strong>{{ result.tier }}</strong>
             <span v-if="result.effect_die" class="effect-result">
               <span class="effect-result-label">effect</span>
               <DieIcon :die="result.effect_die" class="effect-result-icon" />
@@ -192,7 +193,7 @@
         </template>
         <template v-else>
           <div class="resolved-result">
-            <strong class="resolved-total">{{ computedTotal }}</strong>
+            <strong class="resolved-total result-num">{{ computedTotal }}</strong>
             <DieIcon v-if="effectDie" :die="effectDie" class="resolved-eff-die" />
           </div>
         </template>
@@ -232,7 +233,7 @@
       <div class="peer-pool">
         <div class="peer-pool-title">{{ activeName }}</div>
         <div v-if="remoteView?.committed" class="peer-committed">
-          Set: {{ sumLabel }} <strong>{{ remoteView.committed.total }}</strong>
+          Set: <strong class="result-num">{{ remoteView.committed.total }}</strong>
           <DieIcon v-if="remoteView.committed.effect_die" :die="remoteView.committed.effect_die" class="peer-effect-die" />
         </div>
         <div v-else-if="remoteView?.rolls?.length" class="roll-dice">
@@ -361,25 +362,24 @@ const opponentName = computed(() =>
   opponentId.value ||
   'Opponent'
 )
-const winnerLabel = computed(() => {
-  if (!contestResult.value) return ''
+const myContestantName = computed(() =>
+  (props.peers || []).find(p => p.id === editingEntityId.value)?.name || editingEntityId.value
+)
+const challengerName = computed(() => isChallenger.value ? myContestantName.value : opponentName.value)
+const defendantName = computed(() => isChallenger.value ? opponentName.value : myContestantName.value)
+const iWon = computed(() => {
+  if (!contestResult.value) return false
   const challengerWon = contestResult.value.winner === 'player'
-  if (challengerWon) return isChallenger.value ? 'You win' : `${opponentName.value} wins`
-  return isChallenger.value ? `${opponentName.value} wins` : 'You win'
+  return isChallenger.value ? challengerWon : !challengerWon
 })
-const challengerWon = computed(() => contestResult.value?.winner === 'player')
-const challengerLabel = computed(() => isChallenger.value ? 'You' : opponentName.value)
-const defendantLabel = computed(() => isChallenger.value ? opponentName.value : 'You')
-const gaveInLabel = computed(() => {
-  const g = contestResult.value?.gave_in
-  if (!g) return ''
-  const youGaveIn = isChallenger.value ? g === 'player' : g === 'opponent'
-  return youGaveIn ? 'You gave in' : `${opponentName.value} gave in`
-})
+function sideIsMine(side) { return (side === 'challenger') === isChallenger.value }
+function sideIcon(side) { return sideIsMine(side) ? (iWon.value ? '🏆' : '💀') : '' }
+function sideClasses(side) {
+  const mine = sideIsMine(side)
+  return { mine, winner: mine && iWon.value, loser: mine && !iWon.value }
+}
 const sumLabel = computed(() =>
-  (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB)
-    ? '∑difficulty'
-    : '∑result'
+  (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) ? 'difficulty' : 'result'
 )
 
 // ── Roll kind (P2.11: visual pool styling per roll kind) ───────────
@@ -498,7 +498,7 @@ function setContestOutcome(outcome) {
 function onOpponentCommitted(data) {
   if (!challenged.value || !data) return
   if (data.entity_id === opponentId.value) {
-    contestNotice.value = `${opponentName.value} committed (∑result ${data.total}) — waiting on you`
+    contestNotice.value = `${opponentName.value} committed (${data.total}) — waiting on you`
   }
 }
 
@@ -1297,22 +1297,22 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   border: 1px solid rgba(255,255,255,0.12);
   display: flex; flex-direction: column; gap: 8px;
 }
-.contest-winner { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: var(--text); }
-.winner-crown { font-size: 16px; }
-.winner-text { flex: 1; }
-.contest-gave-in { font-size: 11px; color: var(--text-dim); font-weight: 400; }
 .contest-sides { display: flex; gap: 8px; }
 .contest-side {
   flex: 1; padding: 8px; border-radius: 8px;
   background: rgba(0,0,0,0.2); border: 1px solid transparent;
   display: flex; flex-direction: column; gap: 2px; font-size: 12px;
 }
-.contest-side.winner { border-color: var(--success, #40b860); background: rgba(64,184,96,0.12); }
+.contest-side.mine.winner { border-color: var(--success, #40b860); background: rgba(64,184,96,0.12); }
+.contest-side.mine.loser { border-color: var(--danger, #d44040); background: rgba(212,64,64,0.12); }
+.side-icon { font-size: 16px; line-height: 1; }
 .side-name { font-weight: 600; color: var(--text); }
 .side-sum { color: var(--text); }
-.side-sum strong { font-size: 18px; color: var(--accent, #7aa2f7); }
-.contest-side.winner .side-sum strong { color: var(--success, #40b860); }
+.side-sum .result-num { font-size: 22px; }
+.contest-side.mine.winner .side-sum .result-num { color: var(--success, #40b860); }
+.contest-side.mine.loser .side-sum .result-num { color: var(--danger, #d44040); }
 .side-effect { color: var(--text-dim); }
+.side-empty { color: var(--text-dim); font-style: italic; }
 
 .peer-pool { display: flex; flex-direction: column; gap: 8px; }
 .peer-pool-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
@@ -1391,6 +1391,12 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   text-shadow: 0 2px 8px rgba(64,136,212,0.3);
   line-height: 1;
 }
+.result-num {
+  font-family: Georgia, 'Times New Roman', 'Playfair Display', serif;
+  font-weight: 800;
+  font-variant-numeric: lining-nums;
+  letter-spacing: 0.4px;
+}
 .resolved-eff-die {
   width: 72px; height: 80px;
 }
@@ -1432,6 +1438,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 .sel-label { color: var(--text-dim); min-width: 42px; cursor: pointer; }
 .sel-label:hover { color: var(--accent); }
+.slot-plus { color: var(--text-dim); font-weight: 700; }
 .sel-slot {
   width: 36px; height: 28px; border-radius: 6px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
