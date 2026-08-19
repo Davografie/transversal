@@ -52,7 +52,7 @@ class TestManualContestFlow:
         assert data["winner"] == "player"  # 15 > 10, challenger wins
         assert data["challenger"]["total"] == 15
         assert data["defendant"]["total"] == 10
-        assert data["stakes"] == "d6"
+        assert data["defendant"]["effect_die"] == "d6"
 
     def test_give_in(self, client):
         _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])

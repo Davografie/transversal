@@ -38,7 +38,8 @@ class ContestState:
     location_id: str
     universe: str
     opposition_entity_id: Optional[str] = None
-    pushed_this_beat: bool = False
+    initiative: Optional[str] = None  # entity_id holding the current difficulty to beat
+    pushed_this_loop: bool = False
     razmerit_spent: int = 0
     committed: Optional[CommittedResult] = None
     gave_in: bool = False
@@ -90,17 +91,21 @@ class ContestTracker:
         state.opposition_entity_id = opponent_id
         state.committed = None
         state.gave_in = False
+        state.initiative = None
+        state.pushed_this_loop = False
 
         opponent = self.get_or_create(location_id, opponent_id, universe)
         opponent.committed = None
         opponent.gave_in = False
+        opponent.initiative = None
+        opponent.pushed_this_loop = False
         return state
 
     def set_pushed(self, location_id: str, entity_id: str) -> None:
         """Mark that the entity has pushed this beat."""
         state = self._contests.get(location_id, {}).get(entity_id)
         if state:
-            state.pushed_this_beat = True
+            state.pushed_this_loop = True
 
     def clear_pool(self, location_id: str, entity_id: str) -> None:
         """Remove contest metadata for an entity at a location."""
@@ -206,7 +211,7 @@ class ContestTracker:
         )
 
         result = resolve_contest(challenger_req, defendant_req)
-        result.pushed = challenger.pushed_this_beat
+        result.pushed = challenger.pushed_this_loop
         return result
 
     # ── Manual (concurrent) contest flow ────────────────
@@ -276,14 +281,12 @@ class ContestTracker:
         else:
             winner = compare_committed(challenger.committed, defendant.committed)  # type: ignore[arg-type]
 
-        stakes = defendant.committed.effect_die if defendant.committed else None
         return ContestOutcome(
             winner=winner,
             challenger=challenger.committed,
             defendant=defendant.committed,
-            stakes=stakes,
             gave_in=gave_in,
-            pushed=challenger.pushed_this_beat,
+            pushed=challenger.pushed_this_loop,
         )
 
     def push_contest(
@@ -303,11 +306,11 @@ class ContestTracker:
         state = self.get(location_id, entity_id)
         if state is None:
             return None
-        if state.pushed_this_beat:
-            return None  # already pushed this beat
+        if state.pushed_this_loop:
+            return None  # already pushed this contest
 
         scene_store.save_pool(location_id, entity_id, list(new_dice))
-        state.pushed_this_beat = True
+        state.pushed_this_loop = True
         return self.resolve(location_id, entity_id, scene_store)
 
 

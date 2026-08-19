@@ -380,7 +380,6 @@ def resolve_contest(
         pipeline=pipeline,
         kind=RollKind.CONTEST,
         winner=winner,
-        stakes=opponent_result.effect_die,
         player_result=player_result,
         opponent_result=opponent_result,
     )

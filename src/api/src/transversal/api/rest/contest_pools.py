@@ -52,7 +52,7 @@ def _broadcast(event: str, location_id: str, entity_id: str, data: dict) -> None
 def _to_committed(body: SetRequest) -> CommittedResult:
     return CommittedResult(
         total=body.total,
-        effect_die=DieType(body.effect_die) if body.effect_die else None,
+        effect_die=DieType(body.effect_die) if body.effect_die else DieType.D4,
         tier=OutcomeTier(body.tier) if body.tier else None,
         pipeline=body.pipeline,
     )
@@ -102,7 +102,6 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
     if outcome is not None:
         _broadcast("contest_resolved", location_id, entity_id, {
             "winner": outcome.winner.value,
-            "stakes": outcome.stakes.value if outcome.stakes else None,
             "gave_in": outcome.gave_in.value if outcome.gave_in else None,
             "challenger": outcome.challenger.model_dump() if outcome.challenger else None,
             "defendant": outcome.defendant.model_dump() if outcome.defendant else None,
@@ -155,7 +154,6 @@ async def give_in(location_id: str, entity_id: str):
     })
     _broadcast("contest_resolved", location_id, entity_id, {
         "winner": outcome.winner.value,
-        "stakes": outcome.stakes.value if outcome.stakes else None,
         "gave_in": outcome.gave_in.value if outcome.gave_in else None,
         "challenger": outcome.challenger.model_dump() if outcome.challenger else None,
         "defendant": outcome.defendant.model_dump() if outcome.defendant else None,

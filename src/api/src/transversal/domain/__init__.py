@@ -235,13 +235,10 @@ class ContestResult(BaseModel):
     determines the magnitude of their success; the loser's may still
     matter for certain SFX or narrative mechanics.
 
-    ``stakes`` is the opponent's (defender's) effect die — what's on the
-    line for the initiator. Tests do not carry stakes.
     """
     pipeline: str  # "simplified" or "pool" — which pipeline the contest used
     kind: RollKind = RollKind.CONTEST
     winner: ContestWinner
-    stakes: Optional[DieType] = None
     player_result: SimplifiedResult | PoolResult
     opponent_result: SimplifiedResult | PoolResult
     pushed: bool = False
@@ -270,7 +267,6 @@ class ContestOutcome(BaseModel):
     winner: ContestWinner
     challenger: Optional[CommittedResult] = None
     defendant: Optional[CommittedResult] = None
-    stakes: Optional[DieType] = None
     gave_in: Optional[ContestWinner] = None
     pushed: bool = False
 

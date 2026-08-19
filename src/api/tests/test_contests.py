@@ -640,43 +640,4 @@ class TestSFXPushDataModel:
         ct = ContestTracker()
         ct.set_opposition("loc-1", "kael", "guard-1", "earth")
         ct.set_pushed("loc-1", "kael")
-        assert ct.get("loc-1", "kael").pushed_this_beat is True
-
-
-class TestStakes:
-    """The opponent's effect die is surfaced as the contest 'stakes'."""
-
-    def test_pool_contest_reports_opponent_effect_die(self):
-        player = DicePoolRequest(
-            entity_id="kael", universe="earth",
-            dice=[(DieType.D10, "a"), (DieType.D8, "b"), (DieType.D6, "c")],
-        )
-        opponent = DicePoolRequest(
-            entity_id="guard", universe="earth",
-            dice=[(DieType.D8, "x"), (DieType.D6, "y"), (DieType.D6, "z")],
-        )
-        result = resolve_contest(player, opponent)
-        assert result.stakes == result.opponent_result.effect_die
-        assert result.stakes is not None  # pool opponent always has an effect die
-
-    def test_simplified_contest_reports_opponent_effect_die(self):
-        player = DicePoolRequest(
-            entity_id="kael", universe="earth",
-            dice=[(DieType.D8, "shooting")],
-        )
-        opponent = DicePoolRequest(
-            entity_id="guard", universe="earth",
-            dice=[(DieType.D6, "agility")],
-        )
-        result = resolve_contest(player, opponent)
-        assert result.stakes == result.opponent_result.effect_die
-
-    def test_test_roll_reports_no_stakes(self):
-        """A single-side test (gmc opposition) carries no stakes."""
-        request = DicePoolRequest(
-            entity_id="kael", universe="earth",
-            dice=[(DieType.D8, "shooting"), (DieType.D8, "distinction"), (DieType.D6, "asset")],
-            opposition=Opposition(type="gmc", dice=[(DieType.D8, "agility")]),
-        )
-        result = resolve(request)
-        assert not hasattr(result, "stakes")
+        assert ct.get("loc-1", "kael").pushed_this_loop is True
