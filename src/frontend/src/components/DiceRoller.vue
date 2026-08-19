@@ -1247,6 +1247,7 @@ async function syncContestState() {
 async function restorePool() {
   if (props.gmMode && !props.actingEntityId) return  // GM difficulty mode: transient
   await loadPoolIntoEditor(editingEntityId.value)
+  await syncContestState()
 }
 
 onMounted(() => {
