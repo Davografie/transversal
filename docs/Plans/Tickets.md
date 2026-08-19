@@ -200,6 +200,14 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** a pool die is a single `DieSpec` (per-die), so this is **not** a "string → array" change to the pool die. The work is: (1) `CharacterSheet.onTraitClick` emits the trait's full `dice` array; (2) `DiceRoller.addFromSheet`/`removeByTsId` toggle all dice sharing a `ts_id`; (3) `resync_trait_die`/`resyncTraitDie` re-sync all matching dice (and `trait_updated` should carry `new_dice`, not just `new_rating`). Resources remain P2.16.
 - **Load:** `components/CharacterSheet.vue` (`onTraitClick`, `resolvedDieType`), `components/DiceRoller.vue` (`addFromSheet`, `removeByTsId`, `resyncTraitDie`), `App.vue` (`trait_updated` routing), `services/scene_state.py` (`resync_trait_die` + `resync_pool_dice_for_trait`), `services/effects_commit.py` / `entity_manager.py` (`trait_updated` payload).
 
+### P2.10d — Backend + frontend: contest push loop (roll & compare)
+- **Status:** pending
+- **What:** after both sides set, do not auto-finalize. Compare provisionally; the side that is behind may either **give in** (+1 razmerit) or **push** (spend 1 razmerit, re-roll, re-compare). Only one push per beat. Follows the "roll and compare loop" in [[Cortex Flowcharts]].
+- **Done:** a losing side is offered give-in/push after compare; pushing spends razmerit, re-rolls, and re-compares, looping until someone gives in or wins.
+- **Depends:** P2.10b
+- **Note:** `ContestTracker.push_contest` exists but targets the retired `resolve()` path — rework it for the manual `set_result` flow. Razmerit spend should route through the effects engine / `razmerit_spent` on `ContestState`.
+- **Load:** `services/contest_tracker.py` (`set_result`, `give_in`, `push_contest`, `pushed_this_beat`), `api/rest/contest_pools.py` (`set` / `give-in` / `push`), `components/DiceRoller.vue` (push / give-in choice), `services/effects_engine.py` (razmerit spend).
+
 ### P2.11 — Frontend: dice-pool styling per roll kind
 - **Status:** done
 - **What:** the pool is visually distinguished by simple-test / cortex-test / challenger-contest / defendant-contest / roll-table.
