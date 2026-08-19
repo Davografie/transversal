@@ -7,7 +7,6 @@ without a live ArangoDB.
 from types import SimpleNamespace
 
 from transversal.services.sfx_owner import (
-    ensure_contest_complication_sfx,
     ensure_give_in_sfx,
     ensure_sfx_owners,
     ensure_targeting_ban_sfx,
@@ -141,12 +140,23 @@ class SetupRepo:
         self.sfxs[sfx.id] = sfx
         return sfx
 
+    def delete_sfx(self, sfx_id):
+        if sfx_id in self.sfxs:
+            del self.sfxs[sfx_id]
+            return True
+        return False
+
 
 def test_ensure_sfx_owners_creates_buckets_and_table_reward():
     repo = SetupRepo()
     ensure_sfx_owners(repo)
     assert set(repo.owners.keys()) == {"table", "gm", "players"}
-    assert set(repo.owners["table"].sfx_ids) == {"sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban", "sfx-contest-loss-complication"}
+    assert set(repo.owners["table"].sfx_ids) == {
+        "sfx-give-in-get-razmerit",
+        "sfx-give-in-targeting-ban",
+        "apply-complication",
+        "take-complication",
+    }
     assert repo.owners["gm"].sfx_ids == []
     assert repo.owners["players"].sfx_ids == []
 
@@ -184,14 +194,57 @@ def test_ensure_targeting_ban_sfx_creates_once():
     assert len(repo.sfxs) == 1
 
 
+def test_ensure_sfx_owners_table_defaults():
+    # The table bucket carries the give-in SFX plus the two contest-complication
+    # menu SFX (winner applies / conceder takes).
+    repo = SetupRepo()
+    ensure_sfx_owners(repo)
+    assert set(repo.owners["table"].sfx_ids) == {
+        "sfx-give-in-get-razmerit",
+        "sfx-give-in-targeting-ban",
+        "apply-complication",
+        "take-complication",
+    }
+
+
 def test_ensure_contest_complication_sfx_creates_once():
+    from transversal.services.sfx_owner import ensure_contest_complication_sfx
+
     repo = SetupRepo()
     ensure_contest_complication_sfx(repo)
-    sfx = repo.sfxs["sfx-contest-loss-complication"]
-    assert sfx.trigger == "on_contest_loss"
-    assert sfx.effects[0].type == "modify_trait"
-    assert sfx.effects[0].action == "gain_complication"
-    assert sfx.effects[0].target == "{choose_trait}"
-    assert sfx.effects[0].result == "{effect_die}"
+    apply_sfx = repo.sfxs["apply-complication"]
+    take_sfx = repo.sfxs["take-complication"]
+    assert apply_sfx.trigger == "on_consequence"
+    assert take_sfx.trigger == "on_consequence"
+    assert apply_sfx.name == "Apply a complication"
+    assert take_sfx.name == "Take a complication"
+    # Identical effect, different label.
+    assert apply_sfx.effects[0].action == "gain_complication"
+    assert take_sfx.effects[0].action == "gain_complication"
+    assert apply_sfx.effects[0].target == "{choose_trait}"
+    assert take_sfx.effects[0].target_scope == "traitset:ts-complications"
     ensure_contest_complication_sfx(repo)
-    assert len(repo.sfxs) == 1
+    assert len(repo.sfxs) == 2
+
+
+def test_remove_legacy_contest_complication_sfx_is_idempotent():
+    from transversal.domain import SFX
+    from transversal.services.sfx_owner import remove_legacy_contest_complication_sfx
+
+    repo = SetupRepo()
+    repo.sfxs["sfx-contest-loss-complication"] = SFX(
+        id="sfx-contest-loss-complication", name="stale", trigger="on_contest_loss", effects=[]
+    )
+    repo.owners["table"] = SimpleNamespace(
+        id="table",
+        sfx_ids=["sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban", "sfx-contest-loss-complication"],
+    )
+
+    remove_legacy_contest_complication_sfx(repo)
+    assert "sfx-contest-loss-complication" not in repo.sfxs
+    assert "sfx-contest-loss-complication" not in repo.owners["table"].sfx_ids
+
+    # Idempotent: a second pass is a no-op.
+    remove_legacy_contest_complication_sfx(repo)
+    assert "sfx-contest-loss-complication" not in repo.sfxs
+    assert "sfx-contest-loss-complication" not in repo.owners["table"].sfx_ids

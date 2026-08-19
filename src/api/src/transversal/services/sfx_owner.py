@@ -23,10 +23,20 @@ def ensure_sfx_owners(repo) -> None:
     """Create/refresh the default SFX owner buckets. Idempotent.
 
     ``table`` = globally available SFX (everyone) — seeded with the give-in
-    reward; ``gm`` = GM-context SFX (not entity-derived; P3.3 buy-hitch);
-    ``players`` = player-facing SFX bucket (reserved, currently empty).
+    reward and the contest-complication menu SFX; ``gm`` = GM-context SFX (not
+    entity-derived; P3.3 buy-hitch); ``players`` = player-facing SFX bucket
+    (reserved, currently empty).
     """
-    defaults = {"table": ["sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban", "sfx-contest-loss-complication"], "gm": [], "players": []}
+    defaults = {
+        "table": [
+            "sfx-give-in-get-razmerit",
+            "sfx-give-in-targeting-ban",
+            "apply-complication",
+            "take-complication",
+        ],
+        "gm": [],
+        "players": [],
+    }
     for owner_id, sfx_ids in defaults.items():
         owner = repo.get_sfx_owner(owner_id)
         if owner is None:
@@ -85,17 +95,16 @@ def ensure_targeting_ban_sfx(repo) -> None:
 
 
 def ensure_contest_complication_sfx(repo) -> None:
-    """Create the contest-loss complication SFX if missing. Idempotent."""
+    """Create the winner (apply) + conceder (take) complication SFX. Idempotent.
+
+    Both carry the same ``gain_complication`` effect; they differ only in label
+    so the frontend can surface the right one at each end of a contest. They
+    are ``on_consequence`` SFX owned by ``table`` (available to players + GM).
+    """
     from transversal.domain import Effect, EffectTiming, SFX
 
-    if repo.get_sfx("sfx-contest-loss-complication") is not None:
-        return
-    repo.create_sfx(SFX(
-        id="sfx-contest-loss-complication",
-        name="Contest Loss Complication",
-        description="When you lose a contest, pick a complication and take it at the winner's effect die",
-        trigger="on_contest_loss",
-        effects=[
+    def _complication_effect() -> list:
+        return [
             Effect(
                 timing=EffectTiming.IMMEDIATE,
                 type="modify_trait",
@@ -104,8 +113,41 @@ def ensure_contest_complication_sfx(repo) -> None:
                 target_scope="traitset:ts-complications",
                 result="{effect_die}",
             ),
-        ],
-    ))
+        ]
+
+    if repo.get_sfx("apply-complication") is None:
+        repo.create_sfx(SFX(
+            id="apply-complication",
+            name="Apply a complication",
+            description="When you win a contest, give your opponent a complication at your effect die",
+            trigger="on_consequence",
+            effects=_complication_effect(),
+        ))
+    if repo.get_sfx("take-complication") is None:
+        repo.create_sfx(SFX(
+            id="take-complication",
+            name="Take a complication",
+            description="When you give in, take a complication at the winner's effect die",
+            trigger="on_consequence",
+            effects=_complication_effect(),
+        ))
+
+
+def remove_legacy_contest_complication_sfx(repo) -> None:
+    """Delete the retired auto-fired contest-loss complication SFX. Idempotent.
+
+    P2.10d moved contest-loss complications into the manual consequence menu.
+    This removes a previously-seeded ``sfx-contest-loss-complication`` row and
+    its reference in the ``table`` owner bucket so a stale DB doesn't keep
+    re-registering it on ``on_contest_loss``.
+    """
+    legacy_id = "sfx-contest-loss-complication"
+    if repo.get_sfx(legacy_id) is not None:
+        repo.delete_sfx(legacy_id)
+    owner = repo.get_sfx_owner("table")
+    if owner is not None and legacy_id in (owner.sfx_ids or []):
+        owner.sfx_ids = [sid for sid in owner.sfx_ids if sid != legacy_id]
+        repo.update_sfx_owner(owner)
 
 
 def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:

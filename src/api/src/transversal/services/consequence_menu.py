@@ -70,16 +70,6 @@ _BASE_GM = [
         source="base",
     ),
     ConsequenceOption(
-        id="apply_complication", label="Apply a complication", side="gm",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="gain_complication", target="{choose_trait}", result="{effect_die}",
-            ),
-        ],
-        source="base",
-    ),
-    ConsequenceOption(
         id="give_asset", label="Give a GMC an asset", side="gm",
         effects=[
             Effect(

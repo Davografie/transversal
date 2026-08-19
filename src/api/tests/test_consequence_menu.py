@@ -80,7 +80,6 @@ def test_gm_side_returns_base_gm_options():
     out = assemble_consequence_menu(_entity(), MenuRepo(), "gm")
     labels = _labels(out)
     assert "Increase the doom pool" in labels
-    assert "Apply a complication" in labels
     assert "Give a GMC an asset" in labels
 
 
@@ -133,5 +132,4 @@ def test_base_moves_carry_effect_die_placeholder():
     assert player["create_scene_trait"].effects[0].result == "{effect_die}"
 
     gm = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "gm")}
-    assert gm["apply_complication"].effects[0].result == "{effect_die}"
     assert gm["give_asset"].effects[0].result == "{effect_die}"

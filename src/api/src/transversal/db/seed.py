@@ -285,19 +285,6 @@ def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
                          target="", result="1"),
             ],
         ),
-        SFX(
-            id="sfx-contest-loss-complication",
-            name="Contest Loss Complication",
-            description="When you lose a contest, pick a complication and take it at the winner's effect die",
-            limit="",
-            trigger="on_contest_loss",
-            effects=[
-                Effect(timing=EffectTiming.IMMEDIATE,
-                         type="modify_trait", action="gain_complication",
-                         target="{choose_trait}", target_scope="traitset:ts-complications",
-                         result="{effect_die}"),
-            ],
-        ),
     ]
 
     # Persist to database
