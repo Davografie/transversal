@@ -110,6 +110,10 @@ async def give_in(location_id: str, entity_id: str):
     if outcome is None:
         return {"status": "no_contest"}
 
+    # Fire automatic SFX for the conceding side (give-in → +1 razmerit).
+    from transversal.services.state_events import fire_state_sfx
+    fire_state_sfx(entity_id, "", "on_give_in", {"gave_in": True})
+
     _broadcast("contest_give_in", location_id, entity_id, {
         "gave_in": outcome.gave_in.value if outcome.gave_in else None,
         "winner": outcome.winner.value,

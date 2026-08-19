@@ -6,7 +6,11 @@ without a live ArangoDB.
 
 from types import SimpleNamespace
 
-from transversal.services.sfx_owner import get_available_sfx_ids
+from transversal.services.sfx_owner import (
+    ensure_give_in_sfx,
+    ensure_sfx_owners,
+    get_available_sfx_ids,
+)
 
 
 class Repo:
@@ -108,3 +112,58 @@ def test_missing_entity_still_collects_other_surfaces():
     repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-trait"], trait_id="t1")]
     repo.traits = {"t1": SimpleNamespace(default_sfx_ids=[])}
     assert get_available_sfx_ids("ghost", "earth", repo) == ["sfx-table", "sfx-trait"]
+
+
+class SetupRepo:
+    """Minimal in-memory double for the owner/SFX setup functions."""
+
+    def __init__(self):
+        self.owners = {}
+        self.sfxs = {}
+
+    def get_sfx_owner(self, owner_id):
+        return self.owners.get(owner_id)
+
+    def create_sfx_owner(self, owner):
+        self.owners[owner.id] = owner
+        return owner
+
+    def update_sfx_owner(self, owner):
+        self.owners[owner.id] = owner
+        return owner
+
+    def get_sfx(self, sfx_id):
+        return self.sfxs.get(sfx_id)
+
+    def create_sfx(self, sfx):
+        self.sfxs[sfx.id] = sfx
+        return sfx
+
+
+def test_ensure_sfx_owners_creates_buckets_and_table_reward():
+    repo = SetupRepo()
+    ensure_sfx_owners(repo)
+    assert set(repo.owners.keys()) == {"table", "gm", "players"}
+    assert repo.owners["table"].sfx_ids == ["sfx-give-in-get-razmerit"]
+    assert repo.owners["gm"].sfx_ids == []
+    assert repo.owners["players"].sfx_ids == []
+
+
+def test_ensure_sfx_owners_merges_into_existing_table():
+    repo = SetupRepo()
+    repo.owners["table"] = SimpleNamespace(id="table", sfx_ids=["sfx-other"])
+    ensure_sfx_owners(repo)
+    assert "sfx-give-in-get-razmerit" in repo.owners["table"].sfx_ids
+    assert "sfx-other" in repo.owners["table"].sfx_ids
+
+
+def test_ensure_give_in_sfx_creates_once():
+    repo = SetupRepo()
+    ensure_give_in_sfx(repo)
+    sfx = repo.sfxs["sfx-give-in-get-razmerit"]
+    assert sfx.trigger == "on_give_in"
+    assert sfx.effects[0].type == "transfer_razmerit"
+    assert sfx.effects[0].action == "earn"
+    assert sfx.effects[0].result == "1"
+    ensure_give_in_sfx(repo)
+    assert len(repo.sfxs) == 1

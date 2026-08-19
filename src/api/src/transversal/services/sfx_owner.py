@@ -20,15 +20,45 @@ from transversal.domain import SfxOwner
 
 
 def ensure_sfx_owners(repo) -> None:
-    """Create the default SFX owner buckets if missing. Idempotent.
+    """Create/refresh the default SFX owner buckets. Idempotent.
 
-    ``table`` = globally available SFX (everyone); ``gm`` = GM-context SFX
-    (not entity-derived; P3.3 buy-hitch lands here).
+    ``table`` = globally available SFX (everyone) — seeded with the give-in
+    reward; ``gm`` = GM-context SFX (not entity-derived; P3.3 buy-hitch);
+    ``players`` = player-facing SFX bucket (reserved, currently empty).
     """
-    defaults = {"table": [], "gm": []}
+    defaults = {"table": ["sfx-give-in-get-razmerit"], "gm": [], "players": []}
     for owner_id, sfx_ids in defaults.items():
-        if repo.get_sfx_owner(owner_id) is None:
+        owner = repo.get_sfx_owner(owner_id)
+        if owner is None:
             repo.create_sfx_owner(SfxOwner(id=owner_id, sfx_ids=list(sfx_ids)))
+        else:
+            merged = list(dict.fromkeys((owner.sfx_ids or []) + sfx_ids))
+            if merged != (owner.sfx_ids or []):
+                owner.sfx_ids = merged
+                repo.update_sfx_owner(owner)
+
+
+def ensure_give_in_sfx(repo) -> None:
+    """Create the give-in razmerit-reward SFX if missing. Idempotent."""
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    if repo.get_sfx("sfx-give-in-get-razmerit") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="sfx-give-in-get-razmerit",
+        name="Give In Reward",
+        description="Gain 1 razmerit when you give in during a contest",
+        trigger="on_give_in",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="transfer_razmerit",
+                action="earn",
+                target="self",
+                result="1",
+            ),
+        ],
+    ))
 
 
 def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:

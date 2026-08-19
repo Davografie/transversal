@@ -261,6 +261,18 @@ def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
                          target="self", result="1"),
             ],
         ),
+        SFX(
+            id="sfx-give-in-get-razmerit",
+            name="Give In Reward",
+            description="Gain 1 razmerit when you give in during a contest",
+            limit="",
+            trigger="on_give_in",
+            effects=[
+                Effect(timing=EffectTiming.IMMEDIATE,
+                         type="transfer_razmerit", action="earn",
+                         target="self", result="1"),
+            ],
+        ),
     ]
 
     # Persist to database
