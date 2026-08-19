@@ -49,3 +49,49 @@ def fire_state_sfx(
         _emit_pending_choices(entity_id, universe, outcome.pending)
     finally:
         _firing.discard(key)
+
+
+def fire_contest_outcome_sfx(
+    winner_id: str,
+    loser_id: str,
+    universe: str,
+    effect_die: str | None = None,
+    high_stakes: bool = False,
+    taken_out: bool = False,
+) -> None:
+    """Fire on_contest_win / on_contest_loss for a resolved manual contest.
+
+    The seeded table SFX can use ``{effect_die}`` in its result; the effects
+    engine substitutes it from the event context before applying.
+    """
+    from transversal.main import _get_engine, _get_repo
+    from transversal.services.effects_engine import GameEvent
+    from transversal.services.roll_orchestrator import _emit_pending_choices
+    from transversal.services.sfx_owner import get_available_sfx_ids
+
+    engine = _get_engine()
+    repo = _get_repo()
+    for entity_id, contest_winner, opponent_id in (
+        (winner_id, "player", loser_id),
+        (loser_id, "opponent", winner_id),
+    ):
+        entity = repo.get_entity(entity_id)
+        if entity is None:
+            continue
+        if not universe:
+            universe = entity.current_universe
+        sfx_ids = get_available_sfx_ids(entity_id, universe, repo)
+        event = GameEvent(
+            type="contest",
+            entity_id=entity_id,
+            universe=universe,
+            context={
+                "contest_winner": contest_winner,
+                "opponent_id": opponent_id,
+                "effect_die": effect_die,
+                "high_stakes": high_stakes,
+                "taken_out": taken_out,
+            },
+        )
+        outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
+        _emit_pending_choices(entity_id, universe, outcome.pending)

@@ -1028,6 +1028,9 @@ watch(lastEvent, (evt) => {
       if (gmMode.value && eid) addToast(`${name} is pushing`, 'dice')
       if (eid && eid !== entityId.value) diceRef.value?.onContestPush(evt.data)
       break
+    case 'contest_stakes':
+      diceRef.value?.setHighStakes(evt.data?.high_stakes)
+      break
     case 'contest_resolved':
       diceRef.value?.setContestOutcome(evt.data)
       addToast('Contest resolved', 'roll')

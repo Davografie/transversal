@@ -46,6 +46,10 @@
             <DieIcon v-if="opponentCommitted.effect_die" :die="opponentCommitted.effect_die" class="opponent-effect-die" />
           </span>
         </span>
+        <label v-if="challenged" class="stakes-toggle">
+          <input type="checkbox" :checked="highStakes" @change="toggleStakes" />
+          High stakes
+        </label>
       </div>
     </div>
     <div v-if="!gmMode && sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
@@ -301,7 +305,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -344,6 +348,7 @@ const giveInAllowed = ref(false)
 const opponentCommitted = ref(null) // { total, effect_die } once the opponent has set
 const bannedTargetIds = ref([])     // entity ids the acting entity cannot currently challenge
 const youTabBlink = ref(false)      // nudge: it's your turn to roll
+const highStakes = ref(false)       // contest stakes (low by default)
 const difficultyFlash = ref('')
 
 const tabEntities = computed(() => {
@@ -805,7 +810,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -1277,6 +1282,7 @@ function resetEditor() {
   opponentId.value = ''
   giveInAllowed.value = false
   youTabBlink.value = false
+  highStakes.value = false
   opponentCommitted.value = null
   showDiePicker.value = false
 }
@@ -1339,6 +1345,7 @@ async function syncContestState() {
   isChallenger.value = res.challenger_id === me
   opponentId.value = isChallenger.value ? res.defendant_id : res.challenger_id
   giveInAllowed.value = !!res.challenger_result && !res.pending  // early decline only
+  highStakes.value = !!res.high_stakes
   const opp = isChallenger.value ? res.defendant_result : res.challenger_result
   opponentCommitted.value = opp ? { total: opp.total, effect_die: opp.effect_die } : null
   if (res.pending) {
@@ -1362,6 +1369,16 @@ async function syncContestState() {
 async function loadTargetingBans() {
   const res = await apiGetTargetingBans(editingEntityId.value)
   bannedTargetIds.value = (res?.bans || []).map(b => b.target_id)
+}
+
+function setHighStakes(v) {
+  highStakes.value = !!v
+}
+
+async function toggleStakes() {
+  if (!props.locationId) return
+  highStakes.value = !highStakes.value
+  await apiSetStakes(props.locationId, editingEntityId.value, highStakes.value)
 }
 
 async function restorePool() {
@@ -1661,6 +1678,8 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   gap: 6px;
   flex-shrink: 0;
 }
+.stakes-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.stakes-toggle input { accent-color: var(--accent, #7aa2f7); }
 .challenge-select {
   padding: 4px 10px;
   font-size: 12px;

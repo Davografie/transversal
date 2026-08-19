@@ -167,6 +167,7 @@ class EffectsEngine:
 
             # Execute each effect with its own timing
             for effect in sfx.effects:
+                effect = _substitute_effect_context(effect, event.context)
                 # Attunement: enable applies now; disable is scheduled at its timing.
                 if effect.type == "attune" and effect.action == "enable":
                     _effects_applier.effect_registry.apply(
@@ -359,6 +360,21 @@ class EffectsEngine:
     @property
     def scheduled_count(self) -> int:
         return len(self._schedule)
+
+
+def _substitute_effect_context(effect: Effect, context: dict) -> Effect:
+    """Replace ``{context_key}`` placeholders in an effect's result from context."""
+    if not context:
+        return effect
+    result = effect.result or ""
+    new_result = result
+    for key, value in context.items():
+        placeholder = "{" + key + "}"
+        if placeholder in new_result:
+            new_result = new_result.replace(placeholder, str(value) if value is not None else "")
+    if new_result == result:
+        return effect
+    return effect.model_copy(update={"result": new_result})
 
 
 def _beats_for_timing(timing: EffectTiming) -> int:

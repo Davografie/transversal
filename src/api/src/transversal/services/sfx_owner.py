@@ -26,7 +26,7 @@ def ensure_sfx_owners(repo) -> None:
     reward; ``gm`` = GM-context SFX (not entity-derived; P3.3 buy-hitch);
     ``players`` = player-facing SFX bucket (reserved, currently empty).
     """
-    defaults = {"table": ["sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban"], "gm": [], "players": []}
+    defaults = {"table": ["sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban", "sfx-contest-loss-complication"], "gm": [], "players": []}
     for owner_id, sfx_ids in defaults.items():
         owner = repo.get_sfx_owner(owner_id)
         if owner is None:
@@ -79,6 +79,30 @@ def ensure_targeting_ban_sfx(repo) -> None:
                 action="targeting_ban",
                 target="",
                 result="1",
+            ),
+        ],
+    ))
+
+
+def ensure_contest_complication_sfx(repo) -> None:
+    """Create the contest-loss complication SFX if missing. Idempotent."""
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    if repo.get_sfx("sfx-contest-loss-complication") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="sfx-contest-loss-complication",
+        name="Contest Loss Complication",
+        description="When you lose a contest, pick a complication and take it at the winner's effect die",
+        trigger="on_contest_loss",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="modify_trait",
+                action="gain_complication",
+                target="{choose_trait}",
+                target_scope="traitset:ts-complications",
+                result="{effect_die}",
             ),
         ],
     ))

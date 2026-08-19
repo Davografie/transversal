@@ -113,7 +113,7 @@ async def get_context(request: Request) -> dict:
 async def on_startup():
     """Wire core services. Seed data runs via `python -m transversal seed`."""
     from transversal.services.effects_applier import _register_core_handlers
-    from transversal.services.sfx_owner import ensure_sfx_owners, ensure_give_in_sfx, ensure_targeting_ban_sfx
+    from transversal.services.sfx_owner import ensure_sfx_owners, ensure_give_in_sfx, ensure_targeting_ban_sfx, ensure_contest_complication_sfx
 
     _register_core_handlers(_get_em(), _get_raz())
 
@@ -123,6 +123,7 @@ async def on_startup():
     ensure_sfx_owners(repo)
     ensure_give_in_sfx(repo)
     ensure_targeting_ban_sfx(repo)
+    ensure_contest_complication_sfx(repo)
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:
         engine.register(s)

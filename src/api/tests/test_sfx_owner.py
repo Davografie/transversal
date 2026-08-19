@@ -7,6 +7,7 @@ without a live ArangoDB.
 from types import SimpleNamespace
 
 from transversal.services.sfx_owner import (
+    ensure_contest_complication_sfx,
     ensure_give_in_sfx,
     ensure_sfx_owners,
     ensure_targeting_ban_sfx,
@@ -145,7 +146,7 @@ def test_ensure_sfx_owners_creates_buckets_and_table_reward():
     repo = SetupRepo()
     ensure_sfx_owners(repo)
     assert set(repo.owners.keys()) == {"table", "gm", "players"}
-    assert set(repo.owners["table"].sfx_ids) == {"sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban"}
+    assert set(repo.owners["table"].sfx_ids) == {"sfx-give-in-get-razmerit", "sfx-give-in-targeting-ban", "sfx-contest-loss-complication"}
     assert repo.owners["gm"].sfx_ids == []
     assert repo.owners["players"].sfx_ids == []
 
@@ -180,4 +181,17 @@ def test_ensure_targeting_ban_sfx_creates_once():
     assert sfx.effects[0].action == "targeting_ban"
     assert sfx.effects[0].result == "1"
     ensure_targeting_ban_sfx(repo)
+    assert len(repo.sfxs) == 1
+
+
+def test_ensure_contest_complication_sfx_creates_once():
+    repo = SetupRepo()
+    ensure_contest_complication_sfx(repo)
+    sfx = repo.sfxs["sfx-contest-loss-complication"]
+    assert sfx.trigger == "on_contest_loss"
+    assert sfx.effects[0].type == "modify_trait"
+    assert sfx.effects[0].action == "gain_complication"
+    assert sfx.effects[0].target == "{choose_trait}"
+    assert sfx.effects[0].result == "{effect_die}"
+    ensure_contest_complication_sfx(repo)
     assert len(repo.sfxs) == 1

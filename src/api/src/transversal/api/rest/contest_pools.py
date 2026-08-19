@@ -12,7 +12,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 
-from transversal.domain import CommittedResult, ContestCompare, ContestOutcome, DieType, OutcomeTier
+from transversal.domain import CommittedResult, ContestCompare, ContestOutcome, ContestWinner, DieType, OutcomeTier
 from transversal.services.contest_tracker import (
     broadcast_pool_change,
     get_contest_tracker,
@@ -111,6 +111,18 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
         _broadcast("contest_compare", location_id, entity_id, result.model_dump())
         return result
     if isinstance(result, ContestOutcome):
+        winner_id = challenger_id if result.winner == ContestWinner.PLAYER else defendant_id
+        loser_id = defendant_id if result.winner == ContestWinner.PLAYER else challenger_id
+        universe = challenger.universe if challenger else ""
+        from transversal.services.state_events import fire_contest_outcome_sfx
+        fire_contest_outcome_sfx(
+            winner_id or "",
+            loser_id or "",
+            universe,
+            effect_die=result.effect_die.value if result.effect_die else None,
+            high_stakes=result.high_stakes,
+            taken_out=result.taken_out,
+        )
         _broadcast("contest_resolved", location_id, entity_id, {
             "winner": result.winner.value,
             "gave_in": result.gave_in.value if result.gave_in else None,
@@ -118,10 +130,27 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
             "defendant": result.defendant.model_dump() if result.defendant else None,
             "challenger_id": challenger_id,
             "defendant_id": defendant_id,
+            "high_stakes": result.high_stakes,
+            "effect_die": result.effect_die.value if result.effect_die else None,
+            "taken_out": result.taken_out,
         })
         return result
 
     return {"status": "waiting"}
+
+
+class SetStakesRequest(BaseModel):
+    high_stakes: bool = False
+
+
+@router.post("/{location_id}/pools/{entity_id}/stakes")
+async def set_stakes(location_id: str, entity_id: str, body: SetStakesRequest):
+    """Set whether the contest is high stakes (default low)."""
+    ct = get_contest_tracker()
+    if not ct.set_stakes(location_id, entity_id, body.high_stakes):
+        return {"status": "no_contest"}
+    _broadcast("contest_stakes", location_id, entity_id, {"high_stakes": body.high_stakes})
+    return {"status": "ok", "high_stakes": body.high_stakes}
 
 
 @router.post("/{location_id}/pools/{entity_id}/give-in")
@@ -215,6 +244,7 @@ async def get_contest(location_id: str, entity_id: str):
         "defendant_result": defendant.committed.model_dump() if defendant.committed else None,
         "initiative": challenger.initiative,
         "pending": challenger.pending_decision,
+        "high_stakes": challenger.high_stakes,
         "challenger_pushed": challenger.pushed_this_loop,
         "defendant_pushed": defendant.pushed_this_loop,
     }

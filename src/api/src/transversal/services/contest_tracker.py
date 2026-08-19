@@ -20,10 +20,17 @@ from transversal.domain import (
     ContestResult,
     ContestWinner,
     DicePoolRequest,
+    DieType,
 )
 from transversal.services.dice_resolver import resolve_contest
 
 logger = logging.getLogger("transversal.contest_tracker")
+
+
+def _effect_rank(die: Optional[DieType]) -> int:
+    if die is None:
+        return 0
+    return list(DieType).index(die)
 
 
 @dataclass
@@ -41,6 +48,7 @@ class ContestState:
     opposition_entity_id: Optional[str] = None
     initiative: Optional[str] = None  # entity_id holding the current difficulty to beat
     pending_decision: Optional[str] = None  # entity_id that must give in or push
+    high_stakes: bool = False
     pushed_this_loop: bool = False
     razmerit_spent: int = 0
     committed: Optional[CommittedResult] = None
@@ -95,6 +103,7 @@ class ContestTracker:
         state.gave_in = False
         state.initiative = None
         state.pending_decision = None
+        state.high_stakes = False
         state.pushed_this_loop = False
 
         opponent = self.get_or_create(location_id, opponent_id, universe)
@@ -102,6 +111,7 @@ class ContestTracker:
         opponent.gave_in = False
         opponent.initiative = None
         opponent.pending_decision = None
+        opponent.high_stakes = False
         opponent.pushed_this_loop = False
         return state
 
@@ -110,6 +120,15 @@ class ContestTracker:
         state = self._contests.get(location_id, {}).get(entity_id)
         if state:
             state.pushed_this_loop = True
+
+    def set_stakes(self, location_id: str, entity_id: str, high_stakes: bool) -> bool:
+        """Set the contest's stakes (low by default). Returns False if no contest."""
+        challenger, defendant = self.get_contestants(location_id, entity_id)
+        if challenger is None or defendant is None:
+            return False
+        challenger.high_stakes = high_stakes
+        defendant.high_stakes = high_stakes
+        return True
 
     def clear_pool(self, location_id: str, entity_id: str) -> None:
         """Remove contest metadata for an entity at a location."""
@@ -298,6 +317,11 @@ class ContestTracker:
             )
 
         winner = ContestWinner.PLAYER if holder is challenger else ContestWinner.OPPONENT
+        winner_state = challenger if winner == ContestWinner.PLAYER else defendant
+        loser_state = defendant if winner == ContestWinner.PLAYER else challenger
+        effect_die, taken_out = self._resolve_ramifications(
+            winner_state, loser_state, challenger.high_stakes
+        )
         challenger.pending_decision = None
         defendant.pending_decision = None
         logger.info(f"[contest] compare resolved loc={challenger.location_id} winner={winner.value}")
@@ -307,7 +331,30 @@ class ContestTracker:
             defendant=defendant.committed,
             gave_in=None,
             pushed=challenger.pushed_this_loop,
+            high_stakes=challenger.high_stakes,
+            effect_die=effect_die,
+            taken_out=taken_out,
         )
+
+    def _resolve_ramifications(
+        self, winner_state: ContestState, loser_state: ContestState, high_stakes: bool
+    ) -> tuple[Optional[DieType], bool]:
+        """Compute the effective complication die for the loser.
+
+        Low stakes: winner's effect applies, stepped down one if it is not
+        strictly larger than the loser's.  High stakes: winner's effect
+        applies; if strictly larger, the loser is taken out.
+        """
+        winner_effect = winner_state.committed.effect_die if winner_state.committed else None
+        loser_effect = loser_state.committed.effect_die if loser_state.committed else None
+        winner_rank = _effect_rank(winner_effect)
+        loser_rank = _effect_rank(loser_effect)
+
+        if high_stakes:
+            return winner_effect, winner_rank > loser_rank
+        if winner_rank > loser_rank:
+            return winner_effect, False
+        return (winner_effect.step_down() if winner_effect else None), False
 
     def give_in(self, location_id: str, entity_id: str) -> Optional[ContestOutcome]:
         """Concede the contest — the other side wins.

@@ -204,6 +204,16 @@ export function useApi() {
     } catch (e) { console.error('[API] setResult', e.message); return null }
   }
 
+  async function setStakes(locationId, entityId, highStakes) {
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/stakes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ high_stakes: highStakes })
+      })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] setStakes', e.message); return null }
+  }
+
   async function giveIn(locationId, entityId) {
     try {
       const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/give-in`, { method: 'POST' })
@@ -282,5 +292,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

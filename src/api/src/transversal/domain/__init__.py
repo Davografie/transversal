@@ -269,6 +269,9 @@ class ContestOutcome(BaseModel):
     defendant: Optional[CommittedResult] = None
     gave_in: Optional[ContestWinner] = None
     pushed: bool = False
+    high_stakes: bool = False
+    effect_die: Optional[DieType] = None  # effective complication die to apply to the loser
+    taken_out: bool = False
 
 
 class ContestCompare(BaseModel):
