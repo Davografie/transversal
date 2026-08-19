@@ -46,6 +46,7 @@ import logging
 
 # Ensure our diagnostic INFO logs (contest flow, etc.) are emitted.
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("transversal.graphql")
 
 class _NoisyPathFilter(logging.Filter):
     """Suppress access logs for paths that generate constant poll traffic."""
@@ -97,6 +98,7 @@ def _get_engine():
 
 
 async def get_context(request: Request) -> dict:
+    logger.info("[init] graphql request")
     return {
         "entity_manager": _get_em(),
         "razmerit_service": _get_raz(),

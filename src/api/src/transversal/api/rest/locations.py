@@ -1,10 +1,14 @@
 """Location navigation REST endpoint."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
 from transversal.services.entity_manager import EntityManager
+
+logger = logging.getLogger("transversal.locations")
 
 router = APIRouter(prefix="/api/v1", tags=["locations"])
 
@@ -20,6 +24,7 @@ def _em():
 @router.get("/locations/tree")
 async def location_tree():
     """Return the full location hierarchy as a nested tree."""
+    logger.info("[init] location_tree")
     return _repo().location_tree()
 
 
@@ -35,6 +40,7 @@ async def navigate(location_id: str):
 
     Returns parent (up), children (down), and transversal destinations (lateral).
     """
+    logger.info(f"[init] navigate loc={location_id}")
     result = _repo().navigate_from(location_id)
     if result["location"] is None:
         raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
