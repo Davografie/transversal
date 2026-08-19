@@ -454,8 +454,9 @@ const consequenceTargetId = computed(() => {
 // Contest complication SFX surface as menu options (id ``sfx:<sfx-id>``).
 // Show only the one that matches this end of the contest pipeline:
 // winner → apply to opponent; conceder → take on self; non-contest → neither.
+// On a give-in the conceder already takes their own, so the winner does not apply.
 const consequenceExcludeIds = computed(() => {
-  if (iWon.value) return ['sfx:take-complication']
+  if (iWon.value && !contestResult.value?.gave_in) return ['sfx:take-complication']
   if (iGaveIn.value) return ['sfx:apply-complication']
   return ['sfx:apply-complication', 'sfx:take-complication']
 })
