@@ -896,6 +896,7 @@ watch(lastEvent, (evt) => {
       diceRef.value?.clearPool()
       remotePools.value = {}
       remoteResults.value = {}
+      if (gmMode.value) addToast('Beat ended', 'dice')
       break
     case 'trait_updated':
       // local patch handles display; SSE sync deferred
@@ -938,7 +939,7 @@ watch(lastEvent, (evt) => {
     case 'scene_change':
       if (evt.data?.to_location) locationName.value = evt.data.to_location
       if (gmMode.value) {
-        addToast(`Scene: ${evt.data?.to_location || 'changed'}`, 'scene')
+        addToast(evt.data?.to_location ? `Scene: ${evt.data.to_location}` : 'Scene advanced', 'scene')
       }
       break
     case 'pool_updated':

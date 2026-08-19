@@ -29,4 +29,13 @@ async def advance_scene():
 
     _get_engine().tick_scene()
     changed = decrement_scene_bans(_get_repo())
+
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="scene_change",
+            session_id=s.id,
+            data={"scene": "advanced", "entities_updated": changed},
+        ))
     return {"status": "advanced", "entities_updated": changed}
