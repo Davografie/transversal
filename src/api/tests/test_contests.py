@@ -301,7 +301,7 @@ class TestContestResultModel:
                       DieRoll(die=DieType.D8, result=6, label="b")],
                 total=15, effect_die=DieType.D8, effect_die_value=5,
                 unused=[DieRoll(die=DieType.D8, result=5, label="c")],
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
             opponent_result=PoolResult(
                 rolls=[DieRoll(die=DieType.D8, result=5, label="x"),
@@ -311,7 +311,7 @@ class TestContestResultModel:
                       DieRoll(die=DieType.D6, result=4, label="y")],
                 total=9, effect_die=DieType.D6, effect_die_value=3,
                 unused=[DieRoll(die=DieType.D6, result=3, label="z")],
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
             pushed=False,
         )
@@ -325,12 +325,12 @@ class TestContestResultModel:
             player_result=SimplifiedResult(
                 rolls=[DieRoll(die=DieType.D6, result=4, label="a")],
                 highest=4, tier=OutcomeTier.MARGINAL, effect_die=DieType.D4,
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
             opponent_result=SimplifiedResult(
                 rolls=[DieRoll(die=DieType.D8, result=7, label="x")],
                 highest=7, tier=OutcomeTier.SUCCESS, effect_die=DieType.D6,
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
         )
         assert result.winner == ContestWinner.OPPONENT
@@ -347,7 +347,7 @@ class TestContestResultModel:
                       DieRoll(die=DieType.D8, result=5, label="b")],
                 total=13, effect_die=DieType.D6, effect_die_value=4,
                 unused=[DieRoll(die=DieType.D6, result=4, label="c")],
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
             opponent_result=PoolResult(
                 rolls=[DieRoll(die=DieType.D10, result=8, label="x"),
@@ -357,7 +357,7 @@ class TestContestResultModel:
                       DieRoll(die=DieType.D6, result=5, label="y")],
                 total=13, effect_die=DieType.D6, effect_die_value=3,
                 unused=[DieRoll(die=DieType.D6, result=3, label="z")],
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
         )
         assert result.winner == ContestWinner.PLAYER
@@ -607,7 +607,7 @@ class TestSFXPushDataModel:
                       DieRoll(die=DieType.D8, result=4, label="b")],
                 total=10, effect_die=DieType.D6, effect_die_value=3,
                 unused=[DieRoll(die=DieType.D6, result=3, label="c")],
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
             opponent_result=PoolResult(
                 rolls=[DieRoll(die=DieType.D10, result=8, label="x"),
@@ -617,7 +617,7 @@ class TestSFXPushDataModel:
                       DieRoll(die=DieType.D8, result=5, label="y")],
                 total=13, effect_die=DieType.D6, effect_die_value=2,
                 unused=[DieRoll(die=DieType.D6, result=2, label="z")],
-                hitches=[], botch=False, razmerit_earned=0,
+                hitches=[], botch=False, hitches_count=0,
             ),
             pushed=False,
         )

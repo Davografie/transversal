@@ -215,7 +215,7 @@ class TestSimplifiedPipeline:
         result = resolve(request)
         assert isinstance(result, SimplifiedResult)
         # Can't assert specific hitch count (random), but structure is correct
-        assert result.razmerit_earned == len(result.hitches)
+        assert result.hitches_count == len(result.hitches)
 
     def test_simplified_static_difficulty(self):
         request = DicePoolRequest(
@@ -279,7 +279,7 @@ class TestPoolPipeline:
         result = resolve(request)
         assert result.hitches == []
         assert result.botch is False
-        assert result.razmerit_earned == 0
+        assert result.hitches_count == 0
 
     def test_pool_effect_die_skips_hitches(self, monkeypatch):
         """A rolled-1 die (hitch) can't be auto-selected as the effect die."""

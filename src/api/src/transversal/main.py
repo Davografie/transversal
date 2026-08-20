@@ -119,6 +119,7 @@ async def on_startup():
         ensure_targeting_ban_sfx,
         ensure_contest_complication_sfx,
         ensure_prevent_taken_out_sfx,
+        ensure_buy_hitch_sfx,
         remove_legacy_contest_complication_sfx,
     )
 
@@ -132,6 +133,7 @@ async def on_startup():
     ensure_targeting_ban_sfx(repo)
     ensure_contest_complication_sfx(repo)
     ensure_prevent_taken_out_sfx(repo)
+    ensure_buy_hitch_sfx(repo)
     remove_legacy_contest_complication_sfx(repo)
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:

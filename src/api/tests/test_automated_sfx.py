@@ -90,7 +90,7 @@ class TestNewTriggers:
                 rolls=[DieRoll(die=DieType.D8, result=7, label="test")],
                 highest=7, tier=OutcomeTier.SUCCESS,
                 effect_die=DieType.D6, hitches=[], botch=False,
-                razmerit_earned=0,
+                hitches_count=0,
             ),
         )
         assert engine._trigger_matches(sfx, event)
@@ -105,7 +105,7 @@ class TestNewTriggers:
                 rolls=[DieRoll(die=DieType.D8, result=2, label="test")],
                 highest=2, tier=OutcomeTier.FAIL,
                 effect_die=None, hitches=[], botch=False,
-                razmerit_earned=0,
+                hitches_count=0,
             ),
         )
         assert engine._trigger_matches(sfx, event)
@@ -120,7 +120,7 @@ class TestNewTriggers:
                 rolls=[DieRoll(die=DieType.D8, result=8, label="test")],
                 highest=8, tier=OutcomeTier.SUCCESS,
                 effect_die=DieType.D6, hitches=[], botch=False,
-                razmerit_earned=0,
+                hitches_count=0,
             ),
         )
         assert not engine._trigger_matches(sfx, event)

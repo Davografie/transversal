@@ -192,7 +192,7 @@ class SimplifiedResult(BaseModel):
     opposition_roll: Optional[DieRoll] = None
     opposition_total: Optional[int] = None
     challenge_result: Optional[ChallengeResult] = None
-    razmerit_earned: int = 0
+    hitches_count: int = 0
 
 
 class PoolResult(BaseModel):
@@ -209,7 +209,7 @@ class PoolResult(BaseModel):
     opposition_rolls: list[DieRoll] = Field(default_factory=list)
     opposition_total: Optional[int] = None
     challenge_result: Optional[ChallengeResult] = None
-    razmerit_earned: int = 0
+    hitches_count: int = 0
 
 
 RollResult = SimplifiedResult | PoolResult

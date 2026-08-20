@@ -35,7 +35,7 @@ def ensure_sfx_owners(repo) -> None:
             "take-complication",
             "prevent-taken-out",
         ],
-        "gm": [],
+        "gm": ["buy-hitch"],
         "players": [],
     }
     for owner_id, sfx_ids in defaults.items():
@@ -189,6 +189,43 @@ def ensure_prevent_taken_out_sfx(repo) -> None:
                 action="spend",
                 target="self",
                 result="1",
+            ),
+        ],
+    ))
+
+
+def ensure_buy_hitch_sfx(repo) -> None:
+    """Create the GM buy-hitch SFX. Idempotent.
+
+    P3.3: when a player rolls a hitch, the GM may hand over 1 razmerit to
+    activate a complication. The roller earns 1 razmerit and a complication is
+    created (or stepped up) at d6, scoped to the complications trait set.
+    """
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    if repo.get_sfx("buy-hitch") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="buy-hitch",
+        name="Buy a Hitch",
+        description="Pay 1 razmerit to the roller and introduce a complication (d6) when they roll a hitch",
+        trigger="manual",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="transfer_razmerit",
+                action="earn",
+                target="self",
+                result="1",
+            ),
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="modify_trait",
+                action="cortex_gain",
+                target="{choose_trait}",
+                target_scope="traitset:ts-complications-a190",
+                result="d6",
+                negative=True,
             ),
         ],
     ))

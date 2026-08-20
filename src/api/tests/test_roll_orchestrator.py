@@ -53,7 +53,7 @@ def _simplified(tier=OutcomeTier.SUCCESS, hitches=None, botch=False):
         effect_die=DieType.D6,
         hitches=hitches or [],
         botch=botch,
-        razmerit_earned=0,
+        hitches_count=0,
     )
 
 

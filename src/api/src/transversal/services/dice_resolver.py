@@ -175,7 +175,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     tier = _determine_tier(highest)
     hitches = detect_hitches(rolls) if request.hitches_apply else []
     botch = is_botch(rolls) if request.hitches_apply else False
-    razmerit_earned = len(hitches)  # 1 razmerit per hitch
+    hitches_count = len(hitches)  # buyable count; no auto-earn
 
     # Opposition roll (GMC, challenge, or static difficulty)
     opposition_roll = None
@@ -218,7 +218,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
                 challenge_die=request.opposition.challenge_die,
                 success=success,
             )
-            razmerit_earned = len(hitches)
+            hitches_count = len(hitches)
 
         elif request.opposition.type == "static_difficulty" and request.opposition.static_difficulty is not None:
             opposition_total = request.opposition.static_difficulty
@@ -234,7 +234,7 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
         opposition_roll=opposition_roll,
         opposition_total=opposition_total,
         challenge_result=challenge_result,
-        razmerit_earned=razmerit_earned,
+        hitches_count=hitches_count,
     )
 
 
@@ -243,7 +243,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     rolls = roll_dice(request.dice)
     hitches = detect_hitches(rolls) if request.hitches_apply else []
     botch = is_botch(rolls) if request.hitches_apply else False
-    razmerit_earned = len(hitches)
+    hitches_count = len(hitches)
 
     # Keep the two highest dice for the total; the rest stay unused.
     order = sorted(range(len(rolls)), key=lambda i: rolls[i].result, reverse=True)
@@ -300,7 +300,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
         opposition_rolls=opposition_rolls,
         opposition_total=opposition_total,
         challenge_result=challenge_result,
-        razmerit_earned=razmerit_earned,
+        hitches_count=hitches_count,
     )
 
 
