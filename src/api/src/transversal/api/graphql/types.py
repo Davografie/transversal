@@ -36,6 +36,23 @@ RollSource = strawberry.enum(DomainRollSource)
 ConditionType = strawberry.enum(DomainConditionType)
 
 
+# ── SFX ownership ─────────────────────────────────────
+
+class SfxOwnerKind(str, Enum):
+    """Every surface that can own SFX ids."""
+    TABLE = "table"
+    GM = "gm"
+    PLAYERS = "players"
+    ENTITY = "entity"
+    PROJECTION = "projection"
+    TRAIT = "trait"
+    TRAIT_INSTANCE = "trait_instance"
+    TRAIT_SET = "trait_set"
+
+
+SfxOwnerKindGql = strawberry.enum(SfxOwnerKind)
+
+
 # ── Trait Display Name ───────────────────────────────
 
 @strawberry.type
@@ -208,6 +225,22 @@ class SfxUpdateInput:
     trigger: Optional[str] = None
     limit: Optional[str] = None
     effects: Optional[list[EffectInput]] = None
+
+
+@strawberry.type
+class SfxOwnerRef:
+    """A flattened owner instance in the SFX ownership manager."""
+    owner_type: SfxOwnerKindGql
+    owner_id: strawberry.ID
+    label: str
+    sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+
+
+@strawberry.input
+class OwnerRefInput:
+    """Reference to one owner instance for a batch add/remove operation."""
+    owner_type: SfxOwnerKindGql
+    owner_id: strawberry.ID
 
 
 # ── Roll Tables ─────────────────────────────────────

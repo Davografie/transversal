@@ -43,6 +43,9 @@ from transversal.api.graphql.types import (
     Effect as GqlEffect,
     SfxInput,
     SfxRef,
+    SfxOwnerKindGql,
+    SfxOwnerRef,
+    OwnerRefInput,
     TeachResult,
     GiftResult,
     TakeResult,
@@ -331,6 +334,22 @@ class Query:
                 ) for s in engine.get_all()
             ]
         return []
+
+    @strawberry.field
+    def sfx_owners(self, info: strawberry.Info, owner_type: SfxOwnerKindGql) -> list[SfxOwnerRef]:
+        """Flattened owner instances of one type for the SFX ownership manager."""
+        from transversal.services.sfx_owner import list_owner_refs
+
+        refs = list_owner_refs(_em(info).repo, owner_type.value)
+        return [
+            SfxOwnerRef(
+                owner_type=r["owner_type"],
+                owner_id=r["owner_id"],
+                label=r["label"],
+                sfx_ids=r["sfx_ids"],
+            )
+            for r in refs
+        ]
 
     @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:
@@ -970,6 +989,38 @@ class Mutation:
     @strawberry.mutation
     def delete_sfx(self, info: strawberry.Info, id: strawberry.ID) -> bool:
         return _em(info).repo.delete_sfx(str(id))
+
+    @strawberry.mutation
+    def add_owner_sfx(
+        self,
+        info: strawberry.Info,
+        owner_refs: list[OwnerRefInput],
+        sfx_id: strawberry.ID,
+    ) -> bool:
+        """Add one SFX id to every referenced owner (batch, idempotent)."""
+        from transversal.services.sfx_owner import add_sfx_to_owner
+
+        repo = _em(info).repo
+        for ref in owner_refs:
+            if not add_sfx_to_owner(repo, ref.owner_type.value, str(ref.owner_id), str(sfx_id)):
+                return False
+        return True
+
+    @strawberry.mutation
+    def remove_owner_sfx(
+        self,
+        info: strawberry.Info,
+        owner_refs: list[OwnerRefInput],
+        sfx_id: strawberry.ID,
+    ) -> bool:
+        """Remove one SFX id from every referenced owner (batch, idempotent)."""
+        from transversal.services.sfx_owner import remove_sfx_from_owner
+
+        repo = _em(info).repo
+        for ref in owner_refs:
+            if not remove_sfx_from_owner(repo, ref.owner_type.value, str(ref.owner_id), str(sfx_id)):
+                return False
+        return True
 
     @strawberry.mutation
     def send_message(self, info: strawberry.Info, input: SendMessageInput) -> Message:

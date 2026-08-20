@@ -697,6 +697,17 @@ class EntityRepository:
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
         ]
 
+    def list_all_traitsettings(self) -> list[TraitSetting]:
+        """Return every trait setting (entity↔trait edge)."""
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
+        ]
+
     def get_traitsettings_by_traitset(
         self, entity_id: str, traitset_id: str
     ) -> list[TraitSetting]:
@@ -758,6 +769,17 @@ class EntityRepository:
         return [
             TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
+        ]
+
+    def list_all_traitsetsettings(self) -> list[TraitSetSetting]:
+        """Return every trait set setting (entity↔traitset edge)."""
+        query = f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            RETURN tss
+        """
+        return [
+            TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
         ]
 
     def get_effective_traitsetsettings(
@@ -831,6 +853,13 @@ class EntityRepository:
         doc["_key"] = owner.id
         self._sfx_owners.replace(doc)
         return owner
+
+    def list_sfx_owners(self) -> list[SfxOwner]:
+        """Return every SFX owner bucket (``table``, ``gm``, ``players``)."""
+        return [
+            SfxOwner.model_validate({**doc, "id": doc["_key"]})
+            for doc in self._sfx_owners.all()
+        ]
 
     def get_relationship_traitsettings(self, edge_key: str) -> list[TraitSetting]:
         """Get trait settings attached to a relationship edge."""

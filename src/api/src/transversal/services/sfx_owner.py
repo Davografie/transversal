@@ -208,3 +208,215 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
         ids.update(tss.sfx_ids or [])
 
     return sorted(ids)
+
+
+# ── Owner index + batch management ────────────────────
+#
+# The GM ownership panel reads a flattened view of every owner surface (the
+# three ``sfx_owners`` buckets plus entity/projection/trait/trait-instance/
+# trait-set ``sfx_ids`` fields) and writes add/remove operations back through
+# a dispatcher so the frontend doesn't need to know which collection each
+# owner type lives in.
+
+_BUCKET_TYPES = ("table", "gm", "players")
+_BUCKET_LABELS = {"table": "Table", "gm": "GM", "players": "Players"}
+
+
+def _entity_name(repo, entity_id: str) -> str:
+    entity = repo.get_entity(entity_id)
+    return entity.name if entity else ""
+
+
+def _trait_name(repo, trait_id: str) -> str:
+    trait = repo.get_trait(trait_id)
+    return trait.name if trait else ""
+
+
+def _traitset_name(repo, traitset_id: str) -> str:
+    ts = repo.get_traitset_by_id(traitset_id)
+    return ts.name if ts else ""
+
+
+def list_owner_refs(repo, owner_type: str) -> list[dict]:
+    """Return flattened owner refs of one type for the ownership panel.
+
+    Each ref is ``{owner_type, owner_id, label, sfx_ids}``.  ``sfx_ids`` is the
+    *active grant* list for that surface (``Trait.default_sfx_ids`` for the
+    trait owner, ``TraitSetting.sfx_ids`` for trait instances, etc.).
+    """
+    if owner_type in _BUCKET_TYPES:
+        owner = repo.get_sfx_owner(owner_type)
+        if owner is None:
+            return []
+        return [{
+            "owner_type": owner_type,
+            "owner_id": owner.id,
+            "label": _BUCKET_LABELS.get(owner_type, owner.id),
+            "sfx_ids": list(owner.sfx_ids or []),
+        }]
+
+    if owner_type == "entity":
+        return [{
+            "owner_type": "entity",
+            "owner_id": e.id,
+            "label": e.name or e.id,
+            "sfx_ids": list(e.sfx_ids or []),
+        } for e in repo.list_all_entities()]
+
+    if owner_type == "projection":
+        return [{
+            "owner_type": "projection",
+            "owner_id": p.id,
+            "label": p.name or p.id,
+            "sfx_ids": list(p.sfx_ids or []),
+        } for p in repo.list_all_projections()]
+
+    if owner_type == "trait":
+        return [{
+            "owner_type": "trait",
+            "owner_id": t.id,
+            "label": t.name or t.id,
+            "sfx_ids": list(t.default_sfx_ids or []),
+        } for t in repo.get_all_traits()]
+
+    if owner_type == "trait_instance":
+        refs = []
+        entity_names: dict[str, str] = {}
+        trait_names: dict[str, str] = {}
+        for ts in repo.list_all_traitsettings():
+            ename = entity_names.get(ts.entity_id)
+            if ename is None:
+                ename = _entity_name(repo, ts.entity_id)
+                entity_names[ts.entity_id] = ename
+            tname = trait_names.get(ts.trait_id)
+            if tname is None:
+                tname = _trait_name(repo, ts.trait_id)
+                trait_names[ts.trait_id] = tname
+            label = tname or ts.trait_id
+            if ename:
+                label = f"{label} @ {ename}"
+            refs.append({
+                "owner_type": "trait_instance",
+                "owner_id": ts.id,
+                "label": label,
+                "sfx_ids": list(ts.sfx_ids or []),
+            })
+        return refs
+
+    if owner_type == "trait_set":
+        refs = []
+        entity_names: dict[str, str] = {}
+        traitset_names: dict[str, str] = {}
+        for tss in repo.list_all_traitsetsettings():
+            ename = entity_names.get(tss.entity_id)
+            if ename is None:
+                ename = _entity_name(repo, tss.entity_id)
+                entity_names[tss.entity_id] = ename
+            tsname = traitset_names.get(tss.traitset_id)
+            if tsname is None:
+                tsname = _traitset_name(repo, tss.traitset_id)
+                traitset_names[tss.traitset_id] = tsname
+            label = tsname or tss.traitset_id
+            if ename:
+                label = f"{label} @ {ename}"
+            refs.append({
+                "owner_type": "trait_set",
+                "owner_id": tss.id,
+                "label": label,
+                "sfx_ids": list(tss.sfx_ids or []),
+            })
+        return refs
+
+    return []
+
+
+def _get_owner_sfx_ids(repo, owner_type: str, owner_id: str) -> list[str] | None:
+    """Return the current sfx_ids for one owner, or None if it doesn't exist."""
+    if owner_type in _BUCKET_TYPES:
+        owner = repo.get_sfx_owner(owner_id)
+        return list(owner.sfx_ids or []) if owner else None
+    if owner_type == "entity":
+        entity = repo.get_entity(owner_id)
+        return list(entity.sfx_ids or []) if entity else None
+    if owner_type == "projection":
+        proj = repo.get_projection(owner_id)
+        return list(proj.sfx_ids or []) if proj else None
+    if owner_type == "trait":
+        trait = repo.get_trait(owner_id)
+        return list(trait.default_sfx_ids or []) if trait else None
+    if owner_type == "trait_instance":
+        ts = repo.get_traitsetting(owner_id)
+        return list(ts.sfx_ids or []) if ts else None
+    if owner_type == "trait_set":
+        tss = repo.get_traitsetsetting(owner_id)
+        return list(tss.sfx_ids or []) if tss else None
+    return None
+
+
+def _set_owner_sfx_ids(repo, owner_type: str, owner_id: str, sfx_ids: list[str]) -> bool:
+    """Write the sfx_ids list back onto one owner.  Returns True on success."""
+    if owner_type in _BUCKET_TYPES:
+        owner = repo.get_sfx_owner(owner_id)
+        if owner is None:
+            return False
+        owner.sfx_ids = list(sfx_ids)
+        repo.update_sfx_owner(owner)
+        return True
+    if owner_type == "entity":
+        entity = repo.get_entity(owner_id)
+        if entity is None:
+            return False
+        entity.sfx_ids = list(sfx_ids)
+        repo.update_entity(entity)
+        return True
+    if owner_type == "projection":
+        proj = repo.get_projection(owner_id)
+        if proj is None:
+            return False
+        proj.sfx_ids = list(sfx_ids)
+        repo.update_projection(proj)
+        return True
+    if owner_type == "trait":
+        trait = repo.get_trait(owner_id)
+        if trait is None:
+            return False
+        trait.default_sfx_ids = list(sfx_ids)
+        repo.update_trait(trait)
+        return True
+    if owner_type == "trait_instance":
+        ts = repo.get_traitsetting(owner_id)
+        if ts is None:
+            return False
+        ts.sfx_ids = list(sfx_ids)
+        repo.update_traitsetting(ts)
+        return True
+    if owner_type == "trait_set":
+        tss = repo.get_traitsetsetting(owner_id)
+        if tss is None:
+            return False
+        tss.sfx_ids = list(sfx_ids)
+        repo.update_traitsetsetting(tss)
+        return True
+    return False
+
+
+def add_sfx_to_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> bool:
+    """Add an SFX id to one owner.  Idempotent."""
+    ids = _get_owner_sfx_ids(repo, owner_type, owner_id)
+    if ids is None:
+        return False
+    if sfx_id not in ids:
+        ids.append(sfx_id)
+        return _set_owner_sfx_ids(repo, owner_type, owner_id, ids)
+    return True
+
+
+def remove_sfx_from_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> bool:
+    """Remove an SFX id from one owner.  Idempotent."""
+    ids = _get_owner_sfx_ids(repo, owner_type, owner_id)
+    if ids is None:
+        return False
+    if sfx_id in ids:
+        ids.remove(sfx_id)
+        return _set_owner_sfx_ids(repo, owner_type, owner_id, ids)
+    return True
