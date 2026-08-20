@@ -982,7 +982,7 @@ class Mutation:
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
                     negative=e.negative,
-                    context=e.context,
+                    context=e.context or {},
                     duration=_duration_input_to_domain(e.duration),
                 )
                 for e in input.effects
@@ -1039,7 +1039,7 @@ class Mutation:
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
                     negative=e.negative,
-                    context=e.context,
+                    context=e.context or {},
                     duration=_duration_input_to_domain(e.duration),
                 )
                 for e in input.effects

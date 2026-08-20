@@ -29,7 +29,7 @@ export function useTraitsConfig() {
         sfxs {
           id name description trigger menuContext limit
           conditions { type target value narrative }
-          effects { timing type action target result targetScope negative duration { timers { event remaining } combine } }
+          effects { timing type action target result targetScope negative context duration { timers { event remaining } combine } }
         }
       }`),
     ])
