@@ -285,7 +285,7 @@ import { usePanelBus } from './composables/usePanelBus.js'
 import { useEntityCrud } from './composables/useEntityCrud.js'
 import ToastBar from './components/ToastBar.vue'
 
-const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listPools: apiListPools } = useApi()
+const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools } = useApi()
 const { fetchEntities: prefetchEntities } = useEntityCrud()
 const bus = usePanelBus()
 
@@ -703,8 +703,8 @@ async function refreshDifficulty() {
 }
 
 async function seedRemotePools() {
-  if (!currentLocationId.value) return
-  const res = await apiListPools(currentLocationId.value)
+  // Tabs are global — seed every active pool across all locations.
+  const res = await apiListAllPools()
   const pools = res?.pools || {}
   for (const [eid, dice] of Object.entries(pools)) {
     if (eid !== entityId.value && dice && dice.length) {

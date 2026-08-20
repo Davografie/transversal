@@ -87,6 +87,14 @@ class SceneStateStore:
             for eid, dice in self._pools.get(location_id, {}).items()
         }
 
+    def list_all_pools(self) -> dict[str, list[dict]]:
+        """Return {entity_id: dice} for every saved pool across all locations."""
+        result: dict[str, list[dict]] = {}
+        for pools in self._pools.values():
+            for eid, dice in pools.items():
+                result[eid] = list(dice)
+        return result
+
     # ── Difficulty ────────────────────────────────────
 
     def set_difficulty(self, location_id: str, difficulty: int) -> None:

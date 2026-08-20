@@ -200,6 +200,14 @@ export function useApi() {
     } catch (e) { console.error('[API] listPools', e.message); return null }
   }
 
+  async function listAllPools() {
+    try {
+      const r = await fetch(`${API_BASE}/pools`)
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] listAllPools', e.message); return null }
+  }
+
   // ── Contest actions ──
   async function setOpposition(locationId, entityId, opponentId, universe = 'earth') {
     try {
@@ -309,5 +317,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

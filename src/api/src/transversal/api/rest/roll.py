@@ -156,3 +156,9 @@ async def select_dice(location_id: str, entity_id: str, req: SelectRequest):
     store.save_pool(location_id, entity_id, dice)
     broadcast_pool_change(location_id, entity_id, dice=dice, phase="selected")
     return {"dice": dice}
+
+
+@router.get("/pools")
+async def list_all_pools():
+    """Return every saved dice pool across all locations (tabs are global)."""
+    return {"pools": get_scene_store().list_all_pools()}

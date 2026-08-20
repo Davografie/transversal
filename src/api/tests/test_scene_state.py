@@ -46,6 +46,14 @@ class TestSceneStateStore:
         assert set(store.get_pools_at("loc-1").keys()) == {"kael-1", "guard-1"}
         assert store.get_pools_at("loc-2") == {}
 
+    def test_list_all_pools_across_locations(self, store):
+        store.save_pool("loc-1", "kael-1", [_die()])
+        store.save_pool("loc-2", "guard-1", [_die(die="d6")])
+        all_pools = store.list_all_pools()
+        assert set(all_pools.keys()) == {"kael-1", "guard-1"}
+        assert all_pools["kael-1"][0]["die"] == "d8"
+        assert all_pools["guard-1"][0]["die"] == "d6"
+
     def test_clear_pool(self, store):
         store.save_pool("loc-1", "kael-1", [_die()])
         store.clear_pool("loc-1", "kael-1")

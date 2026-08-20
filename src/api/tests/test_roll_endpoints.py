@@ -91,3 +91,11 @@ def test_select_resets_previous_roles(client):
     r = client.post("/api/v1/locations/loc-1/pools/e1/select", json={"total_indices": [1, 2]})
     roles = [d["role"] for d in r.json()["dice"]]
     assert roles == [None, "total", "total"]
+
+
+def test_list_all_pools_is_global(client):
+    _save(client, "loc-1", "a", [_die("d8")])
+    _save(client, "loc-2", "b", [_die("d6")])
+    r = client.get("/api/v1/pools")
+    assert r.status_code == 200, r.text
+    assert set(r.json()["pools"].keys()) == {"a", "b"}
