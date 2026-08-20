@@ -6,6 +6,7 @@ tags:
   - sfx
   - effects
   - automation
+  - technical
 aliases:
   - SFX
   - Special Effects
@@ -15,261 +16,339 @@ status: canonical
 
 # SFX and Effects
 
-**SFX** (Special Effects) are rule exceptions that modify how the game behaves for specific entities and situations. The **Effects System** is the backend automation layer that applies SFX-triggered changes to the gamestate.
+> [!note] This is a technical reference
+> This page describes how SFX and effects are *implemented* in the current codebase, not just the design intent. It references the actual modules, model fields, and trigger/action identifiers so it can be read alongside `src/api/src/transversal/`.
 
-## SFX Overview
+**SFX** (Special Effects) are rule exceptions attached to entities, traits, and projections. The **Effects System** is the backend automation layer that matches SFX against game events and applies structured `Effect` records to the gamestate.
 
-In Cortex Prime, SFX are attached to specific traits (usually Distinctions) and provide conditional rule modifications. Transversal preserves this model while adding structured automation so the system can resolve SFX without human adjudication.
+## Where everything lives
 
-### Anatomy of an SFX
+| Concern | Module |
+|---------|--------|
+| Domain models (`SFX`, `Effect`, `EffectTiming`, `ConsequenceOption`, `SfxOwner`, `Attunement`, `TargetingBan`, `Condition`) | `src/api/src/transversal/domain/__init__.py` |
+| Effect action registry (what actions exist, their fields, category, valid timings) | `src/api/src/transversal/services/effects_registry.py` |
+| Effects engine (trigger matching, scheduling, event → applied/pending effects) | `src/api/src/transversal/services/effects_engine.py` |
+| Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier.py` |
+| SFX ownership resolution + seeding of table/contest SFX | `src/api/src/transversal/services/sfx_owner.py` |
+| State-change event wiring (takeout, contest win/loss, give-in, push) | `src/api/src/transversal/services/state_events.py` |
+| Consequence menu assembly (base + entity + SFX moves) | `src/api/src/transversal/services/consequence_menu.py` |
+| Contest lifecycle endpoints (challenge, set, give-in, push, prevent-taken-out) | `src/api/src/transversal/api/rest/contest_pools.py` |
+| Targeting bans + takeout clearing on scene advance | `src/api/src/transversal/services/targeting_bans.py` |
 
-```yaml
-sfx:
-  name: "Dimensional Echo"
-  trigger: "When you roll a complication on a task related to dimensional travel"
-  effect:
-    type: "modify_roll"
-    action: "step_up_die"
-    target: "complication_die"
-  cost: 1  # Razmerit cost (0 = free)
+## Domain model
+
+All definitions are in `src/api/src/transversal/domain/__init__.py`.
+
+### `EffectTiming` (line 618)
+
+```python
+class EffectTiming(str, Enum):
+    IMMEDIATE       = "immediate"
+    END_OF_BEAT     = "end_of_beat"
+    END_OF_SCENE    = "end_of_scene"
+    END_OF_SESSION  = "end_of_session"
+    AFTER_BEATS     = "after_beats"
+    ON_CONDITION    = "on_condition"
 ```
 
-| Field | Description |
-|-------|-------------|
-| `name` | Human-readable name |
-| `trigger` | The condition that activates the SFX (declarative description) |
-| `effect` | What the SFX does when triggered (structured effect object) |
-| `cost` | Razmerit cost to activate (0 for always-on SFX) |
+### `Effect` (line 646)
 
-### SFX Categories
+One canonical, operational effect record shared by SFX and life-path consequences.
 
-| Category | Description | Example |
-|----------|-------------|---------|
-| **Modify Roll** | Change dice in the pool before or after rolling | Step up a die, reroll a die, add a die |
-| **Modify Outcome** | Change the result after resolution | Increase effect die, add a raise, negate a complication |
-| **Create/Modify Entity** | Add, remove, or change traits/assets | Create a temporary asset, step up a trait |
-| **Attunement** | Temporarily add a universe for trait availability | Activate the jian to access Three Realms traits on Earth |
-| **Narrative** | Declare a story fact | "You recognize this technology from your home dimension" |
+| Field | Type | Meaning |
+|-------|------|---------|
+| `timing` | `EffectTiming` | When the effect fires (default `IMMEDIATE`) |
+| `type` | `str` | Effect family: `modify_roll`, `modify_outcome`, `modify_trait`, `transfer_razmerit`, `create_entity`, `attune`, `travel`, `life_path`, `relationship`, `entity` |
+| `action` | `str` | Operation within the family (see registry below) |
+| `target` | `str` | Literal id, `"self"`, or a `{choose_*}` / `{random:*}` placeholder |
+| `result` | `Optional[str]` | Die rating, integer amount, relationship type, or `{context_key}` placeholder |
+| `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) |
+| `context` | `dict` | Extra data (e.g. relationship description) |
 
-## The Effects System
+There is **no `polarity` field** — cost vs. benefit is derived from the `(type, action)` pair via the registry's `category`.
 
-The effects system is the technical layer that executes SFX. When an SFX triggers, the effects system:
+### `SFX` (line 673)
 
-1. **Validates** — checks that the trigger conditions are met and the cost can be paid
-2. **Applies** — executes the structured effect against the gamestate
-3. **Records** — logs the change for undo, replay, and UI updates
-
-### SFX Scheduling
-
-Every SFX declares a **timing** that determines when its effect fires relative to its trigger:
-
-| Timing | Behavior | Example |
-|--------|----------|---------|
-| `immediate` | Fires instantly when trigger conditions are met | Step up a die before rolling |
-| `end_of_beat` | Fires after the current beat resolves and dice pools clear | "After your attack, gain +1 razmerit" |
-| `end_of_scene` | Fires when the location changes or the scene ends | "Your buffed trait returns to normal" |
-| `end_of_session` | Fires when playtime ends | "At session end, resolve all outstanding debts" |
-| `after_beats(N)` | Fires after N beats have elapsed since activation | "For the next 3 beats, your qi is doubled" |
-| `on_condition` | Fires when a specified narrative or mechanical condition is met | "When the gate opens, you gain an insight" |
-
-If no timing is specified, `immediate` is the default. Deferred effects are queued by the effects system and executed when their boundary arrives. This enables buffs, debuffs, delayed consequences, and session-wrap cleanup without GM manual tracking.
-
-### Effect Targets
-
-Effects can target many parts of the application:
-
-| Target | Example Action |
-|--------|---------------|
-| `razmerit` | Add or deduct razmerit from an entity's pool |
-| `trait` | Create, delete, step up, step down, or set a trait rating |
-| `dice_pool` | Add, remove, step up, step down, or reroll dice in an active pool |
-| `entity` | Create or delete an entity (asset, GMC, location) |
-| `relationship` | Create, modify, or remove a relationship between entities |
-| `known_to` | Reveal hidden entities by adding to `known_to` lists |
-| `projection` | Create or modify a universe projection |
-| `effective_universes` | Temporarily add a universe (attunement) for trait availability |
-
-### Unified Effect Model
-
-One canonical effect spec is shared by SFX **and** life-path consequences — see [[Unified Effects Plan]] for the full model:
-
-```
-Effect:
-  timing        (immediate | end_of_beat | end_of_scene | end_of_session | after_beats | on_condition)
-  type          (modify_trait | transfer_razmerit | life_path | relationship | modify_roll | modify_outcome | ...)
-  action        (gain | step_up | gain_or_step_up | step_down | set | earn | spend | ...)
-  target        (id | "self" | {choose_trait} | "")
-  result        (die | integer | rel_type | "")
-  target_scope  (optional narrowing for target choice)
-  context       (optional dict)
+```python
+class SFX(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    trigger: str
+    effects: list[Effect] = Field(default_factory=list)
+    conditions: list["Condition"] = Field(default_factory=list)
 ```
 
-There is **no `polarity` field** — whether an effect is a cost or a benefit is derived from its `(type, action)` category. An effect is an effect regardless of which surface authored it, and **checks are roll tables**: a life path is a graph of roll tables whose entries execute these effects (see [[Character Growth]]).
+- `trigger` names the event (see trigger semantics below).
+- `conditions` gate which instance of that event applies.
+- A legacy `limit` string is folded into a `NARRATIVE` condition by the `@model_validator` `_fold_legacy_limit`.
 
-Additional vocabulary beyond the per-type tables below:
+### `SfxOwner` (line 709)
 
-| Type | Actions | Meaning |
-|------|---------|---------|
-| `modify_trait` | `gain`, `step_up`, `gain_or_step_up`, `step_down`, `gain_complication`, `set` | Create / raise / lower / remove a trait |
-| `transfer_razmerit` | `earn`, `spend`, `transfer` | Move razmerit |
-| `life_path` | `discover`, `next_step`, `draft`, `force_muster` | Advance a life-path term |
-| `relationship` | `create` | Create a relationship edge (`result` = relationship type) |
+Ownership lives on the *owner* side, not the SFX. An owner bucket is a named set of SFX ids:
 
-`step_up` and `gain_or_step_up` both mean "step up the smallest die, capped at d12."
-
-### Effect Types
-
-#### modify_roll
-
-Changes dice within an active dice pool.
-
-| Action | Description |
-|--------|-------------|
-| `step_up_die` | Increase a die by one step (d6→d8) |
-| `step_down_die` | Decrease a die by one step (d8→d6) |
-| `double_die` | Add a second copy of a die to the pool |
-| `reroll_die` | Reroll a single die, keep the new result |
-| `add_die` | Add a new die to the pool (specified by size) |
-| `remove_die` | Remove a die from the pool |
-
-```yaml
-# Example: "Relentless" SFX — step up your primary trait die before rolling
-effect:
-  type: "modify_roll"
-  action: "step_up_die"
-  target: "highest_trait_die"
+```python
+class SfxOwner(BaseModel):
+    id: str            # "table" | "gm" | "players"
+    sfx_ids: list[str]
 ```
 
-#### modify_outcome
+### `ConsequenceOption` (line 660)
 
-Changes the result after the roll is resolved.
+A selectable post-roll consequence entry. Authored directly on entities (location/lair moves), registered as base moves, or derived from `on_consequence` SFX.
 
-| Action | Description |
-|--------|-------------|
-| `step_up_effect` | Increase the effect die by one step |
-| `step_up_outcome` | Simplified: bump outcome tier by 1. Dice Pool: add +2 to total |
-| `negate_complication` | Cancel one triggering complication |
-| `convert_complication` | Turn a complication into a bonus die (adds a d6 to a future roll) |
-| `reroll_highest` | Reroll the highest die and keep the new result |
+| Field | Meaning |
+|-------|---------|
+| `id` | Stable option id; SFX moves use `sfx:{sfx_id}` |
+| `label` | Display text |
+| `side` | `"player"` \| `"gm"` \| `"either"` |
+| `effects` | `list[Effect]` applied when chosen |
+| `source` | `"base"` \| `"entity"` \| `"sfx"` |
 
-#### create_entity
+### Entity state touched by effects (`Entity`, line 525)
 
-Creates a new entity or asset in the gamestate.
+- `razmerit` — spend/earn/transfer balance.
+- `current_universe`, `current_location`, `current_projection`.
+- `attunements: list[Attunement]` — active temporary universe grants (effect-managed).
+- `targeting_bans: list[TargetingBan]` — directional, scene-counted contest-target bans (`TargetingBan`, line 517).
+- `taken_out: bool = False` — scene-scoped; a high-stakes contest removed this entity from the scene.
+- `sfx_ids: list[str]` — SFX owned directly by this entity.
+- `consequence_options: list[ConsequenceOption]` — location/lair moves.
 
-```yaml
-# Example: "MacGyver" SFX — create a temporary asset from available materials
-effect:
-  type: "create_entity"
-  entity_type: "asset"
-  traits:
-    utility: d6
-  duration: "scene"
-  name_template: "Improvised {material}"
+### `Attunement` (line 633) and `AttunementScope` (line 627)
+
+```python
+class AttunementScope(str, Enum):
+    SELF   = "self"     # only the entity carrying the attunement
+    DOMAIN = "domain"   # occupants in the entity's location subtree
+
+class Attunement(BaseModel):
+    universe: str
+    scope: AttunementScope = AttunementScope.SELF
+    until: Optional[EffectTiming] = None
+    source_sfx_id: Optional[str] = None
 ```
 
-#### modify_trait
+### `Condition` (line 734) and `ConditionType` (line 723)
 
-Changes a trait on any entity.
+Conditions are authored alongside effects and evaluated against entity state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks. See `src/api/src/transversal/services/conditions.py`.
 
-| Action | Description |
-|--------|-------------|
-| `gain` | Create the trait at `result` if absent |
-| `step_up` | Step up the smallest die, capped at d12 |
-| `gain_or_step_up` | Create at `result` if absent, else step up |
-| `step_down` | Step down the die |
-| `gain_complication` | Add a complication trait at `result` |
-| `set` | Set the trait to a specific die value |
+## Effect action registry
 
-#### transfer_razmerit
+`src/api/src/transversal/services/effects_registry.py` is the single source of truth for every action the editor can author (`EFFECT_ACTION_REGISTRY`, line 52). Each entry is an `EffectActionMeta` with `action_id`, `category` (`cost` | `benefit` | `either`), `effect_type`, `effect_action`, `valid_timings`, field definitions, and `target_kind`.
 
-Moves razmerit between an entity and the pool.
+| Family (`effect_type`) | `action_id` → `effect_action` | Category |
+|------------------------|-------------------------------|----------|
+| `modify_roll` | `play_as_rating` → `play_as_rating` | cost |
+| | `step_up_die` → `step_up_die` | benefit |
+| | `step_down_die` → `step_down_die` | cost |
+| | `double_die` → `double_die` | benefit |
+| | `reroll_die` → `reroll_die` | benefit |
+| | `add_die` → `add_die` | benefit |
+| | `remove_die` → `remove_die` | cost |
+| | `split_die` → `split_die` | benefit |
+| `modify_outcome` | `step_up_effect` → `step_up_effect` | benefit |
+| | `step_up_outcome` → `step_up_outcome` | benefit |
+| | `negate_complication` → `negate_complication` | benefit |
+| | `convert_complication` → `convert_complication` | benefit |
+| | `reroll_highest` → `reroll_highest` | either |
+| `modify_trait` | `step_up_trait` → `step_up` | benefit |
+| | `step_down_trait` → `step_down` | cost |
+| | `set_trait` → `set` | either |
+| | `gain_trait` → `gain` | benefit |
+| | `gain_or_step_up_trait` → `gain_or_step_up` | benefit |
+| | `gain_complication` → `gain_complication` | cost |
+| | `gain_or_step_up_complication` → `gain_or_step_up_complication` | cost |
+| `transfer_razmerit` | `earn_razmerit` → `earn` | benefit |
+| | `spend_razmerit` → `spend` | cost |
+| | `transfer_razmerit` → `transfer` | either |
+| `create_entity` | `create_asset` → `create_asset` | benefit |
+| `attune` | `attune` → `enable` | benefit |
+| `travel` | `travel` → `move` | benefit |
+| `life_path` | `discover_life_path` → `discover` | benefit |
+| | `next_step` → `next_step` | either |
+| | `draft_life_path` → `draft` | either |
+| | `force_muster` → `force_muster` | cost |
+| | `muster` → `muster` | either |
+| | `enroll_life_path` → `enroll` | either |
+| `relationship` | `create_relationship` → `create` | either |
+| `entity` | `entity_targeting_ban` → `targeting_ban` | cost |
 
-| Action | Description |
-|--------|-------------|
-| `earn` | Add to target from the system pool |
-| `spend` | Deduct from the entity |
-| `transfer` | Move from one entity to another |
+## Effects engine
 
-### Trigger System
+`src/api/src/transversal/services/effects_engine.py`.
 
-SFX triggers can be:
+### Event and outcome types
 
-| Trigger Type | Fires When |
-|--------------|------------|
-| `on_roll` | A dice pool is assembled but before rolling |
-| `on_result` | After the roll is resolved but before effect die is chosen |
-| `on_complication` | A complication (hitch) occurs |
-| `on_botch` | All dice in a roll show 1 (catastrophic failure) |
-| `on_success` | A roll succeeds |
-| `on_failure` | A roll fails |
-| `on_location_change` | An entity changes location |
-| `on_trait_change` | A trait value changes on any entity |
-| `on_turn` | The entity's turn begins or ends |
+- `GameEvent` (line 33): `type`, `entity_id`, `universe`, `context`, plus optional `dice_request` / `roll_result`.
+- `EventOutcome`: splits results into `applied` (immediate effects that were executed) and `pending` (`PendingSfxEffect` — immediate effects with a `{choose_*}` target that were skipped and need user resolution).
 
-Multiple SFX can chain — the effects system resolves them in dependency order, not arbitrarily.
+### Processing (`EffectsEngine.process_event_outcome`, line 127)
 
-## Example SFX Builds
+For each available SFX id:
 
-### "Lucky Break"
-```
-Trigger: on_complication
-Effect: reroll_die (target: the die that rolled 1)
-Cost: 1 razmerit
-```
-When you roll a hitch, spend 1 razmerit to reroll that die. The new result stands.
+1. Look up the SFX in the registry.
+2. `_trigger_matches` (line 219) checks the trigger.
+3. If `conditions` exist and a repo is provided, `evaluate_conditions` gates on current entity state.
+4. A razmerit cost check sums `transfer_razmerit`/`spend` effect results and skips the SFX if it exceeds the balance.
+5. `_substitute_effect_context` replaces `{context_key}` placeholders in each effect's `result` from the event context (this is how `{effect_die}` becomes a concrete die rating).
+6. `IMMEDIATE` effects with a `{choose_*}` target are returned as `pending`; otherwise they are applied via `effects_applier.effect_registry.apply`. Non-`IMMEDIATE` effects are queued on the internal schedule.
 
-### "Dimensional Anchor"
-```
-Trigger: on_location_change (entering a new dimension)
-Effect: create_entity (asset: "Anchor Point", trait: stability d8, duration: scene)
-Cost: 0 razmerit
-```
-When you enter a new dimension, you automatically create a temporary anchor point that helps you navigate.
+`attune`/`enable` is special-cased: it applies immediately and also schedules a matching `attune`/`disable` at the effect's timing.
 
-### "Overcharge"
-```
-Trigger: on_roll
-Effect: step_up_die (target: primary trait die), then after resolution step_down_die (target: same trait)
-Cost: 1 razmerit
-```
-Push your abilities beyond normal limits — but suffer temporary depletion afterward.
+### Scheduling
 
-### "Catastrophe Insurance"
-```
-Trigger: on_botch
-Effect: convert_complication (turn the botch into a standard hitch — the action still fails, but without the catastrophic escalation)
-Cost: 2 razmerit
-```
-When everything goes wrong, burn razmerit to contain the damage. The roll still fails, but the GM downgrades the botch to a single hitch-level complication.
+| Method | Fires |
+|--------|-------|
+| `tick_beat` (line 310) | `END_OF_BEAT` effects; decrements `AFTER_BEATS` counters and fires them at zero |
+| `tick_scene` (line 334) | `END_OF_SCENE` effects |
+| `tick_session` (line 350) | everything remaining on the schedule |
 
-## Integration with Dice Mechanics
+`AFTER_BEATS` defaults to 3 beats (`_beats_for_timing`).
 
-The effects system hooks into both resolution pipelines at shared interception points. After `on_roll` SFX fire, the system re-evaluates pool size to determine which pipeline executes:
+### Trigger semantics (`_trigger_matches`, line 219)
 
-```
-Assemble Pool → [on_roll SFX fire] → Re-evaluate pipeline (1-2 = Simplified, 3+ = Pool)
-    → Roll → Check for botch (all dice = 1) → [on_botch SFX fire if triggered]
-    → [on_complication SFX fire] for individual hitches
-    → Simplified: take highest → map to tier
-    → Dice Pool: keep two highest → add → compare
-    → [on_success / on_failure SFX fire]
-    → Choose Effect Die → [on_result SFX fire]
-    → Apply Outcome
-```
+| SFX `trigger` | Fires when |
+|---------------|------------|
+| `== event.type` | Direct match on the event name |
+| `on_activate` | Legacy alias for event type `manual` |
+| `on_complication` | `on_roll` / `on_result` whose `roll_result.hitches` is non-empty |
+| `on_botch` | `roll_result.botch` is true |
+| `on_location_change` | event type `location_changed` |
+| `on_trait_change` | event type `trait_updated` |
+| `on_relationship_create` | event type `relationship_created` |
+| `on_contest_loss` | `event.context["contest_winner"] == "opponent"` |
+| `on_contest_win` | `event.context["contest_winner"] == "player"` |
+| `on_success` | `roll_result.tier` is present and not `FAIL` |
+| `on_failure` | `roll_result.tier == FAIL` |
 
-See [[Dice Mechanics]] for both pipeline procedures.
+`contest_to_events` (line 390) and `fire_contest_sfx` (line 437) generate per-side events from a `ContestResult`, with `contest_winner` set from each side's perspective (ties favor the initiator — there is no separate tie outcome).
 
-## Design Principle
+## Effect applier
 
-> [!quote] Declarative Over Procedural
-> SFX are defined declaratively — they describe *what* happens, not *how*. The effects system interprets the declaration and applies it to the current gamestate. This separation means:
-> - New SFX can be added without changing core code
-> - The system can reason about effect chains and resolve conflicts
-> - Rollback and replay are possible because all changes are recorded
-> - The GM can create custom SFX during play
+`src/api/src/transversal/services/effects_applier.py`.
+
+- `EffectRegistry` (line 23) dispatches by `(type, action)`, falling back to `(*, action)` → `(type, *)` → `(*, *)`.
+- Core mutation handlers are registered at import time (lines 71–166). `modify_roll` and `modify_outcome` are registered as `("*", ...)` pass-throughs (roll/outcome math happens in the resolver, not here).
+- `apply_effects` (line 569) mutates the entity in place for entity-level fields (razmerit, discovered paths, rank) and collects `TraitSetting` changes, relationship edges, cross-entity mutations, pending choices, and passthrough effects into an `EffectsResult`. **Persistence and SSE broadcast are the caller's responsibility.**
+
+### Target placeholders
+
+- `_parse_placeholder` (line 304) parses `{mode:kind}` and `{mode_kind}` targets. Recognised modes are `choose` and `random`; recognised kinds are `location`, `occupant`, `trait`, `entity`, `rating_die`, `life_path`, `roll_table`.
+- `is_choose_target` (line 324) and `choose_kind` (line 330) are what the engine uses to decide whether an effect needs user resolution.
+- `_resolve_target` (line 348): `"self"` → the entity's id; `{choose_*}` / empty-when-required → a `PendingChoice`; `{random:*}` → a random in-scope candidate via `effect_targets.resolve_candidates`; anything else → a literal target id.
+- `resolve_choice` (line 377) re-applies a `PendingChoice` with a concrete target.
+
+### `target_scope`
+
+A `target_scope` like `traitset:ts-complications-a190` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). This is how the contest complication SFX restrict the "pick a complication" choice to the complications trait set.
+
+### Complication trait set id
+
+The complications trait set is **`ts-complications-a190`**. The negative-trait fallback in `_new_traitsetting` (line 268) and the contest complication SFX both use it. See [[#Known mismatch]] below for the one place that still references the old id.
+
+## SFX ownership and seeding
+
+`src/api/src/transversal/services/sfx_owner.py`.
+
+### Owner buckets
+
+`ensure_sfx_owners` (line 22) seeds three owner buckets: `table` (everyone), `gm` (GM-context only, not entity-derived), `players` (reserved, currently empty). The `gm` bucket is intentionally excluded from entity-derived resolution.
+
+### Available SFX resolution (`get_available_sfx_ids`, line 181)
+
+The SFX ids available to an entity in a universe are the sorted union of:
+
+1. `Entity.sfx_ids` (direct ownership).
+2. The active projection's `Projection.sfx_ids` (`entity.current_projection`).
+3. The `table` owner bucket.
+4. Trait-level grants from effective `TraitSetting.sfx_ids` plus the trait's `Trait.default_sfx_ids`.
+5. Trait-set-as-unit grants from effective `TraitSetSetting.sfx_ids`.
+
+### Seeded table/contest SFX
+
+| SFX id | Trigger | Effect(s) | Purpose |
+|--------|---------|-----------|---------|
+| `sfx-give-in-get-razmerit` | `on_give_in` | `transfer_razmerit`/`earn`/`self`/`1` | Conceder gains 1 razmerit |
+| `sfx-give-in-targeting-ban` | `on_give_in` | `entity`/`targeting_ban`/`""`/`1` | Conceder can't target that opponent for the scene |
+| `apply-complication` | `on_consequence` | `modify_trait`/`gain_complication`/`{choose_trait}` @ `{effect_die}`, scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
+| `take-complication` | `on_consequence` | same effect as `apply-complication` | Conceder takes a complication on their own projection |
+| `prevent-taken-out` | `on_prevent_taken_out` | `transfer_razmerit`/`spend`/`self`/`1` | Spend 1 razmerit to avoid being taken out |
+
+`ensure_contest_complication_sfx` (line 98) intentionally creates **two** SFX (`apply-complication`, `take-complication`) with identical effects but different labels, so the frontend can surface the correct one at each end of a contest. Both are `on_consequence` and owned by `table` (players + GM).
+
+`remove_legacy_contest_complication_sfx` (line 164) deletes the retired `sfx-contest-loss-complication` row and its `table` reference so a stale DB doesn't keep auto-firing it on `on_contest_loss` (P2.10d moved contest-loss complications into the manual consequence menu).
+
+## State events and takeout
+
+`src/api/src/transversal/services/state_events.py` centralises automatic SFX firing for state changes (entity moves, trait gains, relationship creation, contest outcomes) that don't happen in the roll/contest endpoint layer.
+
+### `fire_state_sfx` (line 16)
+
+Fires matching condition-gated SFX for a single state event. A re-entrancy guard (`_firing` set of `(entity_id, event_type)`) prevents an SFX-triggered mutation from re-entering the same event. Pending `{choose_*}` effects are emitted via `roll_orchestrator._emit_pending_choices`.
+
+### Contest outcome (`fire_contest_outcome_sfx`, line 54)
+
+Fires `on_contest_win` / `on_contest_loss` for both sides of a resolved manual contest. The event context carries `contest_winner`, `opponent_id`, `effect_die`, `high_stakes`, and `taken_out`; `{effect_die}` in an SFX result is substituted from this context. If `taken_out` is true, `_mark_taken_out` is called for the loser.
+
+### Takeout (`_mark_taken_out`, line 103)
+
+Sets `loser.taken_out = True`, persists it, and fires `on_taken_out` with `{taken_out: True, opponent_id}`.
+
+### Prevent takeout (`prevent_taken_out`, line 116)
+
+Server-enforced:
+
+1. Returns `{"prevented": False, "reason": "insufficient razmerit"}` if `razmerit < 1`.
+2. Returns `{"prevented": False, "reason": "not taken out"}` if not `taken_out`.
+3. Otherwise fires `on_prevent_taken_out` with `{prevented: True, effect_die}` (the seeded `prevent-taken-out` SFX spends 1 razmerit).
+4. Re-fetches the entity, clears `taken_out`, and returns `{"prevented": True}`.
+
+> [!note] The complication on prevent is **not** applied by the prevent SFX itself
+> `prevent-taken-out` only spends the razmerit. The winner applies the complication at the effect die through the consequence menu (`apply-complication`).
+
+### Endpoints (`src/api/src/transversal/api/rest/contest_pools.py`)
+
+| Path | Behavior |
+|------|----------|
+| `POST /locations/{location_id}/pools/{entity_id}/set-opposition` | Challenge; blocked by `has_targeting_ban` |
+| `POST .../set` | Commit one side's result; on final resolution fires `fire_contest_outcome_sfx` |
+| `POST .../stakes` | Toggle high stakes |
+| `POST .../give-in` | Concede; fires `on_give_in` (razmerit + ban SFX) |
+| `POST .../push` | Start a push; fires `on_push` |
+| `POST .../prevent-taken-out` | `PreventTakenOutRequest { effect_die }` → `prevent_taken_out`, broadcasts `contest_prevent_taken_out` |
+| `GET .../contest` | Re-sync perspective (challenger/defendant, committed results, high stakes) |
+
+### Scene-advance clearing (`src/api/src/transversal/services/targeting_bans.py`)
+
+- `decrement_scene_bans` (line 42) advances every entity's `targeting_bans` by one scene, removing expired bans.
+- `clear_taken_out` (line 68) clears `taken_out` from every entity.
+
+Both are wired into scene advance (see `src/api/src/transversal/api/rest/targeting_bans.py`), so a scene boundary expires challenge bans and re-admits taken-out entities.
+
+## Consequence menu
+
+`src/api/src/transversal/services/consequence_menu.py`.
+
+`assemble_consequence_menu` (line 90) builds the post-roll consequence options from three sources:
+
+1. **Base moves** (`BASE_CONSEQUENCE_OPTIONS`) — always available, keyed by `"player"` / `"gm"`.
+2. **Entity moves** — `Entity.consequence_options` on the acting entity's current location and its ancestors (lair moves), filtered by `side`.
+3. **SFX moves** — `on_consequence` SFX available to the acting entity, wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`.
+
+Choosing an option applies its effects through the shared applier, resolving any `{choose_*}` targets via the wizard.
+
+### Known mismatch
+
+The base doom-pool options (`decrease_doom`, `increase_doom` in `consequence_menu.py` lines 53 and 67) still declare `target_scope="traitset:ts-complications"`, while the correct complications trait set id is **`ts-complications-a190`** (used by `sfx_owner._complication_effect` and the `effects_applier` negative-trait fallback). The precise doom-pool scoping is deferred to Phase 3's challenge-pool work; the contest complication SFX already use the correct id.
+
+## Design principle
+
+> [!quote] Declarative over procedural
+> SFX and consequences are authored declaratively as `Effect` records. The engine interprets the declaration against the current event and gamestate. This separation means new SFX can be added without changing core code, effect chains can be reasoned about, and `{choose_*}` targets surface as user-resolvable choices instead of being hardcoded.
 
 ## Next
 
 - [[Core Mechanics]] — The fundamentals these exceptions modify
 - [[Dice Mechanics]] — Where SFX intercept the rolling procedure
-- [[System Architecture]] — How the effects system is implemented
+- [[Character Growth]] — Life paths execute the same `Effect` records
