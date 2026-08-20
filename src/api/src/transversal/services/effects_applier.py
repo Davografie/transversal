@@ -145,8 +145,16 @@ def _register_core_handlers(em, raz):
         remove_targeting_ban(entity, a.target or "")
         em.repo.update_entity(entity)
 
+    def _clear_taken_out(a, eid, u, ctx):
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        entity.taken_out = False
+        em.repo.update_entity(entity)
+
     effect_registry.register("entity", "targeting_ban", _targeting_ban)
     effect_registry.register("entity", "remove_targeting_ban", _remove_targeting_ban)
+    effect_registry.register("entity", "clear_taken_out", _clear_taken_out)
 
     # Travel — move the entity across a universal boundary.
     #

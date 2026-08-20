@@ -47,6 +47,8 @@ class EffectActionMeta:
     requires_choice: bool = False        # target must be resolved at runtime
     target_kind: str | None = None       # trait | entity | life_path | ...
     supports_duration: bool = False      # UI shows a duration/timers builder
+    inverse: tuple[str, str] | None = None  # (type, action) to undo this effect
+    inverse_captures_prior: bool = False    # revert needs the pre-apply value
 
 
 # Reusable context-field definition: trait-modifying effects may target a
@@ -237,6 +239,8 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=True, default="primary"),
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        supports_duration=True,
+        inverse=("modify_trait", "step_down"),
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -254,6 +258,8 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=False, default="after_resolution"),
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        supports_duration=True,
+        inverse=("modify_trait", "step_up"),
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -271,6 +277,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        supports_duration=True,
+        inverse=("modify_trait", "set"),
+        inverse_captures_prior=True,
         target_kind="trait",
     ),
 
@@ -541,6 +550,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         ],
         target_kind="entity",
         supports_duration=True,
+        inverse=("entity", "remove_targeting_ban"),
     ),
 ]
 
@@ -557,3 +567,11 @@ def get_action_meta(action_id: str) -> EffectActionMeta | None:
 def get_actions_by_category(category: str) -> list[EffectActionMeta]:
     """Return all actions matching a category ('cost', 'benefit', 'either')."""
     return [m for m in EFFECT_ACTION_REGISTRY if m.category == category]
+
+
+def get_inverse(effect_type: str, effect_action: str) -> tuple[tuple[str, str] | None, bool]:
+    """Return ``(inverse, captures_prior)`` for an effect (type, action)."""
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.effect_type == effect_type and meta.effect_action == effect_action:
+            return (meta.inverse, meta.inverse_captures_prior)
+    return (None, False)

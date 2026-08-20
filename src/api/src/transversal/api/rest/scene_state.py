@@ -104,6 +104,13 @@ async def next_beat(location_id: str):
     from transversal.services.contest_tracker import get_contest_tracker
     get_contest_tracker().clear_location(location_id)
 
+    from transversal.main import _get_engine, _get_repo
+    from transversal.services.scheduled_events import dispatch_event
+    repo = _get_repo()
+    if getattr(repo, "db", None) is not None:
+        _get_engine().tick_beat()
+        dispatch_event(repo, "beat")
+
     for s in session_manager.list_active():
         event_bus.publish(StreamEvent(
             event="beat_end",

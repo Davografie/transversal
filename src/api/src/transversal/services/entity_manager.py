@@ -12,7 +12,6 @@ from transversal.db.repository import EntityRepository
 from transversal.services.change_log import change_log
 from transversal.services.scene_state import resync_pool_dice_for_trait
 from transversal.services.session_manager import session_manager
-from transversal.services.state_events import fire_state_sfx
 
 
 def _publish_to_sessions(event: StreamEvent) -> None:
@@ -31,7 +30,8 @@ def _publish_location_changed(entity: Entity, old_location: Optional[str], old_u
         data={"entity_id": entity.id, "from": old_location or "",
               "to": entity.current_location or "", "universe": entity.current_universe},
     ))
-    fire_state_sfx(entity.id, entity.current_universe, "location_changed")
+    from transversal.services.scheduled_events import dispatch_event
+    dispatch_event(None, "location_changed", entity_id=entity.id, universe=entity.current_universe)
 from transversal.domain import (
     CharacterView,
     Entity,
@@ -392,8 +392,9 @@ class EntityManager:
                   "new_dice": new_dice},
         ))
         resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
-        fire_state_sfx(ts.entity_id, None, "trait_updated",
-                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
+        from transversal.services.scheduled_events import dispatch_event
+        dispatch_event(None, "trait_updated", entity_id=ts.entity_id,
+                       context={"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
         return result
 
@@ -416,8 +417,9 @@ class EntityManager:
                   "new_dice": new_dice},
         ))
         resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
-        fire_state_sfx(ts.entity_id, None, "trait_updated",
-                       {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
+        from transversal.services.scheduled_events import dispatch_event
+        dispatch_event(None, "trait_updated", entity_id=ts.entity_id,
+                       context={"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
         return result
 

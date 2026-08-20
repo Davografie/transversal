@@ -13,7 +13,6 @@ from transversal.domain import Effect, Entity, dice_list_to_rating
 from transversal.services.effects_applier import EffectsResult, apply_effects
 from transversal.services.scene_state import resync_pool_dice_for_trait
 from transversal.services.session_manager import session_manager
-from transversal.services.state_events import fire_state_sfx
 
 
 def _publish(event: str, data: dict) -> None:
@@ -33,8 +32,9 @@ def _publish_trait_changed(ts, universe: str) -> None:
         "new_dice": new_dice,
     })
     resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
-    fire_state_sfx(ts.entity_id, universe, "trait_updated",
-                   {"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
+    from transversal.services.scheduled_events import dispatch_event
+    dispatch_event(None, "trait_updated", entity_id=ts.entity_id, universe=universe,
+                   context={"trait_id": ts.trait_id, "traitset_id": ts.traitset_id})
 
 
 def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult:
@@ -87,7 +87,8 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
         repo.create_relationship(
             rel["from"], rel["to"], rel["type"], rel.get("description", ""),
         )
-        fire_state_sfx(rel["from"], entity.current_universe, "relationship_created",
-                       {"target": rel["to"], "type": rel["type"]})
+        from transversal.services.scheduled_events import dispatch_event
+        dispatch_event(None, "relationship_created", entity_id=rel["from"], universe=entity.current_universe,
+                       context={"target": rel["to"], "type": rel["type"]})
 
     return result

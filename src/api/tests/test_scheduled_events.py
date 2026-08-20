@@ -11,9 +11,13 @@ from transversal.domain import (
     ScheduledEvent,
     Timer,
     TimerCombine,
+    TraitSetting,
 )
 from transversal.services.scheduled_events import (
     advance_events,
+    advance_traitsetting_events,
+    build_revert,
+    dispatch_event,
     schedule_revert,
 )
 
@@ -80,7 +84,7 @@ def test_schedule_revert_ignores_missing_duration_or_inverse():
 
     # Duration but no inverse registered.
     unknown = Effect(
-        type="modify_trait", action="step_up", target="t",
+        type="modify_trait", action="gain", target="t",
         duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]),
     )
     assert schedule_revert(entity, unknown, repo) is False
@@ -162,3 +166,56 @@ def test_all_transpired_combine(monkeypatch):
     # final beat → all transpired.
     assert advance_events(repo, "beat") == 1
     assert fired == ["remove_targeting_ban"]
+
+
+def test_build_revert_set_captures_prior():
+    effect = Effect(type="modify_trait", action="set", target="trait-1", result="d8")
+    revert = build_revert(effect, prior_result="d6")
+    assert revert is not None
+    assert revert.type == "modify_trait"
+    assert revert.action == "set"
+    assert revert.target == "trait-1"
+    assert revert.result == "d6"  # prior value, not d8
+
+    # Without prior result it falls back to the forward result.
+    fallback = build_revert(effect)
+    assert fallback.result == "d8"
+
+
+def test_build_revert_no_inverse_returns_none():
+    assert build_revert(Effect(type="modify_trait", action="gain", target="t")) is None
+
+
+class TraitRepo:
+    def __init__(self, traitsettings):
+        self.traitsettings = list(traitsettings)
+        self.updated = []
+
+    def list_all_traitsettings(self):
+        return list(self.traitsettings)
+
+    def update_traitsetting(self, ts):
+        self.updated.append(ts.id)
+        for i, existing in enumerate(self.traitsettings):
+            if existing.id == ts.id:
+                self.traitsettings[i] = ts
+                return
+
+
+def test_advance_traitsetting_events(monkeypatch):
+    revert = Effect(type="modify_trait", action="set", target="trait-1", result="d6")
+    ts = TraitSetting(
+        id="ts-1", entity_id="kael", trait_id="trait-1", traitset_id="tset",
+        scheduled_events=[ScheduledEvent(id="se-1", effect=revert, timers=[Timer(event="beat", remaining=1)])],
+    )
+    repo = TraitRepo([ts])
+
+    fired = []
+    monkeypatch.setattr(
+        "transversal.services.effects_applier.effect_registry.apply",
+        lambda eff, eid, u, ctx: fired.append((eff.action, eid, eff.target)),
+    )
+
+    assert advance_traitsetting_events(repo, "beat") == 1
+    assert fired == [("set", "kael", "trait-1")]
+    assert ts.scheduled_events == []

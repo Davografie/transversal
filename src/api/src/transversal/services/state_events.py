@@ -107,6 +107,19 @@ def _mark_taken_out(repo, loser_id: str, opponent_id: str) -> None:
         return
     loser.taken_out = True
     repo.update_entity(loser)
+
+    # Schedule the undo: clear the status after one scene.
+    from transversal.domain import Effect, EffectTiming, Timer, TimerCombine
+    from transversal.services.scheduled_events import schedule_effect
+
+    schedule_effect(
+        loser,
+        Effect(timing=EffectTiming.IMMEDIATE, type="entity", action="clear_taken_out", target="self"),
+        [Timer(event="scene", remaining=1)],
+        TimerCombine.FIRST_TO_FIRE,
+        repo,
+    )
+
     fire_state_sfx(loser_id, loser.current_universe, "on_taken_out", {
         "taken_out": True,
         "opponent_id": opponent_id,
