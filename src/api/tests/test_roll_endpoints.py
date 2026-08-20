@@ -43,7 +43,12 @@ def test_simplified_roll_derives_highest_tier_effect(client):
 
 
 def test_difficulty_roll_returns_rolls_only(client):
-    data = _roll(client, "/difficulty-roll", [["d8", "diff"], ["d8", "diff"]])
+    # Difficulty roll is stateless — dice only, no entity_id/universe.
+    r = client.post("/api/v1/difficulty-roll", json={
+        "dice": [["d8", "diff"], ["d8", "diff"]],
+    })
+    assert r.status_code == 200, r.text
+    data = r.json()
     assert data["pipeline"] == "pool"
     assert len(data["rolls"]) == 2
     assert "hitches" not in data

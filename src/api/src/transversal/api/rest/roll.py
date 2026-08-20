@@ -13,8 +13,14 @@ game UI. Only rolling is automatic — the client drives total/effect selection:
 from types import SimpleNamespace
 
 from fastapi import APIRouter
+from pydantic import BaseModel, Field, field_validator
 
-from transversal.domain import DicePoolRequest, RollResult
+from transversal.domain import (
+    DicePoolRequest,
+    DieSpec,
+    RollResult,
+    _coerce_die_list,
+)
 from transversal.services.dice_resolver import (
     detect_hitches,
     determine_tier,
@@ -25,6 +31,17 @@ from transversal.services.dice_resolver import (
 from transversal.services.roll_orchestrator import fire_roll_sfx
 
 router = APIRouter(prefix="/api/v1", tags=["dice"])
+
+
+class DifficultyRollRequest(BaseModel):
+    """A GM difficulty roll is stateless — just the dice, no entity/hitches."""
+
+    dice: list[DieSpec] = Field(default_factory=list)
+
+    @field_validator("dice", mode="before")
+    @classmethod
+    def _coerce_dice(cls, v):
+        return _coerce_die_list(v)
 
 
 def _static_difficulty(request: DicePoolRequest):
@@ -98,7 +115,7 @@ async def simplified_roll(request: DicePoolRequest):
 
 
 @router.post("/difficulty-roll")
-async def difficulty_roll(request: DicePoolRequest):
+async def difficulty_roll(request: DifficultyRollRequest):
     """Roll GM difficulty dice (no hitches). The client picks the total."""
     rolls = roll_pool_dice(request.dice)
     return {"pipeline": "pool", "rolls": rolls}
