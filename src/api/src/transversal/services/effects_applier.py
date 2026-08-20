@@ -89,14 +89,25 @@ def _register_core_handlers(em, raz):
     effect_registry.register("relationship", "create", _commit)
 
     # Entity operations
-    effect_registry.register("create_entity", "create_asset",
-        lambda a, eid, u, ctx: em.create(
+    def _create_asset(a, eid, u, ctx):
+        created = em.create(
             name=ctx.get("name", a.target or "Created Asset"),
             entity_type="gmc" if a.target == "npc" else "asset",
             universe=u,
             location=ctx.get("location"),
             razmerit=ctx.get("razmerit", 0),
-        ))
+        )
+        from transversal.services.scheduled_events import schedule_revert
+        schedule_revert(created, a, em.repo, target=created.id, source_sfx_id=ctx.get("sfx_id"))
+        return created
+
+    def _delete_entity(a, eid, u, ctx):
+        target = a.target or ""
+        if target and target != "self":
+            em.repo.delete_entity(target)
+
+    effect_registry.register("create_entity", "create_asset", _create_asset)
+    effect_registry.register("entity", "delete_entity", _delete_entity)
 
     # Attunement (temporary effective-universe additions)
     def _attune(a, eid, u, ctx):

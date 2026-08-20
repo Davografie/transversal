@@ -333,11 +333,13 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="benefit",
         effect_type="create_entity",
         effect_action="create_asset",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE"],
+        valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="target", label="Asset Name", field_type="text",
                           required=True, default="anchor_point"),
         ],
+        supports_duration=True,
+        inverse=("entity", "delete_entity"),
     ),
 
     # ── Attunement ─────────────────────────────────────
