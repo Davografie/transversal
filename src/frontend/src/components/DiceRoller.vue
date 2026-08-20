@@ -77,6 +77,15 @@
         @cancel="clearSfxChoices"
       />
     </div>
+    <div v-if="gmMode && buyHitchChoices.length" class="sfx-choice-panel">
+      <EffectTargetWizard
+        :entity-id="buyHitchTargetId"
+        :pending-choices="buyHitchChoices"
+        title="Buy a hitch — choose a complication"
+        @resolve="resolveBuyHitch"
+        @cancel="cancelBuyHitch"
+      />
+    </div>
     <div v-if="!gmMode && difficulty != null" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
@@ -295,7 +304,12 @@
           <div v-if="!viewPoolDice.length" class="empty-pool">No dice assembled</div>
         </div>
         <div v-if="remoteView?.botch" class="botch">BOTCH</div>
-        <div v-if="remoteView?.hitches?.length" class="hitches">{{ remoteView.hitches.length }} hitch{{ remoteView.hitches.length > 1 ? 'es' : '' }}</div>
+        <div v-if="remoteView?.hitches?.length" class="hitches">
+          {{ remoteView.hitches.length }} hitch{{ remoteView.hitches.length > 1 ? 'es' : '' }}
+          <button v-if="gmMode" class="buy-hitch-btn" :disabled="buyingHitch" @click="buyHitch">
+            {{ buyingHitch ? '…' : 'Buy hitch' }}
+          </button>
+        </div>
       </div>
     </template>
   </div>
@@ -305,6 +319,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEffectApplication } from '../composables/useEffectApplication.js'
+import { useTraitsConfig } from '../composables/useTraitsConfig.js'
 import DieIcon from './DieIcon.vue'
 import ConsequenceMenu from './gm/ConsequenceMenu.vue'
 import EffectTargetWizard from './gm/EffectTargetWizard.vue'
@@ -330,7 +345,8 @@ const props = defineProps({
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
 const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
-const { resolveEffectTargets } = useEffectApplication()
+const { applyEffects, resolveEffectTargets } = useEffectApplication()
+const { allSfxs, fetchTraitsConfig } = useTraitsConfig()
 const pool = reactive([])
 const result = ref(null)
 const rollingFaces = ref([]) // [{ die, face }] animated faces during ROLLING
@@ -346,6 +362,9 @@ const difficultyPresets = [
 const panelOpen = ref(false)
 const showConsequences = ref(false)
 const consequenceSide = ref('player')
+const buyHitchChoices = ref([])
+const buyingHitch = ref(false)
+const buyHitchTargetId = ref('')
 
 // ── GM roll purpose + per-entity pool tabs ───────────
 const DIFFICULTY_TAB = '__difficulty__'
@@ -740,6 +759,35 @@ async function resolveSfxChoices(resolutions) {
 }
 function clearSfxChoices() {
   emit('sfx-choice-resolved')
+}
+
+// ── GM buy-hitch ─────────────────────────────────────
+async function buyHitch() {
+  const rollerId = activeId.value
+  if (!rollerId || rollerId === DIFFICULTY_TAB) return
+  buyHitchTargetId.value = rollerId
+  buyingHitch.value = true
+  try {
+    if (!allSfxs.value.length) await fetchTraitsConfig()
+    const sfx = allSfxs.value.find(s => s.id === 'buy-hitch')
+    if (!sfx) return
+    const result = await applyEffects(rollerId, sfx.effects || [])
+    if (result?.pendingChoices?.length) {
+      buyHitchChoices.value = result.pendingChoices
+    }
+  } finally {
+    buyingHitch.value = false
+  }
+}
+
+async function resolveBuyHitch(resolutions) {
+  await resolveEffectTargets(buyHitchTargetId.value, resolutions)
+  buyHitchChoices.value = []
+  buyHitchTargetId.value = ''
+}
+function cancelBuyHitch() {
+  buyHitchChoices.value = []
+  buyHitchTargetId.value = ''
 }
 watch(panelOpen, (v) => emit('panelOpen', v))
 
@@ -1721,6 +1769,8 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 
 .hitches { color: var(--warn); font-size: 13px; }
+.buy-hitch-btn { font-size: 10px; margin-left: 6px; padding: 2px 7px; border-radius: 4px; background: rgba(64,184,96,0.15); border: 1px solid var(--success); color: var(--success); cursor: pointer; }
+.buy-hitch-btn:disabled { opacity: 0.5; cursor: default; }
 .challenge { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 .error { color: var(--danger); font-size: 13px; }
 
