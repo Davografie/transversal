@@ -109,9 +109,11 @@ def _register_core_handlers(em, raz):
         if a.action == "enable":
             if not any(x.universe == universe and x.scope == scope for x in entity.attunements):
                 entity.attunements.append(Attunement(
-                    universe=universe, scope=scope, until=a.timing,
+                    universe=universe, scope=scope,
                     source_sfx_id=ctx.get("sfx_id"),
                 ))
+            from transversal.services.scheduled_events import schedule_revert
+            schedule_revert(entity, a, em.repo, source_sfx_id=ctx.get("sfx_id"))
         else:  # disable
             entity.attunements = [
                 x for x in entity.attunements

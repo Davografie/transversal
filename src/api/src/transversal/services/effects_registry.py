@@ -348,13 +348,15 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="benefit",
         effect_type="attune",
         effect_action="enable",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="result", label="Target Universe", field_type="select",
                           required=True, options=["three_realms", "earth"]),
             EffectFieldDef(name="target", label="Target Entity", field_type="text",
                           required=False, default="wielder"),
         ],
+        supports_duration=True,
+        inverse=("attune", "disable"),
     ),
 
     # ── Travel / Transversal ───────────────────────────
