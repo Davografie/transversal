@@ -475,3 +475,38 @@ def test_step_down_relationship_trait():
     result = apply_effects(_entity(), [effect], repo)
     assert len(result.updated_trait_settings) == 1
     assert result.updated_trait_settings[0].dice == [DieType.D6]
+
+
+def test_set_with_duration_queues_prior_value_revert():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+
+    repo = FakeRepo(traitsettings=[_ts("strength", [DieType.D6])])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="set",
+        target="strength", result="d8",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    ts = result.updated_trait_settings[0]
+    assert ts.dice == [DieType.D8]
+    assert len(ts.scheduled_events) == 1
+    se = ts.scheduled_events[0]
+    assert se.effect.type == "modify_trait"
+    assert se.effect.action == "set"
+    assert se.effect.result == "d6"  # prior value captured
+
+
+def test_step_up_with_duration_queues_step_down_revert():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+
+    repo = FakeRepo(traitsettings=[_ts("strength", [DieType.D6])])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
+        target="strength",
+        duration=EffectDuration(timers=[Timer(event="beat", remaining=3)]),
+    )
+    result = apply_effects(_entity(), [effect], repo)
+    ts = result.updated_trait_settings[0]
+    assert ts.dice == [DieType.D8]
+    assert len(ts.scheduled_events) == 1
+    assert ts.scheduled_events[0].effect.action == "step_down"

@@ -60,6 +60,32 @@ def _append(owner, event: ScheduledEvent) -> None:
     owner.scheduled_events = list(owner.scheduled_events or []) + [event]
 
 
+def queue_revert(
+    owner,
+    effect: Effect,
+    *,
+    target: Optional[str] = None,
+    prior_result: Optional[str] = None,
+    source_sfx_id: Optional[str] = None,
+) -> Optional[ScheduledEvent]:
+    """Build + append the inverse of ``effect`` to ``owner`` (no persistence).
+
+    Used by the collect-mutations path (``apply_effects``), where the caller
+    persists the mutated owner.  Returns the scheduled event, or None if the
+    effect has no duration or no inverse.
+    """
+    if not effect.duration or not effect.duration.timers:
+        return None
+    revert = build_revert(effect, prior_result=prior_result)
+    if revert is None:
+        return None
+    if target is not None:
+        revert.target = target
+    event = _new_event(revert, effect.duration.timers, effect.duration.combine, source_sfx_id)
+    _append(owner, event)
+    return event
+
+
 def schedule_revert(
     entity,
     effect: Effect,
@@ -69,15 +95,10 @@ def schedule_revert(
     prior_result: Optional[str] = None,
     source_sfx_id: Optional[str] = None,
 ) -> bool:
-    """Schedule the inverse of ``effect`` on an *entity*, if it has a duration."""
-    if not effect.duration or not effect.duration.timers:
+    """Schedule the inverse of ``effect`` on an *entity* (persists it)."""
+    event = queue_revert(entity, effect, target=target, prior_result=prior_result, source_sfx_id=source_sfx_id)
+    if event is None:
         return False
-    revert = build_revert(effect, prior_result=prior_result)
-    if revert is None:
-        return False
-    if target is not None:
-        revert.target = target
-    _append(entity, _new_event(revert, effect.duration.timers, effect.duration.combine, source_sfx_id))
     repo.update_entity(entity)
     return True
 
@@ -109,13 +130,10 @@ def schedule_traitsetting_revert(
     prior_result: Optional[str] = None,
     source_sfx_id: Optional[str] = None,
 ) -> bool:
-    """Schedule the inverse of ``effect`` on a *trait setting*, if it has a duration."""
-    if not effect.duration or not effect.duration.timers:
+    """Schedule the inverse of ``effect`` on a *trait setting* (persists it)."""
+    event = queue_revert(ts, effect, prior_result=prior_result, source_sfx_id=source_sfx_id)
+    if event is None:
         return False
-    revert = build_revert(effect, prior_result=prior_result)
-    if revert is None:
-        return False
-    _append(ts, _new_event(revert, effect.duration.timers, effect.duration.combine, source_sfx_id))
     repo.update_traitsetting(ts)
     return True
 

@@ -448,6 +448,7 @@ def _apply_step_up(entity, effect, repo, result):
     if _step_up(existing):
         result.updated_trait_settings.append(existing)
         result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
+        _queue_trait_revert(existing, effect)
     else:
         result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
 
@@ -464,6 +465,7 @@ def _apply_step_down(entity, effect, repo, result):
     if _step_down(existing):
         result.updated_trait_settings.append(existing)
         result.applied.append(AppliedEffect(effect, f"stepped down {target}", existing.id))
+        _queue_trait_revert(existing, effect)
     else:
         result.applied.append(AppliedEffect(effect, f"{target} already at d4"))
 
@@ -478,9 +480,11 @@ def _apply_set(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"no trait {target} to set"))
         return
     die = _die(effect.result)
+    prior = existing.dice[0].value if existing.dice else None
     existing.dice = [die]
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"set {target} to {die.value}", existing.id))
+    _queue_trait_revert(existing, effect, prior_result=prior)
 
 
 def _apply_gain_complication(entity, effect, repo, result):
@@ -566,6 +570,17 @@ def _apply_relationship_create(entity, effect, repo, result):
         "description": description,
     })
     result.applied.append(AppliedEffect(effect, f"relationship {rel_type} → {target}"))
+
+
+def _queue_trait_revert(ts, effect, prior_result=None):
+    """Queue the inverse of ``effect`` on a trait setting (in-memory).
+
+    The caller (``commit_effects``) persists ``ts`` via its updated-trait-settings
+    delta, so this only appends the scheduled event without persisting.
+    """
+    from transversal.services.scheduled_events import queue_revert
+
+    queue_revert(ts, effect, prior_result=prior_result)
 
 
 _MUTATION_HANDLERS = {
