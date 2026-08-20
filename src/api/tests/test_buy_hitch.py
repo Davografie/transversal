@@ -1,4 +1,4 @@
-"""Buy-hitch extra-hitch rule: die stepping + razmerit/botch handling."""
+"""Buy-hitch extra-hitch rule: d4 base + flat steps + razmerit/botch handling."""
 
 from graphql import graphql_sync
 
@@ -65,13 +65,13 @@ def _repo():
 QUERY = """
 mutation($eid: ID!, $n: Int!, $botch: Boolean!) {
   buyHitch(entityId: $eid, hitchesCount: $n, botch: $botch) {
-    applied pendingChoices { kind scope effect { type action target result targetScope negative } }
+    applied pendingChoices { kind scope effect { timing type action target result targetScope negative context } }
   }
 }
 """
 
 
-def test_buy_hitch_single_hitch_d6_and_earns():
+def test_buy_hitch_single_hitch_earns_and_bases_d4():
     repo = _repo()
     data = _run(repo, QUERY, {"eid": "char-1", "n": 1, "botch": False})
     assert "earned 1 razmerit" in data["buyHitch"]["applied"]
@@ -80,15 +80,16 @@ def test_buy_hitch_single_hitch_d6_and_earns():
     assert choice["kind"] == "trait"
     assert choice["scope"] == "traitset:ts-complications-a190"
     assert choice["effect"]["type"] == "modify_trait"
-    assert choice["effect"]["action"] == "cortex_gain"
-    assert choice["effect"]["result"] == "d6"
+    assert choice["effect"]["action"] == "gain_or_step_up"
+    assert choice["effect"]["result"] == "d4"
     assert choice["effect"]["negative"] is True
+    assert choice["effect"]["context"] == {"steps": 1}
 
 
-def test_buy_hitch_extra_hitches_step_up():
+def test_buy_hitch_extra_hitches_increase_steps():
     repo = _repo()
     data = _run(repo, QUERY, {"eid": "char-1", "n": 3, "botch": False})
-    assert data["buyHitch"]["pendingChoices"][0]["effect"]["result"] == "d10"
+    assert data["buyHitch"]["pendingChoices"][0]["effect"]["context"] == {"steps": 3}
 
 
 def test_buy_hitch_botch_is_free():
@@ -96,10 +97,4 @@ def test_buy_hitch_botch_is_free():
     data = _run(repo, QUERY, {"eid": "char-1", "n": 2, "botch": True})
     assert repo.entities["char-1"].razmerit == 0
     assert data["buyHitch"]["applied"] == []
-    assert data["buyHitch"]["pendingChoices"][0]["effect"]["result"] == "d8"
-
-
-def test_buy_hitch_caps_at_d12():
-    repo = _repo()
-    data = _run(repo, QUERY, {"eid": "char-1", "n": 10, "botch": False})
-    assert data["buyHitch"]["pendingChoices"][0]["effect"]["result"] == "d12"
+    assert data["buyHitch"]["pendingChoices"][0]["effect"]["context"] == {"steps": 2}

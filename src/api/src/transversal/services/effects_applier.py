@@ -282,40 +282,64 @@ def _step_up(ts: TraitSetting) -> bool:
     return True
 
 
-def _step_down(ts: TraitSetting) -> bool:
-    """Step down the smallest die, floored at d4. Returns False if at floor/empty."""
+def _step_down_one(ts: TraitSetting) -> str:
+    """Step down the smallest die. Returns ``"stepped" | "removed" | "empty"``.
+
+    A d4 die steps down to an empty rating ("a 4 goes away"), so the trait is
+    removed rather than floored at d4.
+    """
     if not ts.dice:
-        return False
+        return "empty"
     smallest = min(ts.dice, key=lambda d: d.max_value)
     if smallest == DieType.D4:
-        return False
+        return "removed"
     ts.dice[ts.dice.index(smallest)] = smallest.step_down()
-    return True
+    return "stepped"
 
 
-def _step_up_trait(entity: Entity, ts: TraitSetting, target: str, effect: Effect, result) -> bool:
-    """Step up a trait setting; a d12 complication instead takes the entity out.
+def _steps(effect: Effect) -> int:
+    """Read the optional step magnitude from an effect's context (default 1)."""
+    raw = (effect.context or {}).get("steps")
+    try:
+        return max(int(raw), 1)
+    except (TypeError, ValueError):
+        return 1
 
-    Returns True when the step succeeded (caller persists + reverts). On a
-    failed step it appends the appropriate AppliedEffect (already-at-d12, or
-    taken-out for complications) and returns False.
+
+def _has_steps(effect: Effect) -> bool:
+    """True when ``steps`` was explicitly provided in the effect's context."""
+    return "steps" in (effect.context or {})
+
+
+def _step_up_trait(entity: Entity, ts: TraitSetting, target: str, effect: Effect, result, steps: int = 1) -> bool:
+    """Step up a trait setting up to ``steps`` times.
+
+    Returns True when the rating changed (caller persists + reverts). A negative
+    trait pushed beyond d12 takes the entity out (once) and leaves the trait at
+    d12.
     """
-    if _step_up(ts):
-        return True
-    if ts.negative:
-        entity.taken_out = True
-        result.applied.append(AppliedEffect(effect, f"{target} stepped beyond d12 — taken out"))
-        from transversal.domain import Effect as _Effect, EffectTiming as _ET, Timer as _Timer, TimerCombine as _TC
-        from transversal.services.scheduled_events import queue_event
-        queue_event(
-            entity,
-            _Effect(timing=_ET.IMMEDIATE, type="entity", action="clear_taken_out", target="self"),
-            [_Timer(event="scene", remaining=1)],
-            _TC.FIRST_TO_FIRE,
-        )
-    else:
-        result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
-    return False
+    applied = 0
+    for _ in range(steps):
+        if _step_up(ts):
+            applied += 1
+        else:
+            break  # empty dice or already at d12
+
+    if applied < steps:
+        if ts.negative:
+            entity.taken_out = True
+            result.applied.append(AppliedEffect(effect, f"{target} stepped beyond d12 — taken out"))
+            from transversal.domain import Effect as _Effect, EffectTiming as _ET, Timer as _Timer, TimerCombine as _TC
+            from transversal.services.scheduled_events import queue_event
+            queue_event(
+                entity,
+                _Effect(timing=_ET.IMMEDIATE, type="entity", action="clear_taken_out", target="self"),
+                [_Timer(event="scene", remaining=1)],
+                _TC.FIRST_TO_FIRE,
+            )
+        elif applied == 0:
+            result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
+    return applied > 0
 
 
 def _die(result: Optional[str]) -> DieType:
@@ -458,21 +482,31 @@ def _apply_gain(entity, effect, repo, result):
 
 
 def _apply_gain_or_step_up(entity, effect, repo, result):
+    """Create at ``result`` if absent, then step up; or step up an existing trait.
+
+    Without an explicit ``steps`` this preserves the historical behavior (create
+    at ``result``, or step up once). With ``steps`` set, both paths step up that
+    many times — ``result`` is then the base die (e.g. d4 + ``steps``).
+    """
     target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
         return
     owner = _trait_owner(entity, effect, repo)
     existing = _find_traitsetting(owner, repo, target)
+    steps = _steps(effect)
     if existing:
-        if _step_up_trait(entity, existing, target, effect, result):
+        if _step_up_trait(entity, existing, target, effect, result, steps=steps):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
             _queue_explicit(existing, effect, "step_down", target)
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
+    if _has_steps(effect):
+        _step_up_trait(entity, ts, target, effect, result, steps=steps)
     result.new_trait_settings.append(ts)
-    result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
+    final_die = ts.dice[0] if ts.dice else die
+    result.applied.append(AppliedEffect(effect, f"gained {target} at {final_die.value}", ts.id))
     _queue_explicit(entity, effect, "remove", target)
 
 
@@ -522,7 +556,7 @@ def _apply_step_up(entity, effect, repo, result):
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step up"))
         return
-    if _step_up_trait(entity, existing, target, effect, result):
+    if _step_up_trait(entity, existing, target, effect, result, steps=_steps(effect)):
         result.updated_trait_settings.append(existing)
         result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         _queue_trait_revert(existing, effect)
@@ -537,12 +571,19 @@ def _apply_step_down(entity, effect, repo, result):
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step down"))
         return
-    if _step_down(existing):
-        result.updated_trait_settings.append(existing)
-        result.applied.append(AppliedEffect(effect, f"stepped down {target}", existing.id))
-        _queue_trait_revert(existing, effect)
-    else:
-        result.applied.append(AppliedEffect(effect, f"{target} already at d4"))
+    for _ in range(_steps(effect)):
+        status = _step_down_one(existing)
+        if status == "stepped":
+            continue
+        if status == "removed":
+            result.removed_trait_settings.append(existing)
+            result.applied.append(AppliedEffect(effect, f"removed {target} (empty rating)", existing.id))
+            return
+        result.applied.append(AppliedEffect(effect, f"{target} has no dice to step down"))
+        return
+    result.updated_trait_settings.append(existing)
+    result.applied.append(AppliedEffect(effect, f"stepped down {target}", existing.id))
+    _queue_trait_revert(existing, effect)
 
 
 def _apply_set(entity, effect, repo, result):

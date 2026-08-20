@@ -152,12 +152,33 @@ def test_step_up_steps_smallest_die():
     assert result.updated_trait_settings[0].dice == [DieType.D8, DieType.D8]
 
 
-def test_step_down_floors_at_d4():
+def test_step_down_removes_at_d4():
     repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D4])])
     entity = _entity()
     result = apply_effects(entity, [_effect("modify_trait", "step_down", "pool")], repo)
     assert len(result.updated_trait_settings) == 0
-    assert result.applied[0].summary == "pool already at d4"
+    assert len(result.removed_trait_settings) == 1
+    assert result.applied[0].summary == "removed pool (empty rating)"
+
+
+def test_step_up_multiple_steps():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
+                    target="pool", context={"steps": 2})
+    result = apply_effects(entity, [effect], repo)
+    assert result.updated_trait_settings[0].dice == [DieType.D10]
+
+
+def test_step_down_multiple_steps_removes():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+                    target="pool", context={"steps": 2})
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.updated_trait_settings) == 0
+    assert len(result.removed_trait_settings) == 1
+    assert result.applied[0].summary == "removed pool (empty rating)"
 
 
 def test_set_overrides_dice():
@@ -201,6 +222,27 @@ def test_gain_or_step_up_negative_steps_up_when_present():
     assert len(result.new_trait_settings) == 0
     assert len(result.updated_trait_settings) == 1
     assert result.updated_trait_settings[0].dice == [DieType.D6]
+
+
+def test_gain_or_step_up_with_steps_creates_base_plus_steps():
+    repo = FakeRepo(traits=[FakeTrait("scar", "ts-complications")])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+                    target="scar", result="d4", negative=True, context={"steps": 2})
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_trait_settings) == 1
+    assert result.new_trait_settings[0].dice == [DieType.D8]
+
+
+def test_gain_or_step_up_with_steps_steps_up_existing():
+    repo = FakeRepo(traitsettings=[_ts("scar", [DieType.D6], traitset_id="ts-complications", negative=True)])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+                    target="scar", result="d4", negative=True, context={"steps": 2})
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_trait_settings) == 0
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D10]
 
 
 # ── Razmerit ─────────────────────────────────────────
