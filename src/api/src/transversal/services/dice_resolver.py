@@ -54,6 +54,65 @@ def _is_botch(rolls: list[DieRoll]) -> bool:
     return len(rolls) > 0 and all(r.result == 1 for r in rolls)
 
 
+# ── Decomposed resolution callables (P2.10d G5) ──────
+#
+# The only step that should be automatic is rolling. Everything else — hitch
+# detection, total selection, effect-die selection, comparison — is exposed as
+# a pure callable so the MCP (and the client) can drive resolution step by
+# step instead of relying on the monolithic ``resolve()``.
+
+
+def roll_dice(specs: list[DieSpec]) -> list[DieRoll]:
+    """Roll every die in a pool, returning one ``DieRoll`` per die."""
+    return [_roll_die(spec) for spec in specs]
+
+
+def detect_hitches(rolls: list[DieRoll]) -> list[DieRoll]:
+    """Return the dice that rolled a 1 (hitches)."""
+    return [r for r in rolls if r.result == 1]
+
+
+def is_botch(rolls: list[DieRoll]) -> bool:
+    """A botch occurs when every die rolled a 1."""
+    return _is_botch(rolls)
+
+
+def pick_total(rolls: list[DieRoll], indices: list[int]) -> int:
+    """Sum the results of the dice at ``indices`` (the chosen total)."""
+    return sum(rolls[i].result for i in indices)
+
+
+def pick_effect_die(
+    rolls: list[DieRoll],
+    total_indices: list[int],
+    hitches_apply: bool = True,
+) -> Optional[DieRoll]:
+    """Choose the effect die from dice not used in the total.
+
+    Prefers the largest die type among eligible leftovers; hitches are
+    ineligible. Ties in die type prefer the higher rolled result (matching the
+    auto-resolve ordering). Returns the chosen roll, or ``None`` when nothing
+    remains — callers fall back to ``d4``.
+    """
+    used = set(total_indices)
+    candidates = [r for i, r in enumerate(rolls) if i not in used]
+    if hitches_apply:
+        candidates = [r for r in candidates if r.result != 1]
+    if not candidates:
+        return None
+    candidates = sorted(candidates, key=lambda r: r.result, reverse=True)
+    return max(candidates, key=lambda r: r.die.max_value)
+
+
+def compare_totals(player_total: int, opponent_total: int) -> ContestWinner:
+    """Higher total wins a contest; a tie favors the challenger (PLAYER)."""
+    if player_total > opponent_total:
+        return ContestWinner.PLAYER
+    if opponent_total > player_total:
+        return ContestWinner.OPPONENT
+    return ContestWinner.PLAYER
+
+
 def _resolve_challenge(
     effect_die: Optional[DieType],
     challenge_die: DieType,
@@ -106,11 +165,11 @@ def _resolve_challenge(
 
 def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
     """Resolve a simplified pipeline roll (1-2 dice)."""
-    rolls = [_roll_die(spec) for spec in request.dice]
+    rolls = roll_dice(request.dice)
     highest = max(r.result for r in rolls)
     tier = _determine_tier(highest)
-    hitches = [r for r in rolls if r.result == 1] if request.hitches_apply else []
-    botch = _is_botch(rolls) if request.hitches_apply else False
+    hitches = detect_hitches(rolls) if request.hitches_apply else []
+    botch = is_botch(rolls) if request.hitches_apply else False
     razmerit_earned = len(hitches)  # 1 razmerit per hitch
 
     # Opposition roll (GMC, challenge, or static difficulty)
@@ -176,29 +235,22 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
 
 def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     """Resolve a dice pool pipeline roll (3+ dice, Cortex Prime)."""
-    rolls = [_roll_die(spec) for spec in request.dice]
-    hitches = [r for r in rolls if r.result == 1] if request.hitches_apply else []
-    botch = _is_botch(rolls) if request.hitches_apply else False
+    rolls = roll_dice(request.dice)
+    hitches = detect_hitches(rolls) if request.hitches_apply else []
+    botch = is_botch(rolls) if request.hitches_apply else False
     razmerit_earned = len(hitches)
 
-    # Sort by result descending; keep two highest
-    sorted_rolls = sorted(rolls, key=lambda r: r.result, reverse=True)
-    kept = sorted_rolls[:2]
-    total = sum(r.result for r in kept)
-    unused = sorted_rolls[2:]
+    # Keep the two highest dice for the total; the rest stay unused.
+    order = sorted(range(len(rolls)), key=lambda i: rolls[i].result, reverse=True)
+    kept_indices = order[:2]
+    kept = [rolls[i] for i in kept_indices]
+    total = pick_total(rolls, kept_indices)
+    unused = [rolls[i] for i in order[2:]]
 
-    # Effect die: choose from unused dice, preferring the largest die type.
-    # Hitches (rolled 1s) can never be used as the effect die.
-    effect_candidates = unused
-    if request.hitches_apply:
-        effect_candidates = [r for r in unused if r.result != 1]
-    if effect_candidates:
-        effect_roll = max(effect_candidates, key=lambda r: r.die.max_value)
-        effect_die = effect_roll.die
-        effect_die_value = effect_roll.result
-    else:
-        effect_die = DieType.D4  # default
-        effect_die_value = None
+    # Effect die: choose from unused dice via the shared callable.
+    effect_roll = pick_effect_die(rolls, kept_indices, request.hitches_apply)
+    effect_die = effect_roll.die if effect_roll else DieType.D4
+    effect_die_value = effect_roll.result if effect_roll else None
 
     # Opposition
     opposition_rolls: list[DieRoll] = []
@@ -310,12 +362,7 @@ def _resolve_contest_winner_pool(
 
     Higher total wins. Tie goes to the challenger (initiator).
     """
-    if player_total > opponent_total:
-        return ContestWinner.PLAYER
-    elif opponent_total > player_total:
-        return ContestWinner.OPPONENT
-    else:
-        return ContestWinner.PLAYER  # tie favors the initiator
+    return compare_totals(player_total, opponent_total)
 
 
 def resolve_contest(

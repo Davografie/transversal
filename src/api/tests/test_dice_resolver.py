@@ -21,8 +21,14 @@ from transversal.services.dice_resolver import (
     _is_botch,
     _resolve_challenge,
     compare_committed,
+    compare_totals,
+    detect_hitches,
+    is_botch,
+    pick_effect_die,
+    pick_total,
     resolve,
     resolve_contest,
+    roll_dice,
 )
 
 
@@ -485,3 +491,66 @@ class TestStructuredDieSource:
         assert hacking.ts_id == "ts-hacking"
         assert hacking.die == DieType.D10
         assert isinstance(hacking.result, int)
+
+
+class TestDecomposedCallables:
+    """The P2.10d G5 granular callables drive resolution step by step."""
+
+    @staticmethod
+    def _r(die, result):
+        return DieRoll(die=die, result=result)
+
+    def test_roll_dice_returns_one_roll_per_spec(self):
+        specs = [
+            DieSpec(die=DieType.D8, label="a"),
+            DieSpec(die=DieType.D6, label="b"),
+        ]
+        rolls = roll_dice(specs)
+        assert len(rolls) == 2
+        for r in rolls:
+            assert 1 <= r.result <= r.die.max_value
+
+    def test_detect_hitches(self):
+        rolls = [self._r(DieType.D8, 1), self._r(DieType.D6, 5), self._r(DieType.D4, 1)]
+        hitches = detect_hitches(rolls)
+        assert len(hitches) == 2
+        assert all(r.result == 1 for r in hitches)
+
+    def test_is_botch(self):
+        assert is_botch([self._r(DieType.D8, 1), self._r(DieType.D6, 1)])
+        assert not is_botch([self._r(DieType.D8, 1), self._r(DieType.D6, 5)])
+        assert not is_botch([])
+
+    def test_pick_total(self):
+        rolls = [self._r(DieType.D8, 5), self._r(DieType.D6, 3), self._r(DieType.D8, 8)]
+        assert pick_total(rolls, [0, 2]) == 13
+
+    def test_pick_effect_die_prefers_largest_type(self):
+        rolls = [
+            self._r(DieType.D8, 6),   # kept in total
+            self._r(DieType.D8, 5),   # kept in total
+            self._r(DieType.D6, 6),   # leftover d6
+            self._r(DieType.D8, 2),   # leftover d8
+        ]
+        effect = pick_effect_die(rolls, [0, 1])
+        assert effect.die == DieType.D8
+        assert effect.result == 2
+
+    def test_pick_effect_die_excludes_hitches(self):
+        rolls = [
+            self._r(DieType.D8, 6),
+            self._r(DieType.D8, 5),
+            self._r(DieType.D8, 1),   # leftover hitch (ineligible)
+            self._r(DieType.D6, 4),   # leftover d6
+        ]
+        effect = pick_effect_die(rolls, [0, 1])
+        assert effect.die == DieType.D6
+
+    def test_pick_effect_die_none_when_no_leftovers(self):
+        rolls = [self._r(DieType.D8, 6), self._r(DieType.D8, 5)]
+        assert pick_effect_die(rolls, [0, 1]) is None
+
+    def test_compare_totals(self):
+        assert compare_totals(15, 12) == ContestWinner.PLAYER
+        assert compare_totals(10, 14) == ContestWinner.OPPONENT
+        assert compare_totals(13, 13) == ContestWinner.PLAYER  # tie → initiator
