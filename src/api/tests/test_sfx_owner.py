@@ -265,3 +265,72 @@ def test_remove_legacy_contest_complication_sfx_is_idempotent():
     remove_legacy_contest_complication_sfx(repo)
     assert "sfx-contest-loss-complication" not in repo.sfxs
     assert "sfx-contest-loss-complication" not in repo.owners["table"].sfx_ids
+
+
+class DispatchRepo:
+    """In-memory double for the owner-index + add/remove dispatcher.
+
+    Each owner type maps to a SimpleNamespace with the attribute the dispatcher
+    reads/writes (``sfx_ids`` everywhere except trait, which uses
+    ``default_sfx_ids``).
+    """
+
+    def __init__(self):
+        self.owners = {}
+        self.entities = {}
+        self.projections = {}
+        self.traits = {}
+        self.traitsettings = {}
+        self.traitsetsettings = {}
+
+    def get_sfx_owner(self, oid): return self.owners.get(oid)
+    def update_sfx_owner(self, o): self.owners[o.id] = o
+    def get_entity(self, eid): return self.entities.get(eid)
+    def update_entity(self, e): self.entities[e.id] = e
+    def get_projection(self, pid): return self.projections.get(pid)
+    def update_projection(self, p): self.projections[p.id] = p
+    def get_trait(self, tid): return self.traits.get(tid)
+    def update_trait(self, t): self.traits[t.id] = t
+    def get_traitsetting(self, sid): return self.traitsettings.get(sid)
+    def update_traitsetting(self, s): self.traitsettings[s.id] = s
+    def get_traitsetsetting(self, sid): return self.traitsetsettings.get(sid)
+    def update_traitsetsetting(self, s): self.traitsetsettings[s.id] = s
+
+
+def test_add_remove_dispatcher_across_surfaces():
+    from transversal.services.sfx_owner import add_sfx_to_owner, remove_sfx_from_owner
+
+    repo = DispatchRepo()
+    repo.owners["table"] = SimpleNamespace(id="table", sfx_ids=[])
+    repo.entities["char-1"] = SimpleNamespace(id="char-1", sfx_ids=[])
+    repo.projections["proj-1"] = SimpleNamespace(id="proj-1", sfx_ids=[])
+    repo.traits["trait-1"] = SimpleNamespace(id="trait-1", default_sfx_ids=[])
+    repo.traitsettings["ts-1"] = SimpleNamespace(id="ts-1", sfx_ids=[])
+    repo.traitsetsettings["tss-1"] = SimpleNamespace(id="tss-1", sfx_ids=[])
+
+    for owner_type, owner_id in [
+        ("table", "table"),
+        ("entity", "char-1"),
+        ("projection", "proj-1"),
+        ("trait", "trait-1"),
+        ("trait_instance", "ts-1"),
+        ("trait_set", "tss-1"),
+    ]:
+        assert add_sfx_to_owner(repo, owner_type, owner_id, "sfx-x") is True
+
+    assert repo.owners["table"].sfx_ids == ["sfx-x"]
+    assert repo.entities["char-1"].sfx_ids == ["sfx-x"]
+    assert repo.projections["proj-1"].sfx_ids == ["sfx-x"]
+    assert repo.traits["trait-1"].default_sfx_ids == ["sfx-x"]
+    assert repo.traitsettings["ts-1"].sfx_ids == ["sfx-x"]
+    assert repo.traitsetsettings["tss-1"].sfx_ids == ["sfx-x"]
+
+    # Idempotent add + remove.
+    assert add_sfx_to_owner(repo, "entity", "char-1", "sfx-x") is True
+    assert repo.entities["char-1"].sfx_ids == ["sfx-x"]
+    assert remove_sfx_from_owner(repo, "entity", "char-1", "sfx-x") is True
+    assert repo.entities["char-1"].sfx_ids == []
+
+    # Missing owner returns False without error.
+    assert add_sfx_to_owner(repo, "entity", "ghost", "sfx-x") is False
+    assert remove_sfx_from_owner(repo, "entity", "ghost", "sfx-x") is False
