@@ -46,6 +46,7 @@ class EffectActionMeta:
     implicit_timing: str | None = None   # if only one valid timing, hide field
     requires_choice: bool = False        # target must be resolved at runtime
     target_kind: str | None = None       # trait | entity | life_path | ...
+    supports_duration: bool = False      # UI shows a duration/timers builder
 
 
 # Reusable context-field definition: trait-modifying effects may target a
@@ -539,6 +540,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target Entity", field_type="text", required=False),
         ],
         target_kind="entity",
+        supports_duration=True,
     ),
 ]
 

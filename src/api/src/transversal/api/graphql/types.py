@@ -16,6 +16,7 @@ from transversal.domain import (
     OutcomeTier as DomainOutcomeTier,
     RollTableScheme as DomainRollTableScheme,
     RollSource as DomainRollSource,
+    TimerCombine as DomainTimerCombine,
     DiscoveryBlock,
     LifePath,
 )
@@ -34,6 +35,7 @@ OutcomeTier = strawberry.enum(DomainOutcomeTier)
 RollTableScheme = strawberry.enum(DomainRollTableScheme)
 RollSource = strawberry.enum(DomainRollSource)
 ConditionType = strawberry.enum(DomainConditionType)
+TimerCombineGql = strawberry.enum(DomainTimerCombine)
 
 
 # ── Conditions ────────────────────────────────────────
@@ -142,6 +144,30 @@ class TraitSetRef:
 # ── SFX Registry ──────────────────────────────────────
 
 @strawberry.type
+class Timer:
+    event: str = "scene"
+    remaining: int = 0
+
+
+@strawberry.input
+class TimerInput:
+    event: str = "scene"
+    remaining: int = 0
+
+
+@strawberry.type
+class EffectDuration:
+    timers: list[Timer] = strawberry.field(default_factory=list)
+    combine: TimerCombineGql = TimerCombineGql.FIRST_TO_FIRE
+
+
+@strawberry.input
+class EffectDurationInput:
+    timers: list[TimerInput] = strawberry.field(default_factory=list)
+    combine: TimerCombineGql = TimerCombineGql.FIRST_TO_FIRE
+
+
+@strawberry.type
 class Effect:
     """A single operational effect — shared by SFX and life-path consequences."""
     timing: EffectTimingEnum
@@ -151,6 +177,7 @@ class Effect:
     result: Optional[str] = None
     target_scope: Optional[str] = None
     context: Optional[strawberry.scalars.JSON] = None
+    duration: Optional[EffectDuration] = None
 
 
 @strawberry.input
@@ -162,6 +189,7 @@ class EffectInput:
     result: Optional[str] = None
     target_scope: Optional[str] = None
     context: Optional[strawberry.scalars.JSON] = None
+    duration: Optional[EffectDurationInput] = None
 
 
 @strawberry.type
@@ -363,6 +391,7 @@ class EffectActionMeta:
     valid_timings: list[str]
     fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
     context_fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
+    supports_duration: bool = False
     implicit_target: Optional[str] = None
     implicit_result: Optional[str] = None
     implicit_timing: Optional[str] = None

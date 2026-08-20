@@ -141,6 +141,10 @@ class SetupRepo:
         self.sfxs[sfx.id] = sfx
         return sfx
 
+    def update_sfx(self, sfx):
+        self.sfxs[sfx.id] = sfx
+        return sfx
+
     def delete_sfx(self, sfx_id):
         if sfx_id in self.sfxs:
             del self.sfxs[sfx_id]
@@ -196,6 +200,24 @@ def test_ensure_targeting_ban_sfx_creates_once():
     assert sfx.effects[0].duration.timers == [Timer(event="scene", remaining=1)]
     ensure_targeting_ban_sfx(repo)
     assert len(repo.sfxs) == 1
+
+
+def test_ensure_targeting_ban_sfx_migrates_legacy_result():
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.sfx_owner import ensure_targeting_ban_sfx
+
+    repo = SetupRepo()
+    repo.sfxs["sfx-give-in-targeting-ban"] = SFX(
+        id="sfx-give-in-targeting-ban",
+        name="Give In — Keep Your Distance",
+        trigger="on_give_in",
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="entity", action="targeting_ban", target="", result="1")],
+    )
+    ensure_targeting_ban_sfx(repo)
+    sfx = repo.sfxs["sfx-give-in-targeting-ban"]
+    assert sfx.effects[0].result is None
+    assert sfx.effects[0].duration is not None
+    assert sfx.effects[0].duration.timers == [Timer(event="scene", remaining=1)]
 
 
 def test_ensure_sfx_owners_table_defaults():

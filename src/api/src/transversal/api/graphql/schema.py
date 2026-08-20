@@ -41,6 +41,10 @@ from transversal.api.graphql.types import (
     RazmeritResult,
     SendMessageInput,
     Effect as GqlEffect,
+    EffectDuration as GqlEffectDuration,
+    EffectDurationInput,
+    Timer as GqlTimer,
+    TimerInput,
     SfxInput,
     SfxRef,
     SfxOwnerKindGql,
@@ -73,6 +77,8 @@ from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import Condition as DomainCondition
 from transversal.domain import ConditionType as DomainConditionType
 from transversal.domain import Effect as DomainEffect
+from transversal.domain import EffectDuration as DomainEffectDuration
+from transversal.domain import Timer as DomainTimer
 from transversal.domain import ConsequenceOption as DomainConsequenceOption
 from transversal.domain import RollTable as DomainRollTable
 from transversal.domain import RollTableEntry as DomainRollTableEntry
@@ -146,11 +152,30 @@ def _message_to_gql(m: "Message", repo) -> Message:
     )
 
 
+def _duration_to_gql(d) -> Optional[GqlEffectDuration]:
+    if d is None:
+        return None
+    return GqlEffectDuration(
+        timers=[GqlTimer(event=t.event, remaining=t.remaining) for t in d.timers],
+        combine=d.combine,
+    )
+
+
+def _duration_input_to_domain(d) -> Optional[DomainEffectDuration]:
+    if d is None:
+        return None
+    return DomainEffectDuration(
+        timers=[DomainTimer(event=t.event, remaining=t.remaining) for t in d.timers],
+        combine=d.combine,
+    )
+
+
 def _effect_to_gql(e: DomainEffect) -> GqlEffect:
     return GqlEffect(
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, result=e.result, target_scope=e.target_scope,
         context=e.context,
+        duration=_duration_to_gql(e.duration),
     )
 
 
@@ -192,6 +217,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, result=e.result, target_scope=e.target_scope,
         context=e.context or {},
+        duration=_duration_input_to_domain(e.duration),
     )
 
 
@@ -392,7 +418,7 @@ class Query:
                 fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.fields],
                 context_fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.context_fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
-                requires_choice=m.requires_choice, target_kind=m.target_kind,
+                requires_choice=m.requires_choice, target_kind=m.target_kind, supports_duration=m.supports_duration,
             ) for m in EFFECT_ACTION_REGISTRY
         ]
 
@@ -929,6 +955,7 @@ class Mutation:
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
                     context=e.context,
+                    duration=_duration_input_to_domain(e.duration),
                 )
                 for e in input.effects
             ],
@@ -982,6 +1009,7 @@ class Mutation:
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
                     context=e.context,
+                    duration=_duration_input_to_domain(e.duration),
                 )
                 for e in input.effects
             ]

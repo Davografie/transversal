@@ -73,26 +73,40 @@ def ensure_give_in_sfx(repo) -> None:
 
 
 def ensure_targeting_ban_sfx(repo) -> None:
-    """Create the give-in targeting-ban SFX if missing. Idempotent."""
+    """Create/migrate the give-in targeting-ban SFX. Idempotent.
+
+    The ban is applied immediately and its inverse (``remove_targeting_ban``) is
+    scheduled to fire after one scene via the unified duration model.  Migrates
+    the legacy seed (``result="1"``) to the ``duration`` shape in place.
+    """
     from transversal.domain import Effect, EffectDuration, EffectTiming, SFX, Timer
 
-    if repo.get_sfx("sfx-give-in-targeting-ban") is not None:
+    desired = Effect(
+        timing=EffectTiming.IMMEDIATE,
+        type="entity",
+        action="targeting_ban",
+        target="",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]),
+    )
+
+    existing = repo.get_sfx("sfx-give-in-targeting-ban")
+    if existing is None:
+        repo.create_sfx(SFX(
+            id="sfx-give-in-targeting-ban",
+            name="Give In — Keep Your Distance",
+            description="When you give in, you can't target that opponent for the rest of the scene",
+            trigger="on_give_in",
+            effects=[desired],
+        ))
         return
-    repo.create_sfx(SFX(
-        id="sfx-give-in-targeting-ban",
-        name="Give In — Keep Your Distance",
-        description="When you give in, you can't target that opponent for the rest of the scene",
-        trigger="on_give_in",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="entity",
-                action="targeting_ban",
-                target="",
-                duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]),
-            ),
-        ],
-    ))
+
+    changed = False
+    for i, eff in enumerate(existing.effects):
+        if eff.type == "entity" and eff.action == "targeting_ban" and eff.duration is None:
+            existing.effects[i] = desired
+            changed = True
+    if changed:
+        repo.update_sfx(existing)
 
 
 def ensure_contest_complication_sfx(repo) -> None:
