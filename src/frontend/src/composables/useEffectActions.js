@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 
-const EFFECT_ACTIONS_QUERY = `{ effectActions { actionId label description category effectType effectAction validTimings fields { name label fieldType required default options } contextFields { name label fieldType required default options } implicitTarget implicitResult implicitTiming targetKind requiresChoice } }`
+const EFFECT_ACTIONS_QUERY = `{ effectActions { actionId label description category effectType effectAction validTimings fields { name label fieldType required default options } contextFields { name label fieldType required default options } implicitTarget implicitResult implicitTiming targetKind requiresChoice supportsDuration } }`
 
 // Module-level cache so multiple panels share one fetch.
 const cache = ref([])

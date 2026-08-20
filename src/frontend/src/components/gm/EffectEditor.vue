@@ -93,6 +93,10 @@
           <label>Other context (JSON)</label>
           <textarea v-model="newEffect.extraContext" rows="2" placeholder='{"key": "value"}'></textarea>
         </div>
+        <div v-if="selectedAction.supportsDuration" class="ee-field">
+          <label>Duration</label>
+          <DurationBuilder v-model="newEffect.duration" />
+        </div>
         <button class="ee-save" @click="commitEffect">{{ editingIndex !== null ? 'Update' : 'Add' }}</button>
       </template>
     </div>
@@ -104,6 +108,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmTraitPicker from './GmTraitPicker.vue'
 import GmRollTablePicker from './GmRollTablePicker.vue'
+import DurationBuilder from './DurationBuilder.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -121,7 +126,7 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', targetMode: 'literal', scope: '' })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '' })
 
 onMounted(() => { load() })
 
@@ -162,6 +167,7 @@ function onActionChange() {
   newEffect.fields = {}
   newEffect.context = {}
   newEffect.extraContext = ''
+  newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
   const meta = selectedAction.value
@@ -207,6 +213,12 @@ function buildEffect(meta) {
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
     context: { ...cleanContext(newEffect.context), ...parseContext(newEffect.extraContext) },
+    duration: (meta.supportsDuration && (newEffect.duration?.timers || []).length)
+      ? {
+          timers: newEffect.duration.timers.map(t => ({ event: t.event || 'scene', remaining: Number(t.remaining) || 0 })),
+          combine: newEffect.duration.combine || 'FIRST_TO_FIRE',
+        }
+      : null,
   }
 }
 
@@ -255,6 +267,12 @@ function editEffect(i) {
   }
   newEffect.context = knownCtx
   newEffect.extraContext = Object.keys(extraCtx).length ? JSON.stringify(extraCtx) : ''
+  newEffect.duration = eff.duration
+    ? {
+        timers: (eff.duration.timers || []).map(t => ({ event: t.event || 'scene', remaining: t.remaining ?? 0 })),
+        combine: eff.duration.combine || 'FIRST_TO_FIRE',
+      }
+    : { timers: [], combine: 'FIRST_TO_FIRE' }
 }
 
 function closeEditor() {
@@ -265,6 +283,7 @@ function closeEditor() {
   newEffect.timing = 'IMMEDIATE'
   newEffect.context = {}
   newEffect.extraContext = ''
+  newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
 }
