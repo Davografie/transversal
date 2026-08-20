@@ -239,6 +239,10 @@ def test_ensure_prevent_taken_out_sfx_creates_once():
     assert sfx.effects[0].type == "transfer_razmerit"
     assert sfx.effects[0].action == "spend"
     assert sfx.effects[0].result == "1"
+    assert sfx.effects[1].type == "modify_trait"
+    assert sfx.effects[1].action == "gain_complication"
+    assert sfx.effects[1].target == "{choose_trait}"
+    assert sfx.effects[1].result == "{effect_die}"
     ensure_prevent_taken_out_sfx(repo)
     assert len(repo.sfxs) == 1
 

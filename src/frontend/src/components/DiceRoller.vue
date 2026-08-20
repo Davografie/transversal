@@ -693,7 +693,7 @@ async function doGiveIn() {
 async function doPreventTakenOut() {
   if (!props.locationId) return
   contestError.value = ''
-  const res = await apiPreventTakenOut(props.locationId, editingEntityId.value)
+  const res = await apiPreventTakenOut(props.locationId, editingEntityId.value, contestResult.value?.effect_die)
   if (res && res.prevented) {
     contestResult.value = { ...contestResult.value, taken_out: false }
     contestNotice.value = 'You prevented being taken out'

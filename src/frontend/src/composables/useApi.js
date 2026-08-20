@@ -247,9 +247,13 @@ export function useApi() {
     } catch (e) { console.error('[API] giveIn', e.message); return null }
   }
 
-  async function preventTakenOut(locationId, entityId) {
+  async function preventTakenOut(locationId, entityId, effectDie = null) {
     try {
-      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/prevent-taken-out`, { method: 'POST' })
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/prevent-taken-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ effect_die: effectDie }),
+      })
       if (!r.ok) throw new Error(await r.text())
       return await r.json()
     } catch (e) { console.error('[API] preventTakenOut', e.message); return null }

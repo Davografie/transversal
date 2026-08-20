@@ -153,6 +153,14 @@ def ensure_prevent_taken_out_sfx(repo) -> None:
                 target="self",
                 result="1",
             ),
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="modify_trait",
+                action="gain_complication",
+                target="{choose_trait}",
+                target_scope="traitset:ts-complications",
+                result="{effect_die}",
+            ),
         ],
     ))
 

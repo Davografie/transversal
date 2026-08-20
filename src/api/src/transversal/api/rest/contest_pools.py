@@ -36,6 +36,10 @@ class SetRequest(BaseModel):
     pipeline: str = "pool"
 
 
+class PreventTakenOutRequest(BaseModel):
+    effect_die: Optional[str] = None
+
+
 def _broadcast(event: str, location_id: str, entity_id: str, data: dict) -> None:
     """Publish a contest SSE event to all active sessions."""
     from transversal.api.sse.bus import StreamEvent, event_bus
@@ -208,11 +212,11 @@ async def give_in(location_id: str, entity_id: str):
 
 
 @router.post("/{location_id}/pools/{entity_id}/prevent-taken-out")
-async def prevent_taken_out(location_id: str, entity_id: str):
+async def prevent_taken_out(location_id: str, entity_id: str, req: PreventTakenOutRequest):
     """Prevent a pending high-stakes takeout by spending 1 razmerit."""
     from transversal.services.state_events import prevent_taken_out as _prevent
 
-    result = _prevent(entity_id)
+    result = _prevent(entity_id, effect_die=req.effect_die)
     if result.get("prevented"):
         _broadcast("contest_prevent_taken_out", location_id, entity_id, {"entity_id": entity_id})
     return result

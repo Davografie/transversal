@@ -113,12 +113,13 @@ def _mark_taken_out(repo, loser_id: str, opponent_id: str) -> None:
     })
 
 
-def prevent_taken_out(entity_id: str, universe: str = "") -> dict:
+def prevent_taken_out(entity_id: str, universe: str = "", effect_die: str | None = None) -> dict:
     """Prevent a pending takeout by spending 1 razmerit (via SFX).
 
-    Fires ``on_prevent_taken_out`` (the seeded table SFX spends 1 razmerit),
-    then clears the taken-out state. Server-enforced: returns
-    ``{"prevented": False}`` when the entity can't afford it or isn't taken out.
+    Fires ``on_prevent_taken_out`` (the seeded table SFX spends 1 razmerit and
+    applies a complication at ``effect_die``), then clears the taken-out state.
+    Server-enforced: returns ``{"prevented": False}`` when the entity can't
+    afford it or isn't taken out.
     """
     from transversal.main import _get_repo
 
@@ -131,7 +132,7 @@ def prevent_taken_out(entity_id: str, universe: str = "") -> dict:
 
     fire_state_sfx(entity_id, universe or entity.current_universe, "on_prevent_taken_out", {
         "prevented": True,
-        "opponent_id": "",
+        "effect_die": effect_die,
     })
 
     entity = repo.get_entity(entity_id)  # re-fetch (razmerit changed)
