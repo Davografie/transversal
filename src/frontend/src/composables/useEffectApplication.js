@@ -42,5 +42,22 @@ export function useEffectApplication() {
     }
   }
 
-  return { applying, applyEffects, resolveEffectTargets }
+  async function buyHitch(entityId, hitchesCount, botch) {
+    applying.value = true
+    try {
+      const data = await graphql(
+        `mutation($entityId: ID!, $hitchesCount: Int!, $botch: Boolean!) {
+          buyHitch(entityId: $entityId, hitchesCount: $hitchesCount, botch: $botch) {
+            applied pendingChoices { index kind scope effect { timing type action target result targetScope negative context } }
+          }
+        }`,
+        { entityId, hitchesCount, botch }
+      )
+      return data?.buyHitch || { applied: [], pendingChoices: [] }
+    } finally {
+      applying.value = false
+    }
+  }
+
+  return { applying, applyEffects, resolveEffectTargets, buyHitch }
 }

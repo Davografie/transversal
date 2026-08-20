@@ -1473,6 +1473,49 @@ class Mutation:
         return _effects_result_to_gql(result)
 
     @strawberry.mutation
+    def buy_hitch(self, info: strawberry.Info, entity_id: strawberry.ID,
+                  hitches_count: int, botch: bool = False) -> EffectApplicationResult:
+        """GM buys a hitch: introduce (or step up) a complication on the roller.
+
+        Complications start at d6 and step up once per extra hitch (capped at
+        d12). The roller earns 1 razmerit unless this is a botch (all dice hitches),
+        in which case the complication is free.
+        """
+        from transversal.domain import DieType, EffectTiming
+        from transversal.services.effects_commit import commit_effects
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+
+        die = DieType.D6
+        for _ in range(max(hitches_count - 1, 0)):
+            die = die.step_up()
+
+        effects: list[DomainEffect] = []
+        if not botch:
+            effects.append(DomainEffect(
+                timing=EffectTiming.IMMEDIATE,
+                type="transfer_razmerit",
+                action="earn",
+                target="self",
+                result="1",
+            ))
+        effects.append(DomainEffect(
+            timing=EffectTiming.IMMEDIATE,
+            type="modify_trait",
+            action="cortex_gain",
+            target="{choose_trait}",
+            target_scope="traitset:ts-complications-a190",
+            result=die.value,
+            negative=True,
+        ))
+
+        result = commit_effects(entity, effects, repo)
+        return _effects_result_to_gql(result)
+
+    @strawberry.mutation
     def set_consequence_options(self, info: strawberry.Info, entity_id: strawberry.ID,
                                 options: list[ConsequenceOptionInput]) -> Entity:
         """Replace an entity's authored consequence options (location moves)."""

@@ -319,7 +319,6 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEffectApplication } from '../composables/useEffectApplication.js'
-import { useTraitsConfig } from '../composables/useTraitsConfig.js'
 import DieIcon from './DieIcon.vue'
 import ConsequenceMenu from './gm/ConsequenceMenu.vue'
 import EffectTargetWizard from './gm/EffectTargetWizard.vue'
@@ -345,8 +344,7 @@ const props = defineProps({
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
 const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
-const { applyEffects, resolveEffectTargets } = useEffectApplication()
-const { allSfxs, fetchTraitsConfig } = useTraitsConfig()
+const { resolveEffectTargets, buyHitch: requestBuyHitch } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
 const rollingFaces = ref([]) // [{ die, face }] animated faces during ROLLING
@@ -768,10 +766,9 @@ async function buyHitch() {
   buyHitchTargetId.value = rollerId
   buyingHitch.value = true
   try {
-    if (!allSfxs.value.length) await fetchTraitsConfig()
-    const sfx = allSfxs.value.find(s => s.id === 'buy-hitch')
-    if (!sfx) return
-    const result = await applyEffects(rollerId, sfx.effects || [])
+    const hitchesCount = remoteView.value?.hitches?.length || 0
+    const botch = !!remoteView.value?.botch
+    const result = await requestBuyHitch(rollerId, hitchesCount, botch)
     if (result?.pendingChoices?.length) {
       buyHitchChoices.value = result.pendingChoices
     }
