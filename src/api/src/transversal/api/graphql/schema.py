@@ -912,9 +912,15 @@ class Mutation:
             input.id, input.name, input.trigger,
             [(e.type, e.action, e.target, e.result, e.timing) for e in input.effects],
         )
+        conditions = [_condition_input_to_domain(c) for c in (input.conditions or [])]
+        if input.limit and not any(
+            c.type == DomainConditionType.NARRATIVE and c.narrative for c in conditions
+        ):
+            conditions.append(DomainCondition(type=DomainConditionType.NARRATIVE, narrative=input.limit))
+
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
-            trigger=input.trigger, limit=input.limit,
+            trigger=input.trigger, conditions=conditions,
             effects=[
                 DomainEffect(
                     timing=e.timing,
@@ -934,6 +940,7 @@ class Mutation:
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
             trigger=created.trigger, limit=created.limit,
+            conditions=[_condition_to_gql(c) for c in created.conditions],
             effects=[_effect_to_gql(e) for e in created.effects],
         )
 
@@ -953,7 +960,9 @@ class Mutation:
             existing.name = input.name
         if input.description is not None:
             existing.description = input.description
-        if input.limit is not None:
+        if input.conditions is not None:
+            existing.conditions = [_condition_input_to_domain(c) for c in input.conditions]
+        elif input.limit is not None:
             existing.conditions = [
                 c for c in (existing.conditions or [])
                 if c.type != DomainConditionType.NARRATIVE
@@ -983,6 +992,7 @@ class Mutation:
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
             trigger=updated.trigger, limit=updated.limit,
+            conditions=[_condition_to_gql(c) for c in updated.conditions],
             effects=[_effect_to_gql(e) for e in updated.effects],
         )
 

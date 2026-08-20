@@ -36,6 +36,25 @@ RollSource = strawberry.enum(DomainRollSource)
 ConditionType = strawberry.enum(DomainConditionType)
 
 
+# ── Conditions ────────────────────────────────────────
+
+@strawberry.type
+class Condition:
+    """A configurable, automatically-evaluated gate or limit."""
+    type: ConditionType
+    target: str = ""
+    value: Optional[str] = None
+    narrative: str = ""
+
+
+@strawberry.input
+class ConditionInput:
+    type: ConditionType = ConditionType.ALWAYS
+    target: str = ""
+    value: Optional[str] = None
+    narrative: str = ""
+
+
 # ── SFX ownership ─────────────────────────────────────
 
 class SfxOwnerKind(str, Enum):
@@ -202,6 +221,7 @@ class SfxRef:
     description: str = ""
     trigger: str = ""
     limit: str = ""
+    conditions: list[Condition] = strawberry.field(default_factory=list)
     effects: list[Effect] = strawberry.field(default_factory=list)
 
 
@@ -213,6 +233,7 @@ class SfxInput:
     description: str = ""
     trigger: str = ""
     limit: str = ""
+    conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
 
 
@@ -224,6 +245,7 @@ class SfxUpdateInput:
     description: Optional[str] = None
     trigger: Optional[str] = None
     limit: Optional[str] = None
+    conditions: Optional[list[ConditionInput]] = None
     effects: Optional[list[EffectInput]] = None
 
 
@@ -244,15 +266,6 @@ class OwnerRefInput:
 
 
 # ── Roll Tables ─────────────────────────────────────
-
-@strawberry.type
-class Condition:
-    """A configurable, automatically-evaluated gate or limit."""
-    type: ConditionType
-    target: str = ""
-    value: Optional[str] = None
-    narrative: str = ""
-
 
 @strawberry.type
 class RollTableCheck:
@@ -290,14 +303,6 @@ class RollTable:
     entries: list[RollTableEntry]
     canvas_x: Optional[float] = None
     canvas_y: Optional[float] = None
-
-
-@strawberry.input
-class ConditionInput:
-    type: ConditionType = ConditionType.ALWAYS
-    target: str = ""
-    value: Optional[str] = None
-    narrative: str = ""
 
 
 @strawberry.input
