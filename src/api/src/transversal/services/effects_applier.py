@@ -132,11 +132,21 @@ def _register_core_handlers(em, raz):
         target = ctx.get("opponent_id") or (a.target or "")
         if not target or target == "self":
             return
-        scenes = int(a.result) if str(a.result or "1").isdigit() else 1
-        apply_targeting_ban(entity, target, scenes)
+        apply_targeting_ban(entity, target)
+        from transversal.services.scheduled_events import schedule_revert
+        schedule_revert(entity, a, em.repo, target=target, source_sfx_id=ctx.get("sfx_id"))
+        em.repo.update_entity(entity)
+
+    def _remove_targeting_ban(a, eid, u, ctx):
+        from transversal.services.targeting_bans import remove_targeting_ban
+        entity = em.repo.get_entity(eid)
+        if entity is None:
+            return
+        remove_targeting_ban(entity, a.target or "")
         em.repo.update_entity(entity)
 
     effect_registry.register("entity", "targeting_ban", _targeting_ban)
+    effect_registry.register("entity", "remove_targeting_ban", _remove_targeting_ban)
 
     # Travel — move the entity across a universal boundary.
     #

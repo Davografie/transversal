@@ -5,8 +5,8 @@ from transversal.services.targeting_bans import (
     active_target_ids,
     apply_targeting_ban,
     clear_taken_out,
-    decrement_scene_bans,
     has_targeting_ban,
+    remove_targeting_ban,
 )
 
 
@@ -38,38 +38,28 @@ class FakeRepo:
 
 def test_apply_and_has():
     entity = _entity("kael")
-    apply_targeting_ban(entity, "guard", 1)
+    apply_targeting_ban(entity, "guard")
     assert has_targeting_ban(entity, "guard") is True
     assert has_targeting_ban(entity, "other") is False
 
 
 def test_apply_refreshes_existing_ban():
     entity = _entity("kael")
-    apply_targeting_ban(entity, "guard", 3)
-    apply_targeting_ban(entity, "guard", 1)
+    apply_targeting_ban(entity, "guard")
+    apply_targeting_ban(entity, "guard")
     assert sum(1 for b in entity.targeting_bans if b.target_id == "guard") == 1
-    assert entity.targeting_bans[0].scenes_remaining == 1
 
 
-def test_decrement_scene_bans_expires_and_counts_down():
-    entity = _entity("kael", [
-        TargetingBan(target_id="guard", scenes_remaining=2),
-        TargetingBan(target_id="fox", scenes_remaining=1),
-    ])
-    repo = FakeRepo([entity])
-    changed = decrement_scene_bans(repo)
-    assert changed == 1
-    assert {b.target_id for b in entity.targeting_bans} == {"guard"}
-    assert entity.targeting_bans[0].scenes_remaining == 1
-    assert has_targeting_ban(entity, "fox") is False
+def test_remove_targeting_ban():
+    entity = _entity("kael", [TargetingBan(target_id="guard"), TargetingBan(target_id="fox")])
+    remove_targeting_ban(entity, "guard")
+    assert has_targeting_ban(entity, "guard") is False
+    assert has_targeting_ban(entity, "fox") is True
 
 
-def test_active_target_ids_filters_expired():
-    entity = _entity("kael", [
-        TargetingBan(target_id="guard", scenes_remaining=1),
-        TargetingBan(target_id="fox", scenes_remaining=0),
-    ])
-    assert active_target_ids(entity) == ["guard"]
+def test_active_target_ids():
+    entity = _entity("kael", [TargetingBan(target_id="guard"), TargetingBan(target_id="fox")])
+    assert active_target_ids(entity) == ["guard", "fox"]
 
 
 def test_clear_taken_out():

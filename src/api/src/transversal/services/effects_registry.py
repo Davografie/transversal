@@ -530,14 +530,13 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="entity_targeting_ban",
         label="Targeting Ban",
-        description="Prevent the entity from targeting another entity (e.g. re-challenging after giving in) for N scenes",
+        description="Prevent the entity from targeting another entity (e.g. re-challenging after giving in)",
         category="cost",
         effect_type="entity",
         effect_action="targeting_ban",
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="target", label="Target Entity", field_type="text", required=False),
-            EffectFieldDef(name="result", label="Scenes", field_type="number", required=False, default="1"),
         ],
         target_kind="entity",
     ),

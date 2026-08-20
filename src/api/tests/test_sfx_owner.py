@@ -6,6 +6,7 @@ without a live ArangoDB.
 
 from types import SimpleNamespace
 
+from transversal.domain import Timer
 from transversal.services.sfx_owner import (
     ensure_give_in_sfx,
     ensure_sfx_owners,
@@ -190,7 +191,9 @@ def test_ensure_targeting_ban_sfx_creates_once():
     assert sfx.trigger == "on_give_in"
     assert sfx.effects[0].type == "entity"
     assert sfx.effects[0].action == "targeting_ban"
-    assert sfx.effects[0].result == "1"
+    assert sfx.effects[0].result is None
+    assert sfx.effects[0].duration is not None
+    assert sfx.effects[0].duration.timers == [Timer(event="scene", remaining=1)]
     ensure_targeting_ban_sfx(repo)
     assert len(repo.sfxs) == 1
 

@@ -74,7 +74,7 @@ def ensure_give_in_sfx(repo) -> None:
 
 def ensure_targeting_ban_sfx(repo) -> None:
     """Create the give-in targeting-ban SFX if missing. Idempotent."""
-    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.domain import Effect, EffectDuration, EffectTiming, SFX, Timer
 
     if repo.get_sfx("sfx-give-in-targeting-ban") is not None:
         return
@@ -89,7 +89,7 @@ def ensure_targeting_ban_sfx(repo) -> None:
                 type="entity",
                 action="targeting_ban",
                 target="",
-                result="1",
+                duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]),
             ),
         ],
     ))

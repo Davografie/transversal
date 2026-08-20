@@ -460,6 +460,7 @@ class TraitSetting(BaseModel):
     source_life_path_id: Optional[str] = None  # which life path generated this (life_path_term)
     source_term_number: Optional[int] = None  # which term in that path (life_path_term)
     stolen: bool = False  # trait was taken — may have narrative consequences
+    scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
 
 
 # ── Per-Entity: Trait Set Settings ───────────────────
@@ -515,11 +516,12 @@ class Zone(BaseModel):
 
 
 class TargetingBan(BaseModel):
-    """A directional, scene-counted ban: the owning entity may not target
-    ``target_id`` (e.g. initiate a contest) until ``scenes_remaining`` is zero.
+    """A directional ban: the owning entity may not target ``target_id``.
+
+    Expiry is driven by a scheduled event (``entity/remove_targeting_ban``), not
+    by a countdown stored here.
     """
     target_id: str
-    scenes_remaining: int = 1
 
 
 class Entity(BaseModel):
@@ -554,6 +556,7 @@ class Entity(BaseModel):
     targeting_bans: list["TargetingBan"] = Field(default_factory=list)  # directional contest-target bans
     taken_out: bool = False  # scene-scoped: high-stakes contest removed this entity from the scene
     sfx_ids: list[str] = Field(default_factory=list)  # SFX owned directly by this entity
+    scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
     # Life path tracking
@@ -655,6 +658,40 @@ class Effect(BaseModel):
     result: Optional[str] = None
     target_scope: Optional[str] = None  # narrowing hint for runtime target choice
     context: dict = Field(default_factory=dict)  # e.g. relationship description
+    duration: Optional["EffectDuration"] = None  # when set, schedules the inverse effect on expiry
+
+
+class Timer(BaseModel):
+    """One countdown within an effect duration.
+
+    ``event`` names the advancement signal that decrements it: ``"beat"``,
+    ``"scene"``, ``"session"``, or any state-change event (e.g.
+    ``"location_changed"``). ``remaining`` is the countdown; ``0`` (or event
+    ``"immediate"``) fires on the next advancement pass.
+    """
+    event: str = "scene"
+    remaining: int = 0
+
+
+class TimerCombine(str, Enum):
+    """How multiple timers combine to determine expiry."""
+    FIRST_TO_FIRE = "first_to_fire"      # any timer reaches 0
+    ALL_TRANSPIRED = "all_transpired"    # every timer reaches 0
+
+
+class EffectDuration(BaseModel):
+    """Timers + combine that turn a forward effect into a temporary one."""
+    timers: list["Timer"] = Field(default_factory=list)
+    combine: TimerCombine = TimerCombine.FIRST_TO_FIRE
+
+
+class ScheduledEvent(BaseModel):
+    """A persisted, owner-scoped revert scheduled to fire when its timers expire."""
+    id: str
+    effect: "Effect"                     # the revert effect to apply
+    timers: list["Timer"] = Field(default_factory=list)
+    combine: TimerCombine = TimerCombine.FIRST_TO_FIRE
+    source_sfx_id: Optional[str] = None
 
 
 class ConsequenceOption(BaseModel):
