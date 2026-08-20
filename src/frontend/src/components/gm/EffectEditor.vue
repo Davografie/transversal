@@ -65,7 +65,7 @@
             </template>
             <div v-else class="ee-field">
               <label>Scope</label>
-              <input v-model="newEffect.scope" type="text" placeholder="universe:earth / faction:mafia / subtree:loc / traitset:ts-…" />
+              <ScopeBuilder v-model="newEffect.scope" :universe="universe" />
             </div>
           </template>
 
@@ -115,6 +115,7 @@ import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmTraitPicker from './GmTraitPicker.vue'
 import GmRollTablePicker from './GmRollTablePicker.vue'
 import DurationBuilder from './DurationBuilder.vue'
+import ScopeBuilder from './ScopeBuilder.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
