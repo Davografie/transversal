@@ -25,21 +25,22 @@ status: canonical
 
 | Concern | Module |
 |---------|--------|
-| Domain models (`SFX`, `Effect`, `EffectTiming`, `ConsequenceOption`, `SfxOwner`, `Attunement`, `TargetingBan`, `Condition`) | `src/api/src/transversal/domain/__init__.py` |
-| Effect action registry (what actions exist, their fields, category, valid timings) | `src/api/src/transversal/services/effects_registry.py` |
+| Domain models (`SFX`, `Effect`, `EffectTiming`, `EffectDuration`, `Timer`, `TimerCombine`, `ScheduledEvent`, `ConsequenceOption`, `SfxOwner`, `Attunement`, `TargetingBan`, `Condition`) | `src/api/src/transversal/domain/__init__.py` |
+| Effect action registry (what actions exist, their fields, category, valid timings, inverse, supports-duration) | `src/api/src/transversal/services/effects_registry.py` |
 | Effects engine (trigger matching, scheduling, event → applied/pending effects) | `src/api/src/transversal/services/effects_engine.py` |
 | Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier.py` |
+| Scheduled events / duration (timers, combine, central `dispatch_event`, `advance_events`) | `src/api/src/transversal/services/scheduled_events.py` |
 | SFX ownership resolution + seeding of table/contest SFX | `src/api/src/transversal/services/sfx_owner.py` |
 | State-change event wiring (takeout, contest win/loss, give-in, push) | `src/api/src/transversal/services/state_events.py` |
 | Consequence menu assembly (base + entity + SFX moves) | `src/api/src/transversal/services/consequence_menu.py` |
 | Contest lifecycle endpoints (challenge, set, give-in, push, prevent-taken-out) | `src/api/src/transversal/api/rest/contest_pools.py` |
-| Targeting bans + takeout clearing on scene advance | `src/api/src/transversal/services/targeting_bans.py` |
+| Targeting bans (membership) + takeout clearing | `src/api/src/transversal/services/targeting_bans.py` |
 
 ## Domain model
 
 All definitions are in `src/api/src/transversal/domain/__init__.py`.
 
-### `EffectTiming` (line 618)
+### `EffectTiming` (line 621)
 
 ```python
 class EffectTiming(str, Enum):
@@ -51,7 +52,7 @@ class EffectTiming(str, Enum):
     ON_CONDITION    = "on_condition"
 ```
 
-### `Effect` (line 646)
+### `Effect` (line 649)
 
 One canonical, operational effect record shared by SFX and life-path consequences.
 
@@ -63,11 +64,43 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `target` | `str` | Literal id, `"self"`, or a `{choose_*}` / `{random:*}` placeholder |
 | `result` | `Optional[str]` | Die rating, integer amount, relationship type, or `{context_key}` placeholder |
 | `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) |
-| `context` | `dict` | Extra data (e.g. relationship description) |
+| `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`) |
+| `duration` | `Optional[EffectDuration]` | When set, the inverse effect is scheduled to fire on expiry (see below) |
 
 There is **no `polarity` field** — cost vs. benefit is derived from the `(type, action)` pair via the registry's `category`.
 
-### `SFX` (line 673)
+### `Timer`, `TimerCombine`, `EffectDuration`, `ScheduledEvent` (lines 664–695)
+
+These implement the **duration** model: an effect can be temporary, and its inverse
+fires later.
+
+```python
+class Timer(BaseModel):
+    event: str = "scene"      # "beat" | "scene" | "session" | "location_changed" | "trait_updated" | …
+    remaining: int = 0        # countdown; 0 fires on the next advance pass
+
+class TimerCombine(str, Enum):
+    FIRST_TO_FIRE = "first_to_fire"   # expire when ANY timer reaches 0
+    ALL_TRANSPIRED = "all_transpired" # expire when ALL timers reach 0
+
+class EffectDuration(BaseModel):
+    timers: list[Timer]
+    combine: TimerCombine = TimerCombine.FIRST_TO_FIRE
+
+class ScheduledEvent(BaseModel):
+    id: str
+    effect: Effect        # the REVERT effect to fire on expiry
+    timers: list[Timer]
+    combine: TimerCombine
+    source_sfx_id: Optional[str] = None
+```
+
+The owner holds the scheduled events: `Entity.scheduled_events` (line 527) and
+`TraitSetting.scheduled_events` (line 424). The forward effect is applied
+immediately (mutating the owner's concrete state); only the *revert* is
+scheduled. See [[#Duration / scheduled events]] below.
+
+### `SFX` (line 710)
 
 ```python
 class SFX(BaseModel):
@@ -83,7 +116,7 @@ class SFX(BaseModel):
 - `conditions` gate which instance of that event applies.
 - A legacy `limit` string is folded into a `NARRATIVE` condition by the `@model_validator` `_fold_legacy_limit`.
 
-### `SfxOwner` (line 709)
+### `SfxOwner` (line 746)
 
 Ownership lives on the *owner* side, not the SFX. An owner bucket is a named set of SFX ids:
 
@@ -105,17 +138,18 @@ A selectable post-roll consequence entry. Authored directly on entities (locatio
 | `effects` | `list[Effect]` applied when chosen |
 | `source` | `"base"` \| `"entity"` \| `"sfx"` |
 
-### Entity state touched by effects (`Entity`, line 525)
+### Entity state touched by effects (`Entity`, line 527)
 
 - `razmerit` — spend/earn/transfer balance.
 - `current_universe`, `current_location`, `current_projection`.
 - `attunements: list[Attunement]` — active temporary universe grants (effect-managed).
-- `targeting_bans: list[TargetingBan]` — directional, scene-counted contest-target bans (`TargetingBan`, line 517).
+- `targeting_bans: list[TargetingBan]` — directional bans, membership only; expiry via scheduled events (`TargetingBan`, line 518).
 - `taken_out: bool = False` — scene-scoped; a high-stakes contest removed this entity from the scene.
+- `scheduled_events: list[ScheduledEvent]` — pending timed reverts.
 - `sfx_ids: list[str]` — SFX owned directly by this entity.
 - `consequence_options: list[ConsequenceOption]` — location/lair moves.
 
-### `Attunement` (line 633) and `AttunementScope` (line 627)
+### `Attunement` (line 636) and `AttunementScope` (line 630)
 
 ```python
 class AttunementScope(str, Enum):
@@ -129,13 +163,13 @@ class Attunement(BaseModel):
     source_sfx_id: Optional[str] = None
 ```
 
-### `Condition` (line 734) and `ConditionType` (line 723)
+### `Condition` (line 771) and `ConditionType` (line 760)
 
 Conditions are authored alongside effects and evaluated against entity state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks. See `src/api/src/transversal/services/conditions.py`.
 
 ## Effect action registry
 
-`src/api/src/transversal/services/effects_registry.py` is the single source of truth for every action the editor can author (`EFFECT_ACTION_REGISTRY`, line 52). Each entry is an `EffectActionMeta` with `action_id`, `category` (`cost` | `benefit` | `either`), `effect_type`, `effect_action`, `valid_timings`, field definitions, and `target_kind`.
+`src/api/src/transversal/services/effects_registry.py` is the single source of truth for every action the editor can author (`EFFECT_ACTION_REGISTRY`, line 52). Each entry is an `EffectActionMeta` with `action_id`, `category` (`cost` | `benefit` | `either`), `effect_type`, `effect_action`, `valid_timings`, `fields`, `context_fields`, `target_kind`, `supports_duration`, and an optional `inverse` + `inverse_captures_prior` (used by the scheduler to undo a temporary effect).
 
 | Family (`effect_type`) | `action_id` → `effect_action` | Category |
 |------------------------|-------------------------------|----------|
@@ -174,6 +208,16 @@ Conditions are authored alongside effects and evaluated against entity state (`a
 | `relationship` | `create_relationship` → `create` | either |
 | `entity` | `entity_targeting_ban` → `targeting_ban` | cost |
 
+### Internal inverse actions (not editor-authored)
+
+These are registered directly on the effect registry (`effects_applier._register_core_handlers`) and are used by the scheduler to revert temporary effects:
+
+- `modify_trait` / `remove` — delete a trait setting (inverse of `gain` / `gain_complication`).
+- `entity` / `remove_targeting_ban` — inverse of `targeting_ban`.
+- `entity` / `clear_taken_out` — inverse of the `taken_out` status.
+- `entity` / `delete_entity` — inverse of `create_asset`.
+- `attune` / `disable` — inverse of `attune` / `enable`.
+
 ## Effects engine
 
 `src/api/src/transversal/services/effects_engine.py`.
@@ -192,21 +236,23 @@ For each available SFX id:
 3. If `conditions` exist and a repo is provided, `evaluate_conditions` gates on current entity state.
 4. A razmerit cost check sums `transfer_razmerit`/`spend` effect results and skips the SFX if it exceeds the balance.
 5. `_substitute_effect_context` replaces `{context_key}` placeholders in each effect's `result` from the event context (this is how `{effect_die}` becomes a concrete die rating).
-6. `IMMEDIATE` effects with a `{choose_*}` target are returned as `pending`; otherwise they are applied via `effects_applier.effect_registry.apply`. Non-`IMMEDIATE` effects are queued on the internal schedule.
+6. `IMMEDIATE` effects with a `{choose_*}` target are returned as `pending`; otherwise they are applied via `effects_applier.effect_registry.apply`. Non-`IMMEDIATE` effects are persisted as `ScheduledEvent`s on the entity when a repo is available (see [[#Duration / scheduled events]]); an in-memory schedule remains only as a fallback for the no-repo, life-path, and `ON_CONDITION` cases.
 
-`attune`/`enable` is special-cased: it applies immediately and also schedules a matching `attune`/`disable` at the effect's timing.
+`attune`/`enable` no longer special-cases the schedule: the `_attune` handler applies the enable now and `schedule_revert` schedules the `disable` via the same duration model.
 
 ### Scheduling
 
+The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_session` for deferred life-path and `ON_CONDITION` effects. Ordinary timed reverts are persisted and driven by `scheduled_events.dispatch_event` (see [[#Duration / scheduled events]]).
+
 | Method | Fires |
 |--------|-------|
-| `tick_beat` (line 310) | `END_OF_BEAT` effects; decrements `AFTER_BEATS` counters and fires them at zero |
-| `tick_scene` (line 334) | `END_OF_SCENE` effects |
-| `tick_session` (line 350) | everything remaining on the schedule |
+| `tick_beat` (line 296) | in-memory `END_OF_BEAT` / `AFTER_BEATS` effects |
+| `tick_scene` (line 320) | in-memory `END_OF_SCENE` effects |
+| `tick_session` (line 336) | everything remaining on the in-memory schedule |
 
 `AFTER_BEATS` defaults to 3 beats (`_beats_for_timing`).
 
-### Trigger semantics (`_trigger_matches`, line 219)
+### Trigger semantics (`_trigger_matches`, line 205)
 
 | SFX `trigger` | Fires when |
 |---------------|------------|
@@ -222,7 +268,7 @@ For each available SFX id:
 | `on_success` | `roll_result.tier` is present and not `FAIL` |
 | `on_failure` | `roll_result.tier == FAIL` |
 
-`contest_to_events` (line 390) and `fire_contest_sfx` (line 437) generate per-side events from a `ContestResult`, with `contest_winner` set from each side's perspective (ties favor the initiator — there is no separate tie outcome).
+`contest_to_events` (line 376) generates per-side events from a `ContestResult`, with `contest_winner` set from each side's perspective (ties favor the initiator — there is no separate tie outcome). The legacy `fire_contest_sfx` no-repo helper was removed; contest outcomes fire through `fire_contest_outcome_sfx` (see [[#State events and takeout]]).
 
 ## Effect applier
 
@@ -246,6 +292,45 @@ A `target_scope` like `traitset:ts-complications-a190` narrows the candidate set
 ### Complication trait set id
 
 The complications trait set is **`ts-complications-a190`**. The negative-trait fallback in `_new_traitsetting` (line 268) and the contest complication SFX both use it. See [[#Known mismatch]] below for the one place that still references the old id.
+
+## Duration / scheduled events
+
+`src/api/src/transversal/services/scheduled_events.py`.
+
+A temporary effect is modeled as **apply now + schedule a revert**:
+
+1. The forward effect mutates the owner's concrete state immediately (a trait's `dice`, an entity's `targeting_bans` / `taken_out` / `attunements`, a created asset).
+2. `schedule_revert` / `schedule_traitsetting_revert` / `queue_revert` / `queue_event` append a `ScheduledEvent` holding the inverse effect and its `timers`.
+3. `dispatch_event(repo, event_type, entity_id, …)` advances timers on the boundary and applies the stored revert when they expire.
+
+### Advancement (central point)
+
+- **Global boundaries** (`beat` / `scene` / `session`, no entity): `dispatch_event` advances every entity + trait setting's scheduled events.
+- **Entity-scoped events** (`location_changed`, `trait_updated`, `relationship_created`): advance that entity + its trait settings, then fire state SFX.
+- `next_beat` → `dispatch_event(repo, "beat")`; `advance_scene` → `dispatch_event(repo, "scene")`; `entity_manager._publish_location_changed` and `effects_commit` publish through `dispatch_event`.
+
+### Inverse mappings (registry)
+
+`EffectActionMeta.inverse` + `inverse_captures_prior` declare the undo for reversible actions. `scheduled_events.build_revert(effect, prior_result=…)` builds the inverse effect, substituting `prior_result` for `inverse_captures_prior` actions (e.g. `set` reverts to the pre-apply die rating).
+
+| Forward | Inverse |
+|---------|---------|
+| `modify_trait` / `step_up` | `step_down` |
+| `modify_trait` / `step_down` | `step_up` |
+| `modify_trait` / `set` | `set` (prior value captured) |
+| `modify_trait` / `gain` | `remove` |
+| `modify_trait` / `gain_complication` | `remove` |
+| `modify_trait` / `gain_or_step_up` | `step_down` (if stepped) or `remove` (if created) |
+| `entity` / `targeting_ban` | `remove_targeting_ban` |
+| `taken_out` (status) | `clear_taken_out` |
+| `create_entity` / `create_asset` | `delete_entity` |
+| `attune` / `enable` | `disable` |
+
+`gain_or_step_up` is compound — it queues the explicit branch-specific revert (`_queue_explicit`) rather than a single registry inverse.
+
+### Deferred SFX effects
+
+Non-`IMMEDIATE` effects from the effects engine are persisted as scheduled events when a repo is available (`scheduled_events.schedule_deferred` → `timing_to_timer` maps `END_OF_BEAT` / `END_OF_SCENE` / `END_OF_SESSION` / `AFTER_BEATS` to a timer). The in-memory `ScheduledEffect` schedule remains only for life-path deferrals and `ON_CONDITION`.
 
 ## SFX ownership and seeding
 
@@ -293,7 +378,7 @@ Fires `on_contest_win` / `on_contest_loss` for both sides of a resolved manual c
 
 ### Takeout (`_mark_taken_out`, line 103)
 
-Sets `loser.taken_out = True`, persists it, and fires `on_taken_out` with `{taken_out: True, opponent_id}`.
+Sets `loser.taken_out = True`, schedules a `clear_taken_out` revert (one scene) via `scheduled_events.schedule_effect`, persists it, and fires `on_taken_out` with `{taken_out: True, opponent_id}`.
 
 ### Prevent takeout (`prevent_taken_out`, line 116)
 
@@ -319,12 +404,9 @@ Server-enforced:
 | `POST .../prevent-taken-out` | `PreventTakenOutRequest { effect_die }` → `prevent_taken_out`, broadcasts `contest_prevent_taken_out` |
 | `GET .../contest` | Re-sync perspective (challenger/defendant, committed results, high stakes) |
 
-### Scene-advance clearing (`src/api/src/transversal/services/targeting_bans.py`)
+### Scene-advance clearing
 
-- `decrement_scene_bans` (line 42) advances every entity's `targeting_bans` by one scene, removing expired bans.
-- `clear_taken_out` (line 68) clears `taken_out` from every entity.
-
-Both are wired into scene advance (see `src/api/src/transversal/api/rest/targeting_bans.py`), so a scene boundary expires challenge bans and re-admits taken-out entities.
+Scene advance (`advance_scene` in `src/api/src/transversal/api/rest/targeting_bans.py`) now routes through `scheduled_events.dispatch_event(repo, "scene")`, which expires ban and takeout timers by applying their `remove_targeting_ban` / `clear_taken_out` reverts. `targeting_bans.py` keeps `apply_targeting_ban` / `remove_targeting_ban` / `has_targeting_ban` (membership) and the `clear_taken_out` sweep utility; the old `decrement_scene_bans` scene countdown was removed.
 
 ## Consequence menu
 
