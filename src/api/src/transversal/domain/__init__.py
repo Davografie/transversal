@@ -657,6 +657,7 @@ class Effect(BaseModel):
     target: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None  # narrowing hint for runtime target choice
+    negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)
     context: dict = Field(default_factory=dict)  # e.g. relationship description
     duration: Optional["EffectDuration"] = None  # when set, schedules the inverse effect on expiry
 
@@ -717,6 +718,7 @@ class SFX(BaseModel):
     name: str
     description: str = ""
     trigger: str
+    menu_context: Optional[str] = None  # consequence menu this SFX is an option in; None = trigger-driven (auto-fire)
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
 
