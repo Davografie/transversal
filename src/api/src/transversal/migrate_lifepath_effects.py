@@ -8,8 +8,9 @@ so they landed on the relationship edge instead of the character entity and
 never showed on the character sheet.
 
 This pass also promotes the seeded ``gain_complication`` mishap effects to the
-idempotent ``gain_or_step_up_complication`` action (which mirrors
-``gain_or_step_up`` and no longer collides when the complication already exists).
+idempotent ``gain_or_step_up`` action with negative polarity (which mirrors
+the positive trait gain and no longer collides when the complication already
+exists).
 
 Idempotent: safe to re-run.
 
@@ -40,7 +41,12 @@ def _fix_effect(effect) -> bool:
             changed = True
 
     if effect.action == "gain_complication":
-        effect.action = "gain_or_step_up_complication"
+        effect.action = "gain_or_step_up"
+        effect.negative = True
+        changed = True
+    elif effect.action == "gain_or_step_up_complication":
+        effect.action = "gain_or_step_up"
+        effect.negative = True
         changed = True
 
     return changed

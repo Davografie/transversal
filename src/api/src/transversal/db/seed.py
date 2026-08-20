@@ -646,13 +646,14 @@ def seed_life_paths(repo) -> None:
     ROGUE_FACTION = "fac-rogue-cultivators"
 
     # ── Effect / table builders ───────────────────────
-    def eff(type_, action, target="", result=None, context=None):
+    def eff(type_, action, target="", result=None, context=None, negative=False):
         return Effect(
             timing=EffectTiming.IMMEDIATE,
             type=type_,
             action=action,
             target=target,
             result=result,
+            negative=negative,
             context=context or {},
         )
 
@@ -662,9 +663,9 @@ def seed_life_paths(repo) -> None:
     def next_step(target=""):
         return flow("next_step", target)
 
-    def trait(action, trait_id, die=None, relationship=FACTION):
+    def trait(action, trait_id, die=None, relationship=FACTION, negative=False):
         ctx = {"relationship": relationship} if relationship else {}
-        return eff("modify_trait", action, trait_id, result=die, context=ctx)
+        return eff("modify_trait", action, trait_id, result=die, context=ctx, negative=negative)
 
     def entry(label, effects=None, **fields):
         return RollTableEntry(label=label, effects=effects or [], **fields)
@@ -785,9 +786,9 @@ def seed_life_paths(repo) -> None:
         scheme=RollTableScheme.INDEX,
         entries=[
             entry("Lost a little face", effects=[eff("transfer_razmerit", "spend", "self", "1"), next_step("rt-verdant-advance")]),
-            entry("Qi backlash", effects=[trait("gain_or_step_up_complication", "trait-3r-qi-reserves", "d4", relationship=None), next_step("rt-verdant-advance")]),
+            entry("Qi backlash", effects=[trait("gain_or_step_up", "trait-3r-qi-reserves", "d4", relationship=None, negative=True), next_step("rt-verdant-advance")]),
             entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-verdant-advance")]),
-            entry("Wounded spirit", effects=[trait("gain_or_step_up_complication", "trait-3r-dao-comprehension", "d4", relationship=None), next_step("rt-verdant-advance")]),
+            entry("Wounded spirit", effects=[trait("gain_or_step_up", "trait-3r-dao-comprehension", "d4", relationship=None, negative=True), next_step("rt-verdant-advance")]),
             entry("Demoted", effects=[trait("step_down", "trait-rel-rank"), next_step("rt-verdant-advance")]),
             entry("Expelled", effects=[flow("force_muster")]),
         ],
@@ -882,9 +883,9 @@ def seed_life_paths(repo) -> None:
         scheme=RollTableScheme.INDEX,
         entries=[
             entry("Lost a little face", effects=[eff("transfer_razmerit", "spend", "self", "1"), next_step("rt-drifter-3r-advance")]),
-            entry("Qi backlash", effects=[trait("gain_or_step_up_complication", "trait-3r-qi-reserves", "d4", relationship=None), next_step("rt-drifter-3r-advance")]),
+            entry("Qi backlash", effects=[trait("gain_or_step_up", "trait-3r-qi-reserves", "d4", relationship=None, negative=True), next_step("rt-drifter-3r-advance")]),
             entry("Lost ground", effects=[eff("transfer_razmerit", "spend", "self", "2"), next_step("rt-drifter-3r-advance")]),
-            entry("Wounded spirit", effects=[trait("gain_or_step_up_complication", "trait-3r-dao-comprehension", "d4", relationship=None), next_step("rt-drifter-3r-advance")]),
+            entry("Wounded spirit", effects=[trait("gain_or_step_up", "trait-3r-dao-comprehension", "d4", relationship=None, negative=True), next_step("rt-drifter-3r-advance")]),
             entry("Demoted", effects=[trait("step_down", "trait-rel-rank", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-advance")]),
             entry("Expelled", effects=[flow("force_muster")]),
         ],

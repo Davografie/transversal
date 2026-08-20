@@ -246,12 +246,37 @@ def test_ensure_contest_complication_sfx_creates_once():
     assert apply_sfx.name == "Apply a complication"
     assert take_sfx.name == "Take a complication"
     # Identical effect, different label.
-    assert apply_sfx.effects[0].action == "gain_complication"
-    assert take_sfx.effects[0].action == "gain_complication"
+    assert apply_sfx.effects[0].action == "cortex_gain"
+    assert take_sfx.effects[0].action == "cortex_gain"
+    assert apply_sfx.effects[0].negative is True
+    assert take_sfx.effects[0].negative is True
     assert apply_sfx.effects[0].target == "{choose_trait}"
     assert take_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
     ensure_contest_complication_sfx(repo)
     assert len(repo.sfxs) == 2
+
+
+def test_ensure_contest_complication_sfx_migrates_stale_effect():
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.sfx_owner import ensure_contest_complication_sfx
+
+    repo = SetupRepo()
+    repo.create_sfx(SFX(
+        id="apply-complication", name="Apply a complication",
+        description="", trigger="on_consequence",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait",
+            action="gain_complication", target="{choose_trait}",
+            target_scope="traitset:ts-complications-a190", result="{effect_die}",
+        )],
+    ))
+
+    ensure_contest_complication_sfx(repo)
+
+    apply_sfx = repo.sfxs["apply-complication"]
+    assert apply_sfx.effects[0].action == "cortex_gain"
+    assert apply_sfx.effects[0].negative is True
+    assert apply_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
 
 
 def test_ensure_prevent_taken_out_sfx_creates_once():

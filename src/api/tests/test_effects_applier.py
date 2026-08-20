@@ -167,31 +167,37 @@ def test_set_overrides_dice():
     assert result.updated_trait_settings[0].dice == [DieType.D10]
 
 
-# ── Complications ────────────────────────────────────
+# ── Complications (unified polarity) ─────────────────
 
-def test_gain_complication_sets_negative():
+def test_gain_negative_sets_negative():
     repo = FakeRepo(traits=[FakeTrait("scar", "ts-complications")])
     entity = _entity()
-    result = apply_effects(entity, [_effect("modify_trait", "gain_complication", "scar", "d4")], repo)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="scar", result="d4", negative=True)
+    result = apply_effects(entity, [effect], repo)
     ts = result.new_trait_settings[0]
     assert ts.negative is True
     assert ts.traitset_id == "ts-complications"
 
 
-def test_gain_or_step_up_complication_creates_when_absent():
+def test_gain_or_step_up_negative_creates_when_absent():
     repo = FakeRepo(traits=[FakeTrait("scar", "ts-complications")])
     entity = _entity()
-    result = apply_effects(entity, [_effect("modify_trait", "gain_or_step_up_complication", "scar", "d4")], repo)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+                    target="scar", result="d4", negative=True)
+    result = apply_effects(entity, [effect], repo)
     assert len(result.new_trait_settings) == 1
     ts = result.new_trait_settings[0]
     assert ts.negative is True
     assert ts.dice == [DieType.D4]
 
 
-def test_gain_or_step_up_complication_steps_up_when_present():
+def test_gain_or_step_up_negative_steps_up_when_present():
     repo = FakeRepo(traitsettings=[_ts("scar", [DieType.D4], traitset_id="ts-complications", negative=True)])
     entity = _entity()
-    result = apply_effects(entity, [_effect("modify_trait", "gain_or_step_up_complication", "scar", "d4")], repo)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+                    target="scar", result="d4", negative=True)
+    result = apply_effects(entity, [effect], repo)
     assert len(result.new_trait_settings) == 0
     assert len(result.updated_trait_settings) == 1
     assert result.updated_trait_settings[0].dice == [DieType.D6]

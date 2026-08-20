@@ -110,42 +110,52 @@ def ensure_targeting_ban_sfx(repo) -> None:
 
 
 def ensure_contest_complication_sfx(repo) -> None:
-    """Create the winner (apply) + conceder (take) complication SFX. Idempotent.
+    """Create + migrate the winner (apply) / conceder (take) complication SFX.
 
-    Both carry the same ``gain_complication`` effect; they differ only in label
-    so the frontend can surface the right one at each end of a contest. They
-    are ``on_consequence`` SFX owned by ``table`` (available to players + GM).
+    Both carry the same ``cortex_gain`` effect with negative polarity so winning
+    applies a complication at the effect die via Cortex create-or-step-up rules.
+    Idempotent: also rewrites stale ``gain_complication`` effects in place.
     """
     from transversal.domain import Effect, EffectTiming, SFX
 
-    def _complication_effect() -> list:
-        return [
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="modify_trait",
-                action="gain_complication",
-                target="{choose_trait}",
-                target_scope="traitset:ts-complications-a190",
-                result="{effect_die}",
-            ),
-        ]
+    def _complication_effect() -> Effect:
+        return Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="modify_trait",
+            action="cortex_gain",
+            target="{choose_trait}",
+            target_scope="traitset:ts-complications-a190",
+            result="{effect_die}",
+            negative=True,
+        )
 
-    if repo.get_sfx("apply-complication") is None:
-        repo.create_sfx(SFX(
-            id="apply-complication",
-            name="Apply a complication",
-            description="When you win a contest, give your opponent a complication at your effect die",
-            trigger="on_consequence",
-            effects=_complication_effect(),
-        ))
-    if repo.get_sfx("take-complication") is None:
-        repo.create_sfx(SFX(
-            id="take-complication",
-            name="Take a complication",
-            description="When you give in, take a complication at the winner's effect die",
-            trigger="on_consequence",
-            effects=_complication_effect(),
-        ))
+    def _ensure(sfx_id: str, name: str, description: str) -> None:
+        existing = repo.get_sfx(sfx_id)
+        if existing is None:
+            repo.create_sfx(SFX(
+                id=sfx_id,
+                name=name,
+                description=description,
+                trigger="on_consequence",
+                effects=[_complication_effect()],
+            ))
+            return
+        desired = _complication_effect()
+        changed = False
+        for i, eff in enumerate(existing.effects):
+            if eff.type == "modify_trait" and eff.action in (
+                "gain_complication", "gain_or_step_up_complication", "cortex_gain",
+            ):
+                if eff.action != desired.action or not eff.negative:
+                    existing.effects[i] = desired
+                    changed = True
+        if changed:
+            repo.update_sfx(existing)
+
+    _ensure("apply-complication", "Apply a complication",
+            "When you win a contest, give your opponent a complication at your effect die")
+    _ensure("take-complication", "Take a complication",
+            "When you give in, take a complication at the winner's effect die")
 
 
 def ensure_prevent_taken_out_sfx(repo) -> None:

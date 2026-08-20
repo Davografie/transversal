@@ -83,7 +83,7 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(entity, [a], em.repo)
 
-    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "gain_complication", "gain_or_step_up_complication", "cortex_gain"):
+    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -426,7 +426,7 @@ def _apply_gain(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
     die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo)
+    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
     _queue_entity_revert(entity, effect, target=target)
@@ -447,7 +447,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
             result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
         return
     die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo)
+    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
     _queue_explicit(entity, effect, "remove", target)
@@ -541,39 +541,6 @@ def _apply_set(entity, effect, repo, result):
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"set {target} to {die.value}", existing.id))
     _queue_trait_revert(existing, effect, prior_result=prior)
-
-
-def _apply_gain_complication(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait", repo)
-    if target is None:
-        return
-    owner = _trait_owner(entity, effect, repo)
-    die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo, negative=True)
-    result.new_trait_settings.append(ts)
-    result.applied.append(AppliedEffect(effect, f"gained complication {target} at {die.value}", ts.id))
-    _queue_entity_revert(entity, effect, target=target)
-
-
-def _apply_gain_or_step_up_complication(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait", repo)
-    if target is None:
-        return
-    owner = _trait_owner(entity, effect, repo)
-    existing = _find_traitsetting(owner, repo, target)
-    if existing:
-        if _step_up(existing):
-            result.updated_trait_settings.append(existing)
-            result.applied.append(AppliedEffect(effect, f"stepped up complication {target}", existing.id))
-            _queue_explicit(existing, effect, "step_down", target)
-        else:
-            result.applied.append(AppliedEffect(effect, f"complication {target} already at d12", existing.id))
-        return
-    die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo, negative=True)
-    result.new_trait_settings.append(ts)
-    result.applied.append(AppliedEffect(effect, f"gained complication {target} at {die.value}", ts.id))
-    _queue_explicit(entity, effect, "remove", target)
 
 
 def _apply_earn(entity, effect, repo, result):
@@ -685,8 +652,6 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
     ("modify_trait", "set"): _apply_set,
-    ("modify_trait", "gain_complication"): _apply_gain_complication,
-    ("modify_trait", "gain_or_step_up_complication"): _apply_gain_or_step_up_complication,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,
     ("transfer_razmerit", "transfer"): _apply_transfer,
