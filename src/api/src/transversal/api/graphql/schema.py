@@ -346,7 +346,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit,
+                    trigger=s.trigger, menu_context=s.menu_context, limit=s.limit,
                     effects=[_effect_to_gql(e) for e in s.effects],
                 )
                 for s in db_sfxs
@@ -357,7 +357,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit,
+                    trigger=s.trigger, menu_context=s.menu_context, limit=s.limit,
                     effects=[_effect_to_gql(e) for e in s.effects],
                 ) for s in engine.get_all()
             ]
@@ -974,13 +974,14 @@ class Mutation:
 
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
-            trigger=input.trigger, conditions=conditions,
+            trigger=input.trigger, menu_context=input.menu_context, conditions=conditions,
             effects=[
                 DomainEffect(
                     timing=e.timing,
                     type=e.type, action=e.action,
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
+                    negative=e.negative,
                     context=e.context,
                     duration=_duration_input_to_domain(e.duration),
                 )
@@ -994,7 +995,7 @@ class Mutation:
             engine.register(created)
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
-            trigger=created.trigger, limit=created.limit,
+            trigger=created.trigger, menu_context=created.menu_context, limit=created.limit,
             conditions=[_condition_to_gql(c) for c in created.conditions],
             effects=[_effect_to_gql(e) for e in created.effects],
         )
@@ -1028,6 +1029,8 @@ class Mutation:
                 )
         if input.trigger is not None:
             existing.trigger = input.trigger
+        if input.menu_context is not None:
+            existing.menu_context = input.menu_context
         if input.effects is not None:
             existing.effects = [
                 DomainEffect(
@@ -1035,6 +1038,7 @@ class Mutation:
                     type=e.type, action=e.action,
                     target=e.target, result=e.result,
                     target_scope=e.target_scope,
+                    negative=e.negative,
                     context=e.context,
                     duration=_duration_input_to_domain(e.duration),
                 )
@@ -1047,7 +1051,7 @@ class Mutation:
             engine.register(updated)
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
-            trigger=updated.trigger, limit=updated.limit,
+            trigger=updated.trigger, menu_context=updated.menu_context, limit=updated.limit,
             conditions=[_condition_to_gql(c) for c in updated.conditions],
             effects=[_effect_to_gql(e) for e in updated.effects],
         )

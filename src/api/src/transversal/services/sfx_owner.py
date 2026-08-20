@@ -129,7 +129,7 @@ def ensure_contest_complication_sfx(repo) -> None:
             negative=True,
         )
 
-    def _ensure(sfx_id: str, name: str, description: str) -> None:
+    def _ensure(sfx_id: str, name: str, description: str, menu_context: str) -> None:
         existing = repo.get_sfx(sfx_id)
         if existing is None:
             repo.create_sfx(SFX(
@@ -137,6 +137,7 @@ def ensure_contest_complication_sfx(repo) -> None:
                 name=name,
                 description=description,
                 trigger="on_consequence",
+                menu_context=menu_context,
                 effects=[_complication_effect()],
             ))
             return
@@ -149,13 +150,18 @@ def ensure_contest_complication_sfx(repo) -> None:
                 if eff.action != desired.action or not eff.negative:
                     existing.effects[i] = desired
                     changed = True
+        if existing.menu_context != menu_context:
+            existing.menu_context = menu_context
+            changed = True
         if changed:
             repo.update_sfx(existing)
 
     _ensure("apply-complication", "Apply a complication",
-            "When you win a contest, give your opponent a complication at your effect die")
+            "When you win a contest, give your opponent a complication at your effect die",
+            "contest_win")
     _ensure("take-complication", "Take a complication",
-            "When you give in, take a complication at the winner's effect die")
+            "When you give in, take a complication at the winner's effect die",
+            "contest_give_in")
 
 
 def ensure_prevent_taken_out_sfx(repo) -> None:

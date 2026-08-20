@@ -243,6 +243,8 @@ def test_ensure_contest_complication_sfx_creates_once():
     take_sfx = repo.sfxs["take-complication"]
     assert apply_sfx.trigger == "on_consequence"
     assert take_sfx.trigger == "on_consequence"
+    assert apply_sfx.menu_context == "contest_win"
+    assert take_sfx.menu_context == "contest_give_in"
     assert apply_sfx.name == "Apply a complication"
     assert take_sfx.name == "Take a complication"
     # Identical effect, different label.
@@ -277,6 +279,7 @@ def test_ensure_contest_complication_sfx_migrates_stale_effect():
     assert apply_sfx.effects[0].action == "cortex_gain"
     assert apply_sfx.effects[0].negative is True
     assert apply_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
+    assert apply_sfx.menu_context == "contest_win"
 
 
 def test_ensure_prevent_taken_out_sfx_creates_once():

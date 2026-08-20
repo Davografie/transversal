@@ -33,6 +33,7 @@ status: canonical
 | SFX ownership resolution + seeding of table/contest SFX | `src/api/src/transversal/services/sfx_owner.py` |
 | State-change event wiring (takeout, contest win/loss, give-in, push) | `src/api/src/transversal/services/state_events.py` |
 | Consequence menu assembly (base + entity + SFX moves) | `src/api/src/transversal/services/consequence_menu.py` |
+| Menu-context / trigger variable contract | `src/api/src/transversal/services/menu_contexts.py` |
 | Contest lifecycle endpoints (challenge, set, give-in, push, prevent-taken-out) | `src/api/src/transversal/api/rest/contest_pools.py` |
 | Targeting bans (membership) + takeout clearing | `src/api/src/transversal/services/targeting_bans.py` |
 
@@ -64,10 +65,11 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `target` | `str` | Literal id, `"self"`, or a `{choose_*}` / `{random:*}` placeholder |
 | `result` | `Optional[str]` | Die rating, integer amount, relationship type, or `{context_key}` placeholder |
 | `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) |
+| `negative` | `bool` | Polarity of trait-grant effects: `true` = negative trait (complication). Replaces the former `gain_complication` / `gain_or_step_up_complication` actions. |
 | `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`) |
 | `duration` | `Optional[EffectDuration]` | When set, the inverse effect is scheduled to fire on expiry (see below) |
 
-There is **no `polarity` field** — cost vs. benefit is derived from the `(type, action)` pair via the registry's `category`.
+Cost vs. benefit (sign) is still derived from the `(type, action)` pair via the registry's `category`; `negative` is the *polarity* flag that marks a trait as a complication, separate from sign.
 
 ### `Timer`, `TimerCombine`, `EffectDuration`, `ScheduledEvent` (lines 664–695)
 
@@ -108,11 +110,13 @@ class SFX(BaseModel):
     name: str
     description: str = ""
     trigger: str
+    menu_context: Optional[str] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
 ```
 
-- `trigger` names the event (see trigger semantics below).
+- `trigger` names the auto-fire event (see trigger semantics below).
+- `menu_context` names the consequence menu this SFX appears in (`test_success`, `simplified_roll`, `contest_win`, `contest_give_in`); `None` = not a menu option. Distinct from `trigger`.
 - `conditions` gate which instance of that event applies.
 - A legacy `limit` string is folded into a `NARRATIVE` condition by the `@model_validator` `_fold_legacy_limit`.
 
@@ -169,7 +173,7 @@ Conditions are authored alongside effects and evaluated against entity state (`a
 
 ## Effect action registry
 
-`src/api/src/transversal/services/effects_registry.py` is the single source of truth for every action the editor can author (`EFFECT_ACTION_REGISTRY`, line 52). Each entry is an `EffectActionMeta` with `action_id`, `category` (`cost` | `benefit` | `either`), `effect_type`, `effect_action`, `valid_timings`, `fields`, `context_fields`, `target_kind`, `supports_duration`, and an optional `inverse` + `inverse_captures_prior` (used by the scheduler to undo a temporary effect).
+`src/api/src/transversal/services/effects_registry.py` is the single source of truth for every action the editor can author (`EFFECT_ACTION_REGISTRY`, line 52). Each entry is an `EffectActionMeta` with `action_id`, `category` (`cost` | `benefit` | `either`), `effect_type`, `effect_action`, `valid_timings`, `fields`, `context_fields`, `target_kind`, `supports_duration`, `supports_polarity`, and an optional `inverse` + `inverse_captures_prior` (used by the scheduler to undo a temporary effect).
 
 | Family (`effect_type`) | `action_id` → `effect_action` | Category |
 |------------------------|-------------------------------|----------|
@@ -189,10 +193,9 @@ Conditions are authored alongside effects and evaluated against entity state (`a
 | `modify_trait` | `step_up_trait` → `step_up` | benefit |
 | | `step_down_trait` → `step_down` | cost |
 | | `set_trait` → `set` | either |
-| | `gain_trait` → `gain` | benefit |
-| | `gain_or_step_up_trait` → `gain_or_step_up` | benefit |
-| | `gain_complication` → `gain_complication` | cost |
-| | `gain_or_step_up_complication` → `gain_or_step_up_complication` | cost |
+| | `gain_trait` → `gain` | either (polarity) |
+| | `gain_or_step_up_trait` → `gain_or_step_up` | either (polarity) |
+| | `cortex_gain_trait` → `cortex_gain` | either (polarity) |
 | `transfer_razmerit` | `earn_razmerit` → `earn` | benefit |
 | | `spend_razmerit` → `spend` | cost |
 | | `transfer_razmerit` → `transfer` | either |
@@ -208,11 +211,13 @@ Conditions are authored alongside effects and evaluated against entity state (`a
 | `relationship` | `create_relationship` → `create` | either |
 | `entity` | `entity_targeting_ban` → `targeting_ban` | cost |
 
+`gain_trait` / `gain_or_step_up_trait` / `cortex_gain_trait` all declare `supports_polarity`, so the editor shows a "Negative (complication)" toggle that sets `Effect.negative`. `cortex_gain` is the Cortex create-or-step-up rule: create at the effect die if absent; if present, jump to the effect die when higher, else step up one step.
+
 ### Internal inverse actions (not editor-authored)
 
 These are registered directly on the effect registry (`effects_applier._register_core_handlers`) and are used by the scheduler to revert temporary effects:
 
-- `modify_trait` / `remove` — delete a trait setting (inverse of `gain` / `gain_complication`).
+- `modify_trait` / `remove` — delete a trait setting (inverse of `gain`).
 - `entity` / `remove_targeting_ban` — inverse of `targeting_ban`.
 - `entity` / `clear_taken_out` — inverse of the `taken_out` status.
 - `entity` / `delete_entity` — inverse of `create_asset`.
@@ -319,7 +324,6 @@ A temporary effect is modeled as **apply now + schedule a revert**:
 | `modify_trait` / `step_down` | `step_up` |
 | `modify_trait` / `set` | `set` (prior value captured) |
 | `modify_trait` / `gain` | `remove` |
-| `modify_trait` / `gain_complication` | `remove` |
 | `modify_trait` / `gain_or_step_up` | `step_down` (if stepped) or `remove` (if created) |
 | `entity` / `targeting_ban` | `remove_targeting_ban` |
 | `taken_out` (status) | `clear_taken_out` |
@@ -356,11 +360,11 @@ The SFX ids available to an entity in a universe are the sorted union of:
 |--------|---------|-----------|---------|
 | `sfx-give-in-get-razmerit` | `on_give_in` | `transfer_razmerit`/`earn`/`self`/`1` | Conceder gains 1 razmerit |
 | `sfx-give-in-targeting-ban` | `on_give_in` | `entity`/`targeting_ban`/`""`/`1` | Conceder can't target that opponent for the scene |
-| `apply-complication` | `on_consequence` | `modify_trait`/`gain_complication`/`{choose_trait}` @ `{effect_die}`, scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
-| `take-complication` | `on_consequence` | same effect as `apply-complication` | Conceder takes a complication on their own projection |
+| `apply-complication` | `on_consequence` → menu `contest_win` | `modify_trait`/`cortex_gain`/`{choose_trait}` @ `{effect_die}` (negative), scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
+| `take-complication` | `on_consequence` → menu `contest_give_in` | same effect as `apply-complication` | Conceder takes a complication on their own projection |
 | `prevent-taken-out` | `on_prevent_taken_out` | `transfer_razmerit`/`spend`/`self`/`1` | Spend 1 razmerit to avoid being taken out |
 
-`ensure_contest_complication_sfx` (line 98) intentionally creates **two** SFX (`apply-complication`, `take-complication`) with identical effects but different labels, so the frontend can surface the correct one at each end of a contest. Both are `on_consequence` and owned by `table` (players + GM).
+`ensure_contest_complication_sfx` creates/migrates **two** SFX (`apply-complication`, `take-complication`) with identical `cortex_gain` + negative effects but different `menu_context` (`contest_win` vs `contest_give_in`), so the frontend surfaces the right one at each end of a contest. The migration also rewrites stale `gain_complication` effects in place.
 
 `remove_legacy_contest_complication_sfx` (line 164) deletes the retired `sfx-contest-loss-complication` row and its `table` reference so a stale DB doesn't keep auto-firing it on `on_contest_loss` (P2.10d moved contest-loss complications into the manual consequence menu).
 
@@ -412,11 +416,11 @@ Scene advance (`advance_scene` in `src/api/src/transversal/api/rest/targeting_ba
 
 `src/api/src/transversal/services/consequence_menu.py`.
 
-`assemble_consequence_menu` (line 90) builds the post-roll consequence options from three sources:
+`assemble_consequence_menu(entity, repo, side, menu_context)` builds the post-roll consequence options from three sources:
 
 1. **Base moves** (`BASE_CONSEQUENCE_OPTIONS`) — always available, keyed by `"player"` / `"gm"`.
 2. **Entity moves** — `Entity.consequence_options` on the acting entity's current location and its ancestors (lair moves), filtered by `side`.
-3. **SFX moves** — `on_consequence` SFX available to the acting entity, wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`.
+3. **SFX moves** — SFX whose `menu_context` matches the requested menu context, wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`. Legacy SFX with no `menu_context` but `trigger="on_consequence"` are included in all contexts for backward compatibility.
 
 Choosing an option applies its effects through the shared applier, resolving any `{choose_*}` targets via the wizard.
 

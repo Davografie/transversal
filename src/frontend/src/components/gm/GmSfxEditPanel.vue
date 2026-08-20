@@ -27,6 +27,14 @@
         <option value="on_trait_change">On Trait Change</option>
         <option value="on_relationship_create">On Relationship Create</option>
       </select>
+      <label>Consequence menu</label>
+      <select v-model="form.menuContext">
+        <option value="">(none — trigger only)</option>
+        <option value="test_success">Test success</option>
+        <option value="simplified_roll">Simplified roll</option>
+        <option value="contest_win">Contest win</option>
+        <option value="contest_give_in">Contest give in</option>
+      </select>
       <label>Conditions</label>
       <ConditionEditor v-model="form.conditions" />
     </div>
@@ -101,12 +109,13 @@ const form = reactive({
   name: props.sfx?.name || '',
   description: props.sfx?.description || '',
   trigger: props.sfx?.trigger || 'manual',
+  menuContext: props.sfx?.menuContext || '',
   conditions: initialConditions(props.sfx),
   effects: (props.sfx?.effects || []).map(e => ({ ...e })),
 })
 
 const { variables: scopeVariables, fetchVariables } = useScopeVariables()
-watch(() => form.trigger, (t) => { fetchVariables(t || '') }, { immediate: true })
+watch(() => [form.trigger, form.menuContext], ([t, m]) => { fetchVariables(t || '', m || '') }, { immediate: true })
 
 function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -118,15 +127,15 @@ async function onSave() {
   errorMsg.value = ''
   try {
     const result = await graphql(
-      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope negative context duration { timers { event remaining } combine } } } }`,
-      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target result targetScope negative context duration { timers { event remaining } combine } } } }`,
+      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
     patchData('sfxs', props.sfx.id, {
-      name: form.name, trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      name: form.name, trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     emit('sfx-updated', {
-      id: props.sfx.id, name: form.name, trigger: form.trigger,
+      id: props.sfx.id, name: form.name, trigger: form.trigger, menuContext: form.menuContext,
       description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
   } finally { saving.value = false }
@@ -138,8 +147,8 @@ async function onCreate() {
   const sfxId = generateSfxId(form.name)
   try {
     const result = await graphql(
-      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope negative context duration { timers { event remaining } combine } } } }`,
-      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
+      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target result targetScope negative context duration { timers { event remaining } combine } } } }`,
+      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) {
       const msg = apiError.value || ''
@@ -153,11 +162,11 @@ async function onCreate() {
     errorMsg.value = ''
     await fetchTraitsConfig()
     patchData('sfxs', sfxId, {
-      id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      id: sfxId, name: form.name.trim(), trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     successMsg.value = `Created "${form.name}"`
     emit('sfx-created', {
-      id: sfxId, name: form.name.trim(), trigger: form.trigger,
+      id: sfxId, name: form.name.trim(), trigger: form.trigger, menuContext: form.menuContext,
       description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     setTimeout(() => { panel.close() }, 600)
