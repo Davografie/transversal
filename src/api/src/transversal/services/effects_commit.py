@@ -81,6 +81,8 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     for ts in result.updated_trait_settings:
         repo.update_traitsetting(ts)
         _publish_trait_changed(ts, entity.current_universe)
+    for ts in result.removed_trait_settings:
+        repo.delete_traitsetting(ts.id)
 
     # Relationship edges produced by the applier.
     for rel in result.new_relationships:

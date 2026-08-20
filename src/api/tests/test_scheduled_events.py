@@ -84,7 +84,7 @@ def test_schedule_revert_ignores_missing_duration_or_inverse():
 
     # Duration but no inverse registered.
     unknown = Effect(
-        type="modify_trait", action="gain", target="t",
+        type="modify_trait", action="gain_or_step_up", target="t",
         duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]),
     )
     assert schedule_revert(entity, unknown, repo) is False
@@ -183,7 +183,7 @@ def test_build_revert_set_captures_prior():
 
 
 def test_build_revert_no_inverse_returns_none():
-    assert build_revert(Effect(type="modify_trait", action="gain", target="t")) is None
+    assert build_revert(Effect(type="modify_trait", action="gain_or_step_up", target="t")) is None
 
 
 class TraitRepo:

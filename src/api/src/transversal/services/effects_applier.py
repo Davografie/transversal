@@ -83,7 +83,7 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(entity, [a], em.repo)
 
-    for action in ("step_up", "step_down", "set", "gain", "gain_or_step_up", "gain_complication", "gain_or_step_up_complication"):
+    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "gain_complication", "gain_or_step_up_complication"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -219,6 +219,7 @@ class EffectsResult:
     applied: list[AppliedEffect] = field(default_factory=list)
     new_trait_settings: list[TraitSetting] = field(default_factory=list)
     updated_trait_settings: list[TraitSetting] = field(default_factory=list)
+    removed_trait_settings: list[TraitSetting] = field(default_factory=list)
     new_relationships: list[dict] = field(default_factory=list)
     entities_to_update: list[Entity] = field(default_factory=list)
     pending_choices: list[PendingChoice] = field(default_factory=list)
@@ -415,6 +416,7 @@ def _apply_gain(entity, effect, repo, result):
     ts = _new_traitsetting(owner, target, die, repo)
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
+    _queue_entity_revert(entity, effect, target=target)
 
 
 def _apply_gain_or_step_up(entity, effect, repo, result):
@@ -496,6 +498,7 @@ def _apply_gain_complication(entity, effect, repo, result):
     ts = _new_traitsetting(owner, target, die, repo, negative=True)
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained complication {target} at {die.value}", ts.id))
+    _queue_entity_revert(entity, effect, target=target)
 
 
 def _apply_gain_or_step_up_complication(entity, effect, repo, result):
@@ -572,6 +575,19 @@ def _apply_relationship_create(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"relationship {rel_type} → {target}"))
 
 
+def _apply_remove(entity, effect, repo, result):
+    target = _resolve_target(entity, effect, result, "trait", repo)
+    if target is None:
+        return
+    owner = _trait_owner(entity, effect, repo)
+    existing = _find_traitsetting(owner, repo, target)
+    if not existing:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to remove"))
+        return
+    result.removed_trait_settings.append(existing)
+    result.applied.append(AppliedEffect(effect, f"removed {target}", existing.id))
+
+
 def _queue_trait_revert(ts, effect, prior_result=None):
     """Queue the inverse of ``effect`` on a trait setting (in-memory).
 
@@ -583,8 +599,16 @@ def _queue_trait_revert(ts, effect, prior_result=None):
     queue_revert(ts, effect, prior_result=prior_result)
 
 
+def _queue_entity_revert(entity, effect, target=None):
+    """Queue the inverse of ``effect`` on an entity (in-memory, caller persists)."""
+    from transversal.services.scheduled_events import queue_revert
+
+    queue_revert(entity, effect, target=target)
+
+
 _MUTATION_HANDLERS = {
     ("modify_trait", "gain"): _apply_gain,
+    ("modify_trait", "remove"): _apply_remove,
     ("modify_trait", "gain_or_step_up"): _apply_gain_or_step_up,
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
