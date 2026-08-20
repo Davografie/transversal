@@ -1391,11 +1391,35 @@ function resyncTraitDie(traitSettingId, newDice) {
   if (changed) notifyPool()
 }
 
+function restoreRolledResult(dice) {
+  // Reconstruct the rolled result + selection from the stateful pool dice.
+  const hitches = dice.filter(d => d.hitch)
+  const botch = dice.length > 0 && dice.every(d => d.hitch)
+  if (dice.length <= 2) {
+    const highest = Math.max(...dice.map(d => d.result))
+    const tier = highest <= 2 ? 'FAIL' : highest <= 5 ? 'MARGINAL' : highest <= 8 ? 'SUCCESS' : highest <= 11 ? 'EXCEPTIONAL' : 'PERFECT'
+    const effect = { FAIL: null, MARGINAL: 'd4', SUCCESS: 'd6', EXCEPTIONAL: 'd8', PERFECT: 'd10' }[tier]
+    result.value = { pipeline: 'simplified', rolls: dice, hitches, botch, highest, tier, effect_die: effect }
+  } else {
+    result.value = { pipeline: 'pool', rolls: dice, hitches, botch }
+  }
+  selection.total = dice.map((d, i) => d.role === 'total' ? i : null).filter(i => i !== null)
+  selection.effect = dice.map((d, i) => d.role === 'effect' ? i : null).filter(i => i !== null)
+  ensureSlots()
+  setPhase(Phase.PICKING)
+  panelOpen.value = true
+}
+
 async function loadPoolIntoEditor(id) {
   if (!props.locationId || !id) return
   const res = await apiGetPool(props.locationId, id)
   const dice = res?.dice || []
   pool.splice(0, pool.length)
+  if (dice.some(d => d.result != null)) {
+    // Already rolled — restore the rolled result instead of treating it as unrolled.
+    restoreRolledResult(dice)
+    return
+  }
   for (const d of dice) {
     pool.push({
       die: d.die,
@@ -1437,6 +1461,9 @@ async function syncContestState() {
     }
     if (res.pending === me) contestNotice.value = "You're behind — give in or push"
     else contestNotice.value = `${opponentName.value} must give in or push`
+    // In a compare/pending state there is nothing to roll or pick — show the
+    // decision UI (Give in / Push) rather than the unrolled pool.
+    setPhase(Phase.RESOLVED)
   } else {
     contestCompare.value = null
   }
