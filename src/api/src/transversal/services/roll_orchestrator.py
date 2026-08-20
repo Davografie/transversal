@@ -11,12 +11,11 @@ frontend can prompt the user and re-apply once resolved.
 
 from __future__ import annotations
 
-from transversal.domain import ContestResult, RollResult
+from transversal.domain import RollResult
 from transversal.services import effects_applier
 from transversal.services.effects_engine import (
     EffectsEngine,
     GameEvent,
-    contest_to_events,
 )
 from transversal.services.sfx_owner import get_available_sfx_ids
 
@@ -77,39 +76,3 @@ def fire_roll_sfx(
     outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
     _emit_pending_choices(entity_id, universe, outcome.pending)
     return outcome.applied
-
-
-def fire_contest_sfx_auto(
-    engine: EffectsEngine,
-    repo,
-    result: ContestResult,
-    challenger_id: str,
-    defendant_id: str,
-    universe: str,
-) -> list:
-    """Fire automatic SFX for both sides of a contest. Returns applied effects.
-
-    ``challenger_id`` is the initiator — the ``PLAYER`` side in ContestWinner
-    terms (ties favor the initiator).
-    """
-    challenger_sfx, challenger_raz = _entity_sfx_context(repo, challenger_id, universe)
-    defendant_sfx, defendant_raz = _entity_sfx_context(repo, defendant_id, universe)
-
-    applied: list = []
-    pending_by_entity: dict[str, list] = {}
-
-    for event in contest_to_events(result, challenger_id, defendant_id, universe):
-        if event.entity_id == challenger_id:
-            sfx_ids, raz = challenger_sfx, challenger_raz
-        else:
-            sfx_ids, raz = defendant_sfx, defendant_raz
-
-        outcome = engine.process_event_outcome(event, sfx_ids, raz, repo=repo)
-        applied.extend(outcome.applied)
-        if outcome.pending:
-            pending_by_entity.setdefault(event.entity_id, []).extend(outcome.pending)
-
-    for eid, effects in pending_by_entity.items():
-        _emit_pending_choices(eid, universe, effects)
-
-    return applied

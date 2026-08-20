@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from transversal.domain import (
-    ContestResult,
     DieType,
     DicePoolRequest,
     Effect,
@@ -371,51 +370,4 @@ def _beats_for_timing(timing: EffectTiming) -> int:
 def _noop_applier(action: Effect, entity_id: str, universe: str, context: dict) -> None:
     """Default no-op applier for testing."""
     pass
-
-
-def contest_to_events(
-    contest: "ContestResult",
-    player_id: str,
-    opponent_id: str,
-    universe: str,
-) -> list[GameEvent]:
-    """Create GameEvents from a ContestResult so automated SFX can fire.
-
-    Returns events for both sides — the engine processes them separately.
-    Events emitted:
-      - on_roll (for each side, with their roll_result)
-      - on_contest_win / on_contest_loss (per side, via context)
-      - on_complication (if any hitches)
-      - on_botch (if all dice show 1)
-    """
-    events: list[GameEvent] = []
-
-    # Determine who won from each side's perspective.
-    # Ties favor the initiator, so there's no separate tie outcome.
-    if contest.winner == "player":
-        player_winner = "player"
-        opponent_winner = "opponent"
-    else:
-        player_winner = "opponent"
-        opponent_winner = "player"
-
-    # Player event
-    events.append(GameEvent(
-        type="on_roll",
-        entity_id=player_id,
-        universe=universe,
-        roll_result=contest.player_result,
-        context={"contest_winner": player_winner, "opponent_id": opponent_id},
-    ))
-
-    # Opponent event
-    events.append(GameEvent(
-        type="on_roll",
-        entity_id=opponent_id,
-        universe=universe,
-        roll_result=contest.opponent_result,
-        context={"contest_winner": opponent_winner, "opponent_id": player_id},
-    ))
-
-    return events
 

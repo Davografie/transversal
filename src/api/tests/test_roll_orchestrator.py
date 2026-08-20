@@ -7,8 +7,6 @@ import transversal.services.roll_orchestrator as roll_orchestrator
 from transversal.domain import (
     Condition,
     ConditionType,
-    ContestResult,
-    ContestWinner,
     DieRoll,
     DieType,
     Effect,
@@ -19,7 +17,7 @@ from transversal.domain import (
 )
 from transversal.services.effects_applier import choose_kind, is_choose_target
 from transversal.services.effects_engine import EffectsEngine, GameEvent
-from transversal.services.roll_orchestrator import fire_contest_sfx_auto, fire_roll_sfx
+from transversal.services.roll_orchestrator import fire_roll_sfx
 
 
 class Repo:
@@ -82,34 +80,6 @@ def test_fire_roll_sfx_missing_entity_is_noop():
     ))
 
     assert fire_roll_sfx(engine, repo, "ghost", "earth", _simplified()) == []
-
-
-def test_fire_contest_sfx_auto_fires_per_side():
-    repo = Repo({
-        "challenger": SimpleNamespace(razmerit=10, sfx_ids=["sfx-win"], current_projection=None),
-        "defendant": SimpleNamespace(razmerit=5, sfx_ids=["sfx-loss"], current_projection=None),
-    })
-    engine = EffectsEngine()
-    engine.register(SFX(
-        id="sfx-win", name="Victory", trigger="on_contest_win",
-        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
-                        action="step_up_die", target="next")],
-    ))
-    engine.register(SFX(
-        id="sfx-loss", name="Sore", trigger="on_contest_loss",
-        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
-                        action="step_down_die", target="self")],
-    ))
-
-    result = ContestResult(
-        pipeline="simplified",
-        winner=ContestWinner.PLAYER,
-        player_result=_simplified(),
-        opponent_result=_simplified(tier=OutcomeTier.MARGINAL),
-    )
-
-    applied = fire_contest_sfx_auto(engine, repo, result, "challenger", "defendant", "earth")
-    assert sorted(a.action for a in applied) == ["step_down_die", "step_up_die"]
 
 
 def test_process_event_outcome_returns_pending_for_choose_target():
