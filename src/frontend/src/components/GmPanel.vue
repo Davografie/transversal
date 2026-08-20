@@ -46,6 +46,7 @@
         <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
       </div>
       <button class="create-btn" style="margin-top:8px" @click="openTraitsConfig">Manage Traits</button>
+      <button class="create-btn" style="margin-top:4px" @click="openSfxOwners">Manage SFX Owners</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
   </div>
@@ -64,6 +65,7 @@ import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
+import GmSfxOwnersPanel from '@/components/gm/GmSfxOwnersPanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
@@ -188,6 +190,16 @@ async function openTraitsConfig() {
   panel.open({
     component: GmTraitsetsPanel,
     title: 'Traitsets',
+    props: {},
+  })
+}
+
+async function openSfxOwners() {
+  editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
+  if (allSfxs.value.length === 0) await fetchTraitsConfig()
+  panel.open({
+    component: GmSfxOwnersPanel,
+    title: 'SFX Owners',
     props: {},
   })
 }
