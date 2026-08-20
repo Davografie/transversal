@@ -315,7 +315,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** [[Pressure-Test Log]] § Scenario 4, `services/dice_resolver.py` (`resolve_contest`).
 
 ### P3.8 — Backend + frontend: complication stepped beyond d12 = taken out *(later)*
-- **Status:** pending
+- **Status:** done
 - **What:** stepping a complication above d12 automatically takes the character out of the scene.
 - **Done:** a d12 complication stepped up marks the character taken out.
 - **Depends:** P3.7
@@ -499,9 +499,9 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Depends:** —
 - **Load:** to-do "Trait notes field", `components/CharacterSheet.vue`, `domain/__init__.py` (`TraitSetting.statement`).
 
-### P7.3 — Frontend: phased trait picker
+### P7.3 — Frontend: phased trait character sheet
 - **Status:** pending
-- **What:** replace the accordion-style trait set / trait listing with a phased picker.
+- **What:** replace the character sheet accordion-style traitset / trait listing with separate screens for traitset list and traitset-scoped trait list.
 - **Done:** picking a trait is a phased flow instead of nested accordions.
 - **Depends:** —
 - **Load:** to-do "Instead of an accordion style trait sets / traits, try a phased trait picker", `components/CharacterSheet.vue`.
