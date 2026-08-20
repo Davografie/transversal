@@ -325,7 +325,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, roll: apiRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -1257,14 +1257,16 @@ async function doRoll() {
     ? { type: 'static_difficulty', static_difficulty: props.difficulty }
     : null
   const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
-  const pipeline = isDifficulty ? 'pool' : null
-  const hitchesApply = !isDifficulty
 
   // Blink random faces while the request is in flight, then lock each die
   // left-to-right so the player can see the numbers fall into place.
   const t0 = Date.now()
   const anim = startRollAnimation(dice)
-  const result_ = await apiRoll(editingEntityId.value, props.universe, dice, opp, pipeline, hitchesApply)
+  const result_ = isDifficulty
+    ? await apiDifficultyRoll(dice)
+    : dice.length <= 2
+      ? await apiSimplifiedRoll(editingEntityId.value, props.universe, dice, opp)
+      : await apiCortexRoll(editingEntityId.value, props.universe, dice, opp)
 
   await sleep(Math.max(0, FIRST_LOCK_MS - (Date.now() - t0)))
   for (let i = 0; i < rollingFaces.value.length; i++) {

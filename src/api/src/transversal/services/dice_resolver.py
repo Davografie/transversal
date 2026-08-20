@@ -49,6 +49,11 @@ def _determine_tier(highest: int) -> OutcomeTier:
         return OutcomeTier.PERFECT
 
 
+def determine_tier(highest: int) -> OutcomeTier:
+    """Public alias for the simplified-pipeline tier mapping."""
+    return _determine_tier(highest)
+
+
 def _is_botch(rolls: list[DieRoll]) -> bool:
     """A botch occurs when ALL dice show 1."""
     return len(rolls) > 0 and all(r.result == 1 for r in rolls)

@@ -30,13 +30,11 @@ export function useApi() {
     }
   }
 
-  async function roll(entityId, universe, dice, opposition = null, pipeline = null, hitchesApply = true) {
+  async function _rollEndpoint(path, body) {
     loading.value = true
     error.value = null
     try {
-      const body = { entity_id: entityId, universe, dice, opposition, hitches_apply: hitchesApply }
-      if (pipeline) body.pipeline = pipeline
-      const r = await fetch(`${API_BASE}/roll`, {
+      const r = await fetch(`${API_BASE}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -49,6 +47,18 @@ export function useApi() {
     } finally {
       loading.value = false
     }
+  }
+
+  async function cortexRoll(entityId, universe, dice, opposition = null) {
+    return _rollEndpoint('/cortex-roll', { entity_id: entityId, universe, dice, opposition })
+  }
+
+  async function simplifiedRoll(entityId, universe, dice, opposition = null) {
+    return _rollEndpoint('/simplified-roll', { entity_id: entityId, universe, dice, opposition })
+  }
+
+  async function difficultyRoll(dice) {
+    return _rollEndpoint('/difficulty-roll', { dice })
   }
 
   async function triggerSfx(entityId, sfxName, universe = 'earth', context = {}) {
@@ -292,5 +302,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, roll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }
