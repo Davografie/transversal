@@ -77,6 +77,15 @@
         @cancel="clearSfxChoices"
       />
     </div>
+    <div v-if="gmMode && buyHitchChoices.length" class="sfx-choice-panel">
+      <EffectTargetWizard
+        :entity-id="buyHitchTargetId"
+        :pending-choices="buyHitchChoices"
+        title="Buy a hitch — choose a complication"
+        @resolve="resolveBuyHitch"
+        @cancel="cancelBuyHitch"
+      />
+    </div>
     <div v-if="!gmMode && difficulty != null" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
@@ -303,15 +312,6 @@
         </div>
       </div>
     </template>
-    <div v-if="gmMode && buyHitchChoices.length" class="sfx-choice-panel">
-      <EffectTargetWizard
-        :entity-id="buyHitchTargetId"
-        :pending-choices="buyHitchChoices"
-        title="Buy a hitch — choose a complication"
-        @resolve="resolveBuyHitch"
-        @cancel="cancelBuyHitch"
-      />
-    </div>
   </div>
 </template>
 
@@ -772,8 +772,6 @@ async function buyHitch() {
     if (result?.pendingChoices?.length) {
       buyHitchChoices.value = result.pendingChoices
     }
-  } catch (e) {
-    console.error('[buy-hitch] failed', e)
   } finally {
     buyingHitch.value = false
   }
