@@ -10,17 +10,24 @@
       <select v-model="form.trigger">
         <option value="manual">Manual (player activates)</option>
         <option value="on_roll">On Roll</option>
-        <option value="on_complication">On Complication</option>
+        <option value="on_result">On Result</option>
+        <option value="on_complication">On Complication (hitch)</option>
         <option value="on_botch">On Botch</option>
         <option value="on_success">On Success</option>
         <option value="on_failure">On Failure</option>
-        <option value="on_location_change">On Location Change</option>
-        <option value="on_trait_change">On Trait Change</option>
         <option value="on_contest_win">On Contest Win</option>
         <option value="on_contest_loss">On Contest Loss</option>
+        <option value="on_give_in">On Give In</option>
+        <option value="on_push">On Push</option>
+        <option value="on_taken_out">On Taken Out</option>
+        <option value="on_prevent_taken_out">On Prevent Taken Out</option>
+        <option value="on_consequence">On Consequence (menu)</option>
+        <option value="on_location_change">On Location Change</option>
+        <option value="on_trait_change">On Trait Change</option>
+        <option value="on_relationship_create">On Relationship Create</option>
       </select>
-      <label>Limit <span class="hint">(markdown — narrative condition)</span></label>
-      <textarea v-model="form.limit" rows="3" placeholder="When it works or when it doesn't…"></textarea>
+      <label>Conditions</label>
+      <ConditionEditor v-model="form.conditions" />
     </div>
 
     <!-- Effects (shared editor) -->
@@ -57,6 +64,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import EffectEditor from './EffectEditor.vue'
+import ConditionEditor from './ConditionEditor.vue'
 
 const { graphql, error: apiError } = useApi()
 const panel = usePanel()
@@ -72,11 +80,26 @@ const saving = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 
+function initialConditions(sfx) {
+  if (sfx?.conditions?.length) {
+    return sfx.conditions.map(c => ({
+      type: c.type || 'ALWAYS',
+      target: c.target || '',
+      value: c.value || '',
+      narrative: c.narrative || '',
+    }))
+  }
+  if (sfx?.limit) {
+    return [{ type: 'NARRATIVE', target: '', value: '', narrative: sfx.limit }]
+  }
+  return []
+}
+
 const form = reactive({
   name: props.sfx?.name || '',
   description: props.sfx?.description || '',
   trigger: props.sfx?.trigger || 'manual',
-  limit: props.sfx?.limit || '',
+  conditions: initialConditions(props.sfx),
   effects: (props.sfx?.effects || []).map(e => ({ ...e })),
 })
 
@@ -90,16 +113,16 @@ async function onSave() {
   errorMsg.value = ''
   try {
     const result = await graphql(
-      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit effects { timing type action target result targetScope context } } }`,
-      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, limit: form.limit, effects: form.effects } }
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope context } } }`,
+      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
     patchData('sfxs', props.sfx.id, {
-      name: form.name, trigger: form.trigger, description: form.description, limit: form.limit, effects: [...form.effects],
+      name: form.name, trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     emit('sfx-updated', {
       id: props.sfx.id, name: form.name, trigger: form.trigger,
-      description: form.description, limit: form.limit, effects: [...form.effects],
+      description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
   } finally { saving.value = false }
 }
@@ -110,8 +133,8 @@ async function onCreate() {
   const sfxId = generateSfxId(form.name)
   try {
     const result = await graphql(
-      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit effects { timing type action target result targetScope context } } }`,
-      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, limit: form.limit, effects: form.effects } }
+      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope context } } }`,
+      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) {
       const msg = apiError.value || ''
@@ -125,17 +148,17 @@ async function onCreate() {
     errorMsg.value = ''
     await fetchTraitsConfig()
     patchData('sfxs', sfxId, {
-      id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, limit: form.limit, effects: [...form.effects],
+      id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     successMsg.value = `Created "${form.name}"`
     emit('sfx-created', {
       id: sfxId, name: form.name.trim(), trigger: form.trigger,
-      description: form.description, limit: form.limit, effects: [...form.effects],
+      description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     setTimeout(() => { panel.close() }, 600)
     form.name = ''
     form.description = ''
-    form.limit = ''
+    form.conditions = []
     form.effects = []
     setTimeout(() => { successMsg.value = '' }, 8000)
   } finally { saving.value = false }
