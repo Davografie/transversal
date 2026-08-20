@@ -81,9 +81,17 @@
         <select v-model="newEffect.timing">
           <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ t }}</option>
         </select>
-        <div class="ee-field">
-          <label>Context (JSON)</label>
-          <textarea v-model="newEffect.context" rows="2" placeholder='{"relationship": "fac-…"}'></textarea>
+        <div v-for="f in (selectedAction.contextFields || [])" :key="f.name" class="ee-field">
+          <label>{{ f.label }}</label>
+          <select v-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
+            <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+          </select>
+          <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.context[f.name]" type="number" :placeholder="f.default || ''" />
+          <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
+        </div>
+        <div v-if="newEffect.extraContext" class="ee-field">
+          <label>Other context (JSON)</label>
+          <textarea v-model="newEffect.extraContext" rows="2" placeholder='{"key": "value"}'></textarea>
         </div>
         <button class="ee-save" @click="commitEffect">{{ editingIndex !== null ? 'Update' : 'Add' }}</button>
       </template>
@@ -113,7 +121,7 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: '', targetMode: 'literal', scope: '' })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', targetMode: 'literal', scope: '' })
 
 onMounted(() => { load() })
 
@@ -152,13 +160,17 @@ function detectTargetMode(eff, meta) {
 
 function onActionChange() {
   newEffect.fields = {}
-  newEffect.context = ''
+  newEffect.context = {}
+  newEffect.extraContext = ''
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
   const meta = selectedAction.value
   if (meta) {
     for (const f of (meta.fields || [])) {
       if (f.default) newEffect.fields[f.name] = f.default
+    }
+    for (const f of (meta.contextFields || [])) {
+      if (f.default) newEffect.context[f.name] = f.default
     }
     if ((meta.validTimings || []).length === 1) newEffect.timing = meta.validTimings[0]
   }
@@ -171,6 +183,14 @@ function strVal(v) {
 function parseContext(s) {
   if (!s) return {}
   try { return JSON.parse(s) } catch { return {} }
+}
+
+function cleanContext(obj) {
+  const out = {}
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v !== '' && v !== null && v !== undefined) out[k] = v
+  }
+  return out
 }
 
 function buildEffect(meta) {
@@ -186,7 +206,7 @@ function buildEffect(meta) {
     target,
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
-    context: parseContext(newEffect.context),
+    context: { ...cleanContext(newEffect.context), ...parseContext(newEffect.extraContext) },
   }
 }
 
@@ -225,7 +245,16 @@ function editEffect(i) {
     newEffect.fields.target = eff.target
   }
   if (eff.result && eff.result !== (meta?.implicitResult || '')) newEffect.fields.result = eff.result
-  newEffect.context = eff.context && Object.keys(eff.context).length ? JSON.stringify(eff.context) : ''
+  const ctx = eff.context || {}
+  const known = new Set((meta?.contextFields || []).map(f => f.name))
+  const knownCtx = {}
+  const extraCtx = {}
+  for (const [k, v] of Object.entries(ctx)) {
+    if (known.has(k)) knownCtx[k] = v
+    else extraCtx[k] = v
+  }
+  newEffect.context = knownCtx
+  newEffect.extraContext = Object.keys(extraCtx).length ? JSON.stringify(extraCtx) : ''
 }
 
 function closeEditor() {
@@ -234,7 +263,8 @@ function closeEditor() {
   newEffect.actionId = ''
   newEffect.fields = {}
   newEffect.timing = 'IMMEDIATE'
-  newEffect.context = ''
+  newEffect.context = {}
+  newEffect.extraContext = ''
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
 }
