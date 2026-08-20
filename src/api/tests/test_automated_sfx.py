@@ -4,7 +4,6 @@ Covers:
   - New trigger types: on_location_change, on_trait_change,
     on_contest_loss, on_contest_win, on_success, on_failure
   - contest_to_events(): ContestResult → GameEvents for both sides
-  - fire_contest_sfx(): process both sides through effects engine
   - SFX push: ContestTracker.push_contest()
 """
 
@@ -26,7 +25,6 @@ from transversal.services.effects_engine import (
     EffectsEngine,
     GameEvent,
     contest_to_events,
-    fire_contest_sfx,
 )
 
 
@@ -279,130 +277,6 @@ class TestContestToEvents:
         assert events[1].roll_result is not None
         assert events[0].roll_result.highest == 7
         assert events[1].roll_result.highest == 4
-
-
-# ── fire_contest_sfx ───────────────────────────────────
-
-class TestFireContestSFX:
-    """Process a contest result through the effects engine for both sides."""
-
-    def test_processes_both_sides(self):
-        engine = EffectsEngine()
-
-        # Register a win SFX for player and a loss SFX for opponent
-        engine.register(SFX(
-            id="sfx-win", name="Victory Lap", trigger="on_contest_win",
-            effects=[Effect(timing=EffectTiming.IMMEDIATE,
-                              type="modify_roll", action="step_up_die", target="next")],
-        ))
-        engine.register(SFX(
-            id="sfx-loss", name="Vengeful", trigger="on_contest_loss",
-            effects=[Effect(timing=EffectTiming.END_OF_BEAT,
-                              type="modify_trait", action="step_up", target="rage")],
-        ))
-
-        contest = ContestResult(
-            pipeline="pool",
-            winner=ContestWinner.PLAYER,
-            player_result=PoolResult(
-                rolls=[DieRoll(die=DieType.D10, result=9, label="a"),
-                       DieRoll(die=DieType.D8, result=6, label="b"),
-                       DieRoll(die=DieType.D6, result=3, label="c")],
-                kept=[DieRoll(die=DieType.D10, result=9, label="a"),
-                      DieRoll(die=DieType.D8, result=6, label="b")],
-                total=15, effect_die=DieType.D6, effect_die_value=3,
-                unused=[DieRoll(die=DieType.D6, result=3, label="c")],
-                hitches=[], botch=False, razmerit_earned=0,
-            ),
-            opponent_result=PoolResult(
-                rolls=[DieRoll(die=DieType.D8, result=5, label="x"),
-                       DieRoll(die=DieType.D6, result=4, label="y"),
-                       DieRoll(die=DieType.D6, result=3, label="z")],
-                kept=[DieRoll(die=DieType.D8, result=5, label="x"),
-                      DieRoll(die=DieType.D6, result=4, label="y")],
-                total=9, effect_die=DieType.D6, effect_die_value=3,
-                unused=[DieRoll(die=DieType.D6, result=3, label="z")],
-                hitches=[], botch=False, razmerit_earned=0,
-            ),
-        )
-
-        applied = fire_contest_sfx(
-            engine, contest,
-            player_id="kael", opponent_id="guard",
-            universe="earth",
-            player_sfx_ids=["sfx-win"], opponent_sfx_ids=["sfx-loss"],
-            player_razmerit=10, opponent_razmerit=5,
-        )
-
-        # Player's win SFX fires immediately
-        assert len(applied) >= 1
-        win_effects = [a for a in applied if a.action == "step_up_die"]
-        assert len(win_effects) >= 1
-
-        # Opponent's loss SFX is deferred (END_OF_BEAT)
-        assert engine.scheduled_count == 1
-
-    def test_no_sfx_when_none_available(self):
-        engine = EffectsEngine()
-        contest = ContestResult(
-            pipeline="simplified",
-            winner=ContestWinner.PLAYER,
-            player_result=SimplifiedResult(
-                rolls=[DieRoll(die=DieType.D8, result=7, label="a")],
-                highest=7, tier=OutcomeTier.SUCCESS,
-                effect_die=DieType.D6, hitches=[], botch=False,
-                razmerit_earned=0,
-            ),
-            opponent_result=SimplifiedResult(
-                rolls=[DieRoll(die=DieType.D6, result=4, label="x")],
-                highest=4, tier=OutcomeTier.MARGINAL,
-                effect_die=DieType.D4, hitches=[], botch=False,
-                razmerit_earned=0,
-            ),
-        )
-        applied = fire_contest_sfx(
-            engine, contest,
-            player_id="kael", opponent_id="guard",
-            universe="earth",
-            player_sfx_ids=[], opponent_sfx_ids=[],
-            player_razmerit=10, opponent_razmerit=5,
-        )
-        assert len(applied) == 0
-
-    def test_insufficient_razmerit_blocks_sfx(self):
-        engine = EffectsEngine()
-        engine.register(SFX(
-            id="sfx-costly", name="Costly", trigger="on_contest_win",
-            effects=[Effect(timing=EffectTiming.IMMEDIATE,
-                              type="transfer_razmerit", action="spend", target="self", result="3"),
-                     Effect(timing=EffectTiming.IMMEDIATE,
-                              type="modify_roll", action="step_up_die", target="next")],
-        ))
-        contest = ContestResult(
-            pipeline="simplified",
-            winner=ContestWinner.PLAYER,
-            player_result=SimplifiedResult(
-                rolls=[DieRoll(die=DieType.D8, result=7, label="a")],
-                highest=7, tier=OutcomeTier.SUCCESS,
-                effect_die=DieType.D6, hitches=[], botch=False,
-                razmerit_earned=0,
-            ),
-            opponent_result=SimplifiedResult(
-                rolls=[DieRoll(die=DieType.D6, result=4, label="x")],
-                highest=4, tier=OutcomeTier.MARGINAL,
-                effect_die=DieType.D4, hitches=[], botch=False,
-                razmerit_earned=0,
-            ),
-        )
-        applied = fire_contest_sfx(
-            engine, contest,
-            player_id="kael", opponent_id="guard",
-            universe="earth",
-            player_sfx_ids=["sfx-costly"], opponent_sfx_ids=[],
-            player_razmerit=1, opponent_razmerit=5,
-        )
-        # Cost is 3, only 1 razmerit available — SFX skipped
-        assert len(applied) == 0
 
 
 # ── SFX Push via ContestTracker ────────────────────────

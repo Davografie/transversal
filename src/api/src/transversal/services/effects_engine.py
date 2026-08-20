@@ -419,32 +419,3 @@ def contest_to_events(
 
     return events
 
-
-def fire_contest_sfx(
-    engine: EffectsEngine,
-    contest: "ContestResult",
-    player_id: str,
-    opponent_id: str,
-    universe: str,
-    player_sfx_ids: list[str],
-    opponent_sfx_ids: list[str],
-    player_razmerit: int,
-    opponent_razmerit: int,
-) -> list[Effect]:
-    """Process a contest result through the effects engine for both sides.
-
-    Returns all immediately-applied effects (deferred are queued internally).
-    """
-    events = contest_to_events(contest, player_id, opponent_id, universe)
-    applied: list[Effect] = []
-
-    for event in events:
-        if event.entity_id == player_id:
-            sfx_ids = player_sfx_ids
-            raz = player_razmerit
-        else:
-            sfx_ids = opponent_sfx_ids
-            raz = opponent_razmerit
-        applied.extend(engine.process_event(event, sfx_ids, raz))
-
-    return applied
