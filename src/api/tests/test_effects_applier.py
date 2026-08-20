@@ -587,3 +587,31 @@ def test_cortex_gain_at_cap_noop():
     result = apply_effects(entity, [_effect("modify_trait", "cortex_gain", "complication-x", "d12")], repo)
     assert len(result.updated_trait_settings) == 0
     assert "already at d12" in result.applied[0].summary
+
+
+# ── P3.8: complication stepped beyond d12 → taken out ──
+
+def test_step_up_d12_complication_takes_out():
+    repo = FakeRepo(traitsettings=[_ts("scar", [DieType.D12], negative=True)])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "step_up", "scar")], repo)
+    assert entity.taken_out is True
+    assert "taken out" in result.applied[0].summary
+    assert len(entity.scheduled_events) == 1
+    assert entity.scheduled_events[0].effect.action == "clear_taken_out"
+
+
+def test_step_up_d12_positive_trait_no_takeout():
+    repo = FakeRepo(traitsettings=[_ts("iron-will", [DieType.D12])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "step_up", "iron-will")], repo)
+    assert entity.taken_out is False
+    assert "already at d12" in result.applied[0].summary
+
+
+def test_cortex_gain_d12_complication_takes_out():
+    repo = FakeRepo(traitsettings=[_ts("scar", [DieType.D12], negative=True)])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "cortex_gain", "scar", "d8")], repo)
+    assert entity.taken_out is True
+    assert "taken out" in result.applied[0].summary

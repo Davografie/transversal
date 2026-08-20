@@ -293,6 +293,31 @@ def _step_down(ts: TraitSetting) -> bool:
     return True
 
 
+def _step_up_trait(entity: Entity, ts: TraitSetting, target: str, effect: Effect, result) -> bool:
+    """Step up a trait setting; a d12 complication instead takes the entity out.
+
+    Returns True when the step succeeded (caller persists + reverts). On a
+    failed step it appends the appropriate AppliedEffect (already-at-d12, or
+    taken-out for complications) and returns False.
+    """
+    if _step_up(ts):
+        return True
+    if ts.negative:
+        entity.taken_out = True
+        result.applied.append(AppliedEffect(effect, f"{target} stepped beyond d12 — taken out"))
+        from transversal.domain import Effect as _Effect, EffectTiming as _ET, Timer as _Timer, TimerCombine as _TC
+        from transversal.services.scheduled_events import queue_event
+        queue_event(
+            entity,
+            _Effect(timing=_ET.IMMEDIATE, type="entity", action="clear_taken_out", target="self"),
+            [_Timer(event="scene", remaining=1)],
+            _TC.FIRST_TO_FIRE,
+        )
+    else:
+        result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
+    return False
+
+
 def _die(result: Optional[str]) -> DieType:
     return DieType(str(result).lower()) if result else DieType.D4
 
@@ -439,12 +464,10 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     owner = _trait_owner(entity, effect, repo)
     existing = _find_traitsetting(owner, repo, target)
     if existing:
-        if _step_up(existing):
+        if _step_up_trait(entity, existing, target, effect, result):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
             _queue_explicit(existing, effect, "step_down", target)
-        else:
-            result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
@@ -481,11 +504,9 @@ def _apply_cortex_gain(entity, effect, repo, result):
             existing.dice = [die]
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"{target} jumped to {die.value}", existing.id))
-        elif _step_up(existing):
+        elif _step_up_trait(entity, existing, target, effect, result):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
-        else:
-            result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
         return
     ts = _new_traitsetting(owner, target, die, repo, negative=negative)
     result.new_trait_settings.append(ts)
@@ -501,12 +522,10 @@ def _apply_step_up(entity, effect, repo, result):
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step up"))
         return
-    if _step_up(existing):
+    if _step_up_trait(entity, existing, target, effect, result):
         result.updated_trait_settings.append(existing)
         result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         _queue_trait_revert(existing, effect)
-    else:
-        result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
 
 
 def _apply_step_down(entity, effect, repo, result):

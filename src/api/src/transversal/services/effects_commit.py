@@ -55,6 +55,7 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
             "name": other.name,
             "current_universe": other.current_universe,
             "current_location": other.current_location,
+            "taken_out": other.taken_out,
         })
 
     # The primary entity.
@@ -65,6 +66,7 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
             "name": entity.name,
             "current_universe": entity.current_universe,
             "current_location": entity.current_location,
+            "taken_out": entity.taken_out,
         })
         if entity.razmerit != old_razmerit:
             _publish("razmerit_changed", {
