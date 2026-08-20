@@ -18,7 +18,9 @@ from transversal.services.scheduled_events import (
     advance_traitsetting_events,
     build_revert,
     dispatch_event,
+    schedule_deferred,
     schedule_revert,
+    timing_to_timer,
 )
 
 
@@ -219,3 +221,27 @@ def test_advance_traitsetting_events(monkeypatch):
     assert advance_traitsetting_events(repo, "beat") == 1
     assert fired == [("set", "kael", "trait-1")]
     assert ts.scheduled_events == []
+
+
+def test_timing_to_timer():
+    from transversal.domain import EffectTiming
+
+    assert timing_to_timer(EffectTiming.END_OF_BEAT) == Timer(event="beat", remaining=1)
+    assert timing_to_timer(EffectTiming.END_OF_SCENE) == Timer(event="scene", remaining=1)
+    assert timing_to_timer(EffectTiming.END_OF_SESSION) == Timer(event="session", remaining=1)
+    assert timing_to_timer(EffectTiming.AFTER_BEATS) == Timer(event="beat", remaining=3)
+    assert timing_to_timer(EffectTiming.IMMEDIATE) is None
+    assert timing_to_timer(EffectTiming.ON_CONDITION) is None
+
+
+def test_schedule_deferred_persists_event():
+    entity = _entity()
+    repo = FakeRepo([entity])
+    effect = Effect(timing=EffectTiming.END_OF_BEAT, type="modify_trait", action="step_up", target="t")
+
+    assert schedule_deferred(entity, effect, repo) is True
+    assert len(entity.scheduled_events) == 1
+    assert entity.scheduled_events[0].timers == [Timer(event="beat", remaining=1)]
+
+    # ON_CONDITION is unmapable → not persisted.
+    assert schedule_deferred(entity, Effect(timing=EffectTiming.ON_CONDITION, type="modify_trait", action="step_up", target="t"), repo) is False

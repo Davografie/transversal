@@ -179,6 +179,14 @@ class EffectsEngine:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
                         outcome.applied.append(effect)
                 else:
+                    # Fold deferred effects into persisted scheduled events when a
+                    # repo is available (survives restart); fall back to the
+                    # in-memory schedule otherwise.
+                    if repo is not None:
+                        from transversal.services.scheduled_events import schedule_deferred
+                        entity = repo.get_entity(event.entity_id)
+                        if entity is not None and schedule_deferred(entity, effect, repo, source_sfx_id=sfx.id):
+                            continue
                     self._schedule.append(
                         ScheduledEffect(
                             sfx_name=sfx.name,

@@ -16,6 +16,7 @@ from transversal.domain import (
     Effect,
     EffectTiming,
     ScheduledEvent,
+    Timer,
     TimerCombine,
 )
 
@@ -141,6 +142,29 @@ def schedule_traitsetting_revert(
         return False
     repo.update_traitsetting(ts)
     return True
+
+
+def timing_to_timer(timing) -> Optional[Timer]:
+    """Map an ``EffectTiming`` boundary to a single timer, or None if unmapable."""
+    from transversal.domain import EffectTiming
+
+    if timing == EffectTiming.END_OF_BEAT:
+        return Timer(event="beat", remaining=1)
+    if timing == EffectTiming.END_OF_SCENE:
+        return Timer(event="scene", remaining=1)
+    if timing == EffectTiming.END_OF_SESSION:
+        return Timer(event="session", remaining=1)
+    if timing == EffectTiming.AFTER_BEATS:
+        return Timer(event="beat", remaining=3)
+    return None  # IMMEDIATE / ON_CONDITION
+
+
+def schedule_deferred(entity, effect: Effect, repo, *, source_sfx_id: Optional[str] = None) -> bool:
+    """Persist a deferred (non-IMMEDIATE) effect as a scheduled event on ``entity``."""
+    timer = timing_to_timer(effect.timing)
+    if timer is None:
+        return False
+    return schedule_effect(entity, effect, [timer], TimerCombine.FIRST_TO_FIRE, repo, source_sfx_id=source_sfx_id)
 
 
 def _transpired(timer) -> bool:
