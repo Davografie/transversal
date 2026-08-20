@@ -40,11 +40,23 @@ class EffectActionMeta:
         "IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
     ])
     fields: list[EffectFieldDef] = field(default_factory=list)
+    context_fields: list[EffectFieldDef] = field(default_factory=list)
     implicit_target: str | None = None   # if always the same, hide field
     implicit_result: str | None = None   # if always the same, hide field
     implicit_timing: str | None = None   # if only one valid timing, hide field
     requires_choice: bool = False        # target must be resolved at runtime
     target_kind: str | None = None       # trait | entity | life_path | ...
+
+
+# Reusable context-field definition: trait-modifying effects may target a
+# character↔faction relationship edge instead of the entity (see
+# effects_applier._trait_owner).
+_RELATIONSHIP_CONTEXT_FIELD = EffectFieldDef(
+    name="relationship",
+    label="Faction (relationship)",
+    field_type="text",
+    required=False,
+)
 
 
 # ── The Registry ──────────────────────────────────────
@@ -223,6 +235,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
         ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -239,6 +252,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Deferral", field_type="text",
                           required=False, default="after_resolution"),
         ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -255,6 +269,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         target_kind="trait",
     ),
 
@@ -346,8 +361,10 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=False, default="self"),
             EffectFieldDef(name="result", label="Target Location", field_type="text",
                           required=True),
+        ],
+        context_fields=[
             EffectFieldDef(name="transversal_type", label="Transversal Type",
-                          field_type="select", required=False,
+                          field_type="select", required=False, default="inapposite",
                           options=["inapposite", "consciousness"]),
         ],
     ),
@@ -366,6 +383,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -381,6 +399,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Create At", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -396,6 +415,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -411,6 +431,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Create At", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         target_kind="trait",
     ),
 
@@ -438,6 +459,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="target", label="Next Table", field_type="text", required=False),
+        ],
+        context_fields=[
+            EffectFieldDef(name="return_to", label="Return To", field_type="text", required=False),
         ],
         target_kind="roll_table",
     ),
@@ -497,6 +521,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target Entity", field_type="text", required=True),
             EffectFieldDef(name="result", label="Relationship Type", field_type="text", required=True),
+        ],
+        context_fields=[
+            EffectFieldDef(name="description", label="Description", field_type="text", required=False),
         ],
         target_kind="entity",
     ),

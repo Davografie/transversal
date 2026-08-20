@@ -362,6 +362,7 @@ class EffectActionMeta:
     effect_action: str
     valid_timings: list[str]
     fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
+    context_fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
     implicit_target: Optional[str] = None
     implicit_result: Optional[str] = None
     implicit_timing: Optional[str] = None
