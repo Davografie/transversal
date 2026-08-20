@@ -176,6 +176,7 @@ class Effect:
     target: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
+    negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDuration] = None
 
@@ -188,6 +189,7 @@ class EffectInput:
     target: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
+    negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDurationInput] = None
 

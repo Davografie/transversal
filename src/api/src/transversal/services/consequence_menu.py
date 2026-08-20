@@ -87,8 +87,17 @@ BASE_CONSEQUENCE_OPTIONS: dict[str, list[ConsequenceOption]] = {
 }
 
 
-def assemble_consequence_menu(entity: Entity, repo, side: str) -> list[ConsequenceOption]:
-    """Return the consequence options offered to ``side`` in this context."""
+def assemble_consequence_menu(
+    entity: Entity,
+    repo,
+    side: str,
+    menu_context: str = "test_success",
+) -> list[ConsequenceOption]:
+    """Return the consequence options offered to ``side`` in ``menu_context``.
+
+    SFX are sourced by ``SFX.menu_context``; SFX with no ``menu_context`` but the
+    legacy ``on_consequence`` trigger are included for backward compatibility.
+    """
     options: list[ConsequenceOption] = list(BASE_CONSEQUENCE_OPTIONS.get(side, []))
 
     # Entity moves: current location and its ancestors (nearest → root).
@@ -103,10 +112,16 @@ def assemble_consequence_menu(entity: Entity, repo, side: str) -> list[Consequen
             if option.side in (side, "either"):
                 options.append(option)
 
-    # SFX moves: on_consequence SFX available to the acting entity (player side).
+    # SFX moves: SFX whose menu_context matches; legacy on_consequence SFX with
+    # no menu_context are included for backward compatibility.
     for sfx_id in get_available_sfx_ids(entity.id, entity.current_universe, repo):
         sfx = repo.get_sfx(sfx_id)
-        if sfx is None or sfx.trigger != "on_consequence":
+        if sfx is None:
+            continue
+        if sfx.menu_context:
+            if sfx.menu_context != menu_context:
+                continue
+        elif sfx.trigger != "on_consequence":
             continue
         options.append(ConsequenceOption(
             id=f"sfx:{sfx.id}", label=sfx.name, side="player",

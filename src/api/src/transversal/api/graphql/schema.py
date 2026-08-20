@@ -174,6 +174,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
     return GqlEffect(
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, result=e.result, target_scope=e.target_scope,
+        negative=e.negative,
         context=e.context,
         duration=_duration_to_gql(e.duration),
     )
@@ -216,6 +217,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
     return DomainEffect(
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, result=e.result, target_scope=e.target_scope,
+        negative=e.negative,
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),
     )
@@ -451,11 +453,14 @@ class Query:
         self, info: strawberry.Info,
         entity_id: strawberry.ID,
         side: str = "player",
+        menu_context: str = "test_success",
     ) -> list[ConsequenceOption]:
-        """Assemble the post-roll consequence menu for a side in this context.
+        """Assemble the post-roll consequence menu for a side in a menu context.
 
-        ``side`` is ``"player"`` or ``"gm"``. Options come from base moves,
-        the acting entity's location chain, and ``on_consequence`` SFX.
+        ``side`` is ``"player"`` or ``"gm"``. ``menu_context`` is one of the
+        declared consequence-menu contexts (``test_success``, ``simplified_roll``,
+        ``contest_win``, ``contest_give_in``). Options come from base moves, the
+        acting entity's location chain, and SFX whose ``menu_context`` matches.
         """
         from transversal.services.consequence_menu import assemble_consequence_menu
 
@@ -465,7 +470,7 @@ class Query:
             return []
         return [
             _consequence_option_to_gql(o)
-            for o in assemble_consequence_menu(entity, repo, side)
+            for o in assemble_consequence_menu(entity, repo, side, menu_context)
         ]
 
     @strawberry.field

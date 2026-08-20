@@ -133,3 +133,29 @@ def test_base_moves_carry_effect_die_placeholder():
 
     gm = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "gm")}
     assert gm["give_asset"].effects[0].result == "{effect_die}"
+
+
+def test_menu_context_sfx_appears_only_in_matching_context():
+    repo = MenuRepo()
+    repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-apply"], trait_id="origin")]
+    repo.traits = {"origin": SimpleNamespace(default_sfx_ids=[])}
+    repo.sfxs = {"sfx-apply": SFX(id="sfx-apply", name="Apply", trigger="",
+                                  menu_context="contest_win", effects=[])}
+
+    contest = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "player", "contest_win")}
+    assert "sfx:sfx-apply" in contest
+
+    test = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "player", "test_success")}
+    assert "sfx:sfx-apply" not in test
+
+
+def test_legacy_on_consequence_sfx_appears_in_all_contexts():
+    repo = MenuRepo()
+    repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-flashback"], trait_id="origin")]
+    repo.traits = {"origin": SimpleNamespace(default_sfx_ids=[])}
+    repo.sfxs = {"sfx-flashback": SFX(id="sfx-flashback", name="Flashback",
+                                     trigger="on_consequence", effects=[])}
+
+    for context in ("test_success", "contest_win"):
+        options = {o.id for o in assemble_consequence_menu(_entity(), repo, "player", context)}
+        assert "sfx:sfx-flashback" in options
