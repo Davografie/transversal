@@ -416,6 +416,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        supports_duration=True,
         target_kind="trait",
     ),
     EffectActionMeta(
@@ -450,6 +451,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        supports_duration=True,
         target_kind="trait",
     ),
 

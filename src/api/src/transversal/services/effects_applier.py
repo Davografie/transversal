@@ -442,6 +442,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
         if _step_up(existing):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
+            _queue_explicit(existing, effect, "step_down", target)
         else:
             result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
         return
@@ -449,6 +450,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     ts = _new_traitsetting(owner, target, die, repo)
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
+    _queue_explicit(entity, effect, "remove", target)
 
 
 def _apply_step_up(entity, effect, repo, result):
@@ -524,6 +526,7 @@ def _apply_gain_or_step_up_complication(entity, effect, repo, result):
         if _step_up(existing):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up complication {target}", existing.id))
+            _queue_explicit(existing, effect, "step_down", target)
         else:
             result.applied.append(AppliedEffect(effect, f"complication {target} already at d12", existing.id))
         return
@@ -531,6 +534,7 @@ def _apply_gain_or_step_up_complication(entity, effect, repo, result):
     ts = _new_traitsetting(owner, target, die, repo, negative=True)
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained complication {target} at {die.value}", ts.id))
+    _queue_explicit(entity, effect, "remove", target)
 
 
 def _apply_earn(entity, effect, repo, result):
@@ -617,6 +621,21 @@ def _queue_entity_revert(entity, effect, target=None):
     from transversal.services.scheduled_events import queue_revert
 
     queue_revert(entity, effect, target=target)
+
+
+def _queue_explicit(owner, effect, action, target):
+    """Queue an explicit inverse action (for compound actions like gain_or_step_up)."""
+    if not effect.duration or not effect.duration.timers:
+        return
+    from transversal.domain import Effect as _Effect, EffectTiming as _ET
+    from transversal.services.scheduled_events import queue_event
+
+    queue_event(
+        owner,
+        _Effect(timing=_ET.IMMEDIATE, type="modify_trait", action=action, target=target),
+        effect.duration.timers,
+        effect.duration.combine,
+    )
 
 
 _MUTATION_HANDLERS = {

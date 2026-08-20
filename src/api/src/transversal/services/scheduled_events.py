@@ -60,6 +60,13 @@ def _append(owner, event: ScheduledEvent) -> None:
     owner.scheduled_events = list(owner.scheduled_events or []) + [event]
 
 
+def queue_event(owner, effect: Effect, timers, combine, source_sfx_id: Optional[str] = None) -> ScheduledEvent:
+    """Append an explicit (already-built) effect to ``owner`` without persisting."""
+    event = _new_event(effect, timers, combine, source_sfx_id)
+    _append(owner, event)
+    return event
+
+
 def queue_revert(
     owner,
     effect: Effect,
@@ -81,9 +88,7 @@ def queue_revert(
         return None
     if target is not None:
         revert.target = target
-    event = _new_event(revert, effect.duration.timers, effect.duration.combine, source_sfx_id)
-    _append(owner, event)
-    return event
+    return queue_event(owner, revert, effect.duration.timers, effect.duration.combine, source_sfx_id)
 
 
 def schedule_revert(
