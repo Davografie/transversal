@@ -52,10 +52,10 @@
       <div v-if="selected.length === 0" class="empty">Select one or more owners to manage their shared SFX</div>
       <div v-else-if="sharedSfx.length === 0" class="empty">No SFX shared by all selected owners</div>
       <div v-else class="sfx-list">
-        <div v-for="s in sharedSfx" :key="s.id" class="sfx-row">
+        <div v-for="s in sharedSfx" :key="s.id" class="sfx-row" @click="openSfx(s)">
           <span class="sfx-name">{{ s.name }}</span>
           <span class="sfx-trigger">{{ s.trigger || '' }}</span>
-          <button class="row-del-btn" @click="removeSfx(s.id)" title="Remove from all selected">✕</button>
+          <button class="row-del-btn" @click.stop="removeSfx(s.id)" title="Remove from all selected">✕</button>
         </div>
       </div>
     </div>
@@ -70,6 +70,7 @@ import { useSfxOwners } from '@/composables/useSfxOwners.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
+import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 
 const panel = usePanel()
 const { OWNER_TYPES, ownersByType, loading, error, fetchOwners, addOwnerSfx, removeOwnerSfx } = useSfxOwners()
@@ -137,6 +138,15 @@ async function openPicker() {
 
 async function removeSfx(id) {
   await removeOwnerSfx(ownerRefs.value, id)
+}
+
+function openSfx(sfx) {
+  panel.open({
+    component: GmSfxEditPanel,
+    title: sfx.name || 'Edit SFX',
+    props: { sfx },
+    listeners: {},
+  })
 }
 
 onMounted(() => {
