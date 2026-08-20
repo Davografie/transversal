@@ -56,6 +56,11 @@ class TestSceneStateStore:
         store.set_difficulty("loc-1", 11)
         assert store.get_difficulty("loc-1") == 11
 
+    def test_clear_difficulty(self, store):
+        store.set_difficulty("loc-1", 11)
+        store.clear_difficulty("loc-1")
+        assert store.get_difficulty("loc-1") is None
+
     def test_clear_location(self, store):
         store.save_pool("loc-1", "kael-1", [_die()])
         store.set_difficulty("loc-1", 9)
@@ -139,5 +144,12 @@ class TestSceneStateEndpoints:
         assert r.json()["difficulty"] == 12
 
     def test_difficulty_unset_is_null(self, client):
+        r = client.get("/api/v1/locations/loc-1/difficulty")
+        assert r.json()["difficulty"] is None
+
+    def test_next_beat_clears_difficulty(self, client):
+        client.put("/api/v1/locations/loc-1/difficulty", json={"difficulty": 12})
+        r = client.post("/api/v1/locations/loc-1/next-beat")
+        assert r.status_code == 200, r.text
         r = client.get("/api/v1/locations/loc-1/difficulty")
         assert r.json()["difficulty"] is None

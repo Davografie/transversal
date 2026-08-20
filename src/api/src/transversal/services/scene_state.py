@@ -95,6 +95,10 @@ class SceneStateStore:
     def get_difficulty(self, location_id: str) -> Optional[int]:
         return self._difficulty.get(location_id)
 
+    def clear_difficulty(self, location_id: str) -> None:
+        """Clear the test difficulty for a location (end of beat)."""
+        self._difficulty.pop(location_id, None)
+
     # ── Lifecycle ─────────────────────────────────────
 
     def clear_location(self, location_id: str) -> None:

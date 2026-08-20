@@ -95,10 +95,11 @@ async def get_difficulty(location_id: str):
 
 @router.post("/{location_id}/next-beat")
 async def next_beat(location_id: str):
-    """End the beat: clear every pool at the location and broadcast beat_end."""
+    """End the beat: clear every pool and the difficulty at the location."""
     store = get_scene_store()
     cleared = store.list_entities(location_id)
     store.clear_pools(location_id)
+    store.clear_difficulty(location_id)
 
     from transversal.services.contest_tracker import get_contest_tracker
     get_contest_tracker().clear_location(location_id)

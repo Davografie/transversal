@@ -877,6 +877,7 @@ watch(lastEvent, (evt) => {
       diceRef.value?.clearPool()
       remotePools.value = {}
       remoteResults.value = {}
+      currentDifficulty.value = null
       if (gmMode.value) addToast('Beat ended', 'dice')
       break
     case 'trait_updated':
@@ -1173,7 +1174,8 @@ async function onNextBeat() {
   // Clear remote pools and results
   remotePools.value = {}
   remoteResults.value = {}
-  // Clear every pool at the location server-side (broadcasts beat_end to all)
+  currentDifficulty.value = null
+  // Clear every pool + difficulty at the location server-side (broadcasts beat_end to all)
   if (currentLocationId.value) {
     await apiNextBeat(currentLocationId.value)
   }
