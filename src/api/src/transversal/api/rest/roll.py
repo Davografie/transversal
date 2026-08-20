@@ -1,72 +1,96 @@
-"""REST endpoints: dice resolution.
+"""REST endpoints: stateful dice-pool resolution (P2.10d G5).
 
-Three decomposed endpoints (P2.10d G5) replace the monolithic resolve for the
-game UI. Only rolling is automatic — the client drives total/effect selection:
+Every roll is now a pool: the pool is assembled and saved (unrolled), then a
+roll endpoint reads the stored pool, sets ``result`` + ``hitch`` on each die,
+saves it back, and returns the enriched dice. Selection flags ``role`` via
+``/select``. Only rolling is automatic.
 
-  - ``/cortex-roll``     3+ dice, hitches apply → rolls + hitches + botch
-  - ``/simplified-roll`` 1-2 dice → rolls + hitches + botch + highest/tier/effect
-  - ``/difficulty-roll`` GM difficulty → rolls only (no hitches, no SFX)
+  - ``/locations/{loc}/pools/{entity}/cortex-roll``     3+ dice, hitches apply
+  - ``/locations/{loc}/pools/{entity}/simplified-roll`` 1-2 dice, deterministic
+  - ``/locations/{loc}/pools/{entity}/difficulty-roll`` GM difficulty (no hitches)
+  - ``/locations/{loc}/pools/{entity}/select``           flag result/effect dice
+
+The difficulty pool uses the location id as its ``entity`` key (unified pool
+concept — the location is its own "entity" for that pool).
 
 ``/roll`` is retained as the legacy monolithic resolve for compatibility.
 """
 
 from types import SimpleNamespace
+from typing import Optional
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
-from transversal.domain import (
-    DicePoolRequest,
-    DieSpec,
-    RollResult,
-    _coerce_die_list,
-)
+from transversal.domain import DieSpec, DieType, DicePoolRequest, RollResult
+from transversal.services.contest_tracker import broadcast_pool_change
 from transversal.services.dice_resolver import (
-    detect_hitches,
     determine_tier,
     is_botch,
     resolve as resolve_dice,
     roll_dice as roll_pool_dice,
 )
 from transversal.services.roll_orchestrator import fire_roll_sfx
+from transversal.services.scene_state import get_scene_store
 
 router = APIRouter(prefix="/api/v1", tags=["dice"])
 
 
-class DifficultyRollRequest(BaseModel):
-    """A GM difficulty roll is stateless — just the dice, no entity/hitches."""
+class SelectRequest(BaseModel):
+    """Flag which dice are the result/effect dice after a roll."""
 
-    dice: list[DieSpec] = Field(default_factory=list)
-
-    @field_validator("dice", mode="before")
-    @classmethod
-    def _coerce_dice(cls, v):
-        return _coerce_die_list(v)
+    total_indices: list[int] = Field(default_factory=list)
+    effect_index: Optional[int] = None
 
 
-def _static_difficulty(request: DicePoolRequest):
-    """Echo the static difficulty back so the client can compare against it."""
-    if request.opposition and request.opposition.type == "static_difficulty":
-        return request.opposition.static_difficulty
-    return None
+def _dice_to_specs(dice: list[dict]) -> list[DieSpec]:
+    return [
+        DieSpec(
+            die=DieType(d["die"]),
+            source_kind=d.get("source_kind", "manual"),
+            source_id=d.get("source_id", ""),
+            label=d.get("label", ""),
+            ts_id=d.get("ts_id"),
+        )
+        for d in dice
+    ]
 
 
-def _fire_roll_sfx(request: DicePoolRequest, rolls, hitches, botch) -> None:
-    """Fire roll SFX against the decomposed result (rolls/hitches/botch)."""
+def _roll_stored_pool(location_id: str, entity_id: str, hitches_apply: bool) -> tuple[list[dict], list[dict], bool]:
+    """Roll the stored pool in place, setting ``result`` + ``hitch`` per die.
+
+    Returns ``(enriched_dice, hitches, botch)`` and saves the enriched dice back.
+    """
+    store = get_scene_store()
+    dice = store.get_pool(location_id, entity_id)
+    rolls = roll_pool_dice(_dice_to_specs(dice))
+    enriched = [
+        {**d, "result": r.result, "hitch": r.result == 1, "role": None}
+        for d, r in zip(dice, rolls)
+    ]
+    store.save_pool(location_id, entity_id, enriched)
+    hitches = [d for d in enriched if d.get("hitch")] if hitches_apply else []
+    botch = is_botch(rolls) if hitches_apply and rolls else False
+    return enriched, hitches, botch
+
+
+def _fire_entity_roll_sfx(entity_id: str, rolls: list[dict], hitches: list[dict], botch: bool) -> None:
+    """Fire roll SFX for a real entity roll (not the difficulty pool)."""
     from transversal.main import _get_engine, _get_repo
 
+    repo = _get_repo()
+    entity = repo.get_entity(entity_id)
+    if entity is None:
+        return
     fire_roll_sfx(
-        _get_engine(), _get_repo(), request.entity_id, request.universe,
+        _get_engine(), repo, entity_id, entity.current_universe,
         SimpleNamespace(rolls=rolls, hitches=hitches, botch=botch),
     )
 
 
 @router.post("/roll", response_model=RollResult)
 async def roll_dice(request: DicePoolRequest) -> RollResult:
-    """Legacy monolithic resolve — kept for compatibility/tests.
-
-    Superseded by the decomposed endpoints below.
-    """
+    """Legacy monolithic resolve — kept for compatibility/tests."""
     result = resolve_dice(request)
     from transversal.main import _get_engine, _get_repo
 
@@ -74,48 +98,61 @@ async def roll_dice(request: DicePoolRequest) -> RollResult:
     return result
 
 
-@router.post("/cortex-roll")
-async def cortex_roll(request: DicePoolRequest):
-    """Roll a 3+ dice pool and return rolls + hitches only.
-
-    The client picks the two dice for the total and the effect die.
-    """
-    rolls = roll_pool_dice(request.dice)
-    hitches = detect_hitches(rolls) if request.hitches_apply else []
-    botch = is_botch(rolls) if request.hitches_apply else False
-    _fire_roll_sfx(request, rolls, hitches, botch)
+@router.post("/locations/{location_id}/pools/{entity_id}/cortex-roll")
+async def cortex_roll(location_id: str, entity_id: str):
+    """Roll a 3+ dice pool; return rolls + hitches only (client picks)."""
+    enriched, hitches, botch = _roll_stored_pool(location_id, entity_id, hitches_apply=True)
+    _fire_entity_roll_sfx(entity_id, enriched, hitches, botch)
+    broadcast_pool_change(location_id, entity_id, dice=enriched, phase="rolled")
     return {
         "pipeline": "pool",
-        "rolls": rolls,
+        "rolls": enriched,
         "hitches": hitches,
         "botch": botch,
-        "opposition_total": _static_difficulty(request),
+        "opposition_total": get_scene_store().get_difficulty(location_id),
     }
 
 
-@router.post("/simplified-roll")
-async def simplified_roll(request: DicePoolRequest):
-    """Roll 1-2 dice and derive highest/tier/effect deterministically."""
-    rolls = roll_pool_dice(request.dice)
-    hitches = detect_hitches(rolls) if request.hitches_apply else []
-    botch = is_botch(rolls) if request.hitches_apply else False
-    highest = max(r.result for r in rolls)
+@router.post("/locations/{location_id}/pools/{entity_id}/simplified-roll")
+async def simplified_roll(location_id: str, entity_id: str):
+    """Roll 1-2 dice; derive highest/tier/effect deterministically."""
+    enriched, hitches, botch = _roll_stored_pool(location_id, entity_id, hitches_apply=True)
+    highest = max((d["result"] for d in enriched if d.get("result") is not None), default=0)
     tier = determine_tier(highest)
-    _fire_roll_sfx(request, rolls, hitches, botch)
+    _fire_entity_roll_sfx(entity_id, enriched, hitches, botch)
+    broadcast_pool_change(location_id, entity_id, dice=enriched, phase="rolled")
     return {
         "pipeline": "simplified",
-        "rolls": rolls,
+        "rolls": enriched,
         "hitches": hitches,
         "botch": botch,
         "highest": highest,
         "tier": tier.value,
         "effect_die": tier.effect_die.value if tier.effect_die else None,
-        "opposition_total": _static_difficulty(request),
+        "opposition_total": get_scene_store().get_difficulty(location_id),
     }
 
 
-@router.post("/difficulty-roll")
-async def difficulty_roll(request: DifficultyRollRequest):
-    """Roll GM difficulty dice (no hitches). The client picks the total."""
-    rolls = roll_pool_dice(request.dice)
-    return {"pipeline": "pool", "rolls": rolls}
+@router.post("/locations/{location_id}/pools/{entity_id}/difficulty-roll")
+async def difficulty_roll(location_id: str, entity_id: str):
+    """Roll GM difficulty dice (no hitches); the client picks the total."""
+    enriched, _, _ = _roll_stored_pool(location_id, entity_id, hitches_apply=False)
+    broadcast_pool_change(location_id, entity_id, dice=enriched, phase="rolled")
+    return {"pipeline": "pool", "rolls": enriched}
+
+
+@router.post("/locations/{location_id}/pools/{entity_id}/select")
+async def select_dice(location_id: str, entity_id: str, req: SelectRequest):
+    """Flag the chosen result/effect dice (``role``) on the stored pool."""
+    store = get_scene_store()
+    dice = store.get_pool(location_id, entity_id)
+    for d in dice:
+        d["role"] = None
+    for i in req.total_indices:
+        if 0 <= i < len(dice):
+            dice[i]["role"] = "total"
+    if req.effect_index is not None and 0 <= req.effect_index < len(dice):
+        dice[req.effect_index]["role"] = "effect"
+    store.save_pool(location_id, entity_id, dice)
+    broadcast_pool_change(location_id, entity_id, dice=dice, phase="selected")
+    return {"dice": dice}

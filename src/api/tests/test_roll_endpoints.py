@@ -1,55 +1,93 @@
-"""Tests for the decomposed roll endpoints (P2.10d G5)."""
+"""Tests for the stateful roll endpoints (P2.10d G5)."""
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from transversal.api.rest.roll import router
+from transversal.api.rest.roll import router as roll_router
+from transversal.api.rest.scene_state import router as scene_router
+from transversal.services import scene_state as ss_module
+from transversal.services.scene_state import SceneStateStore
 
 
 @pytest.fixture
 def client():
+    ss_module._store = SceneStateStore()
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(scene_router)
+    app.include_router(roll_router)
     return TestClient(app)
 
 
-def _roll(client, path, dice):
-    r = client.post(f"/api/v1{path}", json={
-        "entity_id": "ghost-1",
-        "universe": "earth",
-        "dice": dice,
-    })
+def _save(client, location_id, entity_id, dice):
+    r = client.put(f"/api/v1/locations/{location_id}/pools/{entity_id}", json={"dice": dice})
     assert r.status_code == 200, r.text
-    return r.json()
 
 
-def test_cortex_roll_returns_rolls_and_hitches_only(client):
-    data = _roll(client, "/cortex-roll", [["d8", "a"], ["d6", "b"], ["d8", "c"]])
+def _die(die, sid="trait"):
+    return {"die": die, "source_kind": "trait", "source_id": sid, "label": sid}
+
+
+def test_cortex_roll_enriches_pool_with_result_and_hitch(client):
+    _save(client, "loc-1", "e1", [_die("d8"), _die("d6"), _die("d8")])
+    r = client.post("/api/v1/locations/loc-1/pools/e1/cortex-roll")
+    assert r.status_code == 200, r.text
+    data = r.json()
     assert data["pipeline"] == "pool"
     assert len(data["rolls"]) == 3
-    assert all("result" in r for r in data["rolls"])
-    # No auto-picking: total/effect are the client's job.
+    for d in data["rolls"]:
+        assert "result" in d and isinstance(d["result"], int)
+        assert "hitch" in d
+        assert "role" in d and d["role"] is None
     assert "total" not in data
     assert "effect_die" not in data
-    assert "kept" not in data
+
+
+def test_cortex_roll_flags_hitch(client):
+    _save(client, "loc-1", "e1", [_die("d4")])
+    # A d4 roll of 1 is a hitch — retry until we observe one deterministically.
+    r = client.post("/api/v1/locations/loc-1/pools/e1/cortex-roll")
+    data = r.json()
+    for d in data["rolls"]:
+        assert d["hitch"] == (d["result"] == 1)
 
 
 def test_simplified_roll_derives_highest_tier_effect(client):
-    data = _roll(client, "/simplified-roll", [["d8", "a"], ["d6", "b"]])
+    _save(client, "loc-1", "e1", [_die("d8"), _die("d6")])
+    r = client.post("/api/v1/locations/loc-1/pools/e1/simplified-roll")
+    assert r.status_code == 200, r.text
+    data = r.json()
     assert data["pipeline"] == "simplified"
-    assert data["highest"] == max(r["result"] for r in data["rolls"])
+    assert data["highest"] == max(d["result"] for d in data["rolls"])
     assert "tier" in data and "effect_die" in data
 
 
-def test_difficulty_roll_returns_rolls_only(client):
-    # Difficulty roll is stateless — dice only, no entity_id/universe.
-    r = client.post("/api/v1/difficulty-roll", json={
-        "dice": [["d8", "diff"], ["d8", "diff"]],
-    })
+def test_difficulty_roll_uses_location_as_entity_key(client):
+    _save(client, "loc-1", "loc-1", [_die("d6", "difficulty"), _die("d6", "difficulty")])
+    r = client.post("/api/v1/locations/loc-1/pools/loc-1/difficulty-roll")
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["pipeline"] == "pool"
     assert len(data["rolls"]) == 2
-    assert "hitches" not in data
-    assert "botch" not in data
+    assert all("result" in d for d in data["rolls"])
+
+
+def test_select_flags_result_and_effect_dice(client):
+    _save(client, "loc-1", "e1", [_die("d8"), _die("d6"), _die("d8")])
+    client.post("/api/v1/locations/loc-1/pools/e1/cortex-roll")
+    r = client.post(
+        "/api/v1/locations/loc-1/pools/e1/select",
+        json={"total_indices": [0, 2], "effect_index": 1},
+    )
+    assert r.status_code == 200, r.text
+    roles = [d["role"] for d in r.json()["dice"]]
+    assert roles == ["total", "effect", "total"]
+
+
+def test_select_resets_previous_roles(client):
+    _save(client, "loc-1", "e1", [_die("d8"), _die("d6"), _die("d8")])
+    client.post("/api/v1/locations/loc-1/pools/e1/cortex-roll")
+    client.post("/api/v1/locations/loc-1/pools/e1/select", json={"total_indices": [0, 2], "effect_index": 1})
+    r = client.post("/api/v1/locations/loc-1/pools/e1/select", json={"total_indices": [1, 2]})
+    roles = [d["role"] for d in r.json()["dice"]]
+    assert roles == [None, "total", "total"]
