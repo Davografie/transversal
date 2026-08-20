@@ -5,11 +5,19 @@
         <option value="ALWAYS">Always</option>
         <option value="AT_LOCATION">At location</option>
         <option value="HAS_TRAIT">Has trait</option>
+        <option value="HAS_TRAIT_IN_TRAITSET">Has trait in traitset</option>
         <option value="HAS_RELATIONSHIP">Has relationship</option>
+        <option value="TRAIT_RATING">Trait rating</option>
         <option value="NARRATIVE">Narrative</option>
       </select>
-      <input v-if="c.type !== 'ALWAYS' && c.type !== 'NARRATIVE'" v-model="c.target" placeholder="target id" class="ce-target" />
-      <input v-if="c.type === 'HAS_TRAIT' || c.type === 'AT_LOCATION'" v-model="c.value" placeholder="value" class="ce-value" />
+      <input v-if="needsTarget(c.type)" v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
+      <select v-if="c.type === 'TRAIT_RATING'" v-model="c.value" class="ce-value">
+        <option value="d4">d4</option>
+        <option value="d6">d6</option>
+        <option value="d8">d8</option>
+        <option value="d10">d10</option>
+        <option value="d12">d12</option>
+      </select>
       <input v-if="c.type === 'NARRATIVE'" v-model="c.narrative" placeholder="narrative text" class="ce-target" />
       <button class="ce-del" @click="remove(i)">✕</button>
     </div>
@@ -29,6 +37,22 @@ const conditions = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v),
 })
+
+const TARGET_PLACEHOLDERS = {
+  AT_LOCATION: 'location id',
+  HAS_TRAIT: 'trait id',
+  HAS_TRAIT_IN_TRAITSET: 'traitset id',
+  HAS_RELATIONSHIP: 'entity id',
+  TRAIT_RATING: 'trait id',
+}
+
+function needsTarget(type) {
+  return type in TARGET_PLACEHOLDERS
+}
+
+function targetPlaceholder(type) {
+  return TARGET_PLACEHOLDERS[type] || 'target id'
+}
 
 function add() {
   const next = [...props.modelValue, { type: 'ALWAYS', target: '', value: '', narrative: '' }]
