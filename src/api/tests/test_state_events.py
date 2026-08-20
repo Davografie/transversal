@@ -23,7 +23,7 @@ class CaptureEngine:
         return EventOutcome()
 
 
-def test_contest_context_carries_opponent_entity_projection_and_effect_dice(monkeypatch):
+def test_contest_context_carries_opponent_entity_projection_and_effect_die(monkeypatch):
     import transversal.main as main
 
     repo = FakeRepo({
@@ -48,7 +48,6 @@ def test_contest_context_carries_opponent_entity_projection_and_effect_dice(monk
     assert winner_event.context["contest_entity_opponent"] == "loser"
     assert winner_event.context["contest_projection_opponent"] == "proj-l"
     assert winner_event.context["effect_die"] == "d8"
-    assert winner_event.context["effect_dice"] == ["d8"]
 
     loser_event = engine.events[1]
     assert loser_event.entity_id == "loser"

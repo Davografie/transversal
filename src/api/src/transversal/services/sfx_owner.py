@@ -136,7 +136,7 @@ def ensure_contest_complication_sfx(repo) -> None:
                 id=sfx_id,
                 name=name,
                 description=description,
-                trigger="on_consequence",
+                trigger="manual",
                 menu_context=menu_context,
                 effects=[_complication_effect()],
             ))
@@ -152,6 +152,9 @@ def ensure_contest_complication_sfx(repo) -> None:
                     changed = True
         if existing.menu_context != menu_context:
             existing.menu_context = menu_context
+            changed = True
+        if existing.trigger == "on_consequence":
+            existing.trigger = "manual"
             changed = True
         if changed:
             repo.update_sfx(existing)

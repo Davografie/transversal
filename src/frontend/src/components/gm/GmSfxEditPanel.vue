@@ -22,7 +22,6 @@
         <option value="on_push">On Push</option>
         <option value="on_taken_out">On Taken Out</option>
         <option value="on_prevent_taken_out">On Prevent Taken Out</option>
-        <option value="on_consequence">On Consequence (menu)</option>
         <option value="on_location_change">On Location Change</option>
         <option value="on_trait_change">On Trait Change</option>
         <option value="on_relationship_create">On Relationship Create</option>

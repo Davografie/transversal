@@ -82,7 +82,6 @@ def fire_contest_outcome_sfx(
             universe = entity.current_universe
         opponent = repo.get_entity(opponent_id)
         opponent_projection = opponent.current_projection if opponent else None
-        effect_dice = [effect_die] if effect_die else []
         sfx_ids = get_available_sfx_ids(entity_id, universe, repo)
         event = GameEvent(
             type="contest",
@@ -93,8 +92,7 @@ def fire_contest_outcome_sfx(
                 "opponent_id": opponent_id,                    # legacy alias
                 "contest_entity_opponent": opponent_id,
                 "contest_projection_opponent": opponent_projection,
-                "effect_die": effect_die,                      # legacy singular
-                "effect_dice": effect_dice,                    # contract array (multi-keep deferred)
+                "effect_die": effect_die,
                 "high_stakes": high_stakes,
                 "taken_out": taken_out,
             },

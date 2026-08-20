@@ -241,8 +241,8 @@ def test_ensure_contest_complication_sfx_creates_once():
     ensure_contest_complication_sfx(repo)
     apply_sfx = repo.sfxs["apply-complication"]
     take_sfx = repo.sfxs["take-complication"]
-    assert apply_sfx.trigger == "on_consequence"
-    assert take_sfx.trigger == "on_consequence"
+    assert apply_sfx.trigger == "manual"
+    assert take_sfx.trigger == "manual"
     assert apply_sfx.menu_context == "contest_win"
     assert take_sfx.menu_context == "contest_give_in"
     assert apply_sfx.name == "Apply a complication"
@@ -280,6 +280,7 @@ def test_ensure_contest_complication_sfx_migrates_stale_effect():
     assert apply_sfx.effects[0].negative is True
     assert apply_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
     assert apply_sfx.menu_context == "contest_win"
+    assert apply_sfx.trigger == "manual"
 
 
 def test_ensure_prevent_taken_out_sfx_creates_once():

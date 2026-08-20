@@ -132,7 +132,7 @@ class SfxOwner(BaseModel):
 
 ### `ConsequenceOption` (line 660)
 
-A selectable post-roll consequence entry. Authored directly on entities (location/lair moves), registered as base moves, or derived from `on_consequence` SFX.
+A selectable post-roll consequence entry. Authored directly on entities (location/lair moves), registered as base moves, or derived from `menu_context` SFX.
 
 | Field | Meaning |
 |-------|---------|
@@ -360,8 +360,8 @@ The SFX ids available to an entity in a universe are the sorted union of:
 |--------|---------|-----------|---------|
 | `sfx-give-in-get-razmerit` | `on_give_in` | `transfer_razmerit`/`earn`/`self`/`1` | Conceder gains 1 razmerit |
 | `sfx-give-in-targeting-ban` | `on_give_in` | `entity`/`targeting_ban`/`""`/`1` | Conceder can't target that opponent for the scene |
-| `apply-complication` | `on_consequence` → menu `contest_win` | `modify_trait`/`cortex_gain`/`{choose_trait}` @ `{effect_die}` (negative), scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
-| `take-complication` | `on_consequence` → menu `contest_give_in` | same effect as `apply-complication` | Conceder takes a complication on their own projection |
+| `apply-complication` | `manual` → menu `contest_win` | `modify_trait`/`cortex_gain`/`{choose_trait}` @ `{effect_die}` (negative), scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
+| `take-complication` | `manual` → menu `contest_give_in` | same effect as `apply-complication` | Conceder takes a complication on their own projection |
 | `prevent-taken-out` | `on_prevent_taken_out` | `transfer_razmerit`/`spend`/`self`/`1` | Spend 1 razmerit to avoid being taken out |
 
 `ensure_contest_complication_sfx` creates/migrates **two** SFX (`apply-complication`, `take-complication`) with identical `cortex_gain` + negative effects but different `menu_context` (`contest_win` vs `contest_give_in`), so the frontend surfaces the right one at each end of a contest. The migration also rewrites stale `gain_complication` effects in place.

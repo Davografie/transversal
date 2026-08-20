@@ -22,10 +22,10 @@ MENU_CONTEXT_IDS: tuple[str, ...] = (
 )
 
 MENU_CONTEXT_VARIABLES: dict[str, list[str]] = {
-    "test_success": ["effect_dice"],
-    "simplified_roll": ["effect_dice"],
-    "contest_win": ["contest_entity_opponent", "contest_projection_opponent", "effect_dice"],
-    "contest_give_in": ["contest_entity_opponent", "contest_projection_opponent", "effect_dice"],
+    "test_success": ["effect_die"],
+    "simplified_roll": ["effect_die"],
+    "contest_win": ["contest_entity_opponent", "contest_projection_opponent", "effect_die"],
+    "contest_give_in": ["contest_entity_opponent", "contest_projection_opponent", "effect_die"],
 }
 
 # ── Auto-fire trigger variables ──────────────────────
@@ -34,8 +34,8 @@ MENU_CONTEXT_VARIABLES: dict[str, list[str]] = {
 # from menu contexts so an SFX can be trigger-driven or menu-driven.
 
 TRIGGER_VARIABLES: dict[str, list[str]] = {
-    "on_contest_win": ["contest_entity_opponent", "contest_projection_opponent", "effect_dice"],
-    "on_contest_loss": ["contest_entity_opponent", "contest_projection_opponent", "effect_dice"],
+    "on_contest_win": ["contest_entity_opponent", "contest_projection_opponent", "effect_die"],
+    "on_contest_loss": ["contest_entity_opponent", "contest_projection_opponent", "effect_die"],
     "on_give_in": ["opponent_id", "gave_in"],
     "on_push": ["pushed"],
     "on_taken_out": ["opponent_id", "taken_out"],
