@@ -111,7 +111,7 @@ def ensure_contest_complication_sfx(repo) -> None:
                 type="modify_trait",
                 action="gain_complication",
                 target="{choose_trait}",
-                target_scope="traitset:ts-complications",
+                target_scope="traitset:ts-complications-a190",
                 result="{effect_die}",
             ),
         ]
@@ -135,7 +135,11 @@ def ensure_contest_complication_sfx(repo) -> None:
 
 
 def ensure_prevent_taken_out_sfx(repo) -> None:
-    """Create the prevent-taken-out SFX (spend 1 razmerit). Idempotent."""
+    """Create the prevent-taken-out SFX (spend 1 razmerit). Idempotent.
+
+    The complication itself is applied by the winner via the consequence menu,
+    so this SFX only handles the razmerit spend.
+    """
     from transversal.domain import Effect, EffectTiming, SFX
 
     if repo.get_sfx("prevent-taken-out") is not None:
@@ -152,14 +156,6 @@ def ensure_prevent_taken_out_sfx(repo) -> None:
                 action="spend",
                 target="self",
                 result="1",
-            ),
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="modify_trait",
-                action="gain_complication",
-                target="{choose_trait}",
-                target_scope="traitset:ts-complications",
-                result="{effect_die}",
             ),
         ],
     ))

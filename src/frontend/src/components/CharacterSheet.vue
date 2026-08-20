@@ -824,9 +824,10 @@ async function adjustRazmerit(delta) {
   if (balance != null) entity.value.razmerit = balance
 }
 
-function setRazmerit(balance) {
-  // Live-patch the sheet when the SSE razmerit_changed event arrives for this entity.
-  if (entity.value && entity.value.id === props.entityId) {
+function setRazmerit(balance, entityId) {
+  // Live-patch the sheet when the SSE razmerit_changed event arrives for the
+  // entity this sheet is currently showing (could be an override/peer).
+  if (entity.value && balance != null && entity.value.id === (entityId ?? props.entityId)) {
     entity.value.razmerit = balance
   }
 }

@@ -249,7 +249,7 @@
       <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide' : 'Take complication' }}</button>
     </div>
 
-    <div class="controls" v-if="iAmTakenOut && (!gmMode || actingEntityId)">
+    <div class="controls" v-if="iAmTakenOut && razmerit >= 1 && (!gmMode || actingEntityId)">
       <button @click="doPreventTakenOut" class="roll-btn prevent-taken-out-btn">Prevent take out (1 razmerit)</button>
     </div>
 
@@ -329,7 +329,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -437,6 +437,13 @@ function sideClasses(side) {
 const appliedEffectDie = computed(() => contestResult.value?.effect_die || null)
 const loserTakenOut = computed(() => !!contestResult.value?.taken_out)
 const iAmTakenOut = computed(() => !!contestResult.value?.taken_out && !iWon.value)
+const razmerit = ref(null)  // acting entity's razmerit (fetched when a takeout happens)
+
+watch(iAmTakenOut, async (taken) => {
+  if (!taken || !editingEntityId.value) return
+  const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: editingEntityId.value })
+  razmerit.value = data?.entity?.razmerit ?? 0
+})
 function sideIsWinner(side) {
   if (!contestResult.value) return false
   const challengerWon = contestResult.value.winner === 'player'
@@ -696,6 +703,7 @@ async function doPreventTakenOut() {
   const res = await apiPreventTakenOut(props.locationId, editingEntityId.value, contestResult.value?.effect_die)
   if (res && res.prevented) {
     contestResult.value = { ...contestResult.value, taken_out: false }
+    razmerit.value = Math.max(0, (razmerit.value || 0) - 1)
     contestNotice.value = 'You prevented being taken out'
   } else {
     contestError.value = res?.reason || 'Cannot prevent take out'

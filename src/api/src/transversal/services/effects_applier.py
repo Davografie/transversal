@@ -269,7 +269,7 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     from_type, owner_id = owner
     traitset_id = _resolve_traitset_id(trait_id, repo)
     if not traitset_id and negative:
-        traitset_id = "ts-complications"
+        traitset_id = "ts-complications-a190"
     trait = repo.get_trait(trait_id)
     ego = getattr(trait, "default_ego", False) if trait else False
     return TraitSetting(

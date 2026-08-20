@@ -869,8 +869,8 @@ watch(lastEvent, (evt) => {
 
   switch (evt.type) {
     case 'razmerit_changed':
-      if (evt.data?.entity_id === entityId.value && evt.data?.new_balance != null) {
-        sheetRef.value?.setRazmerit(evt.data.new_balance)
+      if (evt.data?.new_balance != null) {
+        sheetRef.value?.setRazmerit(evt.data.new_balance, evt.data.entity_id)
       }
       break
     case 'beat_end':

@@ -224,7 +224,7 @@ def test_ensure_contest_complication_sfx_creates_once():
     assert apply_sfx.effects[0].action == "gain_complication"
     assert take_sfx.effects[0].action == "gain_complication"
     assert apply_sfx.effects[0].target == "{choose_trait}"
-    assert take_sfx.effects[0].target_scope == "traitset:ts-complications"
+    assert take_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
     ensure_contest_complication_sfx(repo)
     assert len(repo.sfxs) == 2
 
@@ -236,13 +236,10 @@ def test_ensure_prevent_taken_out_sfx_creates_once():
     ensure_prevent_taken_out_sfx(repo)
     sfx = repo.sfxs["prevent-taken-out"]
     assert sfx.trigger == "on_prevent_taken_out"
+    assert len(sfx.effects) == 1
     assert sfx.effects[0].type == "transfer_razmerit"
     assert sfx.effects[0].action == "spend"
     assert sfx.effects[0].result == "1"
-    assert sfx.effects[1].type == "modify_trait"
-    assert sfx.effects[1].action == "gain_complication"
-    assert sfx.effects[1].target == "{choose_trait}"
-    assert sfx.effects[1].result == "{effect_die}"
     ensure_prevent_taken_out_sfx(repo)
     assert len(repo.sfxs) == 1
 
