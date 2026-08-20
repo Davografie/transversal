@@ -33,7 +33,7 @@
 
     <!-- Effects (shared editor) -->
     <h4 class="ps-section-title">Effects</h4>
-    <EffectEditor v-model="form.effects" />
+    <EffectEditor v-model="form.effects" :variables="scopeVariables" />
 
     <!-- Status messages -->
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
@@ -59,10 +59,11 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
+import { useScopeVariables } from '@/composables/useScopeVariables.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import EffectEditor from './EffectEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
@@ -103,6 +104,9 @@ const form = reactive({
   conditions: initialConditions(props.sfx),
   effects: (props.sfx?.effects || []).map(e => ({ ...e })),
 })
+
+const { variables: scopeVariables, fetchVariables } = useScopeVariables()
+watch(() => form.trigger, (t) => { fetchVariables(t || '') }, { immediate: true })
 
 function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')

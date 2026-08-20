@@ -35,6 +35,12 @@
       </select>
       <template v-if="selectedAction">
         <div class="ee-help">{{ selectedAction.description }}</div>
+        <div v-if="variables.length" class="ee-vars">
+          <span class="ee-vars-label">Variables:</span>
+          <button v-for="v in variables" :key="v" type="button" class="ee-var" :class="{ copied: copiedVar === v }" @click="copyVariable(v)">
+            {{ '{' + v + '}' }}
+          </button>
+        </div>
         <div v-for="f in visibleFields" :key="f.name" class="ee-field">
           <label>{{ f.label }}</label>
 
@@ -70,7 +76,17 @@
           </template>
 
           <template v-else>
-            <select v-if="f.fieldType === 'die_select' || f.fieldType === 'select'" v-model="newEffect.fields[f.name]">
+            <template v-if="isResultDieField(f)">
+              <div class="ee-result-mode">
+                <button type="button" :class="{ active: resultMode === 'die' }" @click="resultMode = 'die'">Die</button>
+                <button type="button" :class="{ active: resultMode === 'variable' }" @click="resultMode = 'variable'">Variable</button>
+              </div>
+              <select v-if="resultMode === 'die'" v-model="newEffect.fields[f.name]">
+                <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+              </select>
+              <input v-else v-model="newEffect.fields[f.name]" type="text" placeholder="{effect_die}" />
+            </template>
+            <select v-else-if="f.fieldType === 'die_select' || f.fieldType === 'select'" v-model="newEffect.fields[f.name]">
               <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
             </select>
             <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" />
@@ -122,6 +138,7 @@ const props = defineProps({
   universe: { type: String, default: '' },
   faction: { type: String, default: '' },
   lifePath: { type: String, default: '' },
+  variables: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -134,6 +151,8 @@ const { load, actions: effectActions, summarize: effectSummary } = useEffectActi
 const showEditor = ref(false)
 const editingIndex = ref(null)
 const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', negative: false })
+const resultMode = ref('die')
+const copiedVar = ref('')
 
 onMounted(() => { load() })
 
@@ -159,6 +178,10 @@ function isRollTableTarget(f) {
   return f.name === 'target' && selectedAction.value?.targetKind === 'roll_table'
 }
 
+function isResultDieField(f) {
+  return f.name === 'result' && f.fieldType === 'die_select'
+}
+
 function isScopedTargetField(f) {
   return f.name === 'target' && !!selectedAction.value?.targetKind
 }
@@ -178,6 +201,7 @@ function onActionChange() {
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
   newEffect.negative = false
+  resultMode.value = 'die'
   const meta = selectedAction.value
   if (meta) {
     for (const f of (meta.fields || [])) {
@@ -263,6 +287,7 @@ function editEffect(i) {
   newEffect.targetMode = detectTargetMode(eff, meta)
   newEffect.scope = eff.targetScope || ''
   newEffect.negative = !!eff.negative
+  resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
   }
@@ -297,6 +322,16 @@ function closeEditor() {
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
   newEffect.negative = false
+  resultMode.value = 'die'
+}
+
+async function copyVariable(v) {
+  const token = `{${v}}`
+  try {
+    await navigator.clipboard.writeText(token)
+    copiedVar.value = v
+    setTimeout(() => { if (copiedVar.value === v) copiedVar.value = '' }, 1200)
+  } catch { /* non-fatal: token stays visible for manual copy */ }
 }
 
 function effectCategory(eff) {
@@ -350,6 +385,13 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .ee-mode-row { display: flex; margin-top: 2px; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
+.ee-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ee-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.ee-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); cursor: pointer; }
+.ee-var.copied { background: rgba(64,184,96,0.2); border-color: #40b860; color: #40b860; }
+.ee-result-mode { display: flex; gap: 4px; }
+.ee-result-mode button { font-size: 9px; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); cursor: pointer; }
+.ee-result-mode button.active { background: rgba(64,136,212,0.2); border-color: var(--accent-dim); color: var(--accent); }
 .ee-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text); text-transform: none; letter-spacing: 0; cursor: pointer; }
 .ee-check input { width: auto; }
 .ee-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }

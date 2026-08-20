@@ -426,6 +426,27 @@ class Query:
         ]
 
     @strawberry.field
+    def scope_variables(
+        self, info: strawberry.Info,
+        trigger: str = "",
+        menu_context: str = "",
+    ) -> list[str]:
+        """Variables available to authored effects for a trigger and/or menu context.
+
+        These are the ``{variable}`` tokens the SFX editor may offer; they mirror
+        the outcome payload the trigger/menu context exposes.
+        """
+        from transversal.services.menu_contexts import trigger_variables, menu_context_variables
+
+        seen: set[str] = set()
+        out: list[str] = []
+        for v in list(trigger_variables(trigger)) + list(menu_context_variables(menu_context)):
+            if v not in seen:
+                seen.add(v)
+                out.append(v)
+        return out
+
+    @strawberry.field
     def target_candidates(
         self, info: strawberry.Info,
         kind: str,
