@@ -249,6 +249,10 @@
       <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide' : 'Take complication' }}</button>
     </div>
 
+    <div class="controls" v-if="iAmTakenOut && (!gmMode || actingEntityId)">
+      <button @click="doPreventTakenOut" class="roll-btn prevent-taken-out-btn">Prevent take out (1 razmerit)</button>
+    </div>
+
     <div class="controls" v-if="isWaitingForDecision">
       <span class="waiting-state">Waiting for {{ opponentName }} to decide…</span>
     </div>
@@ -325,7 +329,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -432,6 +436,7 @@ function sideClasses(side) {
 }
 const appliedEffectDie = computed(() => contestResult.value?.effect_die || null)
 const loserTakenOut = computed(() => !!contestResult.value?.taken_out)
+const iAmTakenOut = computed(() => !!contestResult.value?.taken_out && !iWon.value)
 function sideIsWinner(side) {
   if (!contestResult.value) return false
   const challengerWon = contestResult.value.winner === 'player'
@@ -682,6 +687,18 @@ async function doGiveIn() {
     await loadTargetingBans()
   } else if (res && res.status === 'not_ready') {
     contestError.value = 'Initiator must set their result first'
+  }
+}
+
+async function doPreventTakenOut() {
+  if (!props.locationId) return
+  contestError.value = ''
+  const res = await apiPreventTakenOut(props.locationId, editingEntityId.value)
+  if (res && res.prevented) {
+    contestResult.value = { ...contestResult.value, taken_out: false }
+    contestNotice.value = 'You prevented being taken out'
+  } else {
+    contestError.value = res?.reason || 'Cannot prevent take out'
   }
 }
 

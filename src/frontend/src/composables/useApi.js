@@ -247,6 +247,14 @@ export function useApi() {
     } catch (e) { console.error('[API] giveIn', e.message); return null }
   }
 
+  async function preventTakenOut(locationId, entityId) {
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/prevent-taken-out`, { method: 'POST' })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] preventTakenOut', e.message); return null }
+  }
+
   async function push(locationId, entityId) {
     try {
       const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/push`, { method: 'POST' })
@@ -317,5 +325,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

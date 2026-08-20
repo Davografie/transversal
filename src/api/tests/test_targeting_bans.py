@@ -4,6 +4,7 @@ from transversal.domain import Entity, EntityType, TargetingBan
 from transversal.services.targeting_bans import (
     active_target_ids,
     apply_targeting_ban,
+    clear_taken_out,
     decrement_scene_bans,
     has_targeting_ban,
 )
@@ -69,3 +70,13 @@ def test_active_target_ids_filters_expired():
         TargetingBan(target_id="fox", scenes_remaining=0),
     ])
     assert active_target_ids(entity) == ["guard"]
+
+
+def test_clear_taken_out():
+    taken = Entity(id="kael", type=EntityType.CHARACTER, name="kael", current_universe="earth", taken_out=True)
+    not_taken = Entity(id="guard", type=EntityType.CHARACTER, name="guard", current_universe="earth", taken_out=False)
+    repo = FakeRepo([taken, not_taken])
+    changed = clear_taken_out(repo)
+    assert changed == 1
+    assert taken.taken_out is False
+    assert not_taken.taken_out is False
