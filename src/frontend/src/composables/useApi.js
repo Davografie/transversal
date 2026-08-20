@@ -49,16 +49,23 @@ export function useApi() {
     }
   }
 
-  async function cortexRoll(entityId, universe, dice, opposition = null) {
-    return _rollEndpoint('/cortex-roll', { entity_id: entityId, universe, dice, opposition })
+  async function cortexRoll(locationId, entityId) {
+    return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/cortex-roll`, {})
   }
 
-  async function simplifiedRoll(entityId, universe, dice, opposition = null) {
-    return _rollEndpoint('/simplified-roll', { entity_id: entityId, universe, dice, opposition })
+  async function simplifiedRoll(locationId, entityId) {
+    return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/simplified-roll`, {})
   }
 
-  async function difficultyRoll(dice) {
-    return _rollEndpoint('/difficulty-roll', { dice })
+  async function difficultyRoll(locationId, entityId) {
+    return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/difficulty-roll`, {})
+  }
+
+  async function selectDice(locationId, entityId, totalIndices, effectIndex) {
+    return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/select`, {
+      total_indices: totalIndices,
+      effect_index: effectIndex,
+    })
   }
 
   async function triggerSfx(entityId, sfxName, universe = 'earth', context = {}) {
@@ -302,5 +309,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, setOpposition, setResult, setStakes, giveIn, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

@@ -325,7 +325,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const pool = reactive([])
 const result = ref(null)
@@ -764,10 +764,17 @@ function setUniverse(u) {
   emit('update:universe', u)
 }
 
+function poolEntityKey() {
+  // Entity pools use the acting entity; the GM difficulty pool uses the
+  // location id as its key (unified pool concept).
+  if (props.gmMode && !props.actingEntityId) return props.locationId
+  return editingEntityId.value
+}
+
 function persistPool() {
-  // Persist only when editing a real entity pool (player self, or GM acting as an entity).
-  // GM difficulty mode (no acting entity) is transient.
-  if (!props.actingEntityId || !props.locationId) return
+  if (!props.locationId) return
+  const key = poolEntityKey()
+  if (!key) return
   const dice = pool.map(d => ({
     die: d.die,
     source_kind: d.sourceKind || 'manual',
@@ -775,7 +782,7 @@ function persistPool() {
     label: d.label || d.source || d.die,
     ts_id: d.tsId || null,
   }))
-  apiSavePool(props.locationId, editingEntityId.value, dice)
+  apiSavePool(props.locationId, key, dice)
 }
 
 function notifyPool() {
@@ -1253,20 +1260,23 @@ async function doRoll() {
     label: d.label || d.source || d.die,
     ts_id: d.tsId || null,
   }))
-  const opp = (!props.gmMode && props.difficulty != null && !challenged.value)
-    ? { type: 'static_difficulty', static_difficulty: props.difficulty }
-    : null
   const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
+  const key = poolEntityKey()
+
+  // Persist the assembled pool (entity or difficulty) before the server rolls it.
+  if (props.locationId && key) {
+    await apiSavePool(props.locationId, key, dice)
+  }
 
   // Blink random faces while the request is in flight, then lock each die
   // left-to-right so the player can see the numbers fall into place.
   const t0 = Date.now()
   const anim = startRollAnimation(dice)
   const result_ = isDifficulty
-    ? await apiDifficultyRoll(dice)
+    ? await apiDifficultyRoll(props.locationId, key)
     : dice.length <= 2
-      ? await apiSimplifiedRoll(editingEntityId.value, props.universe, dice, opp)
-      : await apiCortexRoll(editingEntityId.value, props.universe, dice, opp)
+      ? await apiSimplifiedRoll(props.locationId, key)
+      : await apiCortexRoll(props.locationId, key)
 
   await sleep(Math.max(0, FIRST_LOCK_MS - (Date.now() - t0)))
   for (let i = 0; i < rollingFaces.value.length; i++) {
@@ -1280,7 +1290,7 @@ async function doRoll() {
 
   result.value = result_
   pool.length = 0
-  notifyPool()
+  emit('poolChange', [])  // clear sheet sources; the enriched pool stays on the server
   if (result.value?.pipeline === 'pool' && props.mode !== 'roll_table') {
     setPhase(Phase.PICKING)
     ensureSlots()
@@ -1309,7 +1319,18 @@ function commitPicks() {
   }
 }
 
-function onPickCommit() {
+async function flagSelection() {
+  // Record which dice are the result/effect dice on the stored pool.
+  const total = selection.total.filter(i => i !== null)
+  const effect = selection.effect.find(i => i !== null)
+  const isDifficulty = props.gmMode && !props.actingEntityId
+  const key = poolEntityKey()
+  if (!props.locationId || !key || !total.length) return
+  await apiSelectDice(props.locationId, key, total, isDifficulty ? null : (effect ?? null))
+}
+
+async function onPickCommit() {
+  await flagSelection()
   if (challenged.value) {
     doSetResult()
   } else {
