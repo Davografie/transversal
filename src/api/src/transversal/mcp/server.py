@@ -11,15 +11,22 @@ from typing import Any
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
+    DieRoll,
+    DieSpec,
     DieType,
-    DicePoolRequest,
     EntityType,
-    Opposition,
     Trait,
     TraitSet,
     TraitSetting,
 )
-from transversal.services.dice_resolver import resolve
+from transversal.services.dice_resolver import (
+    compare_totals as _compare_totals,
+    detect_hitches,
+    is_botch,
+    pick_effect_die as _pick_effect_die,
+    pick_total as _pick_total,
+    roll_dice as _roll_pool,
+)
 from transversal.services.entity_manager import EntityManager
 
 
@@ -67,32 +74,65 @@ def create_npc(args: dict) -> dict:
     return entity.model_dump()
 
 
-def roll_dice(args: dict) -> dict:
-    entity_id = args["entity_id"]
-    universe = args.get("universe", "earth")
-    dice = [(DieType(d), s) for d, s in args["dice"]]
-    opposition = None
-    if "opposition" in args:
-        opp = args["opposition"]
-        opposition = Opposition(
-            type=opp.get("type", "static_difficulty"),
-            dice=[(DieType(d), s) for d, s in opp.get("dice", [])],
-            challenge_die=DieType(opp["challenge_die"]) if "challenge_die" in opp else None,
-            static_difficulty=opp.get("static_difficulty"),
-        )
+def _rolls_to_wire(rolls) -> list[dict]:
+    return [
+        {
+            "die": r.die.value,
+            "result": r.result,
+            "source_id": r.source_id,
+            "source_kind": r.source_kind,
+            "label": r.label,
+        }
+        for r in rolls
+    ]
 
-    request = DicePoolRequest(entity_id=entity_id, universe=universe,
-                               dice=dice, opposition=opposition)
-    result = resolve(request)
-    # Return as dict — handle both SimplifiedResult and PoolResult
-    if hasattr(result, 'highest'):
-        return {"pipeline": "simplified", "highest": result.highest,
-                "tier": result.tier.value, "effect_die": result.effect_die.value if result.effect_die else None,
-                "botch": result.botch, "razmerit_earned": result.razmerit_earned}
-    else:
-        return {"pipeline": "pool", "total": result.total,
-                "effect_die": result.effect_die.value if result.effect_die else None,
-                "botch": result.botch, "razmerit_earned": result.razmerit_earned}
+
+def _wire_to_rolls(wire) -> list[DieRoll]:
+    return [
+        DieRoll(
+            die=DieType(r["die"]),
+            result=int(r["result"]),
+            source_id=r.get("source_id", ""),
+            source_kind=r.get("source_kind", "manual"),
+            label=r.get("label", ""),
+        )
+        for r in wire
+    ]
+
+
+def roll_dice(args: dict) -> dict:
+    """Roll a pool and return rolls + hitch data only.
+
+    Nothing is auto-picked — the caller drives total/effect selection via
+    ``pick_total`` / ``pick_effect_die`` and comparison via ``compare_totals``.
+    """
+    dice = [DieSpec(die=DieType(d), source_id=s, label=s) for d, s in args["dice"]]
+    rolls = _roll_pool(dice)
+    return {
+        "pipeline": "pool" if len(rolls) > 2 else "simplified",
+        "rolls": _rolls_to_wire(rolls),
+        "hitches": _rolls_to_wire(detect_hitches(rolls)),
+        "botch": is_botch(rolls),
+    }
+
+
+def pick_total(args: dict) -> dict:
+    rolls = _wire_to_rolls(args["rolls"])
+    return {"total": _pick_total(rolls, args["indices"])}
+
+
+def pick_effect_die(args: dict) -> dict:
+    rolls = _wire_to_rolls(args["rolls"])
+    effect = _pick_effect_die(
+        rolls,
+        args.get("total_indices", []),
+        args.get("hitches_apply", True),
+    )
+    return {"effect_die": effect.die.value if effect else "d4"}
+
+
+def compare_totals(args: dict) -> dict:
+    return {"winner": _compare_totals(args["player_total"], args["opponent_total"]).value}
 
 
 def get_entity(args: dict) -> dict:
@@ -114,6 +154,9 @@ TOOLS = {
     "create_entity": create_entity,
     "create_npc": create_npc,
     "roll_dice": roll_dice,
+    "pick_total": pick_total,
+    "pick_effect_die": pick_effect_die,
+    "compare_totals": compare_totals,
     "get_entity": get_entity,
     "query_entities": query_entities,
 }
@@ -151,17 +194,54 @@ TOOL_SCHEMAS = {
     },
     "roll_dice": {
         "name": "roll_dice",
-        "description": "Resolve a dice pool using the dual-pipeline system",
+        "description": "Roll a dice pool and return the rolled dice + hitches only (no auto-picking)",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "entity_id": {"type": "string"},
-                "universe": {"type": "string"},
                 "dice": {"type": "array", "items": {"type": "array", "items": {"type": "string"}},
                          "description": "List of [die_type, source] pairs, e.g. [['d8', 'shooting']]"},
-                "opposition": {"type": "object"},
             },
-            "required": ["entity_id", "dice"],
+            "required": ["dice"],
+        },
+    },
+    "pick_total": {
+        "name": "pick_total",
+        "description": "Sum the results of the chosen dice (by roll index) into a total",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "rolls": {"type": "array", "description": "The rolls returned by roll_dice"},
+                "indices": {"type": "array", "items": {"type": "integer"},
+                           "description": "Indices of the dice to sum"},
+            },
+            "required": ["rolls", "indices"],
+        },
+    },
+    "pick_effect_die": {
+        "name": "pick_effect_die",
+        "description": "Choose the effect die from dice not used in the total",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "rolls": {"type": "array", "description": "The rolls returned by roll_dice"},
+                "total_indices": {"type": "array", "items": {"type": "integer"},
+                                 "description": "Indices of the dice used for the total"},
+                "hitches_apply": {"type": "boolean",
+                                 "description": "Whether rolled 1s are ineligible (default true)"},
+            },
+            "required": ["rolls"],
+        },
+    },
+    "compare_totals": {
+        "name": "compare_totals",
+        "description": "Compare two totals and declare a contest winner (tie favors the challenger)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "player_total": {"type": "integer"},
+                "opponent_total": {"type": "integer"},
+            },
+            "required": ["player_total", "opponent_total"],
         },
     },
     "get_entity": {
