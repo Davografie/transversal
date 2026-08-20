@@ -421,6 +421,7 @@ class Query:
                 context_fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.context_fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
                 requires_choice=m.requires_choice, target_kind=m.target_kind, supports_duration=m.supports_duration,
+                supports_polarity=m.supports_polarity,
             ) for m in EFFECT_ACTION_REGISTRY
         ]
 

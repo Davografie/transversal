@@ -14,7 +14,7 @@ export function useEffectApplication() {
       const data = await graphql(
         `mutation($entityId: ID!, $effects: [EffectInput!]!) {
           applyEffects(entityId: $entityId, effects: $effects) {
-            applied pendingChoices { index kind scope effect { timing type action target result targetScope context } }
+            applied pendingChoices { index kind scope effect { timing type action target result targetScope negative context } }
           }
         }`,
         { entityId, effects }
@@ -31,7 +31,7 @@ export function useEffectApplication() {
       const data = await graphql(
         `mutation($entityId: ID!, $resolutions: [EffectTargetResolutionInput!]!) {
           resolveEffectTargets(entityId: $entityId, resolutions: $resolutions) {
-            applied pendingChoices { index kind scope effect { timing type action target result targetScope context } }
+            applied pendingChoices { index kind scope effect { timing type action target result targetScope negative context } }
           }
         }`,
         { entityId, resolutions }

@@ -1,5 +1,6 @@
 <template>
   <div>
+    <div v-if="sfx" class="sfx-id">ID: {{ sfx.id }}</div>
     <!-- Shared form -->
     <div class="ps-form">
       <label>Name</label>
@@ -113,7 +114,7 @@ async function onSave() {
   errorMsg.value = ''
   try {
     const result = await graphql(
-      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope context duration { timers { event remaining } combine } } } }`,
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope negative context duration { timers { event remaining } combine } } } }`,
       { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
@@ -133,7 +134,7 @@ async function onCreate() {
   const sfxId = generateSfxId(form.name)
   try {
     const result = await graphql(
-      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope context duration { timers { event remaining } combine } } } }`,
+      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target result targetScope negative context duration { timers { event remaining } combine } } } }`,
       { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) {
@@ -184,6 +185,7 @@ async function onDelete() {
   font-family: inherit; width: 100%; box-sizing: border-box;
 }
 .ps-form textarea { resize: vertical; min-height: 48px; }
+.sfx-id { font-size: 10px; color: var(--text-dim); font-family: monospace; margin-bottom: 6px; }
 .hint { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 9px; }
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }

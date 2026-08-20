@@ -265,7 +265,7 @@ async function loadNameMaps() {
 
 async function loadTable(tableId) {
   const data = await graphql(
-    `query($id:ID!){rollTable(id:$id){id name universe lifePath scheme rollSource traitDiceCount die entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope context}}}}`,
+    `query($id:ID!){rollTable(id:$id){id name universe lifePath scheme rollSource traitDiceCount die entries{label description minValue maxValue weight tier conditions{type target value narrative} effects{timing type action target result targetScope negative context}}}}`,
     { id: tableId },
   )
   currentTable.value = data?.rollTable || null

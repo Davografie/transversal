@@ -97,6 +97,12 @@
           <label>Duration</label>
           <DurationBuilder v-model="newEffect.duration" />
         </div>
+        <div v-if="selectedAction.supportsPolarity" class="ee-field ee-polarity">
+          <label class="ee-check">
+            <input type="checkbox" v-model="newEffect.negative" />
+            Negative (complication)
+          </label>
+        </div>
         <button class="ee-save" @click="commitEffect">{{ editingIndex !== null ? 'Update' : 'Add' }}</button>
       </template>
     </div>
@@ -126,7 +132,7 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '' })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', negative: false })
 
 onMounted(() => { load() })
 
@@ -170,6 +176,7 @@ function onActionChange() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.negative = false
   const meta = selectedAction.value
   if (meta) {
     for (const f of (meta.fields || [])) {
@@ -212,6 +219,7 @@ function buildEffect(meta) {
     target,
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
+    negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context: { ...cleanContext(newEffect.context), ...parseContext(newEffect.extraContext) },
     duration: (meta.supportsDuration && (newEffect.duration?.timers || []).length)
       ? {
@@ -253,6 +261,7 @@ function editEffect(i) {
   newEffect.fields = {}
   newEffect.targetMode = detectTargetMode(eff, meta)
   newEffect.scope = eff.targetScope || ''
+  newEffect.negative = !!eff.negative
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
   }
@@ -286,6 +295,7 @@ function closeEditor() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.negative = false
 }
 
 function effectCategory(eff) {
@@ -339,5 +349,7 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .ee-mode-row { display: flex; margin-top: 2px; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
+.ee-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text); text-transform: none; letter-spacing: 0; cursor: pointer; }
+.ee-check input { width: auto; }
 .ee-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }
 </style>

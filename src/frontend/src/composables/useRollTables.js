@@ -12,7 +12,7 @@ const ROLL_TABLE_FIELDS = `
   entries {
     label description minValue maxValue weight tier
     conditions { type target value narrative }
-    effects { timing type action target result targetScope context }
+    effects { timing type action target result targetScope negative context }
   }
 `
 
