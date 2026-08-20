@@ -156,6 +156,7 @@ def test_ensure_sfx_owners_creates_buckets_and_table_reward():
         "sfx-give-in-targeting-ban",
         "apply-complication",
         "take-complication",
+        "prevent-taken-out",
     }
     assert repo.owners["gm"].sfx_ids == []
     assert repo.owners["players"].sfx_ids == []
@@ -204,6 +205,7 @@ def test_ensure_sfx_owners_table_defaults():
         "sfx-give-in-targeting-ban",
         "apply-complication",
         "take-complication",
+        "prevent-taken-out",
     }
 
 
@@ -225,6 +227,20 @@ def test_ensure_contest_complication_sfx_creates_once():
     assert take_sfx.effects[0].target_scope == "traitset:ts-complications"
     ensure_contest_complication_sfx(repo)
     assert len(repo.sfxs) == 2
+
+
+def test_ensure_prevent_taken_out_sfx_creates_once():
+    from transversal.services.sfx_owner import ensure_prevent_taken_out_sfx
+
+    repo = SetupRepo()
+    ensure_prevent_taken_out_sfx(repo)
+    sfx = repo.sfxs["prevent-taken-out"]
+    assert sfx.trigger == "on_prevent_taken_out"
+    assert sfx.effects[0].type == "transfer_razmerit"
+    assert sfx.effects[0].action == "spend"
+    assert sfx.effects[0].result == "1"
+    ensure_prevent_taken_out_sfx(repo)
+    assert len(repo.sfxs) == 1
 
 
 def test_remove_legacy_contest_complication_sfx_is_idempotent():

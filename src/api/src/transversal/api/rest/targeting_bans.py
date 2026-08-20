@@ -25,10 +25,11 @@ async def get_targeting_bans(entity_id: str):
 async def advance_scene():
     """Advance the scene: fire scheduled scene effects and decrement bans."""
     from transversal.main import _get_engine, _get_repo
-    from transversal.services.targeting_bans import decrement_scene_bans
+    from transversal.services.targeting_bans import clear_taken_out, decrement_scene_bans
 
     _get_engine().tick_scene()
     changed = decrement_scene_bans(_get_repo())
+    changed += clear_taken_out(_get_repo())
 
     from transversal.services.scene_state import get_scene_store
     from transversal.services.contest_tracker import get_contest_tracker

@@ -63,3 +63,17 @@ def decrement_scene_bans(repo) -> int:
             repo.update_entity(entity)
             changed_entities += 1
     return changed_entities
+
+
+def clear_taken_out(repo) -> int:
+    """Clear the scene-scoped taken-out state from every entity.
+
+    Returns the number of entities that were taken out.
+    """
+    changed = 0
+    for entity in repo.list_all_entities():
+        if entity.taken_out:
+            entity.taken_out = False
+            repo.update_entity(entity)
+            changed += 1
+    return changed

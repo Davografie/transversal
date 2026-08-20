@@ -95,3 +95,47 @@ def fire_contest_outcome_sfx(
         )
         outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
         _emit_pending_choices(entity_id, universe, outcome.pending)
+
+    if taken_out:
+        _mark_taken_out(repo, loser_id, winner_id)
+
+
+def _mark_taken_out(repo, loser_id: str, opponent_id: str) -> None:
+    """Persist the scene-scoped taken-out state and fire ``on_taken_out``."""
+    loser = repo.get_entity(loser_id)
+    if loser is None:
+        return
+    loser.taken_out = True
+    repo.update_entity(loser)
+    fire_state_sfx(loser_id, loser.current_universe, "on_taken_out", {
+        "taken_out": True,
+        "opponent_id": opponent_id,
+    })
+
+
+def prevent_taken_out(entity_id: str, universe: str = "") -> dict:
+    """Prevent a pending takeout by spending 1 razmerit (via SFX).
+
+    Fires ``on_prevent_taken_out`` (the seeded table SFX spends 1 razmerit),
+    then clears the taken-out state. Server-enforced: returns
+    ``{"prevented": False}`` when the entity can't afford it or isn't taken out.
+    """
+    from transversal.main import _get_repo
+
+    repo = _get_repo()
+    entity = repo.get_entity(entity_id)
+    if entity is None or entity.razmerit < 1:
+        return {"prevented": False, "reason": "insufficient razmerit"}
+    if not entity.taken_out:
+        return {"prevented": False, "reason": "not taken out"}
+
+    fire_state_sfx(entity_id, universe or entity.current_universe, "on_prevent_taken_out", {
+        "prevented": True,
+        "opponent_id": "",
+    })
+
+    entity = repo.get_entity(entity_id)  # re-fetch (razmerit changed)
+    if entity is not None:
+        entity.taken_out = False
+        repo.update_entity(entity)
+    return {"prevented": True}

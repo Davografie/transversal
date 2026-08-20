@@ -552,6 +552,7 @@ class Entity(BaseModel):
     owned_by: Optional[str] = None
     attunements: list["Attunement"] = Field(default_factory=list)  # active attunements (effect-managed)
     targeting_bans: list["TargetingBan"] = Field(default_factory=list)  # directional contest-target bans
+    taken_out: bool = False  # scene-scoped: high-stakes contest removed this entity from the scene
     sfx_ids: list[str] = Field(default_factory=list)  # SFX owned directly by this entity
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}

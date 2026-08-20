@@ -207,6 +207,17 @@ async def give_in(location_id: str, entity_id: str):
     return outcome
 
 
+@router.post("/{location_id}/pools/{entity_id}/prevent-taken-out")
+async def prevent_taken_out(location_id: str, entity_id: str):
+    """Prevent a pending high-stakes takeout by spending 1 razmerit."""
+    from transversal.services.state_events import prevent_taken_out as _prevent
+
+    result = _prevent(entity_id)
+    if result.get("prevented"):
+        _broadcast("contest_prevent_taken_out", location_id, entity_id, {"entity_id": entity_id})
+    return result
+
+
 @router.post("/{location_id}/pools/{entity_id}/push")
 async def push(location_id: str, entity_id: str):
     """Start a push: the pending side rebuilds and rerolls (free, once)."""

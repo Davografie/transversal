@@ -33,6 +33,7 @@ def ensure_sfx_owners(repo) -> None:
             "sfx-give-in-targeting-ban",
             "apply-complication",
             "take-complication",
+            "prevent-taken-out",
         ],
         "gm": [],
         "players": [],
@@ -131,6 +132,29 @@ def ensure_contest_complication_sfx(repo) -> None:
             trigger="on_consequence",
             effects=_complication_effect(),
         ))
+
+
+def ensure_prevent_taken_out_sfx(repo) -> None:
+    """Create the prevent-taken-out SFX (spend 1 razmerit). Idempotent."""
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    if repo.get_sfx("prevent-taken-out") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="prevent-taken-out",
+        name="Prevent Being Taken Out",
+        description="Spend 1 razmerit to avoid being taken out of the scene",
+        trigger="on_prevent_taken_out",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="transfer_razmerit",
+                action="spend",
+                target="self",
+                result="1",
+            ),
+        ],
+    ))
 
 
 def remove_legacy_contest_complication_sfx(repo) -> None:
