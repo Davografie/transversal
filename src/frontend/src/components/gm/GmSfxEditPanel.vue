@@ -35,6 +35,10 @@
         <option value="contest_win">Contest win</option>
         <option value="contest_give_in">Contest give in</option>
       </select>
+      <div v-if="scopeVariables.length" class="sfx-vars">
+        <span class="sfx-vars-label">Available variables:</span>
+        <span v-for="v in scopeVariables" :key="v" class="sfx-var">{{ '{' + v + '}' }}</span>
+      </div>
       <label>Conditions</label>
       <ConditionEditor v-model="form.conditions" />
     </div>
@@ -199,6 +203,9 @@ async function onDelete() {
 }
 .ps-form textarea { resize: vertical; min-height: 48px; }
 .sfx-id { font-size: 10px; color: var(--text-dim); font-family: monospace; margin-bottom: 6px; }
+.sfx-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
+.sfx-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }
 .hint { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 9px; }
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }

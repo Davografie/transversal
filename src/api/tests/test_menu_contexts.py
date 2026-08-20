@@ -25,3 +25,10 @@ def test_unknown_menu_context_is_empty():
 def test_trigger_variables_for_contests():
     assert "effect_dice" in trigger_variables("on_contest_win")
     assert trigger_variables("on_roll") == []
+
+
+def test_trigger_variables_for_state_events():
+    assert "opponent_id" in trigger_variables("on_give_in")
+    assert "gave_in" in trigger_variables("on_give_in")
+    assert "pushed" in trigger_variables("on_push")
+    assert "effect_die" in trigger_variables("on_prevent_taken_out")

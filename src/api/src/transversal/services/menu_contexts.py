@@ -36,6 +36,10 @@ MENU_CONTEXT_VARIABLES: dict[str, list[str]] = {
 TRIGGER_VARIABLES: dict[str, list[str]] = {
     "on_contest_win": ["contest_entity_opponent", "contest_projection_opponent", "effect_dice"],
     "on_contest_loss": ["contest_entity_opponent", "contest_projection_opponent", "effect_dice"],
+    "on_give_in": ["opponent_id", "gave_in"],
+    "on_push": ["pushed"],
+    "on_taken_out": ["opponent_id", "taken_out"],
+    "on_prevent_taken_out": ["effect_die", "prevented"],
 }
 
 
