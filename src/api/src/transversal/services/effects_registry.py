@@ -47,6 +47,7 @@ class EffectActionMeta:
     requires_choice: bool = False        # target must be resolved at runtime
     target_kind: str | None = None       # trait | entity | life_path | ...
     supports_duration: bool = False      # UI shows a duration/timers builder
+    supports_polarity: bool = False      # UI shows a negative (complication) toggle
     inverse: tuple[str, str] | None = None  # (type, action) to undo this effect
     inverse_captures_prior: bool = False    # revert needs the pre-apply value
 
@@ -453,6 +454,23 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         supports_duration=True,
         target_kind="trait",
+    ),
+    EffectActionMeta(
+        action_id="cortex_gain_trait",
+        label="Cortex Gain Trait",
+        description="Create the trait at the effect die if absent; if present, jump to the effect die when higher, else step up one step",
+        category="either",
+        effect_type="modify_trait",
+        effect_action="cortex_gain",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
+                          required=True, options=["d4", "d6", "d8", "d10", "d12"]),
+        ],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        target_kind="trait",
+        supports_polarity=True,
     ),
 
     # ── Rank and life-path flow ────────────────────────

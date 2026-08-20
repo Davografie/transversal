@@ -83,7 +83,7 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(entity, [a], em.repo)
 
-    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "gain_complication", "gain_or_step_up_complication"):
+    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "gain_complication", "gain_or_step_up_complication", "cortex_gain"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -453,6 +453,45 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     _queue_explicit(entity, effect, "remove", target)
 
 
+def _apply_cortex_gain(entity, effect, repo, result):
+    """Cortex-style trait application: create at the effect die if absent.
+
+    If the trait already exists, compare the effect die against the current
+    rating: a higher effect die jumps the rating straight up to it (d8→d12 is
+    legal); otherwise step up one step.  Polarity comes from ``effect.negative``
+    (only used when the trait is first created).
+    """
+    target = _resolve_target(entity, effect, result, "trait", repo)
+    if target is None:
+        return
+    owner = _trait_owner(entity, effect, repo)
+    die = _die(effect.result)
+    negative = bool(effect.negative)
+    existing = _find_traitsetting(owner, repo, target)
+    if existing:
+        if not existing.dice:
+            existing.dice = [die]
+            result.updated_trait_settings.append(existing)
+            result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", existing.id))
+            return
+        # Single-die rating assumption (Cortex traits/complications); choosing
+        # one die from a multi-die rating is deferred.
+        rating = existing.dice[0]
+        if die.max_value > rating.max_value:
+            existing.dice = [die]
+            result.updated_trait_settings.append(existing)
+            result.applied.append(AppliedEffect(effect, f"{target} jumped to {die.value}", existing.id))
+        elif _step_up(existing):
+            result.updated_trait_settings.append(existing)
+            result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
+        else:
+            result.applied.append(AppliedEffect(effect, f"{target} already at d12"))
+        return
+    ts = _new_traitsetting(owner, target, die, repo, negative=negative)
+    result.new_trait_settings.append(ts)
+    result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
+
+
 def _apply_step_up(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "trait", repo)
     if target is None:
@@ -642,6 +681,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "gain"): _apply_gain,
     ("modify_trait", "remove"): _apply_remove,
     ("modify_trait", "gain_or_step_up"): _apply_gain_or_step_up,
+    ("modify_trait", "cortex_gain"): _apply_cortex_gain,
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
     ("modify_trait", "set"): _apply_set,

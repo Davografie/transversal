@@ -529,3 +529,55 @@ def test_gain_with_duration_queues_remove_revert():
     assert se.effect.type == "modify_trait"
     assert se.effect.action == "remove"
     assert se.effect.target == "iron-will"
+
+
+# ── cortex_gain ──────────────────────────────────────
+
+def test_cortex_gain_creates_when_absent():
+    repo = FakeRepo(traits=[FakeTrait("complication-x", "ts-complications-a190")])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "cortex_gain", "complication-x", "d8")], repo)
+    assert len(result.new_trait_settings) == 1
+    ts = result.new_trait_settings[0]
+    assert ts.trait_id == "complication-x"
+    assert ts.dice == [DieType.D8]
+    assert ts.negative is False
+    assert result.applied[0].summary == "gained complication-x at d8"
+
+
+def test_cortex_gain_negative_flag_creates_negative():
+    repo = FakeRepo(traits=[FakeTrait("complication-x", "ts-complications-a190")])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="cortex_gain",
+        target="complication-x", result="d8", negative=True,
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_trait_settings) == 1
+    assert result.new_trait_settings[0].negative is True
+
+
+def test_cortex_gain_jumps_when_effect_die_higher():
+    repo = FakeRepo(traitsettings=[_ts("complication-x", [DieType.D8])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "cortex_gain", "complication-x", "d12")], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D12]
+    assert "jumped" in result.applied[0].summary
+
+
+def test_cortex_gain_steps_up_when_effect_die_equal():
+    repo = FakeRepo(traitsettings=[_ts("complication-x", [DieType.D8])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "cortex_gain", "complication-x", "d8")], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D10]
+    assert "stepped up" in result.applied[0].summary
+
+
+def test_cortex_gain_at_cap_noop():
+    repo = FakeRepo(traitsettings=[_ts("complication-x", [DieType.D12])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "cortex_gain", "complication-x", "d12")], repo)
+    assert len(result.updated_trait_settings) == 0
+    assert "already at d12" in result.applied[0].summary
