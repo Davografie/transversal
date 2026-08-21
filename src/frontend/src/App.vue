@@ -310,6 +310,7 @@ const gmRootPanel = computed(() => ({
   props: {
     universe: universe.value,
     currentLocationId: currentLocationId.value,
+    currentEntityId: actingEntityId.value,
   },
   listeners: {
     'next-beat': () => onNextBeat(),

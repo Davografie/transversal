@@ -79,6 +79,7 @@ let offLocationsChanged = null
 const props = defineProps({
   universe: { type: String, default: 'earth' },
   currentLocationId: { type: String, default: '' },
+  currentEntityId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['next-beat', 'advance-scene', 'start-session', 'end-session', 'add-to-pool'])
@@ -111,6 +112,14 @@ const {
   filteredEntities, filteredFactions, sceneEntities,
   suggestions, selectSuggestion, hideSuggestions,
 } = useEntityFilter(entities)
+
+// Default the entity filter to the acted character so the tree focuses on
+// that character's location path instead of the whole hierarchy.
+watch(() => props.currentEntityId, (id) => {
+  if (!id) { activeFilters.value = []; return }
+  const ent = entities.value.find((e) => e.id === id)
+  activeFilters.value = [{ type: 'name', value: id, label: ent?.name || id }]
+}, { immediate: true })
 
 // ── Location tree ───────────────────────────────────
 const {
@@ -285,16 +294,6 @@ async function onMoveEntity({ entityId, entityKind, targetId, targetKind, target
   }
   fetchEntities()
 }
-
-// ── Auto-expand current location ────────────────────
-watch([locationTree, () => props.currentLocationId], () => {
-  const path = []
-  if (props.currentLocationId && findAncestorIds(locationTree.value, props.currentLocationId, path)) {
-    const next = { ...expandedNodes.value }
-    for (const id of path) next[id] = true
-    expandedNodes.value = next
-  }
-})
 
 // ── Lifecycle ───────────────────────────────────────
 onMounted(() => {

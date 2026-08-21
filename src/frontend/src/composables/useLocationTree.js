@@ -86,29 +86,33 @@ export function useLocationTree({ filteredEntities, activeFilters }) {
   // ── Flatten ────────────────────────────────────────
   function flattenTree(nodes, occupants, depth = 0) {
     const result = []
+    const filterMode = hasOccupantFilter.value
+    const populated = populatedLocations.value
     for (const node of nodes) {
       const kind = node.kind || (node.node_type === 'universe' ? 'universe' : 'location')
       if (activeUniverseFilters.value.size > 0) {
         if (kind === 'universe' && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
         if (kind === 'location' && depth === 0 && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
       }
-      if (hasOccupantFilter.value && kind === 'location' && !populatedLocations.value.has(node.id)) continue
+      // In filter mode only render nodes on the populated path, which hides
+      // sibling locations and unrelated universes.
+      const onPath = filterMode && populated.has(node.id)
+      if (filterMode && !onPath) continue
       const hasChildren = (node.children && node.children.length > 0) ||
         (occupants[node.id] && occupants[node.id].length > 0)
       let expanded
       if (expandedNodes.value[node.id] !== undefined) {
         expanded = expandedNodes.value[node.id]
-      } else if (hasOccupantFilter.value) {
-        expanded = populatedLocations.value.has(node.id)
       } else {
-        expanded = depth === 0
+        expanded = filterMode ? false : depth === 0
       }
       result.push({
         id: node.id, name: node.name, universe: node.universe,
         depth, hasChildren, kind, expanded,
       })
-      if (expanded && occupants[node.id]) {
-        for (const e of occupants[node.id]) {
+      // In filter mode also reveal the occupant on a collapsed leaf.
+      if (expanded || (filterMode && occupants[node.id] && occupants[node.id].length)) {
+        for (const e of occupants[node.id] || []) {
           result.push({
             id: e.id, name: e.name, universe: e.currentUniverse || '',
             depth: depth + 1, hasChildren: false, kind: 'occupant',
@@ -128,8 +132,14 @@ export function useLocationTree({ filteredEntities, activeFilters }) {
           }
         }
       }
-      if (expanded && node.children && node.children.length) {
-        result.push(...flattenTree(node.children, occupants, depth + 1))
+      if (node.children && node.children.length) {
+        if (expanded) {
+          result.push(...flattenTree(node.children, occupants, depth + 1))
+        } else if (filterMode && onPath) {
+          // Collapsed but on the focus path: render only the on-path child.
+          const next = node.children.filter((c) => populated.has(c.id))
+          if (next.length) result.push(...flattenTree(next, occupants, depth + 1))
+        }
       }
     }
     return result

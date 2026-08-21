@@ -27,7 +27,7 @@ export function useEntityFilter(entities) {
     for (const f of activeFilters.value) {
       if (f.type === 'universe' && e.currentUniverse !== f.value) return false
       if (f.type === 'entityType' && e.type !== f.value) return false
-      if (f.type === 'name' && !fuzzyMatch(e.name, f.value)) return false
+      if (f.type === 'name' && !(fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value))) return false
     }
     return true
   }
@@ -59,7 +59,7 @@ export function useEntityFilter(entities) {
       }
     }
     for (const e of entities.value.filter(entityMatchesFilters)) {
-      if (fuzzyMatch(e.name, q) && !seen.has('ent:' + e.id)) {
+      if ((fuzzyMatch(e.name, q) || fuzzyMatch(e.id, q)) && !seen.has('ent:' + e.id)) {
         seen.add('ent:' + e.id)
         results.push({ id: 'ent:' + e.id, name: e.name, entityType: e.type, hint: 'name', filterType: 'name', filterValue: e.name, filterLabel: e.name })
       }
