@@ -113,8 +113,11 @@
           <span
             class="sel-slot total-slot"
             :class="{ empty: idx === null, selected: selectedSlot?.type === 'total' && selectedSlot?.index === i }"
+            :draggable="idx !== null"
             @dragover.prevent
             @drop="onSlotDrop('total', i, $event)"
+            @dragstart="onSlotDragStart($event, 'total', i)"
+            @touchstart="onSlotTouchStart($event, 'total', i)"
             @click="idx !== null ? clearSlot('total', i) : selectSlot('total', i)"
           >
             {{ idx !== null ? result.rolls[idx].result : '' }}
@@ -128,8 +131,11 @@
           v-for="(idx, i) in selection.effect" :key="'e'+i"
           class="sel-slot effect-slot"
           :class="{ empty: idx === null, filled: idx !== null, selected: selectedSlot?.type === 'effect' && selectedSlot?.index === i }"
+          :draggable="idx !== null"
           @dragover.prevent
           @drop="onSlotDrop('effect', i, $event)"
+          @dragstart="onSlotDragStart($event, 'effect', i)"
+          @touchstart="onSlotTouchStart($event, 'effect', i)"
           @click="idx !== null ? clearSlot('effect', i) : selectSlot('effect', i)"
         >
           <DieIcon v-if="idx !== null" :die="result.rolls[idx].die" class="effect-die-icon" />
@@ -1014,9 +1020,9 @@ function toggleDie(idx) {
 
   // If die is already placed, remove it
   const tIdx = selection.total.indexOf(idx)
-  if (tIdx !== -1) { selection.total[tIdx] = null; selectedSlot.value = null; return }
+  if (tIdx !== -1) { selection.total[tIdx] = null; selectedSlot.value = null; syncSelection(); return }
   const eIdx = selection.effect.indexOf(idx)
-  if (eIdx !== -1) { selection.effect[eIdx] = null; selectedSlot.value = null; return }
+  if (eIdx !== -1) { selection.effect[eIdx] = null; selectedSlot.value = null; syncSelection(); return }
 
   // If a slot is selected, place die there
   if (selectedSlot.value) {
@@ -1024,6 +1030,7 @@ function toggleDie(idx) {
     if (selection[type][index] === null) {
       selection[type][index] = idx
       selectedSlot.value = null
+      syncSelection()
       return
     }
   }
@@ -1035,11 +1042,13 @@ function toggleDie(idx) {
     const emptyEffect = selection.effect.indexOf(null)
     if (emptyEffect !== -1) { selection.effect[emptyEffect] = idx }
   }
+  syncSelection()
 }
 
 function clearSlot(type, i) {
   if (type === 'total') selection.total[i] = null
   else selection.effect[i] = null
+  syncSelection()
 }
 
 // ── Slot selection ─────────────────────────────────
@@ -1056,18 +1065,26 @@ function selectSlot(type, i) {
 
 // ── Drag-and-drop (mouse + touch) ──────────────────
 
-const dragDieIndex = ref(null)
-const touchDrag = ref(null)  // { dieIdx, el, startX, startY, ghost }
-const ghostEl = ref(null)
+// Source of an in-flight drag: where the die is coming from (a slot, or the pool).
+// { dieIdx: number, type: 'total'|'effect'|null, index: number|null }
+const dragSource = ref(null)
+const touchDrag = ref(null)  // { dieIdx, type, index, el, startX, startY, ghost }
 
 function onDieDragStart(e, idx) {
-  dragDieIndex.value = idx
+  dragSource.value = { dieIdx: idx, type: null, index: null }
   e.dataTransfer.effectAllowed = 'move'
   e.dataTransfer.setData('text/plain', String(idx))
 }
 
-function onDieTouchStart(e, idx) {
-  if (isHitch(idx)) return
+function onSlotDragStart(e, type, i) {
+  const dieIdx = selection[type][i]
+  if (dieIdx === null || dieIdx === undefined) return
+  dragSource.value = { dieIdx, type, index: i }
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(dieIdx))
+}
+
+function startTouchDrag(e, dieIdx, type, index) {
   e.preventDefault()
   const touch = e.touches[0]
   const el = e.currentTarget
@@ -1084,8 +1101,19 @@ function onDieTouchStart(e, idx) {
   ghost.style.transform = 'scale(1.2)'
   document.body.appendChild(ghost)
 
-  touchDrag.value = { dieIdx: idx, el, ghost, startX: touch.clientX, startY: touch.clientY }
+  touchDrag.value = { dieIdx, type, index, el, ghost, startX: touch.clientX, startY: touch.clientY }
   el.style.opacity = '0.3'
+}
+
+function onDieTouchStart(e, idx) {
+  if (isHitch(idx)) return
+  startTouchDrag(e, idx, null, null)
+}
+
+function onSlotTouchStart(e, type, i) {
+  const dieIdx = selection[type][i]
+  if (dieIdx === null || dieIdx === undefined) return
+  startTouchDrag(e, dieIdx, type, i)
 }
 
 function onDocTouchMove(e) {
@@ -1099,7 +1127,7 @@ function onDocTouchMove(e) {
 
 function onDocTouchEnd(e) {
   if (!touchDrag.value) return
-  const { dieIdx, el, ghost } = touchDrag.value
+  const { dieIdx, type, index, el, ghost } = touchDrag.value
   touchDrag.value = null
   el.style.opacity = ''
   ghost.remove()
@@ -1110,45 +1138,40 @@ function onDocTouchEnd(e) {
   const slot = target?.closest('.sel-slot')
   if (!slot) return
 
-  const type = slot.classList.contains('total-slot') ? 'total' : 'effect'
+  const slotType = slot.classList.contains('total-slot') ? 'total' : 'effect'
   const slots = Array.from(slot.parentElement.querySelectorAll('.sel-slot'))
   const slotIndex = slots.indexOf(slot)
-  if (slotIndex < 0 || slotIndex >= selection[type].length) return  // out of bounds
+  if (slotIndex < 0 || slotIndex >= selection[slotType].length) return  // out of bounds
 
-  // Remove die from any existing slot
-  const tIdx = selection.total.indexOf(dieIdx)
-  if (tIdx !== -1) selection.total[tIdx] = null
-  const eIdx = selection.effect.indexOf(dieIdx)
-  if (eIdx !== -1) selection.effect[eIdx] = null
-
-  // Swap if target slot occupied
-  const existing = selection[type][slotIndex]
-  if (existing !== null) {
-    selection[type][slotIndex] = null
-  }
-
-  selection[type][slotIndex] = dieIdx
+  placeDraggedDie({ dieIdx, type, index }, slotType, slotIndex)
 }
 
 function onSlotDrop(type, slotIndex, e) {
-  const dieIdx = dragDieIndex.value
-  dragDieIndex.value = null
-  if (dieIdx === null || dieIdx === undefined) return
+  const source = dragSource.value
+  dragSource.value = null
+  if (!source) return
+  placeDraggedDie(source, type, slotIndex)
+}
 
-  // Remove die from any existing slot
-  const tIdx = selection.total.indexOf(dieIdx)
-  if (tIdx !== -1) selection.total[tIdx] = null
-  const eIdx = selection.effect.indexOf(dieIdx)
-  if (eIdx !== -1) selection.effect[eIdx] = null
+// Move the dragged die into the target slot. If the target is occupied, the
+// displaced die swaps into the source slot (or returns to the pool when the
+// drag started from the pool).
+function placeDraggedDie(source, type, slotIndex) {
+  const { dieIdx, type: srcType, index: srcIndex } = source
 
-  // If target slot has a die, swap it back to unpicked
+  // Remove the dragged die from its source slot (if any).
+  if (srcType) selection[srcType][srcIndex] = null
+
   const existing = selection[type][slotIndex]
-  if (existing !== null) {
-    selection[type][slotIndex] = null
+  // Swap: the displaced die takes the source slot (pool sources leave it unpicked).
+  if (existing !== null && srcType) {
+    selection[srcType][srcIndex] = existing
   }
 
-  // Place die in target slot
   selection[type][slotIndex] = dieIdx
+
+  selectedSlot.value = null
+  syncSelection()
 }
 
 // ── Auto-assign ────────────────────────────────────
@@ -1229,6 +1252,7 @@ function assignBestTotal() {
   } else if (bestTotalCombo) {
     for (let i = 0; i < bestTotalCombo.length; i++) selection.total[i] = bestTotalCombo[i]
   }
+  syncSelection()
 }
 
 /**
@@ -1279,6 +1303,7 @@ function assignBestEffect() {
     for (let i = 0; i < bestEffCombo.length; i++) selection.effect[i] = bestEffCombo[i]
     for (let i = 0; i < bestTotalCombo.length; i++) selection.total[i] = bestTotalCombo[i]
   }
+  syncSelection()
 }
 
 function clearAllSlots() {
@@ -1447,18 +1472,22 @@ function commitPicks() {
   }
 }
 
-async function flagSelection() {
-  // Record which dice are the result/effect dice on the stored pool.
+// Push the current result/effect selection to the stored pool. Called after
+// every selection change (drag/drop/swap/click/auto-assign) so the server and
+// peers stay in sync; also the authoritative first step of committing a pick.
+async function syncSelection() {
+  if (result.value?.pipeline !== 'pool') return
+  if (props.mode === 'roll_table') return
+  const key = poolEntityKey()
+  if (!props.locationId || !key) return
   const total = selection.total.filter(i => i !== null)
   const effect = selection.effect.find(i => i !== null)
   const isDifficulty = props.gmMode && !props.actingEntityId
-  const key = poolEntityKey()
-  if (!props.locationId || !key || !total.length) return
   await apiSelectDice(props.locationId, key, total, isDifficulty ? null : (effect ?? null))
 }
 
 async function onPickCommit() {
-  await flagSelection()
+  await syncSelection()
   if (challenged.value) {
     doSetResult()
   } else {
@@ -1864,7 +1893,9 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 16px;
   border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+  touch-action: none; user-select: none; -webkit-user-select: none;
 }
+.sel-slot:not(.empty) { cursor: grab; }
 .total-slot { border-color: var(--accent-dim); }
 .effect-slot { border-color: var(--success); min-width: 44px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
 .effect-slot.filled { border-color: transparent; background: transparent; }
