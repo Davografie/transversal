@@ -34,7 +34,6 @@
           </div>
         </div>
       </div>
-      <button class="create-btn" @click="startCreate">+ New Entity</button>
       <div class="canvas-btn-row">
         <button class="create-btn canvas-btn" @click="openLocationTreeCanvas">🗺 Canvas</button>
       </div>
@@ -47,6 +46,7 @@
         <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
         <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
       </div>
+      <button class="fab-create" @click="startCreate" title="New Entity" aria-label="New Entity">＋</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
   </div>
@@ -348,6 +348,18 @@ onUnmounted(() => {
 .canvas-btn-row .create-btn { flex: 1; }
 .faction-canvas-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
 .faction-canvas-btn:hover { background: var(--accent); }
+
+.fab-create {
+  position: sticky; bottom: 16px; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px;
+  margin-left: auto; margin-top: 12px;
+  border-radius: 50%; border: none; cursor: pointer;
+  background: var(--accent); color: #0a0a0f;
+  font-size: 26px; font-weight: 700; line-height: 1;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.fab-create:hover { opacity: 0.9; }
 
 .entity-row { margin-bottom: 4px; }
 .factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
