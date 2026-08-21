@@ -1896,7 +1896,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
-.sel-slot:not(.empty) { cursor: grab; border-color: transparent; }
+.sel-slot:not(.empty) { cursor: grab; border-color: transparent; background: transparent; }
 .total-slot { border-color: var(--accent-dim); min-width: 44px; min-height: 40px; }
 .effect-slot { border-color: var(--success); min-width: 44px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
 .effect-slot.filled { border-color: transparent; background: transparent; }
