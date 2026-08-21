@@ -6,6 +6,7 @@ from transversal.domain import (
     EffectTiming,
     Entity,
     EntityType,
+    Polarity,
     TraitSetting,
 )
 from transversal.services.effects_applier import apply_effects, resolve_choice
@@ -27,6 +28,9 @@ class FakeRepo:
 
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
+
+    def get_traitset_by_id(self, traitset_id):
+        return None
 
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
@@ -104,7 +108,7 @@ def test_gain_creates_traitsetting():
     assert ts.trait_id == "iron-will"
     assert ts.traitset_id == "ts-distinctions"
     assert ts.dice == [DieType.D6]
-    assert ts.negative is False
+    assert ts.polarity == Polarity.POSITIVE
     assert result.applied[0].summary == "gained iron-will at d6"
 
 
@@ -197,7 +201,7 @@ def test_gain_negative_sets_negative():
                     target="scar", result="d4", negative=True)
     result = apply_effects(entity, [effect], repo)
     ts = result.new_trait_settings[0]
-    assert ts.negative is True
+    assert ts.polarity == Polarity.NEGATIVE
     assert ts.traitset_id == "ts-complications"
 
 
@@ -209,7 +213,7 @@ def test_gain_or_step_up_negative_creates_when_absent():
     result = apply_effects(entity, [effect], repo)
     assert len(result.new_trait_settings) == 1
     ts = result.new_trait_settings[0]
-    assert ts.negative is True
+    assert ts.polarity == Polarity.NEGATIVE
     assert ts.dice == [DieType.D4]
 
 
@@ -474,6 +478,9 @@ class RelationshipFakeRepo:
     def get_trait(self, trait_id):
         return FakeTrait(trait_id, "ts-rel")
 
+    def get_traitset_by_id(self, traitset_id):
+        return None
+
     def get_traitsettings_for_entity(self, entity_id):
         return []
 
@@ -589,7 +596,7 @@ def test_cortex_gain_creates_when_absent():
     ts = result.new_trait_settings[0]
     assert ts.trait_id == "complication-x"
     assert ts.dice == [DieType.D8]
-    assert ts.negative is False
+    assert ts.polarity == Polarity.POSITIVE
     assert result.applied[0].summary == "gained complication-x at d8"
 
 
@@ -602,7 +609,7 @@ def test_cortex_gain_negative_flag_creates_negative():
     )
     result = apply_effects(entity, [effect], repo)
     assert len(result.new_trait_settings) == 1
-    assert result.new_trait_settings[0].negative is True
+    assert result.new_trait_settings[0].polarity == Polarity.NEGATIVE
 
 
 def test_cortex_gain_jumps_when_effect_die_higher():

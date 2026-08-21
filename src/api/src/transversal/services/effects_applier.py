@@ -12,7 +12,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from transversal.domain import DieType, Effect, Entity, TraitSetting
+from transversal.domain import DieType, Effect, Entity, Polarity, TraitSetting
 from transversal.services.effect_targets import resolve_candidates
 from transversal.services.trait_reveal import reveal_trait_to
 
@@ -331,7 +331,7 @@ def _step_up_trait(entity: Entity, ts: TraitSetting, target: str, effect: Effect
             break  # empty dice or already at d12
 
     if applied < steps:
-        if ts.negative:
+        if ts.polarity == Polarity.NEGATIVE:
             entity.taken_out = True
             result.applied.append(AppliedEffect(effect, f"{target} stepped beyond d12 — taken out"))
             from transversal.domain import Effect as _Effect, EffectTiming as _ET, Timer as _Timer, TimerCombine as _TC
@@ -352,20 +352,25 @@ def _die(result: Optional[str]) -> DieType:
 
 
 def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False) -> TraitSetting:
+    from transversal.services.polarity import default_polarity
+
     from_type, owner_id = owner
     traitset_id = _resolve_traitset_id(trait_id, repo)
-    if not traitset_id and negative:
-        traitset_id = "ts-complications-a190"
     trait = repo.get_trait(trait_id)
+    get_traitset = getattr(repo, "get_traitset_by_id", None)
+    traitset = get_traitset(traitset_id) if traitset_id and get_traitset else None
+    polarity = Polarity.NEGATIVE if negative else default_polarity(trait, traitset)
+    if not traitset_id and polarity == Polarity.NEGATIVE:
+        traitset_id = "ts-complications-a190"
     ego = getattr(trait, "default_ego", False) if trait else False
     return TraitSetting(
-        id=f"{owner_id}:{trait_id}{':complication' if negative else ''}",
+        id=f"{owner_id}:{trait_id}{':complication' if polarity == Polarity.NEGATIVE else ''}",
         entity_id=owner_id,
         trait_id=trait_id,
         traitset_id=traitset_id,
         from_type=from_type,
         dice=[die],
-        negative=negative,
+        polarity=polarity,
         ego=ego,
         source_type="effect",
     )

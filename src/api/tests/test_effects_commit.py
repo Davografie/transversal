@@ -30,6 +30,9 @@ class RecordingRepo:
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
 
+    def get_traitset_by_id(self, traitset_id):
+        return None
+
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
 

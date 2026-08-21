@@ -29,6 +29,7 @@ from transversal.api.graphql.types import (
     MessageKind,
     OutcomeTier as GqlOutcomeTier,
     PendingTerm as GqlPendingTerm,
+    Polarity,
     Projection,
     RelatedEntity,
     Relationship,
@@ -124,7 +125,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         traitset_id=s.traitset_id,
         rating_type=s.rating_type, dice=s.dice,
         polarity=s.polarity,
-        statement=s.statement, negative=s.negative,
+        statement=s.statement,
         ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
@@ -336,7 +337,8 @@ class Query:
         tss = _em(info).repo.get_all_traitsets()
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
-                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit)
+                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
+                        polarity=ts.polarity)
             for ts in tss
         ]
 
@@ -394,6 +396,7 @@ class Query:
                 default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
                 default_ego=t.default_ego,
+                polarity=t.polarity,
                 display_names=[
                     GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                         ratings=dn.ratings)
@@ -408,7 +411,8 @@ class Query:
         tss = _em(info).repo.get_traitsets_by_universe(universe)
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
-                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit)
+                        entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
+                        polarity=ts.polarity)
             for ts in tss
         ]
 
@@ -670,9 +674,14 @@ class Mutation:
     @strawberry.mutation
     def add_trait_setting(self, info: strawberry.Info, entity_id: strawberry.ID, input: TraitSettingInput) -> TraitSetting:
         ts_id = f"{entity_id}:{input.trait_id}"
-        existing = _em(info).repo.get_traitsetting(ts_id)
+        repo = _em(info).repo
+        existing = repo.get_traitsetting(ts_id)
         if existing:
             raise ValueError(f"TraitSetting '{ts_id}' already exists")
+        trait = repo.get_trait(str(input.trait_id))
+        traitset = repo.get_traitset_by_id(str(input.traitset_id))
+        from transversal.services.polarity import default_polarity
+        polarity = input.polarity if input.polarity is not None else default_polarity(trait, traitset)
         ts = DomainTraitSetting(
             id=ts_id,
             entity_id=str(entity_id),
@@ -680,9 +689,8 @@ class Mutation:
             traitset_id=str(input.traitset_id),
             dice=input.dice,
             rating_type=input.rating_type,
-            polarity=input.polarity,
+            polarity=polarity,
             statement=input.statement,
-            negative=input.negative,
             ego=input.ego,
             from_type=input.from_type or "entity",
             projection_id=str(input.projection_id) if input.projection_id else None,
@@ -809,8 +817,6 @@ class Mutation:
             ts.polarity = input.polarity
         if input.statement is not None:
             ts.statement = input.statement
-        if input.negative is not None:
-            ts.negative = input.negative
         if input.ego is not None:
             ts.ego = input.ego
         if input.from_type is not None:
@@ -841,31 +847,42 @@ class Mutation:
     @strawberry.mutation
     def create_traitset(self, info: strawberry.Info, id: str, name: str, universes: list[str],
                         entity_types: Optional[list[EntityType]] = None, description: str = "",
-                        order: int = 0, limit: int = 1) -> TraitSetRef:
+                        order: int = 0, limit: int = 1,
+                        polarity: Optional[Polarity] = None) -> TraitSetRef:
         from transversal.domain import TraitSet as DomainTraitSet
         ts = DomainTraitSet(id=id, name=name, universes=universes,
                             entity_types=entity_types or [], description=description,
-                            order=order, limit=limit)
+                            order=order, limit=limit, polarity=polarity)
         created = _em(info).repo.create_traitset(ts)
         return TraitSetRef(id=created.id, name=created.name, universes=created.universes,
-                           entity_types=created.entity_types, order=created.order, limit=created.limit)
+                           entity_types=created.entity_types, order=created.order, limit=created.limit,
+                           polarity=created.polarity)
 
     @strawberry.mutation
     def update_traitset(self, info: strawberry.Info, id: strawberry.ID, name: Optional[str] = None,
                         universes: Optional[list[str]] = None, entity_types: Optional[list[EntityType]] = None,
                         description: Optional[str] = None, order: Optional[int] = None,
-                        limit: Optional[int] = None) -> TraitSetRef:
+                        limit: Optional[int] = None, polarity: Optional[Polarity] = None,
+                        clear_polarity: bool = False) -> TraitSetRef:
         existing = _em(info).repo.get_traitset_by_id(str(id))
         if not existing: raise ValueError(f"TraitSet '{id}' not found")
+        old_polarity = existing.polarity
         if name is not None: existing.name = name
         if universes is not None: existing.universes = universes
         if entity_types is not None: existing.entity_types = entity_types
         if description is not None: existing.description = description
         if order is not None: existing.order = order
         if limit is not None: existing.limit = limit
+        if clear_polarity:
+            existing.polarity = None
+        elif polarity is not None:
+            existing.polarity = polarity
         updated = _em(info).repo.update_traitset(existing)
+        from transversal.services.polarity import propagate_traitset_polarity
+        propagate_traitset_polarity(_em(info).repo, str(id), old_polarity, existing.polarity)
         return TraitSetRef(id=updated.id, name=updated.name, universes=updated.universes,
-                           entity_types=updated.entity_types, order=updated.order, limit=updated.limit)
+                           entity_types=updated.entity_types, order=updated.order, limit=updated.limit,
+                           polarity=updated.polarity)
 
     @strawberry.mutation
     def delete_traitset(self, info: strawberry.Info, id: strawberry.ID) -> str:
@@ -891,6 +908,7 @@ class Mutation:
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
             default_ego=input.default_ego,
+            polarity=input.polarity,
             display_names=[
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
                                        ratings=dn.ratings)
@@ -907,6 +925,7 @@ class Mutation:
             default_sfx_ids=created.default_sfx_ids,
             location_restricted=created.location_restricted,
             default_ego=created.default_ego,
+            polarity=created.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)
@@ -919,6 +938,7 @@ class Mutation:
         existing = _em(info).repo.get_trait(str(id))
         if not existing:
             raise ValueError(f"Trait '{id}' not found")
+        old_polarity = existing.polarity
         if input.name is not None:
             existing.name = input.name
         if input.universes is not None:
@@ -937,6 +957,10 @@ class Mutation:
             existing.location_restricted = input.location_restricted
         if input.default_ego is not None:
             existing.default_ego = input.default_ego
+        if input.clear_polarity:
+            existing.polarity = None
+        elif input.polarity is not None:
+            existing.polarity = input.polarity
         if input.display_names is not None:
             existing.display_names = [
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -944,6 +968,12 @@ class Mutation:
                 for dn in input.display_names
             ]
         updated = _em(info).repo.update_trait(existing)
+        from transversal.services.polarity import propagate_trait_polarity
+        traitset = _em(info).repo.get_traitset_by_id(updated.traitset_id)
+        propagate_trait_polarity(
+            _em(info).repo, str(id), old_polarity, updated.polarity,
+            traitset.polarity if traitset else None,
+        )
         return TraitRef(
             id=updated.id, name=updated.name, universes=updated.universes,
             traitset_id=updated.traitset_id,
@@ -953,6 +983,7 @@ class Mutation:
             default_sfx_ids=updated.default_sfx_ids,
             location_restricted=updated.location_restricted,
             default_ego=updated.default_ego,
+            polarity=updated.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
                                     ratings=dn.ratings)

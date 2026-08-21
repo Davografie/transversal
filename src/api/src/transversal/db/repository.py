@@ -723,6 +723,30 @@ class EntityRepository:
             )
         ]
 
+    def get_traitsettings_by_trait(self, trait_id: str) -> list[TraitSetting]:
+        """Return every trait setting that references a trait (across entities)."""
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.trait_id == @tid
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"tid": trait_id})
+        ]
+
+    def get_traitsettings_by_traitset_all(self, traitset_id: str) -> list[TraitSetting]:
+        """Return every trait setting belonging to a trait set (across entities)."""
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.traitset_id == @tsid
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"tsid": traitset_id})
+        ]
+
     def update_traitsetting(self, ts: TraitSetting) -> TraitSetting:
         doc = ts.model_dump()
         doc["_key"] = ts.id
@@ -1028,7 +1052,7 @@ class EntityRepository:
 
         query = f"""
             FOR ts IN 1..1 INBOUND @trait_ref {TRAITSETTINGS}
-            FILTER ts.negative == false
+            FILTER ts.polarity != 'negative'
             RETURN DISTINCT ts.entity_id
         """
         cursor = self.db.aql.execute(

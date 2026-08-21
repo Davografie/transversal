@@ -519,13 +519,13 @@ def seed_locations(em) -> None:
             repo.update_entity(loc)
     # ── Seed challenge traits on locations ────────────
 
-    from transversal.domain import ChallengePolarity
+    from transversal.domain import Polarity
 
     _challenge_traits = [
         ("loc-krasnoyarsk", "regime_alert", "ts-earth-distinctions",
-         [DieType.D6, DieType.D6, DieType.D8], ChallengePolarity.NEGATIVE),
+         [DieType.D6, DieType.D6, DieType.D8], Polarity.NEGATIVE),
         ("loc-sect", "sect_suspicion", "ts-earth-distinctions",
-         [DieType.D6], ChallengePolarity.NEGATIVE),
+         [DieType.D6], Polarity.NEGATIVE),
     ]
     for loc_id, name, tsid, dice, polarity in _challenge_traits:
         ts_key = f"{loc_id}:challenge:{name}"

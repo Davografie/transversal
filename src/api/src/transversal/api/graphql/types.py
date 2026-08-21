@@ -9,7 +9,7 @@ from transversal.domain import (
     RatingType as DomainRatingType,
     EntityType as DomainEntityType,
     TransversalType as DomainTransversalType,
-    ChallengePolarity as DomainChallengePolarity,
+    Polarity as DomainPolarity,
     ConditionType as DomainConditionType,
     EffectTiming as DomainEffectTiming,
     MessageKind as DomainMessageKind,
@@ -28,7 +28,7 @@ DieType = strawberry.enum(DomainDieType)
 RatingType = strawberry.enum(DomainRatingType)
 EntityType = strawberry.enum(DomainEntityType)
 TransversalTypeEnum = strawberry.enum(DomainTransversalType)
-ChallengePolarity = strawberry.enum(DomainChallengePolarity)
+Polarity = strawberry.enum(DomainPolarity)
 EffectTimingEnum = strawberry.enum(DomainEffectTiming)
 MessageKind = strawberry.enum(DomainMessageKind)
 OutcomeTier = strawberry.enum(DomainOutcomeTier)
@@ -106,6 +106,7 @@ class TraitRef:
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
     default_ego: bool = False
+    polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
 
@@ -117,6 +118,7 @@ class TraitSetRef:
     entity_types: list[EntityType]
     order: int = 0
     limit: int = 1
+    polarity: Optional[Polarity] = None
 
     @strawberry.field
     def traits(self, info: strawberry.Info) -> list["TraitRef"]:
@@ -131,6 +133,7 @@ class TraitSetRef:
                 possible_sfx_ids=t.possible_sfx_ids,
                 location_restricted=t.location_restricted,
                 default_ego=t.default_ego,
+                polarity=t.polarity,
                 display_names=[
                     TraitDisplayName(name=dn.name, universe=dn.universe,
                                      ratings=dn.ratings)
@@ -430,6 +433,7 @@ class TraitInput:
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
     default_ego: bool = False
+    polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
 
@@ -444,6 +448,8 @@ class TraitUpdateInput:
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
     default_ego: Optional[bool] = None
+    polarity: Optional[Polarity] = None
+    clear_polarity: bool = False
     display_names: Optional[list[TraitDisplayNameInput]] = None
 
 
@@ -457,9 +463,8 @@ class TraitSetting:
     traitset_id: strawberry.ID
     rating_type: RatingType
     dice: list[DieType]
-    polarity: Optional[ChallengePolarity] = None
+    polarity: Polarity
     statement: str
-    negative: bool
     ego: bool
     from_type: str = "entity"  # "entity" | "projection" | "relationship"
     projection_id: Optional[strawberry.ID] = None
@@ -555,9 +560,8 @@ class TraitSettingInput:
     traitset_id: strawberry.ID
     dice: list[DieType] = strawberry.field(default_factory=list)
     rating_type: RatingType = RatingType.STATIC
-    polarity: Optional[ChallengePolarity] = None
+    polarity: Optional[Polarity] = None
     statement: str = ""
-    negative: bool = False
     ego: bool = False
     from_type: Optional[str] = None  # "entity" | "projection"
     projection_id: Optional[strawberry.ID] = None
@@ -568,9 +572,8 @@ class TraitSettingInput:
 class TraitSettingUpdateInput:
     dice: Optional[list[DieType]] = None
     rating_type: Optional[RatingType] = None
-    polarity: Optional[ChallengePolarity] = None
+    polarity: Optional[Polarity] = None
     statement: Optional[str] = None
-    negative: Optional[bool] = None
     ego: Optional[bool] = None
     from_type: Optional[str] = None  # "entity" | "projection"
     projection_id: Optional[strawberry.ID] = None
@@ -710,7 +713,7 @@ class Entity:
                 traitset_id=s.traitset_id,
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
-                statement=s.statement, negative=s.negative,
+                statement=s.statement,
                 ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
                 sfx_ids=s.sfx_ids,
                 known_to=s.known_to,
@@ -729,7 +732,7 @@ class Entity:
                 traitset_id=s.traitset_id,
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
-                statement=s.statement, negative=s.negative,
+                statement=s.statement,
                 ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
                 sfx_ids=s.sfx_ids,
                 known_to=s.known_to,

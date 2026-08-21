@@ -50,14 +50,12 @@ class RatingType(str, Enum):
     EMPTY = "empty"
 
 
-class ChallengePolarity(str, Enum):
-    """For CHALLENGE-type traits: whether the pool represents danger or progress.
+class Polarity(str, Enum):
+    """Whether a trait is a benefit/asset (positive) or a complication (negative).
 
-    NEGATIVE — doom pool: GM spends dice to strengthen opposition.
-        Failures and hitches add dice or step existing dice up.
-
-    POSITIVE — progress clock: players roll against the pool to reduce it.
-        Successes remove or step down dice.  When empty, the project completes.
+    Applies to every trait, not just challenge pools.  Trait settings bake a
+    concrete polarity at creation from the trait/traitset defaults; the enum is
+    the single source of truth for that sign.
     """
     NEGATIVE = "negative"
     POSITIVE = "positive"
@@ -347,6 +345,7 @@ class Trait(BaseModel):
     default_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False
     default_ego: bool = False      # default morph/ego for settings created from this trait
+    polarity: Optional["Polarity"] = None  # default polarity override (None = inherit traitset)
     explanation: str = ""
     random_weight: int = 0
     display_names: list[TraitDisplayName] = Field(default_factory=list)
@@ -367,6 +366,7 @@ class TraitSet(BaseModel):
     limit: int = 1
     location_restricted: bool = False
     default_ego: bool = False
+    polarity: Optional["Polarity"] = None  # default polarity override (None = global positive)
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
     transfer_flags: Optional[TransferFlags] = None
@@ -443,9 +443,8 @@ class TraitSetting(BaseModel):
     traitset_id: str
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)
-    polarity: Optional[ChallengePolarity] = None  # meaningful only for CHALLENGE traits
+    polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
-    negative: bool = False     # true = negative trait (opponent uses it)
     ego: bool = False          # true = persists across all universes/projections
     sub_trait_settings: list["TraitSetting"] = Field(default_factory=list)
     sfx_ids: list[str] = Field(default_factory=list)
@@ -461,6 +460,24 @@ class TraitSetting(BaseModel):
     source_term_number: Optional[int] = None  # which term in that path (life_path_term)
     stolen: bool = False  # trait was taken — may have narrative consequences
     scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fold_legacy_negative(cls, data):
+        """Fold the old ``negative``/challenge ``polarity`` split into one field.
+
+        Legacy docs may store ``polarity=None`` and carry the sign in
+        ``negative``.  Bake a concrete polarity at load so the model stays
+        non-null without requiring a migration to run first.
+        """
+        if isinstance(data, dict):
+            data = {**data}
+            if data.get("negative"):
+                data["polarity"] = "negative"
+            if data.get("polarity") is None:
+                data["polarity"] = "positive"
+            data.pop("negative", None)
+        return data
 
 
 # ── Per-Entity: Trait Set Settings ───────────────────
