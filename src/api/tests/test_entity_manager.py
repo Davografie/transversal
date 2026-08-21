@@ -185,6 +185,16 @@ class TestEntityCreation:
             validate_entity(Entity(id="x", type=EntityType.CHARACTER, name="x",
                                    razmerit=-5, current_universe="earth"))
 
+    def test_universe_key_derived_from_name_and_unique(self, em):
+        em.create(name="Earth", entity_type=EntityType.UNIVERSE, universe="ignored")
+        cyber = em.create(name="Cyberpunk", entity_type=EntityType.UNIVERSE, universe="ignored")
+        assert cyber.current_universe == "cyberpunk"
+
+        # A second universe with the same name gets a numbered suffix, never a
+        # shared key that would collide in the location tree.
+        cyber2 = em.create(name="Cyberpunk", entity_type=EntityType.UNIVERSE, universe="ignored")
+        assert cyber2.current_universe == "cyberpunk-2"
+
 
 class TestProjections:
     def test_add_projection(self, em, kael):

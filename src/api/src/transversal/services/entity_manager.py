@@ -87,6 +87,8 @@ class EntityManager:
         session_id: Optional[str] = None,
     ) -> Entity:
         eid = entity_id or _generate_id(name, entity_type)
+        if entity_type == EntityType.UNIVERSE:
+            universe = _universe_key(name, self.repo)
         proj_id = f"{eid}:{universe}"
         entity = Entity(
             id=eid,
@@ -469,6 +471,19 @@ class EntityManager:
         _publish_to_sessions(event)
 
         return result
+
+
+def _universe_key(name: str, repo: EntityRepository) -> str:
+    """Derive a unique universe key (current_universe) from a name."""
+    import re
+    base = re.sub(r"[^a-z0-9]+", "_", name.lower().strip()).strip("_") or "universe"
+    existing = {u.current_universe for u in repo.list_entities_by_type(EntityType.UNIVERSE)}
+    if base not in existing:
+        return base
+    n = 2
+    while f"{base}-{n}" in existing:
+        n += 1
+    return f"{base}-{n}"
 
 
 def _generate_id(name: str, entity_type: EntityType) -> str:
