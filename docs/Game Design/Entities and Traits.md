@@ -169,6 +169,22 @@ The separation means:
 - SFX unlocking is per-entity — Kael's Overcharge is his; another cultivator might not have unlocked it
 - Queries like "find all entities with qi_reserves ≥ d8" use graph traversal on the `traitsettings` edge collection
 
+## Fog of War
+
+Trait knowledge is tracked per entity. Each `TraitSetting` carries a `known_to` list of entity IDs that know about that specific trait instance (see [[Data Model#traitsettings]]).
+
+- **Players** are affected by fog of war; the GM sees every trait, and an entity always sees its own sheet.
+- On a foreign sheet, a trait whose `known_to` doesn't include the viewer is rendered as `???`.
+- Knowledge is **monotonic** — once learned, a trait is never un-learned.
+
+Trait knowledge changes through three reveal paths:
+
+1. **Using a trait in a dice pool** — when a trait enters a pool at a location, everyone currently at that location learns it. The server persists the `known_to` entries and broadcasts `traits_revealed` so live clients re-fetch the sheet.
+2. **Offering a negative trait** — routing one of your negative traits to an opponent's pool during a contest reveals it to everyone present. If the opponent hadn't learned it yet, `on_trait_offered` fires.
+3. **Reveal effect** — a `modify_trait`/`reveal` effect (e.g. a spying SFX) adds a specific learner to `known_to`.
+
+The `on_trait_learn` trigger fires whenever an entity newly learns a trait, regardless of which path caused it. See [[SFX and Effects#Trigger semantics]] for the trigger vocabulary.
+
 ## Ego and Morph
 
 Not all traits are universe-gated. **Ego traits** represent personality, core identity, and learned understanding that persists regardless of which body or universe the character inhabits.

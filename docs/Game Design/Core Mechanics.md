@@ -215,6 +215,10 @@ Negative traits do not kill a character outright. A character with multiple high
 
 When the GM activates a hitch and the complication manifests as a negative trait, the affected character earns 1 razmerit — same as any complication. The negative trait is the complication.
 
+### Fog of War and Negative Traits
+
+Negative traits are the classic hidden liability — a character doesn't broadcast their cracked ribs until it matters. Fog of war changes when a trait is actually **used**: adding a trait to a dice pool reveals it to everyone at the location, and offering a negative trait to an opponent during a contest reveals it (and pays 1 razmerit via `on_trait_offered` if the opponent hadn't learned it yet). See [[Entities and Traits#Fog of War]].
+
 ## Narrative Actions
 
 Some actions have no trait analog. A character wants to remember a piece of lore, recognize a face, or notice the weather changing. If no trait applies and the outcome isn't contested, the action resolves **narratively** — the players and GM decide what happens without rolling.
