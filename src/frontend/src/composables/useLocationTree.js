@@ -8,7 +8,7 @@ const expandedNodes = ref({})
 const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
 const OCCUPANT_TYPES = new Set(['CHARACTER', 'GMC', 'ASSET'])
 
-export function useLocationTree({ filteredEntities, activeFilters }) {
+export function useLocationTree({ filteredEntities, activeFilters, currentUniverse }) {
   // ── Fetch ──────────────────────────────────────────
   async function fetchLocationTree() {
     try {
@@ -88,6 +88,7 @@ export function useLocationTree({ filteredEntities, activeFilters }) {
     const result = []
     const filterMode = hasOccupantFilter.value
     const populated = populatedLocations.value
+    const curUniverse = currentUniverse?.value || ''
     for (const node of nodes) {
       const kind = node.kind || (node.node_type === 'universe' ? 'universe' : 'location')
       if (activeUniverseFilters.value.size > 0) {
@@ -103,8 +104,10 @@ export function useLocationTree({ filteredEntities, activeFilters }) {
       let expanded
       if (expandedNodes.value[node.id] !== undefined) {
         expanded = expandedNodes.value[node.id]
+      } else if (filterMode) {
+        expanded = false
       } else {
-        expanded = filterMode ? false : depth === 0
+        expanded = depth === 0 && node.universe === curUniverse
       }
       result.push({
         id: node.id, name: node.name, universe: node.universe,

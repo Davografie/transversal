@@ -53,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, toRef, onMounted, onUnmounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -125,7 +125,7 @@ watch(() => props.currentEntityId, (id) => {
 const {
   locationTree, expandedNodes,
   fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds,
-} = useLocationTree({ filteredEntities, activeFilters })
+} = useLocationTree({ filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
 
 // ── Entity selection ────────────────────────────────
 function toggleEntity(e) {
