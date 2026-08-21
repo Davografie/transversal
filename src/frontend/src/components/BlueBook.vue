@@ -31,7 +31,7 @@
               📓 Self (journal)
             </button>
             <button v-for="e in relatedEntities" :key="e.id" class="bb-suggestion-item" :class="{ active: composeRecipientId === e.id }" @mousedown.prevent @click="selectRecipient(e)">
-              <img v-if="e.sheetPortrait" :src="e.sheetPortrait" class="bb-suggestion-img" />
+              <MediaImage v-if="e.sheetPortrait" :src="e.sheetPortrait" class="bb-suggestion-img" alt="" />
               <span v-else class="bb-suggestion-avatar">{{ e.name.charAt(0) }}</span>
               {{ e.name }}
             </button>
@@ -78,7 +78,7 @@
           <div v-if="!entryContinuations.has(m.id)" class="bb-entry-header">
             <div v-if="m.recordType" class="bb-record-badge">🎲 {{ recordLabel(m) }}</div>
             <div v-else-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
-              <img v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" />
+              <MediaImage v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" alt="" />
               <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
               <span class="bb-sender-name">{{ senderName(m.senderEntityId) }}</span>
               <span v-if="m.relationshipDescription" class="bb-rel">· {{ m.relationshipDescription }} ·</span>
@@ -104,6 +104,7 @@
 <script setup>
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
+import MediaImage from './MediaImage.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },

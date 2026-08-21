@@ -135,8 +135,7 @@
               :class="{ active: entityId === e.id }"
               @click="selectCharacter(e)"
             >
-              <video v-if="e.sheetPortrait && isVideoPortrait(e.sheetPortrait)" :src="e.sheetPortrait" class="char-portrait" autoplay loop muted playsinline />
-              <img v-else-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-portrait" alt="" />
+              <MediaImage v-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-portrait" alt="" />
               <span v-else class="char-portrait char-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
               <span class="char-chip-meta">
                 <span class="char-chip-name">{{ e.name || e.id }}</span>
@@ -194,8 +193,7 @@
                   @mousedown.prevent
                   @click="chooseFoundCharacter(e)"
                 >
-                  <video v-if="e.sheetPortrait && isVideoPortrait(e.sheetPortrait)" :src="e.sheetPortrait" class="char-search-portrait" autoplay loop muted playsinline />
-                  <img v-else-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-search-portrait" alt="" />
+                  <MediaImage v-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-search-portrait" alt="" />
                   <span v-else class="char-search-portrait char-search-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
                   <span class="char-search-result-meta">
                     <span class="char-search-result-name">{{ e.name || e.id }}</span>
@@ -288,6 +286,7 @@ import DiceRoller from './components/DiceRoller.vue'
 import GmPanel from './components/GmPanel.vue'
 import PanelStack from './components/gm/PanelStack.vue'
 import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
+import MediaImage from './components/MediaImage.vue'
 import { useSSE } from './composables/useSSE.js'
 import { useSessions } from './composables/useSessions.js'
 import { useToasts } from './composables/useToasts.js'
@@ -1336,10 +1335,6 @@ function locationLabel(e) {
   const lid = e?.currentLocation
   if (lid) return locationNames.value[lid] || lid
   return e?.currentUniverse || ''
-}
-
-function isVideoPortrait(url) {
-  return !!url && /\.(webm|mp4)(\?|$)/i.test(url)
 }
 
 async function fetchEntitiesFor(pid) {

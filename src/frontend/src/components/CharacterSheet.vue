@@ -33,8 +33,7 @@
               <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(1)">+</button>
             </div>
           </div>
-          <video v-if="sheetPortrait && isSheetVideo" :src="sheetPortrait" class="sheet-portrait-video" autoplay loop muted playsinline />
-          <img v-else-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" />
+          <MediaImage v-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" />
         </div>
         <div class="header-controls">
           <div v-if="isForeignSheet" class="rel-widget">
@@ -243,6 +242,7 @@ import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
 import DieIcon from './DieIcon.vue'
+import MediaImage from './MediaImage.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -320,7 +320,6 @@ const ownsCharacter = computed(() => {
   return props.playerOwnedEntityIds.includes(id)
 })
 
-const isSheetVideo = computed(() => sheetPortrait.value && /\.(webm|mp4)(\?|$)/i.test(sheetPortrait.value))
 
 // Resolved human-readable names
 const locationName = ref('')

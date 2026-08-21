@@ -38,8 +38,7 @@
           @touchend="onImageTouchEnd"
           @click="openImage(img)"
         >
-          <video v-if="img.image_type === 'animated'" :src="img.path_animated" class="gallery-thumb-video" autoplay loop muted playsinline />
-          <img v-else :src="img.path_large" :alt="img.image_type" loading="lazy" />
+          <MediaImage :src="img.image_type === 'animated' ? img.path_animated : img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
           <span class="gallery-label">
             {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
             <span v-if="img.universe_label" class="universe-badge">{{ img.universe_label }}</span>
@@ -65,8 +64,7 @@
           @drop.prevent="onProjDrop(p, $event)"
           @click="openProjectionEditor(p)"
         >
-          <video v-if="p.backgroundImage && isProjectionVideo(p)" :src="p.backgroundImage" class="proj-thumb" autoplay loop muted playsinline />
-          <img v-else-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
+          <MediaImage v-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
           <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
           <span class="proj-name">{{ p.name || form?.name }}</span>
           <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
@@ -157,6 +155,7 @@ import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
+import MediaImage from '@/components/MediaImage.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -184,10 +183,6 @@ async function addProjectionLocal() {
   await addProjection(loc.universe, newProjType.value, loc.id)
   newProjLocationId.value = ''
   newProjLocation.value = null
-}
-
-function isProjectionVideo(p) {
-  return !!p?.backgroundImage && /\.(webm|mp4)(\?|$)/i.test(p.backgroundImage)
 }
 
 // ── Image → projection drag-and-drop (HTML5 + touch longpress) ──
@@ -528,7 +523,7 @@ defineExpose({ refresh: loadImages })
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
 .gallery-item { display: block; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; cursor: pointer; }
 .gallery-item img { width: 100%; height: auto; display: block; }
-.gallery-thumb-video { width: 100%; height: auto; display: block; }
+.gallery-thumb, .gallery-thumb-video { width: 100%; height: auto; display: block; }
 .gallery-label { display: block; font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 4px; background: rgba(0,0,0,0.3); }
 .universe-badge { display: inline-block; font-size: 7px; background: rgba(139,92,246,0.3); color: #c4b5fd; padding: 0 3px; border-radius: 2px; margin-left: 3px; }
 .role-badge { display: inline-block; font-size: 7px; background: rgba(245,158,11,0.3); color: #fcd34d; padding: 0 3px; border-radius: 2px; margin-left: 2px; text-transform: uppercase; }

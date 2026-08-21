@@ -688,6 +688,29 @@ class Entity:
         # Fall back to background image
         return self.background_image()
 
+    # Canonical role-based media resolver. The only valid roles are
+    # "background", "sheet", and "navdot" — resolved from the image's roles
+    # tags in entity_images. There is deliberately no fallback to the legacy
+    # denormalized background_image field: callers that want a role image must
+    # use the role tags.
+    _ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
+
+    @strawberry.field
+    def image(self, role: str) -> Optional[str]:
+        from transversal.db.repository import EntityRepository
+        from transversal.domain import ImageType
+        variant = self._ROLE_VARIANT.get(role)
+        if variant is None:
+            return None
+        repo = EntityRepository()
+        images = repo.get_entity_images(str(self.id))
+        for img in images:
+            if role in img.roles:
+                if img.image_type == ImageType.ANIMATED:
+                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+                return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_{variant}.{img.extension}"
+        return None
+
     @strawberry.field
     def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:
         """The entity's in-progress life path term checkpoint, if any."""

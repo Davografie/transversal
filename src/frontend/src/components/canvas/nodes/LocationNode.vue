@@ -41,7 +41,7 @@
       >
         <span class="occ-name" :title="occ.name">{{ occ.name }}</span>
         <div class="occ-navdot" :class="{ selected: occ.selected }">
-          <img v-if="occ.image" :src="occ.image" :alt="occ.name" />
+          <MediaImage v-if="occ.image" :src="occ.image" class="occ-navdot-img" :alt="occ.name" />
           <span v-else class="occ-initials">{{ initials(occ.name) }}</span>
         </div>
         <Handle
@@ -73,6 +73,7 @@
 
 <script setup>
 import { Handle, Position } from '@vue-flow/core'
+import MediaImage from '@/components/MediaImage.vue'
 
 defineProps({
   id: { type: String, required: true },
@@ -140,7 +141,7 @@ function initials(name) {
   display: flex; align-items: center; justify-content: center;
   background: var(--accent-dim); overflow: hidden;
 }
-.occ-navdot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.occ-navdot img, .occ-navdot-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .occ-navdot.selected {
   box-shadow: 0 0 0 2px var(--accent), 0 0 10px rgba(64, 136, 212, 0.9);
 }

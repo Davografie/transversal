@@ -1,7 +1,6 @@
 <template>
   <div class="image-viewer">
-    <video v-if="isVideo" :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" class="viewer-video" autoplay loop muted playsinline />
-    <img v-else :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" :alt="alt" />
+    <MediaImage :src="imageType === 'animated' && animatedSrc ? animatedSrc : src" class="viewer-media" :alt="alt" />
 
     <div class="animate-section" v-if="imageType !== 'animated'">
       <div class="motion-hint-row">
@@ -37,6 +36,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import MediaImage from '@/components/MediaImage.vue'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -52,7 +52,6 @@ const emit = defineEmits(['close', 'deleted', 'refresh'])
 const animating = ref(false)
 
 const activeSrc = computed(() => props.imageType === 'animated' && props.animatedSrc ? props.animatedSrc : props.src)
-const isVideo = computed(() => /\.(webm|mp4)(\?|$)/i.test(activeSrc.value))
 const fileExt = computed(() => { const m = activeSrc.value.match(/\.(\w+)(\?|$)/); return m ? m[1] : '' })
 
 function formatBytes(bytes) {
@@ -219,7 +218,7 @@ async function onDelete() {
 <style scoped>
 .image-viewer { text-align: center; }
 .image-viewer img { max-width: 100%; max-height: 60vh; border-radius: 4px; }
-.viewer-video { max-width: 100%; max-height: 60vh; border-radius: 4px; }
+.viewer-video, .viewer-media { max-width: 100%; max-height: 60vh; border-radius: 4px; }
 
 .animate-section { margin-top: 8px; }
 .motion-hint-row { display: flex; gap: 6px; align-items: center; }

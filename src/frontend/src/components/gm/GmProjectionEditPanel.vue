@@ -7,8 +7,7 @@
 
       <label>Background Image</label>
       <div class="image-row">
-        <video v-if="backgroundImage && isVideo" :src="backgroundImage" class="proj-preview" autoplay loop muted playsinline />
-        <img v-else-if="backgroundImage" :src="backgroundImage" class="proj-preview" />
+        <MediaImage v-if="backgroundImage" :src="backgroundImage" class="proj-preview" />
         <span v-else class="proj-preview proj-preview-empty">🖼</span>
         <input v-model="backgroundImage" placeholder="/media/… or URL" class="image-input" />
         <button v-if="backgroundImage" type="button" class="clear-btn" title="Clear image" @click="backgroundImage = ''">✕</button>
@@ -32,11 +31,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
+import MediaImage from '@/components/MediaImage.vue'
 
 const props = defineProps({
   projection: { type: Object, required: true },
@@ -51,8 +51,6 @@ const currentLocation = ref(props.projection.currentLocation || '')
 const saving = ref(false)
 
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
-
-const isVideo = computed(() => /\.(webm|mp4)(\?|$)/i.test(backgroundImage.value))
 
 onMounted(loadUniverseNames)
 
