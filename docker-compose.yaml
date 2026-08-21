@@ -69,6 +69,16 @@ services:
     environment:
       - NODE_ENV=development
 
+  frontend-prod:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile.prod
+    container_name: tv2_frontend_prod
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+
   imagen:
     build: ./src/imagen
     image: tv2_imagen
