@@ -172,6 +172,7 @@ const props = defineProps({
   locationName: { type: String, default: '' },
   universe: { type: String, default: 'earth' },
   backgroundImage: { type: String, default: '' },
+  rawBackgroundImage: { type: String, default: '' },  // pre-quality URL, used as load-error fallback
   entityId: { type: String, required: true },
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
@@ -631,7 +632,13 @@ watch(currentImage, (url) => {
   } else {
     const img = new Image()
     img.onload = () => { imageAspect.value = img.width / img.height }
-    img.onerror = () => { imageAspect.value = null }
+    img.onerror = () => {
+      imageAspect.value = null
+      // Quality fallback 404'd (e.g. no static sibling) — revert to original.
+      if (props.rawBackgroundImage && props.rawBackgroundImage !== url) {
+        currentImage.value = props.rawBackgroundImage
+      }
+    }
     img.src = url
   }
 })

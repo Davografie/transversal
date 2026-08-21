@@ -46,13 +46,34 @@ function withVariant(url, size) {
 }
 
 /**
+ * Derive the static fallback for an animated media URL.
+ *
+ * The animate pipeline saves the static source under the same base filename
+ * as the animated file, so a video URL maps deterministically to its sibling:
+ *   /media/animated/{e}/{u}/{name}.webm  →  /media/imagen/{e}/{u}/{name}_Small.webp
+ *
+ * Returns '' when the URL isn't an animated file (or can't be mapped).
+ */
+function animatedStaticFallback(url) {
+  if (!url || typeof url !== 'string') return ''
+  const m = url.match(/^(\/media\/)animated(\/[^/]+\/[^/]+\/[^/]+)\.(webm|mp4)(\?.*)?$/i)
+  if (!m) return ''
+  return `${m[1]}imagen${m[2]}_Small.webp${m[4] || ''}`
+}
+
+/**
  * Apply the active quality preference to a media URL.
- * Low quality (auto-detected or forced) drops static images to `_Small`.
+ * Low quality (auto-detected or forced):
+ *   - animated files fall back to their static _Small sibling, else
+ *   - static images drop to _Small.
+ * Animated files with no static sibling would 404, so callers should fall
+ * back to the original URL on load error (see animatedStaticFallback).
  */
 function qualityUrl(url) {
-  return isLowQuality.value ? withVariant(url, 'Small') : url
+  if (!isLowQuality.value) return url
+  return animatedStaticFallback(url) || withVariant(url, 'Small')
 }
 
 export function useMediaQuality() {
-  return { quality, isLowQuality, setQuality, withVariant, qualityUrl }
+  return { quality, isLowQuality, setQuality, withVariant, animatedStaticFallback, qualityUrl }
 }

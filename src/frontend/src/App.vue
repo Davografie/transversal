@@ -221,6 +221,7 @@
     :location-name="locationName"
     :universe="universe"
     :background-image="displayBgImage"
+    :raw-background-image="locationBgImage"
     :entity-id="entityId"
     v-model:edit-zones="editZones"
     :overlay="locationOverlay"
