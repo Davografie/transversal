@@ -170,7 +170,7 @@ Setting: Kael sneaks past a guard (stealth vs perception), head-to-head.
 Setting: Krasnoyarsk rail yard; a "regime alert" doom pool; Kael rolls a hitch; a tether is at risk.
 
 ### Per-step
-1. **Doom pool data** — challenge trait (negative) on a location. Plumbing: `RatingType.CHALLENGE` + `ChallengePolarity.NEGATIVE` + `TraitSetting.polarity`; seeded (`regime_alert`, `sect_suspicion`). ✅
+1. **Doom pool data** — challenge trait (negative) on a location. Plumbing: `RatingType.CHALLENGE` + `Polarity.NEGATIVE` + `TraitSetting.polarity`; seeded (`regime_alert`, `sect_suspicion`). ✅
 2. **Looming dice render** — must be prominent; no frontend challenge/doom rendering exists. ❌
 3. **Buy hitch** — spend a doom die to escalate; no code. ❌
 4. **Effect die vs challenge** — `_resolve_challenge` computes it. ✅ *But it should route through the consequence menu → effect system (the "challenge rating" effect), not resolver-side persistence.*

@@ -128,7 +128,7 @@ A `RollTable` is a reusable data unit: a set of entries, each carrying a label, 
 ## Out of scope (follow-ups)
 
 - Full DiceRoller visibility for every life-path roll.
-- Trait-rating signed-value redesign (`TraitSetting.negative` / `ChallengePolarity`).
+- Trait-rating signed-value redesign (`TraitSetting.polarity` / `Polarity`).
 
 ## Delivery sequence
 

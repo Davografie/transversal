@@ -83,6 +83,7 @@ type TraitRef {
   traitsetId: ID!
   defaultDieType: DieType!
   defaultRatingType: RatingType!
+  polarity: Polarity
   possibleSfxIds: [ID!]!
   locationRestricted: Boolean!
 }
@@ -92,6 +93,7 @@ type TraitSetRef {
   name: String!
   universe: String!
   entityTypes: [EntityType!]!
+  polarity: Polarity
 }
 
 # Per-entity trait configuration (edge: entity → trait registry)
@@ -105,7 +107,7 @@ type TraitSetting {
   dieType: DieType!        # computed: first die in dice, or D6 if empty
   rating: String!          # computed: human-readable, e.g. "d8" or "4d4"
   statement: String
-  negative: Boolean!
+  polarity: Polarity!
   ego: Boolean!            # true = persists across all universes
   sfxIds: [ID!]!           # unlocked SFXs
   name: String!            # resolved from trait registry
@@ -122,6 +124,11 @@ enum RatingType {
   RESOURCE
   CHALLENGE
   EMPTY
+}
+
+enum Polarity {
+  POSITIVE
+  NEGATIVE
 }
 
 type Zone {
@@ -205,7 +212,7 @@ input TraitSettingInput {
   dice: [DieType!]!
   ratingType: RatingType
   statement: String
-  negative: Boolean
+  polarity: Polarity
   ego: Boolean
   sfxIds: [ID!]
 }
@@ -214,7 +221,7 @@ input TraitSettingUpdateInput {
   dice: [DieType!]
   ratingType: RatingType
   statement: String
-  negative: Boolean
+  polarity: Polarity
   ego: Boolean
   sfxIds: [ID!]
 }

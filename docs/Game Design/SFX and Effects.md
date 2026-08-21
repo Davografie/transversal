@@ -63,10 +63,12 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `type` | `str` | Effect family: `modify_roll`, `modify_outcome`, `modify_trait`, `transfer_razmerit`, `create_entity`, `attune`, `travel`, `life_path`, `relationship`, `entity` |
 | `action` | `str` | Operation within the family (see registry below) |
 | `target` | `str` | Literal id, `"self"`, or a `{choose_*}` / `{random:*}` placeholder |
+| `entity` | `str` | Explicit subject entity; `""` or `"self"` = the entity the effect is applied to |
 | `result` | `Optional[str]` | Die rating, integer amount, relationship type, or `{context_key}` placeholder |
 | `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) |
-| `negative` | `bool` | Polarity of trait-grant effects: `true` = negative trait (complication). Replaces the former `gain_complication` / `gain_or_step_up_complication` actions. |
-| `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`) |
+| `entity_scope` | `Optional[str]` | Narrowing hint for runtime entity choice |
+| `negative` | `bool` | Trait-grant effects only: bake the created trait as `polarity=NEGATIVE` (complication) |
+| `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`, `learner`, `steps`) |
 | `duration` | `Optional[EffectDuration]` | When set, the inverse effect is scheduled to fire on expiry (see below) |
 
 Cost vs. benefit (sign) is still derived from the `(type, action)` pair via the registry's `category`; `negative` is the *polarity* flag that marks a trait as a complication, separate from sign.
@@ -272,6 +274,12 @@ The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_se
 | `on_contest_win` | `event.context["contest_winner"] == "player"` |
 | `on_success` | `roll_result.tier` is present and not `FAIL` |
 | `on_failure` | `roll_result.tier == FAIL` |
+| `on_give_in` | event type `on_give_in` |
+| `on_push` | event type `on_push` |
+| `on_taken_out` | event type `on_taken_out` |
+| `on_prevent_taken_out` | event type `on_prevent_taken_out` |
+| `on_trait_learn` | event type `trait_learned` |
+| `on_trait_offered` | event type `trait_offered` |
 
 `contest_to_events` (line 376) generates per-side events from a `ContestResult`, with `contest_winner` set from each side's perspective (ties favor the initiator — there is no separate tie outcome). The legacy `fire_contest_sfx` no-repo helper was removed; contest outcomes fire through `fire_contest_outcome_sfx` (see [[#State events and takeout]]).
 

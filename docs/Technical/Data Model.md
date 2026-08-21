@@ -84,17 +84,19 @@ The Transversal backend uses **ArangoDB 3.12** — a graph + document database. 
 |-------|-----------|
 | `static` | Fixed die — always available at this value |
 | `resource` | Pool of dice — spend dice (removes), recover dice (appends). Depletion possible. |
-| `challenge` | Opposition pool — GM spends dice against players. See [[#Challenge Polarity]]. |
+| `challenge` | Opposition pool — GM spends dice against players. See [[#Polarity]]. |
 | `empty` | No die — trait is present but unrated (flavor, narrative only) |
 
-### ChallengePolarity
+### Polarity
 
-For `rating_type: challenge` only.
+Every trait has a sign, independent of its rating type.
 
-| Value | Behaviour |
-|-------|-----------|
-| `negative` | Doom pool — GM spends dice to strengthen opposition. Failures/hitches add or step up dice. |
-| `positive` | Progress clock — players roll against the pool to reduce it. Successes remove/step down dice. Empty = complete. |
+| Value | Meaning |
+|-------|---------|
+| `positive` | Benefit / asset the character wields |
+| `negative` | Harm / complication the opposition can use against them |
+
+Polarity is **baked** onto a trait setting at creation (non-null), resolved from the most specific override: `traitsetting` → `trait` → `traitset` → global `positive`. Changing a `trait` or `traitset` default propagates down to the settings that were inheriting it.
 
 ### EffectTiming
 
@@ -189,6 +191,7 @@ Registry of trait groupings. Defines named sets of traits available to entity ty
 | `location_restricted` | bool | | Whether universe-specific laws are required (default `false`) |
 | `default_rating_type` | RatingType | | Default rating behaviour for new traits in this set (default `static`) |
 | `default_die_type` | DieType | | Default die for new traits in this set (default `d4`) |
+| `polarity` | Polarity? | | Default polarity override for traits in this set (null = global positive) |
 
 **ID convention:** `ts-{slug}-{hash4}` — slug is a human-readable name variant (e.g. `attributes`, `cultivation`). The 4-char hex hash is `md5(slug + ":" + joined_universes)[:4]`, ensuring keys are unique even when the same name appears in different universes. Examples: `ts-attributes-8f3a` (Earth), `ts-attributes-9d4e` (Three Realms).
 
@@ -204,6 +207,7 @@ Registry of all possible traits per universe. Shared definitions — not per-ent
 | `traitset_id` | string | ✅ | `_key` of parent traitset |
 | `default_die_type` | DieType | | Die for untrained/new entities (default `d6`) |
 | `default_rating_type` | RatingType | | Rating behaviour (default `static`) |
+| `polarity` | Polarity? | | Default polarity override (null = inherit traitset) |
 | `required_trait_ids` | string[] | | Prerequisite trait IDs |
 | `possible_subtrait_ids` | string[] | | Sub-traits that can be nested under this trait |
 | `possible_sfx_ids` | string[] | | SFX IDs unlockable for this trait |
@@ -227,9 +231,8 @@ Per-entity trait configuration. The edge connects an entity to a registry trait,
 | `traitset_id` | string | ✅ | Denormalized |
 | `rating_type` | RatingType | | `static`, `resource`, `challenge`, `empty` (default `static`) |
 | `dice` | DieType[] | | The actual dice this trait contributes (e.g. `[d4, d4, d4, d4]` for 4d4 resource) |
-| `polarity` | ChallengePolarity? | | Only meaningful for `rating_type: challenge` |
+| `polarity` | Polarity | ✅ | Baked sign: `positive` (benefit/asset) or `negative` (complication). Resolved from trait/traitset defaults at creation |
 | `statement` | string | | Distinction statement or flavor text |
-| `negative` | bool | | If `true`, this is a negative trait (opponent uses it) |
 | `ego` | bool | | If `true`, persists across all universes/projections |
 | `sub_trait_settings` | TraitSetting[] | | Nested sub-trait configurations |
 | `sfx_ids` | string[] | | SFX IDs unlocked for this entity on this trait |
@@ -250,9 +253,9 @@ SFX (Special Effect) registry. Defines named abilities with triggers, costs, and
 | `_key` | string | ✅ | e.g. `sfx-law-bridge`, `sfx-overcharge` |
 | `name` | string | ✅ | Display name |
 | `description` | string | | Flavor text and usage notes |
-| `trigger` | string | ✅ | When the SFX can activate: `on_activate`, `on_roll`, `on_complication`, `on_botch`, `on_location_change`, `on_trait_change`, `on_contest_win`, `on_contest_loss`, `on_success`, `on_failure` |
-| `timing` | EffectTiming | | When effects fire (default `immediate`) |
-| `cost` | int | | Razmerit cost to activate (default `0`) |
+| `trigger` | string | ✅ | When the SFX auto-fires (or `manual` for player-activated): `manual`, `on_roll`, `on_result`, `on_complication`, `on_botch`, `on_success`, `on_failure`, `on_contest_win`, `on_contest_loss`, `on_give_in`, `on_push`, `on_taken_out`, `on_prevent_taken_out`, `on_location_change`, `on_trait_change`, `on_trait_learn`, `on_trait_offered`, `on_relationship_create` |
+| `menu_context` | string? | | Consequence menu this SFX appears in (e.g. `test_success`, `contest_win`, `contest_give_in`, `hitch`); null = trigger-driven |
+| `conditions` | Condition[] | | Optional gates evaluated against the entity before firing |
 | `effects` | Effect[] | | List of declarative effects |
 
 **ID convention:** `sfx-{slug}` (e.g. `sfx-hinder`, `sfx-law-bridge`)
@@ -267,9 +270,13 @@ Declarative effect — describes *what* changes, not *how*. Shared by SFX and li
 | `type` | string | Effect type (e.g. `modify_trait`, `transfer_razmerit`, `life_path`, `relationship`) |
 | `action` | string | What to do (e.g. `gain`, `step_up`, `gain_or_step_up`, `step_down`, `set`, `earn`, `spend`, `next_step`) |
 | `target` | string | An id, `"self"`, or a `{choose_*}` placeholder |
+| `entity` | string? | Explicit subject entity; `""` or `"self"` = the applying entity |
 | `result` | string? | Die, integer, relationship type, or "" |
 | `target_scope` | string? | Optional narrowing for target choice |
-| `context` | object? | Optional dict (e.g. relationship description) |
+| `entity_scope` | string? | Optional narrowing for entity choice |
+| `negative` | bool | Trait-grant effects only: bake the created trait as negative polarity |
+| `context` | object? | Optional dict (e.g. relationship description, `learner`, `steps`) |
+| `duration` | EffectDuration? | When set, schedules the inverse effect on expiry |
 
 ### `relationships` (edge)
 

@@ -96,8 +96,10 @@ Implements both resolution pipelines described in [[Dice Mechanics]]. Responsibi
 Manages SFX definitions, trigger matching, and effect execution. Responsibilities:
 
 - Register SFX definitions with declarative effects
-- Match triggers (on_roll, on_complication, on_botch, on_activate, on_location_change,
-  on_trait_change, on_contest_win, on_contest_loss, on_success, on_failure) to SFX
+- Match triggers (manual, on_roll, on_result, on_complication, on_botch,
+  on_success, on_failure, on_contest_win, on_contest_loss, on_give_in, on_push,
+  on_taken_out, on_prevent_taken_out, on_location_change, on_trait_change,
+  on_trait_learn, on_trait_offered, on_relationship_create) to SFX
 - Execute immediate effects and schedule deferred effects
 - Support reverse/deactivation of SFXs
 - Tick system: advance beats, scenes, sessions to fire scheduled effects
@@ -151,10 +153,17 @@ without manual activation:
 |---------|------------|
 | `on_location_change` | Entity moves to a new location |
 | `on_trait_change` | Any trait value changes |
+| `on_trait_learn` | The entity newly learns a trait (fog-of-war reveal) |
+| `on_trait_offered` | The entity offers a negative trait to an opponent who hadn't learned it |
 | `on_contest_win` | Entity wins a contest |
 | `on_contest_loss` | Entity loses or ties a contest |
+| `on_give_in` | Entity gives in during a contest |
+| `on_push` | Entity pushes a contest |
+| `on_taken_out` | Entity is taken out |
+| `on_prevent_taken_out` | Entity spends razmerit to avoid take-out |
 | `on_success` | A roll achieves any tier above FAIL |
 | `on_failure` | A roll results in FAIL tier |
+| `on_relationship_create` | A relationship edge is created |
 
 The `fire_contest_sfx()` function takes a `ContestResult` and processes both
 sides through the engine with their available SFXs.  The `contest_to_events()`
