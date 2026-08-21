@@ -1475,8 +1475,7 @@ async function onPickCommit() {
 }
 
 function clearResult() {
-  resetEditor()
-  setPhase(Phase.ADDING)
+  clearPool()
 }
 
 function resetEditor() {
