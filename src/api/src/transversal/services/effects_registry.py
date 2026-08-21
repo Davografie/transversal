@@ -72,6 +72,16 @@ _STEPS_CONTEXT_FIELD = EffectFieldDef(
     default="1",
 )
 
+# Explicit subject entity for trait/razmerit effects (blank = the entity the
+# effect is applied to).  Accepts a literal id, an entity_id ``{variable}``, or
+# ``{choose_entity}`` / ``{random:entity}``.
+_ENTITY_FIELD = EffectFieldDef(
+    name="entity",
+    label="Entity",
+    field_type="entity",
+    required=False,
+)
+
 
 # ── The Registry ──────────────────────────────────────
 
@@ -248,6 +258,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
+            _ENTITY_FIELD,
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD],
         supports_duration=True,
@@ -265,6 +276,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
+            _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Deferral", field_type="text",
                           required=False, default="after_resolution"),
         ],
@@ -284,6 +296,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True),
+            _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -305,6 +318,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="result", label="Amount", field_type="number",
                           required=True, default="1"),
+            _ENTITY_FIELD,
         ],
         implicit_target="self",
     ),
@@ -318,6 +332,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="result", label="Amount", field_type="number",
                           required=True, default="1"),
+            _ENTITY_FIELD,
         ],
         implicit_target="self",
     ),
@@ -405,6 +420,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -424,6 +440,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Create At", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -442,6 +459,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],

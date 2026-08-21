@@ -37,7 +37,7 @@
       </select>
       <div v-if="scopeVariables.length" class="sfx-vars">
         <span class="sfx-vars-label">Available variables:</span>
-        <span v-for="v in scopeVariables" :key="v" class="sfx-var">{{ '{' + v + '}' }}</span>
+        <span v-for="v in scopeVariables" :key="v.name" class="sfx-var" :title="v.type">{{ '{' + v.name + '}' }}</span>
       </div>
       <label>Conditions</label>
       <ConditionEditor v-model="form.conditions" />

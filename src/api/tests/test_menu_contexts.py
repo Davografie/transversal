@@ -7,18 +7,27 @@ from transversal.services.menu_contexts import (
 )
 
 
+def _names(vs):
+    return [v.name for v in vs]
+
+
 def test_menu_context_ids_declared():
     assert set(MENU_CONTEXT_IDS) == {
         "test_success", "simplified_roll", "contest_win", "contest_give_in", "hitch",
     }
 
 
-def test_hitch_variables():
-    assert menu_context_variables("hitch") == ["number_of_hitches"]
+def test_hitch_variables_are_typed():
+    vs = menu_context_variables("hitch")
+    assert {v.name: v.type for v in vs} == {
+        "number_of_hitches": "number",
+        "buying_entity": "entity_id",
+        "hitch_entity": "entity_id",
+    }
 
 
 def test_contest_win_variables():
-    vs = menu_context_variables("contest_win")
+    vs = _names(menu_context_variables("contest_win"))
     assert "contest_entity_opponent" in vs
     assert "contest_projection_opponent" in vs
     assert "effect_die" in vs
@@ -29,12 +38,13 @@ def test_unknown_menu_context_is_empty():
 
 
 def test_trigger_variables_for_contests():
-    assert "effect_die" in trigger_variables("on_contest_win")
+    assert "effect_die" in _names(trigger_variables("on_contest_win"))
     assert trigger_variables("on_roll") == []
 
 
 def test_trigger_variables_for_state_events():
-    assert "opponent_id" in trigger_variables("on_give_in")
-    assert "gave_in" in trigger_variables("on_give_in")
-    assert "pushed" in trigger_variables("on_push")
-    assert "effect_die" in trigger_variables("on_prevent_taken_out")
+    vs = _names(trigger_variables("on_give_in"))
+    assert "opponent_id" in vs
+    assert "gave_in" in vs
+    assert "pushed" in _names(trigger_variables("on_push"))
+    assert "effect_die" in _names(trigger_variables("on_prevent_taken_out"))

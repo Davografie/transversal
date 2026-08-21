@@ -37,8 +37,8 @@
         <div class="ee-help">{{ selectedAction.description }}</div>
         <div v-if="variables.length" class="ee-vars">
           <span class="ee-vars-label">Variables:</span>
-          <button v-for="v in variables" :key="v" type="button" class="ee-var" :class="{ copied: copiedVar === v }" @click="copyVariable(v)">
-            {{ '{' + v + '}' }}
+          <button v-for="v in variables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" :title="v.type" @click="copyVariable(v.name)">
+            {{ '{' + v.name + '}' }}
           </button>
         </div>
         <div v-for="f in visibleFields" :key="f.name" class="ee-field">
@@ -242,6 +242,7 @@ function buildEffect(meta) {
     type: meta.effectType,
     action: meta.effectAction,
     target,
+    entity: newEffect.fields.entity || '',
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
@@ -292,6 +293,7 @@ function editEffect(i) {
     newEffect.fields.target = eff.target
   }
   if (eff.result && eff.result !== (meta?.implicitResult || '')) newEffect.fields.result = eff.result
+  if (eff.entity) newEffect.fields.entity = eff.entity
   const ctx = eff.context || {}
   const known = new Set((meta?.contextFields || []).map(f => f.name))
   const knownCtx = {}

@@ -9,7 +9,7 @@ export function useScopeVariables() {
 
   async function fetchVariables(trigger = '', menuContext = '') {
     const data = await graphql(
-      `query($trigger: String, $menuContext: String) { scopeVariables(trigger: $trigger, menuContext: $menuContext) }`,
+      `query($trigger: String, $menuContext: String) { scopeVariables(trigger: $trigger, menuContext: $menuContext) { name type } }`,
       { trigger: trigger || '', menuContext: menuContext || '' }
     )
     variables.value = data?.scopeVariables || []

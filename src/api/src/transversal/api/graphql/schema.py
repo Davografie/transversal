@@ -39,6 +39,7 @@ from transversal.api.graphql.types import (
     RollTableEntryInput,
     RollTableInput,
     RazmeritResult,
+    ScopeVariable,
     SendMessageInput,
     Effect as GqlEffect,
     EffectDuration as GqlEffectDuration,
@@ -430,20 +431,17 @@ class Query:
         self, info: strawberry.Info,
         trigger: str = "",
         menu_context: str = "",
-    ) -> list[str]:
-        """Variables available to authored effects for a trigger and/or menu context.
-
-        These are the ``{variable}`` tokens the SFX editor may offer; they mirror
-        the outcome payload the trigger/menu context exposes.
-        """
+    ) -> list[ScopeVariable]:
+        """Typed ``{variable}`` tokens available to authored effects for a trigger
+        and/or menu context (``number``, ``entity_id``, ``die``, ``string``)."""
         from transversal.services.menu_contexts import trigger_variables, menu_context_variables
 
         seen: set[str] = set()
-        out: list[str] = []
+        out: list[ScopeVariable] = []
         for v in list(trigger_variables(trigger)) + list(menu_context_variables(menu_context)):
-            if v not in seen:
-                seen.add(v)
-                out.append(v)
+            if v.name not in seen:
+                seen.add(v.name)
+                out.append(ScopeVariable(name=v.name, type=v.type))
         return out
 
     @strawberry.field

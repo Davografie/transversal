@@ -205,6 +205,13 @@ class TargetCandidate:
 
 
 @strawberry.type
+class ScopeVariable:
+    """A ``{variable}`` token an SFX author may use, plus its data type."""
+    name: str
+    type: str  # "number" | "entity_id" | "die" | "string"
+
+
+@strawberry.type
 class ConsequenceOption:
     """A selectable entry in the post-roll consequence menu."""
     id: strawberry.ID
