@@ -120,7 +120,8 @@
             @touchstart="onSlotTouchStart($event, 'total', i)"
             @click="idx !== null ? clearSlot('total', i) : selectSlot('total', i)"
           >
-            {{ idx !== null ? result.rolls[idx].result : '' }}
+            <DieIcon v-if="idx !== null" :die="result.rolls[idx].die" :result="result.rolls[idx].result" class="total-die-icon" />
+            <span v-else class="empty-text"></span>
           </span>
         </template>
         <span class="sel-value">= <strong class="result-num">{{ computedTotal }}</strong></span>
@@ -1896,7 +1897,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .sel-slot:not(.empty) { cursor: grab; }
-.total-slot { border-color: var(--accent-dim); }
+.total-slot { border-color: var(--accent-dim); min-width: 44px; min-height: 40px; }
 .effect-slot { border-color: var(--success); min-width: 44px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
 .effect-slot.filled { border-color: transparent; background: transparent; }
 .sel-slot.empty { border-style: dashed; opacity: 0.5; }
@@ -1904,6 +1905,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .sel-slot.next { border-style: solid; opacity: 0.8; animation: pulse-slot 1.5s ease-in-out infinite; }
 .sel-slot.selected { border-style: solid; opacity: 1; border-color: var(--accent); background: rgba(64,136,212,0.25); box-shadow: 0 0 6px rgba(64,136,212,0.3); }
 .effect-die-icon { width: 44px; height: 48px; }
+.total-die-icon { width: 44px; height: 48px; }
 @keyframes pulse-slot { 0%, 100% { border-color: var(--accent); } 50% { border-color: var(--accent-dim); } }
 .sel-value { color: var(--text-dim); }
 .sel-value strong { color: var(--accent); font-size: 20px; }
