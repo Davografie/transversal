@@ -95,6 +95,6 @@ flowchart TB
 	subgraph opp_w[opponent wins]
 		init_fail[narrate failure on your terms]
 		opp_a_e[opponent applies effect dice]
-		init_fail-->opp_a_e
+		%%init_fail-->opp_a_e
 	end
 ```
