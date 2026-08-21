@@ -95,7 +95,7 @@ onUnmounted(() => clearTimeout(closeTimer))
 <style scoped>
 .sd-root { position: relative; width: 100%; }
 .sd-input {
-  width: 100%; min-height: 44px; font-size: 13px; padding: 10px 8px; border-radius: 4px; box-sizing: border-box;
+  width: 100%; font-size: 11px; padding: 4px 6px; border-radius: 3px; box-sizing: border-box;
   border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text);
 }
 .sd-input::placeholder { color: var(--text-dim); }
@@ -106,8 +106,8 @@ onUnmounted(() => clearTimeout(closeTimer))
 }
 .sd-drop-up { top: auto; bottom: 100%; }
 .sd-item {
-  min-height: 40px; font-size: 12px; padding: 10px 8px; cursor: pointer; color: var(--text);
+  font-size: 10px; padding: 4px 8px; cursor: pointer; color: var(--text);
 }
 .sd-item:hover { background: rgba(0,200,150,0.1); color: var(--accent); }
-.sd-empty { font-size: 12px; padding: 10px 8px; color: var(--text-dim); }
+.sd-empty { font-size: 10px; padding: 6px 8px; color: var(--text-dim); }
 </style>

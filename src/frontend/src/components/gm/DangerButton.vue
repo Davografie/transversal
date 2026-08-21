@@ -61,8 +61,7 @@ onUnmounted(clearTimer)
 <style scoped>
 .danger-button {
   width: 100%;
-  min-height: 44px;
-  font-size: 13px; padding: 10px;
+  font-size: 12px; padding: 6px;
   background: rgba(212, 64, 64, 0.12); color: var(--danger);
   border: 1px solid rgba(212, 64, 64, 0.25); border-radius: 6px;
   cursor: pointer;

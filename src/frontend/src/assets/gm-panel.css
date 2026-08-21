@@ -4,7 +4,7 @@
 /* ── Entity rows ──────────────────────────────────── */
 .entity-row {
   display: flex; align-items: center; gap: 6px;
-  min-height: 44px; padding: 10px 12px; border-radius: 6px;
+  padding: 8px 10px; border-radius: 6px;
   cursor: pointer; font-size: 13px;
   background: rgba(255,255,255,0.04);
   transition: background 0.15s;
@@ -38,7 +38,7 @@
   border-top: 1px solid rgba(255,255,255,0.08);
 }
 .ps-add-btn {
-  font-size: 13px; padding: 10px; min-height: 44px; margin-top: 8px;
+  font-size: 12px; padding: 6px; margin-top: 8px;
   background: var(--accent-dim); color: var(--text);
   border-radius: 6px; border: none; cursor: pointer; width: 100%;
 }
@@ -47,7 +47,7 @@
 
 /* ── Inline row remove ────────────────────────────── */
 .row-del-btn {
-  font-size: 14px; padding: 2px 6px; min-width: 40px; min-height: 40px;
+  font-size: 12px; padding: 2px 6px;
   background: none; color: var(--text-dim);
   border: none; cursor: pointer; border-radius: 3px;
 }
