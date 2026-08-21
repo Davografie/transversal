@@ -18,7 +18,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Variable:
     name: str
-    type: str  # "number" | "entity_id" | "die" | "string"
+    type: str  # "number" | "entity" | "die" | "string"
 
 
 # ── Menu contexts ────────────────────────────────────
@@ -35,19 +35,19 @@ MENU_CONTEXT_VARIABLES: dict[str, list[Variable]] = {
     "test_success": [Variable("effect_die", "die")],
     "simplified_roll": [Variable("effect_die", "die")],
     "contest_win": [
-        Variable("contest_entity_opponent", "entity_id"),
-        Variable("contest_projection_opponent", "entity_id"),
+        Variable("contest_entity_opponent", "entity"),
+        Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
     ],
     "contest_give_in": [
-        Variable("contest_entity_opponent", "entity_id"),
-        Variable("contest_projection_opponent", "entity_id"),
+        Variable("contest_entity_opponent", "entity"),
+        Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
     ],
     "hitch": [
         Variable("number_of_hitches", "number"),
-        Variable("buying_entity", "entity_id"),
-        Variable("hitch_entity", "entity_id"),
+        Variable("buying_entity", "entity"),
+        Variable("hitch_entity", "entity"),
     ],
 }
 
@@ -58,18 +58,18 @@ MENU_CONTEXT_VARIABLES: dict[str, list[Variable]] = {
 
 TRIGGER_VARIABLES: dict[str, list[Variable]] = {
     "on_contest_win": [
-        Variable("contest_entity_opponent", "entity_id"),
-        Variable("contest_projection_opponent", "entity_id"),
+        Variable("contest_entity_opponent", "entity"),
+        Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
     ],
     "on_contest_loss": [
-        Variable("contest_entity_opponent", "entity_id"),
-        Variable("contest_projection_opponent", "entity_id"),
+        Variable("contest_entity_opponent", "entity"),
+        Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
     ],
-    "on_give_in": [Variable("opponent_id", "entity_id"), Variable("gave_in", "string")],
+    "on_give_in": [Variable("opponent_id", "entity"), Variable("gave_in", "string")],
     "on_push": [Variable("pushed", "string")],
-    "on_taken_out": [Variable("opponent_id", "entity_id"), Variable("taken_out", "string")],
+    "on_taken_out": [Variable("opponent_id", "entity"), Variable("taken_out", "string")],
     "on_prevent_taken_out": [Variable("effect_die", "die"), Variable("prevented", "string")],
 }
 

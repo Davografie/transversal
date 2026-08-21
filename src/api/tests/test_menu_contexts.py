@@ -21,8 +21,8 @@ def test_hitch_variables_are_typed():
     vs = menu_context_variables("hitch")
     assert {v.name: v.type for v in vs} == {
         "number_of_hitches": "number",
-        "buying_entity": "entity_id",
-        "hitch_entity": "entity_id",
+        "buying_entity": "entity",
+        "hitch_entity": "entity",
     }
 
 

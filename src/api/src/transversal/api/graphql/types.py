@@ -208,7 +208,7 @@ class TargetCandidate:
 class ScopeVariable:
     """A ``{variable}`` token an SFX author may use, plus its data type."""
     name: str
-    type: str  # "number" | "entity_id" | "die" | "string"
+    type: str  # "number" | "entity" | "die" | "string"
 
 
 @strawberry.type
