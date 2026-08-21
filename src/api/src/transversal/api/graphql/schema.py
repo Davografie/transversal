@@ -969,7 +969,7 @@ class Mutation:
     @strawberry.mutation
     def create_sfx(self, info: strawberry.Info, input: SfxInput) -> SfxRef:
         import logging
-        from transversal.domain import SFX as DomainSFX, Effect as DomainEffect
+        from transversal.domain import SFX as DomainSFX
         logging.info(
             "[SFX-CREATE] id=%s name=%s trigger=%s effects=%s",
             input.id, input.name, input.trigger,
@@ -984,18 +984,7 @@ class Mutation:
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
             trigger=input.trigger, menu_context=input.menu_context, conditions=conditions,
-            effects=[
-                DomainEffect(
-                    timing=e.timing,
-                    type=e.type, action=e.action,
-                    target=e.target, result=e.result,
-                    target_scope=e.target_scope,
-                    negative=e.negative,
-                    context=e.context or {},
-                    duration=_duration_input_to_domain(e.duration),
-                )
-                for e in input.effects
-            ],
+            effects=[_effect_input_to_domain(e) for e in input.effects],
         )
         created = _em(info).repo.create_sfx(s)
         # Also register with the in-memory engine
@@ -1012,7 +1001,6 @@ class Mutation:
     @strawberry.mutation
     def update_sfx(self, info: strawberry.Info, input: SfxUpdateInput) -> SfxRef:
         import logging
-        from transversal.domain import Effect as DomainEffect
         logging.info(
             "[SFX-UPDATE] id=%s effects=%s",
             input.id,
@@ -1041,18 +1029,7 @@ class Mutation:
         if input.menu_context is not None:
             existing.menu_context = input.menu_context
         if input.effects is not None:
-            existing.effects = [
-                DomainEffect(
-                    timing=e.timing,
-                    type=e.type, action=e.action,
-                    target=e.target, result=e.result,
-                    target_scope=e.target_scope,
-                    negative=e.negative,
-                    context=e.context or {},
-                    duration=_duration_input_to_domain(e.duration),
-                )
-                for e in input.effects
-            ]
+            existing.effects = [_effect_input_to_domain(e) for e in input.effects]
         updated = _em(info).repo.update_sfx(existing)
         # Also update in-memory engine
         engine = info.context.get("effects_engine")
