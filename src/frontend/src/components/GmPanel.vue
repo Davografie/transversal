@@ -171,7 +171,7 @@ function startCreate() {
   panel.open({
     component: GmEntityCreatePanel,
     title: 'New Entity',
-    props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value, entityTypes: ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
+    props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value, saving: saving.value },
     listeners: { 'create': createEntity },
   })
 }

@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 
 // Entity filtering and autocomplete for the GM panel. Takes the reactive
 // entity list from useEntityCrud and exposes the filter bar state, the
@@ -51,7 +52,7 @@ export function useEntityFilter(entities) {
         }
       }
     }
-    const types = ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET']
+    const types = ENTITY_TYPES
     for (const t of types) {
       if (fuzzyMatch(t, q)) {
         results.push({ id: 'type:' + t, name: t.charAt(0) + t.slice(1).toLowerCase(), entityType: t, hint: 'type', filterType: 'entityType', filterValue: t, filterLabel: t.charAt(0) + t.slice(1).toLowerCase() })

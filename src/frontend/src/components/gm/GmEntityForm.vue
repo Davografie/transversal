@@ -5,7 +5,7 @@
 
     <label>Type</label>
     <select v-model="local.type" :disabled="!allowTypeChange" @change="emitUpdate">
-      <option v-for="t in entityTypes" :key="t" :value="t">{{ t }}</option>
+      <option v-for="t in ENTITY_TYPES" :key="t" :value="t">{{ t }}</option>
     </select>
 
     <!-- Universe, Location, and Parent Location are managed by drag-and-drop in the tree view. -->
@@ -25,12 +25,12 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
   entityId: { type: String, default: null },
   allowTypeChange: { type: Boolean, default: false },
-  entityTypes: { type: Array, default: () => ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
 })
 
 const emit = defineEmits(['update:modelValue'])

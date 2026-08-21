@@ -5,11 +5,11 @@
 
     <label>Type</label>
     <select v-model="form.type">
-      <option v-for="t in entityTypes" :key="t" :value="t">{{ t }}</option>
+      <option v-for="t in ENTITY_TYPES" :key="t" :value="t">{{ t }}</option>
     </select>
 
     <label>Location</label>
-    <select v-model="form.location">
+    <select v-model="form.location" :disabled="form.type === 'UNIVERSE'">
       <option value="">-- None --</option>
       <optgroup v-for="uni in universeGroups" :key="uni.key" :label="uni.name">
         <option
@@ -21,7 +21,19 @@
     </select>
 
     <label>Razmerit</label>
-    <input v-model.number="form.razmerit" type="number" />
+    <div class="raz-dots" role="radiogroup" aria-label="Starting razmerit">
+      <button
+        v-for="n in 5"
+        :key="n"
+        type="button"
+        class="raz-dot"
+        :class="{ filled: form.razmerit >= n }"
+        role="radio"
+        :aria-checked="form.razmerit === n"
+        :aria-label="`${n} razmerit`"
+        @click="setRazmerit(n)"
+      ></button>
+    </div>
 
     <button class="save-btn" @click="onSubmit" :disabled="saving || !form.name.trim()">
       {{ saving ? 'Creating…' : 'Create' }}
@@ -30,14 +42,14 @@
 </template>
 
 <script setup>
-import { reactive, computed } from 'vue'
+import { reactive, computed, watch } from 'vue'
+import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 
 const props = defineProps({
   defaultUniverse: { type: String, default: 'earth' },
   defaultLocationId: { type: String, default: '' },
   locationTree: { type: Array, default: () => [] },
   saving: { type: Boolean, default: false },
-  entityTypes: { type: Array, default: () => ['CHARACTER', 'LOCATION', 'GMC', 'FACTION', 'ASSET'] },
 })
 
 const emit = defineEmits(['create'])
@@ -79,6 +91,15 @@ const initForm = () => ({
 })
 const form = reactive(initForm())
 
+// Universe entities have no location; clear and disable the picker.
+watch(() => form.type, (t) => {
+  if (t === 'UNIVERSE') form.location = ''
+})
+
+function setRazmerit(n) {
+  form.razmerit = form.razmerit === n ? 0 : n
+}
+
 function onSubmit() {
   emit('create', {
     ...form,
@@ -91,6 +112,20 @@ function onSubmit() {
 <style scoped>
 label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-top: 8px; }
 input, select { font-size: 13px; padding: 6px 10px; width: 100%; box-sizing: border-box; }
+select:disabled { opacity: 0.45; cursor: not-allowed; }
+.raz-dots { display: flex; gap: 10px; margin-top: 6px; }
+.raz-dot {
+  width: 40px; height: 40px; border-radius: 50%;
+  padding: 0; cursor: pointer;
+  background: rgba(255,255,255,0.06);
+  border: 2px solid rgba(255,255,255,0.25);
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.raz-dot.filled {
+  background: var(--accent, #00c896);
+  border-color: var(--accent, #00c896);
+}
+.raz-dot:active { transform: scale(0.92); }
 optgroup { font-weight: 600; color: var(--text); }
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; margin-top: 8px; padding: 8px; border-radius: 6px; border: none; cursor: pointer; width: 100%; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }

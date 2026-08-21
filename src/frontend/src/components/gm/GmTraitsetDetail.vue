@@ -37,6 +37,7 @@
 
 <script setup>
 import { reactive, ref, watch, computed } from 'vue'
+import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -52,13 +53,17 @@ const universeOptions = [
   { label: 'Earth', value: 'earth' },
   { label: 'Three Realms', value: 'three_realms' },
 ]
-const entityTypeOptions = [
-  { label: 'Character', value: 'CHARACTER' },
-  { label: 'Location', value: 'LOCATION' },
-  { label: 'GMC', value: 'GMC' },
-  { label: 'Faction', value: 'FACTION' },
-  { label: 'Asset', value: 'ASSET' },
-]
+const ENTITY_TYPE_LABELS = {
+  CHARACTER: 'Character',
+  GMC: 'GMC',
+  ASSET: 'Asset',
+  FACTION: 'Faction',
+  LOCATION: 'Location',
+}
+// Universes don't carry traitsets, so they're excluded from the selector.
+const entityTypeOptions = ENTITY_TYPES
+  .filter(t => t !== 'UNIVERSE')
+  .map(t => ({ label: ENTITY_TYPE_LABELS[t], value: t }))
 
 const props = defineProps({
   traitsetId: { type: String, default: '' },

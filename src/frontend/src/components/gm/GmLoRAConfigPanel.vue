@@ -20,6 +20,7 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue'
+import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 
 const props = defineProps({
   loraConfigJson: { type: String, default: '{}' },
@@ -27,7 +28,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:loraConfig'])
 
-const entityTypes = ['CHARACTER', 'GMC', 'LOCATION', 'FACTION', 'ASSET']
+// Universes don't generate images, so they have no LoRA slots.
+const entityTypes = ENTITY_TYPES.filter(t => t !== 'UNIVERSE')
 const availableLoras = ref([])
 const loraConfig = ref({})
 
