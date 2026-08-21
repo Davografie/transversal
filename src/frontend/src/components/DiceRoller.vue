@@ -542,9 +542,13 @@ function ensureSelfTab() {
 async function switchTab(id) {
   activeId.value = id
   if (props.gmMode) {
-    // GM: tabs are a pool viewer only — never switch the acting entity.
-    // Perspective switching stays on the scene overview / peers bar.
-    if (id === DIFFICULTY_TAB) return
+    // Clicking Difficulty while acting as an entity relieves the GM of it,
+    // so they can roll the difficulty dice.
+    if (id === DIFFICULTY_TAB) {
+      if (props.actingEntityId) emit('actingEntityChange', null)
+      return
+    }
+    // Otherwise, GM tabs are a pool viewer only — never switch the acting entity.
     viewPool.value = []
     if (!props.locationId) return
     const res = await apiGetPool(props.locationId, id)
