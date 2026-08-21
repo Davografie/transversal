@@ -657,3 +657,37 @@ def test_cortex_gain_d12_complication_takes_out():
     result = apply_effects(entity, [_effect("modify_trait", "cortex_gain", "scar", "d8")], repo)
     assert entity.taken_out is True
     assert "taken out" in result.applied[0].summary
+
+
+def test_earn_targets_explicit_entity():
+    other = _entity(id="char-2", name="Other")
+    repo = FakeRepo(entities=[other])
+    entity = _entity(razmerit=0)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit", action="earn",
+                    target="self", entity="char-2", result="3")
+    result = apply_effects(entity, [effect], repo)
+    assert other.razmerit == 3
+    assert entity.razmerit == 0
+    assert other in result.entities_to_update
+
+
+def test_gain_targets_explicit_entity():
+    other = _entity(id="char-2", name="Other")
+    repo = FakeRepo(traits=[FakeTrait("scar", "ts-complications")], entities=[other])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="scar", entity="char-2", result="d6", negative=True)
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_trait_settings) == 1
+    assert result.new_trait_settings[0].entity_id == "char-2"
+
+
+def test_choose_entity_pending_choice_marks_field():
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit", action="earn",
+                    target="self", entity="{choose_entity}", result="1")
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.pending_choices) == 1
+    assert result.pending_choices[0].kind == "entity"
+    assert result.pending_choices[0].field == "entity"

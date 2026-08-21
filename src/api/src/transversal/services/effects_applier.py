@@ -220,10 +220,13 @@ class PendingChoice:
     ``occupant``, ``trait``, ``rating_die``, ``entity``, ``life_path``,
     ``roll_table``).  ``scope`` is the narrowing hint from ``Effect.target_scope``
     (e.g. a universe or "current location") used to filter candidates.
+    ``field`` names the Effect field this choice resolves into (``target`` or
+    ``entity``).
     """
     effect: Effect
     kind: str
     scope: Optional[str] = None
+    field: str = "target"
 
 
 @dataclass
@@ -455,22 +458,61 @@ def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind:
     return target
 
 
+def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo):
+    """Resolve the entity an effect acts on (``effect.entity``).
+
+    Blank or ``"self"`` means the applyEffects entity. A ``{choose_entity}`` /
+    ``{random:entity}`` placeholder resolves through the same candidate machinery
+    as ``target``; anything else is treated as a literal entity id.
+    """
+    subject = (effect.entity or "").strip()
+    if subject in ("", "self"):
+        return entity
+    parsed = _parse_placeholder(subject)
+    if parsed is not None:
+        mode, kind = parsed
+        resolved_kind = kind or "entity"
+        if mode == "random":
+            cid = _random_candidate(resolved_kind, effect.target_scope, entity, repo)
+            return repo.get_entity(cid) if cid else None
+        result.pending_choices.append(
+            PendingChoice(effect=effect, kind=resolved_kind, scope=effect.target_scope, field="entity")
+        )
+        return None
+    subject_entity = repo.get_entity(subject)
+    if subject_entity is None:
+        result.applied.append(AppliedEffect(effect, f"entity {subject} not found"))
+        return None
+    return subject_entity
+
+
+def _track_subject(result: EffectsResult, primary: Entity, subject: Entity) -> None:
+    """Record a cross-entity subject so commit_effects persists it."""
+    if subject is not None and subject is not primary and subject not in result.entities_to_update:
+        result.entities_to_update.append(subject)
+
+
 def resolve_choice(choice: PendingChoice, target: str) -> Effect:
     """Resolve a pending choice to a concrete target, returning a re-appliable effect.
 
-    The returned effect has ``target`` set to the chosen id and can be passed back
-    to :func:`apply_effects` (or ``commit_effects``) to complete the mutation.
+    The returned effect has the pending field (``target`` or ``entity``) set to
+    the chosen id and can be passed back to :func:`apply_effects` (or
+    ``commit_effects``) to complete the mutation.
     """
-    return choice.effect.model_copy(update={"target": target})
+    return choice.effect.model_copy(update={choice.field: target})
 
 
 # ── Mutation handlers ────────────────────────────────
 
 def _apply_gain(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait", repo)
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(entity, effect, repo)
+    owner = _trait_owner(subject, effect, repo)
     if _find_traitsetting(owner, repo, target):
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
@@ -478,7 +520,7 @@ def _apply_gain(entity, effect, repo, result):
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
-    _queue_entity_revert(entity, effect, target=target)
+    _queue_entity_revert(subject, effect, target=target)
 
 
 def _apply_gain_or_step_up(entity, effect, repo, result):
@@ -488,14 +530,18 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     at ``result``, or step up once). With ``steps`` set, both paths step up that
     many times — ``result`` is then the base die (e.g. d4 + ``steps``).
     """
-    target = _resolve_target(entity, effect, result, "trait", repo)
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(entity, effect, repo)
+    owner = _trait_owner(subject, effect, repo)
     existing = _find_traitsetting(owner, repo, target)
     steps = _steps(effect)
     if existing:
-        if _step_up_trait(entity, existing, target, effect, result, steps=steps):
+        if _step_up_trait(subject, existing, target, effect, result, steps=steps):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
             _queue_explicit(existing, effect, "step_down", target)
@@ -503,11 +549,11 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
     if _has_steps(effect):
-        _step_up_trait(entity, ts, target, effect, result, steps=steps)
+        _step_up_trait(subject, ts, target, effect, result, steps=steps)
     result.new_trait_settings.append(ts)
     final_die = ts.dice[0] if ts.dice else die
     result.applied.append(AppliedEffect(effect, f"gained {target} at {final_die.value}", ts.id))
-    _queue_explicit(entity, effect, "remove", target)
+    _queue_explicit(subject, effect, "remove", target)
 
 
 def _apply_cortex_gain(entity, effect, repo, result):
@@ -518,10 +564,14 @@ def _apply_cortex_gain(entity, effect, repo, result):
     legal); otherwise step up one step.  Polarity comes from ``effect.negative``
     (only used when the trait is first created).
     """
-    target = _resolve_target(entity, effect, result, "trait", repo)
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(entity, effect, repo)
+    owner = _trait_owner(subject, effect, repo)
     die = _die(effect.result)
     negative = bool(effect.negative)
     existing = _find_traitsetting(owner, repo, target)
@@ -538,7 +588,7 @@ def _apply_cortex_gain(entity, effect, repo, result):
             existing.dice = [die]
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"{target} jumped to {die.value}", existing.id))
-        elif _step_up_trait(entity, existing, target, effect, result):
+        elif _step_up_trait(subject, existing, target, effect, result):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         return
@@ -548,25 +598,33 @@ def _apply_cortex_gain(entity, effect, repo, result):
 
 
 def _apply_step_up(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait", repo)
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(entity, effect, repo)
+    owner = _trait_owner(subject, effect, repo)
     existing = _find_traitsetting(owner, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step up"))
         return
-    if _step_up_trait(entity, existing, target, effect, result, steps=_steps(effect)):
+    if _step_up_trait(subject, existing, target, effect, result, steps=_steps(effect)):
         result.updated_trait_settings.append(existing)
         result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         _queue_trait_revert(existing, effect)
 
 
 def _apply_step_down(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait", repo)
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(entity, effect, repo)
+    owner = _trait_owner(subject, effect, repo)
     existing = _find_traitsetting(owner, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step down"))
@@ -587,10 +645,14 @@ def _apply_step_down(entity, effect, repo, result):
 
 
 def _apply_set(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait", repo)
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(entity, effect, repo)
+    owner = _trait_owner(subject, effect, repo)
     existing = _find_traitsetting(owner, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to set"))
@@ -604,14 +666,22 @@ def _apply_set(entity, effect, repo, result):
 
 
 def _apply_earn(entity, effect, repo, result):
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
     amount = int(effect.result or "0")
-    entity.razmerit += amount
+    subject.razmerit += amount
     result.applied.append(AppliedEffect(effect, f"earned {amount} razmerit"))
 
 
 def _apply_spend(entity, effect, repo, result):
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
     amount = int(effect.result or "0")
-    entity.razmerit -= amount
+    subject.razmerit -= amount
     result.applied.append(AppliedEffect(effect, f"spent {amount} razmerit"))
 
 
@@ -659,10 +729,14 @@ def _apply_relationship_create(entity, effect, repo, result):
 
 
 def _apply_remove(entity, effect, repo, result):
-    target = _resolve_target(entity, effect, result, "trait", repo)
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(entity, effect, repo)
+    owner = _trait_owner(subject, effect, repo)
     existing = _find_traitsetting(owner, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to remove"))

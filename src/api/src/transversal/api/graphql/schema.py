@@ -173,7 +173,7 @@ def _duration_input_to_domain(d) -> Optional[DomainEffectDuration]:
 def _effect_to_gql(e: DomainEffect) -> GqlEffect:
     return GqlEffect(
         timing=e.timing, type=e.type, action=e.action,
-        target=e.target, result=e.result, target_scope=e.target_scope,
+        target=e.target, entity=e.entity, result=e.result, target_scope=e.target_scope,
         negative=e.negative,
         context=e.context,
         duration=_duration_to_gql(e.duration),
@@ -216,7 +216,7 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
 def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
     return DomainEffect(
         timing=e.timing, type=e.type, action=e.action,
-        target=e.target, result=e.result, target_scope=e.target_scope,
+        target=e.target, entity=e.entity, result=e.result, target_scope=e.target_scope,
         negative=e.negative,
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),
@@ -243,7 +243,7 @@ def _effects_result_to_gql(result) -> EffectApplicationResult:
     return EffectApplicationResult(
         applied=[a.summary for a in result.applied],
         pending_choices=[
-            PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, effect=_effect_to_gql(c.effect))
+            PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, field=c.field, effect=_effect_to_gql(c.effect))
             for i, c in enumerate(result.pending_choices)
         ],
     )
@@ -1475,7 +1475,7 @@ class Mutation:
         if entity is None:
             raise ValueError(f"Entity '{entity_id}' not found")
         resolved = [
-            _effect_input_to_domain(r.effect).model_copy(update={"target": r.target})
+            _effect_input_to_domain(r.effect).model_copy(update={r.field: r.target})
             for r in resolutions
         ]
         result = commit_effects(entity, resolved, repo)

@@ -174,6 +174,7 @@ class Effect:
     type: str
     action: str
     target: str = ""
+    entity: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
     negative: bool = False
@@ -187,6 +188,7 @@ class EffectInput:
     type: str = ""
     action: str = ""
     target: str = ""
+    entity: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
     negative: bool = False
@@ -226,6 +228,7 @@ class PendingChoiceRef:
     index: int
     kind: str
     scope: Optional[str] = None
+    field: str = "target"  # which Effect field holds this target ("target" | "entity")
     effect: Effect
 
 
@@ -241,6 +244,7 @@ class EffectTargetResolutionInput:
     """A single resolved target for a previously-pending effect."""
     effect: EffectInput
     target: str
+    field: str = "target"  # "target" | "entity"
 
 
 @strawberry.type

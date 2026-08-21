@@ -655,6 +655,7 @@ class Effect(BaseModel):
     type: str
     action: str
     target: str = ""
+    entity: str = ""  # explicit subject entity; "" or "self" = the applyEffects entity
     result: Optional[str] = None
     target_scope: Optional[str] = None  # narrowing hint for runtime target choice
     negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)
