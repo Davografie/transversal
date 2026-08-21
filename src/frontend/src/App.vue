@@ -299,7 +299,7 @@ import ToastBar from './components/ToastBar.vue'
 
 const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools } = useApi()
 const { fetchEntities: prefetchEntities } = useEntityCrud()
-const { quality: mediaQuality, setQuality: setMediaQuality, qualityUrl } = useMediaQuality()
+const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
@@ -340,8 +340,19 @@ watch(currentLocationId, (v) => { if (v) localStorage.setItem('currentLocationId
 const fullCanvas = ref(null) // { mode: 'location'|'faction', entityId } or null
 const locationName = ref('Krasnoyarsk-45')
 const locationBgImage = ref('')
-// Displayed background: quality preference applied reactively so the toggle takes effect immediately.
-const displayBgImage = computed(() => qualityUrl(locationBgImage.value))
+// Displayed background: quality preference applied reactively so the toggle takes
+// effect immediately. Cache-aware — prefers the already-cached original in low mode.
+const displayBgImage = ref('')
+let bgResolveSeq = 0
+watch(
+  [locationBgImage, isLowQuality],
+  async ([raw]) => {
+    const seq = ++bgResolveSeq
+    const resolved = await resolveMediaUrl(raw)
+    if (seq === bgResolveSeq) displayBgImage.value = resolved
+  },
+  { immediate: true }
+)
 const locationOverlay = ref(null)
 
 // Fetch entity location on mount so refreshes show the real location

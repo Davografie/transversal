@@ -74,6 +74,39 @@ function qualityUrl(url) {
   return animatedStaticFallback(url) || withVariant(url, 'Small')
 }
 
+/**
+ * Cache-aware variant of `qualityUrl`.
+ *
+ * In low-quality mode we'd normally swap to a smaller URL, but if the client
+ * already has the ORIGINAL (large/animated) file cached, showing it costs zero
+ * bandwidth — so prefer the cached original and only downgrade on a cache miss.
+ *
+ * In high-quality mode (or when Cache Storage is unavailable, e.g. dev
+ * without a service worker) this just returns `url` unchanged.
+ */
+async function resolveMediaUrl(url) {
+  if (!isLowQuality.value) return url
+  if (await isCached(url)) return url
+  return qualityUrl(url)
+}
+
+/**
+ * True when `url` is present in the browser's Cache Storage (populated by the
+ * service worker's runtime caching). Returns false when the Cache API is
+ * unavailable (e.g. dev server without a service worker) or on any error.
+ */
+async function isCached(url) {
+  if (!url || typeof url !== 'string') return false
+  if (typeof caches === 'undefined') return false
+  try {
+    // Cache keys are absolute request URLs; resolve relative /media/... paths.
+    const absolute = new URL(url, window.location.origin).href
+    return !!(await caches.match(absolute))
+  } catch {
+    return false
+  }
+}
+
 export function useMediaQuality() {
-  return { quality, isLowQuality, setQuality, withVariant, animatedStaticFallback, qualityUrl }
+  return { quality, isLowQuality, setQuality, withVariant, animatedStaticFallback, qualityUrl, resolveMediaUrl, isCached }
 }

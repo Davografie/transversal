@@ -25,7 +25,29 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            // Static image variants — cache-first, generous cap.
+            urlPattern: /\/media\/imagen\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'media-imagen',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 }
+            }
+          },
+          {
+            // Animated video loops — cache-first, small cap (videos are large).
+            urlPattern: /\/media\/animated\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'media-animated',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 30 }
+            }
+          }
+        ]
       }
     })
   ],
