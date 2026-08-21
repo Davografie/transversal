@@ -1349,6 +1349,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-list {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 .trait-list-title {
   align-self: flex-start;
@@ -1919,7 +1920,7 @@ watch(() => props.externalPoolSources, (sources) => {
   align-items: flex-start;
   gap: 8px;
   padding: 6px 8px;
-  margin: 0 -8px;
+  /* margin: 0 -8px; */
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
@@ -1930,6 +1931,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .trait-row.morph {
   background: rgba(64, 136, 212, 0.08);
+  border-left: 2px solid var(--accent);
 }
 
 .trait-left {
@@ -2001,6 +2003,11 @@ watch(() => props.externalPoolSources, (sources) => {
   --die-d8: var(--die-d8-neg);
   --die-d10: var(--die-d10-neg);
   --die-d12: var(--die-d12-neg);
+  background: rgba(122, 31, 31, 0.10);
+}
+.trait-row.negative.morph {
+  background: rgba(122, 31, 31, 0.14);
+  border-left: 2px solid #7a1f1f;
 }
 
 .loading, .error, .empty {
@@ -2021,6 +2028,8 @@ watch(() => props.externalPoolSources, (sources) => {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  align-self: flex-start;
+  max-width: 100%;
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.08);
