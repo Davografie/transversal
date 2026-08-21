@@ -68,6 +68,10 @@ export function useApi() {
     })
   }
 
+  async function markHitchesBought(locationId, entityId, indices) {
+    return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/hitches/mark-bought`, { indices })
+  }
+
   async function triggerSfx(entityId, sfxName, universe = 'earth', context = {}) {
     loading.value = true
     error.value = null
@@ -329,5 +333,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

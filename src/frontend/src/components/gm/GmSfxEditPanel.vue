@@ -33,6 +33,7 @@
         <option value="simplified_roll">Simplified roll</option>
         <option value="contest_win">Contest win</option>
         <option value="contest_give_in">Contest give in</option>
+        <option value="hitch">Hitch</option>
       </select>
       <div v-if="scopeVariables.length" class="sfx-vars">
         <span class="sfx-vars-label">Available variables:</span>

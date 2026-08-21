@@ -293,7 +293,13 @@
           <DieIcon v-if="remoteView.committed.effect_die" :die="remoteView.committed.effect_die" class="peer-effect-die" />
         </div>
         <div v-else-if="remoteView?.rolls?.length" class="roll-dice">
-          <div v-for="(r, i) in remoteView.rolls" :key="i" class="roll-die-wrap">
+          <div
+            v-for="(r, i) in remoteView.rolls"
+            :key="i"
+            class="roll-die-wrap"
+            :class="{ 'is-hitch': r.result === 1, 'is-bought': r.bought, 'is-selected': selectedHitches.includes(i) }"
+            @click="toggleHitch(r, i)"
+          >
             <DieIcon :die="r.die" :result="r.result" :label="r.label || r.source_id || r.die" />
           </div>
         </div>
@@ -306,9 +312,9 @@
         <div v-if="remoteView?.botch" class="botch">BOTCH</div>
         <div v-if="remoteView?.hitches?.length" class="hitches">
           {{ remoteView.hitches.length }} hitch{{ remoteView.hitches.length > 1 ? 'es' : '' }}
-          <button v-if="gmMode" class="buy-hitch-btn" :disabled="buyingHitch" @click="buyHitch">
-            {{ buyingHitch ? '…' : 'Buy hitch' }}
-          </button>
+        </div>
+        <div v-if="gmMode && showHitchMenu && selectedHitches.length" class="hitch-menu-panel">
+          <HitchMenu :entity-id="activeId" :count="selectedHitches.length" @apply="applyHitchOption" @close="closeHitchMenu" />
         </div>
       </div>
     </template>
@@ -319,9 +325,11 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEffectApplication } from '../composables/useEffectApplication.js'
+import { useHitchMenu } from '../composables/useHitchMenu.js'
 import DieIcon from './DieIcon.vue'
 import ConsequenceMenu from './gm/ConsequenceMenu.vue'
 import EffectTargetWizard from './gm/EffectTargetWizard.vue'
+import HitchMenu from './gm/HitchMenu.vue'
 
 const props = defineProps({
   entityId: { type: String, default: 'kael-1' },
@@ -343,8 +351,9 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
-const { resolveEffectTargets, buyHitch: requestBuyHitch } = useEffectApplication()
+const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { resolveEffectTargets } = useEffectApplication()
+const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
 const result = ref(null)
 const rollingFaces = ref([]) // [{ die, face }] animated faces during ROLLING
@@ -361,8 +370,9 @@ const panelOpen = ref(false)
 const showConsequences = ref(false)
 const consequenceSide = ref('player')
 const buyHitchChoices = ref([])
-const buyingHitch = ref(false)
 const buyHitchTargetId = ref('')
+const selectedHitches = ref([]) // roll indices the GM has toggled
+const showHitchMenu = ref(false)
 
 // ── GM roll purpose + per-entity pool tabs ───────────
 const DIFFICULTY_TAB = '__difficulty__'
@@ -759,32 +769,52 @@ function clearSfxChoices() {
   emit('sfx-choice-resolved')
 }
 
-// ── GM buy-hitch ─────────────────────────────────────
-async function buyHitch() {
+// ── GM buy-hitch (hitch menu) ────────────────────────
+function toggleHitch(r, i) {
+  if (!props.gmMode || r.result !== 1 || r.bought) return
+  selectedHitches.value = selectedHitches.value.includes(i)
+    ? selectedHitches.value.filter((x) => x !== i)
+    : [...selectedHitches.value, i]
+  showHitchMenu.value = selectedHitches.value.length > 0
+}
+
+function closeHitchMenu() {
+  showHitchMenu.value = false
+  selectedHitches.value = []
+}
+
+async function applyHitchOption(opt) {
   const rollerId = activeId.value
   if (!rollerId || rollerId === DIFFICULTY_TAB) return
   buyHitchTargetId.value = rollerId
-  buyingHitch.value = true
   try {
-    const hitchesCount = remoteView.value?.hitches?.length || 0
-    const botch = !!remoteView.value?.botch
-    const result = await requestBuyHitch(rollerId, hitchesCount, botch)
+    const result = await applyHitchEffect(rollerId, opt, selectedHitches.value.length)
     if (result?.pendingChoices?.length) {
       buyHitchChoices.value = result.pendingChoices
+      showHitchMenu.value = false
     }
-  } finally {
-    buyingHitch.value = false
+  } catch (e) {
+    console.error('[hitch-menu] apply failed', e)
   }
 }
 
 async function resolveBuyHitch(resolutions) {
-  await resolveEffectTargets(buyHitchTargetId.value, resolutions)
+  const rollerId = buyHitchTargetId.value
+  await resolveEffectTargets(rollerId, resolutions)
+  if (selectedHitches.value.length) {
+    await apiMarkHitchesBought(props.locationId, rollerId, [...selectedHitches.value])
+  }
   buyHitchChoices.value = []
   buyHitchTargetId.value = ''
+  selectedHitches.value = []
+  showHitchMenu.value = false
 }
+
 function cancelBuyHitch() {
   buyHitchChoices.value = []
   buyHitchTargetId.value = ''
+  selectedHitches.value = []
+  showHitchMenu.value = false
 }
 watch(panelOpen, (v) => emit('panelOpen', v))
 
@@ -1766,8 +1796,10 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 }
 
 .hitches { color: var(--warn); font-size: 13px; }
-.buy-hitch-btn { font-size: 10px; margin-left: 6px; padding: 2px 7px; border-radius: 4px; background: rgba(64,184,96,0.15); border: 1px solid var(--success); color: var(--success); cursor: pointer; }
-.buy-hitch-btn:disabled { opacity: 0.5; cursor: default; }
+.hitch-menu-panel { margin-top: 6px; }
+.roll-die-wrap.is-hitch { cursor: pointer; }
+.roll-die-wrap.is-bought { opacity: 0.35; cursor: not-allowed; }
+.roll-die-wrap.is-selected { border-color: var(--warn); background: rgba(232,168,56,0.15); }
 .challenge { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 .error { color: var(--danger); font-size: 13px; }
 

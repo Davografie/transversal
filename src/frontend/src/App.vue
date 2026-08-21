@@ -937,6 +937,12 @@ watch(lastEvent, (evt) => {
           dice: hasDice ? evt.data.dice : (remotePools.value[eid]?.dice || []),
           player_id: pid, phase,
         }}
+        // Reflect backend 'bought' flags into the resolved-rolls view (hitch menu).
+        const rolls = remoteResults.value[eid]?.rolls
+        if (hasDice && Array.isArray(rolls)) {
+          const merged = rolls.map((r, i) => ({ ...r, bought: evt.data.dice[i]?.bought ?? r.bought }))
+          remoteResults.value = { ...remoteResults.value, [eid]: { ...remoteResults.value[eid], rolls: merged } }
+        }
         if (phase === 'adding' && hasDice && evt.data.dice.length === 0) {
           const { [eid]: _, ...rest } = remoteResults.value
           remoteResults.value = rest
