@@ -1,9 +1,11 @@
 <template>
   <div>
+    <div class="panel-top">
+      <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
+    </div>
     <GmEntityForm
       v-model="form"
       :entity-id="entityId"
-      :allow-type-change="false"
     />
     <div v-if="form.type === 'LOCATION' || form.type === 'GMC'" class="canvas-open-row">
       <button class="section-btn" @click="openCanvas">🗺 Open in Canvas</button>
@@ -501,6 +503,7 @@ defineExpose({ refresh: loadImages })
 .imagen-btn .btn-label { padding: 4px 8px; }
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 
+.panel-top { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .danger-zone {
   margin-top: 12px; padding: 10px;
   border: 1px solid rgba(220,64,64,0.25); border-radius: 6px;
@@ -510,7 +513,8 @@ defineExpose({ refresh: loadImages })
   font-size: 10px; color: #e06060; text-transform: uppercase; letter-spacing: 1px;
   margin: 0 0 8px 0;
 }
-.danger-actions { display: flex; flex-direction: column; gap: 6px; }
+.danger-actions { display: flex; gap: 6px; }
+.danger-actions :deep(.danger-button) { flex: 1; width: auto; }
 
 .image-gallery { margin-top: 12px; }
 .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
@@ -532,8 +536,7 @@ defineExpose({ refresh: loadImages })
 .section-buttons {
   margin-top: 12px; display: flex; gap: 6px;
 }
-.canvas-open-row { margin-top: 12px; }
-.canvas-open-row .section-btn { width: 100%; }
+.canvas-open-row { margin-top: 12px; display: flex; gap: 6px; }
 .section-btn {
   flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.03); color: var(--text); cursor: pointer;

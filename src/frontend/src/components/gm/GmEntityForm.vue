@@ -3,12 +3,6 @@
     <label>Name</label>
     <input v-model="local.name" @input="emitUpdate" />
 
-    <label>Type</label>
-    <select v-if="allowTypeChange" v-model="local.type" @change="emitUpdate">
-      <option v-for="t in ENTITY_TYPES" :key="t" :value="t">{{ t }}</option>
-    </select>
-    <span v-else class="entity-type-badge" :class="'type-' + local.type">{{ local.type }}</span>
-
     <!-- Universe, Location, and Parent Location are managed by drag-and-drop in the tree view. -->
 
     <!-- Razmerit: only CHARACTER, GMC, FACTION -->
@@ -26,12 +20,10 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
   entityId: { type: String, default: null },
-  allowTypeChange: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -55,6 +47,5 @@ const showRazmerit = computed(() => RAZMERIT_TYPES.has(local.value.type))
   font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
 }
 .entity-form input, .entity-form select { font-size: 13px; padding: 6px 10px; }
-.entity-form .entity-type-badge { align-self: flex-start; }
 
 </style>
