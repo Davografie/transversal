@@ -351,7 +351,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
-const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
@@ -952,23 +952,15 @@ function addFromSheet(payload) {
 
 async function addToOpponentPool(dice, source, label, tsId) {
   if (!props.locationId || !opponentId.value) return
-  const res = await apiGetPool(props.locationId, opponentId.value)
-  const existing = res?.dice || []
-  const tsKey = tsId ?? null
-  // Toggle: if this trait is already in the opponent's pool, remove it.
-  if (tsKey != null && existing.some(d => d.ts_id === tsKey)) {
-    const filtered = existing.filter(d => d.ts_id !== tsKey)
-    await apiSavePool(props.locationId, opponentId.value, filtered)
-    return
-  }
-  const added = dice.map(die => ({
-    die,
-    source_kind: 'trait',
-    source_id: tsKey || source || '',
-    label: label || source || die,
-    ts_id: tsKey,
-  }))
-  await apiSavePool(props.locationId, opponentId.value, [...existing, ...added])
+  // Server-authoritative toggle + reveal + reward (on_trait_offered).
+  await apiOfferNegative(
+    props.locationId,
+    editingEntityId.value,
+    opponentId.value,
+    tsId,
+    dice,
+    label || source || '',
+  )
   panelOpen.value = true
 }
 

@@ -177,6 +177,18 @@ export function useApi() {
     } catch (e) { console.error('[API] savePool', e.message); return null }
   }
 
+  async function offerNegative(locationId, entityId, opponentId, traitSettingId, dice, label = '') {
+    if (!locationId || !entityId || !opponentId) return null
+    try {
+      const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/offer-negative`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opponent_id: opponentId, trait_setting_id: traitSettingId, dice, label })
+      })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] offerNegative', e.message); return null }
+  }
+
   async function getPool(locationId, entityId) {
     if (!locationId || !entityId) return null
     try {
@@ -333,5 +345,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }
