@@ -84,20 +84,20 @@ function onBlur() {
 
 <style scoped>
 .chip-input {
-  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
-  padding: 4px 6px; min-height: 34px;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 8px 10px; min-height: 44px;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 6px; background: rgba(255,255,255,0.04);
   cursor: text;
   position: relative;
 }
 .chip {
-  display: inline-flex; align-items: center; gap: 2px;
-  padding: 2px 6px; font-size: 11px;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px; font-size: 12px;
   background: var(--accent-dim); color: var(--accent);
   border-radius: 4px;
 }
-.chip-x { font-size: 12px; padding: 0 2px; background: none; border: none; color: var(--accent); cursor: pointer; }
+.chip-x { font-size: 14px; min-width: 28px; min-height: 28px; background: none; border: none; color: var(--accent); cursor: pointer; }
 .chip-x:hover { color: #fff; }
 .chip-text {
   flex: 1; min-width: 80px; font-size: 12px;
@@ -110,6 +110,6 @@ function onBlur() {
   border: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 6px 6px;
   max-height: 140px; overflow-y: auto;
 }
-.chip-option { padding: 4px 8px; font-size: 11px; cursor: pointer; }
+.chip-option { min-height: 40px; padding: 10px 8px; font-size: 12px; cursor: pointer; }
 .chip-option:hover { background: rgba(255,255,255,0.06); }
 </style>
