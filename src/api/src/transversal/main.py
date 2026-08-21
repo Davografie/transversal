@@ -6,6 +6,7 @@ REST, GraphQL, and SSE endpoints.
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 from strawberry.fastapi import GraphQLRouter
 
 from transversal.api.graphql.schema import schema
@@ -163,6 +164,28 @@ app.include_router(sse_router)
 
 # Serve uploaded media files
 import os
+
+
+class CachedStaticFiles(StaticFiles):
+    """Serve media with long-lived immutable caching.
+
+    Media filenames are content-hashed (e.g. ``_Large``, ``_anim_<hash>.webm``,
+    ``upload_<hash>``), so a regenerated asset gets a new URL and can safely be
+    cached indefinitely by browsers/CDNs.
+    """
+
+    def file_response(
+        self,
+        full_path,
+        stat_result,
+        scope,
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 # Primary path: Docker bind mount; fallback: local dev layout
 media_path = "/app/media"
 if not os.path.isdir(media_path):
@@ -170,7 +193,7 @@ if not os.path.isdir(media_path):
         os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "media")
     )
 if os.path.isdir(media_path):
-    app.mount("/media", StaticFiles(directory=media_path), name="media")
+    app.mount("/media", CachedStaticFiles(directory=media_path), name="media")
 
 graphql_app = GraphQLRouter(schema, context_getter=get_context)
 app.include_router(graphql_app, prefix="/api/v1/graphql")
