@@ -15,7 +15,7 @@ export function useHitchMenu() {
         `query {
           hitchMenu {
             id label side source
-            effects { timing type action target result targetScope negative context }
+            effects { timing type action target entity result targetScope negative context }
           }
         }`
       )
@@ -25,25 +25,31 @@ export function useHitchMenu() {
     }
   }
 
-  function substituteCount(effects, count) {
-    const n = String(count ?? 0)
+  function substituteVariables(effects, vars) {
+    const values = Object.fromEntries(
+      Object.entries(vars || {}).map(([k, v]) => [k, String(v ?? '')])
+    )
+    const sub = (s) =>
+      typeof s === 'string'
+        ? Object.entries(values).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), s)
+        : s
+
     return (effects || []).map((e) => {
       const out = { ...e }
-      if (out.result != null) out.result = out.result.replace('{number_of_hitches}', n)
+      for (const field of ['result', 'target', 'entity', 'targetScope']) {
+        if (out[field] != null) out[field] = sub(out[field])
+      }
       if (out.context && typeof out.context === 'object') {
         out.context = Object.fromEntries(
-          Object.entries(out.context).map(([k, v]) => [
-            k,
-            typeof v === 'string' ? v.replace('{number_of_hitches}', n) : v,
-          ])
+          Object.entries(out.context).map(([k, v]) => [k, sub(v)])
         )
       }
       return out
     })
   }
 
-  async function applyOption(entityId, option, count) {
-    const effects = substituteCount(option.effects || [], count)
+  async function applyOption(entityId, option, vars) {
+    const effects = substituteVariables(option.effects || [], vars)
     return applyEffects(entityId, effects)
   }
 

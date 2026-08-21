@@ -77,15 +77,6 @@
         @cancel="clearSfxChoices"
       />
     </div>
-    <div v-if="gmMode && buyHitchChoices.length" class="sfx-choice-panel">
-      <EffectTargetWizard
-        :entity-id="buyHitchTargetId"
-        :pending-choices="buyHitchChoices"
-        title="Buy a hitch — choose a complication"
-        @resolve="resolveBuyHitch"
-        @cancel="cancelBuyHitch"
-      />
-    </div>
     <div v-if="!gmMode && difficulty != null" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
@@ -318,6 +309,15 @@
         </div>
       </div>
     </template>
+    <div v-if="gmMode && buyHitchChoices.length" class="sfx-choice-panel">
+      <EffectTargetWizard
+        :entity-id="buyHitchTargetId"
+        :pending-choices="buyHitchChoices"
+        title="Buy a hitch — choose a complication"
+        @resolve="resolveBuyHitch"
+        @cancel="cancelBuyHitch"
+      />
+    </div>
   </div>
 </template>
 
@@ -788,7 +788,12 @@ async function applyHitchOption(opt) {
   if (!rollerId || rollerId === DIFFICULTY_TAB) return
   buyHitchTargetId.value = rollerId
   try {
-    const result = await applyHitchEffect(rollerId, opt, selectedHitches.value.length)
+    const vars = {
+      number_of_hitches: selectedHitches.value.length,
+      hitch_entity: rollerId,
+      buying_entity: props.actingEntityId || props.fallbackEntityId || '',
+    }
+    const result = await applyHitchEffect(rollerId, opt, vars)
     if (result?.pendingChoices?.length) {
       buyHitchChoices.value = result.pendingChoices
       showHitchMenu.value = false

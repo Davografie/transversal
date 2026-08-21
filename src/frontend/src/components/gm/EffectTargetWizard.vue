@@ -57,7 +57,7 @@ function back() { if (stepIndex.value > 0) stepIndex.value-- }
 function apply() {
   const resolutions = props.pendingChoices
     .filter((c) => targets.value[c.index])
-    .map((c) => ({ effect: c.effect, target: targets.value[c.index] }))
+    .map((c) => ({ effect: c.effect, target: targets.value[c.index], field: c.field || 'target' }))
   emit('resolve', resolutions)
 }
 </script>

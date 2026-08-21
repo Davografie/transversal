@@ -307,15 +307,17 @@ def test_ensure_hitch_gain_complication_sfx_creates_once():
     assert sfx.trigger == "manual"
     assert sfx.menu_context == "hitch"
     assert len(sfx.effects) == 2
-    assert sfx.effects[0].type == "transfer_razmerit"
-    assert sfx.effects[0].action == "earn"
-    assert sfx.effects[0].result == "1"
-    assert sfx.effects[1].type == "modify_trait"
-    assert sfx.effects[1].action == "gain_or_step_up"
-    assert sfx.effects[1].negative is True
-    assert sfx.effects[1].result == "d4"
-    assert sfx.effects[1].context == {"steps": "{number_of_hitches}"}
-    assert sfx.effects[1].target_scope == "traitset:ts-complications-a190"
+    assert sfx.effects[0].type == "modify_trait"
+    assert sfx.effects[0].action == "gain_or_step_up"
+    assert sfx.effects[0].entity == "{hitch_entity}"
+    assert sfx.effects[0].negative is True
+    assert sfx.effects[0].result == "d4"
+    assert sfx.effects[0].context == {"steps": "{number_of_hitches}"}
+    assert sfx.effects[0].target_scope == "traitset:ts-complications-a190"
+    assert sfx.effects[1].type == "transfer_razmerit"
+    assert sfx.effects[1].action == "earn"
+    assert sfx.effects[1].entity == "{hitch_entity}"
+    assert sfx.effects[1].result == "1"
     ensure_hitch_gain_complication_sfx(repo)
     assert len(repo.sfxs) == 1
 

@@ -198,8 +198,8 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
     """Create the GM hitch-menu SFX that turns bought hitches into a complication.
 
     P3.3: the GM selects a player's hitches and picks this SFX from the ``hitch``
-    menu. The roller earns 1 razmerit and gains (or steps up) a complication at
-    d4 + ``{number_of_hitches}`` steps, scoped to the complications trait set.
+    menu. The roller (``{hitch_entity}``) gains (or steps up) a complication at
+    d4 + ``{number_of_hitches}`` steps, then earns 1 razmerit.
     """
     from transversal.domain import Effect, EffectTiming, SFX
 
@@ -208,26 +208,28 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
     repo.create_sfx(SFX(
         id="hitch-gain-complication",
         name="Gain a complication",
-        description="Roller earns 1 razmerit and takes a complication stepped up by the bought hitches",
+        description="Roller takes a complication stepped up by the bought hitches, then earns 1 razmerit",
         trigger="manual",
         menu_context="hitch",
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE,
-                type="transfer_razmerit",
-                action="earn",
-                target="self",
-                result="1",
-            ),
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
                 type="modify_trait",
                 action="gain_or_step_up",
                 target="{choose_trait}",
+                entity="{hitch_entity}",
                 target_scope="traitset:ts-complications-a190",
                 result="d4",
                 negative=True,
                 context={"steps": "{number_of_hitches}"},
+            ),
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="transfer_razmerit",
+                action="earn",
+                target="self",
+                entity="{hitch_entity}",
+                result="1",
             ),
         ],
     ))
