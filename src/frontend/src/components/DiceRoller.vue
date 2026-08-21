@@ -1908,7 +1908,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .total-die-icon { width: 44px; height: 48px; }
 @keyframes pulse-slot { 0%, 100% { border-color: var(--accent); } 50% { border-color: var(--accent-dim); } }
 .sel-value { color: var(--text-dim); }
-.sel-value strong { color: var(--accent); font-size: 20px; }
+.sel-value strong { color: var(--accent); font-size: 28px; }
 
 .difficulty-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .difficulty-btn { flex: 1; min-width: 56px; padding: 6px 4px; font-size: 11px; font-weight: 700; border-radius: 6px; cursor: pointer; border: 2px solid transparent; background: rgba(255,255,255,0.06); color: var(--text); }
