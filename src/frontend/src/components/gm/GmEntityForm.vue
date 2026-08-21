@@ -4,9 +4,10 @@
     <input v-model="local.name" @input="emitUpdate" />
 
     <label>Type</label>
-    <select v-model="local.type" :disabled="!allowTypeChange" @change="emitUpdate">
+    <select v-if="allowTypeChange" v-model="local.type" @change="emitUpdate">
       <option v-for="t in ENTITY_TYPES" :key="t" :value="t">{{ t }}</option>
     </select>
+    <span v-else class="entity-type-badge" :class="'type-' + local.type">{{ local.type }}</span>
 
     <!-- Universe, Location, and Parent Location are managed by drag-and-drop in the tree view. -->
 
@@ -54,5 +55,6 @@ const showRazmerit = computed(() => RAZMERIT_TYPES.has(local.value.type))
   font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
 }
 .entity-form input, .entity-form select { font-size: 13px; padding: 6px 10px; }
+.entity-form .entity-type-badge { align-self: flex-start; }
 
 </style>
