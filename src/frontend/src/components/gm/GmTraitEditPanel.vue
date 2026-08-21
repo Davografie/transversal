@@ -31,6 +31,12 @@
           <span class="field-label">Default</span>
           <button type="button" class="ego-toggle" :class="{ 'is-ego': form.defaultEgo }" @click="form.defaultEgo = !form.defaultEgo">{{ form.defaultEgo ? 'ego' : 'morph' }}</button>
         </div>
+        <label>Polarity</label>
+        <select v-model="form.polarity">
+          <option value="">Inherit traitset</option>
+          <option value="POSITIVE">Positive</option>
+          <option value="NEGATIVE">Negative</option>
+        </select>
       </div>
 
       <!-- Display Names (read-only list → opens editor panel) -->
@@ -162,6 +168,7 @@ const form = reactive({
   defaultRatingType: 'STATIC',
   locationRestricted: false,
   defaultEgo: false,
+  polarity: '',
   possibleSfxIds: [],
   defaultSfxIds: [],
 })
@@ -223,6 +230,7 @@ watch(trait, (t) => {
     form.defaultRatingType = t.defaultRatingType || 'STATIC'
     form.locationRestricted = t.locationRestricted || false
     form.defaultEgo = t.defaultEgo || false
+    form.polarity = t.polarity || ''
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
     syncDisplayNamesFromTrait(t)
@@ -233,6 +241,7 @@ let saveTimer = null
 watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
   () => form.defaultRatingType, () => form.locationRestricted, () => form.defaultEgo,
+  () => form.polarity,
   () => [...form.possibleSfxIds], () => [...form.defaultSfxIds],
 ], () => {
   if (!trait.value) return
@@ -254,11 +263,12 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
     defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo,
+    polarity: form.polarity || null,
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
   })

@@ -10,6 +10,12 @@
       <ChipInput v-model="form.entityTypes" :options="entityTypeOptions" placeholder="Add type…" />
       <label>Limit</label>
       <input v-model.number="form.limit" type="number" min="1" />
+      <label>Polarity</label>
+      <select v-model="form.polarity">
+        <option value="">Inherit (positive)</option>
+        <option value="POSITIVE">Positive</option>
+        <option value="NEGATIVE">Negative</option>
+      </select>
     </div>
 
     <h4 class="ps-section-title">Traits</h4>
@@ -82,7 +88,7 @@ watch(traitset, (ts) => {
 })
 
 const saving = ref(false)
-const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1 })
+const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1, polarity: '' })
 
 watch(traitset, (ts) => {
   if (ts) {
@@ -90,11 +96,12 @@ watch(traitset, (ts) => {
     form.universes = [...(ts.universes || [])]
     form.entityTypes = [...(ts.entityTypes || [])]
     form.limit = ts.limit || 1
+    form.polarity = ts.polarity || ''
   }
 }, { immediate: true })
 
 let saveTimer = null
-watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit], () => {
+watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit, () => form.polarity], () => {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => saveTraitset(), 600)
 })
@@ -102,11 +109,11 @@ watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], 
 async function saveTraitset() {
   if (!traitset.value?.id) return
   await graphql(
-    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit) { id } }`,
-    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit }
+    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int, $polarity: Polarity, $clearPolarity: Boolean) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit, polarity: $polarity, clearPolarity: $clearPolarity) { id } }`,
+    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit, polarity: form.polarity || null, clearPolarity: !form.polarity }
   )
   patchData('traitsets', traitset.value.id, {
-    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit,
+    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit, polarity: form.polarity || null,
   })
 }
 

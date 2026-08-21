@@ -16,10 +16,10 @@ export function useTraitsConfig() {
     const [ts, sf] = await Promise.all([
       graphql(`query {
         traitsets {
-          id name universes entityTypes order limit
+          id name universes entityTypes order limit polarity
           traits {
             id name defaultDieType traitsetId universes
-            locationRestricted defaultEgo
+            locationRestricted defaultEgo polarity
             possibleSfxIds
             displayNames { name universe ratings }
           }
