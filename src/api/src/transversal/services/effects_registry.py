@@ -62,6 +62,16 @@ _RELATIONSHIP_CONTEXT_FIELD = EffectFieldDef(
     required=False,
 )
 
+# Step magnitude for step_up / step_down / gain_or_step_up.  Free text so it
+# can hold either a literal number or a ``{variable}`` token.
+_STEPS_CONTEXT_FIELD = EffectFieldDef(
+    name="steps",
+    label="Steps",
+    field_type="text",
+    required=False,
+    default="1",
+)
+
 
 # ── The Registry ──────────────────────────────────────
 
@@ -239,7 +249,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD],
         supports_duration=True,
         inverse=("modify_trait", "step_down"),
         target_kind="trait",
@@ -258,7 +268,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Deferral", field_type="text",
                           required=False, default="after_resolution"),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD],
         supports_duration=True,
         inverse=("modify_trait", "step_up"),
         target_kind="trait",
@@ -417,7 +427,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Create At", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD],
         supports_duration=True,
         supports_polarity=True,
         target_kind="trait",
