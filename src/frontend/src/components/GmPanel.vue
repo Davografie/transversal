@@ -1,6 +1,17 @@
 <template>
   <div class="gm-content">
+    <div class="mode-tabs">
+      <button :class="{ active: mode === 'play' }" @click="mode = 'play'">Play</button>
+      <button :class="{ active: mode === 'prep' }" @click="mode = 'prep'">Prep</button>
+    </div>
+
     <template v-if="mode === 'play'">
+      <div class="gm-shortcuts">
+        <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
+        <button class="shortcut-btn scene-btn" @click="advanceScene">◈ Scene</button>
+        <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
+        <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
+      </div>
       <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntities" @inspect="inspectEntity" />
     </template>
 
@@ -23,6 +34,10 @@
           </div>
         </div>
       </div>
+      <button class="create-btn" @click="startCreate">+ New Entity</button>
+      <div class="canvas-btn-row">
+        <button class="create-btn canvas-btn" @click="openLocationTreeCanvas">🗺 Canvas</button>
+      </div>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
@@ -34,24 +49,6 @@
       <button class="create-btn" style="margin-top:4px" @click="openSfxOwners">Manage SFX Owners</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
-
-    <div class="gm-bottom-bar">
-      <div class="gm-actions">
-        <template v-if="mode === 'play'">
-          <button class="gm-action gm-beat" @click="nextBeat">◆ Next Beat</button>
-          <button class="gm-action" @click="advanceScene">◈ Scene</button>
-          <button class="gm-action gm-session" :class="{ active: sessionActive }" @click="toggleSession">{{ sessionActive ? '■ End' : '▶ Start' }}</button>
-        </template>
-        <template v-else>
-          <button class="gm-action gm-primary" @click="startCreate">＋ New Entity</button>
-          <button class="gm-action" @click="openLocationTreeCanvas">🗺 Canvas</button>
-        </template>
-      </div>
-      <div class="gm-mode-switch" role="tablist">
-        <button role="tab" :aria-selected="mode === 'play'" :class="{ active: mode === 'play' }" @click="mode = 'play'">Play</button>
-        <button role="tab" :aria-selected="mode === 'prep'" :class="{ active: mode === 'prep' }" @click="mode = 'prep'">Prep</button>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -107,7 +104,6 @@ function nextBeat() { emit('next-beat') }
 function advanceScene() { viewSceneSummary.value = true; emit('advance-scene') }
 function startSession() { sessionActive.value = true; emit('start-session') }
 function endSession() { sessionActive.value = false; emit('end-session') }
-function toggleSession() { sessionActive.value ? endSession() : startSession() }
 
 // ── Filtering (entities) ────────────────────────────
 const {
@@ -316,37 +312,18 @@ onUnmounted(() => {
 <style scoped>
 
 
-.gm-bottom-bar {
-  position: sticky; bottom: 0; z-index: 6;
-  display: flex; flex-direction: column; gap: 8px;
-  margin: 12px -10px -10px -10px; padding: 10px;
-  background: var(--bg-panel, rgba(10,10,20,0.95));
-  border-top: 1px solid rgba(255,255,255,0.08);
-}
-.gm-actions { display: flex; gap: 6px; }
-.gm-action {
-  flex: 1; min-height: 44px; font-size: 13px; padding: 8px;
-  border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04); color: var(--text);
-  cursor: pointer; white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
-}
-.gm-action:hover { background: rgba(255,255,255,0.08); }
-.gm-action.gm-primary { background: var(--accent); color: #0a0a0f; font-weight: 700; border-color: transparent; }
-.gm-action.gm-beat { background: rgba(64,136,212,0.2); border-color: rgba(64,136,212,0.4); }
-.gm-action.gm-session.active { background: rgba(212,64,64,0.2); border-color: rgba(212,64,64,0.4); color: var(--danger); }
+.mode-tabs { display: flex; gap: 0; margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
+.mode-tabs button { flex: 1; font-size: 12px; padding: 6px 0; border: none; background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
+.mode-tabs button.active { background: var(--accent); color: #fff; }
+.mode-tabs button:hover:not(.active) { background: rgba(255,255,255,0.08); }
 
-.gm-mode-switch {
-  display: flex; background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
-  padding: 3px; gap: 3px;
-}
-.gm-mode-switch button {
-  flex: 1; min-height: 44px; font-size: 13px; font-weight: 600;
-  border: none; border-radius: 6px; background: transparent; color: var(--text-dim);
-  cursor: pointer; transition: background 0.15s, color 0.15s;
-}
-.gm-mode-switch button.active { background: var(--accent); color: #0a0a0f; }
+.gm-shortcuts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.shortcut-btn { flex: 1; font-size: 11px; padding: 8px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.shortcut-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.beat-btn { border-color: rgba(64,136,212,0.3); } .beat-btn:hover { border-color: var(--accent); background: rgba(64,136,212,0.12); }
+.scene-btn { border-color: rgba(64,184,96,0.3); } .scene-btn:hover { border-color: #40b860; background: rgba(64,184,96,0.12); }
+.session-btn { border-color: rgba(232,136,48,0.3); } .session-btn:hover { border-color: #e88830; background: rgba(232,136,48,0.12); }
+.session-btn.active { border-color: #d44040; color: #d44040; } .session-btn.active:hover { background: rgba(212,64,64,0.12); }
 
 .filter-bar { margin-bottom: 8px; }
 .chip-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
@@ -365,6 +342,10 @@ onUnmounted(() => {
 
 .create-btn { width: 100%; font-size: 12px; padding: 8px; margin-bottom: 8px; background: var(--accent-dim); color: var(--text); }
 .create-btn:hover { background: var(--accent); }
+.canvas-btn { background: rgba(64, 136, 212, 0.3); border: 1px dashed var(--accent-dim); }
+.canvas-btn:hover { background: var(--accent); border-color: var(--accent); }
+.canvas-btn-row { display: flex; gap: 6px; }
+.canvas-btn-row .create-btn { flex: 1; }
 .faction-canvas-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
 .faction-canvas-btn:hover { background: var(--accent); }
 
