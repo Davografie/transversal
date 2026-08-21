@@ -33,6 +33,13 @@ class SavePoolRequest(BaseModel):
     dice: list[PoolDieIn] = Field(default_factory=list)
 
 
+class OfferNegativeRequest(BaseModel):
+    opponent_id: str
+    trait_setting_id: str
+    dice: list[str] = Field(default_factory=list)
+    label: str = ""
+
+
 class DifficultyRequest(BaseModel):
     difficulty: int
 
@@ -85,6 +92,59 @@ async def save_pool(location_id: str, entity_id: str, req: SavePoolRequest):
                         },
                     ))
     return {"saved": True}
+
+
+@router.post("/{location_id}/pools/{entity_id}/offer-negative")
+async def offer_negative(location_id: str, entity_id: str, req: OfferNegativeRequest):
+    """Offer a negative trait to an opponent's pool during a contest.
+
+    Toggle: if the trait is already in the opponent's pool, remove it.  On offer,
+    reveal the trait to everyone at the location and — when the opponent hadn't
+    learned it yet — fire ``on_trait_offered`` so a table SFX can reward the
+    offering entity.
+    """
+    store = get_scene_store()
+    opponent_pool = store.get_pool(location_id, req.opponent_id)
+
+    if any(d.get("ts_id") == req.trait_setting_id for d in opponent_pool):
+        filtered = [d for d in opponent_pool if d.get("ts_id") != req.trait_setting_id]
+        store.save_pool(location_id, req.opponent_id, filtered)
+        broadcast_pool_change(location_id, req.opponent_id, dice=filtered, phase="adding")
+        return {"offered": False, "removed": True, "newly_revealed": False}
+
+    added = [
+        {"die": die, "source_kind": "trait", "source_id": req.trait_setting_id,
+         "label": req.label or die, "ts_id": req.trait_setting_id}
+        for die in req.dice
+    ]
+    new_pool = opponent_pool + added
+    store.save_pool(location_id, req.opponent_id, new_pool)
+    broadcast_pool_change(location_id, req.opponent_id, dice=new_pool, phase="adding")
+
+    from transversal.main import _get_repo
+    from transversal.services.trait_reveal import reveal_trait_to
+
+    repo = _get_repo()
+    ts = repo.get_traitsetting(req.trait_setting_id)
+    newly_revealed = False
+    if ts is not None:
+        was_known = req.opponent_id in ts.known_to
+        for occupant in repo.list_entities_by_location(location_id):
+            reveal_trait_to(ts, occupant.id)
+        repo.update_traitsetting(ts)
+        newly_revealed = not was_known
+
+    if newly_revealed and ts is not None:
+        from transversal.services.state_events import fire_state_sfx
+        fire_state_sfx(entity_id, "", "on_trait_offered", {
+            "trait_id": ts.trait_id,
+            "trait_setting_id": ts.id,
+            "owner": ts.entity_id,
+            "opponent": req.opponent_id,
+            "newly_revealed": "true",
+        })
+
+    return {"offered": True, "removed": False, "newly_revealed": newly_revealed}
 
 
 @router.delete("/{location_id}/pools/{entity_id}")

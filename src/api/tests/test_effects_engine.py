@@ -346,3 +346,17 @@ def test_substitute_effect_context_leaves_choose_placeholder():
     out = _substitute_effect_context(effect, {"trait_id": "x"})
     assert out.target == "{choose_trait}"
     assert out.result == "d6"
+
+
+def test_on_trait_offered_trigger_matches_trait_offered():
+    engine = EffectsEngine()
+    sfx = _make_sfx("sfx-offer", "Offer", "on_trait_offered")
+    event = GameEvent(type="trait_offered", entity_id="char-1", universe="earth")
+    assert engine._trigger_matches(sfx, event)
+
+
+def test_on_trait_offered_trigger_ignores_other_events():
+    engine = EffectsEngine()
+    sfx = _make_sfx("sfx-offer", "Offer", "on_trait_offered")
+    event = GameEvent(type="trait_learned", entity_id="char-1", universe="earth")
+    assert not engine._trigger_matches(sfx, event)

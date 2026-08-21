@@ -121,6 +121,7 @@ async def on_startup():
         ensure_contest_complication_sfx,
         ensure_prevent_taken_out_sfx,
         ensure_hitch_gain_complication_sfx,
+        ensure_offer_negative_sfx,
         remove_legacy_contest_complication_sfx,
         remove_legacy_buy_hitch_sfx,
     )
@@ -136,6 +137,7 @@ async def on_startup():
     ensure_contest_complication_sfx(repo)
     ensure_prevent_taken_out_sfx(repo)
     ensure_hitch_gain_complication_sfx(repo)
+    ensure_offer_negative_sfx(repo)
     remove_legacy_contest_complication_sfx(repo)
     remove_legacy_buy_hitch_sfx(repo)
     db_sfxs = repo.get_all_sfxs()

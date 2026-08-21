@@ -48,8 +48,9 @@ def reveal_pool_traits(
 ) -> tuple[list[str], list[str]]:
     """Reveal every trait in ``owner_id``'s pool at ``location_id``.
 
-    Everyone currently at the location (other than the owner) learns each trait
-    in the pool.  Returns ``(changed_trait_setting_ids, learner_ids)``.
+    Everyone currently at the location learns each trait in the pool (the pool
+    owner included — they aren't necessarily the trait owner, e.g. an offered
+    negative trait).  Returns ``(changed_trait_setting_ids, learner_ids)``.
     """
     from transversal.services.scene_state import get_scene_store
 
@@ -58,7 +59,7 @@ def reveal_pool_traits(
     if not ts_ids:
         return [], []
 
-    learner_ids = [e.id for e in repo.list_entities_by_location(location_id) if e.id != owner_id]
+    learner_ids = [e.id for e in repo.list_entities_by_location(location_id)]
     if not learner_ids:
         return [], []
 

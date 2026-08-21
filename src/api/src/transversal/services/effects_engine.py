@@ -245,6 +245,10 @@ class EffectsEngine:
         if trigger == "on_trait_learn" and event.type == "trait_learned":
             return True
 
+        # on_trait_offered
+        if trigger == "on_trait_offered" and event.type == "trait_offered":
+            return True
+
         # on_relationship_create
         if trigger == "on_relationship_create" and event.type == "relationship_created":
             return True

@@ -77,6 +77,13 @@ TRIGGER_VARIABLES: dict[str, list[Variable]] = {
         Variable("owner", "entity"),
         Variable("learner", "entity"),
     ],
+    "on_trait_offered": [
+        Variable("trait_id", "string"),
+        Variable("trait_setting_id", "string"),
+        Variable("owner", "entity"),
+        Variable("opponent", "entity"),
+        Variable("newly_revealed", "string"),
+    ],
 }
 
 

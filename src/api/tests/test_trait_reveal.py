@@ -81,9 +81,9 @@ def test_reveal_pool_traits_adds_occupants(monkeypatch):
     changed, learners = reveal_pool_traits(repo, "loc-1", "owner")
 
     assert changed == ["ts-1", "ts-2"]
-    assert learners == ["viewer-a", "viewer-b"]
-    assert ts1.known_to == ["viewer-a", "viewer-b"]
-    assert ts2.known_to == ["viewer-b", "viewer-a"]
+    assert learners == ["owner", "viewer-a", "viewer-b"]
+    assert ts1.known_to == ["owner", "viewer-a", "viewer-b"]
+    assert ts2.known_to == ["viewer-b", "owner", "viewer-a"]
 
 
 def test_reveal_pool_traits_fires_on_trait_learn(monkeypatch):
@@ -104,12 +104,18 @@ def test_reveal_pool_traits_fires_on_trait_learn(monkeypatch):
     reveal_pool_traits(repo, "loc-1", "owner")
 
     assert fired == [
+        ("owner", "on_trait_learn", {
+            "trait_id": "hidden",
+            "trait_setting_id": "ts-1",
+            "owner": "owner",
+            "learner": "owner",
+        }),
         ("viewer-a", "on_trait_learn", {
             "trait_id": "hidden",
             "trait_setting_id": "ts-1",
             "owner": "owner",
             "learner": "viewer-a",
-        })
+        }),
     ]
 
 

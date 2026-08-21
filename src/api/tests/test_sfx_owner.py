@@ -162,6 +162,7 @@ def test_ensure_sfx_owners_creates_buckets_and_table_reward():
         "apply-complication",
         "take-complication",
         "prevent-taken-out",
+        "sfx-offer-negative-trait",
     }
     assert repo.owners["gm"].sfx_ids == ["hitch-gain-complication"]
     assert repo.owners["players"].sfx_ids == []
@@ -231,7 +232,22 @@ def test_ensure_sfx_owners_table_defaults():
         "apply-complication",
         "take-complication",
         "prevent-taken-out",
+        "sfx-offer-negative-trait",
     }
+
+
+def test_ensure_offer_negative_sfx_creates_once():
+    from transversal.services.sfx_owner import ensure_offer_negative_sfx
+
+    repo = SetupRepo()
+    ensure_offer_negative_sfx(repo)
+    sfx = repo.sfxs["sfx-offer-negative-trait"]
+    assert sfx.trigger == "on_trait_offered"
+    assert sfx.effects[0].type == "transfer_razmerit"
+    assert sfx.effects[0].action == "earn"
+    assert sfx.effects[0].result == "1"
+    ensure_offer_negative_sfx(repo)
+    assert len(repo.sfxs) == 1
 
 
 def test_ensure_contest_complication_sfx_creates_once():

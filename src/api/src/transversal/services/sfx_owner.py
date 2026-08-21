@@ -34,6 +34,7 @@ def ensure_sfx_owners(repo) -> None:
             "apply-complication",
             "take-complication",
             "prevent-taken-out",
+            "sfx-offer-negative-trait",
         ],
         "gm": ["hitch-gain-complication"],
         "players": [],
@@ -229,6 +230,35 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
                 action="earn",
                 target="self",
                 entity="{hitch_entity}",
+                result="1",
+            ),
+        ],
+    ))
+
+
+def ensure_offer_negative_sfx(repo) -> None:
+    """Create the table SFX that rewards offering a negative trait mid-contest.
+
+    Fires on the server event ``trait_offered`` (the player routed one of their
+    negative traits to the opponent's pool).  The endpoint only fires that event
+    when the opponent hadn't learned the trait yet, so the +1 razmerit here is
+    the atomic "reveal-and-reward" payout.
+    """
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    if repo.get_sfx("sfx-offer-negative-trait") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="sfx-offer-negative-trait",
+        name="Offer Negative Trait",
+        description="Gain 1 razmerit when you offer one of your negative traits to an opponent who hasn't learned it yet",
+        trigger="on_trait_offered",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="transfer_razmerit",
+                action="earn",
+                target="self",
                 result="1",
             ),
         ],
