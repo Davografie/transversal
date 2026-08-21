@@ -165,6 +165,7 @@ class EffectsEngine:
                 continue
 
             # Execute each effect with its own timing
+            sfx_applied = False
             for effect in sfx.effects:
                 effect = _substitute_effect_context(effect, event.context)
                 if effect.timing == EffectTiming.IMMEDIATE:
@@ -177,6 +178,7 @@ class EffectsEngine:
                     else:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
                         outcome.applied.append(effect)
+                        sfx_applied = True
                 else:
                     # Fold deferred effects into persisted scheduled events when a
                     # repo is available (survives restart); fall back to the
@@ -198,6 +200,9 @@ class EffectsEngine:
                             context=event.context,
                         )
                     )
+
+            if sfx_applied:
+                _emit_sfx_triggered(event.entity_id, sfx)
 
         return outcome
 
@@ -353,6 +358,23 @@ class EffectsEngine:
     @property
     def scheduled_count(self) -> int:
         return len(self._schedule)
+
+
+def _emit_sfx_triggered(entity_id: str, sfx) -> None:
+    """Broadcast an ``sfx_triggered`` SSE event so clients can toast it."""
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="sfx_triggered",
+            session_id=s.id,
+            data={
+                "entity_id": entity_id,
+                "sfx_id": sfx.id,
+                "sfx_name": sfx.name,
+            },
+        ))
 
 
 def _substitute_effect_context(effect: Effect, context: dict) -> Effect:

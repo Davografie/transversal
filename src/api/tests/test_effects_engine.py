@@ -360,3 +360,23 @@ def test_on_trait_offered_trigger_ignores_other_events():
     sfx = _make_sfx("sfx-offer", "Offer", "on_trait_offered")
     event = GameEvent(type="trait_learned", entity_id="char-1", universe="earth")
     assert not engine._trigger_matches(sfx, event)
+
+
+def test_sfx_triggered_emitted_when_effect_applies(monkeypatch):
+    from transversal.services import effects_engine as ee
+
+    engine = EffectsEngine()
+    sfx = _make_sfx(
+        "sfx-x", "X", "manual",
+        effects=[_make_effect(timing="immediate", type="transfer_razmerit", action="earn", target="self", result="1")],
+    )
+    engine.register(sfx)
+
+    emitted = []
+    monkeypatch.setattr(ee, "_emit_sfx_triggered", lambda entity_id, s: emitted.append((entity_id, s.id)))
+
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth")
+    outcome = engine.process_event_outcome(event, ["sfx-x"], 0)
+
+    assert len(outcome.applied) == 1
+    assert emitted == [("char-1", "sfx-x")]
