@@ -925,9 +925,14 @@ function setDifficulty(die) {
 function addFromSheet(payload) {
   ensureSelfTab()
   // Accept a single-die { die } payload or a multi-die { dice: [...] } payload.
-  const { source, label, tsId } = payload || {}
+  const { source, label, tsId, negative } = payload || {}
   const dice = Array.isArray(payload?.dice) ? payload.dice : (payload?.die ? [payload.die] : [])
   if (!dice.length) return
+  // Negative trait during a contest contributes to the opponent's pool.
+  if (negative && challenged.value && opponentId.value) {
+    addToOpponentPool(dice, source, label, tsId)
+    return
+  }
   // Toggle: if the trait is already in the pool, remove all of its dice.
   if (tsId != null && pool.some(d => d.tsId === tsId)) {
     removeByTsId(tsId)
@@ -939,6 +944,28 @@ function addFromSheet(payload) {
   }
   panelOpen.value = true
   notifyPool()
+}
+
+async function addToOpponentPool(dice, source, label, tsId) {
+  if (!props.locationId || !opponentId.value) return
+  const res = await apiGetPool(props.locationId, opponentId.value)
+  const existing = res?.dice || []
+  const tsKey = tsId ?? null
+  // Toggle: if this trait is already in the opponent's pool, remove it.
+  if (tsKey != null && existing.some(d => d.ts_id === tsKey)) {
+    const filtered = existing.filter(d => d.ts_id !== tsKey)
+    await apiSavePool(props.locationId, opponentId.value, filtered)
+    return
+  }
+  const added = dice.map(die => ({
+    die,
+    source_kind: 'trait',
+    source_id: tsKey || source || '',
+    label: label || source || die,
+    ts_id: tsKey,
+  }))
+  await apiSavePool(props.locationId, opponentId.value, [...existing, ...added])
+  panelOpen.value = true
 }
 
 function removeBySource(source) {

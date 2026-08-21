@@ -490,6 +490,7 @@ async function addTrait(trait) {
 async function onTraitClick(t) {
   if (props.phase !== 'adding') return
 
+  const negative = t.polarity === 'NEGATIVE'
   let dieType = (t.dice && t.dice.length ? t.dice[0] : '').toLowerCase()
 
   if (t.ratingType === 'RESOURCE') {
@@ -516,12 +517,12 @@ async function onTraitClick(t) {
 
   // Multi-die static traits contribute one pool die per rating entry.
   if (t.ratingType === 'STATIC' && (t.dice || []).length > 1) {
-    emit('addToPool', { dice: t.dice.map(d => d.toLowerCase()), source: t.name, label: displayName(t.name), tsId: t.id })
+    emit('addToPool', { dice: t.dice.map(d => d.toLowerCase()), source: t.name, label: displayName(t.name), tsId: t.id, negative })
     return
   }
 
   if (!dieType) return  // no die rating — nothing to add
-  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id })
+  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative })
 }
 
 function resolvedDieType(t) {
