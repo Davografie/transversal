@@ -63,6 +63,7 @@ def reveal_pool_traits(
         return [], []
 
     changed: list[str] = []
+    reveals: list[tuple] = []  # (trait setting, learner_id)
     for ts_id in ts_ids:
         ts = repo.get_traitsetting(ts_id)
         if ts is None:
@@ -71,7 +72,29 @@ def reveal_pool_traits(
         for learner_id in learner_ids:
             if reveal_trait_to(ts, learner_id):
                 modified = True
+                reveals.append((ts, learner_id))
         if modified:
             repo.update_traitsetting(ts)
             changed.append(ts_id)
+
+    for ts, learner_id in reveals:
+        fire_on_trait_learn(ts.entity_id, learner_id, ts.trait_id, ts.id)
+
     return changed, learner_ids
+
+
+def fire_on_trait_learn(owner_id: str, learner_id: str, trait_id: str, trait_setting_id: str) -> None:
+    """Fire ``on_trait_learn`` for the learner of a newly-revealed trait."""
+    from transversal.services.state_events import fire_state_sfx
+
+    fire_state_sfx(
+        learner_id,
+        "",
+        "on_trait_learn",
+        {
+            "trait_id": trait_id,
+            "trait_setting_id": trait_setting_id,
+            "owner": owner_id,
+            "learner": learner_id,
+        },
+    )

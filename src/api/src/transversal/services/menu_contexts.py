@@ -71,6 +71,12 @@ TRIGGER_VARIABLES: dict[str, list[Variable]] = {
     "on_push": [Variable("pushed", "string")],
     "on_taken_out": [Variable("opponent_id", "entity"), Variable("taken_out", "string")],
     "on_prevent_taken_out": [Variable("effect_die", "die"), Variable("prevented", "string")],
+    "on_trait_learn": [
+        Variable("trait_id", "string"),
+        Variable("trait_setting_id", "string"),
+        Variable("owner", "entity"),
+        Variable("learner", "entity"),
+    ],
 }
 
 

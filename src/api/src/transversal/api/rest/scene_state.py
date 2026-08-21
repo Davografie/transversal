@@ -68,19 +68,22 @@ async def save_pool(location_id: str, entity_id: str, req: SavePoolRequest):
     if trait_setting_ids_from_pool(dice):
         from transversal.main import _get_repo
 
-        changed, learner_ids = reveal_pool_traits(_get_repo(), location_id, entity_id)
-        if changed:
-            for s in session_manager.list_active():
-                event_bus.publish(StreamEvent(
-                    event="traits_revealed",
-                    session_id=s.id,
-                    data={
-                        "location_id": location_id,
-                        "owner_id": entity_id,
-                        "learner_ids": learner_ids,
-                        "trait_setting_ids": changed,
-                    },
-                ))
+        repo = _get_repo()
+        # In-memory test repos have no Arango handle; occupant lookup needs one.
+        if getattr(repo, "db", None) is not None:
+            changed, learner_ids = reveal_pool_traits(repo, location_id, entity_id)
+            if changed:
+                for s in session_manager.list_active():
+                    event_bus.publish(StreamEvent(
+                        event="traits_revealed",
+                        session_id=s.id,
+                        data={
+                            "location_id": location_id,
+                            "owner_id": entity_id,
+                            "learner_ids": learner_ids,
+                            "trait_setting_ids": changed,
+                        },
+                    ))
     return {"saved": True}
 
 

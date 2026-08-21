@@ -302,3 +302,47 @@ class TestScheduling:
         assert len(fired) == 1
         assert engine.scheduled_count == 0
         assert len(_test_applied) > before
+
+
+# ── Fog-of-war learning trigger + context substitution ──
+
+def test_on_trait_learn_trigger_matches_trait_learned():
+    engine = EffectsEngine()
+    sfx = _make_sfx("sfx-learn", "Learn", "on_trait_learn")
+    event = GameEvent(type="trait_learned", entity_id="char-1", universe="earth")
+    assert engine._trigger_matches(sfx, event)
+
+
+def test_on_trait_learn_trigger_ignores_other_events():
+    engine = EffectsEngine()
+    sfx = _make_sfx("sfx-learn", "Learn", "on_trait_learn")
+    event = GameEvent(type="trait_updated", entity_id="char-1", universe="earth")
+    assert not engine._trigger_matches(sfx, event)
+
+
+def test_substitute_effect_context_across_fields():
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reveal",
+        target="{trait_id}", entity="{owner}", result="{learner}",
+        context={"learner": "{learner}"},
+    )
+    ctx = {"trait_id": "hidden", "owner": "char-2", "learner": "char-1"}
+    out = _substitute_effect_context(effect, ctx)
+    assert out.target == "hidden"
+    assert out.entity == "char-2"
+    assert out.result == "char-1"
+    assert out.context == {"learner": "char-1"}
+
+
+def test_substitute_effect_context_leaves_choose_placeholder():
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="{choose_trait}", result="d6",
+    )
+    out = _substitute_effect_context(effect, {"trait_id": "x"})
+    assert out.target == "{choose_trait}"
+    assert out.result == "d6"

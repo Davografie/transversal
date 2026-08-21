@@ -24,6 +24,7 @@
         <option value="on_prevent_taken_out">On Prevent Taken Out</option>
         <option value="on_location_change">On Location Change</option>
         <option value="on_trait_change">On Trait Change</option>
+        <option value="on_trait_learn">On Trait Learned</option>
         <option value="on_relationship_create">On Relationship Create</option>
       </select>
       <label>Consequence menu</label>

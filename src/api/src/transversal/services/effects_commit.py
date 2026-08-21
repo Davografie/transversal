@@ -97,6 +97,9 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
             "learner_ids": [learner_id for _, learner_id in result.revealed],
             "trait_setting_ids": revealed_ids,
         })
+        from transversal.services.trait_reveal import fire_on_trait_learn
+        for ts, learner_id in result.revealed:
+            fire_on_trait_learn(ts.entity_id, learner_id, ts.trait_id, ts.id)
 
     # Relationship edges produced by the applier.
     for rel in result.new_relationships:

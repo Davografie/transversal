@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from transversal.services import scene_state as ss_module
 from transversal.services.scene_state import SceneStateStore, get_scene_store
 from transversal.services.trait_reveal import (
+    fire_on_trait_learn,
     reveal_pool_traits,
     reveal_trait_to,
     trait_setting_ids_from_pool,
@@ -19,6 +20,10 @@ def _die(ts_id=None, source_kind="trait", source_id=""):
         "label": "x",
         "ts_id": ts_id,
     }
+
+
+def _ts(id, trait_id="hidden", entity_id="owner", known_to=None):
+    return SimpleNamespace(id=id, trait_id=trait_id, entity_id=entity_id, known_to=known_to or [])
 
 
 class FakeRepo:
@@ -58,8 +63,8 @@ def test_reveal_pool_traits_adds_occupants(monkeypatch):
     ss_module._store = SceneStateStore()
     get_scene_store().save_pool("loc-1", "owner", [_die("ts-1"), _die("ts-2")])
 
-    ts1 = SimpleNamespace(id="ts-1", known_to=[])
-    ts2 = SimpleNamespace(id="ts-2", known_to=["viewer-b"])
+    ts1 = _ts("ts-1", trait_id="hidden-a")
+    ts2 = _ts("ts-2", trait_id="hidden-b", known_to=["viewer-b"])
     repo = FakeRepo(
         occupants=[
             SimpleNamespace(id="owner"),
@@ -68,6 +73,10 @@ def test_reveal_pool_traits_adds_occupants(monkeypatch):
         ],
         traitsettings=[ts1, ts2],
     )
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda *a, **k: None,
+    )
 
     changed, learners = reveal_pool_traits(repo, "loc-1", "owner")
 
@@ -75,6 +84,50 @@ def test_reveal_pool_traits_adds_occupants(monkeypatch):
     assert learners == ["viewer-a", "viewer-b"]
     assert ts1.known_to == ["viewer-a", "viewer-b"]
     assert ts2.known_to == ["viewer-b", "viewer-a"]
+
+
+def test_reveal_pool_traits_fires_on_trait_learn(monkeypatch):
+    ss_module._store = SceneStateStore()
+    get_scene_store().save_pool("loc-1", "owner", [_die("ts-1")])
+
+    ts1 = _ts("ts-1", trait_id="hidden")
+    repo = FakeRepo(
+        occupants=[SimpleNamespace(id="owner"), SimpleNamespace(id="viewer-a")],
+        traitsettings=[ts1],
+    )
+    fired = []
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda entity_id, universe, event_type, context: fired.append((entity_id, event_type, context)),
+    )
+
+    reveal_pool_traits(repo, "loc-1", "owner")
+
+    assert fired == [
+        ("viewer-a", "on_trait_learn", {
+            "trait_id": "hidden",
+            "trait_setting_id": "ts-1",
+            "owner": "owner",
+            "learner": "viewer-a",
+        })
+    ]
+
+
+def test_fire_on_trait_learn_passes_context(monkeypatch):
+    fired = []
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda entity_id, universe, event_type, context: fired.append((entity_id, universe, event_type, context)),
+    )
+    fire_on_trait_learn("owner", "learner", "hidden", "ts-1")
+    assert fired == [
+        ("learner", "", "on_trait_learn", {
+            "trait_id": "hidden",
+            "trait_setting_id": "ts-1",
+            "owner": "owner",
+            "learner": "learner",
+        })
+    ]
 
 
 def test_reveal_pool_traits_skips_when_no_trait_dice(monkeypatch):

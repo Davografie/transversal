@@ -241,6 +241,10 @@ class EffectsEngine:
         if trigger == "on_trait_change" and event.type == "trait_updated":
             return True
 
+        # on_trait_learn
+        if trigger == "on_trait_learn" and event.type == "trait_learned":
+            return True
+
         # on_relationship_create
         if trigger == "on_relationship_create" and event.type == "relationship_created":
             return True
@@ -348,18 +352,50 @@ class EffectsEngine:
 
 
 def _substitute_effect_context(effect: Effect, context: dict) -> Effect:
-    """Replace ``{context_key}`` placeholders in an effect's result from context."""
+    """Replace ``{context_key}`` placeholders across an effect's string fields.
+
+    Covers ``result`` (the original behaviour), plus ``target``, ``entity``, and
+    string ``context`` values so entity/string trigger variables can drive where
+    an effect points, not just a numeric/string result.
+    """
     if not context:
         return effect
-    result = effect.result or ""
-    new_result = result
-    for key, value in context.items():
-        placeholder = "{" + key + "}"
-        if placeholder in new_result:
-            new_result = new_result.replace(placeholder, str(value) if value is not None else "")
-    if new_result == result:
+
+    def _sub(s: Optional[str]) -> Optional[str]:
+        if not s:
+            return s
+        out = s
+        for key, value in context.items():
+            placeholder = "{" + key + "}"
+            if placeholder in out:
+                out = out.replace(placeholder, str(value) if value is not None else "")
+        return out
+
+    updates: dict = {}
+    for field in ("result", "target", "entity"):
+        old = getattr(effect, field)
+        new = _sub(old)
+        if new != old:
+            updates[field] = new
+
+    new_context = {}
+    context_changed = False
+    for k, v in (effect.context or {}).items():
+        if isinstance(v, str):
+            nv = _sub(v)
+            if nv != v:
+                context_changed = True
+                new_context[k] = nv
+            else:
+                new_context[k] = v
+        else:
+            new_context[k] = v
+    if context_changed:
+        updates["context"] = new_context
+
+    if not updates:
         return effect
-    return effect.model_copy(update={"result": new_result})
+    return effect.model_copy(update=updates)
 
 
 def _beats_for_timing(timing: EffectTiming) -> int:
