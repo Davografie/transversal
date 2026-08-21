@@ -58,6 +58,7 @@
 
       <!-- SFX assignment -->
       <h4 class="ps-section-title">Possible SFXs</h4>
+      <p class="section-hint">Each row is an SFX this trait can grant. Check an SFX to make it a <strong>default</strong> — characters with this trait get it automatically. Remove one from the list with ✕.</p>
       <div v-if="possibleSfxs.length === 0" class="empty">No SFXs assigned — add one below</div>
       <div v-else class="sfx-list">
         <div v-for="s in possibleSfxs" :key="s.id" class="sfx-row" @click="onSfxClick(s)">
@@ -380,6 +381,8 @@ async function onDelete() {
 .checkbox-label input { width: auto; }
 .default-ego-row { display: flex; align-items: center; gap: 8px; }
 .field-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.section-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.4; }
+.section-hint strong { color: var(--text); }
 .ego-toggle {
   padding: 3px 12px;
   border-radius: 999px;
