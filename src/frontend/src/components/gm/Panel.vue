@@ -1,15 +1,15 @@
 <template>
   <div class="panel-wrapper" :class="{ nested }">
+    <button v-if="closable" class="panel-close" @click="$emit('close')">×</button>
     <!-- ⚠ v-show is on .panel (this panel's content) NOT on .panel-wrapper.
          If it were on the wrapper, nested child Panels would also be hidden.
          We want shallow panels to hide their content while their deeper
          children remain visible beside them. -->
     <div class="panel" v-show="!minVisibleDepth || depth >= minVisibleDepth">
-      <header v-if="title || closable" class="panel-header">
+      <header v-if="title" class="panel-header">
         <slot name="header">
-          <span v-if="title" class="panel-title">{{ title }}</span>
+          <span class="panel-title">{{ title }}</span>
         </slot>
-        <button v-if="closable" class="panel-close" @click="$emit('close')" title="Close" aria-label="Close">✕</button>
       </header>
       <div class="panel-body">
         <slot />
@@ -126,6 +126,18 @@ provide(panelKey, {
   overflow: auto;
 }
 
+/* Close button: outside the panel, between this and the previous panel */
+.panel-close {
+  position: absolute; top: 50%; right: -22px; transform: translateY(-50%); z-index: 2;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; padding: 0;
+  background: var(--bg-panel); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+}
+.panel-close:hover { background: rgba(255,255,255,0.1); }
+
 /* Nested panel sits beside parent in the flex row */
 .nested {
   position: relative;
@@ -135,29 +147,14 @@ provide(panelKey, {
 .panel-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
 }
 .panel-title {
-  flex: 1;
   font-size: 12px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.5px;
 }
-.panel-close {
-  flex: 0 0 auto;
-  margin-left: auto;
-  width: 44px; height: 44px;
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px; padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.panel-close:hover { background: rgba(255,255,255,0.08); color: var(--text); }
 
 .panel-body {
   flex: 1; overflow-y: auto; padding: 10px;
