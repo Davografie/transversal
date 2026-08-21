@@ -277,7 +277,7 @@
     <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
-  <ToastBar v-if="gmMode" :toasts="toasts" @dismiss="dismissToast" />
+  <ToastBar :toasts="toasts" @dismiss="dismissToast" />
 </template>
 
 <script setup>
@@ -1064,6 +1064,11 @@ watch(lastEvent, (evt) => {
     case 'traits_revealed':
       if ((evt.data?.learner_ids || []).includes(entityId.value)) {
         sheetRef.value?.fetchEntity()
+      }
+      break
+    case 'sfx_triggered':
+      if (evt.data?.entity_id === entityId.value) {
+        addToast(`SFX: ${evt.data?.sfx_name || evt.data?.sfx_id}`, 'sfx')
       }
       break
     case 'sfx_choice_required':

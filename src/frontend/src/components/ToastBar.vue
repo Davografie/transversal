@@ -31,6 +31,7 @@ function typeIcon(type) {
     case 'move': return '📍'
     case 'trait': return '📋'
     case 'scene': return '◈'
+    case 'sfx': return '✨'
     default:    return '·'
   }
 }
@@ -89,6 +90,7 @@ function typeIcon(type) {
 .toast-move  { border-left: 2px solid var(--success); }
 .toast-trait { border-left: 2px solid #a860c8; }
 .toast-scene { border-left: 2px solid #40c8c8; }
+.toast-sfx   { border-left: 2px solid #e8a840; }
 .toast-info  { border-left: 2px solid rgba(255,255,255,0.15); }
 
 /* TransitionGroup animations */
