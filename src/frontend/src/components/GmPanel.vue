@@ -38,6 +38,8 @@
       <div class="canvas-btn-row">
         <button class="create-btn canvas-btn" @click="openLocationTreeCanvas">🗺 Canvas</button>
       </div>
+      <button class="create-btn" @click="openTraitsConfig">Manage Traits</button>
+      <button class="create-btn" @click="openSfxOwners">Manage SFX Owners</button>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
@@ -45,8 +47,6 @@
         <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
         <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
       </div>
-      <button class="create-btn" style="margin-top:8px" @click="openTraitsConfig">Manage Traits</button>
-      <button class="create-btn" style="margin-top:4px" @click="openSfxOwners">Manage SFX Owners</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
   </div>
