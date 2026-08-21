@@ -61,6 +61,26 @@ async def save_pool(location_id: str, entity_id: str, req: SavePoolRequest):
     get_scene_store().save_pool(location_id, entity_id, dice)
     logger.info(f"[init] save_pool loc={location_id} entity={entity_id} dice={len(dice)}")
     broadcast_pool_change(location_id, entity_id, dice=dice, phase="adding")
+
+    # Fog of war: everyone at this location learns the traits now in the pool.
+    from transversal.services.trait_reveal import reveal_pool_traits, trait_setting_ids_from_pool
+
+    if trait_setting_ids_from_pool(dice):
+        from transversal.main import _get_repo
+
+        changed, learner_ids = reveal_pool_traits(_get_repo(), location_id, entity_id)
+        if changed:
+            for s in session_manager.list_active():
+                event_bus.publish(StreamEvent(
+                    event="traits_revealed",
+                    session_id=s.id,
+                    data={
+                        "location_id": location_id,
+                        "owner_id": entity_id,
+                        "learner_ids": learner_ids,
+                        "trait_setting_ids": changed,
+                    },
+                ))
     return {"saved": True}
 
 

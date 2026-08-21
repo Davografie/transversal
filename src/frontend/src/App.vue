@@ -1043,6 +1043,11 @@ watch(lastEvent, (evt) => {
       diceRef.value?.setContestOutcome(evt.data)
       addToast('Contest resolved', 'roll')
       break
+    case 'traits_revealed':
+      if ((evt.data?.learner_ids || []).includes(entityId.value)) {
+        sheetRef.value?.fetchEntity()
+      }
+      break
     case 'sfx_choice_required':
       if (evt.data?.entity_id === entityId.value) {
         sfxChoiceRequest.value = (evt.data.choices || []).map((c, i) => ({ ...c, index: i }))
