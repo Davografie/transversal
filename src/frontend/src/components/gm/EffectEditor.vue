@@ -37,8 +37,8 @@
         <div class="ee-help">{{ selectedAction.description }}</div>
         <div v-if="variables.length" class="ee-vars">
           <span class="ee-vars-label">Variables:</span>
-          <button v-for="v in variables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" :title="v.type" @click="copyVariable(v.name)">
-            {{ '{' + v.name + '}' }}
+          <button v-for="v in variables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" @click="copyVariable(v.name)">
+            {{ '{' + v.name + '}' }}<em class="ee-var-type">{{ v.type }}</em>
           </button>
         </div>
         <div v-for="f in visibleFields" :key="f.name" class="ee-field">
@@ -391,6 +391,7 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 .ee-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); cursor: pointer; }
 .ee-var.copied { background: rgba(64,184,96,0.2); border-color: #40b860; color: #40b860; }
+.ee-var-type { font-style: normal; font-family: inherit; font-size: 8px; color: var(--text-dim); margin-left: 3px; }
 .ee-result-mode { display: flex; gap: 4px; }
 .ee-result-mode button { font-size: 9px; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); cursor: pointer; }
 .ee-result-mode button.active { background: rgba(64,136,212,0.2); border-color: var(--accent-dim); color: var(--accent); }
