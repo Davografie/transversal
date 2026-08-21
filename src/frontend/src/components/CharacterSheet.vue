@@ -204,6 +204,11 @@
                 </div>
               </div>
             </template>
+          <button
+            v-if="activeSheetView === 'traits' && nextSet"
+            class="next-set-btn"
+            @click="goToNextSet"
+          >Next: {{ nextSet.name }} →</button>
         </div> <!-- .trait-list -->
       <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
       <button v-if="!overrideEntityId && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
@@ -360,6 +365,16 @@ const currentSetReachedLimit = computed(() => {
   if (!currentSet.value || !currentSet.value.limit) return false
   return currentSet.value.traits.filter(t => isInPool(t)).length >= currentSet.value.limit
 })
+
+const nextSet = computed(() => {
+  const idx = traitSets.value.findIndex(ts => ts.name === activeSetName.value)
+  if (idx === -1) return null
+  return traitSets.value[idx + 1] || null
+})
+
+function goToNextSet() {
+  if (nextSet.value) activeSetName.value = nextSet.value.name
+}
 
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})
@@ -592,13 +607,13 @@ function setPoolSources(sources) {
   // sources is now [{ die, label, tsId }, ...] — track by tsId
   poolSources.value = sources.map(s => s.tsId).filter(Boolean)
 
-  // When the current set fills to its limit, return to the trait-set list.
+  // When the current set fills to its limit, advance to the next set's list.
   const sets = traitSets.value
   const idx = sets.findIndex(s => s.name === activeSetName.value)
   if (idx !== -1) {
     const count = sets[idx].traits.filter(t => poolSources.value.includes(t.id)).length
     if (sets[idx].limit && count >= sets[idx].limit) {
-      activeSetName.value = null
+      activeSetName.value = sets[idx + 1] ? sets[idx + 1].name : null
     }
   }
 
@@ -1393,6 +1408,22 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .set-back:hover {
   text-decoration: underline;
+}
+.next-set-btn {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px dashed rgba(255,255,255,0.12);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 10px;
+  margin-top: 6px;
+  border-radius: 6px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.next-set-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
 }
 
 .limit-dots {
