@@ -43,6 +43,12 @@ class SelectRequest(BaseModel):
     effect_index: Optional[int] = None
 
 
+class MarkBoughtRequest(BaseModel):
+    """Mark selected rolled dice as bought (consumed by the GM hitch menu)."""
+
+    indices: list[int] = Field(default_factory=list)
+
+
 def _dice_to_specs(dice: list[dict]) -> list[DieSpec]:
     return [
         DieSpec(
@@ -65,7 +71,7 @@ def _roll_stored_pool(location_id: str, entity_id: str, hitches_apply: bool) -> 
     dice = store.get_pool(location_id, entity_id)
     rolls = roll_pool_dice(_dice_to_specs(dice))
     enriched = [
-        {**d, "result": r.result, "hitch": r.result == 1, "role": None}
+        {**d, "result": r.result, "hitch": r.result == 1, "role": None, "bought": False}
         for d, r in zip(dice, rolls)
     ]
     store.save_pool(location_id, entity_id, enriched)
@@ -139,6 +145,19 @@ async def difficulty_roll(location_id: str, entity_id: str):
     enriched, _, _ = _roll_stored_pool(location_id, entity_id, hitches_apply=False)
     broadcast_pool_change(location_id, entity_id, dice=enriched, phase="rolled")
     return {"pipeline": "pool", "rolls": enriched}
+
+
+@router.post("/locations/{location_id}/pools/{entity_id}/hitches/mark-bought")
+async def mark_hitches_bought(location_id: str, entity_id: str, req: MarkBoughtRequest):
+    """Mark the given pool dice as bought so the GM can't re-buy them."""
+    store = get_scene_store()
+    dice = store.get_pool(location_id, entity_id)
+    for i in req.indices:
+        if 0 <= i < len(dice):
+            dice[i]["bought"] = True
+    store.save_pool(location_id, entity_id, dice)
+    broadcast_pool_change(location_id, entity_id, dice=dice, phase="rolled")
+    return {"dice": dice}
 
 
 @router.post("/locations/{location_id}/pools/{entity_id}/select")

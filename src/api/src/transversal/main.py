@@ -119,8 +119,9 @@ async def on_startup():
         ensure_targeting_ban_sfx,
         ensure_contest_complication_sfx,
         ensure_prevent_taken_out_sfx,
-        ensure_buy_hitch_sfx,
+        ensure_hitch_gain_complication_sfx,
         remove_legacy_contest_complication_sfx,
+        remove_legacy_buy_hitch_sfx,
     )
 
     _register_core_handlers(_get_em(), _get_raz())
@@ -133,8 +134,9 @@ async def on_startup():
     ensure_targeting_ban_sfx(repo)
     ensure_contest_complication_sfx(repo)
     ensure_prevent_taken_out_sfx(repo)
-    ensure_buy_hitch_sfx(repo)
+    ensure_hitch_gain_complication_sfx(repo)
     remove_legacy_contest_complication_sfx(repo)
+    remove_legacy_buy_hitch_sfx(repo)
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:
         engine.register(s)

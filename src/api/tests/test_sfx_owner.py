@@ -163,7 +163,7 @@ def test_ensure_sfx_owners_creates_buckets_and_table_reward():
         "take-complication",
         "prevent-taken-out",
     }
-    assert repo.owners["gm"].sfx_ids == ["buy-hitch"]
+    assert repo.owners["gm"].sfx_ids == ["hitch-gain-complication"]
     assert repo.owners["players"].sfx_ids == []
 
 
@@ -298,23 +298,25 @@ def test_ensure_prevent_taken_out_sfx_creates_once():
     assert len(repo.sfxs) == 1
 
 
-def test_ensure_buy_hitch_sfx_creates_once():
-    from transversal.services.sfx_owner import ensure_buy_hitch_sfx
+def test_ensure_hitch_gain_complication_sfx_creates_once():
+    from transversal.services.sfx_owner import ensure_hitch_gain_complication_sfx
 
     repo = SetupRepo()
-    ensure_buy_hitch_sfx(repo)
-    sfx = repo.sfxs["buy-hitch"]
+    ensure_hitch_gain_complication_sfx(repo)
+    sfx = repo.sfxs["hitch-gain-complication"]
     assert sfx.trigger == "manual"
+    assert sfx.menu_context == "hitch"
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "transfer_razmerit"
     assert sfx.effects[0].action == "earn"
     assert sfx.effects[0].result == "1"
     assert sfx.effects[1].type == "modify_trait"
-    assert sfx.effects[1].action == "cortex_gain"
+    assert sfx.effects[1].action == "gain_or_step_up"
     assert sfx.effects[1].negative is True
-    assert sfx.effects[1].result == "d6"
+    assert sfx.effects[1].result == "d4"
+    assert sfx.effects[1].context == {"steps": "{number_of_hitches}"}
     assert sfx.effects[1].target_scope == "traitset:ts-complications-a190"
-    ensure_buy_hitch_sfx(repo)
+    ensure_hitch_gain_complication_sfx(repo)
     assert len(repo.sfxs) == 1
 
 

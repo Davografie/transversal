@@ -35,7 +35,7 @@ def ensure_sfx_owners(repo) -> None:
             "take-complication",
             "prevent-taken-out",
         ],
-        "gm": ["buy-hitch"],
+        "gm": ["hitch-gain-complication"],
         "players": [],
     }
     for owner_id, sfx_ids in defaults.items():
@@ -194,22 +194,23 @@ def ensure_prevent_taken_out_sfx(repo) -> None:
     ))
 
 
-def ensure_buy_hitch_sfx(repo) -> None:
-    """Create the GM buy-hitch SFX. Idempotent.
+def ensure_hitch_gain_complication_sfx(repo) -> None:
+    """Create the GM hitch-menu SFX that turns bought hitches into a complication.
 
-    P3.3: when a player rolls a hitch, the GM may hand over 1 razmerit to
-    activate a complication. The roller earns 1 razmerit and a complication is
-    created (or stepped up) at d6, scoped to the complications trait set.
+    P3.3: the GM selects a player's hitches and picks this SFX from the ``hitch``
+    menu. The roller earns 1 razmerit and gains (or steps up) a complication at
+    d4 + ``{number_of_hitches}`` steps, scoped to the complications trait set.
     """
     from transversal.domain import Effect, EffectTiming, SFX
 
-    if repo.get_sfx("buy-hitch") is not None:
+    if repo.get_sfx("hitch-gain-complication") is not None:
         return
     repo.create_sfx(SFX(
-        id="buy-hitch",
-        name="Buy a Hitch",
-        description="Pay 1 razmerit to the roller and introduce a complication (d6) when they roll a hitch",
+        id="hitch-gain-complication",
+        name="Gain a complication",
+        description="Roller earns 1 razmerit and takes a complication stepped up by the bought hitches",
         trigger="manual",
+        menu_context="hitch",
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE,
@@ -221,14 +222,26 @@ def ensure_buy_hitch_sfx(repo) -> None:
             Effect(
                 timing=EffectTiming.IMMEDIATE,
                 type="modify_trait",
-                action="cortex_gain",
+                action="gain_or_step_up",
                 target="{choose_trait}",
                 target_scope="traitset:ts-complications-a190",
-                result="d6",
+                result="d4",
                 negative=True,
+                context={"steps": "{number_of_hitches}"},
             ),
         ],
     ))
+
+
+def remove_legacy_buy_hitch_sfx(repo) -> None:
+    """Delete the retired ``buy-hitch`` SFX (superseded by the hitch menu)."""
+    legacy_id = "buy-hitch"
+    if repo.get_sfx(legacy_id) is not None:
+        repo.delete_sfx(legacy_id)
+    owner = repo.get_sfx_owner("gm")
+    if owner is not None and legacy_id in (owner.sfx_ids or []):
+        owner.sfx_ids = [sid for sid in owner.sfx_ids if sid != legacy_id]
+        repo.update_sfx_owner(owner)
 
 
 def remove_legacy_contest_complication_sfx(repo) -> None:

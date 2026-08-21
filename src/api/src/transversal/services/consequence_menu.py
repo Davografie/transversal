@@ -129,3 +129,24 @@ def assemble_consequence_menu(
         ))
 
     return options
+
+
+def assemble_hitch_menu(repo) -> list[ConsequenceOption]:
+    """Return the GM hitch menu — SFX from the ``gm``/``table`` owner buckets
+    whose ``menu_context`` is ``hitch`` (no base or entity moves)."""
+    ids: list[str] = []
+    for owner_id in ("gm", "table"):
+        owner = repo.get_sfx_owner(owner_id)
+        if owner is not None:
+            ids.extend(owner.sfx_ids or [])
+
+    options: list[ConsequenceOption] = []
+    for sfx_id in dict.fromkeys(ids):
+        sfx = repo.get_sfx(sfx_id)
+        if sfx is None or sfx.menu_context != "hitch":
+            continue
+        options.append(ConsequenceOption(
+            id=f"sfx:{sfx.id}", label=sfx.name, side="gm",
+            effects=sfx.effects, source="sfx",
+        ))
+    return options

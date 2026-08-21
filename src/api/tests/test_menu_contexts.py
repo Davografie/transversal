@@ -8,7 +8,13 @@ from transversal.services.menu_contexts import (
 
 
 def test_menu_context_ids_declared():
-    assert set(MENU_CONTEXT_IDS) == {"test_success", "simplified_roll", "contest_win", "contest_give_in"}
+    assert set(MENU_CONTEXT_IDS) == {
+        "test_success", "simplified_roll", "contest_win", "contest_give_in", "hitch",
+    }
+
+
+def test_hitch_variables():
+    assert menu_context_variables("hitch") == ["number_of_hitches"]
 
 
 def test_contest_win_variables():

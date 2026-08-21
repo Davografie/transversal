@@ -19,6 +19,7 @@ MENU_CONTEXT_IDS: tuple[str, ...] = (
     "simplified_roll",  # simplified roll: tiered outcome (d4..d12)
     "contest_win",      # contest, winner side
     "contest_give_in",  # contest, loser who gave in
+    "hitch",            # GM buying a player's hitches
 )
 
 MENU_CONTEXT_VARIABLES: dict[str, list[str]] = {
@@ -26,6 +27,7 @@ MENU_CONTEXT_VARIABLES: dict[str, list[str]] = {
     "simplified_roll": ["effect_die"],
     "contest_win": ["contest_entity_opponent", "contest_projection_opponent", "effect_die"],
     "contest_give_in": ["contest_entity_opponent", "contest_projection_opponent", "effect_die"],
+    "hitch": ["number_of_hitches"],
 }
 
 # ── Auto-fire trigger variables ──────────────────────

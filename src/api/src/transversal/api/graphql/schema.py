@@ -496,6 +496,15 @@ class Query:
         ]
 
     @strawberry.field
+    def hitch_menu(self, info: strawberry.Info) -> list[ConsequenceOption]:
+        """Return the GM hitch menu — SFX from the gm/table owners whose
+        ``menu_context`` is ``hitch`` (no base or entity moves)."""
+        from transversal.services.consequence_menu import assemble_hitch_menu
+
+        repo = _em(info).repo
+        return [_consequence_option_to_gql(o) for o in assemble_hitch_menu(repo)]
+
+    @strawberry.field
     def incoming_messages(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[Message]:
         """Get messages addressed to this entity (player: only incoming; GM: all)."""
         repo = _em(info).repo
