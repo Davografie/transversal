@@ -100,6 +100,23 @@
         <button class="section-btn proj-add-btn" @click="createTransversalLinkLocal">+ Add</button>
       </div>
     </div>
+    <div v-if="form.type === 'LOCATION' || form.type === 'UNIVERSE'" class="zones-section">
+      <div class="gallery-header">
+        <h4>Zones</h4>
+      </div>
+      <div v-if="!zones.length" class="gallery-empty">No sub-locations yet.</div>
+      <div v-else class="zones-list">
+        <div v-for="z in zones" :key="z.id" class="zone-row">
+          <span class="zone-name">{{ z.name }}</span>
+        </div>
+      </div>
+      <div class="zones-add">
+        <input v-model="newZoneName" class="zone-input" placeholder="New sub-location name…" @keyup.enter="createZone" />
+        <button class="section-btn zone-add-btn" :disabled="!newZoneName.trim() || creatingZone" @click="createZone">
+          {{ creatingZone ? '…' : '+ Add' }}
+        </button>
+      </div>
+    </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
       <button class="section-btn" @click="openLoraConfig">🖼 LoRA Configuration</button>
       <button class="section-btn" @click="openLifePaths">📋 Life Paths <span v-if="lifePaths.length" class="section-count">{{ lifePaths.length }}</span></button>
@@ -123,6 +140,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
@@ -140,6 +158,7 @@ import DangerButton from '@/components/gm/DangerButton.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
+const { graphql } = useApi()
 
 // ── Composables: shared state with GmPanel ──────────
 const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, updateProjection, removeProjection } = useEntityCrud()
@@ -329,6 +348,64 @@ watch(() => [props.entityId, form.value?.type], ([id, type]) => {
   if (id && type === 'LOCATION') loadTransversalLinks()
 }, { immediate: true })
 
+// ── Zones (sub-locations) ───────────────────────────
+const zones = ref([])
+const newZoneName = ref('')
+const creatingZone = ref(false)
+
+async function loadZones() {
+  zones.value = []
+  if (!props.entityId) return
+  try {
+    if (form.value.type === 'LOCATION') {
+      const r = await fetch(`/api/v1/locations/${props.entityId}/navigate`)
+      if (r.ok) {
+        const nav = await r.json()
+        zones.value = (nav.children || []).map(c => ({ id: c._key || c.id, name: c.name }))
+      }
+    } else if (form.value.type === 'UNIVERSE') {
+      const r = await fetch('/api/v1/locations/tree')
+      if (r.ok) {
+        const tree = await r.json()
+        const uni = tree.find(n => n.id === props.entityId)
+        zones.value = (uni?.children || []).map(c => ({ id: c.id, name: c.name }))
+      }
+    }
+  } catch {}
+}
+
+async function createZone() {
+  const name = newZoneName.value.trim()
+  if (!name || creatingZone.value) return
+  creatingZone.value = true
+  try {
+    const data = await graphql(
+      `mutation($input: CreateEntityInput!) { createEntity(input: $input) { id } }`,
+      { input: { name, type: 'LOCATION', universe: form.value.current_universe, location: null, razmerit: 0 } },
+    )
+    const newId = data?.createEntity?.id
+    if (!newId) return
+    if (form.value.type === 'LOCATION') {
+      await fetch(`/api/v1/locations/${newId}/edges/${props.entityId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'super' }),
+      })
+    }
+    newZoneName.value = ''
+    await loadZones()
+    bus.emit('locations-changed')
+  } catch (e) {
+    console.error('[zones] create failed', e)
+  } finally {
+    creatingZone.value = false
+  }
+}
+
+watch(() => [props.entityId, form.value?.type], ([id, type]) => {
+  if (id && (type === 'LOCATION' || type === 'UNIVERSE')) loadZones()
+}, { immediate: true })
+
 // ── Imagen ──────────────────────────────────────────
 const localImagenJob = ref(null)
 let _jobPollTimer = null
@@ -491,4 +568,11 @@ defineExpose({ refresh: loadImages })
 .transversal-toggle.inapposite { background: rgba(139,92,246,0.18); color: #c4b5fd; }
 .transversal-toggle.consciousness { background: rgba(245,158,11,0.18); color: #fcd34d; }
 .transversal-add { display: flex; gap: 6px; margin-top: 8px; }
+.zones-section { margin-top: 12px; }
+.zones-list { display: flex; flex-direction: column; gap: 4px; }
+.zone-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02); }
+.zone-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zones-add { display: flex; gap: 6px; margin-top: 8px; }
+.zone-input { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
+.zone-add-btn { flex: 0 0 auto; padding: 6px 10px; }
 </style>

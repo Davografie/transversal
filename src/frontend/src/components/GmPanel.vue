@@ -74,6 +74,7 @@ const { graphql } = useApi()
 const panel = usePanel()
 const bus = usePanelBus()
 let offCanvasInspect = null
+let offLocationsChanged = null
 
 const props = defineProps({
   universe: { type: String, default: 'earth' },
@@ -299,10 +300,12 @@ watch([locationTree, () => props.currentLocationId], () => {
 onMounted(() => {
   fetchEntities(); fetchLocationTree(); startJobPolling()
   offCanvasInspect = bus.on('canvas:inspect', (id) => toggleEntity({ id }))
+  offLocationsChanged = bus.on('locations-changed', () => { fetchLocationTree(); fetchEntities() })
 })
 onUnmounted(() => {
   stopJobPolling()
   if (offCanvasInspect) offCanvasInspect()
+  if (offLocationsChanged) offLocationsChanged()
 })
 </script>
 
