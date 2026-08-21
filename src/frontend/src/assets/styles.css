@@ -329,6 +329,12 @@ input:focus, select:focus {
   font-size: 12px;
   color: var(--danger);
 }
+.quality-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin-top: 6px;
+}
 .new-char-toggle {
   font-size: 12px;
   padding: 5px 10px;

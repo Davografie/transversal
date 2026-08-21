@@ -683,7 +683,8 @@ class Entity:
                 if img.image_type == ImageType.ANIMATED:
                     return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
                 else:
-                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
+                    # Sheet portraits render at ~40px — serve the small variant.
+                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Small.{img.extension}"
         # Fall back to background image
         return self.background_image()
 

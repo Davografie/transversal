@@ -101,6 +101,16 @@
           </div>
         </div>
 
+        <div class="settings-section">
+          <label class="settings-label">Media quality</label>
+          <div class="mode-toggle">
+            <button :class="{ active: mediaQuality === 'auto' }" @click="setMediaQuality('auto')">Auto</button>
+            <button :class="{ active: mediaQuality === 'low' }" @click="setMediaQuality('low')">Low</button>
+            <button :class="{ active: mediaQuality === 'high' }" @click="setMediaQuality('high')">High</button>
+          </div>
+          <p class="quality-hint">Low uses smaller images (less data). Auto follows your connection.</p>
+        </div>
+
         <p v-if="needsCharacterPick" class="switch-error">Pick one of your characters to play.</p>
 
         <div v-if="loadingPlayerEntities" class="settings-section">
@@ -210,7 +220,7 @@
     :location-id="currentLocationId"
     :location-name="locationName"
     :universe="universe"
-    :background-image="locationBgImage"
+    :background-image="displayBgImage"
     :entity-id="entityId"
     v-model:edit-zones="editZones"
     :overlay="locationOverlay"
@@ -283,10 +293,12 @@ import { useToasts } from './composables/useToasts.js'
 import { useApi } from './composables/useApi.js'
 import { usePanelBus } from './composables/usePanelBus.js'
 import { useEntityCrud } from './composables/useEntityCrud.js'
+import { useMediaQuality } from './composables/useMediaQuality.js'
 import ToastBar from './components/ToastBar.vue'
 
 const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools } = useApi()
 const { fetchEntities: prefetchEntities } = useEntityCrud()
+const { quality: mediaQuality, setQuality: setMediaQuality, qualityUrl } = useMediaQuality()
 const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
@@ -327,6 +339,8 @@ watch(currentLocationId, (v) => { if (v) localStorage.setItem('currentLocationId
 const fullCanvas = ref(null) // { mode: 'location'|'faction', entityId } or null
 const locationName = ref('Krasnoyarsk-45')
 const locationBgImage = ref('')
+// Displayed background: quality preference applied reactively so the toggle takes effect immediately.
+const displayBgImage = computed(() => qualityUrl(locationBgImage.value))
 const locationOverlay = ref(null)
 
 // Fetch entity location on mount so refreshes show the real location
