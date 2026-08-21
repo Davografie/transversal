@@ -93,6 +93,17 @@ def test_select_resets_previous_roles(client):
     assert roles == [None, "total", "total"]
 
 
+def test_mark_hitches_bought_flags_dice(client):
+    _save(client, "loc-1", "e1", [_die("d8"), _die("d6"), _die("d8")])
+    client.post("/api/v1/locations/loc-1/pools/e1/cortex-roll")
+    r = client.post("/api/v1/locations/loc-1/pools/e1/hitches/mark-bought", json={"indices": [0, 2]})
+    assert r.status_code == 200, r.text
+    dice = r.json()["dice"]
+    assert dice[0]["bought"] is True
+    assert dice[1]["bought"] is False
+    assert dice[2]["bought"] is True
+
+
 def test_list_all_pools_is_global(client):
     _save(client, "loc-1", "a", [_die("d8")])
     _save(client, "loc-2", "b", [_die("d6")])
