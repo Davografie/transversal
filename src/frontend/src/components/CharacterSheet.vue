@@ -153,7 +153,7 @@
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
           <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">{{ activeSetName }}</h4>
             <template v-for="t in currentTraits" :key="t.id">
-              <div v-if="isKnown(t)" class="trait-row" :class="{ ego: t.ego, 'in-pool': isInPool(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
+              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
@@ -1928,7 +1928,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-row:hover {
   background: rgba(255,255,255,0.04);
 }
-.trait-row.ego {
+.trait-row.morph {
   background: rgba(64, 136, 212, 0.08);
 }
 
