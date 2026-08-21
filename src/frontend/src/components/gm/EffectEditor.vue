@@ -75,6 +75,21 @@
             </div>
           </template>
 
+          <template v-else-if="isEntityField(f)">
+            <div class="ee-mode-row">
+              <select v-model="newEffect.entityMode">
+                <option value="literal">Pick specific</option>
+                <option value="choose">Choose at runtime</option>
+                <option value="random">Random</option>
+              </select>
+            </div>
+            <input v-if="newEffect.entityMode === 'literal'" v-model="newEffect.fields[f.name]" type="text" placeholder="self" />
+            <div v-else class="ee-field">
+              <label>Entity scope</label>
+              <ScopeBuilder v-model="newEffect.entityScope" :universe="universe" />
+            </div>
+          </template>
+
           <template v-else>
             <template v-if="isResultDieField(f)">
               <div class="ee-result-mode">
@@ -150,7 +165,7 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', entityMode: 'literal', entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
 
@@ -186,10 +201,20 @@ function isScopedTargetField(f) {
   return f.name === 'target' && !!selectedAction.value?.targetKind
 }
 
+function isEntityField(f) {
+  return f.name === 'entity'
+}
+
 function detectTargetMode(eff, meta) {
   const kind = meta?.targetKind
   if (kind && eff?.target === `{choose_${kind}}`) return 'choose'
   if (kind && eff?.target === `{random:${kind}}`) return 'random'
+  return 'literal'
+}
+
+function detectEntityMode(eff) {
+  if (eff?.entity === '{choose_entity}') return 'choose'
+  if (eff?.entity === '{random:entity}') return 'random'
   return 'literal'
 }
 
@@ -200,6 +225,8 @@ function onActionChange() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.entityMode = 'literal'
+  newEffect.entityScope = ''
   newEffect.negative = false
   resultMode.value = 'die'
   const meta = selectedAction.value
@@ -237,14 +264,19 @@ function buildEffect(meta) {
   let target = meta.implicitTarget || newEffect.fields.target || ''
   if (kind && mode === 'choose') target = `{choose_${kind}}`
   if (kind && mode === 'random') target = `{random:${kind}}`
+  const entityMode = newEffect.entityMode || 'literal'
+  let entity = newEffect.fields.entity || ''
+  if (entityMode === 'choose') entity = '{choose_entity}'
+  if (entityMode === 'random') entity = '{random:entity}'
   return {
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
     action: meta.effectAction,
     target,
-    entity: newEffect.fields.entity || '',
+    entity,
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
+    entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context: { ...cleanContext(newEffect.context), ...parseContext(newEffect.extraContext) },
     duration: (meta.supportsDuration && (newEffect.duration?.timers || []).length)
@@ -287,13 +319,15 @@ function editEffect(i) {
   newEffect.fields = {}
   newEffect.targetMode = detectTargetMode(eff, meta)
   newEffect.scope = eff.targetScope || ''
+  newEffect.entityMode = detectEntityMode(eff)
+  newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
   resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
   }
   if (eff.result && eff.result !== (meta?.implicitResult || '')) newEffect.fields.result = eff.result
-  if (eff.entity) newEffect.fields.entity = eff.entity
+  if (newEffect.entityMode === 'literal' && eff.entity) newEffect.fields.entity = eff.entity
   const ctx = eff.context || {}
   const known = new Set((meta?.contextFields || []).map(f => f.name))
   const knownCtx = {}
@@ -323,6 +357,8 @@ function closeEditor() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.entityMode = 'literal'
+  newEffect.entityScope = ''
   newEffect.negative = false
   resultMode.value = 'die'
 }

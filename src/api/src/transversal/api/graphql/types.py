@@ -177,6 +177,7 @@ class Effect:
     entity: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
+    entity_scope: Optional[str] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDuration] = None
@@ -191,6 +192,7 @@ class EffectInput:
     entity: str = ""
     result: Optional[str] = None
     target_scope: Optional[str] = None
+    entity_scope: Optional[str] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDurationInput] = None

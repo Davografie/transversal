@@ -658,6 +658,7 @@ class Effect(BaseModel):
     entity: str = ""  # explicit subject entity; "" or "self" = the applyEffects entity
     result: Optional[str] = None
     target_scope: Optional[str] = None  # narrowing hint for runtime target choice
+    entity_scope: Optional[str] = None  # narrowing hint for runtime entity choice
     negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)
     context: dict = Field(default_factory=dict)  # e.g. relationship description
     duration: Optional["EffectDuration"] = None  # when set, schedules the inverse effect on expiry

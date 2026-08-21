@@ -473,10 +473,10 @@ def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo)
         mode, kind = parsed
         resolved_kind = kind or "entity"
         if mode == "random":
-            cid = _random_candidate(resolved_kind, effect.target_scope, entity, repo)
+            cid = _random_candidate(resolved_kind, effect.entity_scope, entity, repo)
             return repo.get_entity(cid) if cid else None
         result.pending_choices.append(
-            PendingChoice(effect=effect, kind=resolved_kind, scope=effect.target_scope, field="entity")
+            PendingChoice(effect=effect, kind=resolved_kind, scope=effect.entity_scope, field="entity")
         )
         return None
     subject_entity = repo.get_entity(subject)

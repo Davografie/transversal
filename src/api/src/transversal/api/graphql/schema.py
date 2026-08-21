@@ -174,7 +174,8 @@ def _duration_input_to_domain(d) -> Optional[DomainEffectDuration]:
 def _effect_to_gql(e: DomainEffect) -> GqlEffect:
     return GqlEffect(
         timing=e.timing, type=e.type, action=e.action,
-        target=e.target, entity=e.entity, result=e.result, target_scope=e.target_scope,
+        target=e.target, entity=e.entity, result=e.result,
+        target_scope=e.target_scope, entity_scope=e.entity_scope,
         negative=e.negative,
         context=e.context,
         duration=_duration_to_gql(e.duration),
@@ -217,7 +218,8 @@ def _roll_table_to_gql(t: DomainRollTable) -> RollTable:
 def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
     return DomainEffect(
         timing=e.timing, type=e.type, action=e.action,
-        target=e.target, entity=e.entity, result=e.result, target_scope=e.target_scope,
+        target=e.target, entity=e.entity, result=e.result,
+        target_scope=e.target_scope, entity_scope=e.entity_scope,
         negative=e.negative,
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),

@@ -691,3 +691,12 @@ def test_choose_entity_pending_choice_marks_field():
     assert len(result.pending_choices) == 1
     assert result.pending_choices[0].kind == "entity"
     assert result.pending_choices[0].field == "entity"
+
+
+def test_choose_entity_pending_choice_uses_entity_scope():
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit", action="earn",
+                    target="self", entity="{choose_entity}", entity_scope="subtree:loc-x", result="1")
+    result = apply_effects(entity, [effect], repo)
+    assert result.pending_choices[0].scope == "subtree:loc-x"
