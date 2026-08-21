@@ -11,15 +11,15 @@ export function useApi() {
     error.value = null
     try {
       const payload = JSON.stringify({ query, variables })
-      console.log('[API] graphql', query.substring(0, 80), variables)
+      console.log('[API] graphql', query.substring(0, 80), JSON.stringify(variables))
       const r = await fetch(`${API_BASE}/graphql`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload
       })
       const data = await r.json()
-      console.log('[API] graphql response', { ok: r.ok, hasData: !!data.data, hasErrors: !!data.errors })
-      if (data.errors) { console.error('[API] graphql errors', data.errors); throw new Error(data.errors[0].message) }
+      console.log('[API] graphql response', JSON.stringify({ ok: r.ok, hasData: !!data.data, hasErrors: !!data.errors }))
+      if (data.errors) { console.error('[API] graphql errors', JSON.stringify(data.errors)); throw new Error(data.errors[0].message) }
       return data.data
     } catch (e) {
       console.error('[API] graphql exception', e.message)

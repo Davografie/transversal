@@ -47,15 +47,15 @@ const display = computed(() => {
   pointer-events: none;  /* let parent handle drag/click */
 }
 .die-shape {
-  fill: rgba(10,10,20,0.75);
-  stroke: rgba(255,255,255,0.3);
+  fill: #14142a;
+  stroke: #2a2a4a;
   stroke-width: 1.5;
 }
-.die-icon.die-d4 .die-shape  { fill: rgba(232,136,48,0.7); stroke: #e88830; }
-.die-icon.die-d6 .die-shape  { fill: rgba(160,160,160,0.6); stroke: #e0e0e0; }
-.die-icon.die-d8 .die-shape  { fill: rgba(212,64,64,0.65); stroke: #d44040; }
-.die-icon.die-d10 .die-shape { fill: rgba(64,136,212,0.65); stroke: #4088d4; }
-.die-icon.die-d12 .die-shape { fill: rgba(64,184,96,0.7); stroke: #40b860; }
+.die-icon.die-d4 .die-shape  { fill: var(--die-d4); stroke: var(--die-d4); }
+.die-icon.die-d6 .die-shape  { fill: var(--die-d6); stroke: var(--die-d6); }
+.die-icon.die-d8 .die-shape  { fill: var(--die-d8); stroke: var(--die-d8); }
+.die-icon.die-d10 .die-shape { fill: var(--die-d10); stroke: var(--die-d10); }
+.die-icon.die-d12 .die-shape { fill: var(--die-d12); stroke: var(--die-d12); }
 
 .die-icon.hitch .die-shape {
   fill: rgba(212,64,64,0.4);

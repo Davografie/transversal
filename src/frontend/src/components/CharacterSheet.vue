@@ -7,47 +7,63 @@
       <div class="header">
         <div class="header-top">
           <h2>{{ activeProjection?.name || entity.name }}</h2>
+          <div class="razmerit-anchor">
+            <button class="razmerit-chip" :title="showRazmeritWidget ? 'Close' : 'Adjust razmerit'" @click.stop="showRazmeritWidget = !showRazmeritWidget">
+              ⚡{{ entity.razmerit }}
+            </button>
+            <div v-if="showRazmeritWidget" class="razmerit-popover" @click.stop>
+              <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(-1)">−</button>
+              <input
+                v-if="editingRazmerit"
+                ref="razmeritInput"
+                v-model="razmeritInputValue"
+                class="razmerit-input"
+                type="number"
+                inputmode="numeric"
+                @keyup.enter="commitRazmerit"
+                @keyup.escape="editingRazmerit = false"
+                @blur="commitRazmerit"
+              />
+              <span
+                v-else
+                class="razmerit-value"
+                :class="{ editable: !overrideEntityId }"
+                @click="!overrideEntityId && startRazmeritEdit()"
+              >{{ entity.razmerit }}</span>
+              <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(1)">+</button>
+            </div>
+          </div>
           <video v-if="sheetPortrait && isSheetVideo" :src="sheetPortrait" class="sheet-portrait-video" autoplay loop muted playsinline />
           <img v-else-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" />
+        </div>
+        <div class="header-controls">
           <div v-if="isForeignSheet" class="rel-widget">
             <template v-if="relationship">
               <span class="rel-desc" @click.stop="showRelEditor = true" :title="'Click to edit'">{{ relationship.description || 'associated' }}</span>
               <button class="rel-btn rel-del" @click.stop="removeRelationship" title="Remove relationship">✕</button>
               <button class="rel-btn rel-send" @click.stop="openBlueBookLetter" title="Send letter">✉</button>
             </template>
-            <template v-else-if="showRelTypePicker">
-              <div class="rel-type-picker" @click.stop>
-                <select v-model="newRelType" class="rel-type-select">
-                  <option v-for="rt in relationTypes" :key="rt.id" :value="rt.id">{{ rt.name }}</option>
-                </select>
-                <select v-model="newRelRating" class="rel-rating-select">
-                  <option v-for="d in ['d4','d6','d8','d10','d12']" :key="d" :value="d">{{ d }}</option>
-                </select>
-                <input ref="relInput" v-model="relDescription" placeholder="Describe…" @keyup.enter="saveRatedRelationship" @keyup.escape="showRelTypePicker = false" />
-                <button class="rel-btn rel-save" @click="saveRatedRelationship">✓</button>
-                <button class="rel-btn rel-cancel" @click="showRelTypePicker = false">✕</button>
-              </div>
-            </template>
-            <button v-else class="rel-btn rel-add" @click.stop="showRelTypePicker = true" title="Add rated relationship">+</button>
             <div v-if="showRelEditor" class="rel-editor" @click.stop>
               <input ref="relInput" v-model="relDescription" placeholder="Describe relationship…" @keyup.enter="saveRelationship" @keyup.escape="showRelEditor = false" />
               <button class="rel-btn rel-save" @click="saveRelationship">✓</button>
               <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
             </div>
           </div>
-          <div v-if="!gmMode" class="sheet-pills">
-            <div v-if="ownsCharacter && !overrideEntityId">
-              <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="activeSheetView = 'traits'">🎲</button>
+          <div class="sheet-pills">
+            <div v-if="gmMode || (ownsCharacter && !overrideEntityId)">
+              <button :class="['pill', { active: activeSheetView === 'profile' }]" @click="activeSheetView = 'profile'">👤</button>
+              <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="goToTraitSets">🎲</button>
+              <button v-if="gmMode" :class="['pill', { active: showAllTraits }]" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
               <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
               <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
             </div>
-            <button class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
+            <button v-if="!gmMode && !isForeignSheet" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
+            <button v-if="isForeignSheet && !relationship" class="sheet-settings-btn" @click.stop="createImmediateRelationship()" title="Add relationship">+</button>
           </div>
         </div>
         <div v-if="gmMode" class="meta">
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
-          <button type="button" class="all-traits-toggle" :class="{ active: showAllTraits }" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
         </div>
       </div>
       <BlueBook
@@ -68,28 +84,92 @@
         @updated="fetchEntity"
       />
       <template v-else>
-        <div class="razmerit">
-          <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(-1)">−</button>
-          <span class="razmerit-value">{{ entity.razmerit }}</span>
-          razmerit
-          <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(1)">+</button>
-        </div>
         <div class="sheet-scroll">
-        <div v-if="traitSets.length && !showAddTrait" class="trait-sets">
-        <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
-          <h4 @click="toggleSet(ts.name)" class="set-header">
-            <span class="set-caret">{{ expandedSets.has(ts.name) ? '▾' : '▸' }}</span>
-            {{ ts.name }}
-            <span v-if="ts.limit" class="limit-dots">
-              <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
-            </span>
-          </h4>
-          <div v-show="expandedSets.has(ts.name)" class="set-body">
-            <template v-for="t in ts.traits" :key="t.name">
-              <div v-if="isKnown(t)" class="trait-row" :class="{ ego: t.ego, 'in-pool': isInPool(t), 'limit-reached': inPoolCount(ts) >= ts.limit && !isInPool(t) }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
+        <!-- Full-panel trait edit -->
+        <div v-if="editingTrait && !showAddTrait" class="trait-edit-panel">
+          <button class="set-back" @click="cancelEdit">← Back</button>
+          <h4 class="edit-title">{{ displayName(editingTrait.name) }}</h4>
+          <div class="edit-rating-type">
+            <button
+              v-for="rt in RATING_TYPES"
+              :key="rt.id"
+              type="button"
+              class="rating-type-btn"
+              :class="{ active: editRatingType === rt.id }"
+              @click="setRatingType(rt.id)"
+            >{{ rt.label }}</button>
+          </div>
+          <div class="edit-dice">
+            <button v-for="(d, i) in editDice" :key="i" class="die-chip" @click="pickIdx = i; showDiePicker = true">{{ d }}</button>
+            <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
+          </div>
+          <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
+          <div v-if="editingTrait.possibleSfxIds?.length" class="edit-sfx">
+            <span class="edit-sfx-label">SFX</span>
+            <button v-for="sfxId in editingTrait.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
+              {{ sfxId.replace('sfx-', '') }}
+            </button>
+          </div>
+          <input v-if="editingTrait.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" />
+          <button type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
+          <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
+            {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
+          </button>
+          <div v-if="!editIsEgo" class="edit-projection">
+            <span class="edit-projection-label">on</span>
+            <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
+            <div v-if="showProjectionPicker" class="projection-dropdown">
+              <button
+                v-for="p in editProjectionOptions"
+                :key="p.id"
+                type="button"
+                class="projection-option"
+                :class="{ selected: p.id === editProjectionId }"
+                @click="selectProjection(p)"
+              >{{ p.name || universeDisplay(p.originUniverse) }}</button>
+            </div>
+          </div>
+          <div class="edit-actions">
+            <button class="edit-done-btn" @click="cancelEdit">Done</button>
+            <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === editingTrait.id }" @click="onDeleteClick(editingTrait)">
+              {{ deleteCountdown > 0 && deletingTraitId === editingTrait.id ? `Cancel (${deleteCountdown})` : 'Delete' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Traits tab: trait-set list -->
+        <div v-else-if="activeSheetView === 'traits' && !activeSetName && traitSets.length && !showAddTrait" class="trait-sets">
+          <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
+            <h4 @click="openSet(ts.name)" class="set-header">
+              <span class="set-name">{{ ts.name }}</span>
+              <span v-if="ts.limit" class="limit-dots">
+                <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
+              </span>
+            </h4>
+          </div>
+        </div>
+
+        <!-- Set detail (traits) or profile: flat trait list -->
+        <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
+          <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">{{ activeSetName }}</h4>
+            <template v-for="t in currentTraits" :key="t.id">
+              <div v-if="isKnown(t)" class="trait-row" :class="{ ego: t.ego, 'in-pool': isInPool(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
+                  <div v-if="t.sfxIds?.length" class="sfx-cards">
+                    <div
+                      v-for="sfxId in t.sfxIds"
+                      :key="sfxId"
+                      class="sfx-card"
+                      :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
+                      :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
+                      @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
+                    >
+                      <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
+                      <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
+                    </div>
+                  </div>
                 </div>
                 <div class="trait-right">
                   <div v-if="traitDiceGroups(t).length" class="trait-die-groups">
@@ -104,16 +184,6 @@
                     </div>
                   </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
-                  <span v-if="t.polarity" class="polarity-badge" :class="'polarity-' + t.polarity.toLowerCase()">{{ t.polarity === 'NEGATIVE' ? '☠' : '⏳' }}</span>
-                  <button
-                    v-for="sfxId in t.sfxIds"
-                    :key="sfxId"
-                    class="sfx-btn"
-                    :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
-                    :disabled="sfxUsed(sfxId) && !sfxActive(sfxId)"
-                    @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
-                    :title="sfxActive(sfxId) ? `Deactivate ${sfxId}` : `Activate ${sfxId}`"
-                  >{{ sfxId.replace('sfx-', '') }}</button>
                   <button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.teachable"
                     class="transfer-btn teach-btn" @click.stop="showTeachPicker(t)"
                     title="Teach this trait">🎓</button>
@@ -133,47 +203,9 @@
                   <span class="trait-die unknown-die">?</span>
                 </div>
               </div>
-              <!-- Inline trait edit panel -->
-              <div v-if="editingTraitId === t.id" class="trait-edit" @click.stop>
-                <div class="edit-dice">
-                  <button v-for="(d, i) in editDice" :key="i" class="die-chip" @click="pickIdx = i; showDiePicker = true">{{ d }}</button>
-                  <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
-                </div>
-                <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
-                <div v-if="t.possibleSfxIds?.length" class="edit-sfx">
-                  <span class="edit-sfx-label">SFX</span>
-                  <button v-for="sfxId in t.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
-                    {{ sfxId.replace('sfx-', '') }}
-                  </button>
-                </div>
-                <input v-if="t.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" />
-                <button type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
-                <div v-if="!editIsEgo" class="edit-projection">
-                  <span class="edit-projection-label">on</span>
-                  <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
-                  <div v-if="showProjectionPicker" class="projection-dropdown">
-                    <button
-                      v-for="p in editProjectionOptions"
-                      :key="p.id"
-                      type="button"
-                      class="projection-option"
-                      :class="{ selected: p.id === editProjectionId }"
-                      @click="selectProjection(p)"
-                    >{{ p.name || universeDisplay(p.originUniverse) }}</button>
-                  </div>
-                </div>
-                <div class="edit-actions">
-                  <button class="edit-done-btn" @click="cancelEdit">Done</button>
-                  <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === t.id }" @click="onDeleteClick(t)">
-                    {{ deleteCountdown > 0 && deletingTraitId === t.id ? `Cancel (${deleteCountdown})` : 'Delete' }}
-                  </button>
-                </div>
-              </div>
             </template>
-            </div> <!-- .set-body -->
-          </div>
-        </div>
-      <div v-else-if="!showAddTrait" class="empty">No traits configured</div>
+        </div> <!-- .trait-list -->
+      <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
       <button v-if="!overrideEntityId && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
       <!-- 2-phase trait picker -->
       <div v-if="showAddTrait" class="trait-picker">
@@ -257,7 +289,9 @@ function groupTraitSettings(settings) {
 
 function recomputeTraitSets() {
   const src = showAllTraits.value ? allTraitSettings.value : effectiveSettings.value
-  traitSets.value = groupTraitSettings(src)
+  const settings = src || []
+  profileTraits.value = settings.filter(t => t.ratingType === 'EMPTY')
+  traitSets.value = groupTraitSettings(settings.filter(t => t.ratingType !== 'EMPTY'))
 }
 
 // ── Relationship widget (foreign sheets only) ──────
@@ -267,21 +301,8 @@ const relDescription = ref('')
 const relInput = ref(null)
 const blueBookRef = ref(null)
 
-// Rated relationship creation
-const showRelTypePicker = ref(false)
-const newRelType = ref('trait-relation-trust')
-const newRelRating = ref('d6')
-const relationTypes = [
-  { id: 'trait-relation-trust', name: 'Trust' },
-  { id: 'trait-relation-debt', name: 'Debt' },
-  { id: 'trait-relation-rivalry', name: 'Rivalry' },
-  { id: 'trait-relation-loyalty', name: 'Loyalty' },
-  { id: 'trait-relation-fear', name: 'Fear' },
-  { id: 'trait-relation-love', name: 'Love' },
-  { id: 'trait-relation-duty', name: 'Duty' },
-]
 
-const activeSheetView = ref('traits')  // 'traits' | 'lifepath' | 'bluebook'
+const activeSheetView = ref('traits')  // 'traits' | 'profile' | 'lifepath' | 'bluebook'
 watch(activeSheetView, (v) => emit('sheetViewChange', v))
 
 const isForeignSheet = computed(() =>
@@ -301,31 +322,48 @@ const locationName = ref('')
 const universeName = ref('')
 const universeNames = ref({})  // universe key/id → display name
 
-// Accordion state — user controls which sets are expanded
-const expandedSets = ref(new Set(JSON.parse(localStorage.getItem('expandedSets') || '[]')))
+// Trait-set navigation — at most one set drilled into at a time.
+const activeSetName = ref(null)
+// Traits with an EMPTY rating type, shown flat on the profile tab.
+const profileTraits = ref([])
 
-function toggleSet(name) {
-  const s = new Set(expandedSets.value)
-  if (s.has(name)) {
-    s.delete(name)  // close if already open
-  } else {
-    s.clear()
-    s.add(name)     // open only this one
-  }
-  expandedSets.value = s
-  localStorage.setItem('expandedSets', JSON.stringify([...s]))
+function openSet(name) {
+  activeSetName.value = name
 }
 
-// Collapse every trait set when the sheet is hidden, so it re-opens clean.
+function closeSet() {
+  activeSetName.value = null
+}
+
+function goToTraitSets() {
+  activeSheetView.value = 'traits'
+  cancelEdit()
+  activeSetName.value = null
+}
+
+// Collapse the drilled-in set when the sheet is hidden, so it re-opens clean.
 watch(() => props.visible, (v) => {
-  if (!v && expandedSets.value.size) {
-    expandedSets.value = new Set()
-    localStorage.setItem('expandedSets', '[]')
-  }
+  if (!v && activeSetName.value) activeSetName.value = null
+})
+
+const currentSet = computed(() => {
+  if (!activeSetName.value) return null
+  return traitSets.value.find(ts => ts.name === activeSetName.value) || null
+})
+
+const currentTraits = computed(() => {
+  if (activeSheetView.value === 'profile') return profileTraits.value
+  return currentSet.value?.traits || []
+})
+
+const currentSetReachedLimit = computed(() => {
+  if (!currentSet.value || !currentSet.value.limit) return false
+  return currentSet.value.traits.filter(t => isInPool(t)).length >= currentSet.value.limit
 })
 
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})
+const sfxCatalog = ref({})  // sfxId → { name, description }
 const SFX_PHASES = {
   'sfx-hinder': ['adding'],
   'sfx-spray-n-pray': ['adding'],
@@ -336,9 +374,21 @@ const poolSources = ref([])
 // { tsId: dieType } — cleared when the die is removed from the pool
 const spentResources = ref({})
 
-// Inline trait editing
+// Trait editing (full-panel view)
 const editingTraitId = ref(null)
+
+const editingTrait = computed(() => {
+  if (!editingTraitId.value) return null
+  for (const ts of traitSets.value) {
+    const t = ts.traits.find(t => t.id === editingTraitId.value)
+    if (t) return t
+  }
+  return profileTraits.value.find(t => t.id === editingTraitId.value) || null
+})
+
 const editDice = ref([])
+const editRatingType = ref('STATIC')
+const editPolarity = ref(null)
 const editStatement = ref('')
 const showDiePicker = ref(false)
 const pickIdx = ref(0)
@@ -347,6 +397,13 @@ const editSfxIds = ref([])
 const editIsEgo = ref(true)
 const editProjectionId = ref(null)
 const showProjectionPicker = ref(false)
+
+const RATING_TYPES = [
+  { id: 'STATIC', label: 'Static' },
+  { id: 'RESOURCE', label: 'Resource' },
+  { id: 'CHALLENGE', label: 'Challenge' },
+  { id: 'EMPTY', label: 'Empty' },
+]
 
 const editProjectionOptions = computed(() => entity.value?.projections || [])
 const editProjectionName = computed(() => {
@@ -364,9 +421,10 @@ const selectedTraitSet = ref(null)
 
 const filteredTraits = computed(() => {
   if (!selectedTraitSet.value) return []
-  const assigned = new Set(
-    traitSets.value.flatMap(ts => ts.traits.map(t => t.traitId || t.id))
-  )
+  const assigned = new Set([
+    ...traitSets.value.flatMap(ts => ts.traits.map(t => t.traitId || t.id)),
+    ...profileTraits.value.map(t => t.traitId || t.id),
+  ])
   return availableTraits.value.filter(t =>
     t.traitsetId === selectedTraitSet.value.id && !assigned.has(t.id)
   )
@@ -432,7 +490,7 @@ async function addTrait(trait) {
 async function onTraitClick(t) {
   if (props.phase !== 'adding') return
 
-  let dieType = (t.dieType || 'd6').toLowerCase()
+  let dieType = (t.dice && t.dice.length ? t.dice[0] : '').toLowerCase()
 
   if (t.ratingType === 'RESOURCE') {
     const dice = t.dice || []
@@ -462,6 +520,7 @@ async function onTraitClick(t) {
     return
   }
 
+  if (!dieType) return  // no die rating — nothing to add
   emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id })
 }
 
@@ -486,7 +545,7 @@ function traitDiceGroups(t) {
   // staircase (e.g. 3d4 + 2d6 → [['d4','d4','d4'], ['d6','d6']]).
   // Resources/empty keep their text form (resources — see P2.16).
   if (t.ratingType === 'RESOURCE' || t.ratingType === 'EMPTY') return []
-  const dice = t.dice && t.dice.length ? t.dice : (t.dieType ? [t.dieType] : [])
+  const dice = t.dice || []
   const groups = []
   const byType = new Map()
   for (const d of dice) {
@@ -532,21 +591,13 @@ function setPoolSources(sources) {
   // sources is now [{ die, label, tsId }, ...] — track by tsId
   poolSources.value = sources.map(s => s.tsId).filter(Boolean)
 
-  // Auto-expand next set when current hits limit
+  // When the current set fills to its limit, return to the trait-set list.
   const sets = traitSets.value
-  for (let i = 0; i < sets.length; i++) {
-    if (expandedSets.value.has(sets[i].name)) {
-      const count = sets[i].traits.filter(t => poolSources.value.includes(t.id)).length
-      console.log('setPoolSources check:', { set: sets[i].name, count, limit: sets[i].limit, willHit: count >= sets[i].limit })
-      if (count >= sets[i].limit) {
-        const next = sets[i + 1]
-        if (next) {
-          console.log('auto-expanding:', next.name)
-          expandedSets.value = new Set([next.name])
-          localStorage.setItem('expandedSets', JSON.stringify([next.name]))
-        }
-      }
-      break
+  const idx = sets.findIndex(s => s.name === activeSetName.value)
+  if (idx !== -1) {
+    const count = sets[idx].traits.filter(t => poolSources.value.includes(t.id)).length
+    if (sets[idx].limit && count >= sets[idx].limit) {
+      activeSetName.value = null
     }
   }
 
@@ -587,6 +638,30 @@ function sfxUsed(sfxId) {
   if (sfxActive(sfxId)) return true
   if (sfxId === 'sfx-spray-n-pray' && !poolSources.value.includes('shooting')) return true
   return false
+}
+
+function sfxName(sfxId) {
+  return sfxCatalog.value[sfxId]?.name || sfxId.replace(/^sfx-/, '').replace(/-/g, ' ')
+}
+
+function sfxDescription(sfxId) {
+  return sfxCatalog.value[sfxId]?.description || ''
+}
+
+async function fetchSfxCatalog() {
+  try {
+    const r = await fetch('/api/v1/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: `query { sfxs { id name description } }` }),
+    })
+    const json = await r.json()
+    const map = {}
+    for (const s of json?.data?.sfxs || []) map[s.id] = s
+    sfxCatalog.value = map
+  } catch (e) {
+    console.error('fetchSfxCatalog', e)
+  }
 }
 
 function resetSfxCounts() {
@@ -761,7 +836,9 @@ function startEdit(t) {
     deleteTrait({ id: targetId })
   }
   editingTraitId.value = t.id
-  editDice.value = (t.dice && t.dice.length ? [...t.dice] : [t.dieType || 'd6']).map(d => d.toLowerCase())
+  editDice.value = (t.dice || []).map(d => d.toLowerCase())
+  editRatingType.value = t.ratingType || 'STATIC'
+  editPolarity.value = t.polarity || null
   editStatement.value = t.statement || ''
   editSfxIds.value = [...(t.sfxIds || [])]
   const isMorph = t.fromType === 'projection' || t.ego === false
@@ -809,18 +886,48 @@ function onDeleteClick(t) {
   }, 1000)
 }
 
+const showRazmeritWidget = ref(false)
+const editingRazmerit = ref(false)
+const razmeritInputValue = ref('')
+const razmeritInput = ref(null)
+
+function startRazmeritEdit() {
+  editingRazmerit.value = true
+  razmeritInputValue.value = String(entity.value?.razmerit ?? 0)
+  nextTick(() => razmeritInput.value?.focus())
+}
+
+async function commitRazmerit() {
+  if (!editingRazmerit.value) return
+  editingRazmerit.value = false
+  const val = parseInt(razmeritInputValue.value, 10)
+  if (Number.isNaN(val)) return
+  const resp = await fetch('/api/v1/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: 'mutation($id: ID!, $razmerit: Int) { updateEntity(input: { id: $id, razmerit: $razmerit }) { id razmerit } }',
+      variables: { id: props.entityId, razmerit: val },
+    }),
+  })
+  const data = await resp.json()
+  const newVal = data?.data?.updateEntity?.razmerit
+  if (newVal != null && entity.value) entity.value.razmerit = newVal
+}
+
 async function adjustRazmerit(delta) {
   const mutation = delta < 0 ? 'spendRazmerit' : 'earnRazmerit'
   const resp = await fetch('/api/v1/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      query: 'mutation($eid: ID!, $amt: Int!) { ' + mutation + '(entityId: $eid, amount: $amt) { fromBalance } }',
+      query: 'mutation($eid: ID!, $amt: Int!) { ' + mutation + '(entityId: $eid, amount: $amt) { fromBalance toBalance } }',
       variables: { eid: props.entityId, amt: Math.abs(delta) },
     }),
   })
   const data = await resp.json()
-  const balance = data?.data?.[mutation]?.fromBalance
+  const result = data?.data?.[mutation]
+  const balance = mutation === 'earnRazmerit' ? result?.toBalance : result?.fromBalance
   if (balance != null) entity.value.razmerit = balance
 }
 
@@ -839,7 +946,8 @@ async function deleteTrait(t) {
     body: JSON.stringify({ query: `mutation($id: ID!) { removeTraitSetting(id: $id) }`, variables: { id: t.id } }),
   })
   editingTraitId.value = null
-  // Remove from local traitSets — no full re-render
+  // Remove from local traitSets / profileTraits — no full re-render
+  let removed = false
   for (const ts of traitSets.value) {
     const idx = ts.traits.findIndex(tr => tr.id === t.id)
     if (idx !== -1) {
@@ -847,8 +955,13 @@ async function deleteTrait(t) {
       if (ts.traits.length === 0) {
         traitSets.value = traitSets.value.filter(s => s.name !== ts.name)
       }
+      removed = true
       break
     }
+  }
+  if (!removed) {
+    const idx = profileTraits.value.findIndex(tr => tr.id === t.id)
+    if (idx !== -1) profileTraits.value.splice(idx, 1)
   }
 }
 
@@ -862,39 +975,43 @@ async function doSave() {
   if (!editingTraitId.value) return
   ensureEditProjection()
   const newDice = editDice.value.map(d => d.toUpperCase())
-  const query = `mutation($id: ID!, $dice: [DieType!], $statement: String, $sfxIds: [ID!], $ego: Boolean, $fromType: String, $projectionId: ID) {
-    updateTraitSetting(id: $id, input: { dice: $dice, statement: $statement, sfxIds: $sfxIds, ego: $ego, fromType: $fromType, projectionId: $projectionId }) { id }
+  const query = `mutation($id: ID!, $dice: [DieType!], $ratingType: RatingType, $polarity: ChallengePolarity, $statement: String, $sfxIds: [ID!], $ego: Boolean, $fromType: String, $projectionId: ID) {
+    updateTraitSetting(id: $id, input: { dice: $dice, ratingType: $ratingType, polarity: $polarity, statement: $statement, sfxIds: $sfxIds, ego: $ego, fromType: $fromType, projectionId: $projectionId }) { id }
   }`
+  const variables = {
+    id: editingTraitId.value,
+    dice: newDice,
+    ratingType: editRatingType.value,
+    polarity: editPolarity.value,
+    statement: editStatement.value ?? null,
+    sfxIds: editSfxIds.value,
+    ego: editIsEgo.value,
+    fromType: editIsEgo.value ? 'entity' : 'projection',
+    projectionId: editIsEgo.value ? null : editProjectionId.value,
+  }
   await fetch('/api/v1/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      variables: {
-        id: editingTraitId.value,
-        dice: newDice,
-        statement: editStatement.value ?? null,
-        sfxIds: editSfxIds.value,
-        ego: editIsEgo.value,
-        fromType: editIsEgo.value ? 'entity' : 'projection',
-        projectionId: editIsEgo.value ? null : editProjectionId.value,
-      },
-    }),
+    body: JSON.stringify({ query, variables }),
   })
   // Patch local data — no full re-render
+  const patchTrait = (t) => {
+    t.dice = newDice
+    t.ratingType = editRatingType.value
+    t.polarity = editPolarity.value
+    t.rating = null  // force fallback to dice display
+    t.sfxIds = [...editSfxIds.value]
+    t.statement = editStatement.value
+    t.ego = editIsEgo.value
+    t.fromType = editIsEgo.value ? 'entity' : 'projection'
+    t.projectionId = editIsEgo.value ? null : editProjectionId.value
+  }
   for (const ts of traitSets.value) {
     const t = ts.traits.find(t => t.id === editingTraitId.value)
-    if (t) {
-      t.dice = newDice
-      t.rating = null  // force fallback to dice display
-      t.sfxIds = [...editSfxIds.value]
-      t.statement = editStatement.value
-      t.ego = editIsEgo.value
-      t.fromType = editIsEgo.value ? 'entity' : 'projection'
-      t.projectionId = editIsEgo.value ? null : editProjectionId.value
-      break
-    }
+    if (t) { patchTrait(t); break }
   }
+  const pt = profileTraits.value.find(t => t.id === editingTraitId.value)
+  if (pt) patchTrait(pt)
 }
 
 async function toggleEgo() {
@@ -905,6 +1022,11 @@ async function toggleEgo() {
   showProjectionPicker.value = false
   await doSave()
   await fetchEntity()
+}
+
+function togglePolarity() {
+  editPolarity.value = editPolarity.value === 'POSITIVE' ? 'NEGATIVE' : 'POSITIVE'
+  doSave()
 }
 
 function toggleProjectionPicker() {
@@ -923,6 +1045,16 @@ function toggleSfx(sfxId) {
   if (idx === -1) editSfxIds.value.push(sfxId)
   else editSfxIds.value.splice(idx, 1)
   doSave()
+}
+
+async function setRatingType(rt) {
+  if (editRatingType.value === rt) return
+  editRatingType.value = rt
+  // EMPTY traits carry no dice rating — clear them.
+  if (rt === 'EMPTY') editDice.value = []
+  await doSave()
+  // Re-split so the trait moves between the rated list and the profile tab.
+  recomputeTraitSets()
 }
 
 let statementDebounce = null
@@ -957,19 +1089,32 @@ function onKeydown(e) {
   if (e.key === 'Escape' && editingTraitId.value) cancelEdit()
 }
 
+// Close the razmerit popover when clicking outside its anchor.
+function onDocumentClick(e) {
+  if (showRazmeritWidget.value && !e.target.closest('.razmerit-anchor')) {
+    showRazmeritWidget.value = false
+  }
+}
+
 onMounted(() => {
   console.log('[diag] CharacterSheet mounted', { entityId: props.entityId, universe: props.universe, embedded: props.embedded })
   document.addEventListener('keydown', onKeydown)
+  document.addEventListener('click', onDocumentClick)
 })
-onUnmounted(() => document.removeEventListener('keydown', onKeydown))
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('click', onDocumentClick)
+})
 
 onMounted(() => {
   console.log('[diag] CharacterSheet fetchEntity mounted', { entityId: props.entityId })
   fetchEntity()
+  fetchSfxCatalog()
 })
 watch(() => props.entityId, fetchEntity)
 watch(() => props.universe, fetchEntity)
 watch(() => props.overrideEntityId, fetchEntity)
+watch(() => [props.entityId, props.overrideEntityId], () => { activeSetName.value = null })
 watch(showAllTraits, recomputeTraitSets)
 
 // ── Relationship fetch ─────────────────────────────
@@ -1023,32 +1168,6 @@ async function createImmediateRelationship() {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
   })
-  await fetchRelationship()
-}
-
-async function saveRatedRelationship() {
-  if (!props.viewerEntityId || !props.overrideEntityId) return
-  const dmap = { d4: 'D4', d6: 'D6', d8: 'D8', d10: 'D10', d12: 'D12' }
-  const query = `
-    mutation($from: ID!, $to: ID!, $relType: String!, $traitId: ID!, $die: DieType!) {
-      createRelationship(input: { fromEntityId: $from, toEntityId: $to, description: $desc }) { description }
-      addRelationshipTrait(fromEntityId: $from, toEntityId: $to, relType: $relType, traitId: $traitId, die: $die) { id dice }
-    }
-  `
-  try {
-    await graphql(query, {
-      from: props.viewerEntityId,
-      to: props.overrideEntityId,
-      relType: 'relation',
-      traitId: newRelType.value,
-      die: dmap[newRelRating.value],
-      desc: relDescription.value || '',
-    })
-  } catch (e) {
-    console.error('saveRatedRelationship:', e)
-  }
-  showRelTypePicker.value = false
-  relDescription.value = ''
   await fetchRelationship()
 }
 
@@ -1227,12 +1346,51 @@ watch(() => props.externalPoolSources, (sources) => {
 .set-header:hover {
   color: var(--text);
 }
-.set-caret {
-  font-size: 10px;
-  width: 12px;
+.trait-list {
+  display: flex;
+  flex-direction: column;
 }
-.set-body {
-  padding-left: 4px;
+.trait-list-title {
+  align-self: flex-start;
+  cursor: pointer;
+  user-select: none;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text);
+  transition: color 0.15s;
+}
+.trait-list-title:hover {
+  color: var(--accent);
+}
+.trait-list-wrap {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.trait-list-wrap .trait-row {
+  margin: 0;
+  flex: 0 0 auto;
+  max-width: 100%;
+  background: rgba(255,255,255,0.02);
+}
+.trait-list-wrap .trait-left {
+  flex: 0 1 auto;
+}
+.set-back {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 0;
+  margin-bottom: 6px;
+}
+.set-back:hover {
+  text-decoration: underline;
 }
 
 .limit-dots {
@@ -1275,13 +1433,19 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--text-dim);
 }
 
-.trait-edit {
-  padding: 8px 8px 8px 12px;
-  margin: 2px 0 6px 8px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-left: 2px solid var(--accent-dim);
+.trait-edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.edit-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text);
 }
 .edit-dice {
   display: flex;
@@ -1313,6 +1477,27 @@ watch(() => props.externalPoolSources, (sources) => {
 .edit-dice .add-chip:hover {
   border-color: var(--accent);
   background: rgba(64,136,212,0.1);
+}
+.edit-rating-type {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.rating-type-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.rating-type-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(64, 136, 212, 0.12);
 }
 .edit-sfx {
   display: flex;
@@ -1474,9 +1659,16 @@ watch(() => props.externalPoolSources, (sources) => {
 
 .header-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 .sheet-portrait {
   width: 40px;
@@ -1539,17 +1731,6 @@ watch(() => props.externalPoolSources, (sources) => {
   text-transform: uppercase;
   letter-spacing: 1px;
 }
-.all-traits-toggle {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
-  padding: 0 2px;
-  opacity: 0.4;
-  transition: opacity 0.15s;
-}
-.all-traits-toggle.active { opacity: 1; }
 .ego-toggle {
   padding: 3px 12px;
   border-radius: 999px;
@@ -1562,6 +1743,22 @@ watch(() => props.externalPoolSources, (sources) => {
   cursor: pointer;
 }
 .ego-toggle.is-ego {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+.polarity-toggle {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--text-dim);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.polarity-toggle.is-positive {
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(255, 255, 255, 0.06);
@@ -1622,18 +1819,62 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--accent);
   background: rgba(64, 136, 212, 0.12);
 }
-.razmerit {
+.razmerit-anchor {
+  position: relative;
+  flex-shrink: 0;
+}
+.razmerit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.razmerit-chip:hover {
+  border-color: var(--accent-dim);
+  background: rgba(64,136,212,0.08);
+}
+.razmerit-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--text-dim);
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  white-space: nowrap;
 }
 .razmerit-value {
   font-size: 24px;
   font-weight: 700;
   color: var(--accent);
+}
+.razmerit-value.editable {
+  cursor: pointer;
+}
+.razmerit-input {
+  width: 64px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--accent-dim);
+  border-radius: 6px;
+  padding: 2px 4px;
+  text-align: center;
 }
 .razmerit-btn {
   width: 32px;
@@ -1734,11 +1975,11 @@ watch(() => props.externalPoolSources, (sources) => {
   font-weight: 700;
   font-size: 14px;
 }
-.die-d4  { color: #e88830; }
-.die-d6  { color: #e0e0e0; }
-.die-d8  { color: #d44040; }
-.die-d10 { color: #4088d4; }
-.die-d12 { color: #40b860; }
+.die-d4  { color: var(--die-d4); }
+.die-d6  { color: var(--die-d6); }
+.die-d8  { color: var(--die-d8); }
+.die-d10 { color: var(--die-d10); }
+.die-d12 { color: var(--die-d12); }
 
 .trait-die-groups {
   display: flex;
@@ -1754,13 +1995,13 @@ watch(() => props.externalPoolSources, (sources) => {
   height: 34px;
 }
 
-.polarity-badge {
-  font-size: 10px;
-  margin-left: 4px;
-  opacity: 0.7;
+.trait-row.negative {
+  --die-d4: var(--die-d4-neg);
+  --die-d6: var(--die-d6-neg);
+  --die-d8: var(--die-d8-neg);
+  --die-d10: var(--die-d10-neg);
+  --die-d12: var(--die-d12-neg);
 }
-.polarity-negative { color: #d44040; }
-.polarity-positive { color: #40b860; }
 
 .loading, .error, .empty {
   font-size: 13px;
@@ -1770,15 +2011,44 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .error { color: var(--danger); }
 
-.sfx-btn {
-  font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
-  padding: 2px 8px; border-radius: 4px; cursor: pointer;
-  background: var(--warn); color: #0a0a0f; font-weight: 700;
-  border: none; transition: opacity 0.15s;
+.sfx-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
 }
-.sfx-btn:hover { opacity: 0.8; }
-.sfx-btn:disabled, .sfx-btn.sfx-used { opacity: 0.3; cursor: default; }
-.sfx-btn.sfx-active { background: var(--accent); color: #fff; opacity: 1; }
+.sfx-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.sfx-card:hover {
+  border-color: rgba(255,255,255,0.2);
+}
+.sfx-card.sfx-active {
+  border-color: var(--accent);
+  background: rgba(64, 136, 212, 0.12);
+}
+.sfx-card.sfx-used {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.sfx-card-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+.sfx-card-desc {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
 
 /* ── Relationship widget ──────────────────────── */
 .rel-widget {
@@ -1814,14 +2084,6 @@ watch(() => props.externalPoolSources, (sources) => {
   justify-content: center;
   line-height: 1;
   transition: background 0.15s, color 0.15s;
-}
-.rel-add {
-  background: var(--bg-hover);
-  color: var(--text-dim);
-}
-.rel-add:hover {
-  background: var(--accent);
-  color: #fff;
 }
 .rel-del {
   background: transparent;

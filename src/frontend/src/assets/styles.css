@@ -25,6 +25,18 @@ html, body, #app {
   --text-dim: #888;
   --radius: 10px;
   --gap: 12px;
+
+  /* Dice colors — positive (bright) & negative (dark/ominous) */
+  --die-d4: #e88830;
+  --die-d6: #e0e0e0;
+  --die-d8: #d44040;
+  --die-d10: #4088d4;
+  --die-d12: #40b860;
+  --die-d4-neg: #7a4a1f;
+  --die-d6-neg: #4f4f4f;
+  --die-d8-neg: #7a1f1f;
+  --die-d10-neg: #1f3d6e;
+  --die-d12-neg: #1f5a34;
 }
 
 button {
@@ -94,11 +106,11 @@ input:focus, select:focus {
   backdrop-filter: blur(6px);
   padding: 3px 10px; border-radius: 6px;
 }
-.die-chip-remote.die-d4  { background: #e88830; color: #0a0a0f; }
-.die-chip-remote.die-d6  { background: #e0e0e0; color: #0a0a0f; }
-.die-chip-remote.die-d8  { background: #d44040; color: #fff; }
-.die-chip-remote.die-d10 { background: #4088d4; color: #fff; }
-.die-chip-remote.die-d12 { background: #40b860; color: #0a0a0f; }
+.die-chip-remote.die-d4  { background: var(--die-d4); color: #0a0a0f; }
+.die-chip-remote.die-d6  { background: var(--die-d6); color: #0a0a0f; }
+.die-chip-remote.die-d8  { background: var(--die-d8); color: #fff; }
+.die-chip-remote.die-d10 { background: var(--die-d10); color: #fff; }
+.die-chip-remote.die-d12 { background: var(--die-d12); color: #0a0a0f; }
 .entity-die { width: 28px; height: 32px; }
 .entity-result {
   font-size: 11px; color: var(--text-dim); text-align: center;

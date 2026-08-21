@@ -1754,11 +1754,11 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   height: 44px;
 }
 .die-btn:hover { background: rgba(255,255,255,0.12); border-color: var(--accent-dim); }
-.die-btn-d4  { color: #e88830; }
-.die-btn-d6  { color: #e0e0e0; }
-.die-btn-d8  { color: #d44040; }
-.die-btn-d10 { color: #4088d4; }
-.die-btn-d12 { color: #40b860; }
+.die-btn-d4  { color: var(--die-d4); }
+.die-btn-d6  { color: var(--die-d6); }
+.die-btn-d8  { color: var(--die-d8); }
+.die-btn-d10 { color: var(--die-d10); }
+.die-btn-d12 { color: var(--die-d12); }
 
 .controls { display: flex; gap: 8px; }
 .waiting-state { flex: 1; text-align: center; font-size: 14px; color: var(--text-dim); padding: 10px; }

@@ -778,7 +778,10 @@ function onPeerClick(id) {
     if (actingEntityId.value === id) returnToSelf()
     else switchPerspective(id)
   } else {
-    viewingEntityId.value = (viewingEntityId.value === id) ? null : id
+    // Clicking our own character returns to self-view (no override), keeping the header tabs visible.
+    viewingEntityId.value = (id === entityId.value || id === selfEntityId.value)
+      ? null
+      : (viewingEntityId.value === id ? null : id)
   }
   forceSheet.value = true
 }
@@ -1166,6 +1169,11 @@ onUnmounted(() => {
 // Re-sync closed position when sheet visibility changes while wrapper is closed
 watch(sheetVisible, () => {
   if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+})
+
+// Refresh the peer bar whenever the dice wrapper opens.
+watch(wrapperOpen, (open) => {
+  if (open) fetchPeers()
 })
 
 function onRolled() {
