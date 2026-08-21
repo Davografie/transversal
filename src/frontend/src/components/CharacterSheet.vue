@@ -1410,7 +1410,7 @@ watch(() => props.externalPoolSources, (sources) => {
   text-decoration: underline;
 }
 .next-set-btn {
-  align-self: flex-start;
+  align-self: flex-end;
   background: transparent;
   border: 1px dashed rgba(255,255,255,0.12);
   color: var(--text-dim);
