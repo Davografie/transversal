@@ -86,6 +86,18 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     for ts in result.removed_trait_settings:
         repo.delete_traitsetting(ts.id)
 
+    # Fog-of-war reveals: persist known_to changes and tell viewers to refetch.
+    if result.revealed:
+        revealed_ids = []
+        for ts, learner_id in result.revealed:
+            repo.update_traitsetting(ts)
+            revealed_ids.append(ts.id)
+        _publish("traits_revealed", {
+            "owner_id": result.revealed[0][0].entity_id,
+            "learner_ids": [learner_id for _, learner_id in result.revealed],
+            "trait_setting_ids": revealed_ids,
+        })
+
     # Relationship edges produced by the applier.
     for rel in result.new_relationships:
         repo.create_relationship(

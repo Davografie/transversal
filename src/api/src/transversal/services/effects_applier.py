@@ -14,6 +14,7 @@ from typing import Callable, Optional
 
 from transversal.domain import DieType, Effect, Entity, TraitSetting
 from transversal.services.effect_targets import resolve_candidates
+from transversal.services.trait_reveal import reveal_trait_to
 
 
 # Handler signature: (action, entity_id, universe, context) -> None
@@ -83,7 +84,7 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(entity, [a], em.repo)
 
-    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain"):
+    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -240,6 +241,7 @@ class EffectsResult:
     entities_to_update: list[Entity] = field(default_factory=list)
     pending_choices: list[PendingChoice] = field(default_factory=list)
     passthrough: list[Effect] = field(default_factory=list)
+    revealed: list[tuple[TraitSetting, str]] = field(default_factory=list)
 
 
 def _resolve_traitset_id(trait_id: str, repo) -> str:
@@ -745,6 +747,48 @@ def _apply_remove(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"removed {target}", existing.id))
 
 
+def _resolve_learner(entity: Entity, effect: Effect, result: EffectsResult) -> Optional[str]:
+    """Resolve who learns a revealed trait.
+
+    ``effect.context.learner`` defaults to ``"self"`` (the entity the effect
+    is applied to — the activating entity for a manual SFX).  A literal entity
+    id passes through.  ``{choose_*}` / ``{random:*}` placeholders are not yet
+    supported here (the owner entity is the intended dynamic piece for spying).
+    """
+    learner = (effect.context or {}).get("learner") or "self"
+    learner = (learner or "").strip()
+    if learner in ("", "self"):
+        return entity.id
+    if _parse_placeholder(learner) is not None:
+        result.applied.append(AppliedEffect(effect, f"learner placeholder not supported: {learner}"))
+        return None
+    return learner
+
+
+def _apply_reveal(entity, effect, repo, result):
+    """Add the learner to a trait setting's ``known_to`` (fog of war)."""
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
+    if target is None:
+        return
+    owner = _trait_owner(subject, effect, repo)
+    ts = _find_traitsetting(owner, repo, target)
+    if ts is None:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to reveal"))
+        return
+    learner = _resolve_learner(entity, effect, result)
+    if learner is None:
+        return
+    if reveal_trait_to(ts, learner):
+        result.revealed.append((ts, learner))
+        result.applied.append(AppliedEffect(effect, f"revealed {target} to {learner}", ts.id))
+    else:
+        result.applied.append(AppliedEffect(effect, f"{learner} already knows {target}"))
+
+
 def _queue_trait_revert(ts, effect, prior_result=None):
     """Queue the inverse of ``effect`` on a trait setting (in-memory).
 
@@ -786,6 +830,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
     ("modify_trait", "set"): _apply_set,
+    ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,
     ("transfer_razmerit", "transfer"): _apply_transfer,

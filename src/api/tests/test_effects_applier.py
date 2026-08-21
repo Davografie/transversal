@@ -700,3 +700,41 @@ def test_choose_entity_pending_choice_uses_entity_scope():
                     target="self", entity="{choose_entity}", entity_scope="subtree:loc-x", result="1")
     result = apply_effects(entity, [effect], repo)
     assert result.pending_choices[0].scope == "subtree:loc-x"
+
+
+# ── Fog-of-war reveal ────────────────────────────────
+
+def test_reveal_adds_learner_to_known_to():
+    owner = _entity(id="char-2")
+    ts = _ts("hidden-trait", [DieType.D8], entity_id="char-2", traitset_id="ts-x", known_to=[])
+    repo = FakeRepo(traits=[FakeTrait("hidden-trait", "ts-x")], traitsettings=[ts], entities=[owner])
+    entity = _entity()  # char-1, the learner
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reveal",
+        target="hidden-trait", entity="char-2",
+    )
+    result = apply_effects(entity, [effect], repo)
+
+    assert ts.known_to == ["char-1"]
+    assert len(result.revealed) == 1
+    assert result.revealed[0][0] is ts
+    assert result.revealed[0][1] == "char-1"
+    assert result.applied[0].summary == "revealed hidden-trait to char-1"
+
+
+def test_reveal_is_idempotent():
+    owner = _entity(id="char-2")
+    ts = _ts("hidden-trait", [DieType.D8], entity_id="char-2", traitset_id="ts-x", known_to=["char-1"])
+    repo = FakeRepo(traits=[FakeTrait("hidden-trait", "ts-x")], traitsettings=[ts], entities=[owner])
+    entity = _entity()
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reveal",
+        target="hidden-trait", entity="char-2",
+    )
+    result = apply_effects(entity, [effect], repo)
+
+    assert ts.known_to == ["char-1"]
+    assert result.revealed == []
+    assert result.applied[0].summary == "char-1 already knows hidden-trait"

@@ -467,6 +467,24 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         target_kind="trait",
         supports_polarity=True,
     ),
+    EffectActionMeta(
+        action_id="reveal_trait",
+        label="Reveal Trait (Learn)",
+        description="Add the learner to a trait's known_to list so it stops showing as ??? on their sheet",
+        category="benefit",
+        effect_type="modify_trait",
+        effect_action="reveal",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+            _ENTITY_FIELD,
+        ],
+        context_fields=[
+            EffectFieldDef(name="learner", label="Learner", field_type="entity",
+                          required=False, default="self"),
+        ],
+        target_kind="trait",
+    ),
 
     # ── Rank and life-path flow ────────────────────────
     EffectActionMeta(
