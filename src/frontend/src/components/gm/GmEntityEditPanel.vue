@@ -416,10 +416,11 @@ async function toggleLinkType(link) {
 }
 
 function openPortalConfig(link) {
+  const sourceName = form.value?.name || props.entityId
   panel.open({
     component: GmPortalConfigPanel,
-    title: `Portal → ${link.name}`,
-    props: { fromId: props.entityId, link, universe: form.value?.current_universe || '' },
+    title: `Portal: ${sourceName} → ${link.name}`,
+    props: { fromId: props.entityId, fromName: sourceName, link, universe: form.value?.current_universe || '' },
   })
 }
 

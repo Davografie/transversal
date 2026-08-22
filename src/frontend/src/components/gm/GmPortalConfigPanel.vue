@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="portal-head">
-      <span class="portal-to">→ {{ link.name }}</span>
+      <span class="portal-to">{{ fromName }} → {{ link.name }}</span>
       <span class="portal-type">{{ link.transversal_type || 'inapposite' }}</span>
     </div>
     <div class="portal-effects">
@@ -21,6 +21,7 @@ import EffectEditor from './EffectEditor.vue'
 
 const props = defineProps({
   fromId: { type: String, required: true },
+  fromName: { type: String, default: '' },
   link: { type: Object, required: true },
   universe: { type: String, default: '' },
 })
