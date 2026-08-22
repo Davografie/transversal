@@ -336,6 +336,22 @@ def test_substitute_effect_context_across_fields():
     assert out.context == {"learner": "char-1"}
 
 
+def test_substitute_effect_context_covers_scopes():
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        result="{choose_location}",
+        target_scope="universe:{target_universe}",
+        entity_scope="location:{target_location}",
+    )
+    out = _substitute_effect_context(
+        effect, {"target_universe": "three_realms", "target_location": "krasnoyarsk"}
+    )
+    assert out.target_scope == "universe:three_realms"
+    assert out.entity_scope == "location:krasnoyarsk"
+
+
 def test_substitute_effect_context_leaves_choose_placeholder():
     from transversal.services.effects_engine import _substitute_effect_context
 

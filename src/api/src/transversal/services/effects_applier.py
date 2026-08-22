@@ -428,12 +428,33 @@ def choose_kind(target: str) -> Optional[str]:
     return parsed[1]
 
 
+def _resolve_scope(scope: Optional[str], entity: Entity, repo) -> Optional[str]:
+    """Resolve a ``{random:*}`` placeholder in a scope's value position.
+
+    ``universe:{random_universe}`` becomes ``universe:earth`` (etc.) before the
+    scope reaches the candidate resolver. Literal scopes pass through untouched.
+    """
+    if not scope:
+        return scope
+    from transversal.services.effect_targets import parse_scope
+    prefix, value = parse_scope(scope)
+    parsed = _parse_placeholder(value or "")
+    if parsed is not None and parsed[0] == "random":
+        kind = parsed[1] or "universe"
+        candidates = resolve_candidates(kind, None, entity, repo)
+        if candidates:
+            cid = random.choice([c.id for c in candidates])
+            return f"{prefix}:{cid}" if prefix else cid
+    return scope
+
+
 def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo) -> Optional[str]:
     """Return a random in-scope candidate id for the given target kind.
 
     Delegates to the shared :mod:`effect_targets` resolver so the ``random``
     target mode and the frontend choose-picker see the same candidates.
     """
+    scope = _resolve_scope(scope, entity, repo)
     candidates = resolve_candidates(kind, scope, entity, repo)
     return random.choice([c.id for c in candidates]) if candidates else None
 

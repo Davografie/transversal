@@ -454,6 +454,46 @@ def test_random_trait_resolves_to_candidate():
     assert [ts.trait_id for ts in result.new_trait_settings] == ["iron-will"]
 
 
+def test_resolve_scope_random_universe():
+    from transversal.services.effects_applier import _resolve_scope
+
+    class UniverseRepo:
+        def list_entities_by_type(self, entity_type, universe=None):
+            if entity_type == EntityType.UNIVERSE:
+                return [
+                    Entity(id="earth", type=EntityType.UNIVERSE, name="Earth", current_universe="earth"),
+                    Entity(id="three_realms", type=EntityType.UNIVERSE, name="Three Realms", current_universe="three_realms"),
+                ]
+            return []
+
+    entity = _entity()
+    out = _resolve_scope("universe:{random_universe}", entity, UniverseRepo())
+    assert out in ("universe:earth", "universe:three_realms")
+
+
+def test_random_location_scoped_by_random_universe():
+    from transversal.services.effects_applier import _random_candidate
+
+    class Repo:
+        def list_entities_by_type(self, entity_type, universe=None):
+            if entity_type == EntityType.UNIVERSE:
+                return [
+                    Entity(id="earth", type=EntityType.UNIVERSE, name="Earth", current_universe="earth"),
+                    Entity(id="three_realms", type=EntityType.UNIVERSE, name="Three Realms", current_universe="three_realms"),
+                ]
+            if entity_type == EntityType.LOCATION:
+                locs = {
+                    "earth": [Entity(id="l-earth", type=EntityType.LOCATION, name="Earth Loc", current_universe="earth")],
+                    "three_realms": [Entity(id="l-realm", type=EntityType.LOCATION, name="Realm Loc", current_universe="three_realms")],
+                }
+                return locs.get(universe, [])
+            return []
+
+    entity = _entity()
+    out = _random_candidate("location", "universe:{random_universe}", entity, Repo())
+    assert out in ("l-earth", "l-realm")
+
+
 def test_unknown_effect_is_passthrough():
     entity = _entity()
     result = apply_effects(entity, [_effect("modify_roll", "step_up_die", "highest")], FakeRepo())
