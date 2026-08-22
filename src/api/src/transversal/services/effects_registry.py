@@ -396,7 +396,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         effect_type="travel",
         effect_action="move",
         valid_timings=["IMMEDIATE"],
+        target_kind="location",
         fields=[
+            _ENTITY_FIELD,
             EffectFieldDef(name="target", label="Destination Location", field_type="text",
                           required=True, default=""),
         ],

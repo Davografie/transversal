@@ -112,7 +112,7 @@
         <select v-model="newEffect.timing">
           <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ t }}</option>
         </select>
-        <div v-for="f in (selectedAction.contextFields || [])" :key="f.name" class="ee-field">
+        <div v-for="f in visibleContextFields" :key="f.name" class="ee-field">
           <label>{{ f.label }}</label>
           <select v-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
             <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
@@ -181,6 +181,13 @@ const visibleFields = computed(() => {
   return (selectedAction.value.fields || []).filter(f => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
+    return true
+  })
+})
+
+const visibleContextFields = computed(() => {
+  return (selectedAction.value?.contextFields || []).filter(f => {
+    if (f.name === 'projection' && (newEffect.context.transversal_type || 'inapposite') !== 'consciousness') return false
     return true
   })
 })
@@ -268,6 +275,10 @@ function buildEffect(meta) {
   let entity = newEffect.fields.entity || ''
   if (entityMode === 'choose') entity = '{choose_entity}'
   if (entityMode === 'random') entity = '{random:entity}'
+  const context = { ...cleanContext(newEffect.context), ...parseContext(newEffect.extraContext) }
+  if ((context.transversal_type || 'inapposite') !== 'consciousness') {
+    context.projection = 'active'
+  }
   return {
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
@@ -278,7 +289,7 @@ function buildEffect(meta) {
     targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
     entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
-    context: { ...cleanContext(newEffect.context), ...parseContext(newEffect.extraContext) },
+    context,
     duration: (meta.supportsDuration && (newEffect.duration?.timers || []).length)
       ? {
           timers: newEffect.duration.timers.map(t => ({ event: t.event || 'scene', remaining: Number(t.remaining) || 0 })),
