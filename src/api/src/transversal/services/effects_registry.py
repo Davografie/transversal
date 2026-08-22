@@ -48,6 +48,7 @@ class EffectActionMeta:
     target_kind: str | None = None       # trait | entity | life_path | ...
     supports_duration: bool = False      # UI shows a duration/timers builder
     supports_polarity: bool = False      # UI shows a negative (complication) toggle
+    supports_return_exit: bool = False   # UI offers a "{return:<name>}" target mode (shared tables)
     inverse: tuple[str, str] | None = None  # (type, action) to undo this effect
     inverse_captures_prior: bool = False    # revert needs the pre-apply value
 
@@ -515,9 +516,10 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Next Table", field_type="text", required=False),
         ],
         context_fields=[
-            EffectFieldDef(name="return_to", label="Return To", field_type="text", required=False),
+            EffectFieldDef(name="return_to", label="Return To", field_type="return_map", required=False),
         ],
         target_kind="roll_table",
+        supports_return_exit=True,
     ),
     EffectActionMeta(
         action_id="draft_life_path",

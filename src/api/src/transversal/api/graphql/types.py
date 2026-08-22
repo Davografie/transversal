@@ -414,6 +414,7 @@ class EffectActionMeta:
     context_fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
     supports_duration: bool = False
     supports_polarity: bool = False
+    supports_return_exit: bool = False
     implicit_target: Optional[str] = None
     implicit_result: Optional[str] = None
     implicit_timing: Optional[str] = None

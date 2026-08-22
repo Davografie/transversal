@@ -44,6 +44,7 @@
             <div class="ee-mode-row">
               <select v-model="newEffect.targetMode">
                 <option value="literal">Pick specific</option>
+                <option v-if="selectedAction.supportsReturnExit" value="return">Named exit</option>
                 <option value="choose">Choose at runtime</option>
                 <option value="random">Random</option>
               </select>
@@ -72,6 +73,10 @@
               />
               <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
             </template>
+            <div v-else-if="newEffect.targetMode === 'return'" class="ee-field">
+              <label>Exit name</label>
+              <input v-model="newEffect.returnExit" type="text" placeholder="e.g. survived" />
+            </div>
             <div v-else class="ee-field">
               <label>Scope</label>
               <ScopeBuilder v-model="newEffect.scope" :universe="universe" />
@@ -120,6 +125,13 @@
           <select v-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
             <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
           </select>
+          <ReturnMapEditor
+            v-else-if="f.fieldType === 'return_map'"
+            :model-value="newEffect.context[f.name] || {}"
+            @update:model-value="newEffect.context[f.name] = $event"
+            :target="newEffect.fields.target"
+            :universe="universe"
+          />
           <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.context[f.name]" type="number" :placeholder="f.default || ''" />
           <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
         </div>
@@ -152,6 +164,7 @@ import GmLocationPicker from './GmLocationPicker.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
 import GmList from './GmList.vue'
+import ReturnMapEditor from './ReturnMapEditor.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -174,7 +187,7 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', entityMode: 'literal', entityScope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
 
@@ -227,6 +240,7 @@ function isEntityField(f) {
 
 function detectTargetMode(eff, meta) {
   const kind = meta?.targetKind
+  if (eff?.target?.startsWith('{return:')) return 'return'
   if (kind && eff?.target === `{choose_${kind}}`) return 'choose'
   if (kind && eff?.target === `{random:${kind}}`) return 'random'
   return 'literal'
@@ -245,6 +259,7 @@ function onActionChange() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entityScope = ''
   newEffect.negative = false
@@ -284,6 +299,7 @@ function buildEffect(meta) {
   let target = meta.implicitTarget || newEffect.fields.target || ''
   if (kind && mode === 'choose') target = `{choose_${kind}}`
   if (kind && mode === 'random') target = `{random:${kind}}`
+  if (mode === 'return') target = `{return:${newEffect.returnExit || ''}}`
   const entityMode = newEffect.entityMode || 'literal'
   let entity = newEffect.fields.entity || ''
   if (entityMode === 'choose') entity = '{choose_entity}'
@@ -353,6 +369,9 @@ function editEffect(i) {
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
   }
+  if (newEffect.targetMode === 'return' && eff.target) {
+    newEffect.returnExit = eff.target.slice('{return:'.length, -1)
+  }
   if (eff.result && eff.result !== (meta?.implicitResult || '')) newEffect.fields.result = eff.result
   if (newEffect.entityMode === 'literal' && eff.entity) newEffect.fields.entity = eff.entity
   const ctx = eff.context || {}
@@ -384,6 +403,7 @@ function closeEditor() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entityScope = ''
   newEffect.negative = false
