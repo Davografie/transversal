@@ -313,6 +313,20 @@ def _effect_from_wire(d: dict):
     )
 
 
+def _anchor_portal_travel(effect, to_id: str) -> None:
+    """Force a portal travel effect's destination to the edge's ``_to``.
+
+    The transversal edge is the single source of truth for a portal's
+    destination. A travel effect stored on it must not carry its own (or a
+    redirect) target — literal, blank, and choose/random targets all resolve
+    to ``to_id``; the universe is then derived from ``to_id`` by the applier.
+    """
+    if effect.type != "travel":
+        return
+    effect.target = to_id
+    effect.target_scope = None
+
+
 class PortalFireRequest(BaseModel):
     entity_id: str
 
@@ -337,6 +351,8 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
         raise HTTPException(status_code=404, detail=f"Entity '{body.entity_id}' not found")
 
     effects = [_effect_from_wire(e) for e in (edge.get("effects") or [])]
+    for effect in effects:
+        _anchor_portal_travel(effect, to_id)
 
     if not effects:
         travel_type = edge.get("transversal_type") or "inapposite"

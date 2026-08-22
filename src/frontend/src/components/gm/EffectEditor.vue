@@ -29,6 +29,7 @@
       </select>
       <template v-if="selectedAction">
         <div class="ee-help">{{ selectedAction.description }}</div>
+        <div v-if="isPortalTravel" class="ee-fixed-dest">Destination: <b>{{ portalDestination }}</b></div>
         <div v-if="variables.length" class="ee-vars">
           <span class="ee-vars-label">Variables:</span>
           <button v-for="v in variables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" @click="copyVariable(v.name)">
@@ -149,6 +150,7 @@ const props = defineProps({
   faction: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
+  portalDestination: { type: String, default: '' },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -171,10 +173,13 @@ const selectedAction = computed(() => {
   return effectActions.value.find(a => a.actionId === newEffect.actionId) || null
 })
 
+const isPortalTravel = computed(() => !!props.portalDestination && selectedAction.value?.effectType === 'travel')
+
 const visibleFields = computed(() => {
   if (!selectedAction.value) return []
   return (selectedAction.value.fields || []).filter(f => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
+    if (f.name === 'target' && isPortalTravel.value) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
     return true
   })
@@ -419,6 +424,8 @@ function rowClassFn(eff) {
 .ee-mode-row { display: flex; margin-top: 2px; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
+.ee-fixed-dest { font-size: 10px; color: var(--text-dim); }
+.ee-fixed-dest b { color: var(--text); font-weight: 600; }
 .ee-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .ee-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); cursor: pointer; }
