@@ -201,7 +201,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `components/CharacterSheet.vue` (`onTraitClick`, `resolvedDieType`), `components/DiceRoller.vue` (`addFromSheet`, `removeByTsId`, `resyncTraitDie`), `App.vue` (`trait_updated` routing), `services/scene_state.py` (`resync_trait_die` + `resync_pool_dice_for_trait`), `services/effects_commit.py` / `entity_manager.py` (`trait_updated` payload).
 
 ### P2.10d — Backend + frontend: contest push loop (roll & compare)
-- **Status:** in progress
+- **Status:** done
 - **What:** after both sides set, do not auto-finalize. Compare provisionally against the initiative holder (strictly-beat; tie → holder); the losing side may **give in** (+1 razmerit, plus a scene-scoped directional targeting ban) or **push** (free, once per side, rebuild/roll/set again). Loops until someone gives in or fails to beat.
 - **Done:** initiative-based `ContestCompare`, `push` endpoint + `on_push` trigger, give-in gating, a waiting state for the holder, give-in → razmerit + `entity_targeting_ban` (1 scene), and a scene-advance trigger (GM `[Scene]` button + non-adjacent navigation) with SSE toasts.
 - **Depends:** P2.10b
@@ -213,7 +213,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Landed — G4 effect resolution:** after the final winner, compare winner vs loser effect dice. Low stakes (default) → if winner's effect ≤ loser's, step it down one, then apply as a complication. High stakes → loser is taken out (spend-to-avoid is still a consequence-menu/SFX concern). GM `high_stakes` toggle lives on the roll-kind badge (fiery, GM-only).
 - **Landed — P6 (folded into G4):** result widget shows the final (possibly stepped-down) effect via `DieIcon` (original die dimmed + `↓` + applied die), plus `taken out` on the loser for high-stakes takeout.
 - **Landed — consequence menu:** complications are manual menu choices, not an auto-fired SFX (`sfx-contest-loss-complication` removed from seed/owners). Two `on_consequence` SFX owned by `table` (`apply-complication` / `take-complication`, identical `gain_complication` effect): the winner sees “Apply a complication” (applies to the opponent), the conceder sees “Take a complication” (applies to self), both at the winner's effect die. The frontend filters them by which end of the contest you're on.
-- **Then — G5 resolver decomposition:** split `dice_resolver` into callables (`roll_pool`, `detect_hitches`, `pick_total`, `pick_effect_die`, `compare_totals`, effect step up/down). `/roll` returns rolled dice + hitch data only; result/effect selection and hitch-buying become client actions. Retire the interactive auto-`resolve` path; keep a thin MCP facade.
+- **Landed — G5 resolver decomposition:** `dice_resolver` split into callables (`roll_dice`, `detect_hitches`, `pick_total`, `pick_effect_die`, `compare_totals`). The roll flow is stateful: `/cortex-roll` / `/simplified-roll` / `/difficulty-roll` return rolled dice + hitches, `/select` flags result/effect dice client-side, `/hitches/mark-bought` buys hitches client-side. `ContestTracker.resolve` (auto-resolve) is dead; `resolve_contest` remains only for `trait_transfer`, and `/roll` is a legacy compat shim — neither is part of the contest push loop.
 - **Deferred/optional:** heroic success; high-stakes spend-to-avoid takeout.
 - **Related open tickets:** P2.15 (role-aware toasts), P2.16 (resource dice), P3.3 (buy-hitch).
 
@@ -247,11 +247,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Note:** see P2.10b for give-in semantics and the manual contest state machine.
 
 ### P2.15 — Frontend: role-aware toast system
-- **Status:** pending
+- **Status:** in progress
 - **What:** make the toast system available to all roles and filter which messages surface to whom. Each `addToast` declares an audience/scope (GM-only / player-only / all).
 - **Done:** a player sees player-relevant toasts (e.g. "Difficulty set: N") and the GM sees GM-relevant toasts, without a second notification system.
 - **Depends:** —
-- **Note:** supersedes the temporary inline "Difficulty set" flash in `DiceRoller.vue`; `ToastBar` is currently gated `v-if="gmMode"`.
+- **Note:** `ToastBar` no longer gates on `v-if="gmMode"` (renders for all roles), but `addToast(message, type)` has no audience/scope field yet — filtering is still ad-hoc `if (gmMode.value)` / `if (!gmMode.value)` at each call site in `App.vue`. Remaining: add an audience/scope to `addToast` and centralize the filtering.
 - **Load:** `components/ToastBar.vue`, `App.vue` (`addToast`/`toasts`), `components/DiceRoller.vue` (difficulty flash).
 
 ### P2.16 — Backend + frontend: resource dice (spend / roll / recover)
@@ -454,11 +454,12 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** `api/rest/locations.py` (`navigate`, `_resolve_navdot`), [[Pressure-Test Log]] § Scenario 6.
 
 ### P6.2 — Backend + frontend: inapposite travel endpoint
-- **Status:** pending
+- **Status:** done
 - **What:** a dedicated REST endpoint for inapposite travel, wired into the movement flow.
 - **Done:** an inapposite portal performs in-place universe/location mutation with `INAPPOSITE` type.
 - **Depends:** —
-- **Load:** `services/entity_manager.py` (`inapposite_travel`), `api/rest/locations.py`, [[Pressure-Test Log]] § Scenario 6.
+- **Note:** satisfied by the travel consolidation — `inapposite_travel`/`consciousness_travel` were merged into `EntityManager.travel()`, which the GraphQL `inapposite_travel` mutation, the REST `consciousness-travel` endpoint, and `fire_portal`'s no-effects fallback all route through.
+- **Load:** `services/entity_manager.py` (`travel`), `api/rest/locations.py`, [[Pressure-Test Log]] § Scenario 6.
 
 ### P6.3 — Backend: attunement expiry
 - **Status:** pending
@@ -486,7 +487,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 > Everything here is a real ticket with the same shape as Phase 1–6. They are post-release polish / backlog, not release blockers.
 
 ### P7.1 — Frontend: trait rendering & polarity polish
-- **Status:** pending
+- **Status:** done
 - **What:** empty traits not greyed out, morph traits highlighted (not ego), negative-polarity styling, hidden/visible trait hint. (The ``[dX]`` → ``DieIcon`` item was folded into P2.12.)
 - **Done:** each rendering/affordance behaves as listed.
 - **Depends:** P4.3
@@ -500,7 +501,7 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** to-do "Trait notes field", `components/CharacterSheet.vue`, `domain/__init__.py` (`TraitSetting.statement`).
 
 ### P7.3 — Frontend: phased trait character sheet
-- **Status:** pending
+- **Status:** done
 - **What:** replace the character sheet accordion-style traitset / trait listing with separate screens for traitset list and traitset-scoped trait list.
 - **Done:** picking a trait is a phased flow instead of nested accordions.
 - **Depends:** —
