@@ -521,6 +521,7 @@ class Projection(BaseModel):
     current_location: Optional[str] = None   # where this body currently is
     transversal_type: TransversalType = TransversalType.NATIVE
     sfx_ids: list[str] = Field(default_factory=list)  # SFX owned by this body
+    last_used_at: Optional[str] = None  # ISO timestamp of when this body was last active
 
 
 # ── Entities ──────────────────────────────────────────

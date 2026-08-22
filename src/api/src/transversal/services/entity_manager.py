@@ -111,6 +111,7 @@ class EntityManager:
             current_location=location,
             transversal_type=TransversalType.NATIVE,
         )
+        touch_projection(proj)
         self.repo.create_projection(proj)
 
         if session_id:
@@ -254,7 +255,8 @@ class EntityManager:
             loc = self.repo.get_entity(location)
             if loc is not None:
                 proj.universe = loc.current_universe
-            self.repo.update_projection(proj)
+        touch_projection(proj)
+        self.repo.update_projection(proj)
         entity.current_projection = projection_id
         entity.current_universe = proj.universe
         entity.current_location = proj.current_location
@@ -292,6 +294,7 @@ class EntityManager:
                 current_location=location,
                 transversal_type=TransversalType.NATIVE,
             )
+            touch_projection(proj)
             self.repo.create_projection(proj)
         else:
             if not proj.origin_universe:
@@ -303,6 +306,7 @@ class EntityManager:
                 if loc.current_universe == proj.origin_universe
                 else TransversalType.INAPPOSITE
             )
+            touch_projection(proj)
             self.repo.update_projection(proj)
 
         entity.current_projection = proj.id
@@ -341,12 +345,14 @@ class EntityManager:
                 current_location=location,
                 transversal_type=TransversalType.CONSCIOUSNESS,
             )
+            touch_projection(proj)
             self.repo.create_projection(proj)
         else:
             if not proj.origin_universe:
                 proj.origin_universe = _origin_universe_from_key(proj.id)
             proj.universe = new_universe
             proj.current_location = location
+            touch_projection(proj)
             self.repo.update_projection(proj)
 
         entity.current_projection = proj.id
@@ -475,11 +481,13 @@ class EntityManager:
                 current_location=location,
                 transversal_type=TransversalType.NATIVE,
             )
+            touch_projection(proj)
             self.repo.create_projection(proj)
             entity.current_projection = proj.id
         else:
             proj.current_location = location
             proj.universe = new_universe
+            touch_projection(proj)
             self.repo.update_projection(proj)
 
         result = self.repo.update_entity(entity)
@@ -502,6 +510,12 @@ def _origin_universe_from_key(proj_id: str) -> str:
     """
     parts = proj_id.split(":")
     return parts[1] if len(parts) > 1 else ""
+
+
+def touch_projection(proj) -> None:
+    """Stamp a projection as the most recently used body."""
+    from datetime import datetime, timezone
+    proj.last_used_at = datetime.now(timezone.utc).isoformat()
 
 
 def _universe_key(name: str, repo: EntityRepository) -> str:

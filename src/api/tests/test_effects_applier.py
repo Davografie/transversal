@@ -982,6 +982,27 @@ def test_travel_last_projection_reuses_body():
     assert entity.current_location == "railyard"
 
 
+def test_travel_last_projection_picks_most_recent():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity],
+        projections=[
+            _proj("char-1:earth", "char-1", "earth", location="railyard"),
+            _proj("char-1:earth:2", "char-1", "earth", location="peak"),
+        ],
+    )
+    repo.get_projection("char-1:earth").last_used_at = "2026-08-21T10:00:00+00:00"
+    repo.get_projection("char-1:earth:2").last_used_at = "2026-08-22T10:00:00+00:00"
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="", target_scope="universe:earth",
+        context={"transversal_type": "consciousness", "projection": "{last_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert entity.current_projection == "char-1:earth:2"
+    assert entity.current_location == "peak"
+
+
 def test_travel_last_projection_falls_back_to_new():
     entity = _entity()
     repo = TravelRepo(

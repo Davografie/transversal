@@ -39,7 +39,7 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 2. **Destination location (where)** — a portal's destination is a location picked **within a scope derived from the edge's `_to` type**: `{location:transversal_target}` (location `_to` → the location plus its zones) or `{universe:transversal_target}` (universe `_to` → any location in it). For a free-standing SFX travel effect, `target` is a literal id, `{choose_location}`, or `{random:location}`, scoped via `target_scope`.
 3. **Mechanism (how)** — `context.transversal_type`: `inapposite` | `consciousness`.
 4. **Body / projection policy (which body)** — new `projection` kind. Inapposite always uses `active` (the body travels). Consciousness picks a body:
-   - `{last_projection}` — reuse the existing body in the destination universe (arrive where it is); fallback: spawn a fresh body.
+   - `{last_projection}` — reuse the entity's **most recently used** body in the destination universe (tracked via `Projection.last_used_at`); arrive where it is; fallback: spawn a fresh body.
    - `{random_projection}` — random existing body in the destination universe; fallback: spawn a fresh body.
    - `{choose_projection}` — choose an existing body in the destination universe; fallback: spawn a fresh body.
    - `{new_projection}` — always spawn a fresh body at the destination (`origin_universe` = destination universe, `transversal_type` = `CONSCIOUSNESS`).

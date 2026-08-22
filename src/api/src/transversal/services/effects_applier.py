@@ -942,6 +942,7 @@ def _apply_travel(entity, effect, repo, result):
     body when there is none) or ``{new_projection}`` (always spawn).
     """
     from transversal.domain import Projection, TransversalType
+    from transversal.services.entity_manager import touch_projection
 
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -961,6 +962,7 @@ def _apply_travel(entity, effect, repo, result):
             current_location=location_id,
             transversal_type=trans_type,
         )
+        touch_projection(proj)
         result.new_projections.append(proj)
         subject.current_projection = proj.id
         subject.current_universe = dest_universe
@@ -993,6 +995,7 @@ def _apply_travel(entity, effect, repo, result):
             proj.transversal_type = (
                 TransversalType.NATIVE if dest_universe == proj.origin_universe else TransversalType.INAPPOSITE
             )
+            touch_projection(proj)
             result.updated_projections.append(proj)
             subject.current_projection = proj.id
             subject.current_universe = dest_universe
@@ -1007,6 +1010,8 @@ def _apply_travel(entity, effect, repo, result):
     dest_universe = _dest_universe()
 
     def _arrive_in_body(proj) -> None:
+        touch_projection(proj)
+        result.updated_projections.append(proj)
         subject.current_projection = proj.id
         subject.current_universe = proj.universe
         subject.current_location = proj.current_location
@@ -1037,8 +1042,13 @@ def _apply_travel(entity, effect, repo, result):
                     field="context.projection",
                 ))
                 return
-            proj_id = candidates[0].id if projection_policy == "{last_projection}" else random.choice([c.id for c in candidates])
-            proj = repo.get_projection(proj_id)
+            if projection_policy == "{last_projection}":
+                projs = [repo.get_projection(c.id) for c in candidates]
+                projs = [p for p in projs if p is not None]
+                projs.sort(key=lambda p: p.last_used_at or "", reverse=True)
+                proj = projs[0] if projs else None
+            else:
+                proj = repo.get_projection(random.choice([c.id for c in candidates]))
             if proj is not None:
                 _arrive_in_body(proj)
                 return
