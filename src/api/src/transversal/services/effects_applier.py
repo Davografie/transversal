@@ -250,6 +250,10 @@ def _trait_owner(entity: Entity, effect: Effect, repo) -> tuple[str, str]:
     target the character↔faction relationship edge instead.
     """
     rel_target = (effect.context or {}).get("relationship")
+    if rel_target == "{term_faction}":
+        # Shared tables can't hardcode a faction; resolve to the faction the
+        # entity is currently in a term with.
+        rel_target = entity.pending_term.faction_id if entity.pending_term else ""
     if rel_target:
         rel = repo.get_relationship(entity.id, rel_target, "membership")
         if rel and rel.get("_key"):

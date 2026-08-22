@@ -49,6 +49,10 @@ class SeedRepo:
         self.tables[t.id] = t
         return t
 
+    def delete_roll_table(self, tid):
+        self.tables.pop(tid, None)
+        return True
+
 
 def test_seed_wires_verdant_path():
     repo = SeedRepo()
@@ -67,10 +71,10 @@ def test_seed_wires_verdant_path():
     expected_tables = {
         "rt-verdant-qualify",
         "rt-verdant-learn",
-        "rt-verdant-survive",
         "rt-verdant-mishap",
         "rt-verdant-advance",
-        "rt-verdant-muster",
+        "rt-survive",
+        "rt-continue",
     }
     assert expected_tables.issubset(set(repo.tables))
 
@@ -90,10 +94,10 @@ def test_seed_wires_drifter_path():
 
     drifter_tables = {
         "rt-drifter-3r-learn",
-        "rt-drifter-3r-survive",
         "rt-drifter-3r-mishap",
         "rt-drifter-3r-advance",
-        "rt-drifter-3r-muster",
+        "rt-survive",
+        "rt-continue",
     }
     assert drifter_tables.issubset(set(repo.tables))
 
@@ -114,6 +118,8 @@ def test_seed_table_links_are_coherent():
                     continue
                 if target.startswith("{choose"):
                     continue
+                if target.startswith("{return:"):
+                    continue
                 assert target in table_ids, (
                     f"{table.id} entry '{entry.label}' links to unknown table '{target}'"
                 )
@@ -127,3 +133,27 @@ def test_seed_is_idempotent():
     seed_life_paths(repo)
     assert set(repo.tables) == set(first_tables)
     assert repo.get_lifepath("lp-verdant-disciple").entry_table_id == "rt-verdant-qualify"
+
+
+def test_shared_tables_use_named_exits():
+    repo = SeedRepo()
+    seed_life_paths(repo)
+
+    survive = repo.get_roll_table("rt-survive")
+    assert survive is not None
+    assert survive.life_path is None
+    survive_exits = {
+        effect.target
+        for entry in survive.entries
+        for effect in entry.effects
+        if effect.action == "next_step"
+    }
+    assert survive_exits == {"{return:injured}", "{return:survived}"}
+
+    cont = repo.get_roll_table("rt-continue")
+    assert cont is not None
+    assert cont.life_path is None
+    serve = next(e for e in cont.entries if e.label == "Serve another term")
+    assert any(eff.target == "{return:next}" for eff in serve.effects)
+    # Tenure targets the current term's faction, not a hardcoded one.
+    assert any(eff.context.get("relationship") == "{term_faction}" for eff in serve.effects)

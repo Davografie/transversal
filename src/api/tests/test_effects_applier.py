@@ -6,6 +6,7 @@ from transversal.domain import (
     EffectTiming,
     Entity,
     EntityType,
+    PendingTerm,
     Polarity,
     TraitSetting,
 )
@@ -546,6 +547,27 @@ def test_gain_relationship_trait():
     assert ts.entity_id == "edge:char-1:fac-1:membership"
     assert ts.trait_id == "trait-rel-rank"
     assert ts.dice == [DieType.D4]
+
+
+def test_term_faction_relationship_token():
+    """{term_faction} resolves to the current pending term's faction."""
+    entity = _entity(pending_term=PendingTerm(faction_id="fac-current", path_id="lp-1", current_table_id="tbl"))
+    captured = {}
+
+    class Repo(RelationshipFakeRepo):
+        def get_relationship(self, entity_id, faction_id, rel_type):
+            captured["faction_id"] = faction_id
+            return {"_key": "edge:char-1:fac-current:membership"}
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE,
+        type="modify_trait", action="gain_or_step_up",
+        target="trait-rel-rank", result="d4",
+        context={"relationship": "{term_faction}"},
+    )
+    result = apply_effects(entity, [effect], Repo())
+    assert captured["faction_id"] == "fac-current"
+    assert len(result.new_trait_settings) == 1
 
 
 def test_step_down_relationship_trait():

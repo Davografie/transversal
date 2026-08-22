@@ -662,8 +662,8 @@ def seed_life_paths(repo) -> None:
     def flow(action, target="", context=None):
         return eff("life_path", action, target, context=context)
 
-    def next_step(target=""):
-        return flow("next_step", target)
+    def next_step(target="", return_to=None):
+        return flow("next_step", target, context={"return_to": return_to} if return_to else None)
 
     def trait(action, trait_id, die=None, relationship=FACTION, negative=False):
         ctx = {"relationship": relationship} if relationship else {}
@@ -757,25 +757,9 @@ def seed_life_paths(repo) -> None:
         life_path="lp-verdant-disciple",
         scheme=RollTableScheme.INDEX,
         entries=[
-            entry(name, effects=[trait("gain_or_step_up", tid, die, relationship=None), next_step("rt-verdant-survive")])
+            entry(name, effects=[trait("gain_or_step_up", tid, die, relationship=None),
+                                 next_step("rt-survive", return_to={"survived": "rt-verdant-advance", "injured": "rt-verdant-mishap"})])
             for tid, die, name in learn_skills
-        ],
-    ))
-
-    # Survive — roll Qi Reserves; fail → mishap, otherwise advance.
-    upsert_table(RollTable(
-        id="rt-verdant-survive",
-        name="Survival",
-        universe="three_realms",
-        life_path="lp-verdant-disciple",
-        scheme=RollTableScheme.TIER,
-        check=RollTableCheck(trait_ids=["trait-3r-qi-reserves"], difficulty=DieType.D6),
-        entries=[
-            entry("Injured", tier=OutcomeTier.FAIL, effects=[next_step("rt-verdant-mishap")]),
-            entry("Survived", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-verdant-advance")]),
-            entry("Survived", tier=OutcomeTier.SUCCESS, effects=[next_step("rt-verdant-advance")]),
-            entry("Survived", tier=OutcomeTier.EXCEPTIONAL, effects=[next_step("rt-verdant-advance")]),
-            entry("Survived", tier=OutcomeTier.PERFECT, effects=[next_step("rt-verdant-advance")]),
         ],
     ))
 
@@ -807,27 +791,9 @@ def seed_life_paths(repo) -> None:
         entries=[
             entry("No progress", tier=OutcomeTier.FAIL, effects=[next_step("rt-verdant-learn")]),
             entry("No progress", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-verdant-learn")]),
-            entry("Promoted", tier=OutcomeTier.SUCCESS, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-verdant-muster")]),
-            entry("Promoted", tier=OutcomeTier.EXCEPTIONAL, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-verdant-muster")]),
-            entry("Promoted", tier=OutcomeTier.PERFECT, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-verdant-muster")]),
-        ],
-    ))
-
-    # Muster-out — the term's end: continue, leave respectfully, or be expelled.
-    upsert_table(RollTable(
-        id="rt-verdant-muster",
-        name="Muster Out",
-        universe="three_realms",
-        life_path="lp-verdant-disciple",
-        scheme=RollTableScheme.RANGE,
-        die=DieType.D6,
-        entries=[
-            entry("Serve another term", min_value=1, max_value=2,
-                 effects=[trait("gain_or_step_up", "trait-rel-tenure", "d4"), next_step("rt-verdant-learn")]),
-            entry("Muster out (respectfully)", min_value=3, max_value=5,
-                 effects=[flow("muster")]),
-            entry("Muster out (dishonorably)", min_value=6, max_value=6,
-                 effects=[flow("force_muster")]),
+            entry("Promoted", tier=OutcomeTier.SUCCESS, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-continue", return_to={"next": "rt-verdant-learn"})]),
+            entry("Promoted", tier=OutcomeTier.EXCEPTIONAL, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-continue", return_to={"next": "rt-verdant-learn"})]),
+            entry("Promoted", tier=OutcomeTier.PERFECT, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4"), next_step("rt-continue", return_to={"next": "rt-verdant-learn"})]),
         ],
     ))
 
@@ -854,25 +820,9 @@ def seed_life_paths(repo) -> None:
         life_path="lp-drifter-three-realms",
         scheme=RollTableScheme.INDEX,
         entries=[
-            entry(name, effects=[trait("gain_or_step_up", tid, die, relationship=None), next_step("rt-drifter-3r-survive")])
+            entry(name, effects=[trait("gain_or_step_up", tid, die, relationship=None),
+                                 next_step("rt-survive", return_to={"survived": "rt-drifter-3r-advance", "injured": "rt-drifter-3r-mishap"})])
             for tid, die, name in learn_skills
-        ],
-    ))
-
-    # Survive — roll Qi Reserves; fail → mishap, otherwise advance.
-    upsert_table(RollTable(
-        id="rt-drifter-3r-survive",
-        name="Survival",
-        universe="three_realms",
-        life_path="lp-drifter-three-realms",
-        scheme=RollTableScheme.TIER,
-        check=RollTableCheck(trait_ids=["trait-3r-qi-reserves"], difficulty=DieType.D6),
-        entries=[
-            entry("Injured", tier=OutcomeTier.FAIL, effects=[next_step("rt-drifter-3r-mishap")]),
-            entry("Survived", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-drifter-3r-advance")]),
-            entry("Survived", tier=OutcomeTier.SUCCESS, effects=[next_step("rt-drifter-3r-advance")]),
-            entry("Survived", tier=OutcomeTier.EXCEPTIONAL, effects=[next_step("rt-drifter-3r-advance")]),
-            entry("Survived", tier=OutcomeTier.PERFECT, effects=[next_step("rt-drifter-3r-advance")]),
         ],
     ))
 
@@ -904,26 +854,49 @@ def seed_life_paths(repo) -> None:
         entries=[
             entry("No progress", tier=OutcomeTier.FAIL, effects=[next_step("rt-drifter-3r-learn")]),
             entry("No progress", tier=OutcomeTier.MARGINAL, effects=[next_step("rt-drifter-3r-learn")]),
-            entry("Promoted", tier=OutcomeTier.SUCCESS, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-muster")]),
-            entry("Promoted", tier=OutcomeTier.EXCEPTIONAL, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-muster")]),
-            entry("Promoted", tier=OutcomeTier.PERFECT, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-muster")]),
+            entry("Promoted", tier=OutcomeTier.SUCCESS, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-continue", return_to={"next": "rt-drifter-3r-learn"})]),
+            entry("Promoted", tier=OutcomeTier.EXCEPTIONAL, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-continue", return_to={"next": "rt-drifter-3r-learn"})]),
+            entry("Promoted", tier=OutcomeTier.PERFECT, effects=[trait("gain_or_step_up", "trait-rel-rank", "d4", relationship=ROGUE_FACTION), next_step("rt-continue", return_to={"next": "rt-drifter-3r-learn"})]),
         ],
     ))
 
-    # Muster-out — continue, leave respectfully, or be expelled.
+    # ── Shared tables (life_path=None, reused across life paths) ──
+
+    # Survive — roll Qi Reserves; injured → the path's mishap, survived → its advance.
     upsert_table(RollTable(
-        id="rt-drifter-3r-muster",
-        name="Muster Out",
+        id="rt-survive",
+        name="Survival",
         universe="three_realms",
-        life_path="lp-drifter-three-realms",
+        life_path=None,
+        scheme=RollTableScheme.TIER,
+        check=RollTableCheck(trait_ids=["trait-3r-qi-reserves"], difficulty=DieType.D6),
+        entries=[
+            entry("Injured", tier=OutcomeTier.FAIL, effects=[next_step("{return:injured}")]),
+            entry("Survived", tier=OutcomeTier.MARGINAL, effects=[next_step("{return:survived}")]),
+            entry("Survived", tier=OutcomeTier.SUCCESS, effects=[next_step("{return:survived}")]),
+            entry("Survived", tier=OutcomeTier.EXCEPTIONAL, effects=[next_step("{return:survived}")]),
+            entry("Survived", tier=OutcomeTier.PERFECT, effects=[next_step("{return:survived}")]),
+        ],
+    ))
+
+    # Continue — after promotion: serve another term (return to the path's learn) or muster out.
+    upsert_table(RollTable(
+        id="rt-continue",
+        name="Continue",
+        universe="three_realms",
+        life_path=None,
         scheme=RollTableScheme.RANGE,
         die=DieType.D6,
         entries=[
             entry("Serve another term", min_value=1, max_value=2,
-                 effects=[trait("gain_or_step_up", "trait-rel-tenure", "d4", relationship=ROGUE_FACTION), next_step("rt-drifter-3r-learn")]),
+                 effects=[trait("gain_or_step_up", "trait-rel-tenure", "d4", relationship="{term_faction}"), next_step("{return:next}")]),
             entry("Muster out (respectfully)", min_value=3, max_value=5,
                  effects=[flow("muster")]),
             entry("Muster out (dishonorably)", min_value=6, max_value=6,
                  effects=[flow("force_muster")]),
         ],
     ))
+
+    # Remove the per-path Survive/Muster tables superseded by the shared ones.
+    for old_id in ("rt-verdant-survive", "rt-drifter-3r-survive", "rt-verdant-muster", "rt-drifter-3r-muster"):
+        repo.delete_roll_table(old_id)
