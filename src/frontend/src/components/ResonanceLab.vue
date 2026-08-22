@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RESONANCE, signatureOf } from '@/composables/resonance.js'
 import { drawResonanceFrame } from '@/composables/renderResonance.js'
 
@@ -13,11 +13,14 @@ const durationMs = ref(RESONANCE.durationMs)
 const collapseFraction = ref(RESONANCE.collapseFraction)
 const transformFraction = ref(RESONANCE.transformFraction)
 const expandFraction = ref(RESONANCE.expandFraction)
+const egoBoost = ref(RESONANCE.egoBoost)
 
 const progress = ref(0)
 const playing = ref(false)
-const from = ref([])
-const to = ref([])
+const fromRaw = ref({ traitSettings: [], razmerit: 0 })
+const toRaw = ref({ traitSettings: [], razmerit: 0 })
+const from = computed(() => signatureOf(fromRaw.value.traitSettings, fromRaw.value.razmerit, egoBoost.value))
+const to = computed(() => signatureOf(toRaw.value.traitSettings, toRaw.value.razmerit, egoBoost.value))
 const fromName = ref('kael-1')
 const toName = ref('character-phaos-a2c7db71')
 const fromLabel = ref('Kael Drift')
@@ -35,6 +38,7 @@ const output = computed(() => JSON.stringify({
   renderDivisor: renderDivisor.value,
   drift: drift.value,
   height: height.value,
+  egoBoost: egoBoost.value,
   durationMs: durationMs.value,
   collapseFraction: collapseFraction.value,
   transformFraction: transformFraction.value,
@@ -43,7 +47,7 @@ const output = computed(() => JSON.stringify({
 }, null, 2))
 
 async function fetchSignature(id) {
-  const q = `query($id: ID!) { character(id: $id) { entity { id razmerit } traitSettings { id traitId traitsetId dice polarity fromType projectionId ego } } }`
+  const q = `query($id: ID!) { character(id: $id) { entity { id razmerit effectiveTraitSettings { id traitId traitsetId dice polarity fromType projectionId } } } }`
   const r = await fetch('/api/v1/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -51,22 +55,23 @@ async function fetchSignature(id) {
   })
   const j = await r.json()
   const c = j.data?.character
-  return c ? signatureOf(c.traitSettings || [], c.entity?.razmerit || 0) : []
+  if (!c) return { traitSettings: [], razmerit: 0 }
+  return { traitSettings: c.entity?.effectiveTraitSettings || [], razmerit: c.entity?.razmerit || 0 }
 }
 
 async function load() {
   loading.value = true
   const [a, b] = await Promise.all([fetchSignature(fromName.value), fetchSignature(toName.value)])
-  from.value = a
-  to.value = b
+  fromRaw.value = a
+  toRaw.value = b
   loading.value = false
   render()
 }
 
-function render() {
+function render(now = performance.now()) {
   const canvas = canvasEl.value
   if (!canvas) return
-  const dpr = window.devicePixelRatio || 1
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   const w = canvas.clientWidth || 600
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(height.value * dpr)) {
     canvas.width = Math.round(w * dpr)
@@ -84,6 +89,7 @@ function render() {
     collapseFraction: collapseFraction.value,
     transformFraction: transformFraction.value,
     expandFraction: expandFraction.value,
+    timeMs: now,
   })
 }
 
@@ -95,29 +101,25 @@ function togglePlay() {
       playElapsed = 0
     }
     lastNow = 0
-    rafId = requestAnimationFrame(tick)
-  } else {
-    if (rafId) cancelAnimationFrame(rafId)
   }
-}
-
-function tick(now) {
-  if (!lastNow) lastNow = now
-  playElapsed += now - lastNow
-  lastNow = now
-  progress.value = Math.min(1, playElapsed / durationMs.value)
-  render()
-  if (progress.value >= 1) {
-    playing.value = false
-    return
-  }
-  rafId = requestAnimationFrame(tick)
 }
 
 function onScrub() {
   playing.value = false
-  if (rafId) cancelAnimationFrame(rafId)
-  render()
+}
+
+function loop(now) {
+  if (playing.value) {
+    if (!lastNow) lastNow = now
+    playElapsed += now - lastNow
+    lastNow = now
+    progress.value = Math.min(1, playElapsed / durationMs.value)
+    if (progress.value >= 1) playing.value = false
+  } else {
+    lastNow = 0
+  }
+  render(now)
+  rafId = requestAnimationFrame(loop)
 }
 
 async function copyOutput() {
@@ -130,12 +132,9 @@ async function copyOutput() {
   }
 }
 
-watch([progress, mode, renderDivisor, drift, height, collapseFraction, transformFraction, expandFraction], () => {
-  if (!playing.value) render()
-})
-
 onMounted(() => {
   load()
+  rafId = requestAnimationFrame(loop)
 })
 
 onUnmounted(() => {
@@ -194,6 +193,11 @@ onUnmounted(() => {
           <label class="reslab-knob">
             <span>height {{ height }}</span>
             <input v-model.number="height" type="range" min="120" max="360" step="10" />
+          </label>
+
+          <label class="reslab-knob">
+            <span>egoBoost {{ egoBoost.toFixed(2) }}</span>
+            <input v-model.number="egoBoost" type="range" min="1" max="4" step="0.1" />
           </label>
 
           <label class="reslab-knob">

@@ -16,6 +16,8 @@ const FALLBACK_DIE_COLORS_NEG = {
 }
 
 let dieColorCache = null
+const groupsCache = new WeakMap()
+
 function getDieColor(die, negative) {
   if (!dieColorCache) {
     dieColorCache = {}
@@ -31,6 +33,15 @@ function getDieColor(die, negative) {
   }
   const d = String(die || 'd6').toLowerCase()
   return negative ? (dieColorCache[`${d}:neg`] || dieColorCache[d]) : dieColorCache[d]
+}
+
+function getGroups(arr) {
+  let g = groupsCache.get(arr)
+  if (!g) {
+    g = groupByTraitsetDie(arr)
+    groupsCache.set(arr, g)
+  }
+  return g
 }
 
 function mixColor(a, b, t) {
@@ -57,25 +68,30 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const mode = opts.mode ?? RESONANCE.mode
   const renderDivisor = opts.renderDivisor ?? RESONANCE.renderDivisor
   const drift = opts.drift ?? RESONANCE.drift
+  const timeMs = opts.timeMs ?? (typeof performance !== 'undefined' ? performance.now() : 0)
   const collapseFraction = opts.collapseFraction ?? RESONANCE.collapseFraction
   const transformFraction = opts.transformFraction ?? RESONANCE.transformFraction
   const expandFraction = opts.expandFraction ?? RESONANCE.expandFraction
 
   const midY = h / 2
   const ampScale = h / 2 - 14
-  const driftOffset = progress * drift
+  // Continuous right-to-left scroll. `drift` is a rate in signal-seconds/sec;
+  // each wave multiplies it by its own driftMul so it doesn't march in lockstep.
+  const baseDrift = drift * (timeMs / 1000)
 
+  const sampleStep = Math.max(2, Math.round(w / 180))
   const columns = []
-  for (let x = 0; x <= w; x += 2) columns.push(x)
+  for (let x = 0; x <= w; x += sampleStep) columns.push(x)
 
-  const sampleTime = (x) => (x / w) / renderDivisor + driftOffset
+  const sampleTime = (x) => (x / w) / renderDivisor + baseDrift
+  const waveTime = (o, x) => (x / w) / renderDivisor + baseDrift * (o.driftMul ?? 1)
   const maxAmp = (arr) => {
     let m = 0
     for (const o of arr) if (o.amp > m) m = o.amp
     return m
   }
   const ownY = (o, strength, x) =>
-    midY - Math.sin(2 * Math.PI * o.freq * sampleTime(x) + o.phase) * ampScale * (0.35 + 0.65 * strength)
+    midY - Math.sin(2 * Math.PI * o.freq * waveTime(o, x) + o.phase) * ampScale * (0.35 + 0.65 * strength)
 
   ctx.save()
   ctx.lineJoin = 'round'
@@ -149,20 +165,26 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const drawCompositeBlend = (fromOsc, toOsc, tf, opacity = 1) => {
     const totalA = totalAmplitude(fromOsc, [])
     const totalB = totalAmplitude([], toOsc)
-    ctx.beginPath()
-    ctx.strokeStyle = '#dceaff'
-    ctx.globalAlpha = 0.9 * opacity
-    ctx.lineWidth = 1.6
-    ctx.shadowColor = 'rgba(160, 200, 255, 0.6)'
-    ctx.shadowBlur = 4
-    columns.forEach((x, j) => {
+    const ys = columns.map((x) => {
       const tt = sampleTime(x)
       const a = totalA > 0 ? sampleAt(fromOsc, tt) / totalA : 0
       const b = totalB > 0 ? sampleAt(toOsc, tt) / totalB : 0
-      const v = a * (1 - tf) + b * tf
-      const y = midY - v * ampScale
-      j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+      return midY - (a * (1 - tf) + b * tf) * ampScale
     })
+
+    // Cheap halo + core instead of an expensive per-frame shadowBlur.
+    ctx.beginPath()
+    ctx.strokeStyle = '#dceaff'
+    ctx.globalAlpha = 0.15 * opacity
+    ctx.lineWidth = 4
+    columns.forEach((x, j) => { j === 0 ? ctx.moveTo(x, ys[j]) : ctx.lineTo(x, ys[j]) })
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.strokeStyle = '#dceaff'
+    ctx.globalAlpha = 0.9 * opacity
+    ctx.lineWidth = 1.5
+    columns.forEach((x, j) => { j === 0 ? ctx.moveTo(x, ys[j]) : ctx.lineTo(x, ys[j]) })
     ctx.stroke()
   }
 
@@ -209,8 +231,8 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
     const expandStart = (c + t) / sum
     const blend = Math.min(0.08, (expandStart - collapseEnd) / 3)
 
-    const fromGroups = groupByTraitsetDie(from)
-    const toGroups = groupByTraitsetDie(to)
+    const fromGroups = getGroups(from)
+    const toGroups = getGroups(to)
 
     // Overlapping phase opacities so the phases lerp into each other instead
     // of switching at a hard boundary.

@@ -98,10 +98,13 @@ export function razmeritAmplitude(razmerit) {
  * @param {Array} traitSettings — GraphQL `traitSettings` (dice, polarity,
  *   fromType, ego, traitId/id).
  * @param {number} razmerit — entity's current razmerit balance (amplitude).
+ * @param {number} egoBoost — amplitude multiplier for entity-anchored (ego) traits,
+ *   so an identity's fundamental stays recognisable across projections.
  * @returns {Array} oscillators [{freq, amp, phase, kind, die, traitId}]
  */
-export function signatureOf(traitSettings, razmerit = 0) {
+export function signatureOf(traitSettings, razmerit = 0, egoBoost = 1) {
   const baseAmp = razmeritAmplitude(razmerit)
+  const boost = Number.isFinite(egoBoost) && egoBoost >= 0 ? egoBoost : 1
   const osc = []
   let oscIndex = 0
 
@@ -110,23 +113,27 @@ export function signatureOf(traitSettings, razmerit = 0) {
     if (!dice.length) continue
 
     const band = categoryBand(ts.fromType)
-    const egoBand = ts.ego ? 0.5 : 1
-    const phase = POLARITY_PHASE[String(ts.polarity || '').toLowerCase()] ?? 0
     const kind = String(ts.fromType || 'entity').toLowerCase()
+    const isEgo = ts.ego ?? kind === 'entity'
+    const egoBand = isEgo ? 0.5 : 1
+    const egoAmp = isEgo ? boost : 1
+    const phase = POLARITY_PHASE[String(ts.polarity || '').toLowerCase()] ?? 0
     const traitId = ts.traitId || ts.id || ''
     const traitsetId = ts.traitsetId || ts.traitset_id || traitId
     const negative = String(ts.polarity || '').toLowerCase() === 'negative'
+    const driftMul = 0.5 + (hashString(traitsetId) % 100) / 100 // 0.5..1.5
 
     dice.forEach((die) => {
       const weight = (DIE_WEIGHT[String(die || '').toLowerCase()] ?? 6) / 12
       osc.push({
         freq: dieFrequency(die) * band * egoBand + traitsetDetune(traitsetId),
-        amp: baseAmp * weight,
+        amp: baseAmp * weight * egoAmp,
         phase: phase + oscIndex * GOLDEN,
         kind,
         die,
         traitId,
         traitsetId,
+        driftMul,
         negative,
       })
       oscIndex++
@@ -318,11 +325,12 @@ export const RESONANCE = {
   durationMs: 3000, // minimum switch/load window (crossfade finishes here)
   fanMs: 800, // brief settle after done before the overlay closes
   collapseFraction: 0.45, // relative weight of the collapse phase
-  transformFraction: 0.3, // relative weight of the transform phase
-  expandFraction: 0.25, // relative weight of the expand phase
-  renderDivisor: 220, // Hz → visible cycles; d4 (220 Hz) = one period across width
+  transformFraction: 0.1, // relative weight of the transform phase
+  expandFraction: 0.45, // relative weight of the expand phase
+  renderDivisor: 90, // Hz → visible cycles; d4 (220 Hz) = one period across width
   height: 200, // canvas height (CSS px)
-  drift: 0.002, // slow horizontal flow — max signal-time offset (s) by the end
+  drift: 0.002, // right-to-left scroll rate (signal-seconds per second)
+  egoBoost: 2, // entity-anchored (ego) amplitude multiplier vs morph traits
   mode: 'harmonic', // 'harmonic' | 'crossfade' | 'morph'
   presets: {
     harmonic: { mode: 'harmonic' },

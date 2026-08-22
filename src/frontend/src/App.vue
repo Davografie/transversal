@@ -1678,14 +1678,14 @@ async function fetchCharacterSignature(id) {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `query($id: ID!) { character(id: $id) { entity { id razmerit } traitSettings { id traitId traitsetId dice polarity fromType projectionId ego } } }`,
+        query: `query($id: ID!) { character(id: $id) { entity { id razmerit effectiveTraitSettings { id traitId traitsetId dice polarity fromType projectionId } } } }`,
         variables: { id }
       })
     })
     const json = await r.json()
     const c = json.data?.character
     if (!c) return []
-    return signatureOf(c.traitSettings || [], c.entity?.razmerit || 0)
+    return signatureOf(c.entity?.effectiveTraitSettings || [], c.entity?.razmerit || 0, RESONANCE.egoBoost)
   } catch {
     return []
   }

@@ -35,7 +35,7 @@ function draw(now) {
 
   const progress = clamp01(elapsed / props.duration)
 
-  const dpr = window.devicePixelRatio || 1
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   const w = canvas.clientWidth || 260
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(H * dpr)) {
     canvas.width = Math.round(w * dpr)
@@ -54,6 +54,7 @@ function draw(now) {
     collapseFraction: RESONANCE.collapseFraction,
     transformFraction: RESONANCE.transformFraction,
     expandFraction: RESONANCE.expandFraction,
+    timeMs: now,
   })
 
   rafId = requestAnimationFrame(draw)
