@@ -87,12 +87,17 @@
         {{ switchFound ? 'Continue' : 'Begin' }}
       </button>
 
-      <!-- Character confirmation (separate from switch) -->
-      <p v-if="charStatus" class="name-status name-found">{{ charStatus }}</p>
-      <button v-if="charStatus" class="continue-btn" @click="confirmChar">Continue</button>
+      <!-- Character switch (loading + cancel) -->
+      <div v-if="charSwitchLoading" class="settings-section char-switch-section">
+        <p class="name-status name-found">Preparing {{ charPending?.name || charPending?.id }}…</p>
+        <button class="char-loading-btn" @click="cancelCharacterSwitch">
+          <RazmeritWaves :from="resonanceFrom" :to="resonanceTo" :done="charSwitchDone" :duration="RESONANCE.durationMs" :fan-duration="RESONANCE.fanMs" />
+          <span class="char-loading-label">Harmonizing razmerit… tap to cancel</span>
+        </button>
+      </div>
 
-      <!-- Mode + Characters (hidden during confirmation) -->
-      <template v-if="!switchStatus && !charStatus">
+      <!-- Mode + Characters (hidden during switch) -->
+      <template v-if="!switchStatus && !charSwitchLoading">
         <div class="settings-section">
           <label class="settings-label">Mode</label>
           <div class="mode-toggle">
@@ -209,7 +214,7 @@
       </template>
 
       <p v-if="switchError" class="switch-error">{{ switchError }}</p>
-      <button class="cancel-btn" @click="dismissOverlay">Back to game</button>
+      <button v-if="!charSwitchLoading" class="cancel-btn" @click="dismissOverlay">Back to game</button>
     </template>
   </div>
   <LocationViewer
@@ -244,7 +249,7 @@
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, 'hold-active': hoverHoldActive }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="wrapperOpen && peers.length" class="peers-bar">
         <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: (gmMode ? actingEntityId : viewingEntityId) === p.id || (!(gmMode ? actingEntityId : viewingEntityId) && entityId === p.id) }" @click.stop="onPeerClick(p.id)" :title="p.name">
-          <img v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" />
+          <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
           <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
           <span class="peer-label">{{ p.name }}</span>
         </button>
@@ -286,6 +291,8 @@ import GmPanel from './components/GmPanel.vue'
 import PanelStack from './components/gm/PanelStack.vue'
 import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
 import MediaImage from './components/MediaImage.vue'
+import RazmeritWaves from './components/RazmeritWaves.vue'
+import { signatureOf, RESONANCE } from './composables/resonance.js'
 import { useSSE } from './composables/useSSE.js'
 import { useSessions } from './composables/useSessions.js'
 import { useToasts } from './composables/useToasts.js'
@@ -440,13 +447,15 @@ const selfEntityId = ref(localStorage.getItem('entityId') || 'kael-1')  // stabl
 const entityId = ref(selfEntityId.value)  // perspective entity; null = GM free-roam view
 const editZones = ref(false)
 
+let locationInitPromise = null
+
 // When switching entities, update location (players only — for GM, entityId
 // is a freely-switchable perspective and must not re-init location or persist).
 watch(entityId, () => {
   if (!entityId.value || gmMode.value) return
   localStorage.setItem('entityId', entityId.value)
-  initLocation()
-})
+  locationInitPromise = initLocation()
+}, { flush: 'sync' })
 const keepCount = ref(2)
 const effectCount = ref(1)
 const phase = ref('adding')
@@ -473,7 +482,12 @@ const switchPending = ref(null)
 const switchStatus = ref('')
 const switchFound = ref(false)
 const charPending = ref(null)
-const charStatus = ref('')
+const charSwitchLoading = ref(false)
+const charSwitchDone = ref(false)
+const resonanceFrom = ref([])
+const resonanceTo = ref([])
+let charSwitchToken = 0
+let charSwitchPreviousEntityId = null
 const pendingPlayerEntities = ref([])
 const playerEntities = ref([])
 const loadingPlayerEntities = ref(false)
@@ -648,7 +662,6 @@ async function ensurePlayer() {
     if (p) {
       playerId.value = p.id
       localStorage.setItem('playerId', p.id)
-      fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
       return
     }
   }
@@ -666,7 +679,6 @@ function confirmPlayer() {
   nameStatus.value = ''
   pendingPlayer.value = null
   showLoginOverlay.value = false
-  fetch(`/api/v1/players/${playerId.value}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
   loadPlayerRole()
 }
 ensurePlayer()
@@ -1364,8 +1376,13 @@ function openSettings() {
   switchStatus.value = ''
   switchPending.value = null
   pendingPlayerEntities.value = []
-  charStatus.value = ''
+  charSwitchLoading.value = false
+  charSwitchDone.value = false
+  charSwitchToken++
   charPending.value = null
+  charSwitchPreviousEntityId = null
+  resonanceFrom.value = []
+  resonanceTo.value = []
   switchError.value = ''
   newCharName.value = ''
   createCharError.value = ''
@@ -1388,8 +1405,13 @@ function dismissOverlay() {
     switchStatus.value = ''
     switchPending.value = null
     pendingPlayerEntities.value = []
-    charStatus.value = ''
+    charSwitchLoading.value = false
+    charSwitchDone.value = false
+    charSwitchToken++
     charPending.value = null
+    charSwitchPreviousEntityId = null
+    resonanceFrom.value = []
+    resonanceTo.value = []
     showLoginOverlay.value = false
   }
 }
@@ -1512,15 +1534,13 @@ function confirmSwitch() {
   switchName.value = ''
   showLoginOverlay.value = false
   playerEntities.value = []
-  fetch(`/api/v1/players/${p.id}/claim/${entityId.value}`, { method: 'POST' }).catch(() => {})
   fetchPlayerEntities()
   initLocation()
   loadPlayerRole()
 }
 
 function selectCharacter(e) {
-  charPending.value = e
-  charStatus.value = `Assume the form of ${e.name || e.id}?`
+  beginCharacterSwitch(e)
 }
 
 async function releaseCharacter(e) {
@@ -1595,8 +1615,7 @@ function chooseFoundCharacter(e) {
   charSearchResults.value = []
   charSearchSearched.value = false
   charSearchError.value = ''
-  charPending.value = e
-  charStatus.value = `Assume the form of ${e.name || e.id}?`
+  beginCharacterSwitch(e)
 }
 
 async function createCharacter() {
@@ -1649,17 +1668,77 @@ async function loadPlayerRole() {
   }
 }
 
-function confirmChar() {
-  if (!charPending.value) return
-  const e = charPending.value
-  entityId.value = e.id
-  charStatus.value = ''
-  charPending.value = null
-  showLoginOverlay.value = false
-  if (playerId.value) {
-    fetch(`/api/v1/players/${playerId.value}/claim/${e.id}`, { method: 'POST' }).catch(() => {})
-    fetchPlayerEntities()
+async function fetchCharacterSignature(id) {
+  if (!id) return []
+  try {
+    const r = await fetch('/api/v1/graphql', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query($id: ID!) { character(id: $id) { entity { id razmerit } traitSettings { id traitId dice polarity fromType projectionId ego } } }`,
+        variables: { id }
+      })
+    })
+    const json = await r.json()
+    const c = json.data?.character
+    if (!c) return []
+    return signatureOf(c.traitSettings || [], c.entity?.razmerit || 0)
+  } catch {
+    return []
   }
+}
+
+function beginCharacterSwitch(e) {
+  if (!e?.id || charSwitchLoading.value) return
+  const token = ++charSwitchToken
+  charPending.value = e
+  charSwitchLoading.value = true
+  charSwitchDone.value = false
+  charSwitchPreviousEntityId = entityId.value
+
+  const aId = entityId.value
+  const bId = e.id
+  resonanceFrom.value = []
+  resonanceTo.value = []
+  const sigAP = fetchCharacterSignature(aId).then(s => { if (token === charSwitchToken) resonanceFrom.value = s })
+  const sigBP = fetchCharacterSignature(bId).then(s => { if (token === charSwitchToken) resonanceTo.value = s })
+
+  // Commit the perspective and load everything in the background.
+  locationInitPromise = null
+  entityId.value = bId
+  const claimP = playerId.value
+    ? fetch(`/api/v1/players/${playerId.value}/claim/${bId}`, { method: 'POST' }).catch(() => {})
+    : Promise.resolve()
+  const entitiesP = fetchPlayerEntities()
+  const locationP = locationInitPromise || Promise.resolve()
+  const minDelayP = new Promise(resolve => setTimeout(resolve, RESONANCE.durationMs))
+
+  Promise.all([claimP, entitiesP, locationP, minDelayP, sigAP, sigBP]).then(() => {
+    if (token !== charSwitchToken) return
+    charSwitchDone.value = true
+    // Let the final fan-out read for a beat before closing.
+    setTimeout(() => {
+      if (token !== charSwitchToken) return
+      charSwitchLoading.value = false
+      charPending.value = null
+      charSwitchPreviousEntityId = null
+      resonanceFrom.value = []
+      resonanceTo.value = []
+      showLoginOverlay.value = false
+    }, RESONANCE.fanMs)
+  })
+}
+
+function cancelCharacterSwitch() {
+  charSwitchToken++
+  if (charSwitchPreviousEntityId != null && entityId.value !== charSwitchPreviousEntityId) {
+    entityId.value = charSwitchPreviousEntityId
+  }
+  charSwitchPreviousEntityId = null
+  charSwitchLoading.value = false
+  charSwitchDone.value = false
+  charPending.value = null
+  resonanceFrom.value = []
+  resonanceTo.value = []
 }
 
 watch(gmMode, (v) => {

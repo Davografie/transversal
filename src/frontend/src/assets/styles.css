@@ -554,6 +554,34 @@ input:focus, select:focus {
   0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }
 }
+.char-switch-section {
+  align-items: center;
+  text-align: center;
+}
+.char-loading-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: var(--text);
+  transition: background 0.15s, border-color 0.15s;
+}
+.char-loading-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.22);
+}
+.char-loading-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+}
 /* Name search suggestions */
 .search-wrapper {
   position: relative;
