@@ -71,9 +71,13 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 - `earth` + `{random_projection}` + `consciousness` — mind arrives in a random existing Earth body (the default consciousness transversal).
 - `earth` + `krasnoyarsk` + `{new_projection}` + `consciousness` — spawn a fresh body at Krasnoyarsk (clone factory).
 
-## Deferred — `{choose:*}` in scope
+## Multi-step prompt — implemented
 
-Supporting `{choose:*}` in the scope value (e.g. `universe:{choose_universe}`) means two sequential `PendingChoice`s in one effect. **Deferred, but wanted** — revisit after `{random:*}` and context-variable scope values land.
+`{choose:*}` in the scope value (e.g. `universe:{choose_universe}`) resolves as a sequential `PendingChoice`: the scope choice is prompted first, then the effect re-applies and prompts for the now-scoped target. The SFX choice wizard forwards each round of `pendingChoices`, so back-to-back prompts work.
+
+## Remaining
+
+- **Consolidation** — merge `EntityManager.inapposite_travel` / `consciousness_travel` with the effect-applier travel path so there is one source of truth. Deferred for a separate discussion.
 
 ## Implementation steps
 
