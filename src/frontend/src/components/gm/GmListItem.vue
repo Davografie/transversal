@@ -10,8 +10,8 @@
     @drop.prevent="$emit('drop', $event)"
     @dragend="$emit('dragend', $event)"
   >
-    <span v-if="draggable && dragHandle" class="gml-drag-handle" draggable="true" title="Drag to reorder">⠿</span>
     <slot />
+    <span v-if="draggable && dragHandle" class="gml-drag-handle" draggable="true" title="Drag to reorder">⠿</span>
   </div>
 </template>
 
@@ -39,5 +39,5 @@ defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend'])
   transform: scale(1.02);
 }
 .gml-item.editing { background: rgba(64, 136, 212, 0.12); border: 1px solid var(--accent-dim); }
-.gml-drag-handle { cursor: grab; color: var(--text-dim); font-size: 13px; flex-shrink: 0; user-select: none; }
+.gml-drag-handle { cursor: grab; color: var(--text-dim); font-size: 13px; flex-shrink: 0; user-select: none; margin-left: auto; }
 </style>

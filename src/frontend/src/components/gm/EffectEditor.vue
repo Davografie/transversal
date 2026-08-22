@@ -9,10 +9,10 @@
       @reorder="onReorder"
     >
       <template #item="{ item: eff, index: i }">
-        <span class="ee-handle">⠿</span>
         <span class="ee-cat" :class="'cat-' + effectCategory(eff)">{{ categorySign(effectCategory(eff)) }}</span>
         <span class="ee-summary">{{ effectSummary(eff) }}</span>
         <span class="ee-timing">{{ eff.timing }}</span>
+        <span class="ee-handle">⠿</span>
         <button class="ee-del" @click.stop="removeEffect(i)" title="Remove">✕</button>
       </template>
     </GmList>

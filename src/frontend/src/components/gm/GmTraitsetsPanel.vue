@@ -14,9 +14,9 @@
       @reorder="onReorder"
     >
       <template #item="{ item: ts }">
-        <span class="drag-handle">⠿</span>
         <span class="entity-name">{{ ts.name }}</span>
         <span style="font-size:10px;color:var(--text-dim)">{{ (ts.traits?.length) || 0 }}</span>
+        <span class="drag-handle">⠿</span>
       </template>
     </GmList>
   </div>
@@ -86,6 +86,6 @@ function openBatchEdit() {
 
 <style scoped>
 .batch-btn { margin-top: 0; margin-bottom: 8px; }
-.drag-handle { font-size: 12px; color: var(--text-dim); cursor: grab; opacity: 0.4; transition: opacity 0.15s; padding: 0 2px; }
+.drag-handle { font-size: 12px; color: var(--text-dim); cursor: grab; opacity: 0.4; transition: opacity 0.15s; padding: 0 2px; margin-left: auto; }
 .entity-row:hover .drag-handle { opacity: 0.7; }
 </style>
