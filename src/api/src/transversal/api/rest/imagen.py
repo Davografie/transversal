@@ -326,6 +326,7 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "universe": img.universe,
                 "universe_label": universe_names.get(img.universe, img.universe),
                 "image_type": img.image_type.value,
+                "projection_id": img.projection_id,
                 "prompt": img.prompt,
                 "width": img.width,
                 "height": img.height,
@@ -341,10 +342,12 @@ async def list_images(entity_id: str, universe: str | None = None):
 
 @router.patch("/imagen/{image_id}")
 async def update_image_roles(image_id: str, payload: dict = Body(...)):
-    """Update the roles assigned to an image (background, sheet, navdot).
+    """Update an image's roles, universe, and/or owning projection.
 
-    Per image, universe+role is unique — assigning a role removes it from
-    any other image for the same entity in the same universe.
+    Roles are unique per (owner, role), where the owner is the image's
+    projection when set, else the entity. Assigning a role removes it from
+    any other image with the same owner. ``projection_id`` (string or null)
+    reassigns ownership: null/empty clears it back to the entity.
     """
     from transversal.db.repository import EntityRepository
     repo = EntityRepository()
@@ -354,21 +357,29 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
     if not img:
         raise HTTPException(status_code=404, detail=f"Image '{image_id}' not found")
 
-    old_roles = set(img.roles)
-    new_roles = set(roles)
-    added = new_roles - old_roles
+    updates: dict = {}
 
-    # Remove newly-assigned roles from other images in same universe
-    if added:
-        siblings = repo.get_entity_images(img.entity_id, universe=img.universe)
-        for sib in siblings:
-            if sib.id == image_id:
-                continue
-            sib_roles = [r for r in sib.roles if r not in added]
-            if sib_roles != sib.roles:
-                repo.update_entity_image(sib.id, {"roles": sib_roles})
+    # ── Roles (owner-scoped uniqueness) ──
+    if isinstance(roles, list):
+        old_roles = set(img.roles)
+        new_roles = set(roles)
+        added = new_roles - old_roles
+        if added:
+            siblings = repo.get_images_for_owner(img.entity_id, img.projection_id)
+            for sib in siblings:
+                if sib.id == image_id:
+                    continue
+                sib_roles = [r for r in sib.roles if r not in added]
+                if sib_roles != sib.roles:
+                    repo.update_entity_image(sib.id, {"roles": sib_roles})
+        updates["roles"] = roles
 
-    updates = {"roles": roles}
+    # ── Projection ownership ──
+    if "projection_id" in payload:
+        new_owner = payload.get("projection_id")
+        updates["projection_id"] = new_owner or None
+
+    # ── Universe (and file move) ──
     new_universe = payload.get("universe")
     if new_universe and new_universe != img.universe:
         updates["universe"] = new_universe
@@ -382,9 +393,17 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
                 os.makedirs(os.path.dirname(new_dir), exist_ok=True)
                 shutil.move(old_dir, new_dir)
 
+    if not updates:
+        return {"success": True, "roles": img.roles, "universe": img.universe, "projection_id": img.projection_id}
+
     updated = repo.update_entity_image(image_id, updates)
 
-    return {"success": True, "roles": roles, "universe": updated.universe if updated else img.universe}
+    return {
+        "success": True,
+        "roles": updated.roles if updated else img.roles,
+        "universe": updated.universe if updated else img.universe,
+        "projection_id": updated.projection_id if updated else img.projection_id,
+    }
 
 
 @router.delete("/imagen/{image_id}")

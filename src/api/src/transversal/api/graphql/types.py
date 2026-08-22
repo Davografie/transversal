@@ -661,55 +661,39 @@ class Entity:
     @strawberry.field
     def background_image(self) -> Optional[str]:
         from transversal.db.repository import EntityRepository
-        from transversal.domain import ImageType
         repo = EntityRepository()
-        images = repo.get_entity_images(str(self.id))
-        for img in images:
-            if "background" in img.roles:
-                if img.image_type == ImageType.ANIMATED:
-                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
-                else:
-                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
-        return self._background_image
+        url = repo.resolve_role_image(str(self.id), "background", None, "Large")
+        return url if url is not None else self._background_image
 
     @strawberry.field
     def sheet_portrait(self) -> Optional[str]:
         from transversal.db.repository import EntityRepository
-        from transversal.domain import ImageType
         repo = EntityRepository()
-        images = repo.get_entity_images(str(self.id))
-        for img in images:
-            if "sheet" in img.roles:
-                if img.image_type == ImageType.ANIMATED:
-                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
-                else:
-                    # Sheet portraits render at ~40px — serve the small variant.
-                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Small.{img.extension}"
+        # Sheet portraits render at ~40px — serve the small variant.
+        url = repo.resolve_role_image(str(self.id), "sheet", None, "Small")
+        if url is not None:
+            return url
         # Fall back to background image
         return self.background_image()
 
     # Canonical role-based media resolver. The only valid roles are
     # "background", "sheet", and "navdot" — resolved from the image's roles
-    # tags in entity_images. There is deliberately no fallback to the legacy
-    # denormalized background_image field: callers that want a role image must
-    # use the role tags.
+    # tags in entity_images. ``projection_id`` scopes resolution to a body
+    # (its own image first, then entity-level fallback); when omitted only
+    # entity-level images are considered. There is deliberately no fallback to
+    # the legacy denormalized background_image field.
     _ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
 
     @strawberry.field
-    def image(self, role: str) -> Optional[str]:
+    def image(self, role: str, projection_id: Optional[strawberry.ID] = None) -> Optional[str]:
         from transversal.db.repository import EntityRepository
-        from transversal.domain import ImageType
         variant = self._ROLE_VARIANT.get(role)
         if variant is None:
             return None
         repo = EntityRepository()
-        images = repo.get_entity_images(str(self.id))
-        for img in images:
-            if role in img.roles:
-                if img.image_type == ImageType.ANIMATED:
-                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
-                return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_{variant}.{img.extension}"
-        return None
+        return repo.resolve_role_image(
+            str(self.id), role, str(projection_id) if projection_id else None, variant
+        )
 
     @strawberry.field
     def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:

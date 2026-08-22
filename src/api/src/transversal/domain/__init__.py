@@ -890,9 +890,15 @@ class EntityImage(BaseModel):
 
     Stored in the `entity_images` collection.
     Files live at media/imagen/{entity_id}/{universe}/{image_id}_{variant}.{ext}
+
+    ``projection_id`` ties the image to a specific body (projection). When
+    empty the image is entity-level — the soul's default, used as fallback
+    for any body that has no body-specific image for a role. Role uniqueness
+    is keyed on the owner (projection id when set, else entity id) plus role.
     """
     id: str  # uuid
     entity_id: str
+    projection_id: Optional[str] = None  # owning body; empty = entity-level default
     universe: str
     image_type: ImageType
     roles: list[str] = Field(default_factory=list)  # ["background", "sheet", "navdot"]

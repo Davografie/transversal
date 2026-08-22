@@ -1704,32 +1704,34 @@ class EntityRepository:
         return set(self.db.aql.execute(query, bind_vars={"mids": member_ids}))
 
     def _role_urls(self, entity_ids: list[str], role: str, variant: str = "Large") -> dict[str, str]:
-        """Resolve one image URL per entity for a role tag, newest first.
+        """Resolve one image URL per entity for a role tag.
 
-        ``role`` is a canonical role tag (background/sheet/navdot); ``variant``
-        is the static size suffix (Large/Small). Animated images return their
-        video URL regardless of variant.
+        Each entity is resolved through its active projection (body) first,
+        falling back to entity-level images. ``role`` is a canonical role tag
+        (background/sheet/navdot); ``variant`` is the static size suffix
+        (Large/Small). Animated images return their video URL regardless of
+        variant.
         """
         if not entity_ids:
             return {}
-        query = f"""
-            FOR img IN {ENTITY_IMAGES}
-            FILTER img.entity_id IN @ids AND @role IN img.roles
-            SORT img.created_at DESC
-            RETURN {{ entity_id: img.entity_id, image_type: img.image_type, universe: img.universe, filename: img.filename, extension: img.extension }}
+        # Map each entity to its active projection id.
+        proj_query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e._key IN @ids
+            RETURN {{ id: e._key, current_projection: e.current_projection }}
         """
-        result: dict = {}
-        for row in self.db.aql.execute(query, bind_vars={"ids": entity_ids, "role": role}):
-            if row["entity_id"] in result:
-                continue
-            if row["image_type"] == "animated":
-                result[row["entity_id"]] = f"/media/animated/{row['entity_id']}/{row['universe']}/{row['filename']}.{row['extension']}"
-            else:
-                result[row["entity_id"]] = f"/media/imagen/{row['entity_id']}/{row['universe']}/{row['filename']}_{variant}.{row['extension']}"
-        return result
+        current_proj: dict[str, str | None] = {
+            row["id"]: row.get("current_projection")
+            for row in self.db.aql.execute(proj_query, bind_vars={"ids": entity_ids})
+        }
+        return {
+            eid: url
+            for eid in entity_ids
+            if (url := self.resolve_role_image(eid, role, current_proj.get(eid), variant)) is not None
+        }
 
     def _navdot_urls(self, entity_ids: list[str]) -> dict[str, str]:
-        """Resolve one navdot image URL per entity, newest first."""
+        """Resolve one navdot image URL per entity, projection-scoped first."""
         return self._role_urls(entity_ids, "navdot")
 
     def _occupants_for_locations(self, location_ids: list[str], faction_id: str | None = None) -> dict:
@@ -2246,6 +2248,58 @@ class EntityRepository:
 
     def delete_entity_image(self, image_id: str) -> bool:
         return self._entity_images.delete(image_id)
+
+    def get_images_for_owner(self, entity_id: str, projection_id: str | None = None) -> list[EntityImage]:
+        """Images belonging to an owner: a specific projection, or the entity.
+
+        ``projection_id=None`` returns entity-level images only (those with an
+        empty ``projection_id``); a concrete id returns that projection's images.
+        """
+        images = self.get_entity_images(entity_id)
+        return [
+            img for img in images
+            if (img.projection_id or None) == projection_id
+        ]
+
+    def _image_url(self, img: EntityImage, variant: str = "Large") -> str:
+        """Public media URL for an image, honoring animated vs static variant."""
+        if img.image_type == ImageType.ANIMATED:
+            return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
+        return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_{variant}.{img.extension}"
+
+    def resolve_role_image(
+        self, entity_id: str, role: str, projection_id: str | None = None, variant: str = "Large"
+    ) -> str | None:
+        """Resolve a role image URL, projection-scoped with entity fallback.
+
+        Resolution order:
+        1. The projection's own image carrying ``role`` (newest first).
+        2. Entity-level image carrying ``role`` whose universe matches the
+           projection's current, then origin, universe.
+        3. Any entity-level image carrying ``role``.
+
+        With no ``projection_id`` only entity-level images are considered.
+        """
+        images = self.get_entity_images(entity_id)
+        if projection_id:
+            for img in images:
+                if (img.projection_id or None) == projection_id and role in img.roles:
+                    return self._image_url(img, variant)
+            proj = self.get_projection(projection_id)
+            universes: list[str] = []
+            if proj is not None:
+                if proj.universe:
+                    universes.append(proj.universe)
+                if proj.origin_universe and proj.origin_universe not in universes:
+                    universes.append(proj.origin_universe)
+            for u in universes:
+                for img in images:
+                    if not img.projection_id and role in img.roles and img.universe == u:
+                        return self._image_url(img, variant)
+        for img in images:
+            if not img.projection_id and role in img.roles:
+                return self._image_url(img, variant)
+        return None
 
     # ── Helpers ───────────────────────────────────────
 
