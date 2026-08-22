@@ -448,9 +448,19 @@ class EntityManager:
                 session_id: Optional[str] = None) -> Entity:
         old_location = entity.current_location
         old_universe = entity.current_universe
+
+        # The destination location's universe is authoritative; the client's
+        # ``universe`` argument is only a fallback when the location can't be
+        # resolved (or has no universe). This prevents a move from writing a
+        # location/universe mismatch.
+        loc = self.repo.get_entity(location)
+        if loc is not None and loc.current_universe:
+            universe = loc.current_universe
+        elif not universe:
+            universe = entity.current_universe
+
         entity.current_location = location
-        if universe:
-            entity.current_universe = universe
+        entity.current_universe = universe
 
         # Keep the active projection's location in sync.
         new_universe = entity.current_universe

@@ -333,6 +333,25 @@ class TestLocation:
         assert updated.current_location == "Valley of Ascension"
         assert updated.current_universe == "three_realms"
 
+    def test_move_ignores_mismatched_universe(self, em, kael):
+        # Destination location is on Earth; a wrong client universe must be ignored.
+        loc = em.create(name="Krasnoyarsk", entity_type=EntityType.LOCATION, universe="earth")
+        em.move_to(kael, loc.id, "three_realms")
+        updated = em.get(kael.id)
+        assert updated.current_location == loc.id
+        assert updated.current_universe == "earth"
+
+    def test_move_omitted_universe_follows_location(self, em, kael):
+        # Universe omitted → derive it from the destination location, not the old one.
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        em.move_to(kael, loc.id)
+        updated = em.get(kael.id)
+        assert updated.current_location == loc.id
+        assert updated.current_universe == "three_realms"
+        proj = em.repo.get_projection(f"{kael.id}:earth")
+        assert proj.universe == "three_realms"
+        assert proj.current_location == loc.id
+
     def test_consciousness_travel(self, em, kael):
         loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
         result = em.consciousness_travel(kael.id, loc.id)
