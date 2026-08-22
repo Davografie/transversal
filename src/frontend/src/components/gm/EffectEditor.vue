@@ -29,7 +29,8 @@
       </select>
       <template v-if="selectedAction">
         <div class="ee-help">{{ selectedAction.description }}</div>
-        <div v-if="isPortalTravel" class="ee-fixed-dest">Destination: <b>{{ portalDestination }}</b></div>
+        <div v-if="isPortalLocation" class="ee-fixed-dest">Destination: <b>{{ portalDestination }}</b></div>
+        <div v-else-if="isPortalUniverse" class="ee-fixed-dest">Destination: any location in <b>{{ portalUniverse }}</b></div>
         <div v-if="variables.length" class="ee-vars">
           <span class="ee-vars-label">Variables:</span>
           <button v-for="v in variables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" @click="copyVariable(v.name)">
@@ -61,6 +62,12 @@
                 :universe="universe"
                 :faction="faction"
                 :life-path="lifePath"
+              />
+              <GmLocationPicker
+                v-else-if="isPortalUniverse && f.name === 'target'"
+                :model-value="newEffect.fields[f.name] || ''"
+                @update:model-value="newEffect.fields[f.name] = $event"
+                :universe="portalUniverse"
               />
               <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
             </template>
@@ -140,6 +147,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmTraitPicker from './GmTraitPicker.vue'
 import GmRollTablePicker from './GmRollTablePicker.vue'
+import GmLocationPicker from './GmLocationPicker.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
 import GmList from './GmList.vue'
@@ -151,6 +159,8 @@ const props = defineProps({
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
   portalDestination: { type: String, default: '' },
+  portalTargetType: { type: String, default: '' },
+  portalUniverse: { type: String, default: '' },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -174,12 +184,14 @@ const selectedAction = computed(() => {
 })
 
 const isPortalTravel = computed(() => !!props.portalDestination && selectedAction.value?.effectType === 'travel')
+const isPortalLocation = computed(() => isPortalTravel.value && props.portalTargetType === 'location')
+const isPortalUniverse = computed(() => isPortalTravel.value && props.portalTargetType === 'universe')
 
 const visibleFields = computed(() => {
   if (!selectedAction.value) return []
   return (selectedAction.value.fields || []).filter(f => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
-    if (f.name === 'target' && isPortalTravel.value) return false
+    if (f.name === 'target' && isPortalLocation.value) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
     return true
   })
@@ -271,6 +283,7 @@ function buildEffect(meta) {
   let target = meta.implicitTarget || newEffect.fields.target || ''
   if (kind && mode === 'choose') target = `{choose_${kind}}`
   if (kind && mode === 'random') target = `{random:${kind}}`
+  if (isPortalLocation.value) target = '{location:transversal_target}'
   const entityMode = newEffect.entityMode || 'literal'
   let entity = newEffect.fields.entity || ''
   if (entityMode === 'choose') entity = '{choose_entity}'
@@ -279,6 +292,8 @@ function buildEffect(meta) {
   if ((context.transversal_type || 'inapposite') !== 'consciousness') {
     context.projection = 'active'
   }
+  let targetScope = (kind && mode !== 'literal') ? (newEffect.scope || null) : null
+  if (isPortalUniverse.value) targetScope = 'universe:{universe:transversal_target}'
   return {
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,
@@ -286,7 +301,7 @@ function buildEffect(meta) {
     target,
     entity,
     result: meta.implicitResult || strVal(newEffect.fields.result),
-    targetScope: (kind && mode !== 'literal') ? (newEffect.scope || null) : null,
+    targetScope,
     entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context,

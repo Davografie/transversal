@@ -313,18 +313,38 @@ def _effect_from_wire(d: dict):
     )
 
 
-def _anchor_portal_travel(effect, to_id: str) -> None:
-    """Force a portal travel effect's destination to the edge's ``_to``.
+def _substitute_token(value, token: str, replacement: str):
+    if isinstance(value, str) and token in value:
+        return value.replace(token, replacement)
+    return value
 
-    The transversal edge is the single source of truth for a portal's
-    destination. A travel effect stored on it must not carry its own (or a
-    redirect) target — literal, blank, and choose/random targets all resolve
-    to ``to_id``; the universe is then derived from ``to_id`` by the applier.
+
+def _substitute_portal_variables(effect, to_id: str, repo) -> None:
+    """Resolve the portal's scoped variable against the edge's ``_to``.
+
+    A transversal edge's ``_to`` points at a single entity — either a location
+    or a universe. Exactly one portal-scoped variable is available, matching
+    that target's type:
+
+    * location ``_to`` → ``{location:transversal_target}`` (the location id)
+    * universe ``_to`` → ``{universe:transversal_target}`` (the universe key)
+
+    These resolve in ``target`` / ``target_scope`` before the effect applies,
+    replacing the old force-injection with author-authored variables.
     """
-    if effect.type != "travel":
+    from transversal.domain import EntityType
+
+    to_entity = repo.get_entity(to_id)
+    if to_entity is None:
         return
-    effect.target = to_id
-    effect.target_scope = None
+    if to_entity.type == EntityType.LOCATION:
+        token, replacement = "{location:transversal_target}", to_id
+    elif to_entity.type == EntityType.UNIVERSE:
+        token, replacement = "{universe:transversal_target}", (to_entity.current_universe or to_id)
+    else:
+        return
+    effect.target = _substitute_token(effect.target, token, replacement)
+    effect.target_scope = _substitute_token(effect.target_scope, token, replacement)
 
 
 class PortalFireRequest(BaseModel):
@@ -352,7 +372,7 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
 
     effects = [_effect_from_wire(e) for e in (edge.get("effects") or [])]
     for effect in effects:
-        _anchor_portal_travel(effect, to_id)
+        _substitute_portal_variables(effect, to_id, repo)
 
     if not effects:
         travel_type = edge.get("transversal_type") or "inapposite"

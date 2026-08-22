@@ -36,7 +36,7 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 ## The five axes
 
 1. **Subject (who)** — `Effect.entity`. Type `entity`. Existing.
-2. **Destination location (where)** — for a **portal** travel effect the destination is the transversal edge's `_to` (the effect carries no `target` of its own — see locked decisions). For a free-standing SFX travel effect, `target` is a literal id, `{choose_location}`, or `{random:location}`, scoped via `target_scope`.
+2. **Destination location (where)** — a portal's destination is expressed through a **portal-scoped variable** resolved from the edge's `_to` type (see locked decisions). For a free-standing SFX travel effect, `target` is a literal id, `{choose_location}`, or `{random:location}`, scoped via `target_scope`.
 3. **Mechanism (how)** — `context.transversal_type`: `inapposite` | `consciousness`.
 4. **Body / projection policy (which body)** — new `projection` kind:
    - `active` — default; the body itself travels (inapposite).
@@ -64,7 +64,7 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 - The scope value can itself be a variable (extension above).
 - `{new_projection}` = spawn a fresh body (clone), not reuse.
 - `{random_projection}` = random among the entity's bodies in the destination universe.
-- **Portal destination is the edge** — a travel effect stored on a transversal edge has no destination of its own: `fire_portal` forces its `target` to the edge's `_to` (and clears `target_scope` so the universe derives from `_to`). Redirect/misleading portals are intentionally unsupported.
+- **Portal destination is a variable** — a travel effect on a transversal edge references the edge's `_to` through exactly one portal-scoped variable, matching the target's type: `{location:transversal_target}` (location `_to`) or `{universe:transversal_target}` (universe `_to`). `fire_portal` resolves the variable before applying. A location `_to` fixes the destination; a universe `_to` scopes a location picker to that universe.
 
 ## Examples
 

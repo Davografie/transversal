@@ -5,7 +5,13 @@
       <span class="portal-type">{{ link.transversal_type || 'inapposite' }}</span>
     </div>
     <div class="portal-effects">
-      <EffectEditor v-model="effects" :universe="universe" :portal-destination="link.name" />
+      <EffectEditor
+        v-model="effects"
+        :universe="universe"
+        :portal-destination="link.name"
+        :portal-target-type="link.type"
+        :portal-universe="link.current_universe"
+      />
     </div>
     <div class="actions">
       <button class="save-btn" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save' }}</button>

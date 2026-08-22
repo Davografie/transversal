@@ -62,12 +62,15 @@ class _FakeEdges:
 
 
 class _FakeRepo:
-    def __init__(self, entity, edge):
+    def __init__(self, entity, edge, extra_entities=None):
         self.entity = entity
         self._relationships = _FakeEdges(edge)
+        self._entities = {entity.id: entity}
+        for e in (extra_entities or []):
+            self._entities[e.id] = e
 
     def get_entity(self, eid):
-        return self.entity if self.entity.id == eid else None
+        return self._entities.get(eid)
 
 
 def test_fire_portal_applies_edge_effects(monkeypatch):
@@ -105,19 +108,19 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
     assert captured["effects"][0].context == {"transversal_type": "inapposite"}
 
 
-def test_fire_portal_anchors_travel_target_to_edge_to(monkeypatch):
-    # A travel effect's own destination (and scope) must not override the
-    # edge's ``_to`` — it is forced to ``to_id`` and the universe is re-derived.
+def test_fire_portal_substitutes_location_transversal_target(monkeypatch):
+    # A location ``_to`` exposes ``{location:transversal_target}``, resolved to the id.
     entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
+    to_loc = Entity(id="loc-b", type=EntityType.LOCATION, name="Aviary Peak", current_universe="earth")
     edge = {
         "_key": "edge:loc-a:loc-b:transversal",
         "effects": [
             {"timing": "IMMEDIATE", "type": "travel", "action": "move",
-             "target": "loc-elsewhere", "targetScope": "universe:earth",
+             "target": "{location:transversal_target}",
              "context": {"transversal_type": "inapposite"}},
         ],
     }
-    repo = _FakeRepo(entity, edge)
+    repo = _FakeRepo(entity, edge, extra_entities=[to_loc])
     monkeypatch.setattr(locations_module, "_repo", lambda: repo)
 
     captured = {}
@@ -137,6 +140,40 @@ def test_fire_portal_anchors_travel_target_to_edge_to(monkeypatch):
 
     r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
     assert r.status_code == 200, r.text
-    eff = captured["effects"][0]
-    assert eff.target == "loc-b"           # forced to the edge's _to
-    assert eff.target_scope is None        # universe derives from _to
+    assert captured["effects"][0].target == "loc-b"
+
+
+def test_fire_portal_substitutes_universe_transversal_target(monkeypatch):
+    # A universe ``_to`` exposes ``{universe:transversal_target}``, resolved to the key.
+    entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
+    to_uni = Entity(id="universe-three_realms", type=EntityType.UNIVERSE, name="Three Realms", current_universe="three_realms")
+    edge = {
+        "_key": "edge:loc-a:universe-three_realms:transversal",
+        "effects": [
+            {"timing": "IMMEDIATE", "type": "travel", "action": "move",
+             "target": "loc-b", "targetScope": "universe:{universe:transversal_target}",
+             "context": {"transversal_type": "inapposite"}},
+        ],
+    }
+    repo = _FakeRepo(entity, edge, extra_entities=[to_uni])
+    monkeypatch.setattr(locations_module, "_repo", lambda: repo)
+
+    captured = {}
+
+    def fake_commit_effects(e, effects, r):
+        captured["effects"] = effects
+        class _R:
+            applied = []
+            pending_choices = []
+        return _R()
+
+    monkeypatch.setattr("transversal.services.effects_commit.commit_effects", fake_commit_effects)
+
+    app = FastAPI()
+    app.include_router(locations_router)
+    client = TestClient(app)
+
+    r = client.post("/api/v1/locations/loc-a/portal/universe-three_realms/fire", json={"entity_id": "char-1"})
+    assert r.status_code == 200, r.text
+    assert captured["effects"][0].target_scope == "universe:three_realms"
+    assert captured["effects"][0].target == "loc-b"
