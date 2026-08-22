@@ -1,5 +1,5 @@
 <template>
-  <div class="dice-roller panel" :class="[{ open: panelOpen }, `kind-${rollKind}`]" @touchstart="onRollerTouchStart" @touchend="onRollerTouchEnd">
+  <div class="dice-roller panel" :class="[{ open: panelOpen }, `kind-${rollKind}`]" @touchstart="onRollerTouchStart">
     <div class="pool-tabs" v-if="tabEntities.length > 1">
       <button
         v-for="e in tabEntities"
@@ -356,7 +356,7 @@ const props = defineProps({
   remoteResults: { type: Object, default: () => ({}) }, // entity_id → { rolls, committed, ... } from SSE
 })
 
-const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
 
 const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
@@ -834,17 +834,49 @@ function cancelBuyHitch() {
 }
 watch(panelOpen, (v) => emit('panelOpen', v))
 
-let rollerTouchY = 0
+// ── Panel drag-to-open/close gesture ───────────────
+// The whole roller is the drag handle; touches on dice/slots are skipped
+// (they use the dice drag-and-drop path). We emit raw deltas up so App can
+// move the wrapper 1:1 with the finger, then settle by threshold/velocity.
+const PANEL_DRAG_SLOP = 8  // px: ignore tiny movements so taps on buttons still work
+
+let panelDrag = null  // { startY, lastY, lastT, velocity, started }
+
 function onRollerTouchStart(e) {
-  rollerTouchY = e.touches[0].clientY
+  if (touchDrag.value) return                 // a die/slot drag is in progress
+  if (phase.value === Phase.PICKING) return   // don't disturb dice selection
+  const y = e.touches[0].clientY
+  panelDrag = { startY: y, lastY: y, lastT: performance.now(), velocity: 0, started: false }
+  emit('panelDragStart')
 }
-function onRollerTouchEnd(e) {
-  const dy = e.changedTouches[0].clientY - rollerTouchY
-  if (dy > 40 && panelOpen.value && phase.value !== Phase.PICKING) {
-    panelOpen.value = false        // swipe down → close (disabled during picking)
-  } else if (dy < -40 && !panelOpen.value) {
-    panelOpen.value = true         // swipe up → open
+
+function onPanelTouchMove(e) {
+  if (!panelDrag) return
+  const y = e.touches[0].clientY
+  const dy = y - panelDrag.startY
+  if (!panelDrag.started) {
+    if (Math.abs(dy) < PANEL_DRAG_SLOP) return  // wait for the finger to commit
+    panelDrag.started = true
   }
+  e.preventDefault()
+  const now = performance.now()
+  const dt = now - panelDrag.lastT
+  if (dt > 0) {
+    const inst = (y - panelDrag.lastY) / dt
+    panelDrag.velocity = panelDrag.velocity * 0.75 + inst * 0.25
+  }
+  panelDrag.lastY = y
+  panelDrag.lastT = now
+  emit('panelDrag', dy)
+}
+
+function onPanelTouchEnd(e) {
+  if (!panelDrag) return
+  const y = e.changedTouches[0].clientY
+  const dy = y - panelDrag.startY
+  const velocity = panelDrag.velocity
+  panelDrag = null
+  emit('panelDragEnd', { dy, velocity })
 }
 
 // ── Phases ──────────────────────────────────────────
@@ -1652,6 +1684,8 @@ onMounted(() => {
   console.log('[diag] DiceRoller mounted', { entityId: props.entityId, universe: props.universe })
   document.addEventListener('touchmove', onDocTouchMove, { passive: false })
   document.addEventListener('touchend', onDocTouchEnd)
+  document.addEventListener('touchmove', onPanelTouchMove, { passive: false })
+  document.addEventListener('touchend', onPanelTouchEnd)
   restorePool()
 })
 
@@ -1659,6 +1693,8 @@ watch([() => props.entityId, () => props.locationId], restorePool)
 onUnmounted(() => {
   document.removeEventListener('touchmove', onDocTouchMove)
   document.removeEventListener('touchend', onDocTouchEnd)
+  document.removeEventListener('touchmove', onPanelTouchMove)
+  document.removeEventListener('touchend', onPanelTouchEnd)
 })
 </script>
 

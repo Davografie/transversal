@@ -272,7 +272,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar :toasts="toasts" @dismiss="dismissToast" />
@@ -1135,10 +1135,58 @@ function closePanel() {
   nextTick(() => syncClosedPosition())
 }
 
+// ── Panel drag-to-open/close (touch) ───────────────
+// The DiceRoller emits panelDragStart / panelDrag / panelDragEnd with raw
+// deltas; here we move the wrapper 1:1 with the finger and settle by
+// threshold + velocity. Tune these constants to adjust feel.
+const PANEL_CLOSED_PEEK = 56       // px of the panel left visible when closed
+const PANEL_DRAG_DISTANCE = 72     // px: slow-drag distance that triggers open/close
+const PANEL_DRAG_VELOCITY = 0.5    // px/ms: flick speed that triggers open/close
+
+const panelDragState = { active: false, wasOpen: false, startOffset: 0 }
+
 function syncClosedPosition() {
   if (!wrapperEl.value) return
   const h = wrapperEl.value.offsetHeight
-  wrapperEl.value.style.transform = `translateX(-50%) translateY(${h - 56}px)`
+  wrapperEl.value.style.transform = `translateX(-50%) translateY(${h - PANEL_CLOSED_PEEK}px)`
+}
+
+function onPanelDragStart() {
+  const el = wrapperEl.value
+  if (!el) return
+  panelDragState.wasOpen = wrapperOpen.value
+  panelDragState.startOffset = panelDragState.wasOpen ? 0 : Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK)
+  panelDragState.active = true
+  el.style.transition = 'none'
+}
+
+function onPanelDrag(dy) {
+  const el = wrapperEl.value
+  if (!el || !panelDragState.active) return
+  const closedOffset = Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK)
+  const offset = Math.max(0, Math.min(closedOffset, panelDragState.startOffset + dy))
+  el.style.transform = `translateX(-50%) translateY(${offset}px)`
+}
+
+function onPanelDragEnd({ dy, velocity }) {
+  const el = wrapperEl.value
+  if (!el || !panelDragState.active) return
+  panelDragState.active = false
+
+  let open
+  if (velocity <= -PANEL_DRAG_VELOCITY) open = true        // fast flick up → open
+  else if (velocity >= PANEL_DRAG_VELOCITY) open = false   // fast flick down → close
+  else if (dy <= -PANEL_DRAG_DISTANCE) open = true         // dragged up enough → open
+  else if (dy >= PANEL_DRAG_DISTANCE) open = false         // dragged down enough → close
+  else open = panelDragState.wasOpen                       // revert to previous state
+
+  el.style.transition = ''  // re-enable the CSS transition, then settle
+  if (open) {
+    if (diceRef.value) diceRef.value.panelOpen = true
+    openPanel()
+  } else {
+    closePanel()
+  }
 }
 
 function onPanelOpen(v) {
