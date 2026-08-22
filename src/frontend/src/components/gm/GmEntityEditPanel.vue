@@ -109,6 +109,9 @@
       <div v-else class="transversal-list">
         <div v-for="link in transversalLinks" :key="link._key" class="transversal-row">
           <span class="transversal-name">{{ link.name }}</span>
+          <button class="transversal-effects" :class="{ has: (link.effects || []).length }" title="Edit portal effects" @click="openPortalConfig(link)">
+            ⚙{{ (link.effects || []).length || '' }}
+          </button>
           <button class="transversal-toggle" :class="link.transversal_type || 'inapposite'" @click="toggleLinkType(link)">
             {{ link.transversal_type || 'inapposite' }}
           </button>
@@ -172,6 +175,7 @@ import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
+import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import MediaImage from '@/components/MediaImage.vue'
@@ -410,6 +414,14 @@ async function toggleLinkType(link) {
   link.transversal_type = next
 }
 
+function openPortalConfig(link) {
+  panel.open({
+    component: GmPortalConfigPanel,
+    title: `Portal → ${link.name}`,
+    props: { fromId: props.entityId, link, universe: form.value?.current_universe || '' },
+  })
+}
+
 watch(() => [props.entityId, form.value?.type], ([id, type]) => {
   if (id && type === 'LOCATION') loadTransversalLinks()
 }, { immediate: true })
@@ -637,6 +649,9 @@ defineExpose({ refresh: loadImages })
 .transversal-toggle { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
 .transversal-toggle.inapposite { background: rgba(139,92,246,0.18); color: #c4b5fd; }
 .transversal-toggle.consciousness { background: rgba(245,158,11,0.18); color: #fcd34d; }
+.transversal-effects { background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-dim); cursor: pointer; font-size: 10px; padding: 2px 7px; }
+.transversal-effects.has { color: var(--accent); border-color: var(--accent-dim); }
+.transversal-effects:hover { color: var(--accent); border-color: var(--accent); }
 .transversal-add { display: flex; gap: 6px; margin-top: 8px; }
 .zones-section { margin-top: 12px; }
 .zones-list { display: flex; flex-direction: column; gap: 4px; }
