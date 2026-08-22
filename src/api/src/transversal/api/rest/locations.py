@@ -155,6 +155,7 @@ class MoveRequest(BaseModel):
 class EdgeRequest(BaseModel):
     type: str  # "super" or "transversal"
     transversal_type: str | None = None  # "consciousness" | "inapposite" (transversal edges only)
+    effects: list[dict] | None = None  # portal effects (travel SFX), frontend wire shape
 
 
 @router.post("/entities/{entity_id}/move")
@@ -202,20 +203,25 @@ async def consciousness_travel(entity_id: str, body: MoveRequest):
 
 @router.post("/locations/{from_id}/edges/{to_id}")
 async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
-    """Create a super or transversal edge between two locations."""
+    """Create or update a super or transversal edge between two locations."""
     if body.type not in ("super", "transversal"):
         raise HTTPException(status_code=400, detail=f"Invalid edge type: {body.type}")
 
     repo = _repo()
     edge_key = f"edge:{from_id}:{to_id}:{body.type}"
+    patch = {}
+    if body.transversal_type is not None:
+        patch["transversal_type"] = body.transversal_type
+    if body.effects is not None:
+        patch["effects"] = body.effects
 
     if repo._relationships.has(edge_key):
-        # Upsert the transversal type on existing transversal edges.
-        if body.type == "transversal":
-            repo._relationships.update({"_key": edge_key, "transversal_type": body.transversal_type})
+        # Upsert the provided fields on an existing edge (both directions).
+        if patch:
+            repo._relationships.update({"_key": edge_key, **patch})
             rev_key = f"edge:{to_id}:{from_id}:{body.type}"
             if repo._relationships.has(rev_key):
-                repo._relationships.update({"_key": rev_key, "transversal_type": body.transversal_type})
+                repo._relationships.update({"_key": rev_key, **patch})
             return {"status": "updated", "key": edge_key}
         return {"status": "exists", "key": edge_key}
 
@@ -224,9 +230,8 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
         "_from": f"entities/{from_id}",
         "_to": f"entities/{to_id}",
         "type": body.type,
+        **patch,
     }
-    if body.type == "transversal" and body.transversal_type:
-        edge_doc["transversal_type"] = body.transversal_type
     repo._relationships.insert(edge_doc)
 
     # For transversal edges, also create the reverse
@@ -238,9 +243,8 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
                 "_from": f"entities/{to_id}",
                 "_to": f"entities/{from_id}",
                 "type": body.type,
+                **patch,
             }
-            if body.transversal_type:
-                rev_doc["transversal_type"] = body.transversal_type
             repo._relationships.insert(rev_doc)
 
     return {"status": "created", "key": edge_key}
@@ -264,6 +268,95 @@ async def delete_edge(from_id: str, to_id: str, type: str = "super"):
         return {"status": "deleted", "key": edge_key}
     except Exception:
         raise HTTPException(status_code=404, detail=f"Edge '{edge_key}' not found")
+
+
+# ── Portal firing ────────────────────────────────────
+
+def _effect_from_wire(d: dict):
+    """Convert a frontend effect dict (camelCase) to a domain Effect."""
+    from transversal.domain import Effect, EffectDuration, EffectTiming, Timer, TimerCombine
+
+    def _enum(cls, value, default):
+        if value is None:
+            return default
+        if isinstance(value, str):
+            try:
+                return cls[value]  # member name ("IMMEDIATE", "FIRST_TO_FIRE")
+            except KeyError:
+                try:
+                    return cls(value)  # value ("immediate", "first_to_fire")
+                except ValueError:
+                    return default
+        return value
+
+    duration = None
+    if d.get("duration"):
+        dur = d["duration"]
+        duration = EffectDuration(
+            timers=[Timer(event=t.get("event") or "scene", remaining=t.get("remaining", 0))
+                    for t in (dur.get("timers") or [])],
+            combine=_enum(TimerCombine, dur.get("combine"), TimerCombine.FIRST_TO_FIRE),
+        )
+
+    return Effect(
+        timing=_enum(EffectTiming, d.get("timing"), EffectTiming.IMMEDIATE),
+        type=d.get("type", ""),
+        action=d.get("action", ""),
+        target=d.get("target", ""),
+        entity=d.get("entity", ""),
+        result=d.get("result"),
+        target_scope=d.get("targetScope"),
+        entity_scope=d.get("entityScope"),
+        negative=bool(d.get("negative", False)),
+        context=d.get("context") or {},
+        duration=duration,
+    )
+
+
+class PortalFireRequest(BaseModel):
+    entity_id: str
+
+
+@router.post("/locations/{from_id}/portal/{to_id}/fire")
+async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
+    """Fire a transversal portal: apply its travel effects to the traversing entity.
+
+    With no configured effects, falls back to the legacy ``transversal_type``
+    (consciousness → consciousness-travel, else inapposite move).
+    """
+    from transversal.services.effects_commit import commit_effects
+
+    repo = _repo()
+    edge_key = f"edge:{from_id}:{to_id}:transversal"
+    edge = repo._relationships.get(edge_key)
+    if edge is None:
+        raise HTTPException(status_code=404, detail=f"Portal '{edge_key}' not found")
+
+    entity = repo.get_entity(body.entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Entity '{body.entity_id}' not found")
+
+    effects = [_effect_from_wire(e) for e in (edge.get("effects") or [])]
+
+    if not effects:
+        travel_type = edge.get("transversal_type") or "inapposite"
+        em = _em()
+        if travel_type == "consciousness":
+            em.consciousness_travel(body.entity_id, to_id)
+        else:
+            em.inapposite_travel(body.entity_id, to_id)
+        return {"status": "moved", "applied": [], "pendingChoices": []}
+
+    result = commit_effects(entity, effects, repo)
+    return {
+        "status": "applied" if result.applied else "pending",
+        "applied": [a.summary for a in result.applied],
+        "pendingChoices": [
+            {"index": i, "kind": c.kind, "scope": c.scope, "field": c.field,
+             "effect": c.effect.model_dump()}
+            for i, c in enumerate(result.pending_choices)
+        ],
+    }
 
 
 # ── Zone Management ──────────────────────────────────

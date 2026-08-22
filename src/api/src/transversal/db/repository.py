@@ -1912,7 +1912,7 @@ class EntityRepository:
             LET transversal = (
                 FOR r IN {RELATIONSHIPS}
                 FILTER r._from == @loc_ref AND r.type == 'transversal'
-                RETURN MERGE(DOCUMENT(r._to), {{ transversal_type: r.transversal_type }})
+                RETURN MERGE(DOCUMENT(r._to), {{ transversal_type: r.transversal_type, effects: r.effects || [] }})
             )
             LET occupant_ids = (
                 FOR p IN {PROJECTIONS}
