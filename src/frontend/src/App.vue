@@ -1228,12 +1228,11 @@ function onWrapperEnter() {
 function onWrapperLeave() {
   if (phase.value === 'picking') return  // don't close during dice drag-and-drop
   if (documentDragging.value) return    // don't close during HTML5 drag-and-drop
-  const holdRemaining = hoverHoldUntil.value - Date.now()
-  const delay = holdRemaining > 0 ? holdRemaining : 1000
+  if (Date.now() < hoverHoldUntil.value) return  // pinned open by a recent roller click
   closeTimer = setTimeout(() => {
     closeTimer = null
     closePanel()
-  }, delay)
+  }, 1000)
 }
 
 // Tap outside the panel closes it — without a full-screen overlay, so the
