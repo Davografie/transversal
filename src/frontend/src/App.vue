@@ -788,10 +788,31 @@ function returnToSelf() {
 }
 
 function onInspectEntity(id) {
-  // Match the peer-chip behavior: toggle back to self on re-click, and treat
-  // a self-click as a return to self-view (no override) so the header tabs stay.
-  onPeerClick(id)
-  sheetVisible.value = true
+  if (gmMode.value) {
+    onPeerClick(id)
+    sheetVisible.value = true
+    return
+  }
+  // Map-dot semantics (deliberately NOT the peer-chip toggle):
+  //   self dot    → own sheet
+  //   foreign dot → open if closed/different; close if already open & showing it
+  const isSelf = id === entityId.value || id === selfEntityId.value
+  if (isSelf) {
+    viewingEntityId.value = null
+    forceSheet.value = true
+    sheetVisible.value = true
+    return
+  }
+  const alreadyShowing = viewingEntityId.value === id
+  const sheetOpen = sheetVisible.value
+  if (alreadyShowing && sheetOpen) {
+    viewingEntityId.value = null
+    closePanel()
+  } else {
+    viewingEntityId.value = id
+    forceSheet.value = true
+    sheetVisible.value = true
+  }
 }
 
 function onPeerClick(id) {
@@ -1210,13 +1231,15 @@ function onWrapperLeave() {
 
 // Tap outside the panel closes it — without a full-screen overlay, so the
 // location map behind stays interactive. Capture phase so it also fires on
-// map dots (whose own @click stops bubbling).
+// map dots (whose own @click stops bubbling). Occupant/self dots are excluded:
+// they open/close the sheet themselves via onInspectEntity.
 function onDocumentClick(e) {
   if (gmMode.value) return
   if (!wrapperOpen.value) return
   if (phase.value === 'picking') return
   const el = wrapperEl.value
   if (el && el.contains(e.target)) return
+  if (e.target.closest && e.target.closest('.occ-dot')) return
   closePanel()
 }
 
