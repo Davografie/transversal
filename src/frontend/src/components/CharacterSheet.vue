@@ -70,6 +70,7 @@
         :entity-id="overrideEntityId || entityId"
         ref="blueBookRef"
         :entity-name="entity?.name || ''"
+        :viewer-id="viewerEntityId || entityId"
         :visible="true"
         embedded
       />

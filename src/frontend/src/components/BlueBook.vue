@@ -111,9 +111,12 @@ const props = defineProps({
   entityName: { type: String, default: '' },
   visible: { type: Boolean, default: false },
   embedded: { type: Boolean, default: false },
+  viewerId: { type: String, default: '' },
 })
 
 defineEmits(['close'])
+
+const selfId = computed(() => props.viewerId || props.entityId)
 
 const { graphql } = useApi()
 
@@ -211,7 +214,7 @@ const composePlaceholder = computed(() => {
 
 const isSelfRecipient = computed(() => {
   const id = composeMode.value === 'reply' ? replyTarget.value : composeRecipientId.value
-  return id === props.entityId
+  return id === selfId.value
 })
 
 const sendLabel = computed(() => {
@@ -465,11 +468,11 @@ async function send() {
     const images = [...composeImages.value]
     const tags = parseTags()
     if (isSelfRecipient.value) {
-      await graphql(ADD_JOURNAL, { eid: props.entityId, title: composeTitle.value.trim(), body, images, afterIds: [], threads: tags.length ? tags : [] })
+      await graphql(ADD_JOURNAL, { eid: selfId.value, title: composeTitle.value.trim(), body, images, afterIds: [], threads: tags.length ? tags : [] })
     } else {
       const recipient = composeMode.value === 'reply' ? replyTarget.value : composeRecipientId.value
       if (!recipient) return
-      await graphql(SEND_LETTER, { sender: props.entityId, recipient, body, images, afterIds: [], threads: tags.length ? tags : [] })
+      await graphql(SEND_LETTER, { sender: selfId.value, recipient, body, images, afterIds: [], threads: tags.length ? tags : [] })
     }
   } finally {
     sending.value = false
@@ -508,7 +511,7 @@ async function uploadImage(e) {
 function viewImage(src) { window.open(src, '_blank') }
 
 async function fetchRelatedEntities() {
-  const data = await graphql(RELATED_ENTITIES, { eid: props.entityId, q: '' })
+  const data = await graphql(RELATED_ENTITIES, { eid: selfId.value, q: '' })
   relatedEntities.value = data?.relatedEntities || []
 }
 
@@ -518,7 +521,7 @@ function toggleRecipientList() {
 }
 
 function selectSelf() {
-  composeRecipientId.value = props.entityId
+  composeRecipientId.value = selfId.value
   composeRecipientName.value = props.entityName || 'Me'
   showRecipientList.value = false
 }
@@ -546,7 +549,7 @@ function openCompose(mode, recipient) {
     composeRecipientId.value = recipient.id
     composeRecipientName.value = recipient.name
   } else if (composeMode.value === 'new') {
-    composeRecipientId.value = props.entityId
+    composeRecipientId.value = selfId.value
     composeRecipientName.value = props.entityName || 'Me'
   }
   showCompose.value = true
