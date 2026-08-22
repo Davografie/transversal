@@ -23,12 +23,18 @@ def _n(id, name="", universe=""):
     return SimpleNamespace(id=id, name=name or id, universe=universe)
 
 
+def _proj(id, name="", universe="", entity_id="char-1"):
+    return SimpleNamespace(id=id, name=name, universe=universe, entity_id=entity_id)
+
+
 class TargetRepo:
     """Configurable fake covering every listing method the resolver touches."""
 
     def __init__(self):
         self.locations = []           # _e objects
         self.all_entities = []        # _e objects
+        self.universes = []           # _e objects
+        self.projections = []         # _proj objects (entity_id, id, name, universe)
         self.occupants = {}           # loc_id -> [_e]
         self.traits_universe = {}     # universe -> [_t]
         self.traits_traitset = {}     # traitset_id -> [_t]
@@ -42,7 +48,12 @@ class TargetRepo:
     def list_entities_by_type(self, entity_type, universe=None):
         if entity_type == EntityType.LOCATION:
             return [e for e in self.locations if not universe or e.current_universe == universe]
+        if entity_type == EntityType.UNIVERSE:
+            return [e for e in self.universes if not universe or e.current_universe == universe]
         return []
+
+    def get_projections_for_entity(self, entity_id):
+        return [p for p in self.projections if p.entity_id == entity_id]
 
     def list_entities_by_location(self, location_id):
         return self.occupants.get(location_id, [])
@@ -171,6 +182,37 @@ def test_traitset_scope_lists_traits():
     out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo)
     assert _ids(out) == ["medicine"]
     assert out[0].name == "medicine"
+
+
+# ── universe / projection kinds ─────────────────────
+
+def test_universe_kind_lists_universes():
+    repo = TargetRepo()
+    repo.universes = [_e("earth", universe="earth"), _e("three_realms", universe="three_realms")]
+    out = resolve_candidates("universe", None, _entity(), repo)
+    assert _ids(out) == ["earth", "three_realms"]
+
+
+def test_projection_kind_lists_entity_bodies():
+    repo = TargetRepo()
+    repo.projections = [
+        _proj("char-1:earth", universe="earth"),
+        _proj("char-1:three_realms", universe="three_realms"),
+        _proj("other:earth", universe="earth", entity_id="other"),
+    ]
+    out = resolve_candidates("projection", None, _entity(), repo)
+    assert _ids(out) == ["char-1:earth", "char-1:three_realms"]
+    assert out[0].name == "Kael"  # name falls back to entity name
+
+
+def test_projection_kind_filters_by_universe_scope():
+    repo = TargetRepo()
+    repo.projections = [
+        _proj("char-1:earth", universe="earth"),
+        _proj("char-1:three_realms", universe="three_realms"),
+    ]
+    out = resolve_candidates("projection", "universe:three_realms", _entity(), repo)
+    assert _ids(out) == ["char-1:three_realms"]
 
 
 # ── extensibility ────────────────────────────────────

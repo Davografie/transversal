@@ -387,6 +387,8 @@ _TARGET_KINDS = {
     "rating_die": "rating_die",
     "life_path": "life_path",
     "roll_table": "roll_table",
+    "universe": "universe",
+    "projection": "projection",
 }
 
 _PLACEHOLDER_MODES = {"choose", "random"}

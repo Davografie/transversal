@@ -97,6 +97,20 @@ def _default_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCa
         return [_candidate(lp.id, lp.name, lp.universe) for lp in repo.list_lifepaths_by_universe(universe)]
     if kind == "roll_table":
         return [_candidate(t.id, t.name, t.universe) for t in repo.list_roll_tables()]
+    if kind == "universe":
+        return [
+            _candidate(e.id, e.name, e.current_universe)
+            for e in repo.list_entities_by_type(EntityType.UNIVERSE)
+        ]
+    if kind == "projection":
+        universe = value or None
+        projs = repo.get_projections_for_entity(entity.id)
+        if universe:
+            projs = [p for p in projs if p.universe == universe]
+        return [
+            _candidate(p.id, p.name or entity.name, p.universe)
+            for p in projs
+        ]
     return []
 
 
