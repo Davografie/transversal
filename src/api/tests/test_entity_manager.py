@@ -373,6 +373,26 @@ class TestLocation:
         assert proj.origin_universe == "earth"
         assert proj.transversal_type == TransversalType.INAPPOSITE
 
+    def test_travel_effect_self_entity_id_persists(self, em, kael):
+        # A travel effect whose ``entity`` is the entity's own id must not be
+        # overwritten by the stale primary instance in commit_effects.
+        from transversal.domain import Effect, EffectTiming
+        from transversal.services.effects_commit import commit_effects
+
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        effect = Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="travel", action="move",
+            target=loc.id,
+            entity=kael.id,  # self by id, not ""/"self"
+            context={"transversal_type": "inapposite"},
+        )
+        commit_effects(kael, [effect], em.repo)
+
+        updated = em.get(kael.id)
+        assert updated.current_location == loc.id
+        assert updated.current_universe == "three_realms"
+
 
 def test_origin_universe_from_key_handles_suffix():
     from transversal.services.entity_manager import _origin_universe_from_key

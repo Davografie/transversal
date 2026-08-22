@@ -543,7 +543,7 @@ def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo)
     as ``target``; anything else is treated as a literal entity id.
     """
     subject = (effect.entity or "").strip()
-    if subject in ("", "self"):
+    if subject in ("", "self") or subject == entity.id:
         return entity
     parsed = _parse_placeholder(subject)
     if parsed is not None:
