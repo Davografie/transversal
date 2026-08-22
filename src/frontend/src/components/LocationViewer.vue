@@ -986,22 +986,24 @@ function onDotClick(type, item) {
     if (type === 'nav' && item.type === 'portal') togglePortalType(item)
     return
   }
-  // Never un-pop the player's own character
-  if (type === 'occupant' && item.id === props.entityId) return
-  // If already popped, dismiss; otherwise pop this one
+  // Occupants always inspect — no toggle. The sheet itself handles
+  // open/switch/close, so a second click must reach it too.
+  if (type === 'occupant') {
+    if (item.id === props.entityId) return  // self is filtered out anyway
+    emit('inspectEntity', item.id)
+    return
+  }
+  // Zones / nav dots: pop or dismiss the expanded bubble.
   if (activeElement.value?.type === type) {
     const match = type === 'zone' ? activeElement.value.name === item.name
-      : type === 'nav' ? activeElement.value.key === item.key
-      : activeElement.value.id === item.id
+      : activeElement.value.key === item.key
     if (match) {
       activeElement.value = null
       return
     }
   }
   activeElement.value = type === 'zone' ? { type: 'zone', name: item.name }
-    : type === 'nav' ? { type: 'nav', key: item.key }
-    : { type: 'occupant', id: item.id }
-  if (type === 'occupant') emit('inspectEntity', item.id)
+    : { type: 'nav', key: item.key }
 }
 
 async function travelWithAnimation(zone, child, imageUrl = null) {
