@@ -154,6 +154,7 @@ def _process_flow(entity: Entity, effects: list[Effect], repo) -> dict:
                 pt.path_id = target_path
                 pt.current_table_id = lp.entry_table_id
                 pt.continuation = []
+                pt.return_map = {}
             continue
 
         if effect.action == "next_step":
@@ -174,7 +175,24 @@ def _next_step(entity: Entity, effect: Effect, flow: dict, repo) -> None:
         flow["pending_choices"].append("table")
         return
 
-    if return_to and return_to != target:
+    # Named exit: "{return:<name>}" resolves against the caller's return map.
+    if target.startswith("{return:") and target.endswith("}"):
+        name = target[len("{return:"):-1]
+        target = pt.return_map.get(name, "")
+        pt.return_map = {}
+        if not target:
+            pt.current_table_id = ""
+            flow["done"] = True
+            return
+        pt.current_table_id = target
+        return
+
+    # Entering a shared table: store the named-exit map (single map, no nesting).
+    if isinstance(return_to, dict) and return_to:
+        pt.return_map = dict(return_to)
+
+    # Legacy single-exit string return (backward compatible with the stack).
+    if isinstance(return_to, str) and return_to and return_to != target:
         pt.continuation.append(return_to)
 
     if target in ("", "{continue}"):

@@ -628,7 +628,8 @@ class PendingTerm(BaseModel):
     faction_id: str = ""
     path_id: str = ""
     current_table_id: str = ""
-    continuation: list[str] = Field(default_factory=list)  # return-address stack
+    continuation: list[str] = Field(default_factory=list)  # return-address stack (legacy single-exit)
+    return_map: dict[str, str] = Field(default_factory=dict)  # named-exit map for shared tables (no nesting)
 
 
 # ── SFX ───────────────────────────────────────────────

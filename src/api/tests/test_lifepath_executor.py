@@ -140,6 +140,36 @@ def test_return_to_continuation():
     assert entity.pending_term.current_table_id == "tbl-c"
 
 
+def test_named_exit_return_map():
+    repo = ExecutorRepo()
+    repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
+    repo.tables["tbl-a"] = _table("tbl-a", [_entry(
+        "call", [_next("tbl-survive", return_to={"survived": "tbl-advance", "injured": "tbl-mishap"})],
+    )])
+    repo.tables["tbl-survive"] = _table("tbl-survive", [
+        _entry("survived", [_next("{return:survived}")]),
+        _entry("injured", [_next("{return:injured}")]),
+    ])
+    entity = _entity()
+    start_term(entity, "fac-1", "lp-1", repo)
+
+    # Call into the shared table → return map is stored.
+    resolve_step(entity, repo, index=1)
+    assert entity.pending_term.current_table_id == "tbl-survive"
+    assert entity.pending_term.return_map == {"survived": "tbl-advance", "injured": "tbl-mishap"}
+
+    # "survived" exit → advance, map cleared.
+    resolve_step(entity, repo, index=1)
+    assert entity.pending_term.current_table_id == "tbl-advance"
+    assert entity.pending_term.return_map == {}
+
+    # "injured" exit resolves too (fresh call).
+    entity.pending_term.current_table_id = "tbl-a"
+    resolve_step(entity, repo, index=1)
+    resolve_step(entity, repo, index=2)
+    assert entity.pending_term.current_table_id == "tbl-mishap"
+
+
 def test_force_muster_marks_enrollment():
     repo = ExecutorRepo()
     repo.lifepaths["lp-1"] = LifePath(id="lp-1", name="P", universe="earth", entry_table_id="tbl-a")
