@@ -75,9 +75,33 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 
 `{choose:*}` in the scope value (e.g. `universe:{choose_universe}`) resolves as a sequential `PendingChoice`: the scope choice is prompted first, then the effect re-applies and prompts for the now-scoped target. The SFX choice wizard forwards each round of `pendingChoices`, so back-to-back prompts work.
 
+## Preview — blind vs previewed (planned)
+
+A portal can run **blind** (resolve + move in one step) or **previewed** (resolve → show → confirm/refuse → move). Same effect pipeline; a single per-effect flag controls the pause.
+
+- **Flag**: `context.preview` on the `travel` effect (`true` = previewed, default `false` = blind). Authorable per-SFX, consistent with `transversal_type` and `projection`.
+- **Blind**: fire → resolve → commit atomically (current behaviour).
+- **Previewed**: fire → resolve to a concrete destination → present name/image → player **confirms** (commit) or **walks away** (discard, no move).
+
+Composes with the three destination modes:
+
+- literal + preview — "see where the door goes before stepping through".
+- random + preview — a **shifting gate**: the destination is re-rolled on each approach (never locked); the player previews the roll and may refuse.
+- choose + preview — pick → see it → confirm.
+
+Requires one new primitive: a **pending-confirmation** state that splits *resolve* from *commit* (the applier currently resolves-and-commits atomically). On refuse, the resolved move is discarded.
+
+### Locked decisions
+
+- `context.preview` flag on the travel effect.
+- Refusal is allowed (confirm + walk-away).
+- Previewed-random is a **shifting gate** — re-roll per approach.
+
 ## Remaining
 
-- **Consolidation** — merge `EntityManager.inapposite_travel` / `consciousness_travel` with the effect-applier travel path so there is one source of truth. Deferred for a separate discussion.
+- **Effect-driven portals** — wire LocationViewer portals to fire a `travel` effect rather than the hardcoded `transversal` edges calling `/move` / `/consciousness-travel`.
+- **Preview phase** — the pending-confirmation state (resolve → preview → confirm/refuse) described above.
+- **Consolidation** — merge `EntityManager.inapposite_travel` / `consciousness_travel` with the effect-applier travel path so there is one source of truth.
 
 ## Implementation steps
 
