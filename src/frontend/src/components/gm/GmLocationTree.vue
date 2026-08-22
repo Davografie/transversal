@@ -13,26 +13,28 @@
       @dragleave="onDragLeave(node)"
       @drop.prevent="onDrop($event, node)"
       @click="onClick(node)"
+      @touchstart="onTouchStart($event, node)"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
+      @touchcancel="cancelTouchDrag"
     >
       <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id)">
         {{ node.expanded ? '▾' : '▸' }}
       </span>
       <span v-else class="tree-toggle" :class="{ leaf: node.kind === 'location', occupant: node.kind === 'occupant', universe: node.kind === 'universe' }"></span>
+      <span v-if="node.kind === 'universe'" class="entity-type-badge type-UNIVERSE">UNI</span>
+      <span v-else-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
+      <span v-else class="entity-type-badge" :class="'type-' + node.entityType">{{ shortType(node.entityType) }}</span>
+      <span class="entity-name">{{ node.name }}</span>
       <span
         class="tree-drag-handle"
         :class="{ inactive: !isDraggable(node) }"
         :draggable="isDraggable(node)"
         title="Drag to move"
         @click.stop
+        @touchstart.stop
         @dragstart="onDragStart($event, node)"
-        @touchstart="onTouchStart($event, node)"
-        @touchmove="onTouchMove"
-        @touchend="onTouchEnd"
       >⠿</span>
-      <span v-if="node.kind === 'universe'" class="entity-type-badge type-UNIVERSE">UNI</span>
-      <span v-else-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
-      <span v-else class="entity-type-badge" :class="'type-' + node.entityType">{{ shortType(node.entityType) }}</span>
-      <span class="entity-name">{{ node.name }}</span>
     </div>
   </TransitionGroup>
 </template>
@@ -87,12 +89,11 @@ function onDrop(e, node) {
   emit('move-entity', { entityId: payload.id, entityKind: payload.kind, targetId: node.id, targetKind: node.kind, targetUniverse: node.universe || '' })
 }
 
-// ── Touch Drag — long-press the handle, then drag to a drop target ──
+// ── Touch Drag — long-press anywhere on the row, then drag ──
 function onTouchStart(e, node) {
   if (!isDraggable(node)) return
   const touch = e.touches[0]
-  // The handle is the touch target; drag the whole row as the ghost.
-  const rowEl = e.currentTarget.closest('.tree-row')
+  const rowEl = e.currentTarget // the row element
   touchDrag.value = { entityId: node.id, entityKind: node.kind, el: rowEl, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
   touchDrag.value._timer = setTimeout(() => engageTouchDrag(touch), 400)
 }
@@ -113,6 +114,8 @@ function onTouchMove(e) {
     }
     return
   }
+  // Engaged: keep the browser from scrolling while we drag.
+  e.preventDefault()
   const t = e.touches[0]; const ghost = touchDrag.value.ghost
   if (ghost) { ghost.style.left = (t.clientX - 20) + 'px'; ghost.style.top = (t.clientY - 14) + 'px' }
   const target = document.elementFromPoint(t.clientX, t.clientY)
@@ -143,7 +146,7 @@ function cancelTouchDrag() {
 </script>
 
 <style scoped>
-.tree-row { cursor: pointer; transition: background 0.15s; }
+.tree-row { cursor: pointer; transition: background 0.15s; touch-action: pan-y; }
 .tree-row:hover { background: rgba(255,255,255,0.06); }
 .tree-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
 .tree-row.occupant { font-size: 12px; background: rgba(255,255,255,0.02); }
@@ -167,10 +170,9 @@ function cancelTouchDrag() {
 .tree-toggle.occupant { font-size: 8px; width: 32px; min-height: 32px; line-height: 32px; color: var(--text-dim); }
 
 .tree-drag-handle {
-  width: 28px; min-height: 32px; line-height: 32px;
+  width: 28px; min-height: 32px; line-height: 32px; margin-left: auto;
   text-align: center; flex-shrink: 0; user-select: none;
   color: var(--text-dim); cursor: grab; font-size: 15px;
-  touch-action: none; /* the handle is for dragging, not scrolling */
   border-radius: 6px;
 }
 .tree-drag-handle:hover { color: var(--text); background: rgba(255,255,255,0.08); }
