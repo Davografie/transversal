@@ -1626,10 +1626,9 @@ onMounted(() => {
 .fade-in {
   animation: fadeIn 0.4s ease both;
 }
-/* Self character pops in after implosion completes */
+/* Self character pops in immediately on arrival */
 .self.fade-in {
   animation: arrivePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  animation-delay: 0.9s;
 }
 
 @keyframes arrivePop {
