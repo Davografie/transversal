@@ -494,11 +494,11 @@ The [[Release Plan#Build order]] broken into independently shippable work items.
 - **Load:** to-do "Character Sheet & Traits", `components/CharacterSheet.vue`, `components/DieIcon.vue`.
 
 ### P7.2 — Frontend: trait notes field
-- **Status:** pending
+- **Status:** done
 - **What:** statement/notes split — single-line statement for ≤7 words, a textarea for notes, and a second input so both can co-exist.
 - **Done:** a trait can carry a short statement and longer notes together.
 - **Depends:** —
-- **Load:** to-do "Trait notes field", `components/CharacterSheet.vue`, `domain/__init__.py` (`TraitSetting.statement`).
+- **Load:** to-do "Trait notes field", `components/CharacterSheet.vue`, `domain/__init__.py` (`TraitSetting.statement` + `TraitSetting.notes`).
 
 ### P7.3 — Frontend: phased trait character sheet
 - **Status:** done
