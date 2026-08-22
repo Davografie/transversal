@@ -189,14 +189,16 @@ The `on_trait_learn` trigger fires whenever an entity newly learns a trait, rega
 
 Not all traits are universe-gated. **Ego traits** represent personality, core identity, and learned understanding that persists regardless of which body or universe the character inhabits.
 
-| Tag | Persists across universes? | Example |
-|-----|---------------------------|---------|
-| **Ego** (`ego: true`) | Yes — always available | Curious d8, Antisocial d6, "Answered Antonov's Call" d8 |
-| **Morph** (`ego: false`) | No — only in the trait's native universe | Hacking d10 (Earth only), qi_reserves d6 (Three Realms only) |
+Ego vs morph is **derived from the trait setting's anchor** (`from_type`), not stored as a separate flag:
+
+| Anchor (`from_type`) | Kind | Persists across universes? | Example |
+|-----|------|---------------------------|---------|
+| `entity` | **Ego** | Yes — always available | Curious d8, Antisocial d6, "Answered Antonov's Call" d8 |
+| `projection` | **Morph** | No — gated by that projection's origin universe | Hacking d10 (Earth only), qi_reserves d6 (Three Realms only) |
 
 When the resolver assembles a pool for Kael, it returns:
-- All ego traits, always (curious, antisocial, distinctions)
-- Morph traits whose `origin_universe` is in Kael's `effective_universes` — his active projection's universe plus any unexpired attunements
+- All ego (entity-anchored) traits, always (curious, antisocial, distinctions)
+- Morph (projection-anchored) traits whose projection's `origin_universe` is in Kael's `effective_universes` — his active projection's universe plus any unexpired attunements
 
 Kael's hacking stays on Earth. His curiosity follows him everywhere. See [[Projections and Transversal]] for the gating rule.
 
@@ -219,6 +221,9 @@ See [[Inspired Mechanics]] for razmerit spend/earn rates and the effects system 
 Entities connect through the `relationships` edge collection. See [[Data Model#relationships]] for the edge schema and [[Data Model#Relationship Types]] for the type enum.
 
 Relationships can carry their own trait settings — a relationship edge can have traits attached (e.g., "debt: 4d6 razmerit owed").
+
+> [!note] Relationship anchor (planned)
+> Today relationships are entity → entity. The planned model mirrors trait settings: `_from` is always an entity, but `_to` may be either an **entity** (a soul-level relationship — you know *who they are*) or a **projection** (a looks-level relationship — you know *what they look like*). A projection-anchored relationship can be **promoted** to an entity-anchored one as it deepens. Deferred relationship work — not yet implemented.
 
 ## Design Principle
 
