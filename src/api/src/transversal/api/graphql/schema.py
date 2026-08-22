@@ -126,6 +126,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         rating_type=s.rating_type, dice=s.dice,
         polarity=s.polarity,
         statement=s.statement,
+        notes=s.notes,
         from_type=s.from_type, projection_id=s.projection_id,
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
@@ -704,6 +705,7 @@ class Mutation:
             rating_type=input.rating_type,
             polarity=polarity,
             statement=input.statement,
+            notes=input.notes,
             from_type=from_type,
             projection_id=projection_id,
             sfx_ids=[str(s) for s in input.sfx_ids],
@@ -829,6 +831,8 @@ class Mutation:
             ts.polarity = input.polarity
         if input.statement is not None:
             ts.statement = input.statement
+        if input.notes is not None:
+            ts.notes = input.notes
         if input.from_type is not None:
             if input.from_type == "projection":
                 if input.projection_id is None:

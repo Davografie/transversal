@@ -465,6 +465,7 @@ class TraitSetting:
     dice: list[DieType]
     polarity: Polarity
     statement: str
+    notes: str = ""
     from_type: str = "entity"  # "entity" | "projection" | "relationship"
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID]
@@ -566,6 +567,7 @@ class TraitSettingInput:
     rating_type: RatingType = RatingType.STATIC
     polarity: Optional[Polarity] = None
     statement: str = ""
+    notes: str = ""
     from_type: Optional[str] = None  # "entity" | "projection"
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
@@ -577,6 +579,7 @@ class TraitSettingUpdateInput:
     rating_type: Optional[RatingType] = None
     polarity: Optional[Polarity] = None
     statement: Optional[str] = None
+    notes: Optional[str] = None
     from_type: Optional[str] = None  # "entity" | "projection"
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: Optional[list[strawberry.ID]] = None
@@ -734,6 +737,7 @@ class Entity:
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
                 statement=s.statement,
+                notes=s.notes,
                 from_type=s.from_type, projection_id=s.projection_id,
                 sfx_ids=s.sfx_ids,
                 known_to=s.known_to,
@@ -753,6 +757,7 @@ class Entity:
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
                 statement=s.statement,
+                notes=s.notes,
                 from_type=s.from_type, projection_id=s.projection_id,
                 sfx_ids=s.sfx_ids,
                 known_to=s.known_to,

@@ -444,6 +444,7 @@ class TraitSetting(BaseModel):
     dice: list[DieType] = Field(default_factory=list)
     polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
+    notes: str = ""            # longer freeform notes
     sub_trait_settings: list["TraitSetting"] = Field(default_factory=list)
     sfx_ids: list[str] = Field(default_factory=list)
     locations_enabled: list[str] = Field(default_factory=list)

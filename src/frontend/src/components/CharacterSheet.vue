@@ -110,7 +110,8 @@
               {{ sfxId.replace('sfx-', '') }}
             </button>
           </div>
-          <input v-if="editingTrait.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" />
+          <input v-if="editingTrait.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" @blur="splitStatement" />
+          <textarea v-if="editingTrait.notes !== undefined || editNotes" v-model="editNotes" class="edit-notes" placeholder="Notes…" @input="onStatementInput"></textarea>
           <button type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
           <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
             {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
@@ -157,6 +158,7 @@
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
+                  <span v-if="t.notes" class="trait-notes">{{ t.notes }}</span>
                   <div v-if="t.sfxIds?.length" class="sfx-cards">
                     <div
                       v-for="sfxId in t.sfxIds"
@@ -405,6 +407,7 @@ const editDice = ref([])
 const editRatingType = ref('STATIC')
 const editPolarity = ref(null)
 const editStatement = ref('')
+const editNotes = ref('')
 const showDiePicker = ref(false)
 const pickIdx = ref(0)
 const pickedDie = ref('')
@@ -711,6 +714,7 @@ const QUERY = `
         fromType
         projectionId
         statement
+        notes
         sfxIds
         universe
         dice
@@ -733,6 +737,7 @@ const QUERY = `
         fromType
         projectionId
         statement
+        notes
         sfxIds
         universe
         dice
@@ -856,6 +861,7 @@ function startEdit(t) {
   editRatingType.value = t.ratingType || 'STATIC'
   editPolarity.value = t.polarity || null
   editStatement.value = t.statement || ''
+  editNotes.value = t.notes || ''
   editSfxIds.value = [...(t.sfxIds || [])]
   const isMorph = t.fromType === 'projection' || t.ego === false
   editIsEgo.value = !isMorph
@@ -991,8 +997,8 @@ async function doSave() {
   if (!editingTraitId.value) return
   ensureEditProjection()
   const newDice = editDice.value.map(d => d.toUpperCase())
-  const query = `mutation($id: ID!, $dice: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID) {
-    updateTraitSetting(id: $id, input: { dice: $dice, ratingType: $ratingType, polarity: $polarity, statement: $statement, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId }) { id }
+  const query = `mutation($id: ID!, $dice: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $notes: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID) {
+    updateTraitSetting(id: $id, input: { dice: $dice, ratingType: $ratingType, polarity: $polarity, statement: $statement, notes: $notes, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId }) { id }
   }`
   const variables = {
     id: editingTraitId.value,
@@ -1000,6 +1006,7 @@ async function doSave() {
     ratingType: editRatingType.value,
     polarity: editPolarity.value,
     statement: editStatement.value ?? null,
+    notes: editNotes.value ?? null,
     sfxIds: editSfxIds.value,
     fromType: editIsEgo.value ? 'entity' : 'projection',
     projectionId: editIsEgo.value ? null : editProjectionId.value,
@@ -1017,6 +1024,7 @@ async function doSave() {
     t.rating = null  // force fallback to dice display
     t.sfxIds = [...editSfxIds.value]
     t.statement = editStatement.value
+    t.notes = editNotes.value
     t.ego = editIsEgo.value
     t.fromType = editIsEgo.value ? 'entity' : 'projection'
     t.projectionId = editIsEgo.value ? null : editProjectionId.value
@@ -1076,6 +1084,15 @@ let statementDebounce = null
 function onStatementInput() {
   clearTimeout(statementDebounce)
   statementDebounce = setTimeout(doSave, 500)
+}
+
+function splitStatement() {
+  const words = (editStatement.value || '').trim().split(/\s+/).filter(Boolean)
+  if (words.length > 7) {
+    const moved = editStatement.value.trim()
+    editNotes.value = editNotes.value ? editNotes.value + '\n' + moved : moved
+    editStatement.value = ''
+  }
 }
 
 function onDiePicked(die) {
@@ -1571,6 +1588,14 @@ watch(() => props.externalPoolSources, (sources) => {
   width: 100%;
   box-sizing: border-box;
 }
+.edit-notes {
+  font-size: 12px;
+  padding: 5px 8px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 48px;
+  resize: vertical;
+}
 .edit-actions {
   display: flex;
   gap: 6px;
@@ -2002,6 +2027,15 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--text-dim);
   font-style: italic;
   line-height: 1.3;
+}
+.trait-notes {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .trait-die {
