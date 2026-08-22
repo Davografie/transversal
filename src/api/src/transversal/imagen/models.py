@@ -29,6 +29,7 @@ class ImagenRequest(BaseModel):
     steps: int = 0          # 0 = auto-detect from entity type
     seed: int = -1          # -1 = random
     lora_weights: list[float] = Field(default_factory=list)
+    projection_id: str = ""  # generate for a specific body (empty = entity-level)
 
 
 class AnimateRequest(BaseModel):

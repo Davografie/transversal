@@ -151,15 +151,16 @@ class ImagenOrchestrator:
         entity: Entity,
         universe: str,
         session_id: str = "",
+        projection_id: str = "",
     ) -> EntityImage:
-        """Generate a static Flux image for an entity."""
+        """Generate a static Flux image for an entity or a projection."""
         entity_id = entity.id
         gen_type = GenerationType.IMAGEN
 
         await self._report(entity_id, gen_type, GenerationStatus.PROMPTING, "Building prompt...", 5)
 
-        # 1. Build prompt from traits
-        params = build_imagen_prompt(entity, universe, self.repo)
+        # 1. Build prompt from traits (projection-scoped when given)
+        params = build_imagen_prompt(entity, universe, self.repo, projection_id or None)
         prompt = params["prompt"]
         negative = params["negative"]
         loras = params["loras"]
@@ -235,6 +236,7 @@ class ImagenOrchestrator:
         entity_image = EntityImage(
             id=short_hash,
             entity_id=entity_id,
+            projection_id=projection_id or None,
             universe=universe,
             image_type=ImageType.IMAGEN,
             prompt=prompt,

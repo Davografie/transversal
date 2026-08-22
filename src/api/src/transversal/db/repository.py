@@ -1036,6 +1036,50 @@ class EntityRepository:
 
     # ── Queries ───────────────────────────────────────
 
+    def get_prompt_traitsettings(
+        self, entity_id: str, universes: list[str], projection_id: str | None = None
+    ) -> list[TraitSetting]:
+        """Trait settings used to build a generation prompt.
+
+        Returns ego traits (the entity soul), entity-anchored morph traits
+        gated by ``universes``, and — when ``projection_id`` is given — that
+        projection's morph traits only. Projection-anchored traits are excluded
+        for entity-level generation (``projection_id=None``).
+        """
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.entity_id == @eid
+            LET is_projection = (ts.from_type == 'projection')
+            LET proj = is_projection ? DOCUMENT(ts._from) : null
+            LET origin = proj != null
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[1])
+                : null
+            LET trait = DOCUMENT(ts._to)
+            LET set_doc = (trait.traitset_id != null)
+                ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
+            FILTER ts.ego == true
+                OR (
+                    NOT is_projection
+                    AND LENGTH(INTERSECTION(trait.universes, @universes)) > 0
+                    AND (set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0)
+                )
+                OR (
+                    is_projection AND @projection_id != null AND proj != null
+                    AND proj._key == @projection_id
+                    AND origin IN @universes
+                    AND origin IN trait.universes
+                    AND (set_doc == null OR origin IN set_doc.universes)
+                )
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(
+                query,
+                bind_vars={"eid": entity_id, "universes": universes, "projection_id": projection_id},
+            )
+        ]
+
     def find_entities_with_trait(
         self, trait_name: str, universe: str, min_die: Optional[str] = None
     ) -> list[str]:

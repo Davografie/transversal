@@ -68,6 +68,7 @@
             <span class="proj-name">{{ p.name || form?.name }}</span>
             <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
             <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
+            <button class="proj-imagen" :class="{ cancelling: projectionGenBusy(p) }" :title="projectionGenBusy(p) ? 'Cancel generation' : 'Generate image for this body'" @click.stop="onImagenClick(p.id)">{{ projectionGenBusy(p) ? '✕' : '🖼' }}</button>
             <button class="proj-remove" @click.stop="removeProjection(p.id)" title="Remove projection">✕</button>
           </div>
           <div v-if="projectionImages(p).length" class="gallery-grid projection-gallery">
@@ -506,14 +507,25 @@ const imagenStatus = computed(() => {
   return { label: 'Cancel', status: '✕', cancelling: true }
 })
 
-function onImagenClick() {
-  if (imagenStatus.value.cancelling) doCancel()
-  else doImagen()
+const genTarget = ref(null)  // projection id (or '' for entity) of the active generation
+
+function onImagenClick(projectionId = '') {
+  if (imagenStatus.value.cancelling) {
+    doCancel()
+    genTarget.value = null
+    return
+  }
+  genTarget.value = projectionId
+  doImagen(projectionId)
+}
+
+function projectionGenBusy(p) {
+  return genTarget.value === p.id && imagenStatus.value.cancelling
 }
 
 // Refresh gallery when a job completes
 watch(localImagenJob, (now, prev) => {
-  if (prev && !now) loadImages()
+  if (prev && !now) { loadImages(); genTarget.value = null }
 })
 
 // ── Delete / prune (two-click confirm handled by DangerButton) ──
@@ -632,6 +644,9 @@ defineExpose({ refresh: loadImages })
 .proj-type.active { color: #93c5fd; background: rgba(64,136,212,0.18); }
 .proj-remove { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; }
 .proj-remove:hover { color: #e06060; }
+.proj-imagen { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; }
+.proj-imagen:hover { color: var(--accent); }
+.proj-imagen.cancelling { color: #dc2626; }
 .projection-add { display: flex; gap: 6px; margin-top: 8px; }
 .proj-input { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .proj-type-select { padding: 6px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }

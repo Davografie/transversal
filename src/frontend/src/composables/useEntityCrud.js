@@ -250,14 +250,14 @@ export function useEntityCrud() {
     _jobPollTimer = null
   }
 
-  async function onImagen() {
+  async function onImagen(projectionId = '') {
     if (!selectedId.value || imagenJob.value) return
     jobStatuses.value = {
       ...jobStatuses.value,
       [selectedId.value]: { type: 'imagen', status: 'queued', queue_position: '⋯' },
     }
     try {
-      await imagenEntity(selectedId.value)
+      await imagenEntity(selectedId.value, projectionId)
     } catch (e) {
       const s = { ...jobStatuses.value }
       delete s[selectedId.value]

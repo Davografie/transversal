@@ -139,13 +139,28 @@ def build_imagen_prompt(
     entity: Entity,
     universe: str,
     repository: EntityRepository,
+    projection_id: str | None = None,
 ) -> dict:
     """Build a complete image generation prompt from an entity's traits.
+
+    ``projection_id`` scopes the prompt to a specific body: that projection's
+    morph traits plus the entity's ego traits drive the prompt. With no
+    projection, only entity traits are used. ``universe`` is the generation
+    universe (style guide + LoRA config).
 
     Returns a dict with all the parameters needed by the ComfyUI workflow:
         prompt, negative, loras, steps, width, height
     """
-    trait_settings = repository.get_effective_traitsettings(entity.id, [universe])
+    trait_universes = [universe]
+    if projection_id:
+        proj = repository.get_projection(projection_id)
+        if proj is not None:
+            trait_universes = sorted(
+                {u for u in (universe, proj.origin_universe, proj.universe) if u}
+            )
+    trait_settings = repository.get_prompt_traitsettings(
+        entity.id, trait_universes, projection_id
+    )
     prompt, negative, loras, steps = _build_entity_prompt(
         entity, trait_settings, universe
     )

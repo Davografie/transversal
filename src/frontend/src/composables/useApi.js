@@ -129,11 +129,15 @@ export function useApi() {
     }
   }
 
-  async function imagenEntity(entityId) {
+  async function imagenEntity(entityId, projectionId = '') {
     loading.value = true
     error.value = null
     try {
-      const r = await fetch(`${API_BASE}/imagen/${entityId}`, { method: 'POST' })
+      const r = await fetch(`${API_BASE}/imagen/${entityId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projection_id: projectionId }),
+      })
       if (!r.ok) {
         const msg = await r.text()
         throw new Error(msg)

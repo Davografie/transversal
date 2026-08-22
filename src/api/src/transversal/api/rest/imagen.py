@@ -89,17 +89,18 @@ def _get_orchestrator() -> ImagenOrchestrator:
     return ImagenOrchestrator(repository=repo, progress_callback=progress_cb)
 
 
-def _run_imagen_bg(entity_id: str, universe: str):
+def _run_imagen_bg(entity_id: str, universe: str, projection_id: str = ""):
     """Background task: generate image and publish final SSE event."""
     if entity_id not in active_jobs:
         logger.info(f"Imagen for {entity_id} was cancelled before starting — skipping")
         return
     orchestrator = _get_orchestrator()
     try:
-        logger.info(f"Starting imagen generation for {entity_id} in {universe}")
+        logger.info(f"Starting imagen generation for {entity_id} in {universe} (projection={projection_id or 'entity'})")
         image = asyncio.run(orchestrator.run_imagen(
             entity=EntityManager().get(entity_id),
             universe=universe,
+            projection_id=projection_id,
         ))
         event_bus.publish(StreamEvent(
             event="imagen_progress",
@@ -204,13 +205,28 @@ async def generate_image(
     except EntityNotFoundError:
         raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
 
+    projection_id = (request.projection_id if request else "") or ""
     universe = entity.current_universe
-    logger.info(f"Enqueuing imagen for {entity_id} ({entity.name}) in {universe}")
+    if projection_id:
+        proj = em.repo.get_projection(projection_id)
+        if proj is None or proj.entity_id != entity_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Projection '{projection_id}' not found for entity '{entity_id}'",
+            )
+        universe = proj.universe or universe
+
+    logger.info(f"Enqueuing imagen for {entity_id} ({entity.name}) in {universe} (projection={projection_id or 'entity'})")
 
     _queue_job(entity_id, GenerationType.IMAGEN.value)
-    background_tasks.add_task(_run_imagen_bg, entity_id, universe)
+    background_tasks.add_task(_run_imagen_bg, entity_id, universe, projection_id)
 
-    return {"accepted": True, "entity_id": entity_id, "generation_type": "imagen"}
+    return {
+        "accepted": True,
+        "entity_id": entity_id,
+        "projection_id": projection_id or None,
+        "generation_type": "imagen",
+    }
 
 
 @router.post("/animate/{entity_id}")
