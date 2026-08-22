@@ -1215,6 +1215,11 @@ function onPanelOpen(v) {
   else closePanel()
 }
 
+// Click inside the dice roller pins the panel open briefly, so the mouse can
+// leave without the hover-close firing. Tune HOVER_HOLD_MS to adjust feel.
+const HOVER_HOLD_MS = 2500
+const hoverHoldUntil = ref(0)
+
 function onWrapperEnter() {
   if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
   openPanel()
@@ -1223,10 +1228,12 @@ function onWrapperEnter() {
 function onWrapperLeave() {
   if (phase.value === 'picking') return  // don't close during dice drag-and-drop
   if (documentDragging.value) return    // don't close during HTML5 drag-and-drop
+  const holdRemaining = hoverHoldUntil.value - Date.now()
+  const delay = holdRemaining > 0 ? holdRemaining : 1000
   closeTimer = setTimeout(() => {
     closeTimer = null
     closePanel()
-  }, 1000)
+  }, delay)
 }
 
 // Tap outside the panel closes it — without a full-screen overlay, so the
@@ -1234,6 +1241,10 @@ function onWrapperLeave() {
 // map dots (whose own @click stops bubbling). Occupant/self dots are excluded:
 // they open/close the sheet themselves via onInspectEntity.
 function onDocumentClick(e) {
+  // A click inside the dice roller pins the panel open briefly.
+  if (e.target.closest && e.target.closest('.dice-roller')) {
+    hoverHoldUntil.value = Date.now() + HOVER_HOLD_MS
+  }
   if (gmMode.value) return
   if (!wrapperOpen.value) return
   if (phase.value === 'picking') return
