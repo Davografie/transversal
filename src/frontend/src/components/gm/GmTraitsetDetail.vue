@@ -19,6 +19,10 @@
     </div>
 
     <h4 class="ps-section-title">Traits</h4>
+    <div class="trait-head-actions">
+      <button class="ps-add-btn" @click="onNewTrait">+ New Trait</button>
+      <button class="ps-add-btn" @click="openBatchEdit">Batch Edit</button>
+    </div>
     <div class="ps-list">
       <div v-for="t in traits" :key="t.id" class="entity-row"
         :class="{ selected: selectedId === t.id, 'patch-flash': t._flash }"
@@ -28,7 +32,6 @@
       </div>
       <div v-if="traits.length === 0" class="empty">No traits in this set</div>
     </div>
-    <button class="ps-add-btn" @click="onNewTrait">+ New Trait</button>
 
     <div class="danger-zone">
       <DangerButton
@@ -49,6 +52,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import ChipInput from './ChipInput.vue'
 import GmTraitEditPanel from '@/components/gm/GmTraitEditPanel.vue'
+import GmTraitBatchEditPanel from '@/components/gm/GmTraitBatchEditPanel.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
@@ -133,6 +137,14 @@ function onNewTrait() {
   })
 }
 
+function openBatchEdit() {
+  panel.open({
+    component: GmTraitBatchEditPanel,
+    title: 'Batch Edit Traits',
+    props: { initialTraitsetId: props.traitsetId },
+  })
+}
+
 async function onDeleteTraitset() {
   if (!traitset.value?.id) return
   saving.value = true
@@ -148,4 +160,6 @@ async function onDeleteTraitset() {
 .ps-form input { font-size: 12px; padding: 6px 8px; }
 .traitset-id { font-family: monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .ps-list { display: flex; flex-direction: column; gap: 3px; }
+.trait-head-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.trait-head-actions .ps-add-btn { margin-top: 0; width: auto; }
 </style>

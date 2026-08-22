@@ -1,5 +1,6 @@
 <template>
   <div>
+    <button class="ps-add-btn batch-btn" @click="openBatchEdit">Batch Edit Traits</button>
     <input v-model="search" class="filter-input" placeholder="Search…" style="margin-bottom:8px" />
     <div v-if="loading.value" class="loading">Loading…</div>
     <div v-else class="ps-list">
@@ -36,6 +37,7 @@ import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
+import GmTraitBatchEditPanel from '@/components/gm/GmTraitBatchEditPanel.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()
@@ -71,6 +73,14 @@ function onClick(ts) {
   })
 }
 
+function openBatchEdit() {
+  panel.open({
+    component: GmTraitBatchEditPanel,
+    title: 'Batch Edit Traits',
+    props: {},
+  })
+}
+
 function onDragStart(i, e) {
   dragIndex.value = i
   e.dataTransfer.effectAllowed = 'move'
@@ -96,6 +106,7 @@ function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
 
 <style scoped>
 .ps-list { display: flex; flex-direction: column; gap: 3px; }
+.batch-btn { margin-top: 0; margin-bottom: 8px; }
 .entity-row { user-select: none; transition: background 0.15s, transform 0.15s, box-shadow 0.15s; }
 .entity-row.dragging { opacity: 0.4; }
 .entity-row.drag-over { background: rgba(64,136,212,0.12); box-shadow: 0 0 0 1px var(--accent-dim) inset; transform: scale(1.02); }

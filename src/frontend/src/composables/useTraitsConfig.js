@@ -76,6 +76,29 @@ export function useTraitsConfig() {
     }
   }
 
+  // ── Batch update ───────────────────────────────────
+  // Applies the same partial `changes` (a TraitUpdateInput-shaped object
+  // with only the fields to set) to many trait definitions in parallel.
+  async function batchUpdateTraits(ids, changes) {
+    const results = await Promise.allSettled(ids.map((id) =>
+      graphql(
+        `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
+        { id, input: changes },
+      )
+    ))
+    const succeeded = []
+    const failed = []
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        succeeded.push(ids[i])
+        patchData('traits', ids[i], changes)
+      } else {
+        failed.push(ids[i])
+      }
+    })
+    return { succeeded, failed }
+  }
+
   // ── Derived ────────────────────────────────────────
   const traitNameMap = computed(() => {
     const m = {}
@@ -93,6 +116,7 @@ export function useTraitsConfig() {
     loading,
     fetchTraitsConfig,
     patchData,
+    batchUpdateTraits,
     traitNameMap,
   }
 }

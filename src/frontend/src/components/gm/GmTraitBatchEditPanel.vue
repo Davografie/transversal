@@ -1,0 +1,251 @@
+<template>
+  <div class="batch-panel">
+    <input v-model="search" class="filter-input" placeholder="Filter traits by name or id…" />
+
+    <div class="filter-grid">
+      <select v-model="traitsetId" class="filter-select">
+        <option value="">All traitsets</option>
+        <option v-for="ts in traitsets" :key="ts.id" :value="ts.id">{{ ts.name }}</option>
+      </select>
+      <select v-model="ratingType" class="filter-select">
+        <option value="">Any rating</option>
+        <option value="STATIC">Static</option>
+        <option value="RESOURCE">Resource</option>
+        <option value="CHALLENGE">Challenge</option>
+        <option value="EMPTY">Empty</option>
+      </select>
+      <select v-model="dieType" class="filter-select">
+        <option value="">Any die</option>
+        <option value="D4">d4</option><option value="D6">d6</option><option value="D8">d8</option><option value="D10">d10</option><option value="D12">d12</option>
+      </select>
+      <select v-model="ego" class="filter-select">
+        <option value="">Any flag</option>
+        <option value="ego">Ego</option>
+        <option value="morph">Morph</option>
+      </select>
+    </div>
+
+    <div class="select-bar">
+      <label class="select-all">
+        <input type="checkbox" :checked="allMatchingSelected" @change="toggleAllMatching" />
+        <span>All matching ({{ filtered.length }})</span>
+      </label>
+      <span class="selected-count">{{ selectedIds.length }} selected</span>
+    </div>
+
+    <div v-if="loading" class="loading">Loading…</div>
+    <div v-else class="ps-list">
+      <div
+        v-for="t in filtered"
+        :key="t.id"
+        class="entity-row"
+        :class="{ selected: isSelected(t.id), 'patch-flash': t._flash }"
+        @click="toggle(t.id)"
+      >
+        <input
+          type="checkbox"
+          class="row-check"
+          :checked="isSelected(t.id)"
+          @click.stop
+          @change="toggle(t.id)"
+        />
+        <span class="entity-name">{{ t.name }}</span>
+        <span class="die-badge" :class="'die-' + (t.defaultDieType || 'd6').toLowerCase()">{{ t.defaultDieType || '—' }}</span>
+        <span class="rating-badge" :class="'rt-' + (t.defaultRatingType || 'static').toLowerCase()">{{ ratingLabel(t.defaultRatingType) }}</span>
+        <span class="ego-badge" :class="{ 'is-ego': t.defaultEgo }">{{ t.defaultEgo ? 'ego' : 'morph' }}</span>
+        <span class="entity-universe">{{ t.traitsetName }}</span>
+      </div>
+      <div v-if="filtered.length === 0" class="empty">No traits match the current filters</div>
+    </div>
+
+    <div class="batch-actions">
+      <h4 class="ps-section-title">Apply to {{ selectedIds.length }} selected</h4>
+      <div class="action-row">
+        <label>Die type</label>
+        <select v-model="applyDieType">
+          <option value="">— no change —</option>
+          <option value="D4">d4</option><option value="D6">d6</option><option value="D8">d8</option><option value="D10">d10</option><option value="D12">d12</option>
+        </select>
+      </div>
+      <div class="action-row">
+        <label>Rating type</label>
+        <select v-model="applyRatingType">
+          <option value="">— no change —</option>
+          <option value="STATIC">Static</option><option value="RESOURCE">Resource</option><option value="CHALLENGE">Challenge</option><option value="EMPTY">Empty</option>
+        </select>
+      </div>
+      <div class="action-row">
+        <label>Ego / morph</label>
+        <select v-model="applyEgo">
+          <option value="">— no change —</option>
+          <option value="ego">ego</option>
+          <option value="morph">morph</option>
+        </select>
+      </div>
+      <button class="ps-add-btn" :disabled="applying || selectedIds.length === 0" @click="applyBatch">
+        {{ applying ? 'Applying…' : `Apply to ${selectedIds.length} selected` }}
+      </button>
+      <p v-if="status" class="status" :class="{ 'status-err': statusIsError }">{{ status }}</p>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { computed, ref, onMounted } from 'vue'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+
+const props = defineProps({
+  initialTraitsetId: { type: String, default: '' },
+})
+
+const { traitsets, loading, fetchTraitsConfig, batchUpdateTraits } = useTraitsConfig()
+
+// ── Selection state ──────────────────────────────────
+const selectedIds = ref([])
+const selectedSet = computed(() => new Set(selectedIds.value))
+
+function isSelected(id) { return selectedSet.value.has(id) }
+function toggle(id) {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = [...next]
+}
+
+// ── Filters ──────────────────────────────────────────
+const search = ref('')
+const traitsetId = ref(props.initialTraitsetId || '')
+const ratingType = ref('')
+const dieType = ref('')
+const ego = ref('')
+
+const allTraits = computed(() => {
+  const out = []
+  for (const ts of traitsets.value) {
+    for (const t of (ts.traits || [])) {
+      out.push({ ...t, traitsetName: ts.name, traitsetId: t.traitsetId || ts.id })
+    }
+  }
+  return out
+})
+
+const filtered = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return allTraits.value.filter((t) => {
+    if (traitsetId.value && t.traitsetId !== traitsetId.value) return false
+    if (ratingType.value && t.defaultRatingType !== ratingType.value) return false
+    if (dieType.value && t.defaultDieType !== dieType.value) return false
+    if (ego.value === 'ego' && !t.defaultEgo) return false
+    if (ego.value === 'morph' && t.defaultEgo) return false
+    if (q && !(t.name || '').toLowerCase().includes(q) && !(t.id || '').toLowerCase().includes(q)) return false
+    return true
+  })
+})
+
+const allMatchingSelected = computed(() =>
+  filtered.value.length > 0 && filtered.value.every((t) => selectedSet.value.has(t.id))
+)
+
+function toggleAllMatching() {
+  const next = new Set(selectedIds.value)
+  if (allMatchingSelected.value) {
+    filtered.value.forEach((t) => next.delete(t.id))
+  } else {
+    filtered.value.forEach((t) => next.add(t.id))
+  }
+  selectedIds.value = [...next]
+}
+
+// ── Batch action state ───────────────────────────────
+const applyDieType = ref('')
+const applyRatingType = ref('')
+const applyEgo = ref('')
+const applying = ref(false)
+const status = ref('')
+
+const statusIsError = computed(() =>
+  /fail|select|choose/i.test(status.value)
+)
+
+function ratingLabel(rt) {
+  if (!rt) return 'static'
+  return rt.charAt(0) + rt.slice(1).toLowerCase()
+}
+
+async function applyBatch() {
+  const ids = selectedIds.value
+  if (!ids.length) { status.value = 'Select at least one trait.'; return }
+
+  const changes = {}
+  if (applyDieType.value) changes.defaultDieType = applyDieType.value
+  if (applyRatingType.value) changes.defaultRatingType = applyRatingType.value
+  if (applyEgo.value) changes.defaultEgo = applyEgo.value === 'ego'
+  if (Object.keys(changes).length === 0) { status.value = 'Choose at least one field to set.'; return }
+
+  applying.value = true
+  status.value = ''
+  try {
+    const { succeeded, failed } = await batchUpdateTraits(ids, changes)
+    if (failed.length === 0) {
+      status.value = `Updated ${succeeded.length} trait${succeeded.length === 1 ? '' : 's'}.`
+    } else {
+      status.value = `Updated ${succeeded.length}, failed ${failed.length}.`
+    }
+  } catch (e) {
+    status.value = 'Batch update failed: ' + (e?.message || e)
+  } finally {
+    applying.value = false
+  }
+}
+
+onMounted(() => {
+  if (traitsets.value.length === 0) fetchTraitsConfig()
+})
+</script>
+
+<style scoped>
+.batch-panel { display: flex; flex-direction: column; gap: 8px; }
+.filter-input { width: 100%; font-size: 12px; padding: 6px 8px; box-sizing: border-box; }
+.filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.filter-select { width: 100%; font-size: 12px; padding: 6px 8px; box-sizing: border-box; }
+.select-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.select-all { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; }
+.select-all input { width: auto; margin: 0; cursor: pointer; }
+.selected-count { font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+.ps-list { display: flex; flex-direction: column; gap: 3px; }
+.entity-row { user-select: none; }
+.row-check { width: auto; margin: 0; flex-shrink: 0; cursor: pointer; }
+.die-badge { font-weight: 700; font-size: 11px; min-width: 24px; text-align: center; }
+.die-d4 { color: var(--die-d4); }
+.die-d6 { color: var(--die-d6); }
+.die-d8 { color: var(--die-d8); }
+.die-d10 { color: var(--die-d10); }
+.die-d12 { color: var(--die-d12); }
+
+.rating-badge {
+  font-size: 9px; text-transform: uppercase; padding: 1px 6px;
+  border-radius: 3px; font-weight: 600; letter-spacing: 0.3px;
+}
+.rt-static { background: rgba(255,255,255,0.12); color: var(--text); }
+.rt-resource { background: rgba(64,136,212,0.18); color: var(--accent); }
+.rt-challenge { background: rgba(212,64,64,0.18); color: var(--danger); }
+.rt-empty { background: transparent; color: var(--text-dim); border: 1px solid var(--text-dim); }
+
+.ego-badge {
+  font-size: 9px; text-transform: uppercase; padding: 1px 6px;
+  border-radius: 3px; font-weight: 600; color: var(--text-dim);
+}
+.ego-badge.is-ego { color: var(--accent); }
+
+.batch-actions {
+  margin-top: 4px; padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.action-row { display: flex; flex-direction: column; gap: 3px; }
+.action-row label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.action-row select { width: 100%; font-size: 12px; padding: 6px 8px; box-sizing: border-box; }
+.status { font-size: 12px; color: var(--success); margin: 0; }
+.status-err { color: var(--danger); }
+</style>
