@@ -821,7 +821,7 @@ class EntityRepository:
             LET is_projection = (tss.from_type == 'projection')
             LET proj = is_projection ? DOCUMENT(tss._from) : null
             LET origin = proj != null
-                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[-1])
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[1])
                 : null
             LET set_doc = DOCUMENT(CONCAT('{TRAITSETS}/', tss.traitset_id))
             FILTER (
@@ -1008,7 +1008,7 @@ class EntityRepository:
             LET is_projection = (ts.from_type == 'projection')
             LET proj = is_projection ? DOCUMENT(ts._from) : null
             LET origin = proj != null
-                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[-1])
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[1])
                 : null
             LET trait = DOCUMENT(ts._to)
             LET set_doc = (trait.traitset_id != null)

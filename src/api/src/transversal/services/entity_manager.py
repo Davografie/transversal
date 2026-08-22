@@ -295,7 +295,7 @@ class EntityManager:
             self.repo.create_projection(proj)
         else:
             if not proj.origin_universe:
-                proj.origin_universe = proj.id.rsplit(":", 1)[-1]
+                proj.origin_universe = _origin_universe_from_key(proj.id)
             proj.universe = loc.current_universe
             proj.current_location = location
             proj.transversal_type = (
@@ -344,7 +344,7 @@ class EntityManager:
             self.repo.create_projection(proj)
         else:
             if not proj.origin_universe:
-                proj.origin_universe = proj.id.rsplit(":", 1)[-1]
+                proj.origin_universe = _origin_universe_from_key(proj.id)
             proj.universe = new_universe
             proj.current_location = location
             self.repo.update_projection(proj)
@@ -482,6 +482,16 @@ class EntityManager:
         _publish_to_sessions(event)
 
         return result
+
+
+def _origin_universe_from_key(proj_id: str) -> str:
+    """Recover the origin universe from a projection key (legacy fallback).
+
+    Keys are ``{entity_id}:{origin_universe}[:N]``. Entity ids and universe keys
+    never contain ``:``, so the origin is always the second ``:``-segment.
+    """
+    parts = proj_id.split(":")
+    return parts[1] if len(parts) > 1 else ""
 
 
 def _universe_key(name: str, repo: EntityRepository) -> str:

@@ -353,3 +353,10 @@ class TestLocation:
         assert proj.universe == "three_realms"
         assert proj.origin_universe == "earth"
         assert proj.transversal_type == TransversalType.INAPPOSITE
+
+
+def test_origin_universe_from_key_handles_suffix():
+    from transversal.services.entity_manager import _origin_universe_from_key
+    assert _origin_universe_from_key("character-1:earth") == "earth"
+    assert _origin_universe_from_key("character-1:earth:2") == "earth"
+    assert _origin_universe_from_key("x") == ""
