@@ -38,6 +38,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { isVideoUrl, panAxis } from '@/composables/media.js'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -58,7 +59,7 @@ const props = defineProps({
 
 const emit = defineEmits(['click', 'overlay-click', 'drag-start'])
 
-const isVideoImage = computed(() => props.image && /\.(webm|mp4)(\?|$)/i.test(props.image))
+const isVideoImage = computed(() => isVideoUrl(props.image))
 
 const dotClasses = computed(() => [
   props.type === 'zone' ? 'zone-dot' : '',
@@ -79,16 +80,10 @@ const overlayVisible = computed(() => props.expanded || props.type === 'self' ||
 
 const overlayBgStyle = computed(() => {
   if (props.arrivalX == null || props.arrivalY == null || props.destAspect == null) return null
-  const vw = window.innerWidth, vh = window.innerHeight
-  const viewAspect = vw / vh
-  const imgAspect = props.destAspect
-  if (imgAspect > viewAspect) {
-    // Landscape: pan horizontally to arrival point
-    return { backgroundPosition: `${props.arrivalX}% 50%` }
-  } else if (imgAspect < viewAspect) {
-    // Portrait: pan vertically to arrival point
-    return { backgroundPosition: `50% ${props.arrivalY}%` }
-  }
+  const viewAspect = window.innerWidth / window.innerHeight
+  const axis = panAxis(props.destAspect, viewAspect)
+  if (axis === 'x') return { backgroundPosition: `${props.arrivalX}% 50%` }
+  if (axis === 'y') return { backgroundPosition: `50% ${props.arrivalY}%` }
   return null
 })
 

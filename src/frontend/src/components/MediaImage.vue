@@ -1,6 +1,7 @@
 <script setup>
 import { computed, useAttrs } from 'vue'
 import { useEntityMedia } from '@/composables/useEntityMedia.js'
+import { isVideoUrl } from '@/composables/media.js'
 
 /**
  * Unified media renderer for the element mode (img vs video).
@@ -34,9 +35,7 @@ const { src: queriedSrc } = useEntityMedia(
 const effectiveSrc = computed(() =>
   props.entityId && props.role ? queriedSrc.value : props.src
 )
-const isVideo = computed(() =>
-  !!effectiveSrc.value && /\.(webm|mp4)(\?|$)/i.test(effectiveSrc.value)
-)
+const isVideo = computed(() => isVideoUrl(effectiveSrc.value))
 
 // Single dynamic root so the parent's scoped CSS still reaches this element.
 const tag = computed(() => (isVideo.value ? 'video' : 'img'))

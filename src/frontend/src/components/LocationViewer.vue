@@ -166,6 +166,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import MapDot from './MapDot.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
+import { isVideoUrl, panAxis } from '@/composables/media.js'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -186,7 +187,7 @@ const { toggleTransversalType } = useTransversalLinks()
 
 const currentImage = ref('')
 const videoBgEl = ref(null)
-const isVideoBg = computed(() => /\.(webm|mp4)(\?|$)/i.test(currentImage.value))
+const isVideoBg = computed(() => isVideoUrl(currentImage.value))
 const nav = ref({})
 const zones = ref([])
 const occupants = ref([])
@@ -584,19 +585,17 @@ const bgStyle = computed(() => {
   const self = occupants.value.find(o => o.id === props.entityId)
   const mx = self?.map_x ?? 50
   const my = self?.map_y ?? 50
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const viewAspect = vw / vh
-  const imgAspect = imageAspect.value
+  const viewAspect = window.innerWidth / window.innerHeight
+  const axis = panAxis(imageAspect.value, viewAspect)
 
-  if (imgAspect && imgAspect > viewAspect) {
+  if (axis === 'x') {
     // Image is wider: fit height, pan horizontally only
     return {
       backgroundImage: `url(${currentImage.value})`,
       backgroundSize: `auto 100%`,
       backgroundPosition: `${mx}% 50%`,
     }
-  } else if (imgAspect && imgAspect < viewAspect) {
+  } else if (axis === 'y') {
     // Image is taller: fit width, pan vertically only
     return {
       backgroundImage: `url(${currentImage.value})`,
@@ -623,7 +622,7 @@ const videoStyle = computed(() => {
 // Track image aspect ratio on load — uses video element for .webm/.mp4
 watch(currentImage, (url) => {
   if (!url) { imageAspect.value = null; return }
-  if (/\.(webm|mp4)(\?|$)/i.test(url)) {
+  if (isVideoUrl(url)) {
     const vid = document.createElement('video')
     vid.preload = 'metadata'
     vid.onloadedmetadata = () => { imageAspect.value = vid.videoWidth / vid.videoHeight || null }

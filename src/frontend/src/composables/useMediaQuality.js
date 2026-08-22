@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { isVideoUrl } from './media.js'
 
 const STORAGE_KEY = 'mediaQuality'
 const VALID = ['auto', 'low', 'high']
@@ -38,7 +39,7 @@ const isLowQuality = computed(() => {
  */
 function withVariant(url, size) {
   if (!url || typeof url !== 'string') return url
-  if (/\.(webm|mp4)(\?|$)/i.test(url)) return url
+  if (isVideoUrl(url)) return url
   return url.replace(
     /_(Original|Large|Small|Mini)\.(webp|png|jpe?g)(\?.*)?$/i,
     `_${size}.$2$3`
