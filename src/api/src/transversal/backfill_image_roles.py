@@ -85,7 +85,12 @@ def migrate(dry_run: bool = True) -> int:
 
         for role in missing:
             target = bg_target if role == "background" else static
-            roles = list(target.get("roles") or [])
+            # Re-read the live document — the same image often receives multiple
+            # roles, and reusing a stale snapshot would fail with a _rev conflict.
+            live = images_col.get(target["_key"])
+            if live is None:
+                continue
+            roles = list(live.get("roles") or [])
             if role in roles:
                 continue
             roles.append(role)
@@ -107,7 +112,7 @@ def migrate(dry_run: bool = True) -> int:
             )
 
             if not dry_run:
-                images_col.update({**target, "roles": roles})
+                images_col.update({**live, "roles": roles})
             assigned += 1
 
     print(f"\n{'='*60}")
