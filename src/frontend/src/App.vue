@@ -1,5 +1,6 @@
 <template>
   <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
+  <button v-if="playerId && !showLoginOverlay" class="lab-btn" @click="showResonanceLab = true" title="Resonance Lab">🧪</button>
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
@@ -217,6 +218,7 @@
       <button v-if="!charSwitchLoading" class="cancel-btn" @click="dismissOverlay">Back to game</button>
     </template>
   </div>
+  <ResonanceLab v-if="showResonanceLab" @close="showResonanceLab = false" />
   <LocationViewer
     v-if="!fullCanvas"
     ref="locationRef"
@@ -292,6 +294,7 @@ import PanelStack from './components/gm/PanelStack.vue'
 import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
 import MediaImage from './components/MediaImage.vue'
 import RazmeritWaves from './components/RazmeritWaves.vue'
+import ResonanceLab from './components/ResonanceLab.vue'
 import { signatureOf, RESONANCE } from './composables/resonance.js'
 import { useSSE } from './composables/useSSE.js'
 import { useSessions } from './composables/useSessions.js'
@@ -467,6 +470,7 @@ const sfxChoiceRequest = ref(null) // pending {choose_*} auto-fired SFX choices 
 const playerId = ref(localStorage.getItem('playerId') || '')
 const playerName = ref(localStorage.getItem('playerName') || '')
 const showLoginOverlay = ref(!playerId.value)
+const showResonanceLab = ref(false)
 const checking = ref(false)
 const nameStatus = ref('')
 const nameFound = ref(false)
@@ -1674,7 +1678,7 @@ async function fetchCharacterSignature(id) {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `query($id: ID!) { character(id: $id) { entity { id razmerit } traitSettings { id traitId dice polarity fromType projectionId ego } } }`,
+        query: `query($id: ID!) { character(id: $id) { entity { id razmerit } traitSettings { id traitId traitsetId dice polarity fromType projectionId ego } } }`,
         variables: { id }
       })
     })

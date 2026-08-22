@@ -48,6 +48,34 @@ const POLARITY_PHASE = {
   negative: Math.PI,
 }
 
+// Golden angle — deterministic, non-repeating horizontal spread for repeated
+// dice of the same type (e.g. eight d8s fan out instead of stacking).
+const GOLDEN = Math.PI * (3 - Math.sqrt(5))
+
+export function easeInCubic(x) {
+  return x * x * x
+}
+export function easeOutCubic(x) {
+  return 1 - Math.pow(1 - x, 3)
+}
+export function easeInOutCubic(x) {
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2
+}
+
+// Deterministic tiny detune per traitset so same-die traitsets still read as
+// distinct voices rather than a braid.
+function hashString(s) {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return Math.abs(h)
+}
+function traitsetDetune(id) {
+  return (hashString(String(id || '')) % 1000) / 1000 * 4 - 2 // ±2 Hz
+}
+
 export function dieFrequency(die) {
   return DIE_FREQ[String(die || '').toLowerCase()] ?? FALLBACK_FREQ
 }
@@ -75,6 +103,7 @@ export function razmeritAmplitude(razmerit) {
 export function signatureOf(traitSettings, razmerit = 0) {
   const baseAmp = razmeritAmplitude(razmerit)
   const osc = []
+  let oscIndex = 0
 
   for (const ts of traitSettings || []) {
     const dice = Array.isArray(ts.dice) ? ts.dice : []
@@ -85,20 +114,22 @@ export function signatureOf(traitSettings, razmerit = 0) {
     const phase = POLARITY_PHASE[String(ts.polarity || '').toLowerCase()] ?? 0
     const kind = String(ts.fromType || 'entity').toLowerCase()
     const traitId = ts.traitId || ts.id || ''
+    const traitsetId = ts.traitsetId || ts.traitset_id || traitId
+    const negative = String(ts.polarity || '').toLowerCase() === 'negative'
 
-    dice.forEach((die, i) => {
-      const freq = dieFrequency(die) * band * egoBand
-      // Repeated dice in a rating beat against each other — literally "two dice".
-      const detune = i * 0.35
+    dice.forEach((die) => {
       const weight = (DIE_WEIGHT[String(die || '').toLowerCase()] ?? 6) / 12
       osc.push({
-        freq: freq + detune,
-        amp: baseAmp * weight * (1 / (1 + i * 0.08)),
-        phase,
+        freq: dieFrequency(die) * band * egoBand + traitsetDetune(traitsetId),
+        amp: baseAmp * weight,
+        phase: phase + oscIndex * GOLDEN,
         kind,
         die,
         traitId,
+        traitsetId,
+        negative,
       })
+      oscIndex++
     })
   }
 
@@ -143,6 +174,26 @@ export function traitWaves(osc) {
     } else {
       existing.amp += o.amp
       existing.dice.push(o.die)
+    }
+  }
+  return [...map.values()]
+}
+
+/**
+ * Group dice by (traitset, die type). Each group becomes one phase-aligned,
+ * amplitude-summed wave — the "traitset × die type" voice that emphasizes
+ * that traitset's peak before the final entity composite.
+ */
+export function groupByTraitsetDie(osc) {
+  const map = new Map()
+  for (const o of osc || []) {
+    const key = `${o.traitsetId || o.traitId || 'ts'}:${o.die}`
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, { ...o, phase: 0, amp: o.amp, dice: 1 })
+    } else {
+      existing.amp += o.amp
+      existing.dice += 1
     }
   }
   return [...map.values()]
@@ -200,6 +251,44 @@ export function morphWaves(from, to, progress) {
 }
 
 /**
+ * Collapse an oscillator set onto the nearest harmonics of a shared
+ * fundamental. Waves landing on the same harmonic are summed into one, giving
+ * the single repeating irregular waveform of the "collapse" phase.
+ */
+export function harmonicProfile(osc, fundamental = 55) {
+  const map = new Map()
+  for (const o of osc || []) {
+    const h = Math.max(1, Math.round(o.freq / fundamental))
+    if (!map.has(h)) {
+      map.set(h, { ...o, freq: h * fundamental, phase: 0, harmonic: h })
+    } else {
+      map.get(h).amp += o.amp
+    }
+  }
+  return [...map.values()]
+}
+
+/**
+ * The three-phase "harmonic collapse" transition:
+ *   0–1/3: source dice converge to their nearest harmonics (collapse).
+ *   1/3–2/3: the harmonic profile morphs source → target (transform).
+ *   2/3–1: the target profile splits back into the target's dice.
+ */
+export function harmonicTransition(from, to, progress, fundamental = 55) {
+  const p = Math.max(0, Math.min(1, progress))
+  const fromP = harmonicProfile(from, fundamental)
+  const toP = harmonicProfile(to, fundamental)
+
+  if (p < 1 / 3) {
+    return morphWaves(from, fromP, easeOutCubic(p * 3))
+  }
+  if (p < 2 / 3) {
+    return morphWaves(fromP, toP, easeInOutCubic((p - 1 / 3) * 3))
+  }
+  return morphWaves(to, toP, 1 - easeInCubic((p - 2 / 3) * 3))
+}
+
+/**
  * Crossfade with each side independently normalised to [-1, 1], so neither
  * character dims the other when their total amplitudes differ.
  */
@@ -227,14 +316,16 @@ export function totalAmplitude(from, to) {
  */
 export const RESONANCE = {
   durationMs: 3000, // minimum switch/load window (crossfade finishes here)
-  fanMs: 5000, // final "deposit to the right" phase, then close
-  mergeFraction: 0.35, // fraction of durationMs spent sucking source into the line
+  fanMs: 800, // brief settle after done before the overlay closes
+  collapseFraction: 0.45, // relative weight of the collapse phase
+  transformFraction: 0.3, // relative weight of the transform phase
+  expandFraction: 0.25, // relative weight of the expand phase
   renderDivisor: 220, // Hz → visible cycles; d4 (220 Hz) = one period across width
   height: 200, // canvas height (CSS px)
   drift: 0.002, // slow horizontal flow — max signal-time offset (s) by the end
-  minSpread: 6, // how wide the centre "line" is (px) at full collapse
-  mode: 'crossfade', // 'crossfade' | 'morph'
+  mode: 'harmonic', // 'harmonic' | 'crossfade' | 'morph'
   presets: {
+    harmonic: { mode: 'harmonic' },
     transversalGradient: { mode: 'crossfade' },
     morph: { mode: 'morph' },
   },
