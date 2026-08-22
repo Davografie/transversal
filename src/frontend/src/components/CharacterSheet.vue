@@ -991,8 +991,8 @@ async function doSave() {
   if (!editingTraitId.value) return
   ensureEditProjection()
   const newDice = editDice.value.map(d => d.toUpperCase())
-  const query = `mutation($id: ID!, $dice: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $sfxIds: [ID!], $ego: Boolean, $fromType: String, $projectionId: ID) {
-    updateTraitSetting(id: $id, input: { dice: $dice, ratingType: $ratingType, polarity: $polarity, statement: $statement, sfxIds: $sfxIds, ego: $ego, fromType: $fromType, projectionId: $projectionId }) { id }
+  const query = `mutation($id: ID!, $dice: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID) {
+    updateTraitSetting(id: $id, input: { dice: $dice, ratingType: $ratingType, polarity: $polarity, statement: $statement, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId }) { id }
   }`
   const variables = {
     id: editingTraitId.value,
@@ -1001,7 +1001,6 @@ async function doSave() {
     polarity: editPolarity.value,
     statement: editStatement.value ?? null,
     sfxIds: editSfxIds.value,
-    ego: editIsEgo.value,
     fromType: editIsEgo.value ? 'entity' : 'projection',
     projectionId: editIsEgo.value ? null : editProjectionId.value,
   }

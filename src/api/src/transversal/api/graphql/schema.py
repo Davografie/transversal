@@ -126,7 +126,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         rating_type=s.rating_type, dice=s.dice,
         polarity=s.polarity,
         statement=s.statement,
-        ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+        from_type=s.from_type, projection_id=s.projection_id,
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
     )
@@ -395,7 +395,6 @@ class Query:
                 possible_sfx_ids=t.possible_sfx_ids,
                 default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
-                default_ego=t.default_ego,
                 polarity=t.polarity,
                 display_names=[
                     GqlTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -691,7 +690,6 @@ class Mutation:
             rating_type=input.rating_type,
             polarity=polarity,
             statement=input.statement,
-            ego=input.ego,
             from_type=input.from_type or "entity",
             projection_id=str(input.projection_id) if input.projection_id else None,
             sfx_ids=[str(s) for s in input.sfx_ids],
@@ -817,8 +815,6 @@ class Mutation:
             ts.polarity = input.polarity
         if input.statement is not None:
             ts.statement = input.statement
-        if input.ego is not None:
-            ts.ego = input.ego
         if input.from_type is not None:
             if input.from_type == "projection":
                 if input.projection_id is None:
@@ -828,11 +824,9 @@ class Mutation:
                     raise ValueError(f"Projection '{input.projection_id}' does not belong to this entity")
                 ts.from_type = "projection"
                 ts.projection_id = str(input.projection_id)
-                ts.ego = False
             elif input.from_type == "entity":
                 ts.from_type = "entity"
                 ts.projection_id = None
-                ts.ego = True
             else:
                 raise ValueError(f"Unknown fromType '{input.from_type}'")
         if input.sfx_ids is not None:
@@ -907,7 +901,6 @@ class Mutation:
             possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
-            default_ego=input.default_ego,
             polarity=input.polarity,
             display_names=[
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -924,7 +917,6 @@ class Mutation:
             possible_sfx_ids=created.possible_sfx_ids,
             default_sfx_ids=created.default_sfx_ids,
             location_restricted=created.location_restricted,
-            default_ego=created.default_ego,
             polarity=created.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -955,8 +947,6 @@ class Mutation:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.location_restricted is not None:
             existing.location_restricted = input.location_restricted
-        if input.default_ego is not None:
-            existing.default_ego = input.default_ego
         if input.clear_polarity:
             existing.polarity = None
         elif input.polarity is not None:
@@ -982,7 +972,6 @@ class Mutation:
             possible_sfx_ids=updated.possible_sfx_ids,
             default_sfx_ids=updated.default_sfx_ids,
             location_restricted=updated.location_restricted,
-            default_ego=updated.default_ego,
             polarity=updated.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,

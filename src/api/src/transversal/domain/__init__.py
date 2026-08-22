@@ -344,7 +344,6 @@ class Trait(BaseModel):
     possible_sfx_ids: list[str] = Field(default_factory=list)
     default_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False
-    default_ego: bool = False      # default morph/ego for settings created from this trait
     polarity: Optional["Polarity"] = None  # default polarity override (None = inherit traitset)
     explanation: str = ""
     random_weight: int = 0
@@ -365,7 +364,6 @@ class TraitSet(BaseModel):
     order: int = 0
     limit: int = 1
     location_restricted: bool = False
-    default_ego: bool = False
     polarity: Optional["Polarity"] = None  # default polarity override (None = global positive)
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
@@ -445,7 +443,6 @@ class TraitSetting(BaseModel):
     dice: list[DieType] = Field(default_factory=list)
     polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
-    ego: bool = False          # true = persists across all universes/projections
     sub_trait_settings: list["TraitSetting"] = Field(default_factory=list)
     sfx_ids: list[str] = Field(default_factory=list)
     locations_enabled: list[str] = Field(default_factory=list)

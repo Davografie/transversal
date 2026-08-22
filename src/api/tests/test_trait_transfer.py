@@ -128,7 +128,7 @@ class InMemoryRepository(EntityRepository):
         return [
             TraitSetting.model_validate(d)
             for d in self._traitsettings.values()
-            if d["entity_id"] == eid and (d["trait_id"] in universe_trait_ids or d.get("ego", False))
+            if d["entity_id"] == eid and (d["trait_id"] in universe_trait_ids or d.get("from_type") == "entity")
         ]
 
     # Relationships

@@ -103,7 +103,7 @@ def gating_data():
         transversal_type=TransversalType.CONSCIOUSNESS,
     ))
 
-    # Trait settings: entity-anchored morph, projection-anchored morphs, ego.
+    # Trait settings: entity-anchored ego, projection-anchored morphs.
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:alpha", entity_id=CHAR_ID, trait_id=TRAIT_ALPHA,
         traitset_id=TRAITSET_ALPHA, dice=[DieType.D6],
@@ -120,7 +120,7 @@ def gating_data():
     ))
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:ego", entity_id=CHAR_ID, trait_id=TRAIT_EGO,
-        traitset_id=TRAITSET_EGO, dice=[DieType.D8], ego=True,
+        traitset_id=TRAITSET_EGO, dice=[DieType.D8],
     ))
 
     yield repo
@@ -156,15 +156,7 @@ def test_projection_anchored_trait_gated_by_origin(gating_data):
     assert not _has(elsewhere, TRAIT_BETA)
 
 
-def test_entity_anchored_trait_gated_by_trait_universe(gating_data):
-    repo = gating_data
-    alpha = repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_ALPHA])
-    assert _has(alpha, TRAIT_ALPHA)
-    beta_only = repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_BETA])
-    assert not _has(beta_only, TRAIT_ALPHA)
-
-
-def test_ego_trait_always_effective(gating_data):
+def test_entity_anchored_traits_always_effective(gating_data):
     repo = gating_data
     for universes in (
         [UNIVERSE_ALPHA],
@@ -172,7 +164,9 @@ def test_ego_trait_always_effective(gating_data):
         [UNIVERSE_GAMMA],
         [UNIVERSE_ALPHA, UNIVERSE_BETA, UNIVERSE_GAMMA],
     ):
-        assert _has(repo.get_effective_traitsettings(CHAR_ID, universes), TRAIT_EGO)
+        effective = repo.get_effective_traitsettings(CHAR_ID, universes)
+        assert _has(effective, TRAIT_EGO)
+        assert _has(effective, TRAIT_ALPHA)
 
 
 def test_fixture_current_projection_valid(gating_data):

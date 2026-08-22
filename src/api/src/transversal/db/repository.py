@@ -996,11 +996,10 @@ class EntityRepository:
     ) -> list[TraitSetting]:
         """Get trait settings active in a set of universes.
 
-        Ego traits (``ego=True``) are always returned. Entity-anchored morph
-        traits are gated by the trait/trait-set universe intersection.
-        Projection-anchored morph traits are gated by their projection's
-        ``origin_universe`` being in ``universes`` (falling back to the
-        projection key's universe suffix for pre-migration data).
+        Ego traits (``from_type='entity'``) are always returned. Projection-anchored
+        morph traits are gated by their projection's ``origin_universe`` being in
+        ``universes`` (falling back to the projection key's universe suffix for
+        pre-migration data).
         """
         query = f"""
             FOR ts IN {TRAITSETTINGS}
@@ -1013,12 +1012,7 @@ class EntityRepository:
             LET trait = DOCUMENT(ts._to)
             LET set_doc = (trait.traitset_id != null)
                 ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
-            FILTER ts.ego == true
-                OR (
-                    NOT is_projection
-                    AND LENGTH(INTERSECTION(trait.universes, @universes)) > 0
-                    AND (set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0)
-                )
+            FILTER ts.from_type == 'entity'
                 OR (
                     is_projection AND proj != null
                     AND origin IN @universes
@@ -1041,10 +1035,10 @@ class EntityRepository:
     ) -> list[TraitSetting]:
         """Trait settings used to build a generation prompt.
 
-        Returns ego traits (the entity soul), entity-anchored morph traits
-        gated by ``universes``, and — when ``projection_id`` is given — that
-        projection's morph traits only. Projection-anchored traits are excluded
-        for entity-level generation (``projection_id=None``).
+        Returns ego traits (``from_type='entity'`` — the entity soul) and, when
+        ``projection_id`` is given, that projection's morph traits only.
+        Projection-anchored traits are excluded for entity-level generation
+        (``projection_id=None``).
         """
         query = f"""
             FOR ts IN {TRAITSETTINGS}
@@ -1057,12 +1051,7 @@ class EntityRepository:
             LET trait = DOCUMENT(ts._to)
             LET set_doc = (trait.traitset_id != null)
                 ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
-            FILTER ts.ego == true
-                OR (
-                    NOT is_projection
-                    AND LENGTH(INTERSECTION(trait.universes, @universes)) > 0
-                    AND (set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0)
-                )
+            FILTER ts.from_type == 'entity'
                 OR (
                     is_projection AND @projection_id != null AND proj != null
                     AND proj._key == @projection_id

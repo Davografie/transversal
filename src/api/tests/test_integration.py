@@ -44,16 +44,18 @@ class TestFullCharacterFlow:
         """)
         eid = entity["createEntity"]["id"]
 
-        # 2. Add Earth hacking (morph)
+        # 2. Add Earth hacking (morph, anchored to the Earth projection)
         _gql(client, """
-            mutation($eid: ID!) {
+            mutation($eid: ID!, $proj: ID!) {
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-earth-hacking"
                     traitsetId: "ts-earth-skills"
                     dice: [D10]
+                    fromType: "projection"
+                    projectionId: $proj
                 }) { id }
             }
-        """, {"eid": eid})
+        """, {"eid": eid, "proj": f"{eid}:earth"})
 
         # 3. Add ego trait (personality — follows across universes)
         _gql(client, """
@@ -62,7 +64,7 @@ class TestFullCharacterFlow:
                     traitId: "trait-earth-intelligence"
                     traitsetId: "ts-earth-attributes"
                     dice: [D8]
-                    ego: true
+                    fromType: "entity"
                     statement: "Can't leave a mystery alone"
                 }) { id ego }
             }
@@ -77,17 +79,19 @@ class TestFullCharacterFlow:
             }
         """, {"eid": eid})
 
-        # 5. Add cultivation trait in Three Realms
+        # 5. Add cultivation trait in Three Realms (anchored to that projection)
         _gql(client, """
-            mutation($eid: ID!) {
+            mutation($eid: ID!, $proj: ID!) {
                 addTraitSetting(entityId: $eid, input: {
                     traitId: "trait-3r-qi-reserves"
                     traitsetId: "ts-3r-cultivation"
                     dice: [D4, D4, D4, D4, D4, D4]
                     ratingType: RESOURCE
+                    fromType: "projection"
+                    projectionId: $proj
                 }) { id dice }
             }
-        """, {"eid": eid})
+        """, {"eid": eid, "proj": f"{eid}:three_realms"})
 
         # 6. Verify character assembly shows all traits
         cv = _gql(client, """

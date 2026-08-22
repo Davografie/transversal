@@ -105,7 +105,6 @@ class TraitRef:
     possible_sfx_ids: list[strawberry.ID]
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
-    default_ego: bool = False
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
@@ -132,7 +131,6 @@ class TraitSetRef:
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
                 location_restricted=t.location_restricted,
-                default_ego=t.default_ego,
                 polarity=t.polarity,
                 display_names=[
                     TraitDisplayName(name=dn.name, universe=dn.universe,
@@ -432,7 +430,6 @@ class TraitInput:
     possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
-    default_ego: bool = False
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
@@ -447,7 +444,6 @@ class TraitUpdateInput:
     possible_sfx_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
-    default_ego: Optional[bool] = None
     polarity: Optional[Polarity] = None
     clear_polarity: bool = False
     display_names: Optional[list[TraitDisplayNameInput]] = None
@@ -465,11 +461,15 @@ class TraitSetting:
     dice: list[DieType]
     polarity: Polarity
     statement: str
-    ego: bool
     from_type: str = "entity"  # "entity" | "projection" | "relationship"
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID]
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
+
+    @strawberry.field
+    def ego(self) -> bool:
+        """Entity-anchored traits (from_type='entity') are ego; others morph."""
+        return self.from_type == "entity"
 
     @strawberry.field
     def die_type(self) -> DieType:
@@ -562,7 +562,6 @@ class TraitSettingInput:
     rating_type: RatingType = RatingType.STATIC
     polarity: Optional[Polarity] = None
     statement: str = ""
-    ego: bool = False
     from_type: Optional[str] = None  # "entity" | "projection"
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
@@ -574,7 +573,6 @@ class TraitSettingUpdateInput:
     rating_type: Optional[RatingType] = None
     polarity: Optional[Polarity] = None
     statement: Optional[str] = None
-    ego: Optional[bool] = None
     from_type: Optional[str] = None  # "entity" | "projection"
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: Optional[list[strawberry.ID]] = None
@@ -732,7 +730,7 @@ class Entity:
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
                 statement=s.statement,
-                ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+                from_type=s.from_type, projection_id=s.projection_id,
                 sfx_ids=s.sfx_ids,
                 known_to=s.known_to,
             )
@@ -751,7 +749,7 @@ class Entity:
                 rating_type=s.rating_type, dice=s.dice,
                 polarity=s.polarity,
                 statement=s.statement,
-                ego=s.ego, from_type=s.from_type, projection_id=s.projection_id,
+                from_type=s.from_type, projection_id=s.projection_id,
                 sfx_ids=s.sfx_ids,
                 known_to=s.known_to,
             )

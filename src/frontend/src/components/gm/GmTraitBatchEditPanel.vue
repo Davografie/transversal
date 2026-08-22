@@ -18,11 +18,6 @@
         <option value="">Any die</option>
         <option value="D4">d4</option><option value="D6">d6</option><option value="D8">d8</option><option value="D10">d10</option><option value="D12">d12</option>
       </select>
-      <select v-model="ego" class="filter-select">
-        <option value="">Any flag</option>
-        <option value="ego">Ego</option>
-        <option value="morph">Morph</option>
-      </select>
     </div>
 
     <div class="select-bar">
@@ -47,7 +42,6 @@
         <span class="entity-name">{{ t.name }}</span>
         <span class="die-badge" :class="'die-' + (t.defaultDieType || 'd6').toLowerCase()">{{ t.defaultDieType || '—' }}</span>
         <span class="rating-badge" :class="'rt-' + (t.defaultRatingType || 'static').toLowerCase()">{{ ratingLabel(t.defaultRatingType) }}</span>
-        <span class="ego-badge" :class="{ 'is-ego': t.defaultEgo }">{{ t.defaultEgo ? 'ego' : 'morph' }}</span>
         <span class="polarity-badge" :class="'pol-' + (t.polarity || 'inherit').toLowerCase()">{{ polarityLabel(t.polarity) }}</span>
         <span class="entity-universe">{{ t.traitsetName }}</span>
       </template>
@@ -67,14 +61,6 @@
         <select v-model="applyRatingType">
           <option value="">— no change —</option>
           <option value="STATIC">Static</option><option value="RESOURCE">Resource</option><option value="CHALLENGE">Challenge</option><option value="EMPTY">Empty</option>
-        </select>
-      </div>
-      <div class="action-row">
-        <label>Ego / morph</label>
-        <select v-model="applyEgo">
-          <option value="">— no change —</option>
-          <option value="ego">ego</option>
-          <option value="morph">morph</option>
         </select>
       </div>
       <div class="action-row">
@@ -123,7 +109,6 @@ const search = ref('')
 const traitsetId = ref(props.initialTraitsetId || '')
 const ratingType = ref('')
 const dieType = ref('')
-const ego = ref('')
 
 const allTraits = computed(() => {
   const out = []
@@ -141,8 +126,6 @@ const filtered = computed(() => {
     if (traitsetId.value && t.traitsetId !== traitsetId.value) return false
     if (ratingType.value && t.defaultRatingType !== ratingType.value) return false
     if (dieType.value && t.defaultDieType !== dieType.value) return false
-    if (ego.value === 'ego' && !t.defaultEgo) return false
-    if (ego.value === 'morph' && t.defaultEgo) return false
     if (q && !(t.name || '').toLowerCase().includes(q) && !(t.id || '').toLowerCase().includes(q)) return false
     return true
   })
@@ -165,7 +148,6 @@ function toggleAllMatching() {
 // ── Batch action state ───────────────────────────────
 const applyDieType = ref('')
 const applyRatingType = ref('')
-const applyEgo = ref('')
 const applyPolarity = ref('')
 const applying = ref(false)
 const status = ref('')
@@ -192,7 +174,6 @@ async function applyBatch() {
   const changes = {}
   if (applyDieType.value) changes.defaultDieType = applyDieType.value
   if (applyRatingType.value) changes.defaultRatingType = applyRatingType.value
-  if (applyEgo.value) changes.defaultEgo = applyEgo.value === 'ego'
   if (applyPolarity.value === 'CLEAR') {
     changes.polarity = null
     changes.clearPolarity = true
@@ -248,12 +229,6 @@ onMounted(() => {
 .rt-resource { background: rgba(64,136,212,0.18); color: var(--accent); }
 .rt-challenge { background: rgba(212,64,64,0.18); color: var(--danger); }
 .rt-empty { background: transparent; color: var(--text-dim); border: 1px solid var(--text-dim); }
-
-.ego-badge {
-  font-size: 9px; text-transform: uppercase; padding: 1px 6px;
-  border-radius: 3px; font-weight: 600; color: var(--text-dim);
-}
-.ego-badge.is-ego { color: var(--accent); }
 
 .polarity-badge {
   font-size: 9px; text-transform: uppercase; padding: 1px 6px;

@@ -356,7 +356,6 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     polarity = Polarity.NEGATIVE if negative else default_polarity(trait, traitset)
     if not traitset_id and polarity == Polarity.NEGATIVE:
         traitset_id = "ts-complications-a190"
-    ego = getattr(trait, "default_ego", False) if trait else False
     return TraitSetting(
         id=f"{owner_id}:{trait_id}{':complication' if polarity == Polarity.NEGATIVE else ''}",
         entity_id=owner_id,
@@ -365,7 +364,6 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
         from_type=from_type,
         dice=[die],
         polarity=polarity,
-        ego=ego,
         source_type="effect",
     )
 

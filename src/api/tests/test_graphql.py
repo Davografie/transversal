@@ -103,7 +103,8 @@ class TestGraphQLMutations:
         """, {"eid": eid})
         ts = result["addTraitSetting"]
         assert ts["dice"] == ["D10"]
-        assert ts["ego"] == False
+        # Default anchor is the entity → ego.
+        assert ts["ego"] == True
 
     def test_add_ego_trait(self, client):
         entity = _gql(client, """
@@ -124,7 +125,7 @@ class TestGraphQLMutations:
                     traitId: "trait-earth-intelligence"
                     traitsetId: "ts-earth-attributes"
                     dice: [D8]
-                    ego: true
+                    fromType: "entity"
                     statement: "Overly analytical"
                 }) { dice ego statement }
             }
@@ -257,7 +258,7 @@ class TestCharacterView:
                     traitId: "trait-earth-intelligence"
                     traitsetId: "ts-earth-attributes"
                     dice: [D8]
-                    ego: true
+                    fromType: "entity"
                     statement: "Can't leave a puzzle alone"
                 }) { id }
             }

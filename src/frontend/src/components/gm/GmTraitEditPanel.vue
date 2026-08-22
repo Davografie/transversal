@@ -27,10 +27,6 @@
           <option value="STATIC">Static</option><option value="RESOURCE">Resource</option><option value="CHALLENGE">Challenge</option><option value="EMPTY">Empty</option>
         </select>
         <label class="checkbox-label"><input type="checkbox" v-model="form.locationRestricted" /> Location Restricted</label>
-        <div class="default-ego-row">
-          <span class="field-label">Default</span>
-          <button type="button" class="ego-toggle" :class="{ 'is-ego': form.defaultEgo }" @click="form.defaultEgo = !form.defaultEgo">{{ form.defaultEgo ? 'ego' : 'morph' }}</button>
-        </div>
         <label>Polarity</label>
         <select v-model="form.polarity">
           <option value="">Inherit traitset</option>
@@ -171,7 +167,6 @@ const form = reactive({
   defaultDieType: 'D6',
   defaultRatingType: 'STATIC',
   locationRestricted: false,
-  defaultEgo: false,
   polarity: '',
   possibleSfxIds: [],
   defaultSfxIds: [],
@@ -233,7 +228,6 @@ watch(trait, (t) => {
     form.defaultDieType = t.defaultDieType || 'D6'
     form.defaultRatingType = t.defaultRatingType || 'STATIC'
     form.locationRestricted = t.locationRestricted || false
-    form.defaultEgo = t.defaultEgo || false
     form.polarity = t.polarity || ''
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
@@ -244,7 +238,7 @@ watch(trait, (t) => {
 let saveTimer = null
 watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
-  () => form.defaultRatingType, () => form.locationRestricted, () => form.defaultEgo,
+  () => form.defaultRatingType, () => form.locationRestricted,
   () => form.polarity,
   () => [...form.possibleSfxIds], () => [...form.defaultSfxIds],
 ], () => {
@@ -267,11 +261,11 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
-    defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo,
+    defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted,
     polarity: form.polarity || null,
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
@@ -395,26 +389,9 @@ async function onDelete() {
 .trait-id { font-family: monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: none; cursor: pointer; }
 .checkbox-label input { width: auto; }
-.default-ego-row { display: flex; align-items: center; gap: 8px; }
 .field-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .section-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.4; }
 .section-hint strong { color: var(--text); }
-.ego-toggle {
-  padding: 3px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--text-dim);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-}
-.ego-toggle.is-ego {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
-}
 .universe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .universe-chip {
   padding: 4px 10px;

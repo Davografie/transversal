@@ -352,7 +352,8 @@ def seed_default_character(em) -> None:
         if trait:
             _add_ts_if_missing(f"kael-1:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                dice=[die], sfx_ids=sfx_ids)
+                dice=[die], sfx_ids=sfx_ids,
+                from_type="projection", projection_id="kael-1:earth")
             # Ensure sfx_ids is set on existing settings
             if sfx_ids:
                 ts = em.repo.get_traitsetting(f"kael-1:{trait.id}")
@@ -379,14 +380,15 @@ def seed_default_character(em) -> None:
         if trait:
             _add_ts_if_missing(f"kael-1:3r:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                dice=dice, rating_type=rtype)
+                dice=dice, rating_type=rtype,
+                from_type="projection", projection_id="kael-1:three_realms")
 
     # Add ego distinction — follows Kael across universes
     trait = em.repo.get_trait_by_name("Answered Antonov's Call", "earth")
     if trait:
         _add_ts_if_missing("kael-1:ego:antonov",
             trait_id=trait.id, traitset_id=trait.traitset_id,
-            dice=[DieType.D8], ego=True,
+            dice=[DieType.D8],
             statement="He reached out. I answered.",
             sfx_ids=["sfx-hinder"])
         # Always ensure sfx_ids is set (update even if already exists)
@@ -420,7 +422,7 @@ def seed_elena(em) -> None:
         if trait:
             _add_ts(f"elena-1:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                dice=[die])
+                dice=[die], from_type="projection", projection_id="elena-1:earth")
 
     for attr_name, die in [("Intelligence", DieType.D10), ("Willpower", DieType.D8),
                             ("Agility", DieType.D6), ("Strength", DieType.D4)]:
@@ -428,7 +430,7 @@ def seed_elena(em) -> None:
         if trait:
             _add_ts(f"elena-1:{trait.id}",
                 trait_id=trait.id, traitset_id=trait.traitset_id,
-                dice=[die])
+                dice=[die], from_type="projection", projection_id="elena-1:earth")
 
 
 def seed_locations(em) -> None:

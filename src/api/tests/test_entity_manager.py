@@ -120,7 +120,7 @@ class InMemoryRepository(EntityRepository):
         return [
             TraitSetting.model_validate(d)
             for d in self._traitsettings.values()
-            if d["entity_id"] == eid and (d["trait_id"] in universe_trait_ids or d.get("ego", False))
+            if d["entity_id"] == eid and (d["trait_id"] in universe_trait_ids or d.get("from_type") == "entity")
         ]
 
     def get_effective_traitsetsettings(self, eid: str, universes: list[str]) -> list:
@@ -294,7 +294,7 @@ class TestRazmerit:
 
 class TestEgoTraits:
     def test_ego_persists_across_universes(self, em, repo, kael):
-        # Earth trait
+        # Earth trait (morph — anchored to the Earth projection)
         earth_t = Trait(id="trait-earth-hacking", name="hacking", universes=["earth"],
                         traitset_id="ts-earth-skills")
         repo.create_trait(earth_t)
@@ -306,11 +306,11 @@ class TestEgoTraits:
         em.add_traitsetting(TraitSetting(
             id=f"{kael.id}:hacking", entity_id=kael.id, trait_id="trait-earth-hacking",
             traitset_id="ts-earth-skills", dice=[DieType.D10],
+            from_type="projection", projection_id=f"{kael.id}:earth",
         ))
         em.add_traitsetting(TraitSetting(
             id=f"{kael.id}:curious", entity_id=kael.id, trait_id="trait-ego-curious",
             traitset_id="ts-earth-distinctions", dice=[DieType.D8],
-            ego=True,
         ))
 
         # On Earth: both available
