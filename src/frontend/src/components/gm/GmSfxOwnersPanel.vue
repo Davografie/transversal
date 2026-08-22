@@ -16,21 +16,22 @@
     <!-- Owner instances for the active type -->
     <input v-model="search" class="filter-input" placeholder="Filter owners…" />
 
-    <div v-if="loading" class="empty">Loading…</div>
-    <div v-else-if="filteredOwners.length === 0" class="empty">No owners of this type</div>
-    <div v-else class="owner-list">
-      <div
-        v-for="o in filteredOwners"
-        :key="o.ownerId"
-        class="owner-row"
-        :class="{ selected: isSelected(o) }"
-        @click="toggleOwner(o)"
-      >
-        <span class="pick-icon">{{ isSelected(o) ? '✓' : '+' }}</span>
-        <span class="owner-label">{{ o.label }}</span>
+    <GmList
+      :items="filteredOwners"
+      item-key="key"
+      selectable
+      select-style="pick"
+      :selected-ids="selectedOwnerKeys"
+      :loading="loading"
+      empty-text="No owners of this type"
+      max-height="240px"
+      @toggle="toggleOwner"
+    >
+      <template #item="{ item: o }">
+        <span class="entity-name">{{ o.label }}</span>
         <span class="owner-count">{{ (o.sfxIds || []).length }}</span>
-      </div>
-    </div>
+      </template>
+    </GmList>
 
     <!-- Selected owners -->
     <div v-if="selected.length" class="selected-section">
@@ -90,9 +91,12 @@ const owners = computed(() => ownersByType.value[activeType.value] || [])
 
 const filteredOwners = computed(() => {
   const q = search.value.toLowerCase()
-  if (!q) return owners.value
-  return owners.value.filter(o => (o.label || '').toLowerCase().includes(q))
+  const list = owners.value.filter(o => (o.label || '').toLowerCase().includes(q))
+  return list.map(o => ({ ...o, key: ownerKey(o) }))
 })
+
+// Composite keys (ownerType:ownerId) for the list's selection highlight.
+const selectedOwnerKeys = computed(() => selected.value.map(o => ownerKey(o)))
 
 function ownerKey(o) { return `${o.ownerType}:${o.ownerId}` }
 function isSelected(o) { return selected.value.some(s => ownerKey(s) === ownerKey(o)) }
@@ -174,13 +178,6 @@ onMounted(() => {
 .filter-input { width: 100%; font-size: 12px; padding: 6px 8px; box-sizing: border-box;
   background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; }
 
-.owner-list { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
-.owner-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; background: rgba(255,255,255,0.04); }
-.owner-row:hover { background: rgba(255,255,255,0.08); }
-.owner-row.selected { background: rgba(64,136,212,0.12); }
-.pick-icon { font-weight: 700; font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
-.owner-row.selected .pick-icon { color: var(--success); }
-.owner-label { flex: 1; }
 .owner-count { font-size: 10px; color: var(--text-dim); }
 
 .selected-section { display: flex; flex-direction: column; gap: 4px; }

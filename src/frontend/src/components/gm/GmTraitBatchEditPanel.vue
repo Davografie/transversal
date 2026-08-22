@@ -33,31 +33,25 @@
       <span class="selected-count">{{ selectedIds.length }} selected</span>
     </div>
 
-    <div v-if="loading" class="loading">Loading…</div>
-    <div v-else class="ps-list">
-      <div
-        v-for="t in filtered"
-        :key="t.id"
-        class="entity-row"
-        :class="{ selected: isSelected(t.id), 'patch-flash': t._flash }"
-        @click="toggle(t.id)"
-      >
-        <input
-          type="checkbox"
-          class="row-check"
-          :checked="isSelected(t.id)"
-          @click.stop
-          @change="toggle(t.id)"
-        />
+    <GmList
+      :items="filtered"
+      item-key="id"
+      selectable
+      :selected-ids="selectedIds"
+      :loading="loading"
+      empty-text="No traits match the current filters"
+      :row-class="(t) => (t._flash ? 'patch-flash' : '')"
+      @toggle="onToggle"
+    >
+      <template #item="{ item: t }">
         <span class="entity-name">{{ t.name }}</span>
         <span class="die-badge" :class="'die-' + (t.defaultDieType || 'd6').toLowerCase()">{{ t.defaultDieType || '—' }}</span>
         <span class="rating-badge" :class="'rt-' + (t.defaultRatingType || 'static').toLowerCase()">{{ ratingLabel(t.defaultRatingType) }}</span>
         <span class="ego-badge" :class="{ 'is-ego': t.defaultEgo }">{{ t.defaultEgo ? 'ego' : 'morph' }}</span>
         <span class="polarity-badge" :class="'pol-' + (t.polarity || 'inherit').toLowerCase()">{{ polarityLabel(t.polarity) }}</span>
         <span class="entity-universe">{{ t.traitsetName }}</span>
-      </div>
-      <div v-if="filtered.length === 0" class="empty">No traits match the current filters</div>
-    </div>
+      </template>
+    </GmList>
 
     <div class="batch-actions">
       <h4 class="ps-section-title">Apply to {{ selectedIds.length }} selected</h4>
@@ -103,6 +97,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import GmList from './GmList.vue'
 
 const props = defineProps({
   initialTraitsetId: { type: String, default: '' },
@@ -114,13 +109,14 @@ const { traitsets, loading, fetchTraitsConfig, batchUpdateTraits } = useTraitsCo
 const selectedIds = ref([])
 const selectedSet = computed(() => new Set(selectedIds.value))
 
-function isSelected(id) { return selectedSet.value.has(id) }
 function toggle(id) {
   const next = new Set(selectedIds.value)
   if (next.has(id)) next.delete(id)
   else next.add(id)
   selectedIds.value = [...next]
 }
+
+function onToggle(t) { toggle(t.id) }
 
 // ── Filters ──────────────────────────────────────────
 const search = ref('')
@@ -236,9 +232,6 @@ onMounted(() => {
 .select-all input { width: auto; margin: 0; cursor: pointer; }
 .selected-count { font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums; }
 
-.ps-list { display: flex; flex-direction: column; gap: 3px; }
-.entity-row { user-select: none; }
-.row-check { width: auto; margin: 0; flex-shrink: 0; cursor: pointer; }
 .die-badge { font-weight: 700; font-size: 11px; min-width: 24px; text-align: center; }
 .die-d4 { color: var(--die-d4); }
 .die-d6 { color: var(--die-d6); }

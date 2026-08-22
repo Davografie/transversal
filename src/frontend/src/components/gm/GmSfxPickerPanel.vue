@@ -2,20 +2,20 @@
   <div>
     <input v-model="search" class="filter-input" placeholder="Filter SFXs…" />
 
-    <div v-if="filtered.length === 0" class="empty">No SFXs match</div>
-    <div v-else class="sfx-list">
-      <div
-        v-for="s in filtered"
-        :key="s.id"
-        class="sfx-row"
-        :class="{ selected: selectedIds.includes(s.id) }"
-        @click="toggleSfx(s.id)"
-      >
-        <span class="pick-icon">{{ selectedIds.includes(s.id) ? '✓' : '+' }}</span>
-        <span class="sfx-name">{{ s.name }}</span>
-        <span class="sfx-trigger">{{ s.trigger || '' }}</span>
-      </div>
-    </div>
+    <GmList
+      :items="filtered"
+      item-key="id"
+      selectable
+      select-style="pick"
+      :selected-ids="selectedIds"
+      empty-text="No SFXs match"
+      @toggle="onToggle"
+    >
+      <template #item="{ item: s }">
+        <span class="entity-name">{{ s.name }}</span>
+        <span class="entity-universe">{{ s.trigger || '' }}</span>
+      </template>
+    </GmList>
 
     <button class="ps-add-btn" @click="onNewSfx">+ New SFX</button>
   </div>
@@ -25,6 +25,7 @@
 import { ref, computed } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
+import GmList from './GmList.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 
 const panel = usePanel()
@@ -56,6 +57,8 @@ function toggleSfx(id) {
   }
 }
 
+function onToggle(s) { toggleSfx(s.id) }
+
 function onNewSfx() {
   panel.open({
     component: GmSfxEditPanel,
@@ -74,17 +77,6 @@ function onNewSfx() {
 <style scoped>
 .filter-input { width: 100%; font-size: 12px; padding: 6px 8px; margin-bottom: 8px; box-sizing: border-box;
   background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; }
-
-.sfx-list { display: flex; flex-direction: column; gap: 2px; }
-.sfx-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; background: rgba(255,255,255,0.04); }
-.sfx-row:hover { background: rgba(255,255,255,0.08); }
-.sfx-row.selected { background: rgba(64,136,212,0.12); }
-
-.pick-icon { font-weight: 700; font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
-.sfx-row.selected .pick-icon { color: var(--success); }
-
-.sfx-name { flex: 1; font-weight: 500; }
-.sfx-trigger { font-size: 10px; color: var(--text-dim); }
 
 
 </style>
