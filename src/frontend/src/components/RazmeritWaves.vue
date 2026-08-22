@@ -55,6 +55,9 @@ function draw(now) {
     collapseFraction: RESONANCE.collapseFraction,
     transformFraction: RESONANCE.transformFraction,
     expandFraction: RESONANCE.expandFraction,
+    radialPetals: RESONANCE.radialPetals,
+    breathDepth: RESONANCE.breathDepth,
+    breathRate: RESONANCE.breathRate,
     timeMs: now,
   })
 

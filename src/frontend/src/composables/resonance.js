@@ -276,17 +276,35 @@ export function harmonicProfile(osc, fundamental = 55) {
 }
 
 /**
- * Snap each oscillator to a whole number of cycles per revolution so a closed
- * (radial) trace meets itself seamlessly. Unlike `harmonicProfile`, individual
- * dice are preserved — only frequency is quantized to the nearest harmonic of
- * `fundamental` (which should equal `renderDivisor` for radial rendering).
+ * Assign each oscillator a distinct whole-number harmonic of `fundamental` so
+ * a closed (radial) trace meets itself seamlessly and reads as an irregular
+ * chrysanthemum rather than a regular flower.
+ *
+ * Entity-anchored (ego) traits stay in the low "fundamental" band; projection
+ * and relationship traits occupy higher bands. Collisions are resolved
+ * deterministically so the mapping is stable for a given oscillator set.
  */
-export function lockHarmonic(osc, fundamental = 55) {
+export function radialHarmonics(osc, maxPetals = 24, fundamental = 55) {
   const f = Math.max(1, Number(fundamental) || 1)
-  return (osc || []).map((o) => ({
-    ...o,
-    freq: Math.max(1, Math.round(o.freq / f)) * f,
-  }))
+  const max = Math.max(1, Math.round(Number(maxPetals) || 1))
+  const bandOf = (kind) => {
+    if (kind === 'entity') return [1, Math.max(1, Math.floor(max * 0.3))]
+    if (kind === 'relationship') return [Math.max(1, Math.floor(max * 0.3) + 1), Math.max(1, Math.floor(max * 0.6))]
+    return [Math.max(1, Math.floor(max * 0.6) + 1), max]
+  }
+  const used = new Set()
+  return (osc || []).map((o) => {
+    const [lo, hi] = bandOf(o.kind)
+    const span = hi - lo + 1
+    const identity = `${o.traitsetId || o.traitId || 'ts'}:${o.die}:${o.phase ?? 0}`
+    let k = lo + (hashString(identity) % span)
+    let guard = 0
+    while (used.has(k) && guard++ < max) {
+      k = k >= hi ? lo : k + 1
+    }
+    used.add(k)
+    return { ...o, freq: k * f, radialHarmonic: k }
+  })
 }
 
 /**
@@ -346,6 +364,9 @@ export const RESONANCE = {
   drift: 0.002, // right-to-left scroll rate (signal-seconds per second)
   egoBoost: 2, // entity-anchored (ego) amplitude multiplier vs morph traits
   layout: 'linear', // 'linear' | 'radial' — trace projection
+  radialPetals: 24, // radial max harmonic index (visible lobe count)
+  breathDepth: 0.3, // radial per-harmonic amplitude modulation depth (0..1)
+  breathRate: 0.6, // radial breathing base rate (cycles/sec)
   mode: 'harmonic', // 'harmonic' | 'crossfade' | 'morph'
   presets: {
     harmonic: { mode: 'harmonic' },

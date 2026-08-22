@@ -79,7 +79,7 @@ The visualization is the *measurement device* for the theory:
 - `src/frontend/src/components/RazmeritWaves.vue` — live switch renderer.
 - `src/frontend/src/components/ResonanceLab.vue` — tuning editor (scrub, play, knobs, variable output).
 
-Tunables live in `RESONANCE`: `mode`, `layout`, `renderDivisor`, `drift`, `height`, `durationMs`, `collapseFraction`, `transformFraction`, `expandFraction`, `egoBoost`. The `layout` knob casts the same trace either `linear` (left→right) or `radial` (around a base circle), so the collapse reads as a portal/orb rather than a funnel.
+Tunables live in `RESONANCE`: `mode`, `layout`, `renderDivisor`, `drift`, `height`, `durationMs`, `collapseFraction`, `transformFraction`, `expandFraction`, `egoBoost`, `radialPetals`, `breathDepth`, `breathRate`. The `layout` knob casts the same trace either `linear` (left→right) or `radial` (around a base circle), so the collapse reads as a portal/orb rather than a funnel. In radial, each die locks to a whole-number harmonic of the circle (seam-free) and breathes at its own rate, so the outline vibrates like a chrysanthemum instead of spinning like a wheel.
 
 ## Open questions
 

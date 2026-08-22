@@ -15,6 +15,9 @@ const collapseFraction = ref(RESONANCE.collapseFraction)
 const transformFraction = ref(RESONANCE.transformFraction)
 const expandFraction = ref(RESONANCE.expandFraction)
 const egoBoost = ref(RESONANCE.egoBoost)
+const radialPetals = ref(RESONANCE.radialPetals)
+const breathDepth = ref(RESONANCE.breathDepth)
+const breathRate = ref(RESONANCE.breathRate)
 
 const progress = ref(0)
 const playing = ref(false)
@@ -41,6 +44,9 @@ const output = computed(() => JSON.stringify({
   drift: drift.value,
   height: height.value,
   egoBoost: egoBoost.value,
+  radialPetals: radialPetals.value,
+  breathDepth: breathDepth.value,
+  breathRate: breathRate.value,
   durationMs: durationMs.value,
   collapseFraction: collapseFraction.value,
   transformFraction: transformFraction.value,
@@ -92,6 +98,9 @@ function render(now = performance.now()) {
     collapseFraction: collapseFraction.value,
     transformFraction: transformFraction.value,
     expandFraction: expandFraction.value,
+    radialPetals: radialPetals.value,
+    breathDepth: breathDepth.value,
+    breathRate: breathRate.value,
     timeMs: now,
   })
 }
@@ -209,6 +218,21 @@ onUnmounted(() => {
           <label class="reslab-knob">
             <span>egoBoost {{ egoBoost.toFixed(2) }}</span>
             <input v-model.number="egoBoost" type="range" min="1" max="4" step="0.1" />
+          </label>
+
+          <label class="reslab-knob">
+            <span>radialPetals {{ radialPetals }}</span>
+            <input v-model.number="radialPetals" type="range" min="8" max="64" step="1" />
+          </label>
+
+          <label class="reslab-knob">
+            <span>breathDepth {{ breathDepth.toFixed(2) }}</span>
+            <input v-model.number="breathDepth" type="range" min="0" max="0.9" step="0.05" />
+          </label>
+
+          <label class="reslab-knob">
+            <span>breathRate {{ breathRate.toFixed(2) }}</span>
+            <input v-model.number="breathRate" type="range" min="0.1" max="3" step="0.1" />
           </label>
 
           <label class="reslab-knob">

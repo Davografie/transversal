@@ -1,4 +1,4 @@
-import { RESONANCE, morphWaves, groupByTraitsetDie, sampleAt, totalAmplitude, easeInOutCubic, lockHarmonic } from './resonance.js'
+import { RESONANCE, morphWaves, groupByTraitsetDie, sampleAt, totalAmplitude, easeInOutCubic, radialHarmonics } from './resonance.js'
 
 const FALLBACK_DIE_COLORS = {
   d4: '#e88830',
@@ -47,13 +47,26 @@ function getGroups(arr) {
 
 // Cache the radial harmonic-locked copies so a stable from/to array isn't
 // re-quantized on every animation frame.
-function lockRadial(arr, fundamental) {
+function lockRadial(arr, fundamental, maxPetals) {
   let entry = radialLockCache.get(arr)
-  if (!entry || entry.fundamental !== fundamental) {
-    entry = { fundamental, locked: lockHarmonic(arr, fundamental) }
+  if (!entry || entry.fundamental !== fundamental || entry.maxPetals !== maxPetals) {
+    entry = { fundamental, maxPetals, locked: radialHarmonics(arr, maxPetals, fundamental) }
     radialLockCache.set(arr, entry)
   }
   return entry.locked
+}
+
+// Per-harmonic amplitude breathing: a seam-safe tremolo that makes the outline
+// pulse/vibrate instead of only rotating. Each oscillator breathes at its own
+// rate (driftMul) and phase, so the composite continuously reshapes.
+function applyBreath(osc, timeMs, depth, rate) {
+  if (!depth || !(osc && osc.length)) return osc
+  const t = timeMs / 1000
+  return osc.map((o) => {
+    const w = 2 * Math.PI * rate * (o.driftMul ?? 1) * t + (o.phase ?? 0)
+    const factor = 1 + depth * Math.sin(w)
+    return { ...o, amp: o.amp * Math.max(0.05, factor) }
+  })
 }
 
 function mixColor(a, b, t) {
@@ -85,11 +98,19 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const collapseFraction = opts.collapseFraction ?? RESONANCE.collapseFraction
   const transformFraction = opts.transformFraction ?? RESONANCE.transformFraction
   const expandFraction = opts.expandFraction ?? RESONANCE.expandFraction
+  const radialPetals = opts.radialPetals ?? RESONANCE.radialPetals
+  const breathDepth = opts.breathDepth ?? RESONANCE.breathDepth
+  const breathRate = opts.breathRate ?? RESONANCE.breathRate
 
-  // A closed (radial) trace must meet itself, so each wave completes a whole
-  // number of cycles per revolution. Quantize only for radial rendering.
-  const src = layout === 'radial' ? lockRadial(from, renderDivisor) : from
-  const dst = layout === 'radial' ? lockRadial(to, renderDivisor) : to
+  // Radial: lock each wave to a whole number of cycles per revolution so the
+  // closed loop meets itself, then breathe per-harmonic amplitude so the
+  // outline pulses/vibrates instead of only rotating.
+  let src = from
+  let dst = to
+  if (layout === 'radial') {
+    src = applyBreath(lockRadial(from, renderDivisor, radialPetals), timeMs, breathDepth, breathRate)
+    dst = applyBreath(lockRadial(to, renderDivisor, radialPetals), timeMs, breathDepth, breathRate)
+  }
 
   // Continuous right-to-left scroll. `drift` is a rate in signal-seconds/sec;
   // each wave multiplies it by its own driftMul so it doesn't march in lockstep.
