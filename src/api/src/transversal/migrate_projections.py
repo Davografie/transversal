@@ -23,6 +23,7 @@ import sys
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import EntityType, Projection, TransversalType
+from transversal.services.entity_manager import _origin_universe_from_key
 
 OCCUPANT_TYPES = {EntityType.CHARACTER, EntityType.GMC, EntityType.ASSET}
 
@@ -60,7 +61,7 @@ def migrate() -> int:
     # 1. Backfill origin_universe on every projection from its stable key.
     for proj in repo.list_all_projections():
         if not proj.origin_universe:
-            proj.origin_universe = proj.id.rsplit(":", 1)[-1]
+            proj.origin_universe = _origin_universe_from_key(proj.id)
             repo.update_projection(proj)
             origin_backfills += 1
 
