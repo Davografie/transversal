@@ -133,6 +133,13 @@ def _location_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetC
             _candidate(e.id, e.name, e.current_universe)
             for e in repo.get_entities_by_ids(location_ids)
         ]
+    if kind == "projection":
+        location_ids = [value] + list(repo.list_location_descendants(value))
+        return [
+            _candidate(p.id, p.name or entity.name, p.universe)
+            for p in repo.get_projections_for_entity(entity.id)
+            if p.current_location in location_ids
+        ]
     return []
 
 
@@ -149,6 +156,12 @@ def _subtree_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCa
             _candidate(e.id, e.name, e.current_universe)
             for e in occupants
             if not (kind == "occupant" and e.id == entity.id)
+        ]
+    if kind == "projection":
+        return [
+            _candidate(p.id, p.name or entity.name, p.universe)
+            for p in repo.get_projections_for_entity(entity.id)
+            if p.current_location in location_ids
         ]
     return []
 

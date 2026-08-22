@@ -38,11 +38,13 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 1. **Subject (who)** — `Effect.entity`. Type `entity`. Existing.
 2. **Destination location (where)** — a portal's destination is a location picked **within a scope derived from the edge's `_to` type**: `{location:transversal_target}` (location `_to` → the location plus its zones) or `{universe:transversal_target}` (universe `_to` → any location in it). For a free-standing SFX travel effect, `target` is a literal id, `{choose_location}`, or `{random:location}`, scoped via `target_scope`.
 3. **Mechanism (how)** — `context.transversal_type`: `inapposite` | `consciousness`.
-4. **Body / projection policy (which body)** — new `projection` kind. Inapposite always uses `active` (the body travels). Consciousness picks a body:
-   - `{last_projection}` — reuse the entity's **most recently used** body in the destination universe (tracked via `Projection.last_used_at`); arrive where it is; fallback: spawn a fresh body.
-   - `{random_projection}` — random existing body in the destination universe; fallback: spawn a fresh body.
-   - `{choose_projection}` — choose an existing body in the destination universe; fallback: spawn a fresh body.
-   - `{new_projection}` — always spawn a fresh body at the destination (`origin_universe` = destination universe, `transversal_type` = `CONSCIOUSNESS`).
+4. **Body / projection policy (which body)** — new `projection` kind. Inapposite always uses `active` (the body travels). Consciousness picks a body **scoped to the destination scope** (a location scope → bodies currently in that location + its zones; a universe scope → bodies anywhere in it):
+   - `{last_projection}` — the **most recently used** body in that scope (tracked via `Projection.last_used_at`); arrive where it is.
+   - `{random_projection}` — a random body in that scope.
+   - `{choose_projection}` — choose a body in that scope.
+   - `{new_projection}` — always spawn a fresh body (`origin_universe` = destination universe, `transversal_type` = `CONSCIOUSNESS`).
+
+   The reuse policies (`{last_projection}` / `{random_projection}` / `{choose_projection}`) fall back to spawning a fresh body **at the specific target location** when no body exists within the scope.
 5. **Universe** — new `universe` kind, for `{random_universe}`; also usable as a scope value (`universe:{random_universe}`).
 
 ## New target kinds

@@ -1003,6 +1003,46 @@ def test_travel_last_projection_picks_most_recent():
     assert entity.current_location == "peak"
 
 
+def test_travel_reuse_scoped_to_location():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("valley", "earth"), _loc("yinling", "earth")],
+        projections=[
+            _proj("char-1:earth", "char-1", "earth", location="valley"),
+            _proj("char-1:earth:2", "char-1", "earth", location="elsewhere"),
+        ],
+    )
+    repo.get_projection("char-1:earth").last_used_at = "2026-08-21T10:00:00+00:00"
+    repo.get_projection("char-1:earth:2").last_used_at = "2026-08-22T10:00:00+00:00"  # more recent, but outside scope
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="yinling", target_scope="location:valley",
+        context={"transversal_type": "consciousness", "projection": "{last_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    # only char-1:earth is in the Valley scope, even though :2 is more recent
+    assert entity.current_projection == "char-1:earth"
+    assert entity.current_location == "valley"
+
+
+def test_travel_reuse_fallback_spawns_at_specific_target():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("valley", "earth"), _loc("yinling", "earth")],
+        projections=[_proj("char-1:earth", "char-1", "earth", location="elsewhere")],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="yinling", target_scope="location:valley",
+        context={"transversal_type": "consciousness", "projection": "{last_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_projections) == 1
+    assert result.new_projections[0].current_location == "yinling"
+    assert entity.current_projection == result.new_projections[0].id
+    assert entity.current_location == "yinling"
+
+
 def test_travel_last_projection_falls_back_to_new():
     entity = _entity()
     repo = TravelRepo(

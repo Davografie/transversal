@@ -1032,13 +1032,13 @@ def _apply_travel(entity, effect, repo, result):
         projection_policy = "{new_projection}"
 
     if projection_policy in ("{last_projection}", "{random_projection}", "{choose_projection}"):
-        scope = f"universe:{dest_universe}" if dest_universe else None
+        scope = effect.target_scope or (f"universe:{dest_universe}" if dest_universe else None)
         candidates = resolve_candidates("projection", scope, subject, repo)
         if candidates:
             if projection_policy == "{choose_projection}":
                 result.pending_choices.append(PendingChoice(
                     effect=effect, kind="projection",
-                    scope=f"universe:{dest_universe}" if dest_universe else None,
+                    scope=scope,
                     field="context.projection",
                 ))
                 return
