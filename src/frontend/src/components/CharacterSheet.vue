@@ -49,7 +49,7 @@
             </div>
           </div>
           <div class="sheet-pills">
-            <div v-if="gmMode || (ownsCharacter && !overrideEntityId)">
+            <div v-if="gmMode || !overrideEntityId">
               <button :class="['pill', { active: activeSheetView === 'profile' }]" @click="activeSheetView = 'profile'">👤</button>
               <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="goToTraitSets">🎲</button>
               <button v-if="gmMode" :class="['pill', { active: showAllTraits }]" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
