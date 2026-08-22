@@ -25,10 +25,10 @@
           </button>
         </div>
       </div>
-      <div v-if="!images.length" class="gallery-empty">No images yet — upload or generate one.</div>
-      <div v-else class="gallery-grid">
+      <div v-if="!entityImages.length" class="gallery-empty">No entity images yet — upload or generate one.</div>
+      <div v-else class="gallery-grid entity-gallery-drop" :class="{ 'drag-over': dropTarget === '__entity__' }" @dragover.prevent="onEntityDragOver" @dragleave="onEntityDragLeave" @drop.prevent="onEntityDrop">
         <div
-          v-for="img in images"
+          v-for="img in entityImages"
           :key="img.id"
           class="gallery-item"
           draggable="true"
@@ -53,23 +53,42 @@
       </div>
       <div v-if="!projections.length" class="gallery-empty">No projections yet.</div>
       <div v-else class="projection-list">
-        <div
-          v-for="p in projections"
-          :key="p.id"
-          class="projection-row"
-          :class="{ 'drag-over': dropTarget === p.id }"
-          :data-projection-id="p.id"
-          @dragover.prevent="onProjDragOver(p)"
-          @dragleave="onProjDragLeave(p)"
-          @drop.prevent="onProjDrop(p, $event)"
-          @click="openProjectionEditor(p)"
-        >
-          <MediaImage v-if="p.backgroundImage" :src="p.backgroundImage" class="proj-thumb" :alt="p.originUniverse" />
-          <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
-          <span class="proj-name">{{ p.name || form?.name }}</span>
-          <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
-          <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
-          <button class="proj-remove" @click.stop="removeProjection(p.id)" title="Remove projection">✕</button>
+        <div v-for="p in projections" :key="p.id" class="projection-block">
+          <div
+            class="projection-row"
+            :class="{ 'drag-over': dropTarget === p.id }"
+            :data-projection-id="p.id"
+            @dragover.prevent="onProjDragOver(p)"
+            @dragleave="onProjDragLeave(p)"
+            @drop.prevent="onProjDrop(p, $event)"
+            @click="openProjectionEditor(p)"
+          >
+            <MediaImage v-if="projectionThumb(p)" :src="projectionThumb(p).image_type === 'animated' ? projectionThumb(p).path_animated : projectionThumb(p).path_large" class="proj-thumb" :alt="p.originUniverse" />
+            <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
+            <span class="proj-name">{{ p.name || form?.name }}</span>
+            <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
+            <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
+            <button class="proj-remove" @click.stop="removeProjection(p.id)" title="Remove projection">✕</button>
+          </div>
+          <div v-if="projectionImages(p).length" class="gallery-grid projection-gallery">
+            <div
+              v-for="img in projectionImages(p)"
+              :key="img.id"
+              class="gallery-item"
+              draggable="true"
+              @dragstart="onImageDragStart($event, img)"
+              @touchstart="onImageTouchStart($event, img)"
+              @touchmove="onImageTouchMove"
+              @touchend="onImageTouchEnd"
+              @click="openImage(img)"
+            >
+              <MediaImage :src="img.image_type === 'animated' ? img.path_animated : img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
+              <span class="gallery-label">
+                {{ img.image_type }} — {{ formatSize(img.size_bytes) }}
+                <span v-for="r in img.roles" :key="r" class="role-badge">{{ r }}</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="projection-add">
@@ -162,7 +181,7 @@ const bus = usePanelBus()
 const { graphql } = useApi()
 
 // ── Composables: shared state with GmPanel ──────────
-const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, updateProjection, removeProjection } = useEntityCrud()
+const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { paths: lifePaths, loading: loadingLifepaths, fetchLifePaths } = useLifePaths()
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
@@ -186,12 +205,36 @@ async function addProjectionLocal() {
 }
 
 // ── Image → projection drag-and-drop (HTML5 + touch longpress) ──
-const dropTarget = ref(null)
+const dropTarget = ref(null)  // projection id, or '__entity__' for the entity gallery
 const touchImageDrag = ref(null)
 
+// Entity-level vs projection-scoped images (ownership is ``projection_id``).
+const entityImages = computed(() => images.value.filter(i => !i.projection_id))
+function projectionImages(p) { return images.value.filter(i => i.projection_id === p.id) }
+function projectionThumb(p) {
+  const list = projectionImages(p)
+  return list.find(i => (i.roles || []).includes('sheet'))
+    || list.find(i => (i.roles || []).includes('background'))
+    || list[0] || null
+}
+
+async function assignImage(imageId, projectionId) {
+  if (!imageId) return
+  try {
+    await fetch(`/api/v1/imagen/${imageId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projection_id: projectionId || null }),
+    })
+    await loadImages()
+  } catch (e) {
+    console.error('assignImage:', e)
+  }
+}
+
 function onImageDragStart(e, img) {
-  e.dataTransfer.effectAllowed = 'copy'
-  e.dataTransfer.setData('text/plain', JSON.stringify({ path: img.path_animated || img.path_large }))
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', JSON.stringify({ id: img.id, path: img.path_animated || img.path_large }))
 }
 
 function onProjDragOver(p) { dropTarget.value = p.id }
@@ -201,13 +244,25 @@ function onProjDrop(p, e) {
   const raw = e.dataTransfer.getData('text/plain')
   if (!raw) return
   let payload
-  try { payload = JSON.parse(raw) } catch { payload = { path: raw } }
-  if (payload.path) updateProjection(p.id, { backgroundImage: payload.path })
+  try { payload = JSON.parse(raw) } catch { payload = { id: raw } }
+  if (payload.id) assignImage(payload.id, p.id)
+}
+
+function onEntityDragOver() { dropTarget.value = '__entity__' }
+function onEntityDragLeave() { if (dropTarget.value === '__entity__') dropTarget.value = null }
+function onEntityDrop(e) {
+  dropTarget.value = null
+  const raw = e.dataTransfer.getData('text/plain')
+  if (!raw) return
+  let payload
+  try { payload = JSON.parse(raw) } catch { payload = { id: raw } }
+  if (payload.id) assignImage(payload.id, null)
 }
 
 function onImageTouchStart(e, img) {
   const touch = e.touches[0]
-  touchImageDrag.value = { path: img.path_animated || img.path_large, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
+  const path = img.path_animated || img.path_large
+  touchImageDrag.value = { id: img.id, path, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
   touchImageDrag.value._timer = setTimeout(() => {
     if (!touchImageDrag.value) return
     touchImageDrag.value.engaged = true
@@ -236,8 +291,11 @@ function onImageTouchMove(e) {
   const g = touchImageDrag.value.ghost
   if (g) { g.style.left = (t.clientX - 22) + 'px'; g.style.top = (t.clientY - 22) + 'px' }
   const target = document.elementFromPoint(t.clientX, t.clientY)
-  const row = target?.closest('.projection-row')
-  dropTarget.value = row ? (row.dataset.projectionId || null) : null
+  if (target?.closest('.entity-gallery-drop')) dropTarget.value = '__entity__'
+  else {
+    const row = target?.closest('.projection-row')
+    dropTarget.value = row ? (row.dataset.projectionId || null) : null
+  }
 }
 
 function onImageTouchEnd(e) {
@@ -246,9 +304,14 @@ function onImageTouchEnd(e) {
   if (touchImageDrag.value.engaged) {
     const t = e.changedTouches[0]
     const target = document.elementFromPoint(t.clientX, t.clientY)
-    const row = target?.closest('.projection-row')
-    const projectionId = row?.dataset.projectionId
-    if (projectionId && touchImageDrag.value.path) updateProjection(projectionId, { backgroundImage: touchImageDrag.value.path })
+    const id = touchImageDrag.value.id
+    if (target?.closest('.entity-gallery-drop')) {
+      if (id) assignImage(id, null)
+    } else {
+      const row = target?.closest('.projection-row')
+      const projectionId = row?.dataset.projectionId
+      if (projectionId && id) assignImage(id, projectionId)
+    }
     touchImageDrag.value.ghost?.remove()
   }
   dropTarget.value = null
@@ -542,7 +605,8 @@ defineExpose({ refresh: loadImages })
 .section-count { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 
 .projections-section { margin-top: 12px; }
-.projection-list { display: flex; flex-direction: column; gap: 4px; }
+.projection-list { display: flex; flex-direction: column; gap: 8px; }
+.projection-block { border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 4px; }
 .projection-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02); }
 .proj-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj-universe { font-size: 11px; color: var(--text-dim); }
@@ -558,6 +622,8 @@ defineExpose({ refresh: loadImages })
 .proj-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); flex: 0 0 auto; }
 .proj-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-dim); background: rgba(255,255,255,0.04); }
 .projection-row.drag-over { border-color: var(--accent); background: rgba(64,136,212,0.12); }
+.projection-gallery { margin-top: 4px; padding: 4px; border-top: 1px dashed rgba(255,255,255,0.08); }
+.entity-gallery-drop.drag-over { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .transversal-links { margin-top: 12px; }
 .transversal-list { display: flex; flex-direction: column; gap: 4px; }
 .transversal-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02); }

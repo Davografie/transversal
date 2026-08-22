@@ -5,14 +5,6 @@
       <label>Name</label>
       <input v-model="name" placeholder="Projection name (falls back to entity)" />
 
-      <label>Background Image</label>
-      <div class="image-row">
-        <MediaImage v-if="backgroundImage" :src="backgroundImage" class="proj-preview" />
-        <span v-else class="proj-preview proj-preview-empty">🖼</span>
-        <input v-model="backgroundImage" placeholder="/media/… or URL" class="image-input" />
-        <button v-if="backgroundImage" type="button" class="clear-btn" title="Clear image" @click="backgroundImage = ''">✕</button>
-      </div>
-
       <label>Current Location</label>
       <GmLocationPicker v-model="currentLocation" placeholder="Search location…" :universe="projection.universe" @select="onLocationSelect" />
 
@@ -36,7 +28,6 @@ import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
-import MediaImage from '@/components/MediaImage.vue'
 
 const props = defineProps({
   projection: { type: Object, required: true },
@@ -46,7 +37,6 @@ const panel = usePanel()
 const { updateProjection } = useEntityCrud()
 
 const name = ref(props.projection.name || '')
-const backgroundImage = ref(props.projection.backgroundImage || '')
 const currentLocation = ref(props.projection.currentLocation || '')
 const saving = ref(false)
 
@@ -63,7 +53,6 @@ async function save() {
   try {
     await updateProjection(props.projection.id, {
       name: name.value,
-      backgroundImage: backgroundImage.value || null,
       currentLocation: currentLocation.value || null,
     })
     panel.close()

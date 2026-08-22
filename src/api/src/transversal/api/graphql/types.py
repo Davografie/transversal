@@ -594,6 +594,14 @@ class Projection:
     current_location: Optional[str] = None
     transversal_type: TransversalTypeEnum
 
+    @strawberry.field
+    def sheet_image(self) -> Optional[str]:
+        """This body's sheet role image (with entity-level fallback)."""
+        from transversal.db.repository import EntityRepository
+        return EntityRepository().resolve_role_image(
+            str(self.entity_id), "sheet", str(self.id), "Small"
+        )
+
 
 # ── Entity ───────────────────────────────────────────
 
@@ -691,9 +699,11 @@ class Entity:
         if variant is None:
             return None
         repo = EntityRepository()
-        return repo.resolve_role_image(
-            str(self.id), role, str(projection_id) if projection_id else None, variant
-        )
+        # When no explicit projection is given, resolve through the entity's
+        # active body (current_projection) so callers asking for "the entity's"
+        # image get the active body's image first, falling back to entity level.
+        pid = str(projection_id) if projection_id else (self.current_projection or None)
+        return repo.resolve_role_image(str(self.id), role, pid, variant)
 
     @strawberry.field
     def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:

@@ -274,7 +274,7 @@ const activeProjection = computed(() => {
   if (!e || !e.projections) return null
   return e.projections.find((p) => p.id === e.currentProjection) || null
 })
-const sheetPortrait = computed(() => activeProjection.value?.backgroundImage || entity.value?.sheetPortrait || '')
+const sheetPortrait = computed(() => activeProjection.value?.sheetImage || entity.value?.sheetPortrait || '')
 const traitSets = ref([])
 const allTraitSettings = ref([])
 const effectiveSettings = ref([])
@@ -697,7 +697,7 @@ const QUERY = `
       backgroundImage
       sheetPortrait
       projections {
-        id originUniverse universe name backgroundImage currentLocation transversalType
+        id originUniverse universe name sheetImage currentLocation transversalType
       }
       traitSettings {
         id
