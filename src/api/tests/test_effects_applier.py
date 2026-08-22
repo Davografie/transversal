@@ -785,3 +785,146 @@ def test_reveal_is_idempotent():
     assert ts.known_to == ["char-1"]
     assert result.revealed == []
     assert result.applied[0].summary == "char-1 already knows hidden-trait"
+
+
+# ── Travel (portal) ─────────────────────────────────
+
+class TravelRepo:
+    """Minimal repo for travel effects — entities + projections."""
+
+    def __init__(self, entities=None, projections=None):
+        self.entities = {e.id: e for e in (entities or [])}
+        self.projections = {p.id: p for p in (projections or [])}
+
+    def get_entity(self, eid):
+        return self.entities.get(eid)
+
+    def get_projection(self, pid):
+        return self.projections.get(pid)
+
+    def get_projections_for_entity(self, eid):
+        return [p for p in self.projections.values() if p.entity_id == eid]
+
+    def create_projection(self, p):
+        self.projections[p.id] = p
+        return p
+
+    def update_projection(self, p):
+        self.projections[p.id] = p
+        return p
+
+    def list_entities_by_type(self, et, universe=None):
+        return []
+
+    def list_entities_by_location(self, lid):
+        return []
+
+    def list_entities_by_locations(self, ids):
+        return []
+
+    def list_all_entities(self, universe=None):
+        return []
+
+    def get_traits_by_universe(self, u):
+        return []
+
+    def get_traits_by_traitset(self, t):
+        return []
+
+    def list_lifepaths_by_universe(self, u):
+        return []
+
+    def list_roll_tables(self):
+        return []
+
+    def list_location_descendants(self, lid):
+        return []
+
+    def get_entities_by_ids(self, ids):
+        return [self.entities[i] for i in ids if i in self.entities]
+
+    def list_faction_members(self, f):
+        return []
+
+
+def _proj(id, entity_id, universe, origin_universe=None, location=None, transversal_type=None):
+    from transversal.domain import Projection, TransversalType
+    return Projection(
+        id=id, entity_id=entity_id, universe=universe,
+        origin_universe=origin_universe or universe,
+        current_location=location,
+        transversal_type=transversal_type or TransversalType.NATIVE,
+    )
+
+
+def _loc(id, universe):
+    return Entity(id=id, type=EntityType.LOCATION, name=id, current_universe=universe)
+
+
+def test_travel_new_projection_spawns_body():
+    from transversal.domain import TransversalType
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("krasnoyarsk", "earth")],
+        projections=[_proj("char-1:earth", "char-1", "earth")],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="krasnoyarsk", target_scope="universe:earth",
+        context={"transversal_type": "consciousness", "projection": "{new_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_projections) == 1
+    newp = result.new_projections[0]
+    assert newp.id == "char-1:earth:2"
+    assert newp.transversal_type == TransversalType.CONSCIOUSNESS
+    assert entity.current_projection == "char-1:earth:2"
+    assert entity.current_location == "krasnoyarsk"
+    assert entity.current_universe == "earth"
+
+
+def test_travel_random_projection_reuses_body():
+    entity = _entity()
+    proj = _proj("char-1:earth", "char-1", "earth", location="railyard")
+    repo = TravelRepo(entities=[entity], projections=[proj])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="", target_scope="universe:earth",
+        context={"transversal_type": "consciousness", "projection": "{random_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert entity.current_projection == "char-1:earth"
+    assert entity.current_location == "railyard"
+    assert entity.current_universe == "earth"
+
+
+def test_travel_inapposite_relocates_active_body():
+    from transversal.domain import TransversalType
+    entity = _entity(current_projection="char-1:earth", current_location="railyard")
+    proj = _proj("char-1:earth", "char-1", "earth", location="railyard")
+    repo = TravelRepo(entities=[entity, _loc("peak", "three_realms")], projections=[proj])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="peak", target_scope="universe:three_realms",
+        context={"transversal_type": "inapposite"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.updated_projections) == 1
+    assert result.updated_projections[0].universe == "three_realms"
+    assert result.updated_projections[0].transversal_type == TransversalType.INAPPOSITE
+    assert entity.current_location == "peak"
+    assert entity.current_universe == "three_realms"
+
+
+def test_travel_choose_projection_pends():
+    entity = _entity()
+    repo = TravelRepo(entities=[entity], projections=[_proj("char-1:earth", "char-1", "earth")])
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="", target_scope="universe:earth",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.pending_choices) == 1
+    assert result.pending_choices[0].kind == "projection"
+    assert result.pending_choices[0].field == "context.projection"

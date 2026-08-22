@@ -25,7 +25,7 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 
 ## Current state
 
-- The `travel` effect (`effects_registry.py`, key `("travel", "move")`) exposes `target` (entity) + `result` (location) + `context.transversal_type` (`inapposite` | `consciousness`).
+- The `travel` effect (`effects_registry.py`, key `("travel", "move")`) exposes `entity` (subject) + `target` (location) + `context.transversal_type` (`inapposite` | `consciousness`).
 - Its handler (`effects_applier.py::_travel`) bottoms out in two hardcoded `EntityManager` methods:
   - `inapposite_travel` — moves the **active** body (projection fixed).
   - `consciousness_travel` — reuses/spawns `{entity}:{universe}` (body fixed; location = that body's location).
@@ -36,7 +36,7 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 ## The five axes
 
 1. **Subject (who)** — `Effect.entity`. Type `entity`. Existing.
-2. **Destination location (where)** — `result`. Literal id, `{choose_location}`, or `{random:location}`; scoped.
+2. **Destination location (where)** — `target`. Literal id, `{choose_location}`, or `{random:location}`; scoped via `target_scope`.
 3. **Mechanism (how)** — `context.transversal_type`: `inapposite` | `consciousness`.
 4. **Body / projection policy (which body)** — new `projection` kind:
    - `active` — default; the body itself travels (inapposite).

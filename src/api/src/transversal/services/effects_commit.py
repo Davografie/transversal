@@ -45,6 +45,8 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     mutated entity plus any produced trait settings and relationship edges.
     """
     old_razmerit = entity.razmerit
+    old_location = entity.current_location
+    old_universe = entity.current_universe
     result = apply_effects(entity, effects, repo)
 
     # Other entities mutated (e.g. razmerit transfer recipient).
@@ -75,6 +77,20 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
                 "new_balance": entity.razmerit,
                 "reason": "effect",
             })
+
+    # Projections produced/updated by travel effects.
+    for proj in result.new_projections:
+        repo.create_projection(proj)
+    for proj in result.updated_projections:
+        repo.update_projection(proj)
+
+    if entity.current_location != old_location or entity.current_universe != old_universe:
+        _publish("location_changed", {
+            "entity_id": entity.id,
+            "from": old_location or "",
+            "to": entity.current_location or "",
+            "universe": entity.current_universe,
+        })
 
     # Trait settings produced by the applier.
     for ts in result.new_trait_settings:

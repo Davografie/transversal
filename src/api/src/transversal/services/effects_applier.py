@@ -172,23 +172,15 @@ def _register_core_handlers(em, raz):
 
     # Travel — move the entity across a universal boundary.
     #
-    # ``inapposite`` relocates the active projection in place (key stays
-    # "{entity_id}:{origin_universe}"). ``consciousness`` leaves the body behind
-    # and spawns/reuses a projection at the destination.
+    # Delegates to the shared repo-first applier (``apply_effects``) so the
+    # subject, destination location, universe scope, and body policy resolve
+    # through the same choose/random machinery as every other effect.
     def _travel(a, eid, u, ctx):
         entity = em.repo.get_entity(eid)
         if entity is None:
             return
-        target_location = a.result or ctx.get("location")
-        if not target_location:
-            return
-        if em.repo.get_entity(target_location) is None:
-            return
-        travel_type = (a.context or {}).get("transversal_type") or ctx.get("transversal_type") or "inapposite"
-        if travel_type == "consciousness":
-            em.consciousness_travel(eid, target_location)
-        else:
-            em.inapposite_travel(eid, target_location)
+        from transversal.services.effects_commit import commit_effects
+        commit_effects(entity, [a], em.repo)
 
     effect_registry.register("travel", "move", _travel)
 
@@ -238,6 +230,8 @@ class EffectsResult:
     updated_trait_settings: list[TraitSetting] = field(default_factory=list)
     removed_trait_settings: list[TraitSetting] = field(default_factory=list)
     new_relationships: list[dict] = field(default_factory=list)
+    new_projections: list = field(default_factory=list)
+    updated_projections: list = field(default_factory=list)
     entities_to_update: list[Entity] = field(default_factory=list)
     pending_choices: list[PendingChoice] = field(default_factory=list)
     passthrough: list[Effect] = field(default_factory=list)
@@ -525,11 +519,17 @@ def _track_subject(result: EffectsResult, primary: Entity, subject: Entity) -> N
 def resolve_choice(choice: PendingChoice, target: str) -> Effect:
     """Resolve a pending choice to a concrete target, returning a re-appliable effect.
 
-    The returned effect has the pending field (``target`` or ``entity``) set to
-    the chosen id and can be passed back to :func:`apply_effects` (or
-    ``commit_effects``) to complete the mutation.
+    The returned effect has the pending field (``target``, ``entity``, or a
+    ``context.*`` sub-field) set to the chosen id and can be passed back to
+    :func:`apply_effects` (or ``commit_effects``) to complete the mutation.
     """
-    return choice.effect.model_copy(update={choice.field: target})
+    field = choice.field
+    if "." in field:
+        top, _, sub = field.partition(".")
+        ctx = dict(choice.effect.context or {})
+        ctx[sub] = target
+        return choice.effect.model_copy(update={top: ctx})
+    return choice.effect.model_copy(update={field: target})
 
 
 # ── Mutation handlers ────────────────────────────────
@@ -850,6 +850,141 @@ def _queue_explicit(owner, effect, action, target):
     )
 
 
+def _next_projection_id(entity_id: str, universe: str, repo) -> str:
+    """Generate a unique projection key (first body keeps the legacy key)."""
+    base = f"{entity_id}:{universe}"
+    existing = {p.id for p in repo.get_projections_for_entity(entity_id)}
+    if base not in existing:
+        return base
+    n = 2
+    while f"{base}:{n}" in existing:
+        n += 1
+    return f"{base}:{n}"
+
+
+def _scope_universe(scope: Optional[str]) -> Optional[str]:
+    """Return a literal universe from a ``universe:X`` scope, else None."""
+    from transversal.services.effect_targets import parse_scope
+    if not scope:
+        return None
+    prefix, value = parse_scope(scope)
+    if prefix == "universe" and value and not value.startswith("{"):
+        return value
+    return None
+
+
+def _apply_travel(entity, effect, repo, result):
+    """Cross a universal boundary, honoring subject/location/mechanism/body/universe.
+
+    Subject = ``effect.entity``. Destination location = ``effect.target`` (literal,
+    ``{choose_location}``, or ``{random:location}``). Universe = ``effect.target_scope``
+    (``universe:X``). Mechanism = ``context.transversal_type``. Body policy =
+    ``context.projection`` (``active`` | ``{new_projection}`` | ``{random_projection}``
+    | ``{choose_projection}``).
+    """
+    from transversal.domain import Projection, TransversalType
+
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    ctx = effect.context or {}
+    travel_type = ctx.get("transversal_type") or "inapposite"
+    projection_policy = (ctx.get("projection") or "active").strip()
+    dest_universe = _scope_universe(effect.target_scope)
+
+    # Body policy first — a body-targeted traversal may not need a location.
+    if projection_policy == "{choose_projection}":
+        result.pending_choices.append(PendingChoice(
+            effect=effect, kind="projection",
+            scope=f"universe:{dest_universe}" if dest_universe else None,
+            field="context.projection",
+        ))
+        return
+
+    if projection_policy == "{random_projection}":
+        scope = f"universe:{dest_universe}" if dest_universe else None
+        candidates = resolve_candidates("projection", scope, subject, repo)
+        if candidates:
+            proj_id = random.choice([c.id for c in candidates])
+            proj = repo.get_projection(proj_id)
+            if proj is not None:
+                subject.current_projection = proj_id
+                subject.current_universe = proj.universe
+                subject.current_location = proj.current_location
+                result.applied.append(AppliedEffect(effect, f"arrived in body {proj_id}"))
+                return
+        result.applied.append(AppliedEffect(effect, "no body at destination"))
+        return
+
+    location_id = _resolve_target(subject, effect, result, "location", repo)
+    if location_id is None:
+        return  # pending choice recorded
+
+    if not dest_universe:
+        loc = repo.get_entity(location_id)
+        dest_universe = loc.current_universe if loc else subject.current_universe
+
+    if projection_policy == "{new_projection}":
+        proj = Projection(
+            id=_next_projection_id(subject.id, dest_universe, repo),
+            entity_id=subject.id,
+            origin_universe=dest_universe,
+            universe=dest_universe,
+            current_location=location_id,
+            transversal_type=TransversalType.CONSCIOUSNESS,
+        )
+        result.new_projections.append(proj)
+        subject.current_projection = proj.id
+        subject.current_universe = dest_universe
+        subject.current_location = location_id
+        result.applied.append(AppliedEffect(effect, f"spawned body {proj.id}"))
+        return
+
+    # ``active`` — the body travels (inapposite) or the mind reuses/spawns a body (consciousness).
+    if travel_type == "consciousness":
+        proj = next((p for p in repo.get_projections_for_entity(subject.id) if p.universe == dest_universe), None)
+        if proj is None:
+            proj = Projection(
+                id=_next_projection_id(subject.id, dest_universe, repo),
+                entity_id=subject.id,
+                origin_universe=dest_universe,
+                universe=dest_universe,
+                current_location=location_id,
+                transversal_type=TransversalType.CONSCIOUSNESS,
+            )
+            result.new_projections.append(proj)
+        else:
+            proj.universe = dest_universe
+            proj.current_location = location_id
+            result.updated_projections.append(proj)
+    else:
+        proj = repo.get_projection(subject.current_projection) if subject.current_projection else None
+        if proj is None:
+            proj = Projection(
+                id=_next_projection_id(subject.id, dest_universe, repo),
+                entity_id=subject.id,
+                origin_universe=dest_universe,
+                universe=dest_universe,
+                current_location=location_id,
+                transversal_type=TransversalType.NATIVE,
+            )
+            result.new_projections.append(proj)
+        else:
+            proj.universe = dest_universe
+            proj.current_location = location_id
+            proj.transversal_type = (
+                TransversalType.NATIVE if dest_universe == proj.origin_universe else TransversalType.INAPPOSITE
+            )
+            result.updated_projections.append(proj)
+
+    subject.current_projection = proj.id
+    subject.current_universe = dest_universe
+    subject.current_location = location_id
+    result.applied.append(AppliedEffect(effect, f"relocated to {location_id}"))
+
+
 _MUTATION_HANDLERS = {
     ("modify_trait", "gain"): _apply_gain,
     ("modify_trait", "remove"): _apply_remove,
@@ -864,6 +999,7 @@ _MUTATION_HANDLERS = {
     ("transfer_razmerit", "transfer"): _apply_transfer,
     ("life_path", "discover"): _apply_discover,
     ("relationship", "create"): _apply_relationship_create,
+    ("travel", "move"): _apply_travel,
 }
 
 

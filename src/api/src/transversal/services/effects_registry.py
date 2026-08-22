@@ -397,15 +397,16 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         effect_action="move",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Target Entity", field_type="text",
-                          required=False, default="self"),
-            EffectFieldDef(name="result", label="Target Location", field_type="text",
-                          required=True),
+            EffectFieldDef(name="target", label="Destination Location", field_type="text",
+                          required=True, default=""),
         ],
         context_fields=[
             EffectFieldDef(name="transversal_type", label="Transversal Type",
                           field_type="select", required=False, default="inapposite",
                           options=["inapposite", "consciousness"]),
+            EffectFieldDef(name="projection", label="Body", field_type="select",
+                          required=False, default="active",
+                          options=["active", "{new_projection}", "{random_projection}", "{choose_projection}"]),
         ],
     ),
 
