@@ -395,6 +395,7 @@ class Query:
                 possible_sfx_ids=t.possible_sfx_ids,
                 default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
+                default_ego=t.default_ego,
                 polarity=t.polarity,
                 display_names=[
                     GqlTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -681,6 +682,19 @@ class Mutation:
         traitset = repo.get_traitset_by_id(str(input.traitset_id))
         from transversal.services.polarity import default_polarity
         polarity = input.polarity if input.polarity is not None else default_polarity(trait, traitset)
+        from_type = input.from_type
+        projection_id = str(input.projection_id) if input.projection_id else None
+        if from_type is None:
+            # Default anchor from the trait's registry hint.
+            if trait is not None and not getattr(trait, "default_ego", False):
+                entity = repo.get_entity(str(entity_id))
+                if entity is not None and entity.current_projection:
+                    from_type = "projection"
+                    projection_id = entity.current_projection
+                else:
+                    from_type = "entity"
+            else:
+                from_type = "entity"
         ts = DomainTraitSetting(
             id=ts_id,
             entity_id=str(entity_id),
@@ -690,8 +704,8 @@ class Mutation:
             rating_type=input.rating_type,
             polarity=polarity,
             statement=input.statement,
-            from_type=input.from_type or "entity",
-            projection_id=str(input.projection_id) if input.projection_id else None,
+            from_type=from_type,
+            projection_id=projection_id,
             sfx_ids=[str(s) for s in input.sfx_ids],
         )
         created = _em(info).add_traitsetting(ts)
@@ -901,6 +915,7 @@ class Mutation:
             possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
+            default_ego=input.default_ego,
             polarity=input.polarity,
             display_names=[
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -917,6 +932,7 @@ class Mutation:
             possible_sfx_ids=created.possible_sfx_ids,
             default_sfx_ids=created.default_sfx_ids,
             location_restricted=created.location_restricted,
+            default_ego=created.default_ego,
             polarity=created.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -947,6 +963,8 @@ class Mutation:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.location_restricted is not None:
             existing.location_restricted = input.location_restricted
+        if input.default_ego is not None:
+            existing.default_ego = input.default_ego
         if input.clear_polarity:
             existing.polarity = None
         elif input.polarity is not None:
@@ -972,6 +990,7 @@ class Mutation:
             possible_sfx_ids=updated.possible_sfx_ids,
             default_sfx_ids=updated.default_sfx_ids,
             location_restricted=updated.location_restricted,
+            default_ego=updated.default_ego,
             polarity=updated.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,

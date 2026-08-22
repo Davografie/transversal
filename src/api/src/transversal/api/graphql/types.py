@@ -105,6 +105,7 @@ class TraitRef:
     possible_sfx_ids: list[strawberry.ID]
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
+    default_ego: bool = False
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
@@ -131,6 +132,7 @@ class TraitSetRef:
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
                 location_restricted=t.location_restricted,
+                default_ego=t.default_ego,
                 polarity=t.polarity,
                 display_names=[
                     TraitDisplayName(name=dn.name, universe=dn.universe,
@@ -430,6 +432,7 @@ class TraitInput:
     possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
+    default_ego: bool = False
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
@@ -444,6 +447,7 @@ class TraitUpdateInput:
     possible_sfx_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
+    default_ego: Optional[bool] = None
     polarity: Optional[Polarity] = None
     clear_polarity: bool = False
     display_names: Optional[list[TraitDisplayNameInput]] = None

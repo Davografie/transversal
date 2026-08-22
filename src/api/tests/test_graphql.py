@@ -103,8 +103,8 @@ class TestGraphQLMutations:
         """, {"eid": eid})
         ts = result["addTraitSetting"]
         assert ts["dice"] == ["D10"]
-        # Default anchor is the entity → ego.
-        assert ts["ego"] == True
+        # default_ego=False → anchored to the entity's projection (morph).
+        assert ts["ego"] == False
 
     def test_add_ego_trait(self, client):
         entity = _gql(client, """

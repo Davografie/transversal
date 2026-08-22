@@ -356,12 +356,21 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
     polarity = Polarity.NEGATIVE if negative else default_polarity(trait, traitset)
     if not traitset_id and polarity == Polarity.NEGATIVE:
         traitset_id = "ts-complications-a190"
+    projection_id = None
+    if from_type == "entity" and trait is not None and not getattr(trait, "default_ego", False):
+        # Morph-by-default — anchor the grant to the entity's active projection.
+        get_entity = getattr(repo, "get_entity", None)
+        entity = get_entity(owner_id) if get_entity else None
+        if entity is not None and entity.current_projection:
+            from_type = "projection"
+            projection_id = entity.current_projection
     return TraitSetting(
         id=f"{owner_id}:{trait_id}{':complication' if polarity == Polarity.NEGATIVE else ''}",
         entity_id=owner_id,
         trait_id=trait_id,
         traitset_id=traitset_id,
         from_type=from_type,
+        projection_id=projection_id,
         dice=[die],
         polarity=polarity,
         source_type="effect",

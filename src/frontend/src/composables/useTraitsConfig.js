@@ -19,7 +19,7 @@ export function useTraitsConfig() {
           id name universes entityTypes order limit polarity
           traits {
             id name defaultDieType traitsetId universes
-            locationRestricted polarity
+            locationRestricted defaultEgo polarity
             possibleSfxIds
             displayNames { name universe ratings }
           }

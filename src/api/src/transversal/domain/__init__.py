@@ -344,6 +344,7 @@ class Trait(BaseModel):
     possible_sfx_ids: list[str] = Field(default_factory=list)
     default_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False
+    default_ego: bool = False  # grant default: true = entity (ego/persists), false = projection (morph/gated)
     polarity: Optional["Polarity"] = None  # default polarity override (None = inherit traitset)
     explanation: str = ""
     random_weight: int = 0
