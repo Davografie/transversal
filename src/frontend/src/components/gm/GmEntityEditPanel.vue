@@ -142,7 +142,7 @@
     </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
       <button class="section-btn" @click="openLoraConfig">🖼 LoRA Configuration</button>
-      <button class="section-btn" @click="openLifePaths">📋 Life Paths <span v-if="lifePaths.length" class="section-count">{{ lifePaths.length }}</span></button>
+      <button class="section-btn" @click="openRollTables">🎲 Roll Tables</button>
     </div>
     <div class="danger-zone">
       <h4>Danger Zone</h4>
@@ -174,7 +174,7 @@ import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
-import GmLifePathsPanel from '@/components/gm/GmLifePathsPanel.vue'
+import GmRollTablesPanel from '@/components/gm/GmRollTablesPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
 import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
@@ -188,7 +188,7 @@ const { graphql } = useApi()
 // ── Composables: shared state with GmPanel ──────────
 const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
-const { paths: lifePaths, loading: loadingLifepaths, fetchLifePaths } = useLifePaths()
+const { fetchLifePaths } = useLifePaths()
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
 
@@ -347,11 +347,11 @@ function openLoraConfig() {
   })
 }
 
-function openLifePaths() {
+function openRollTables() {
   const currentUniverse = form.value?.current_universe || props.entityId
   panel.open({
-    component: GmLifePathsPanel,
-    title: 'Life Paths',
+    component: GmRollTablesPanel,
+    title: 'Roll Tables',
     props: { universe: currentUniverse },
   })
 }

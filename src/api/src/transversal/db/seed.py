@@ -866,7 +866,7 @@ def seed_life_paths(repo) -> None:
     upsert_table(RollTable(
         id="rt-survive",
         name="Survival",
-        universe="three_realms",
+        universe="",
         life_path=None,
         scheme=RollTableScheme.TIER,
         check=RollTableCheck(trait_ids=["trait-3r-qi-reserves"], difficulty=DieType.D6),
@@ -883,7 +883,7 @@ def seed_life_paths(repo) -> None:
     upsert_table(RollTable(
         id="rt-continue",
         name="Continue",
-        universe="three_realms",
+        universe="",
         life_path=None,
         scheme=RollTableScheme.RANGE,
         die=DieType.D6,

@@ -142,6 +142,7 @@ def test_shared_tables_use_named_exits():
     survive = repo.get_roll_table("rt-survive")
     assert survive is not None
     assert survive.life_path is None
+    assert survive.universe == ""  # fundamental (global, not universe-scoped)
     survive_exits = {
         effect.target
         for entry in survive.entries
@@ -153,6 +154,7 @@ def test_shared_tables_use_named_exits():
     cont = repo.get_roll_table("rt-continue")
     assert cont is not None
     assert cont.life_path is None
+    assert cont.universe == ""  # fundamental (global, not universe-scoped)
     serve = next(e for e in cont.entries if e.label == "Serve another term")
     assert any(eff.target == "{return:next}" for eff in serve.effects)
     # Tenure targets the current term's faction, not a hardcoded one.

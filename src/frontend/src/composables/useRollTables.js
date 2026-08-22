@@ -3,6 +3,7 @@ import { useApi } from './useApi.js'
 
 // ── Module-level singleton state ─────────────────────
 const tables = ref([])        // lightweight list ({ id name scheme die }) for a path
+const allTables = ref([])     // all tables ({ id name universe lifePath }) for grouping
 const allTableNames = ref({}) // id → name, for human-friendly effect summaries
 const loading = ref(false)
 
@@ -36,6 +37,12 @@ export function useRollTables() {
     for (const t of data?.rollTables || []) map[t.id] = t.name
     allTableNames.value = map
     return map
+  }
+
+  async function fetchAllTables() {
+    const data = await graphql(`{ rollTables { id name universe lifePath } }`)
+    allTables.value = data?.rollTables || []
+    return allTables.value
   }
 
   async function fetchTable(id) {
@@ -75,7 +82,7 @@ export function useRollTables() {
   }
 
   return {
-    tables, allTableNames, loading,
-    fetchTables, fetchAllTableNames, fetchTable, saveRollTable, deleteRollTable,
+    tables, allTables, allTableNames, loading,
+    fetchTables, fetchAllTables, fetchAllTableNames, fetchTable, saveRollTable, deleteRollTable,
   }
 }

@@ -127,12 +127,14 @@ const selectedTable = computed(() => {
 const selectedLabel = computed(() => {
   const t = selectedTable.value
   if (!t) return ''
-  const sub = lifePathName(t.lifePath) || t.universe
+  const sub = subLabel(t)
   return sub ? `${t.name} (${sub})` : t.name
 })
 
 function subLabel(t) {
-  return lifePathName(t.lifePath) || t.universe || ''
+  if (t.lifePath) return lifePathName(t.lifePath)
+  if (t.universe) return t.universe
+  return 'global'
 }
 
 const filtered = computed(() => {
@@ -153,7 +155,7 @@ const filtered = computed(() => {
     .filter(t => {
       if (t.id === props.modelValue) return false
       if (props.excludeIds.includes(t.id)) return false
-      if (uFilter && t.universe !== uFilter) return false
+      if (uFilter && t.universe && t.universe !== uFilter) return false
       if (lpFilter && t.lifePath !== lpFilter) return false
       if (facFilter && !facPathIds.has(t.lifePath)) return false
       if (s && !(t.name || '').toLowerCase().includes(s)) return false
