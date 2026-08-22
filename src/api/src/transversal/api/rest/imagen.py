@@ -351,7 +351,6 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
     """
     from transversal.db.repository import EntityRepository
     repo = EntityRepository()
-    roles = payload.get("roles", [])
 
     img = repo.get_entity_image(image_id)
     if not img:
@@ -360,9 +359,9 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
     updates: dict = {}
 
     # ── Roles (owner-scoped uniqueness) ──
-    if isinstance(roles, list):
+    if "roles" in payload and isinstance(payload.get("roles"), list):
+        new_roles = set(payload["roles"])
         old_roles = set(img.roles)
-        new_roles = set(roles)
         added = new_roles - old_roles
         if added:
             siblings = repo.get_images_for_owner(img.entity_id, img.projection_id)
@@ -372,12 +371,21 @@ async def update_image_roles(image_id: str, payload: dict = Body(...)):
                 sib_roles = [r for r in sib.roles if r not in added]
                 if sib_roles != sib.roles:
                     repo.update_entity_image(sib.id, {"roles": sib_roles})
-        updates["roles"] = roles
+        updates["roles"] = payload["roles"]
 
     # ── Projection ownership ──
     if "projection_id" in payload:
         new_owner = payload.get("projection_id")
         updates["projection_id"] = new_owner or None
+
+    # ── Auto-select all three roles when a drop leaves the image as the
+    # sole image for its (new) owner (entity or projection). This is a drop
+    # (projection_id present, roles absent) landing in an empty owner scope.
+    if "projection_id" in payload and "roles" not in payload:
+        owner = payload.get("projection_id") or None
+        others = [s for s in repo.get_images_for_owner(img.entity_id, owner) if s.id != image_id]
+        if not others:
+            updates["roles"] = ["background", "sheet", "navdot"]
 
     # ── Universe (and file move) ──
     new_universe = payload.get("universe")

@@ -17,7 +17,7 @@
         <div class="gallery-actions">
           <label class="upload-btn">
             📤 Upload
-            <input type="file" accept="image/*" @change="uploadBgImage" hidden />
+            <input type="file" accept="image/*" @change="onUpload" hidden />
           </label>
           <button class="imagen-btn" :class="{ cancelling: imagenStatus.cancelling }" @click="onImagenClick">
             <span class="btn-label">{{ imagenStatus.label }}</span>
@@ -230,6 +230,12 @@ async function assignImage(imageId, projectionId) {
   } catch (e) {
     console.error('assignImage:', e)
   }
+}
+
+async function onUpload(e) {
+  await uploadBgImage(e)
+  await loadImages()
+  e.target.value = ''
 }
 
 function onImageDragStart(e, img) {

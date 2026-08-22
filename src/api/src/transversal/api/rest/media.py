@@ -131,6 +131,12 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
                     created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 repo.create_entity_image(entity_image)
+
+                # Auto-select all three roles when this upload is the sole
+                # entity-level image (the soul default for every role).
+                owner_images = repo.get_images_for_owner(entity_id, None)
+                if len(owner_images) == 1:
+                    repo.update_entity_image(image_id, {"roles": ["background", "sheet", "navdot"]})
         except Exception:
             pass  # Don't fail the upload if image registration fails
 
