@@ -352,9 +352,9 @@ class TestLocation:
         assert proj.universe == "three_realms"
         assert proj.current_location == loc.id
 
-    def test_consciousness_travel(self, em, kael):
+    def test_travel_consciousness(self, em, kael):
         loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
-        result = em.consciousness_travel(kael.id, loc.id)
+        result = em.travel(kael.id, loc.id, transversal_type="consciousness", projection_policy="{last_projection}")
         assert result.current_projection == f"{kael.id}:three_realms"
         assert result.current_universe == "three_realms"
         assert result.current_location == loc.id
@@ -363,9 +363,9 @@ class TestLocation:
         assert proj.transversal_type == TransversalType.CONSCIOUSNESS
         assert proj.origin_universe == "three_realms"
 
-    def test_inapposite_travel(self, em, kael):
+    def test_travel_inapposite(self, em, kael):
         loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
-        result = em.inapposite_travel(kael.id, loc.id)
+        result = em.travel(kael.id, loc.id, transversal_type="inapposite")
         # key stays origin-earth even though the body is now in three_realms
         assert result.current_projection == f"{kael.id}:earth"
         proj = em.repo.get_projection(f"{kael.id}:earth")

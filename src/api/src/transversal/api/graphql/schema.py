@@ -765,7 +765,7 @@ class Mutation:
 
     @strawberry.mutation
     def inapposite_travel(self, info: strawberry.Info, entity_id: strawberry.ID, location: strawberry.ID) -> Entity:
-        updated = _em(info).inapposite_travel(str(entity_id), str(location))
+        updated = _em(info).travel(str(entity_id), str(location), transversal_type="inapposite")
         return _entity_to_gql(updated)
 
     @strawberry.mutation

@@ -184,7 +184,7 @@ async def consciousness_travel(entity_id: str, body: MoveRequest):
     """Transfer an entity's consciousness to a projection at the target location."""
     em = _em()
     repo = _repo()
-    result = em.consciousness_travel(entity_id, body.location)
+    result = em.travel(entity_id, body.location, transversal_type="consciousness", projection_policy="{last_projection}")
 
     loc = repo.get_entity(body.location)
     location_name = loc.name if loc else body.location
@@ -375,11 +375,8 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
 
     if not effects:
         travel_type = edge.get("transversal_type") or "inapposite"
-        em = _em()
-        if travel_type == "consciousness":
-            updated = em.consciousness_travel(body.entity_id, to_id)
-        else:
-            updated = em.inapposite_travel(body.entity_id, to_id)
+        projection_policy = "{last_projection}" if travel_type == "consciousness" else None
+        updated = _em().travel(body.entity_id, to_id, transversal_type=travel_type, projection_policy=projection_policy)
         return {
             "status": "moved", "applied": [], "pendingChoices": [],
             "entity_id": updated.id, "name": updated.name,

@@ -34,6 +34,8 @@ def _publish_location_changed(entity: Entity, old_location: Optional[str], old_u
     dispatch_event(None, "location_changed", entity_id=entity.id, universe=entity.current_universe)
 from transversal.domain import (
     CharacterView,
+    Effect,
+    EffectTiming,
     Entity,
     EntityType,
     Projection,
@@ -264,103 +266,58 @@ class EntityManager:
         _publish_location_changed(entity, old_location, old_universe)
         return result
 
-    def inapposite_travel(self, entity_id: str, location: str) -> Entity:
-        """Physically relocate the entity's active projection to ``location``.
+    def travel(
+        self,
+        entity_id: str,
+        location: str,
+        transversal_type: str = "inapposite",
+        projection_policy: Optional[str] = None,
+    ) -> Entity:
+        """Relocate an entity across a boundary through the unified travel effect.
 
-        The projection keeps its origin key; its ``universe``/``current_location``
-        mutate, and its type becomes INAPPOSITE when crossing universes (NATIVE
-        when it returns home).
+        ``transversal_type`` is ``"inapposite"`` (the active body travels) or
+        ``"consciousness"`` (the mind transfers to a body at the destination).
+        ``projection_policy`` selects the body for consciousness travel
+        (``{last_projection}`` / ``{random_projection}`` / ``{choose_projection}`` /
+        ``{new_projection}``) and is ignored for inapposite travel. Reuse policies
+        are scoped to the destination universe and fall back to spawning a fresh
+        body when nothing matches.
         """
         entity = self.repo.get_entity(entity_id)
         if entity is None:
             raise EntityNotFoundError(f"Entity '{entity_id}' not found")
-        loc = self.repo.get_entity(location)
-        if loc is None:
+        if self.repo.get_entity(location) is None:
             raise ValueError(f"Location '{location}' not found")
 
         old_location = entity.current_location
         old_universe = entity.current_universe
 
-        proj = None
-        if entity.current_projection:
-            proj = self.repo.get_projection(entity.current_projection)
+        context = {"transversal_type": transversal_type}
+        if projection_policy:
+            context["projection"] = projection_policy
 
-        if proj is None:
-            proj = Projection(
-                id=f"{entity.id}:{loc.current_universe}",
-                entity_id=entity.id,
-                origin_universe=loc.current_universe,
-                universe=loc.current_universe,
-                current_location=location,
-                transversal_type=TransversalType.NATIVE,
+        effect = Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="travel",
+            action="move",
+            target=location,
+            context=context,
+        )
+
+        from transversal.services.effects_commit import commit_effects
+
+        commit_effects(entity, [effect], self.repo)
+
+        # Travel is a location_changed state event, so on_location_change SFX fire.
+        if entity.current_location != old_location or entity.current_universe != old_universe:
+            from transversal.services.scheduled_events import dispatch_event
+
+            dispatch_event(
+                self.repo, "location_changed",
+                entity_id=entity.id, universe=entity.current_universe,
             )
-            touch_projection(proj)
-            self.repo.create_projection(proj)
-        else:
-            if not proj.origin_universe:
-                proj.origin_universe = _origin_universe_from_key(proj.id)
-            proj.universe = loc.current_universe
-            proj.current_location = location
-            proj.transversal_type = (
-                TransversalType.NATIVE
-                if loc.current_universe == proj.origin_universe
-                else TransversalType.INAPPOSITE
-            )
-            touch_projection(proj)
-            self.repo.update_projection(proj)
 
-        entity.current_projection = proj.id
-        entity.current_universe = loc.current_universe
-        entity.current_location = location
-        result = self.repo.update_entity(entity)
-        _publish_location_changed(entity, old_location, old_universe)
-        return result
-
-    def consciousness_travel(self, entity_id: str, location: str) -> Entity:
-        """Transfer the entity's consciousness to a projection at ``location``.
-
-        Leaves the current (body) projection in place and spawns/reuses a
-        CONSCIOUSNESS projection keyed by the destination universe, which becomes
-        the entity's active projection.
-        """
-        entity = self.repo.get_entity(entity_id)
-        if entity is None:
-            raise EntityNotFoundError(f"Entity '{entity_id}' not found")
-        loc = self.repo.get_entity(location)
-        if loc is None:
-            raise ValueError(f"Location '{location}' not found")
-
-        new_universe = loc.current_universe
-        old_location = entity.current_location
-        old_universe = entity.current_universe
-
-        proj_id = f"{entity.id}:{new_universe}"
-        proj = self.repo.get_projection(proj_id)
-        if proj is None:
-            proj = Projection(
-                id=proj_id,
-                entity_id=entity.id,
-                origin_universe=new_universe,
-                universe=new_universe,
-                current_location=location,
-                transversal_type=TransversalType.CONSCIOUSNESS,
-            )
-            touch_projection(proj)
-            self.repo.create_projection(proj)
-        else:
-            if not proj.origin_universe:
-                proj.origin_universe = _origin_universe_from_key(proj.id)
-            proj.universe = new_universe
-            proj.current_location = location
-            touch_projection(proj)
-            self.repo.update_projection(proj)
-
-        entity.current_projection = proj.id
-        entity.current_universe = new_universe
-        entity.current_location = location
-        result = self.repo.update_entity(entity)
-        _publish_location_changed(entity, old_location, old_universe)
-        return result
+        return entity
 
     def get_projections(self, entity_id: str) -> list[Projection]:
         return self.repo.get_projections_for_entity(entity_id)
