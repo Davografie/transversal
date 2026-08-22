@@ -395,12 +395,12 @@ async function fetchLocationBg() {
   try {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { backgroundImage overlay } }`, variables: { id: currentLocationId.value } })
+      body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { image(role: "background") overlay } }`, variables: { id: currentLocationId.value } })
     })
     DIAG.mark('fetchLocationBg-fetched', { ok: r.ok, status: r.status })
     const json = await r.json()
-    const hasBg = !!json.data?.entity?.backgroundImage
-    locationBgImage.value = json.data?.entity?.backgroundImage || ''
+    const hasBg = !!json.data?.entity?.image
+    locationBgImage.value = json.data?.entity?.image || ''
     locationOverlay.value = json.data?.entity?.overlay || null
     DIAG.mark('fetchLocationBg-done', { hasBackgroundImage: hasBg, imageLength: locationBgImage.value.length })
   } catch (e) {
