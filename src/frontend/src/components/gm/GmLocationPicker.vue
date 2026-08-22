@@ -37,6 +37,7 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   placeholder: { type: String, default: 'Search location…' },
   universe: { type: String, default: '' },
+  rootId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'select'])
@@ -66,6 +67,28 @@ const allLocations = computed(() => {
   return out
 })
 
+function collectSubtree(node, out) {
+  out.push(node.id)
+  if (node.children) for (const c of node.children) collectSubtree(c, out)
+}
+
+// When rootId is set, restrict to that location plus its sub-locations (zones).
+const subtreeIds = computed(() => {
+  if (!props.rootId) return null
+  let found = null
+  const find = (nodes) => {
+    for (const n of (nodes || [])) {
+      if (n.id === props.rootId) { found = n; return }
+      if (n.children) find(n.children)
+    }
+  }
+  find(locationTree.value)
+  if (!found) return new Set()
+  const ids = []
+  collectSubtree(found, ids)
+  return new Set(ids)
+})
+
 const universeOptions = computed(() => {
   const s = new Set()
   for (const l of allLocations.value) if (l.universe) s.add(l.universe)
@@ -80,9 +103,11 @@ const selectedLabel = computed(() => selectedLocation.value?.name || '')
 const filtered = computed(() => {
   const s = search.value.toLowerCase()
   const uFilter = filterUniverse.value
+  const sub = subtreeIds.value
   return allLocations.value
     .filter((l) => {
       if (l.id === props.modelValue) return false
+      if (sub && !sub.has(l.id)) return false
       if (uFilter && l.universe !== uFilter) return false
       if (s && !l.name.toLowerCase().includes(s)) return false
       return true

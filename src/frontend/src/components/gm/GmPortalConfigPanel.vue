@@ -11,6 +11,7 @@
         :portal-destination="link.name"
         :portal-target-type="link.type"
         :portal-universe="link.current_universe"
+        :portal-root-id="link.type === 'location' ? link._key : ''"
       />
     </div>
     <div class="actions">

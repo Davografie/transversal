@@ -109,14 +109,14 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
 
 
 def test_fire_portal_substitutes_location_transversal_target(monkeypatch):
-    # A location ``_to`` exposes ``{location:transversal_target}``, resolved to the id.
+    # A location ``_to`` exposes ``{location:transversal_target}`` → ``location:<id>``.
     entity = Entity(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
     to_loc = Entity(id="loc-b", type=EntityType.LOCATION, name="Aviary Peak", current_universe="earth")
     edge = {
         "_key": "edge:loc-a:loc-b:transversal",
         "effects": [
             {"timing": "IMMEDIATE", "type": "travel", "action": "move",
-             "target": "{location:transversal_target}",
+             "target": "loc-b-zone-1", "targetScope": "{location:transversal_target}",
              "context": {"transversal_type": "inapposite"}},
         ],
     }
@@ -140,7 +140,8 @@ def test_fire_portal_substitutes_location_transversal_target(monkeypatch):
 
     r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
     assert r.status_code == 200, r.text
-    assert captured["effects"][0].target == "loc-b"
+    assert captured["effects"][0].target_scope == "location:loc-b"
+    assert captured["effects"][0].target == "loc-b-zone-1"
 
 
 def test_fire_portal_substitutes_universe_transversal_target(monkeypatch):
@@ -151,7 +152,7 @@ def test_fire_portal_substitutes_universe_transversal_target(monkeypatch):
         "_key": "edge:loc-a:universe-three_realms:transversal",
         "effects": [
             {"timing": "IMMEDIATE", "type": "travel", "action": "move",
-             "target": "loc-b", "targetScope": "universe:{universe:transversal_target}",
+             "target": "loc-b", "targetScope": "{universe:transversal_target}",
              "context": {"transversal_type": "inapposite"}},
         ],
     }

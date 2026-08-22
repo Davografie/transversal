@@ -29,8 +29,8 @@
       </select>
       <template v-if="selectedAction">
         <div class="ee-help">{{ selectedAction.description }}</div>
-        <div v-if="isPortalLocation" class="ee-fixed-dest">Destination: <b>{{ portalDestination }}</b></div>
-        <div v-else-if="isPortalUniverse" class="ee-fixed-dest">Destination: any location in <b>{{ portalUniverse }}</b></div>
+        <div v-if="isPortalLocation" class="ee-fixed-dest">Scope <b>{location:transversal_target}</b> → {{ portalDestination }} (+ zones)</div>
+        <div v-else-if="isPortalUniverse" class="ee-fixed-dest">Scope <b>{universe:transversal_target}</b> → any location in {{ portalUniverse }}</div>
         <div v-if="variables.length" class="ee-vars">
           <span class="ee-vars-label">Variables:</span>
           <button v-for="v in variables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" @click="copyVariable(v.name)">
@@ -64,10 +64,11 @@
                 :life-path="lifePath"
               />
               <GmLocationPicker
-                v-else-if="isPortalUniverse && f.name === 'target'"
+                v-else-if="isPortalTravel && f.name === 'target'"
                 :model-value="newEffect.fields[f.name] || ''"
                 @update:model-value="newEffect.fields[f.name] = $event"
                 :universe="portalUniverse"
+                :root-id="portalRootId"
               />
               <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
             </template>
@@ -161,6 +162,7 @@ const props = defineProps({
   portalDestination: { type: String, default: '' },
   portalTargetType: { type: String, default: '' },
   portalUniverse: { type: String, default: '' },
+  portalRootId: { type: String, default: '' },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -191,7 +193,6 @@ const visibleFields = computed(() => {
   if (!selectedAction.value) return []
   return (selectedAction.value.fields || []).filter(f => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
-    if (f.name === 'target' && isPortalLocation.value) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
     return true
   })
@@ -283,7 +284,6 @@ function buildEffect(meta) {
   let target = meta.implicitTarget || newEffect.fields.target || ''
   if (kind && mode === 'choose') target = `{choose_${kind}}`
   if (kind && mode === 'random') target = `{random:${kind}}`
-  if (isPortalLocation.value) target = '{location:transversal_target}'
   const entityMode = newEffect.entityMode || 'literal'
   let entity = newEffect.fields.entity || ''
   if (entityMode === 'choose') entity = '{choose_entity}'
@@ -293,7 +293,8 @@ function buildEffect(meta) {
     context.projection = 'active'
   }
   let targetScope = (kind && mode !== 'literal') ? (newEffect.scope || null) : null
-  if (isPortalUniverse.value) targetScope = 'universe:{universe:transversal_target}'
+  if (isPortalLocation.value) targetScope = '{location:transversal_target}'
+  if (isPortalUniverse.value) targetScope = '{universe:transversal_target}'
   return {
     timing: newEffect.timing || 'IMMEDIATE',
     type: meta.effectType,

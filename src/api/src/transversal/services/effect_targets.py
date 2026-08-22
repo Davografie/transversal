@@ -126,6 +126,13 @@ def _location_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetC
             _candidate(e.id, e.name, e.current_universe)
             for e in repo.list_entities_by_location(value)
         ]
+    if kind == "location":
+        # The location itself plus its sub-locations (zones).
+        location_ids = [value] + list(repo.list_location_descendants(value))
+        return [
+            _candidate(e.id, e.name, e.current_universe)
+            for e in repo.get_entities_by_ids(location_ids)
+        ]
     return []
 
 
