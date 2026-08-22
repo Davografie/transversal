@@ -159,7 +159,6 @@ const filtered = computed(() => {
       if (s && !(t.name || '').toLowerCase().includes(s)) return false
       return true
     })
-    .slice(0, 30)
 })
 
 function pick(opt) {

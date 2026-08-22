@@ -112,7 +112,6 @@ const filtered = computed(() => {
       if (s && !l.name.toLowerCase().includes(s)) return false
       return true
     })
-    .slice(0, 20)
 })
 
 function pick(loc) {

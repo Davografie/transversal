@@ -68,6 +68,7 @@ const allTraits = computed(() => {
       out.push({ ...t, tsName: ts.name })
     }
   }
+  out.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   return out
 })
 
@@ -114,7 +115,6 @@ const filtered = computed(() => {
       if (s && !t.name.toLowerCase().includes(s)) return false
       return true
     })
-    .slice(0, 20)
 })
 
 function pick(opt) {
