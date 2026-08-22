@@ -1128,9 +1128,13 @@ class EntityRepository:
             bind_vars["nq"] = name_query.lower()
         query += """
             SORT e.name
-            RETURN { id: e._key, name: e.name, sheet_portrait: e.background_image || null }
+            RETURN { id: e._key, name: e.name }
         """
-        return list(self.db.aql.execute(query, bind_vars=bind_vars))
+        rows = list(self.db.aql.execute(query, bind_vars=bind_vars))
+        sheet_urls = self._role_urls([r["id"] for r in rows], "sheet", "Small")
+        for r in rows:
+            r["sheet_portrait"] = sheet_urls.get(r["id"], "")
+        return rows
 
     # ── Messages ──────────────────────────────────────
 
@@ -1701,25 +1705,34 @@ class EntityRepository:
         """
         return set(self.db.aql.execute(query, bind_vars={"mids": member_ids}))
 
-    def _navdot_urls(self, entity_ids: list[str]) -> dict[str, str]:
-        """Resolve one navdot image URL per entity, newest first."""
+    def _role_urls(self, entity_ids: list[str], role: str, variant: str = "Large") -> dict[str, str]:
+        """Resolve one image URL per entity for a role tag, newest first.
+
+        ``role`` is a canonical role tag (background/sheet/navdot); ``variant``
+        is the static size suffix (Large/Small). Animated images return their
+        video URL regardless of variant.
+        """
         if not entity_ids:
             return {}
         query = f"""
             FOR img IN {ENTITY_IMAGES}
-            FILTER img.entity_id IN @ids AND 'navdot' IN img.roles
+            FILTER img.entity_id IN @ids AND @role IN img.roles
             SORT img.created_at DESC
             RETURN {{ entity_id: img.entity_id, image_type: img.image_type, universe: img.universe, filename: img.filename, extension: img.extension }}
         """
         result: dict = {}
-        for row in self.db.aql.execute(query, bind_vars={"ids": entity_ids}):
+        for row in self.db.aql.execute(query, bind_vars={"ids": entity_ids, "role": role}):
             if row["entity_id"] in result:
                 continue
             if row["image_type"] == "animated":
                 result[row["entity_id"]] = f"/media/animated/{row['entity_id']}/{row['universe']}/{row['filename']}.{row['extension']}"
             else:
-                result[row["entity_id"]] = f"/media/imagen/{row['entity_id']}/{row['universe']}/{row['filename']}_Large.{row['extension']}"
+                result[row["entity_id"]] = f"/media/imagen/{row['entity_id']}/{row['universe']}/{row['filename']}_{variant}.{row['extension']}"
         return result
+
+    def _navdot_urls(self, entity_ids: list[str]) -> dict[str, str]:
+        """Resolve one navdot image URL per entity, newest first."""
+        return self._role_urls(entity_ids, "navdot")
 
     def _occupants_for_locations(self, location_ids: list[str], faction_id: str | None = None) -> dict:
         """Map location key → occupant dicts, optionally filtered to a faction."""
@@ -1912,7 +1925,6 @@ class EntityRepository:
                 FILTER e._key IN occupant_ids OR e.current_location == @lid
                 RETURN {{
                     name: e.name, type: e.type, id: e._key,
-                    image: e.background_image,
                     map_x: e.map_x, map_y: e.map_y
                 }}
             )
@@ -1930,7 +1942,17 @@ class EntityRepository:
         })
         results = list(cursor)
         default = {"location": None, "parent": None, "children": [], "transversal": [], "occupants": []}
-        return results[0] if results else default
+        result = results[0] if results else default
+
+        # Resolve occupant navdot images from the role tag (not the legacy
+        # background_image field). The REST layer can still override with a
+        # more specific resolution, but this is the canonical source.
+        occ_ids = [o["id"] for o in result.get("occupants", [])]
+        navdots = self._navdot_urls(occ_ids)
+        for occ in result.get("occupants", []):
+            occ["image"] = navdots.get(occ["id"])
+
+        return result
 
     # ── Relational Canvas ─────────────────────────────
 
