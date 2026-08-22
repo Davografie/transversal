@@ -766,7 +766,7 @@ async function doPush() {
     notifyPool()
     setPhase(Phase.ADDING)
   } else if (res && res.status === 'not_allowed') {
-    contestError.value = 'Push unavailable (already pushed or not your turn)'
+    contestError.value = 'Push unavailable (not your turn)'
   } else {
     contestError.value = 'Push unavailable'
   }

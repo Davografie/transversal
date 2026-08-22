@@ -299,7 +299,7 @@ When a major GMC's stress dice accumulate to a point where they cannot reasonabl
 
 ### SFX Push
 
-A player may spend 1 razmerit to **push** after a failed or tied contest beat: they assemble a new dice pool (same or different traits) and roll again against the same opposition. Only one push per beat. The new result replaces the old one.
+A player may **push** after a failed or tied contest beat: they assemble a new dice pool (same or different traits) and roll again against the same opposition. Pushing is free, and contests go back and forth until one side gives in or fails to beat the difficulty. The new result replaces the old one.
 
 ---
 

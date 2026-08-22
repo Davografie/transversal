@@ -417,9 +417,11 @@ class ContestTracker:
     def push(self, location_id: str, entity_id: str) -> Optional[dict]:
         """Start a push (continue): the pending side rebuilds and rerolls.
 
-        Free (no razmerit), once per side per contest.  Clears the pusher's
-        committed result so they can assemble and set a new one; the other
-        side's committed result remains the difficulty to beat.
+        Free (no razmerit).  Contests go back and forth until one side gives
+        in or fails to beat the difficulty, so the pending side may push every
+        round it is pending.  Clears the pusher's committed result so they can
+        assemble and set a new one; the other side's committed result remains
+        the difficulty to beat.
         """
         challenger, defendant = self.get_contestants(location_id, entity_id)
         if challenger is None or defendant is None:
@@ -429,10 +431,6 @@ class ContestTracker:
             logger.info(f"[contest] push blocked (not pending) loc={location_id} entity={entity_id}")
             return None
         state = challenger if entity_id == challenger.entity_id else defendant
-        if state.pushed_this_loop:
-            logger.info(f"[contest] push blocked (already pushed) loc={location_id} entity={entity_id}")
-            return None
-        state.pushed_this_loop = True
         state.committed = None
         challenger.pending_decision = None
         defendant.pending_decision = None

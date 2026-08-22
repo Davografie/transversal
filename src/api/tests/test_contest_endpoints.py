@@ -164,7 +164,7 @@ class TestManualContestFlow:
         assert r.status_code == 200, r.text
         assert r.json()["winner"] == "opponent"    # guard (holder) wins
 
-    def test_push_blocked_when_not_pending_or_already_pushed(self, client):
+    def test_push_blocked_when_not_pending(self, client):
         _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
         _save_pool(client, "loc-1", "guard", [("d8", "agility")])
         client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
@@ -174,10 +174,28 @@ class TestManualContestFlow:
 
         # The holder (guard) is not pending → push blocked.
         assert client.post("/api/v1/locations/loc-1/pools/guard/push").json()["status"] == "not_allowed"
-        # Pending side pushes once.
+        # The pending side pushes.
         assert client.post("/api/v1/locations/loc-1/pools/kael/push").json()["status"] == "pushed"
-        # ...and cannot push again.
+        # No fresh compare since → pushing again is blocked for being not-pending, not for a repeat cap.
         assert client.post("/api/v1/locations/loc-1/pools/kael/push").json()["status"] == "not_allowed"
+
+    def test_push_can_repeat_when_pending_again(self, client):
+        _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
+        _save_pool(client, "loc-1", "guard", [("d8", "agility")])
+        client.post("/api/v1/locations/loc-1/pools/kael/set-opposition", json={"opponent_id": "guard"})
+
+        # Round 1: guard beats kael → kael is pending and pushes.
+        client.post("/api/v1/locations/loc-1/pools/kael/set", json={"total": 10, "effect_die": "d8", "pipeline": "pool"})
+        client.post("/api/v1/locations/loc-1/pools/guard/set", json={"total": 14, "effect_die": "d6", "pipeline": "pool"})
+        assert client.post("/api/v1/locations/loc-1/pools/kael/push").json()["status"] == "pushed"
+
+        # Round 2: kael beats guard → guard is pending and pushes.
+        client.post("/api/v1/locations/loc-1/pools/kael/set", json={"total": 16, "effect_die": "d8", "pipeline": "pool"})
+        assert client.post("/api/v1/locations/loc-1/pools/guard/push").json()["status"] == "pushed"
+
+        # Round 3: guard beats kael again → kael is pending a second time and may push again.
+        client.post("/api/v1/locations/loc-1/pools/guard/set", json={"total": 18, "effect_die": "d6", "pipeline": "pool"})
+        assert client.post("/api/v1/locations/loc-1/pools/kael/push").json()["status"] == "pushed"
 
     def test_tie_favors_initiative_holder(self, client):
         _save_pool(client, "loc-1", "kael", [("d10", "intelligence")])
