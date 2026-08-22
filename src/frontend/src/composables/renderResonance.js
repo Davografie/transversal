@@ -1,4 +1,4 @@
-import { RESONANCE, morphWaves, groupByTraitsetDie, sampleAt, totalAmplitude, easeInOutCubic } from './resonance.js'
+import { RESONANCE, morphWaves, groupByTraitsetDie, sampleAt, totalAmplitude, easeInOutCubic, lockHarmonic } from './resonance.js'
 
 const FALLBACK_DIE_COLORS = {
   d4: '#e88830',
@@ -17,6 +17,7 @@ const FALLBACK_DIE_COLORS_NEG = {
 
 let dieColorCache = null
 const groupsCache = new WeakMap()
+const radialLockCache = new WeakMap()
 
 function getDieColor(die, negative) {
   if (!dieColorCache) {
@@ -42,6 +43,17 @@ function getGroups(arr) {
     groupsCache.set(arr, g)
   }
   return g
+}
+
+// Cache the radial harmonic-locked copies so a stable from/to array isn't
+// re-quantized on every animation frame.
+function lockRadial(arr, fundamental) {
+  let entry = radialLockCache.get(arr)
+  if (!entry || entry.fundamental !== fundamental) {
+    entry = { fundamental, locked: lockHarmonic(arr, fundamental) }
+    radialLockCache.set(arr, entry)
+  }
+  return entry.locked
 }
 
 function mixColor(a, b, t) {
@@ -73,6 +85,11 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const collapseFraction = opts.collapseFraction ?? RESONANCE.collapseFraction
   const transformFraction = opts.transformFraction ?? RESONANCE.transformFraction
   const expandFraction = opts.expandFraction ?? RESONANCE.expandFraction
+
+  // A closed (radial) trace must meet itself, so each wave completes a whole
+  // number of cycles per revolution. Quantize only for radial rendering.
+  const src = layout === 'radial' ? lockRadial(from, renderDivisor) : from
+  const dst = layout === 'radial' ? lockRadial(to, renderDivisor) : to
 
   // Continuous right-to-left scroll. `drift` is a rate in signal-seconds/sec;
   // each wave multiplies it by its own driftMul so it doesn't march in lockstep.
@@ -239,8 +256,8 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
     const expandStart = (c + t) / sum
     const blend = Math.min(0.08, (expandStart - collapseEnd) / 3)
 
-    const fromGroups = getGroups(from)
-    const toGroups = getGroups(to)
+    const fromGroups = getGroups(src)
+    const toGroups = getGroups(dst)
 
     // Overlapping phase opacities so the phases lerp into each other instead
     // of switching at a hard boundary.
@@ -250,7 +267,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
     const oE = ramp(expandStart - blend, expandStart + blend)
 
     if (oC > 0) {
-      drawHierarchical(from, fromGroups, easeInOutCubic(clamp01(p / collapseEnd)), oC)
+      drawHierarchical(src, fromGroups, easeInOutCubic(clamp01(p / collapseEnd)), oC)
     }
     if (oT > 0) {
       const tf = easeInOutCubic(clamp01((p - collapseEnd) / (expandStart - collapseEnd)))
@@ -258,13 +275,13 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
     }
     if (oE > 0) {
       const s = easeInOutCubic(clamp01((p - expandStart) / (1 - expandStart)))
-      drawHierarchical(to, toGroups, 1 - s, oE)
+      drawHierarchical(dst, toGroups, 1 - s, oE)
     }
   } else if (mode === 'morph') {
-    drawEnvelopeSet(morphWaves(from, to, progress), 1, () => 1)
+    drawEnvelopeSet(morphWaves(src, dst, progress), 1, () => 1)
   } else {
-    drawEnvelopeSet(from, 1 - progress, (x) => 1 - x)
-    drawEnvelopeSet(to, progress, (x) => x)
+    drawEnvelopeSet(src, 1 - progress, (x) => 1 - x)
+    drawEnvelopeSet(dst, progress, (x) => x)
   }
 
   ctx.restore()

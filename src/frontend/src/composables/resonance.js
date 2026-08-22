@@ -276,6 +276,20 @@ export function harmonicProfile(osc, fundamental = 55) {
 }
 
 /**
+ * Snap each oscillator to a whole number of cycles per revolution so a closed
+ * (radial) trace meets itself seamlessly. Unlike `harmonicProfile`, individual
+ * dice are preserved — only frequency is quantized to the nearest harmonic of
+ * `fundamental` (which should equal `renderDivisor` for radial rendering).
+ */
+export function lockHarmonic(osc, fundamental = 55) {
+  const f = Math.max(1, Number(fundamental) || 1)
+  return (osc || []).map((o) => ({
+    ...o,
+    freq: Math.max(1, Math.round(o.freq / f)) * f,
+  }))
+}
+
+/**
  * The three-phase "harmonic collapse" transition:
  *   0–1/3: source dice converge to their nearest harmonics (collapse).
  *   1/3–2/3: the harmonic profile morphs source → target (transform).
