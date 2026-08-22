@@ -41,11 +41,19 @@
       <button class="create-btn" @click="openSfxOwners">Manage SFX Owners</button>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
-      <div v-for="e in filteredFactions" :key="e.id" class="entity-row" :class="{ selected: selectedId === e.id }" @click="toggleEntity(e)">
-        <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
-        <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
-        <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
-      </div>
+      <GmList
+        v-if="filteredFactions.length"
+        :items="filteredFactions"
+        item-key="id"
+        :selected-ids="selectedId ? [selectedId] : []"
+        @click="toggleEntity"
+      >
+        <template #item="{ item: e }">
+          <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
+          <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
+          <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
+        </template>
+      </GmList>
       <button class="fab-create" @click="startCreate" title="New Entity" aria-label="New Entity">＋</button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
@@ -64,6 +72,7 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
+import GmList from '@/components/gm/GmList.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
 import GmSfxOwnersPanel from '@/components/gm/GmSfxOwnersPanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'

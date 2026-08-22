@@ -41,14 +41,13 @@
 
       <!-- Display Names (read-only list → opens editor panel) -->
       <h4 class="ps-section-title">Display Names</h4>
-      <div v-if="sortedDisplayNames.length === 0" class="empty">No display names — trait uses base name</div>
-      <div v-else class="dn-list">
-        <div
-          v-for="(dn, dni) in sortedDisplayNames"
-          :key="dni"
-          class="dn-row"
-          @click="openDisplayNameEditor(dn._originalIndex)"
-        >
+      <GmList
+        :items="sortedDisplayNames"
+        item-key="_originalIndex"
+        empty-text="No display names — trait uses base name"
+        @click="onDisplayNameClick"
+      >
+        <template #item="{ item: dn }">
           <span class="dn-name">{{ dn.name }}</span>
           <span class="dn-universe">{{ universeLabel(dn.universe) }}</span>
           <span class="dn-ratings">
@@ -58,16 +57,20 @@
             </span>
           </span>
           <button class="row-del-btn" @click.stop="deleteDisplayName(dn._originalIndex)" title="Delete">✕</button>
-        </div>
-      </div>
+        </template>
+      </GmList>
       <button class="ps-add-btn" @click="openDisplayNameEditor(null)">+ Add Display Name</button>
 
       <!-- SFX assignment -->
       <h4 class="ps-section-title">Possible SFXs</h4>
       <p class="section-hint">Each row is an SFX this trait can grant. Check an SFX to make it a <strong>default</strong> — characters with this trait get it automatically. Remove one from the list with ✕.</p>
-      <div v-if="possibleSfxs.length === 0" class="empty">No SFXs assigned — add one below</div>
-      <div v-else class="sfx-list">
-        <div v-for="s in possibleSfxs" :key="s.id" class="sfx-row" @click="onSfxClick(s)">
+      <GmList
+        :items="possibleSfxs"
+        item-key="id"
+        empty-text="No SFXs assigned — add one below"
+        @click="onSfxClick"
+      >
+        <template #item="{ item: s }">
           <label class="checkbox-inner" @click.stop>
             <input type="checkbox" :checked="form.defaultSfxIds.includes(s.id)"
               @change="toggleDefaultSfx(s.id)" title="Default SFX for this trait" />
@@ -75,8 +78,8 @@
           <span class="sfx-name">{{ s.name }}</span>
           <span class="sfx-trigger">{{ s.trigger || '' }}</span>
           <button class="row-del-btn" @click.stop="removePossibleSfx(s.id)" title="Remove from trait">✕</button>
-        </div>
-      </div>
+        </template>
+      </GmList>
       <button class="ps-add-btn" @click="openSfxPicker">+ Add SFX</button>
 
       <div class="danger-zone">
@@ -123,6 +126,7 @@ import ChipInput from './ChipInput.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
+import GmList from './GmList.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 
 const { graphql } = useApi()
@@ -337,6 +341,8 @@ function removePossibleSfx(id) {
   form.defaultSfxIds = form.defaultSfxIds.filter(sid => sid !== id)
 }
 
+function onDisplayNameClick(dn) { openDisplayNameEditor(dn._originalIndex) }
+
 function toggleDefaultSfx(id) {
   if (form.defaultSfxIds.includes(id)) {
     form.defaultSfxIds = form.defaultSfxIds.filter(sid => sid !== id)
@@ -428,9 +434,6 @@ async function onDelete() {
   color: var(--danger);
   background: rgba(212, 64, 64, 0.10);
 }
-.sfx-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
-.sfx-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.1s; background: rgba(255,255,255,0.04); }
-.sfx-row:hover { background: rgba(255,255,255,0.08); }
 .sfx-name { flex: 1; font-weight: 500; }
 .checkbox-inner { display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0; }
 .checkbox-inner input { width: auto; margin: 0; cursor: pointer; }
@@ -441,9 +444,6 @@ async function onDelete() {
 .save-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* Display Names (read-only list) */
-.dn-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
-.dn-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; background: rgba(255,255,255,0.04); transition: background 0.1s; }
-.dn-row:hover { background: rgba(255,255,255,0.08); }
 .dn-name { font-weight: 500; min-width: 120px; }
 .dn-universe { font-size: 10px; color: var(--text-dim); min-width: 80px; }
 .dn-ratings { display: flex; align-items: center; gap: 2px; flex: 1; }
