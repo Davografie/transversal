@@ -20,7 +20,6 @@
       :items="filteredOwners"
       item-key="key"
       selectable
-      select-style="pick"
       :selected-ids="selectedOwnerKeys"
       :loading="loading"
       empty-text="No owners of this type"

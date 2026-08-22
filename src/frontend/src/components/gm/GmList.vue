@@ -18,15 +18,7 @@
         @drop="onDrop(i)"
         @dragend="onDragEnd"
       >
-        <input
-          v-if="selectable && selectStyle === 'checkbox'"
-          type="checkbox"
-          class="gml-check"
-          :checked="isSelected(item)"
-          @click.stop
-          @change="emitToggle(item, i)"
-        />
-        <span v-else-if="selectable" class="gml-pick" :class="{ selected: isSelected(item) }">
+        <span v-if="selectable" class="gml-pick" :class="{ selected: isSelected(item) }">
           {{ isSelected(item) ? '✓' : '+' }}
         </span>
         <slot name="item" :item="item" :index="i" :selected="isSelected(item)" />
@@ -52,9 +44,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   emptyText: { type: String, default: 'Nothing here' },
   // When selectable, row clicks toggle selection (emitting `toggle`) instead
-  // of `click`; the row renders a checkbox or a ✓/+ pick affordance.
+  // of `click`; the row renders a ✓/+ pick affordance.
   selectable: { type: Boolean, default: false },
-  selectStyle: { type: String, default: 'checkbox' }, // 'checkbox' | 'pick'
   // Optional max-height for a scrollable list (e.g. '240px').
   maxHeight: { type: String, default: '' },
   // Optional per-row class function, e.g. to flash a row after an update.
@@ -118,7 +109,6 @@ function onDragEnd() {
 <style scoped>
 .gml-root { display: flex; flex-direction: column; gap: 3px; }
 .gml-list { display: flex; flex-direction: column; gap: 3px; }
-.gml-check { width: auto; margin: 0; flex-shrink: 0; cursor: pointer; }
 .gml-pick { font-weight: 700; font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; color: var(--text-dim); }
 .gml-pick.selected { color: var(--success); }
 </style>

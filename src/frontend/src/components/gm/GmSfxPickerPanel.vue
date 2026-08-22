@@ -6,7 +6,6 @@
       :items="filtered"
       item-key="id"
       selectable
-      select-style="pick"
       :selected-ids="selectedIds"
       empty-text="No SFXs match"
       @toggle="onToggle"
