@@ -25,7 +25,7 @@ export function useEntityCrud() {
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
-      hidden backgroundImage loraConfig
+      hidden loraConfig
       projections {
         id originUniverse universe name backgroundImage currentLocation transversalType
       }
@@ -39,7 +39,7 @@ export function useEntityCrud() {
     const data = await graphql(
       `query($type: EntityType) {
         entities(type: $type) {
-          id type name razmerit currentUniverse currentLocation hidden backgroundImage
+          id type name razmerit currentUniverse currentLocation hidden
           traitSettings {
             id name dieType rating ratingType statement ego sfxIds traitsetName universe
           }
@@ -68,7 +68,6 @@ export function useEntityCrud() {
         current_universe: data.entity.currentUniverse,
         current_location: data.entity.currentLocation || '',
         razmerit: data.entity.razmerit,
-        background_image: data.entity.backgroundImage || '',
         overlay: data.entity.overlay || null,
         hidden: data.entity.hidden,
         lora_config: data.entity.loraConfig || '{}',
@@ -85,7 +84,7 @@ export function useEntityCrud() {
     const result = await graphql(
       `mutation($input: UpdateEntityInput!) {
         updateEntity(input: $input) {
-          id name razmerit currentUniverse currentLocation hidden backgroundImage loraConfig
+          id name razmerit currentUniverse currentLocation hidden loraConfig
         }
       }`,
       {
@@ -96,7 +95,6 @@ export function useEntityCrud() {
           currentUniverse: form.value.current_universe,
           currentLocation: form.value.current_location || null,
           hidden: form.value.hidden,
-          backgroundImage: form.value.background_image || null,
           overlay: form.value.overlay,
           loraConfig: form.value.lora_config,
         },
@@ -110,7 +108,6 @@ export function useEntityCrud() {
         selected.value.currentUniverse = ue.currentUniverse
         selected.value.currentLocation = ue.currentLocation
         selected.value.hidden = ue.hidden
-        selected.value.backgroundImage = ue.backgroundImage
       }
     }
     saving.value = false
@@ -215,18 +212,12 @@ export function useEntityCrud() {
     const fd = new FormData()
     fd.append('file', file)
     try {
-      const r = await fetch(
+      await fetch(
         `/api/v1/media/upload?entity_id=${encodeURIComponent(selected.value.id)}`,
         { method: 'POST', body: fd }
       )
-      const data = await r.json()
-      if (data.path) {
-        form.value.background_image = data.path
-        await graphql(
-          `mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id backgroundImage } }`,
-          { input: { id: selected.value.id, backgroundImage: data.path } }
-        )
-      }
+      // The upload registers the image in entity_images; roles (background/
+      // sheet/navdot) are assigned in the image viewer. No legacy field write.
     } catch (err) {
       console.error('uploadBgImage:', err)
     }
