@@ -86,12 +86,19 @@ export function useTraitsConfig() {
         { id, input: changes },
       )
     ))
+    // Local patch must mirror the real data fields only; input-only flags
+    // (clearPolarity) are stripped and translated to the resulting value.
+    const patch = { ...changes }
+    if ('clearPolarity' in patch) {
+      delete patch.clearPolarity
+      patch.polarity = null
+    }
     const succeeded = []
     const failed = []
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') {
         succeeded.push(ids[i])
-        patchData('traits', ids[i], changes)
+        patchData('traits', ids[i], patch)
       } else {
         failed.push(ids[i])
       }

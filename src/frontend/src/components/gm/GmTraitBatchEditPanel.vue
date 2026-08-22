@@ -53,6 +53,7 @@
         <span class="die-badge" :class="'die-' + (t.defaultDieType || 'd6').toLowerCase()">{{ t.defaultDieType || '—' }}</span>
         <span class="rating-badge" :class="'rt-' + (t.defaultRatingType || 'static').toLowerCase()">{{ ratingLabel(t.defaultRatingType) }}</span>
         <span class="ego-badge" :class="{ 'is-ego': t.defaultEgo }">{{ t.defaultEgo ? 'ego' : 'morph' }}</span>
+        <span class="polarity-badge" :class="'pol-' + (t.polarity || 'inherit').toLowerCase()">{{ polarityLabel(t.polarity) }}</span>
         <span class="entity-universe">{{ t.traitsetName }}</span>
       </div>
       <div v-if="filtered.length === 0" class="empty">No traits match the current filters</div>
@@ -80,6 +81,15 @@
           <option value="">— no change —</option>
           <option value="ego">ego</option>
           <option value="morph">morph</option>
+        </select>
+      </div>
+      <div class="action-row">
+        <label>Polarity</label>
+        <select v-model="applyPolarity">
+          <option value="">— no change —</option>
+          <option value="POSITIVE">Positive</option>
+          <option value="NEGATIVE">Negative</option>
+          <option value="CLEAR">Inherit traitset</option>
         </select>
       </div>
       <button class="ps-add-btn" :disabled="applying || selectedIds.length === 0" @click="applyBatch">
@@ -160,6 +170,7 @@ function toggleAllMatching() {
 const applyDieType = ref('')
 const applyRatingType = ref('')
 const applyEgo = ref('')
+const applyPolarity = ref('')
 const applying = ref(false)
 const status = ref('')
 
@@ -172,6 +183,12 @@ function ratingLabel(rt) {
   return rt.charAt(0) + rt.slice(1).toLowerCase()
 }
 
+function polarityLabel(p) {
+  if (p === 'POSITIVE') return 'pos'
+  if (p === 'NEGATIVE') return 'neg'
+  return 'inherit'
+}
+
 async function applyBatch() {
   const ids = selectedIds.value
   if (!ids.length) { status.value = 'Select at least one trait.'; return }
@@ -180,6 +197,12 @@ async function applyBatch() {
   if (applyDieType.value) changes.defaultDieType = applyDieType.value
   if (applyRatingType.value) changes.defaultRatingType = applyRatingType.value
   if (applyEgo.value) changes.defaultEgo = applyEgo.value === 'ego'
+  if (applyPolarity.value === 'CLEAR') {
+    changes.polarity = null
+    changes.clearPolarity = true
+  } else if (applyPolarity.value) {
+    changes.polarity = applyPolarity.value
+  }
   if (Object.keys(changes).length === 0) { status.value = 'Choose at least one field to set.'; return }
 
   applying.value = true
@@ -237,6 +260,14 @@ onMounted(() => {
   border-radius: 3px; font-weight: 600; color: var(--text-dim);
 }
 .ego-badge.is-ego { color: var(--accent); }
+
+.polarity-badge {
+  font-size: 9px; text-transform: uppercase; padding: 1px 6px;
+  border-radius: 3px; font-weight: 600;
+}
+.pol-positive { background: rgba(64,184,96,0.16); color: var(--success); }
+.pol-negative { background: rgba(212,64,64,0.16); color: var(--danger); }
+.pol-inherit { background: transparent; color: var(--text-dim); border: 1px solid var(--text-dim); }
 
 .batch-actions {
   margin-top: 4px; padding-top: 8px;
