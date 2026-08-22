@@ -109,6 +109,7 @@ instead of re-implementing:
 - `DangerButton` — confirm-on-second-click delete button.
 - `SearchDropdown` — search input + dropdown.
 - `ChipInput` — chip/tag input with suggestions.
+- `GmList` + `GmListItem` — generic controlled list (selection highlight, ✓/+ toggle, drag-reorder, loading/empty). Parents supply pre-filtered `items` and a `#item` slot, and react to `click` / `toggle` / `reorder`. Search stays in the parent.
 - `ConditionEditor`, `EffectEditor`, `TraitEditor`, `GmEntityForm` — sub-form editors.
 - `GmTraitPicker` — trait search/select with universe filtering.
 

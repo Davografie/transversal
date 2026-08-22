@@ -2,7 +2,7 @@
   <div
     class="entity-row gml-item"
     :class="{ selected, dragging, 'drag-over': dragOver }"
-    :draggable="draggable"
+    :draggable="draggable && !dragHandle"
     @click="$emit('click', $event)"
     @dragstart="$emit('dragstart', $event)"
     @dragover.prevent="$emit('dragover', $event)"
@@ -10,6 +10,7 @@
     @drop.prevent="$emit('drop', $event)"
     @dragend="$emit('dragend', $event)"
   >
+    <span v-if="draggable && dragHandle" class="gml-drag-handle" draggable="true" title="Drag to reorder">⠿</span>
     <slot />
   </div>
 </template>
@@ -21,6 +22,7 @@
 defineProps({
   selected: { type: Boolean, default: false },
   draggable: { type: Boolean, default: false },
+  dragHandle: { type: Boolean, default: false },
   dragging: { type: Boolean, default: false },
   dragOver: { type: Boolean, default: false },
 })
@@ -37,4 +39,5 @@ defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend'])
   transform: scale(1.02);
 }
 .gml-item.editing { background: rgba(64, 136, 212, 0.12); border: 1px solid var(--accent-dim); }
+.gml-drag-handle { cursor: grab; color: var(--text-dim); font-size: 13px; flex-shrink: 0; user-select: none; }
 </style>

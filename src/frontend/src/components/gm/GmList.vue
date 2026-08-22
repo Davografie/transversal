@@ -5,10 +5,11 @@
     <div v-else class="gml-list" :style="maxHeight ? { maxHeight, overflowY: 'auto' } : null">
       <GmListItem
         v-for="(item, i) in items"
-        :key="itemKey ? item[itemKey] : i"
+        :key="itemKey && item[itemKey] != null ? item[itemKey] : i"
         :class="rowClass(item)"
         :selected="isSelected(item)"
         :draggable="reorderable"
+        :drag-handle="dragHandle"
         :dragging="dragIndex === i"
         :drag-over="dragOverIndex === i"
         @click="onRowClick(item, i)"
@@ -41,6 +42,9 @@ const props = defineProps({
   itemKey: { type: String, default: 'id' },
   selectedIds: { type: Array, default: () => [] },
   reorderable: { type: Boolean, default: false },
+  // When reorderable && dragHandle, only the ⠿ handle is draggable (for rows
+  // that contain form inputs where whole-row drag would break text selection).
+  dragHandle: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   emptyText: { type: String, default: 'Nothing here' },
   // When selectable, row clicks toggle selection (emitting `toggle`) instead
