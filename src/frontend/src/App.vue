@@ -245,7 +245,7 @@
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="wrapperOpen && peers.length" class="peers-bar">
         <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: (gmMode ? actingEntityId : viewingEntityId) === p.id || (!(gmMode ? actingEntityId : viewingEntityId) && entityId === p.id) }" @click.stop="onPeerClick(p.id)" :title="p.name">
-          <img v-if="p.backgroundImage" :src="p.backgroundImage" class="peer-img" />
+          <img v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" />
           <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
           <span class="peer-label">{{ p.name }}</span>
         </button>
@@ -412,7 +412,7 @@ async function fetchLocationBg() {
 async function fetchPeers() {
   DIAG.mark('fetchPeers-start', { currentLocationId: currentLocationId.value })
   const data = await graphql(`query {
-    entities { id type name backgroundImage currentLocation }
+    entities { id type name sheetImage: image(role: "sheet") currentLocation }
   }`)
   if (data?.entities) {
     const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
