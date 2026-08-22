@@ -8,11 +8,21 @@
     <div class="rte-row">
       <div class="rte-field">
         <label>Universe</label>
-        <input v-model="form.universe" placeholder="empty = fundamental (all universes)" />
+        <GmScopePicker
+          v-model="form.universe"
+          :options="universeOptions"
+          empty-label="Fundamental (all universes)"
+          placeholder="Select universe…"
+        />
       </div>
       <div class="rte-field">
         <label>Life path</label>
-        <input v-model="form.lifePath" placeholder="path id (empty = shared)" />
+        <GmScopePicker
+          v-model="form.lifePath"
+          :options="lifePathOptions"
+          empty-label="Shared (no path)"
+          placeholder="Select life path…"
+        />
       </div>
     </div>
 
@@ -102,13 +112,16 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
+import { useApi } from '@/composables/useApi.js'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmList from './GmList.vue'
+import GmScopePicker from './GmScopePicker.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
+const { graphql } = useApi()
 const { fetchTable, saveRollTable } = useRollTables()
 
 const props = defineProps({
@@ -131,8 +144,22 @@ const form = reactive({
 
 const saving = ref(false)
 const error = ref('')
+const universeOptions = ref([])
+const lifePathOptions = ref([])
+
+async function loadScopeOptions() {
+  try {
+    const [unis, lps] = await Promise.all([
+      graphql(`query($type: EntityType){ entities(type: $type){ id name currentUniverse } }`, { type: 'UNIVERSE' }),
+      graphql(`{ lifePaths { id name } }`),
+    ])
+    universeOptions.value = (unis?.entities || []).map(u => ({ value: u.currentUniverse, label: u.name }))
+    lifePathOptions.value = (lps?.lifePaths || []).map(lp => ({ value: lp.id, label: lp.name }))
+  } catch { /* leave empty */ }
+}
 
 onMounted(async () => {
+  loadScopeOptions()
   if (!props.tableId) return
   try {
     const t = await fetchTable(props.tableId)
