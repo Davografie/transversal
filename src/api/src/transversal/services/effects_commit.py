@@ -91,6 +91,8 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
             "to": entity.current_location or "",
             "universe": entity.current_universe,
         })
+        from transversal.services.scheduled_events import dispatch_event
+        dispatch_event(repo, "location_changed", entity_id=entity.id, universe=entity.current_universe)
 
     # Trait settings produced by the applier.
     for ts in result.new_trait_settings:

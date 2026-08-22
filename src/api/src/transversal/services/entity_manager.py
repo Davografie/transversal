@@ -289,9 +289,6 @@ class EntityManager:
         if self.repo.get_entity(location) is None:
             raise ValueError(f"Location '{location}' not found")
 
-        old_location = entity.current_location
-        old_universe = entity.current_universe
-
         context = {"transversal_type": transversal_type}
         if projection_policy:
             context["projection"] = projection_policy
@@ -307,15 +304,6 @@ class EntityManager:
         from transversal.services.effects_commit import commit_effects
 
         commit_effects(entity, [effect], self.repo)
-
-        # Travel is a location_changed state event, so on_location_change SFX fire.
-        if entity.current_location != old_location or entity.current_universe != old_universe:
-            from transversal.services.scheduled_events import dispatch_event
-
-            dispatch_event(
-                self.repo, "location_changed",
-                entity_id=entity.id, universe=entity.current_universe,
-            )
 
         return entity
 
