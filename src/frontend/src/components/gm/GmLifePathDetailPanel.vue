@@ -37,6 +37,7 @@
         <template #item="{ item: t }">
           <span class="entity-name">{{ t.name }}</span>
           <span class="entity-universe">{{ t.scheme }}</span>
+          <span class="entity-id">{{ t.id }}</span>
         </template>
       </GmList>
       <button class="lpd-add-btn" @click="addTable">＋ Add roll table</button>

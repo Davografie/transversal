@@ -13,6 +13,7 @@
 .entity-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
 .entity-name { flex: 1; font-weight: 500; }
 .entity-universe { font-size: 10px; color: var(--text-dim); }
+.entity-id { font-family: monospace; font-size: 9px; color: var(--text-dim); }
 
 .entity-type-badge {
   font-size: 9px; text-transform: uppercase; padding: 1px 6px;

@@ -7,6 +7,7 @@
     </div>
 
     <div class="rtd-meta">
+      <span class="rtd-chip rtd-id">{{ table?.id || tableId }}</span>
       <span class="rtd-chip">scheme: {{ table?.scheme }}</span>
       <span class="rtd-chip">die: {{ table?.die }}</span>
       <span v-if="table?.lifePath" class="rtd-chip">path: {{ table.lifePath }}</span>
@@ -123,6 +124,7 @@ function conditionSummary(c) {
 .rtd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; }
 .rtd-meta { display: flex; gap: 6px; margin-bottom: 8px; }
 .rtd-chip { font-size: 9px; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
+.rtd-id { font-family: monospace; text-transform: none; }
 .rtd-subsection { margin-top: 10px; }
 .rtd-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .rtd-detail { display: block; font-size: 10px; color: var(--text-dim); line-height: 1.5; }
