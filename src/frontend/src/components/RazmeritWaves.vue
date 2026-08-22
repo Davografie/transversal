@@ -48,6 +48,7 @@ function draw(now) {
 
   drawResonanceFrame(ctx, w, H, props.from, props.to, progress, {
     mode: RESONANCE.mode,
+    layout: RESONANCE.layout,
     renderDivisor: RESONANCE.renderDivisor,
     drift: RESONANCE.drift,
     colors: RESONANCE.colors,

@@ -331,6 +331,7 @@ export const RESONANCE = {
   height: 200, // canvas height (CSS px)
   drift: 0.002, // right-to-left scroll rate (signal-seconds per second)
   egoBoost: 2, // entity-anchored (ego) amplitude multiplier vs morph traits
+  layout: 'linear', // 'linear' | 'radial' — trace projection
   mode: 'harmonic', // 'harmonic' | 'crossfade' | 'morph'
   presets: {
     harmonic: { mode: 'harmonic' },

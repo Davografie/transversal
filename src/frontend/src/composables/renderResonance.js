@@ -66,6 +66,7 @@ function mixColor(a, b, t) {
  */
 export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const mode = opts.mode ?? RESONANCE.mode
+  const layout = opts.layout ?? RESONANCE.layout ?? 'linear'
   const renderDivisor = opts.renderDivisor ?? RESONANCE.renderDivisor
   const drift = opts.drift ?? RESONANCE.drift
   const timeMs = opts.timeMs ?? (typeof performance !== 'undefined' ? performance.now() : 0)
@@ -73,56 +74,71 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const transformFraction = opts.transformFraction ?? RESONANCE.transformFraction
   const expandFraction = opts.expandFraction ?? RESONANCE.expandFraction
 
-  const midY = h / 2
-  const ampScale = h / 2 - 14
   // Continuous right-to-left scroll. `drift` is a rate in signal-seconds/sec;
   // each wave multiplies it by its own driftMul so it doesn't march in lockstep.
   const baseDrift = drift * (timeMs / 1000)
 
+  // Sample points across the trace (t in 0..1). Linear maps t→x, radial maps
+  // t→angle around a base circle.
   const sampleStep = Math.max(2, Math.round(w / 180))
+  const N = Math.max(16, Math.round(w / sampleStep))
   const columns = []
-  for (let x = 0; x <= w; x += sampleStep) columns.push(x)
+  for (let j = 0; j <= N; j++) columns.push(j / N)
 
-  const sampleTime = (x) => (x / w) / renderDivisor + baseDrift
-  const waveTime = (o, x) => (x / w) / renderDivisor + baseDrift * (o.driftMul ?? 1)
+  // Projection: a signed amplitude offset (positive = up / outward) → canvas
+  // point. Everything upstream stays in 1-D signal space; only this differs.
+  let project
+  let ampScale
+  if (layout === 'radial') {
+    const radius = Math.min(w, h) / 2
+    const R = radius / 2
+    ampScale = radius / 2 - 12
+    const cx = w / 2
+    const cy = h / 2
+    project = (t, off) => {
+      const theta = t * Math.PI * 2 - Math.PI / 2
+      const r = R + off
+      return [cx + Math.cos(theta) * r, cy + Math.sin(theta) * r]
+    }
+  } else {
+    const midY = h / 2
+    ampScale = h / 2 - 14
+    project = (t, off) => [t * w, midY - off]
+  }
+
+  const sampleTime = (t) => t / renderDivisor + baseDrift
+  const waveTime = (o, t) => t / renderDivisor + baseDrift * (o.driftMul ?? 1)
   const maxAmp = (arr) => {
     let m = 0
     for (const o of arr) if (o.amp > m) m = o.amp
     return m
   }
-  const ownY = (o, strength, x) =>
-    midY - Math.sin(2 * Math.PI * o.freq * waveTime(o, x) + o.phase) * ampScale * (0.35 + 0.65 * strength)
+  // Signed amplitude offset of one oscillator at trace position t.
+  const ownOff = (o, strength, t) =>
+    Math.sin(2 * Math.PI * o.freq * waveTime(o, t) + o.phase) * ampScale * (0.35 + 0.65 * strength)
 
   ctx.save()
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
   ctx.globalCompositeOperation = 'lighter'
 
-  // Draw one oscillator, lerping its y toward a per-column target.
-  const drawOsc = (o, conv, targetY, color, strength, opacity = 1) => {
-    // Halo.
-    ctx.beginPath()
-    ctx.strokeStyle = color
-    ctx.globalAlpha = 0.12 * strength * opacity
-    ctx.lineWidth = 3.2
-    columns.forEach((x, j) => {
-      const own = ownY(o, strength, x)
-      const y = own + (targetY(x, j) - own) * conv
-      j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-    })
-    ctx.stroke()
-
-    // Core.
-    ctx.beginPath()
-    ctx.strokeStyle = color
-    ctx.globalAlpha = 0.85 * opacity
-    ctx.lineWidth = 1.05
-    columns.forEach((x, j) => {
-      const own = ownY(o, strength, x)
-      const y = own + (targetY(x, j) - own) * conv
-      j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-    })
-    ctx.stroke()
+  // Draw one oscillator, lerping its offset toward a per-column target offset.
+  const drawOsc = (o, conv, targetOff, color, strength, opacity = 1) => {
+    const trace = (lineWidth, alpha) => {
+      ctx.beginPath()
+      ctx.strokeStyle = color
+      ctx.globalAlpha = alpha
+      ctx.lineWidth = lineWidth
+      columns.forEach((t, j) => {
+        const own = ownOff(o, strength, t)
+        const off = own + (targetOff(t, j) - own) * conv
+        const [px, py] = project(t, off)
+        j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
+      })
+      ctx.stroke()
+    }
+    trace(3.2, 0.12 * strength * opacity) // halo
+    trace(1.05, 0.85 * opacity) // core
   }
 
   // Collapse amount c: 0 = individual dice, 1 = entity composite. The first
@@ -143,20 +159,20 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
         const dStrength = die.amp / maxD
         const gStrength = g.amp / maxG
         const color = getDieColor(die.die, die.negative)
-        drawOsc(die, s1, (x) => ownY(g, gStrength, x), color, dStrength, opacity)
+        drawOsc(die, s1, (t) => ownOff(g, gStrength, t), color, dStrength, opacity)
       }
     } else {
       const s2 = easeInOutCubic((c - 0.5) * 2)
       const totalG = totalAmplitude(groups, [])
-      const entityY = columns.map((x) => {
-        const v = totalG > 0 ? sampleAt(groups, sampleTime(x)) / totalG : 0
-        return midY - v * ampScale
+      const entityOff = columns.map((t) => {
+        const v = totalG > 0 ? sampleAt(groups, sampleTime(t)) / totalG : 0
+        return v * ampScale
       })
       const maxG = maxAmp(groups) || 1
       for (const g of groups) {
         const gStrength = g.amp / maxG
         const color = mixColor(getDieColor(g.die, g.negative), '#ffffff', s2)
-        drawOsc(g, s2, (x, j) => entityY[j], color, gStrength, opacity)
+        drawOsc(g, s2, (t, j) => entityOff[j], color, gStrength, opacity)
       }
     }
   }
@@ -165,30 +181,29 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const drawCompositeBlend = (fromOsc, toOsc, tf, opacity = 1) => {
     const totalA = totalAmplitude(fromOsc, [])
     const totalB = totalAmplitude([], toOsc)
-    const ys = columns.map((x) => {
-      const tt = sampleTime(x)
+    const offs = columns.map((t) => {
+      const tt = sampleTime(t)
       const a = totalA > 0 ? sampleAt(fromOsc, tt) / totalA : 0
       const b = totalB > 0 ? sampleAt(toOsc, tt) / totalB : 0
-      return midY - (a * (1 - tf) + b * tf) * ampScale
+      return (a * (1 - tf) + b * tf) * ampScale
     })
 
-    // Cheap halo + core instead of an expensive per-frame shadowBlur.
-    ctx.beginPath()
-    ctx.strokeStyle = '#dceaff'
-    ctx.globalAlpha = 0.15 * opacity
-    ctx.lineWidth = 4
-    columns.forEach((x, j) => { j === 0 ? ctx.moveTo(x, ys[j]) : ctx.lineTo(x, ys[j]) })
-    ctx.stroke()
-
-    ctx.beginPath()
-    ctx.strokeStyle = '#dceaff'
-    ctx.globalAlpha = 0.9 * opacity
-    ctx.lineWidth = 1.5
-    columns.forEach((x, j) => { j === 0 ? ctx.moveTo(x, ys[j]) : ctx.lineTo(x, ys[j]) })
-    ctx.stroke()
+    const trace = (lineWidth, alpha) => {
+      ctx.beginPath()
+      ctx.strokeStyle = '#dceaff'
+      ctx.globalAlpha = alpha
+      ctx.lineWidth = lineWidth
+      columns.forEach((t, j) => {
+        const [px, py] = project(t, offs[j])
+        j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
+      })
+      ctx.stroke()
+    }
+    trace(4, 0.15 * opacity) // cheap halo instead of per-frame shadowBlur
+    trace(1.5, 0.9 * opacity)
   }
 
-  // Draw a set with a horizontal amplitude envelope (used by crossfade/morph).
+  // Draw a set with an amplitude envelope (used by crossfade/morph).
   const drawEnvelopeSet = (osc, gain, envelope) => {
     if (!osc.length || gain <= 0) return
     const max = maxAmp(osc) || 1
@@ -196,27 +211,20 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
       const strength = o.amp / max
       const color = getDieColor(o.die, o.negative)
 
-      ctx.beginPath()
-      ctx.strokeStyle = color
-      ctx.globalAlpha = 0.12 * strength * gain
-      ctx.lineWidth = 3.2
-      columns.forEach((x, j) => {
-        const nx = x / w
-        const y = ownY(o, strength, x) * envelope(nx) + midY * (1 - envelope(nx))
-        j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-      })
-      ctx.stroke()
-
-      ctx.beginPath()
-      ctx.strokeStyle = color
-      ctx.globalAlpha = 0.85 * gain
-      ctx.lineWidth = 1.05
-      columns.forEach((x, j) => {
-        const nx = x / w
-        const y = ownY(o, strength, x) * envelope(nx) + midY * (1 - envelope(nx))
-        j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-      })
-      ctx.stroke()
+      const trace = (lineWidth, alpha) => {
+        ctx.beginPath()
+        ctx.strokeStyle = color
+        ctx.globalAlpha = alpha
+        ctx.lineWidth = lineWidth
+        columns.forEach((t, j) => {
+          const off = ownOff(o, strength, t) * envelope(t)
+          const [px, py] = project(t, off)
+          j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
+        })
+        ctx.stroke()
+      }
+      trace(3.2, 0.12 * strength * gain) // halo
+      trace(1.05, 0.85 * gain) // core
     }
   }
 

@@ -6,6 +6,7 @@ import { drawResonanceFrame } from '@/composables/renderResonance.js'
 const emit = defineEmits(['close'])
 
 const mode = ref(RESONANCE.mode)
+const layout = ref(RESONANCE.layout)
 const renderDivisor = ref(RESONANCE.renderDivisor)
 const drift = ref(RESONANCE.drift)
 const height = ref(RESONANCE.height)
@@ -35,6 +36,7 @@ let playElapsed = 0
 
 const output = computed(() => JSON.stringify({
   mode: mode.value,
+  layout: layout.value,
   renderDivisor: renderDivisor.value,
   drift: drift.value,
   height: height.value,
@@ -83,6 +85,7 @@ function render(now = performance.now()) {
 
   drawResonanceFrame(ctx, w, height.value, from.value, to.value, progress.value, {
     mode: mode.value,
+    layout: layout.value,
     renderDivisor: renderDivisor.value,
     drift: drift.value,
     colors: RESONANCE.colors,
@@ -177,6 +180,14 @@ onUnmounted(() => {
               <option value="harmonic">harmonic</option>
               <option value="crossfade">crossfade</option>
               <option value="morph">morph</option>
+            </select>
+          </label>
+
+          <label class="reslab-knob">
+            <span>Layout</span>
+            <select v-model="layout">
+              <option value="linear">linear</option>
+              <option value="radial">radial</option>
             </select>
           </label>
 
