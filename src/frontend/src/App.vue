@@ -241,7 +241,6 @@
     :initial-universe="fullCanvas.mode === 'location' && fullCanvas.scope === 'tree' ? fullCanvas.entityId : ''"
     @close-full="fullCanvas = null"
   />
-  <div v-if="wrapperOpen && !gmMode" class="panel-backdrop" @click="phase !== 'picking' && closePanel()" />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="wrapperOpen && peers.length" class="peers-bar">
         <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: (gmMode ? actingEntityId : viewingEntityId) === p.id || (!(gmMode ? actingEntityId : viewingEntityId) && entityId === p.id) }" @click.stop="onPeerClick(p.id)" :title="p.name">
@@ -1209,10 +1208,23 @@ function onWrapperLeave() {
   }, 1000)
 }
 
+// Tap outside the panel closes it — without a full-screen overlay, so the
+// location map behind stays interactive. Capture phase so it also fires on
+// map dots (whose own @click stops bubbling).
+function onDocumentClick(e) {
+  if (gmMode.value) return
+  if (!wrapperOpen.value) return
+  if (phase.value === 'picking') return
+  const el = wrapperEl.value
+  if (el && el.contains(e.target)) return
+  closePanel()
+}
+
 onMounted(() => {
   syncClosedPosition()
   document.addEventListener('dragstart', () => { documentDragging.value = true })
   document.addEventListener('dragend', () => { documentDragging.value = false })
+  document.addEventListener('click', onDocumentClick, true)  // capture: outside-tap closes panel
   if (playerId.value) fetchPlayerEntities()
   if (gmMode.value) prefetchEntities()  // warm scene-overview cache before panel opens
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
@@ -1234,6 +1246,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick, true)
   if (offRollTablePrepare) offRollTablePrepare()
   if (offRollTableResolved) offRollTableResolved()
   if (offCanvasOpenFull) offCanvasOpenFull()

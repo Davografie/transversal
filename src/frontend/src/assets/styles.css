@@ -616,14 +616,6 @@ input:focus, select:focus {
   color: var(--text) !important;
 }
 
-/* Panel backdrop — tap outside to close */
-.panel-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 8;
-  background: transparent;
-}
-
 /* Dice panel wrapper: sits at bottom, slides via JS */
 .dice-panel-wrapper {
   position: fixed;
