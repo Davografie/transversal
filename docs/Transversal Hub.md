@@ -46,6 +46,10 @@ status: canonical
 - [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
 - [[Tickets]] — the ticket-level breakdown (per-ticket dependencies + context to load)
 
+### 🎨 Design
+
+- [[UI-UX Design]] — interaction conventions, touch gestures, and tunable feel constants
+
 ## Getting Started
 
 1. Read [[Setting and Narrative]] for the world and story
