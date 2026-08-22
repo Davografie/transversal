@@ -50,14 +50,19 @@
         <button class="ps-add-btn" :disabled="selected.length === 0" @click="openPicker">+ Add SFX</button>
       </div>
       <div v-if="selected.length === 0" class="empty">Select one or more owners to manage their shared SFX</div>
-      <div v-else-if="sharedSfx.length === 0" class="empty">No SFX shared by all selected owners</div>
-      <div v-else class="sfx-list">
-        <div v-for="s in sharedSfx" :key="s.id" class="sfx-row" @click="openSfx(s)">
-          <span class="sfx-name">{{ s.name }}</span>
-          <span class="sfx-trigger">{{ s.trigger || '' }}</span>
+      <GmList
+        v-else
+        :items="sharedSfx"
+        item-key="id"
+        empty-text="No SFX shared by all selected owners"
+        @click="openSfx"
+      >
+        <template #item="{ item: s }">
+          <span class="entity-name">{{ s.name }}</span>
+          <span class="entity-universe">{{ s.trigger || '' }}</span>
           <button class="row-del-btn" @click.stop="removeSfx(s.id)" title="Remove from all selected">✕</button>
-        </div>
-      </div>
+        </template>
+      </GmList>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -71,6 +76,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
+import GmList from './GmList.vue'
 
 const panel = usePanel()
 const { OWNER_TYPES, ownersByType, loading, error, fetchOwners, addOwnerSfx, removeOwnerSfx } = useSfxOwners()
@@ -189,13 +195,6 @@ onMounted(() => {
 .ps-add-btn { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.15);
   border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
 .ps-add-btn:disabled { opacity: 0.4; cursor: default; }
-
-.sfx-list { display: flex; flex-direction: column; gap: 2px; }
-.sfx-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.04); }
-.sfx-name { flex: 1; font-weight: 500; }
-.sfx-trigger { font-size: 10px; color: var(--text-dim); }
-.row-del-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; padding: 0; }
-.row-del-btn:hover { color: var(--danger); }
 
 .empty { font-size: 12px; color: var(--text-dim); padding: 6px 0; }
 .error-msg { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; }

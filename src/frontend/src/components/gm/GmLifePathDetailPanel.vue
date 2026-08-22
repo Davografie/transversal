@@ -28,11 +28,17 @@
 
     <div class="lpd-subsection">
       <span class="lpd-subtitle">Roll tables</span>
-      <div v-if="!tables.length" class="lpd-detail">No tables linked</div>
-      <button v-for="t in tables" :key="t.id" class="lpd-table-btn" @click="openTable(t)">
-        <span class="lpd-table-name">{{ t.name }}</span>
-        <span class="lpd-table-scheme">{{ t.scheme }}</span>
-      </button>
+      <GmList
+        :items="tables"
+        item-key="id"
+        empty-text="No tables linked"
+        @click="openTable"
+      >
+        <template #item="{ item: t }">
+          <span class="entity-name">{{ t.name }}</span>
+          <span class="entity-universe">{{ t.scheme }}</span>
+        </template>
+      </GmList>
       <button class="lpd-add-btn" @click="addTable">＋ Add roll table</button>
     </div>
 
@@ -49,6 +55,7 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
+import GmList from './GmList.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -121,15 +128,6 @@ const discoveryRows = computed(() => {
 .lpd-table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; font-size: 10px; }
 .lpd-table td { padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text); }
 .lpd-key { color: var(--text-dim); width: 130px; }
-.lpd-table-btn {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 4px; padding: 6px 10px; margin-bottom: 4px;
-  cursor: pointer; text-align: left; color: var(--text);
-}
-.lpd-table-btn:hover { border-color: rgba(0,200,150,0.3); background: rgba(0,200,150,0.05); }
-.lpd-table-name { font-weight: 500; font-size: 11px; }
-.lpd-table-scheme { font-size: 9px; color: var(--text-dim); text-transform: uppercase; margin-left: auto; }
 .lpd-add-btn {
   width: 100%; margin-top: 4px; font-size: 11px; padding: 6px 0;
   background: rgba(0,200,150,0.08); border: 1px dashed rgba(0,200,150,0.25);
