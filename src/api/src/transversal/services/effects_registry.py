@@ -407,8 +407,8 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           field_type="select", required=False, default="inapposite",
                           options=["inapposite", "consciousness"]),
             EffectFieldDef(name="projection", label="Body", field_type="select",
-                          required=False, default="active",
-                          options=["active", "{new_projection}", "{random_projection}", "{choose_projection}"]),
+                          required=False, default="{last_projection}",
+                          options=["{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}"]),
         ],
     ),
 

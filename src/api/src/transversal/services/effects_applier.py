@@ -933,9 +933,13 @@ def _apply_travel(entity, effect, repo, result):
 
     Subject = ``effect.entity``. Destination location = ``effect.target`` (literal,
     ``{choose_location}``, or ``{random:location}``). Universe = ``effect.target_scope``
-    (``universe:X``). Mechanism = ``context.transversal_type``. Body policy =
-    ``context.projection`` (``active`` | ``{new_projection}`` | ``{random_projection}``
-    | ``{choose_projection}``).
+    (``universe:X``) or, for a location scope, the target location's universe.
+    Mechanism = ``context.transversal_type``. Body policy = ``context.projection``.
+
+    Inapposite always uses the active body (it travels). Consciousness picks a
+    body via ``{last_projection}`` / ``{random_projection}`` / ``{choose_projection}``
+    (reuse an existing body in the destination universe, falling back to a fresh
+    body when there is none) or ``{new_projection}`` (always spawn).
     """
     from transversal.domain import Projection, TransversalType
 
@@ -947,85 +951,42 @@ def _apply_travel(entity, effect, repo, result):
     ctx = effect.context or {}
     travel_type = ctx.get("transversal_type") or "inapposite"
     projection_policy = (ctx.get("projection") or "active").strip()
-    dest_universe = _scope_universe(effect.target_scope)
 
-    # Body policy first — a body-targeted traversal may not need a location.
-    if projection_policy == "{choose_projection}":
-        result.pending_choices.append(PendingChoice(
-            effect=effect, kind="projection",
-            scope=f"universe:{dest_universe}" if dest_universe else None,
-            field="context.projection",
-        ))
-        return
-
-    if projection_policy == "{random_projection}":
-        scope = f"universe:{dest_universe}" if dest_universe else None
-        candidates = resolve_candidates("projection", scope, subject, repo)
-        if candidates:
-            proj_id = random.choice([c.id for c in candidates])
-            proj = repo.get_projection(proj_id)
-            if proj is not None:
-                subject.current_projection = proj_id
-                subject.current_universe = proj.universe
-                subject.current_location = proj.current_location
-                result.applied.append(AppliedEffect(effect, f"arrived in body {proj_id}"))
-                return
-        result.applied.append(AppliedEffect(effect, "no body at destination"))
-        return
-
-    location_id = _resolve_target(subject, effect, result, "location", repo)
-    if location_id is None:
-        return  # pending choice recorded
-
-    if not dest_universe:
-        loc = repo.get_entity(location_id)
-        dest_universe = loc.current_universe if loc else subject.current_universe
-
-    if projection_policy == "{new_projection}":
+    def _spawn_body(dest_universe: str, location_id: str, trans_type: TransversalType) -> None:
         proj = Projection(
             id=_next_projection_id(subject.id, dest_universe, repo),
             entity_id=subject.id,
             origin_universe=dest_universe,
             universe=dest_universe,
             current_location=location_id,
-            transversal_type=TransversalType.CONSCIOUSNESS,
+            transversal_type=trans_type,
         )
         result.new_projections.append(proj)
         subject.current_projection = proj.id
         subject.current_universe = dest_universe
         subject.current_location = location_id
         result.applied.append(AppliedEffect(effect, f"spawned body {proj.id}"))
-        return
 
-    # ``active`` — the body travels (inapposite) or the mind reuses/spawns a body (consciousness).
-    if travel_type == "consciousness":
-        proj = next((p for p in repo.get_projections_for_entity(subject.id) if p.universe == dest_universe), None)
-        if proj is None:
-            proj = Projection(
-                id=_next_projection_id(subject.id, dest_universe, repo),
-                entity_id=subject.id,
-                origin_universe=dest_universe,
-                universe=dest_universe,
-                current_location=location_id,
-                transversal_type=TransversalType.CONSCIOUSNESS,
-            )
-            result.new_projections.append(proj)
-        else:
-            proj.universe = dest_universe
-            proj.current_location = location_id
-            result.updated_projections.append(proj)
-    else:
+    def _dest_universe() -> str:
+        uni = _scope_universe(effect.target_scope)
+        if uni:
+            return uni
+        target = (effect.target or "").strip()
+        if target and not target.startswith("{"):
+            loc = repo.get_entity(target)
+            if loc and loc.current_universe:
+                return loc.current_universe
+        return subject.current_universe
+
+    # ── Inapposite — the active body itself travels. ──
+    if travel_type != "consciousness":
+        location_id = _resolve_target(subject, effect, result, "location", repo)
+        if location_id is None:
+            return  # pending choice recorded
+        dest_universe = _dest_universe()
         proj = repo.get_projection(subject.current_projection) if subject.current_projection else None
         if proj is None:
-            proj = Projection(
-                id=_next_projection_id(subject.id, dest_universe, repo),
-                entity_id=subject.id,
-                origin_universe=dest_universe,
-                universe=dest_universe,
-                current_location=location_id,
-                transversal_type=TransversalType.NATIVE,
-            )
-            result.new_projections.append(proj)
+            _spawn_body(dest_universe, location_id, TransversalType.NATIVE)
         else:
             proj.universe = dest_universe
             proj.current_location = location_id
@@ -1033,11 +994,57 @@ def _apply_travel(entity, effect, repo, result):
                 TransversalType.NATIVE if dest_universe == proj.origin_universe else TransversalType.INAPPOSITE
             )
             result.updated_projections.append(proj)
+            subject.current_projection = proj.id
+            subject.current_universe = dest_universe
+            subject.current_location = location_id
+            result.applied.append(AppliedEffect(effect, f"relocated to {location_id}"))
+        return
 
-    subject.current_projection = proj.id
-    subject.current_universe = dest_universe
-    subject.current_location = location_id
-    result.applied.append(AppliedEffect(effect, f"relocated to {location_id}"))
+    # ── Consciousness — pick/reuse/spawn a body in the destination universe. ──
+    if projection_policy == "active":
+        projection_policy = "{last_projection}"  # legacy alias
+
+    dest_universe = _dest_universe()
+
+    def _arrive_in_body(proj) -> None:
+        subject.current_projection = proj.id
+        subject.current_universe = proj.universe
+        subject.current_location = proj.current_location
+        result.applied.append(AppliedEffect(effect, f"arrived in body {proj.id}"))
+
+    def _spawn_new() -> None:
+        location_id = _resolve_target(subject, effect, result, "location", repo)
+        if location_id is None:
+            return
+        _spawn_body(dest_universe, location_id, TransversalType.CONSCIOUSNESS)
+
+    # A literal projection id is a resolved ``{choose_projection}``.
+    if projection_policy not in ("{last_projection}", "{new_projection}", "{random_projection}", "{choose_projection}"):
+        proj = repo.get_projection(projection_policy)
+        if proj is not None:
+            _arrive_in_body(proj)
+            return
+        projection_policy = "{new_projection}"
+
+    if projection_policy in ("{last_projection}", "{random_projection}", "{choose_projection}"):
+        scope = f"universe:{dest_universe}" if dest_universe else None
+        candidates = resolve_candidates("projection", scope, subject, repo)
+        if candidates:
+            if projection_policy == "{choose_projection}":
+                result.pending_choices.append(PendingChoice(
+                    effect=effect, kind="projection",
+                    scope=f"universe:{dest_universe}" if dest_universe else None,
+                    field="context.projection",
+                ))
+                return
+            proj_id = candidates[0].id if projection_policy == "{last_projection}" else random.choice([c.id for c in candidates])
+            proj = repo.get_projection(proj_id)
+            if proj is not None:
+                _arrive_in_body(proj)
+                return
+        projection_policy = "{new_projection}"  # no existing body → spawn a fresh one
+
+    _spawn_new()
 
 
 _MUTATION_HANDLERS = {

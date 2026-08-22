@@ -930,6 +930,111 @@ def test_travel_choose_projection_pends():
     assert result.pending_choices[0].field == "context.projection"
 
 
+def test_travel_random_projection_falls_back_to_new():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("peak", "three_realms")],
+        projections=[_proj("char-1:earth", "char-1", "earth")],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="peak", target_scope="universe:three_realms",
+        context={"transversal_type": "consciousness", "projection": "{random_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_projections) == 1
+    assert entity.current_projection == "char-1:three_realms"
+    assert entity.current_location == "peak"
+    assert entity.current_universe == "three_realms"
+
+
+def test_travel_choose_projection_falls_back_to_new():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("peak", "three_realms")],
+        projections=[_proj("char-1:earth", "char-1", "earth")],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="peak", target_scope="universe:three_realms",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.pending_choices == []  # no bodies to choose → spawn instead
+    assert len(result.new_projections) == 1
+    assert entity.current_projection == "char-1:three_realms"
+
+
+def test_travel_last_projection_reuses_body():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity],
+        projections=[_proj("char-1:earth", "char-1", "earth", location="railyard")],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="", target_scope="universe:earth",
+        context={"transversal_type": "consciousness", "projection": "{last_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.new_projections == []
+    assert entity.current_projection == "char-1:earth"
+    assert entity.current_location == "railyard"
+
+
+def test_travel_last_projection_falls_back_to_new():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("peak", "three_realms")],
+        projections=[_proj("char-1:earth", "char-1", "earth")],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="peak", target_scope="universe:three_realms",
+        context={"transversal_type": "consciousness", "projection": "{last_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_projections) == 1
+    assert entity.current_projection == "char-1:three_realms"
+
+
+def test_travel_projection_scoped_to_location_universe():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity, _loc("peak", "three_realms")],
+        projections=[
+            _proj("char-1:earth", "char-1", "earth"),
+            _proj("char-1:three_realms", "char-1", "three_realms", location="peak"),
+        ],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="peak",  # location scope → destination universe = three_realms
+        context={"transversal_type": "consciousness", "projection": "{random_projection}"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert entity.current_projection == "char-1:three_realms"
+
+
+def test_travel_resolved_choose_projection_arrives_in_body():
+    entity = _entity()
+    repo = TravelRepo(
+        entities=[entity],
+        projections=[
+            _proj("char-1:earth", "char-1", "earth", location="railyard"),
+            _proj("char-1:three_realms", "char-1", "three_realms", location="peak"),
+        ],
+    )
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="", target_scope="universe:three_realms",
+        context={"transversal_type": "consciousness", "projection": "char-1:three_realms"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert entity.current_projection == "char-1:three_realms"
+    assert entity.current_location == "peak"
+
+
 # ── choose-placeholder discovery ───────────────────
 
 def test_find_choose_placeholder_target():

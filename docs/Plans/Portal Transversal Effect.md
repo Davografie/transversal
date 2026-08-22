@@ -38,11 +38,11 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 1. **Subject (who)** — `Effect.entity`. Type `entity`. Existing.
 2. **Destination location (where)** — a portal's destination is a location picked **within a scope derived from the edge's `_to` type**: `{location:transversal_target}` (location `_to` → the location plus its zones) or `{universe:transversal_target}` (universe `_to` → any location in it). For a free-standing SFX travel effect, `target` is a literal id, `{choose_location}`, or `{random:location}`, scoped via `target_scope`.
 3. **Mechanism (how)** — `context.transversal_type`: `inapposite` | `consciousness`.
-4. **Body / projection policy (which body)** — new `projection` kind:
-   - `active` — default; the body itself travels (inapposite).
-   - `{choose_projection}` — pick an existing body (deferred, see below).
-   - `{random_projection}` — random existing body, scoped to the destination universe.
-   - `{new_projection}` — spawn a fresh body at the destination (`add_projection` semantics: `origin_universe` = destination universe, `transversal_type` = `CONSCIOUSNESS`).
+4. **Body / projection policy (which body)** — new `projection` kind. Inapposite always uses `active` (the body travels). Consciousness picks a body:
+   - `{last_projection}` — reuse the existing body in the destination universe (arrive where it is); fallback: spawn a fresh body.
+   - `{random_projection}` — random existing body in the destination universe; fallback: spawn a fresh body.
+   - `{choose_projection}` — choose an existing body in the destination universe; fallback: spawn a fresh body.
+   - `{new_projection}` — always spawn a fresh body at the destination (`origin_universe` = destination universe, `transversal_type` = `CONSCIOUSNESS`).
 5. **Universe** — new `universe` kind, for `{random_universe}`; also usable as a scope value (`universe:{random_universe}`).
 
 ## New target kinds
