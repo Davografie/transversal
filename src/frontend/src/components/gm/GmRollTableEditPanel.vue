@@ -7,6 +7,17 @@
 
     <div class="rte-row">
       <div class="rte-field">
+        <label>Universe</label>
+        <input v-model="form.universe" placeholder="empty = fundamental (all universes)" />
+      </div>
+      <div class="rte-field">
+        <label>Life path</label>
+        <input v-model="form.lifePath" placeholder="path id (empty = shared)" />
+      </div>
+    </div>
+
+    <div class="rte-row">
+      <div class="rte-field">
         <label>Scheme</label>
         <select v-model="form.scheme">
           <option value="RANGE">Range (min–max)</option>
