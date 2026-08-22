@@ -1486,7 +1486,10 @@ class Mutation:
         for r in resolutions:
             eff = _effect_input_to_domain(r.effect)
             field = r.field or "target"
-            if "." in field:
+            if field in ("target_scope", "entity_scope"):
+                from transversal.services.effects_applier import _resolve_scope_choose
+                eff = eff.model_copy(update={field: _resolve_scope_choose(getattr(eff, field), r.target)})
+            elif "." in field:
                 top, _, sub = field.partition(".")
                 ctx = dict(eff.context or {})
                 ctx[sub] = r.target

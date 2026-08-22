@@ -958,3 +958,69 @@ def test_find_choose_placeholder_none():
         target="krasnoyarsk", context={"projection": "active"},
     )
     assert find_choose_placeholder(eff) is None
+
+
+# ── {choose:*} in scope ─────────────────────────────
+
+def test_scope_choice_detected_for_choose_universe():
+    from transversal.services.effects_applier import _scope_choice
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="{choose_location}", target_scope="universe:{choose_universe}",
+    )
+    choice = _scope_choice(eff)
+    assert choice is not None
+    assert choice.kind == "universe"
+    assert choice.field == "target_scope"
+
+
+def test_find_choose_placeholder_scope_first():
+    from transversal.services.effects_applier import find_choose_placeholder
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="{choose_location}", target_scope="universe:{choose_universe}",
+    )
+    assert find_choose_placeholder(eff) == ("universe", "target_scope", None)
+
+
+def test_resolve_scope_choose_substitutes():
+    from transversal.services.effects_applier import _resolve_scope_choose
+    assert _resolve_scope_choose("universe:{choose_universe}", "earth") == "universe:earth"
+    assert _resolve_scope_choose("{choose_universe}", "earth") == "earth"
+
+
+def test_apply_effects_defers_scope_choice():
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="{choose_location}", target_scope="universe:{choose_universe}",
+    )
+    entity = _entity()
+    result = apply_effects(entity, [eff], TravelRepo(entities=[entity]))
+    assert len(result.pending_choices) == 1
+    assert result.pending_choices[0].kind == "universe"
+    assert result.pending_choices[0].field == "target_scope"
+    assert result.applied == []
+
+
+def test_two_step_scope_then_location():
+    from transversal.services.effects_applier import resolve_choice
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="{choose_location}", target_scope="universe:{choose_universe}",
+        context={"transversal_type": "inapposite"},
+    )
+    entity = _entity()
+    repo = TravelRepo(entities=[entity])
+
+    r1 = apply_effects(entity, [eff], repo)
+    assert len(r1.pending_choices) == 1
+    assert r1.pending_choices[0].field == "target_scope"
+
+    eff2 = resolve_choice(r1.pending_choices[0], "earth")
+    assert eff2.target_scope == "universe:earth"
+
+    r2 = apply_effects(entity, [eff2], repo)
+    assert len(r2.pending_choices) == 1
+    assert r2.pending_choices[0].field == "target"
+    assert r2.pending_choices[0].kind == "location"
+    assert r2.pending_choices[0].scope == "universe:earth"

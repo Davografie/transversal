@@ -425,10 +425,19 @@ def choose_kind(target: str) -> Optional[str]:
 def find_choose_placeholder(effect: Effect) -> Optional[tuple[str, str, Optional[str]]]:
     """Return ``(kind, field, scope)`` for the first ``{choose:*}`` in an effect.
 
-    Checks ``target`` and ``entity`` first, then string ``context`` values. The
+    Checks scope values first (they narrow the subsequent target/entity/context
+    choice), then ``target``/``entity``, then string ``context`` values. The
     ``field`` is the dotted Effect path the picker should resolve into
-    (``"target"``, ``"entity"``, or ``"context.<key>"``).
+    (``"target"``, ``"entity"``, ``"target_scope"``, ``"entity_scope"``, or
+    ``"context.<key>"``).
     """
+    from transversal.services.effect_targets import parse_scope
+    for field_name in ("target_scope", "entity_scope"):
+        scope = getattr(effect, field_name, None) or ""
+        _, value = parse_scope(scope)
+        parsed = _parse_placeholder(value or "")
+        if parsed is not None and parsed[0] == "choose":
+            return (parsed[1], field_name, None)
     for field_name in ("target", "entity"):
         parsed = _parse_placeholder(getattr(effect, field_name, "") or "")
         if parsed is not None and parsed[0] == "choose":
@@ -441,6 +450,29 @@ def find_choose_placeholder(effect: Effect) -> Optional[tuple[str, str, Optional
                 scope = effect.target_scope if key == "projection" else None
                 return (parsed[1], f"context.{key}", scope)
     return None
+
+
+def _scope_choice(effect: Effect) -> Optional[PendingChoice]:
+    """Return a PendingChoice for a ``{choose:*}`` in the effect's scope value."""
+    from transversal.services.effect_targets import parse_scope
+    for field_name in ("target_scope", "entity_scope"):
+        scope = getattr(effect, field_name, None) or ""
+        _, value = parse_scope(scope)
+        parsed = _parse_placeholder(value or "")
+        if parsed is not None and parsed[0] == "choose":
+            return PendingChoice(effect=effect, kind=parsed[1], scope=None, field=field_name)
+    return None
+
+
+def _resolve_scope_choose(scope: Optional[str], target: str) -> Optional[str]:
+    """Substitute the ``{choose:*}`` placeholder in a scope value with ``target``."""
+    if not scope:
+        return target
+    from transversal.services.effect_targets import parse_scope
+    import re
+    prefix, value = parse_scope(scope)
+    new_value = re.sub(r"\{choose(?:_[a-z_]+|:[a-z_]+)?\}", target, value)
+    return f"{prefix}:{new_value}" if prefix else new_value
 
 
 def _resolve_scope(scope: Optional[str], entity: Entity, repo) -> Optional[str]:
@@ -545,6 +577,8 @@ def resolve_choice(choice: PendingChoice, target: str) -> Effect:
     :func:`apply_effects` (or ``commit_effects``) to complete the mutation.
     """
     field = choice.field
+    if field in ("target_scope", "entity_scope"):
+        return choice.effect.model_copy(update={field: _resolve_scope_choose(getattr(choice.effect, field), target)})
     if "." in field:
         top, _, sub = field.partition(".")
         ctx = dict(choice.effect.context or {})
@@ -1038,6 +1072,10 @@ def apply_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult:
     """
     result = EffectsResult()
     for effect in effects:
+        scope_choice = _scope_choice(effect)
+        if scope_choice is not None:
+            result.pending_choices.append(scope_choice)
+            continue
         handler = _MUTATION_HANDLERS.get((effect.type, effect.action))
         if handler is None:
             result.passthrough.append(effect)

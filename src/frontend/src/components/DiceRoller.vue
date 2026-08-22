@@ -773,8 +773,8 @@ async function doPush() {
 }
 
 async function resolveSfxChoices(resolutions) {
-  await resolveEffectTargets(props.entityId, resolutions)
-  emit('sfx-choice-resolved')
+  const result = await resolveEffectTargets(props.entityId, resolutions)
+  emit('sfx-choice-resolved', result?.pendingChoices || [])
 }
 function clearSfxChoices() {
   emit('sfx-choice-resolved')

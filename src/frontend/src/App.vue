@@ -271,7 +271,7 @@
         @sfx-toggled="onSfxToggled"
         @sheet-view-change="onSheetViewChange"
       />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="sfxChoiceRequest = null" @acting-entity-change="onActingEntityChange" />
+    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" />
   </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar :toasts="toasts" @dismiss="dismissToast" />
@@ -1105,6 +1105,12 @@ watch(lastEvent, (evt) => {
       break
   }
 })
+
+function onSfxChoiceResolved(pendingChoices) {
+  sfxChoiceRequest.value = (pendingChoices && pendingChoices.length)
+    ? pendingChoices.map((c, i) => ({ ...c, index: i }))
+    : null
+}
 
 function onPhaseChange(p) {
   if (rollerMode.value === 'roll_table') return
