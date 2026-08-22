@@ -1,27 +1,21 @@
 <template>
   <div class="ee-root">
-    <div v-if="!effects.length" class="ee-empty">No effects defined</div>
-    <div v-else class="ee-list">
-      <div
-        v-for="(eff, i) in effects"
-        :key="i"
-        class="ee-row"
-        :class="{ editing: editingIndex === i, dragging: dragIndex === i, 'drag-over': dragOverIndex === i }"
-        draggable="true"
-        @dragstart="onDragStart(i, $event)"
-        @dragover.prevent="onDragOver(i)"
-        @dragleave="onDragLeave"
-        @drop="onDrop(i)"
-        @dragend="onDragEnd"
-        @click="editEffect(i)"
-      >
+    <GmList
+      :items="effects"
+      reorderable
+      empty-text="No effects defined"
+      :row-class="rowClassFn"
+      @click="onClickEffect"
+      @reorder="onReorder"
+    >
+      <template #item="{ item: eff, index: i }">
         <span class="ee-handle">⠿</span>
         <span class="ee-cat" :class="'cat-' + effectCategory(eff)">{{ categorySign(effectCategory(eff)) }}</span>
         <span class="ee-summary">{{ effectSummary(eff) }}</span>
         <span class="ee-timing">{{ eff.timing }}</span>
         <button class="ee-del" @click.stop="removeEffect(i)" title="Remove">✕</button>
-      </div>
-    </div>
+      </template>
+    </GmList>
 
     <button class="ee-add" @click="showEditor ? closeEditor() : (showEditor = true)">
       {{ showEditor ? '− Cancel' : '+ Add effect' }}
@@ -147,6 +141,7 @@ import GmTraitPicker from './GmTraitPicker.vue'
 import GmRollTablePicker from './GmRollTablePicker.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
+import GmList from './GmList.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -392,31 +387,21 @@ function categorySign(cat) {
   if (cat === 'benefit') return '+'
   return '~'
 }
-// Drag reorder
-const dragIndex = ref(-1)
-const dragOverIndex = ref(-1)
-function onDragStart(i, e) { dragIndex.value = i; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', '') }
-function onDragOver(i) { dragOverIndex.value = i }
-function onDragLeave() { dragOverIndex.value = -1 }
-function onDrop(i) {
-  if (dragIndex.value < 0 || dragIndex.value === i) return
+// Row interactions — the list/reorder rendering is owned by GmList.
+function onClickEffect(eff, i) { editEffect(i) }
+function onReorder(from, to) {
   const next = [...props.modelValue]
-  const [moved] = next.splice(dragIndex.value, 1)
-  next.splice(i, 0, moved)
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
   emit('update:modelValue', next)
 }
-function onDragEnd() { dragIndex.value = -1; dragOverIndex.value = -1 }
+function rowClassFn(eff) {
+  return editingIndex.value !== null && effects.value[editingIndex.value] === eff ? 'editing' : ''
+}
 </script>
 
 <style scoped>
 .ee-root { display: flex; flex-direction: column; gap: 4px; }
-.ee-empty { font-size: 10px; color: var(--text-dim); }
-.ee-list { display: flex; flex-direction: column; gap: 2px; }
-.ee-row { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-radius: 4px; cursor: pointer; font-size: 11px; background: rgba(255,255,255,0.04); }
-.ee-row:hover { background: rgba(255,255,255,0.08); }
-.ee-row.editing { background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); }
-.ee-row.dragging { opacity: 0.4; }
-.ee-row.drag-over { border: 1px dashed var(--accent); }
 .ee-handle { cursor: grab; color: var(--text-dim); font-size: 13px; }
 .ee-cat { font-weight: 700; font-size: 11px; width: 18px; text-align: center; }
 .cat-cost { color: #d44040; }

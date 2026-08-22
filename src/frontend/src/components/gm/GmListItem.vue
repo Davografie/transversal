@@ -36,4 +36,5 @@ defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend'])
   box-shadow: 0 0 0 1px var(--accent-dim) inset;
   transform: scale(1.02);
 }
+.gml-item.editing { background: rgba(64, 136, 212, 0.12); border: 1px solid var(--accent-dim); }
 </style>
