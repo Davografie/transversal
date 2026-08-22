@@ -789,12 +789,9 @@ function returnToSelf() {
 }
 
 function onInspectEntity(id) {
-  if (gmMode.value) {
-    switchPerspective(id)
-  } else {
-    viewingEntityId.value = id
-  }
-  forceSheet.value = true
+  // Match the peer-chip behavior: toggle back to self on re-click, and treat
+  // a self-click as a return to self-view (no override) so the header tabs stay.
+  onPeerClick(id)
   sheetVisible.value = true
 }
 
