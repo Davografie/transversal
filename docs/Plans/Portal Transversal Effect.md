@@ -26,9 +26,7 @@ Let a single `travel` effect express "cross a universal boundary" with independe
 ## Current state
 
 - The `travel` effect (`effects_registry.py`, key `("travel", "move")`) exposes `entity` (subject) + `target` (location) + `context.transversal_type` (`inapposite` | `consciousness`).
-- Its handler (`effects_applier.py::_travel`) bottoms out in two hardcoded `EntityManager` methods:
-  - `inapposite_travel` — moves the **active** body (projection fixed).
-  - `consciousness_travel` — reuses/spawns `{entity}:{universe}` (body fixed; location = that body's location).
+- Its handler (`effects_applier.py::_apply_travel`) resolves the subject, destination location, mechanism, and body policy directly. `EntityManager.travel()` and `fire_portal`'s no-effects fallback both synthesize a travel effect and run it through `commit_effects`, so there is one travel path (no separate `inapposite_travel`/`consciousness_travel`).
 - Target kinds today: `location`, `occupant`, `entity`, `trait`, `rating_die`, `life_path`, `roll_table`. No `universe` or `projection` kind.
 - Scopes: `universe`, `location`, `subtree`, `faction`, `traitset` — the `prefix:value` value is a literal id; no placeholder/variable in the value position.
 - `Effect.entity` (subject) exists; `{choose_*}` / `{random:*}` placeholders resolve through `resolve_candidates(kind, scope, entity, repo)`.
@@ -102,9 +100,12 @@ Requires one new primitive: a **pending-confirmation** state that splits *resolv
 
 ## Remaining
 
-- **Effect-driven portals** — wire LocationViewer portals to fire a `travel` effect rather than the hardcoded `transversal` edges calling `/move` / `/consciousness-travel`.
 - **Preview phase** — the pending-confirmation state (resolve → preview → confirm/refuse) described above.
-- **Consolidation** — merge `EntityManager.inapposite_travel` / `consciousness_travel` with the effect-applier travel path so there is one source of truth.
+
+## Done
+
+- **Effect-driven portals** — LocationViewer portals fire a `travel` effect via `/portal/{to}/fire`; with no effects, the edge's `transversal_type` fallback routes through the same path.
+- **Consolidation** — `EntityManager.inapposite_travel` / `consciousness_travel` merged into a single `EntityManager.travel()` that synthesizes a travel effect and runs `commit_effects`.
 
 ## Implementation steps
 
@@ -116,4 +117,4 @@ Requires one new primitive: a **pending-confirmation** state that splits *resolv
 
 ## Relationship to multi-projection work
 
-`inapposite_travel` / `consciousness_travel` are the hardcoded "reuse/spawn by `{entity}:{universe}`" paths. This effect's **body policy** is the mechanism through which multiple projections get applied — `{new_projection}` is what actually creates a second body — so this plan and the multi-projection support converge here.
+The body policy is the mechanism through which multiple projections get applied — `{new_projection}` is what actually creates a second body. Travel now goes through a single `EntityManager.travel()` → `commit_effects` path, so the portal effect and multi-projection support share one source of truth.
