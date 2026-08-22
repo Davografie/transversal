@@ -873,7 +873,19 @@ async function moveTo(locationId, universe) {
   } catch { /* silent */ }
 }
 
-async function relocate(locationId, universe, consciousness) {
+async function relocate(locationId, universe, consciousness, effects) {
+  if (effects && effects.length) {
+    try {
+      const r = await fetch(`/api/v1/locations/${props.locationId}/portal/${locationId}/fire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_id: props.entityId })
+      })
+      const data = await r.json()
+      emit('moved', data)
+    } catch { /* silent */ }
+    return
+  }
   if (consciousness) {
     try {
       const r = await fetch(`/api/v1/entities/${props.entityId}/consciousness-travel`, {
@@ -1010,7 +1022,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   const img = imageUrl || childImage(zone)
   const sourceId = props.locationId  // remember where we came from
   if (!img) {
-    relocate(child._key, child.current_universe, child.transversal_type === 'consciousness')
+    relocate(child._key, child.current_universe, child.transversal_type === 'consciousness', child.effects)
     return
   }
 
@@ -1067,7 +1079,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     imageAspect.value = preload.naturalWidth / preload.naturalHeight
   }
 
-  relocate(child._key, child.current_universe, child.transversal_type === 'consciousness')
+  relocate(child._key, child.current_universe, child.transversal_type === 'consciousness', child.effects)
 
   setTimeout(async () => {
     await fetchNav()

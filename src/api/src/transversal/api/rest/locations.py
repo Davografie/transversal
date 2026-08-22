@@ -342,10 +342,14 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
         travel_type = edge.get("transversal_type") or "inapposite"
         em = _em()
         if travel_type == "consciousness":
-            em.consciousness_travel(body.entity_id, to_id)
+            updated = em.consciousness_travel(body.entity_id, to_id)
         else:
-            em.inapposite_travel(body.entity_id, to_id)
-        return {"status": "moved", "applied": [], "pendingChoices": []}
+            updated = em.inapposite_travel(body.entity_id, to_id)
+        return {
+            "status": "moved", "applied": [], "pendingChoices": [],
+            "entity_id": updated.id, "name": updated.name,
+            "location_id": updated.current_location, "universe": updated.current_universe,
+        }
 
     result = commit_effects(entity, effects, repo)
     return {
@@ -356,6 +360,8 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
              "effect": c.effect.model_dump()}
             for i, c in enumerate(result.pending_choices)
         ],
+        "entity_id": entity.id, "name": entity.name,
+        "location_id": entity.current_location, "universe": entity.current_universe,
     }
 
 
