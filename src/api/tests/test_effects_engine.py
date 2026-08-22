@@ -396,3 +396,21 @@ def test_sfx_triggered_emitted_when_effect_applies(monkeypatch):
 
     assert len(outcome.applied) == 1
     assert emitted == [("char-1", "sfx-x")]
+
+
+def test_process_event_defers_choose_projection_in_context():
+    engine = EffectsEngine()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="krasnoyarsk", target_scope="universe:earth",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
+    )
+    sfx = _make_sfx("sfx-portal", "Portal", "manual", effects=[effect])
+    engine.register(sfx)
+
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth")
+    outcome = engine.process_event_outcome(event, ["sfx-portal"], 0)
+
+    assert len(outcome.applied) == 0
+    assert len(outcome.pending) == 1
+    assert outcome.pending[0].effect.context["projection"] == "{choose_projection}"

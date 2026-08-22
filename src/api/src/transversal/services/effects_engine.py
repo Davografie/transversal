@@ -169,7 +169,7 @@ class EffectsEngine:
             for effect in sfx.effects:
                 effect = _substitute_effect_context(effect, event.context)
                 if effect.timing == EffectTiming.IMMEDIATE:
-                    if _effects_applier.is_choose_target(effect.target or ""):
+                    if _effects_applier.find_choose_placeholder(effect):
                         outcome.pending.append(PendingSfxEffect(
                             effect=effect,
                             sfx_name=sfx.name,

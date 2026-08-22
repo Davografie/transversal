@@ -1482,10 +1482,18 @@ class Mutation:
         entity = repo.get_entity(str(entity_id))
         if entity is None:
             raise ValueError(f"Entity '{entity_id}' not found")
-        resolved = [
-            _effect_input_to_domain(r.effect).model_copy(update={r.field: r.target})
-            for r in resolutions
-        ]
+        resolved = []
+        for r in resolutions:
+            eff = _effect_input_to_domain(r.effect)
+            field = r.field or "target"
+            if "." in field:
+                top, _, sub = field.partition(".")
+                ctx = dict(eff.context or {})
+                ctx[sub] = r.target
+                eff = eff.model_copy(update={top: ctx})
+            else:
+                eff = eff.model_copy(update={field: r.target})
+            resolved.append(eff)
         result = commit_effects(entity, resolved, repo)
         return _effects_result_to_gql(result)
 

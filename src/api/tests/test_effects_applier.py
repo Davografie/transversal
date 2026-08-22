@@ -928,3 +928,33 @@ def test_travel_choose_projection_pends():
     assert len(result.pending_choices) == 1
     assert result.pending_choices[0].kind == "projection"
     assert result.pending_choices[0].field == "context.projection"
+
+
+# ── choose-placeholder discovery ───────────────────
+
+def test_find_choose_placeholder_target():
+    from transversal.services.effects_applier import find_choose_placeholder
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="{choose_location}", target_scope="universe:earth",
+    )
+    assert find_choose_placeholder(eff) == ("location", "target", "universe:earth")
+
+
+def test_find_choose_placeholder_context_projection():
+    from transversal.services.effects_applier import find_choose_placeholder
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="krasnoyarsk", target_scope="universe:earth",
+        context={"transversal_type": "consciousness", "projection": "{choose_projection}"},
+    )
+    assert find_choose_placeholder(eff) == ("projection", "context.projection", "universe:earth")
+
+
+def test_find_choose_placeholder_none():
+    from transversal.services.effects_applier import find_choose_placeholder
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="krasnoyarsk", context={"projection": "active"},
+    )
+    assert find_choose_placeholder(eff) is None

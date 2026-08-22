@@ -36,16 +36,20 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list) -> None:
     from transversal.api.sse.bus import StreamEvent, event_bus
     from transversal.services.session_manager import session_manager
 
-    choices = [
-        {
-            "kind": effects_applier.choose_kind(p.effect.target),
-            "scope": p.effect.target_scope,
+    choices = []
+    for p in effects:
+        found = effects_applier.find_choose_placeholder(p.effect)
+        kind, field, scope = (
+            found if found else (effects_applier.choose_kind(p.effect.target), "target", p.effect.target_scope)
+        )
+        choices.append({
+            "kind": kind,
+            "field": field,
+            "scope": scope,
             "sfx_name": p.sfx_name,
             "sfx_description": p.sfx_description,
             "effect": p.effect.model_dump(),
-        }
-        for p in effects
-    ]
+        })
     for session in session_manager.list_active():
         event_bus.publish(StreamEvent(
             event="sfx_choice_required",

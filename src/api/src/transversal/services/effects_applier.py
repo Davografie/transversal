@@ -422,6 +422,27 @@ def choose_kind(target: str) -> Optional[str]:
     return parsed[1]
 
 
+def find_choose_placeholder(effect: Effect) -> Optional[tuple[str, str, Optional[str]]]:
+    """Return ``(kind, field, scope)`` for the first ``{choose:*}`` in an effect.
+
+    Checks ``target`` and ``entity`` first, then string ``context`` values. The
+    ``field`` is the dotted Effect path the picker should resolve into
+    (``"target"``, ``"entity"``, or ``"context.<key>"``).
+    """
+    for field_name in ("target", "entity"):
+        parsed = _parse_placeholder(getattr(effect, field_name, "") or "")
+        if parsed is not None and parsed[0] == "choose":
+            scope = effect.target_scope if field_name == "target" else effect.entity_scope
+            return (parsed[1], field_name, scope)
+    for key, value in (effect.context or {}).items():
+        if isinstance(value, str):
+            parsed = _parse_placeholder(value)
+            if parsed is not None and parsed[0] == "choose":
+                scope = effect.target_scope if key == "projection" else None
+                return (parsed[1], f"context.{key}", scope)
+    return None
+
+
 def _resolve_scope(scope: Optional[str], entity: Entity, repo) -> Optional[str]:
     """Resolve a ``{random:*}`` placeholder in a scope's value position.
 
