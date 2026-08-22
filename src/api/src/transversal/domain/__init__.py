@@ -507,13 +507,14 @@ class Projection(BaseModel):
 
     Stored in the `projections` collection.
 
-    ``id`` is immutable and encodes the projection's *origin* universe:
-    ``"{entity_id}:{origin_universe}"``. Inapposite travel mutates ``universe``
-    and ``current_location`` in place — never the key.
+    ``id`` is immutable and uniquely identifies a body. The first body in a
+    universe keys as ``"{entity_id}:{origin_universe}"``; additional bodies in
+    the same universe append a numeric suffix (``:2``, ``:3``, …). Inapposite
+    travel mutates ``universe`` and ``current_location`` in place — never the key.
     """
     id: str
     entity_id: str
-    origin_universe: str = ""       # native universe (immutable; equals id suffix)
+    origin_universe: str = ""       # native/home universe (immutable)
     universe: str                   # current universe (mutable)
     name: str = ""                  # display name; falls back to entity name
     background_image: Optional[str] = None  # falls back to entity background_image
@@ -872,7 +873,7 @@ class RollTable(BaseModel):
 class CharacterView(BaseModel):
     """Full character assembled from multiple collections."""
     entity: Entity
-    projections: dict[str, Projection] = Field(default_factory=dict)
+    projections: list[Projection] = Field(default_factory=list)
     trait_settings: list[TraitSetting] = Field(default_factory=list)
 
 

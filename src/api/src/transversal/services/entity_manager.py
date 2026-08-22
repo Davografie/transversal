@@ -162,6 +162,22 @@ class EntityManager:
 
     # ── Projections ───────────────────────────────────
 
+    def _next_projection_id(self, entity_id: str, universe: str) -> str:
+        """Generate a unique projection key for an entity in a universe.
+
+        The first body keeps ``{entity_id}:{universe}`` (matching legacy keys);
+        additional bodies in the same universe get a numbered suffix (``:2``,
+        ``:3``, …).
+        """
+        base = f"{entity_id}:{universe}"
+        existing = {p.id for p in self.repo.get_projections_for_entity(entity_id)}
+        if base not in existing:
+            return base
+        n = 2
+        while f"{base}:{n}" in existing:
+            n += 1
+        return f"{base}:{n}"
+
     def add_projection(
         self,
         entity: Entity,
@@ -169,13 +185,8 @@ class EntityManager:
         transversal_type: TransversalType = TransversalType.CONSCIOUSNESS,
         location: Optional[str] = None,
     ) -> Entity:
-        existing = self.repo.get_projections_for_entity(entity.id)
-        for p in existing:
-            if p.id == f"{entity.id}:{universe}":
-                raise ValueError(f"Entity already has a projection in '{universe}'")
-
         proj = Projection(
-            id=f"{entity.id}:{universe}",
+            id=self._next_projection_id(entity.id, universe),
             entity_id=entity.id,
             universe=universe,
             origin_universe=universe,

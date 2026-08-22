@@ -133,7 +133,7 @@ class InMemoryRepository(EntityRepository):
             return None
         return CharacterView(
             entity=entity,
-            projections={p.universe: p for p in self.get_projections_for_entity(eid)},
+            projections=self.get_projections_for_entity(eid),
             trait_settings=self.get_traitsettings_for_entity(eid),
         )
 
@@ -204,9 +204,13 @@ class TestProjections:
         universes = {p.universe for p in projs}
         assert universes == {"earth", "three_realms"}
 
-    def test_duplicate_rejected(self, em, kael):
-        with pytest.raises(ValueError, match="already has"):
-            em.add_projection(kael, "earth")
+    def test_duplicate_universe_allowed(self, em, kael):
+        em.add_projection(kael, "earth")
+        earth_projs = [p for p in em.get_projections(kael.id) if p.universe == "earth"]
+        assert len(earth_projs) == 2
+        ids = {p.id for p in earth_projs}
+        assert f"{kael.id}:earth" in ids
+        assert f"{kael.id}:earth:2" in ids
 
     def test_effective_universes(self, em, repo, kael):
         # base = active projection's universe
@@ -257,7 +261,7 @@ class TestTraitSettings:
         em.add_traitsetting(ts)
         cv = em.get_character(kael.id)
         assert cv.entity.name == "Kael Drift"
-        assert "earth" in cv.projections
+        assert any(p.universe == "earth" for p in cv.projections)
         assert len(cv.trait_settings) == 1
         assert cv.trait_settings[0].dice == [DieType.D10]
 

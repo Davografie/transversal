@@ -917,9 +917,7 @@ class EntityRepository:
         if entity is None:
             return None
 
-        projections = {
-            p.universe: p for p in self.get_projections_for_entity(entity_id)
-        }
+        projections = self.get_projections_for_entity(entity_id)
         # All trait settings (morph + ego)
         all_settings = self.get_traitsettings_for_entity(entity_id)
 

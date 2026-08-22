@@ -159,7 +159,7 @@ class InMemoryRepository(EntityRepository):
         from transversal.domain import CharacterView
         return CharacterView(
             entity=entity,
-            projections={p.universe: p for p in self.get_projections_for_entity(eid)},
+            projections=self.get_projections_for_entity(eid),
             trait_settings=self.get_traitsettings_for_entity(eid),
         )
 

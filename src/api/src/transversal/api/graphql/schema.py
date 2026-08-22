@@ -313,7 +313,7 @@ class Query:
                 Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
                            universe=p.universe, name=p.name, background_image=p.background_image,
                            current_location=p.current_location, transversal_type=p.transversal_type)
-                for p in cv.projections.values()
+                for p in cv.projections
             ],
             trait_settings=[_ts_to_gql(s) for s in cv.trait_settings],
         )
