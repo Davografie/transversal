@@ -426,10 +426,12 @@ class TraitSetting(BaseModel):
     Stored as an edge in the `traitsettings` collection.
     _from → entity, _to → trait (registry).
 
-    The ``dice`` array is the single source of truth for what dice this
-    trait contributes.  For a static d8 trait it is ``[D8]``.  For a
-    resource pool of 4d4 it is ``[D4, D4, D4, D4]``.  Spending removes a
-    die from the array; recovery appends one.
+    The ``dice`` array holds the currently-available dice this trait
+    contributes.  For a static d8 trait it is ``[D8]``.  For a resource
+    pool, ``dice`` is the unspent remainder and ``spent_dice`` holds the
+    dice that have been spent and are recoverable; the pool's capacity is
+    ``dice + spent_dice``.  Spending moves a die ``dice → spent_dice``;
+    recovery moves it back, so recovery can never exceed what was spent.
 
     ``rating_type`` determines behaviour (STATIC / RESOURCE / CHALLENGE /
     EMPTY) and is never inferred from the dice.
@@ -442,6 +444,7 @@ class TraitSetting(BaseModel):
     traitset_id: str
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)
+    spent_dice: list[DieType] = Field(default_factory=list)  # spent-but-recoverable (resource pools)
     polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
     notes: str = ""            # longer freeform notes

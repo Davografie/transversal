@@ -103,6 +103,16 @@
             <button v-for="(d, i) in editDice" :key="i" class="die-chip" @click="pickIdx = i; showDiePicker = true">{{ d }}</button>
             <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
           </div>
+          <div v-if="editRatingType === 'RESOURCE' && (editingTrait.spentDice || []).length" class="edit-spent-dice">
+            <span class="edit-spent-label">Recoverable</span>
+            <button
+              v-for="(die, i) in editingTrait.spentDice"
+              :key="'spent' + i"
+              class="die-chip ghost-chip"
+              :title="`Recover one ${die.toLowerCase()}`"
+              @click="recoverSpentDie(die)"
+            >{{ die.toLowerCase() }}</button>
+          </div>
           <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
           <div v-if="editingTrait.possibleSfxIds?.length" class="edit-sfx">
             <span class="edit-sfx-label">SFX</span>
@@ -183,6 +193,25 @@
                         class="trait-die-icon"
                         :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
                       />
+                    </div>
+                  </div>
+                  <div v-else-if="t.ratingType === 'RESOURCE'" class="trait-die-groups resource">
+                    <div class="trait-die-group">
+                      <DieIcon
+                        v-for="(die, i) in (t.dice || [])"
+                        :key="'a' + i"
+                        :die="die.toLowerCase()"
+                        class="trait-die-icon"
+                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
+                      />
+                      <DieIcon
+                        v-for="(die, i) in (t.spentDice || [])"
+                        :key="'s' + i"
+                        :die="die.toLowerCase()"
+                        class="trait-die-icon ghost"
+                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
+                      />
+                      <span v-if="!(t.dice || []).length && !(t.spentDice || []).length" class="trait-die depleted">depleted</span>
                     </div>
                   </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
@@ -584,6 +613,14 @@ function isResourceDepleted(t) {
   return (!t.dice || t.dice.length === 0) && !spentResources.value[t.id]
 }
 
+async function recoverSpentDie(die) {
+  // Recover one spent die back into the resource pool (editor affordance).
+  const t = editingTrait.value
+  if (!t) return
+  await recoverResourceDie(t.id, die.toLowerCase())
+  await fetchEntity()
+}
+
 function isInPool(t) {
   return poolSources.value.includes(t.id)
 }
@@ -718,6 +755,7 @@ const QUERY = `
         sfxIds
         universe
         dice
+        spentDice
         polarity
         traitsetOrder
         traitsetLimit
@@ -741,6 +779,7 @@ const QUERY = `
         sfxIds
         universe
         dice
+        spentDice
         polarity
         traitsetOrder
         traitsetLimit
@@ -1527,6 +1566,32 @@ watch(() => props.externalPoolSources, (sources) => {
   border-color: var(--accent);
   background: rgba(64,136,212,0.1);
 }
+.edit-spent-dice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.edit-spent-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.edit-spent-dice .die-chip {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 6px;
+  border: 2px dashed rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.edit-spent-dice .die-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
 .edit-rating-type {
   display: flex;
   gap: 6px;
@@ -2060,6 +2125,16 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-die-icon {
   width: 32px;
   height: 34px;
+}
+.trait-die-icon.ghost {
+  opacity: 0.32;
+}
+.trait-die-groups.resource .trait-die-group {
+  gap: 0;
+}
+.trait-die.depleted {
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 .trait-row.negative {

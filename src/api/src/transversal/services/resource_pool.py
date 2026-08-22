@@ -1,7 +1,10 @@
-"""Resource dice operations — spend / recover dice from a TraitSetting's dice array.
+"""Resource dice operations — spend / recover dice from a TraitSetting.
 
-No separate ResourcePool model — the ``dice`` list on TraitSetting *is* the pool.
-Spending removes one die of the requested type; recovery appends one.
+No separate ResourcePool model: ``dice`` is the currently-available pool and
+``spent_dice`` is the spent-but-recoverable ledger.  Spending moves one die
+``dice → spent_dice``; recovery moves it back.  Because recovery only moves
+dice that are actually in ``spent_dice``, it can never exceed what was spent
+and the pool's capacity (``dice + spent_dice``) is always preserved.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ class ResourcePoolError(Exception):
 
 
 def spend_die(ts: TraitSetting, die: DieType, em: EntityManager, session_id: str = "") -> TraitSetting:
-    """Remove one die of *die* type from *ts.dice* and persist.
+    """Move one die of *die* type from ``ts.dice`` to ``ts.spent_dice`` and persist.
 
     Returns the updated TraitSetting.
     """
@@ -29,6 +32,7 @@ def spend_die(ts: TraitSetting, die: DieType, em: EntityManager, session_id: str
 
     old_rating = _rating(ts)
     ts.dice.pop(idx)
+    ts.spent_dice.append(die)
     result = em.update_traitsetting(ts)
 
     change_log.record(
@@ -42,11 +46,22 @@ def spend_die(ts: TraitSetting, die: DieType, em: EntityManager, session_id: str
 
 
 def recover_die(ts: TraitSetting, die: DieType, em: EntityManager, session_id: str = "") -> TraitSetting:
-    """Append one die of *die* type to *ts.dice* and persist.
+    """Move one die of *die* type from ``ts.spent_dice`` back to ``ts.dice`` and persist.
+
+    Raises ``ResourcePoolError`` if no such die is in the spent ledger, so
+    recovery can never push the pool past its capacity.
 
     Returns the updated TraitSetting.
     """
+    try:
+        idx = ts.spent_dice.index(die)
+    except ValueError:
+        raise ResourcePoolError(
+            f"No spent {die.value} die to recover in trait '{ts.id}'"
+        )
+
     old_rating = _rating(ts)
+    ts.spent_dice.pop(idx)
     ts.dice.append(die)
     result = em.update_traitsetting(ts)
 

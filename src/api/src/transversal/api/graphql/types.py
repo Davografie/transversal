@@ -464,6 +464,7 @@ class TraitSetting:
     traitset_id: strawberry.ID
     rating_type: RatingType
     dice: list[DieType]
+    spent_dice: list[DieType] = strawberry.field(default_factory=list)
     polarity: Polarity
     statement: str
     notes: str = ""
@@ -736,6 +737,7 @@ class Entity:
                 id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
                 traitset_id=s.traitset_id,
                 rating_type=s.rating_type, dice=s.dice,
+                spent_dice=s.spent_dice,
                 polarity=s.polarity,
                 statement=s.statement,
                 notes=s.notes,
@@ -756,6 +758,7 @@ class Entity:
                 id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
                 traitset_id=s.traitset_id,
                 rating_type=s.rating_type, dice=s.dice,
+                spent_dice=s.spent_dice,
                 polarity=s.polarity,
                 statement=s.statement,
                 notes=s.notes,

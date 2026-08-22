@@ -106,11 +106,13 @@ class TestSpendDie:
         result = spend_die(qi_ts, DieType.D4, em)
         assert len(result.dice) == 3
         assert result.dice.count(DieType.D4) == 3
+        assert result.spent_dice.count(DieType.D4) == 1
 
     def test_spend_all(self, em, qi_ts):
         for _ in range(4):
             qi_ts = spend_die(qi_ts, DieType.D4, em)
         assert len(qi_ts.dice) == 0
+        assert len(qi_ts.spent_dice) == 4
 
     def test_spend_wrong_type_raises(self, em, qi_ts):
         with pytest.raises(ResourcePoolError, match="No d6 die"):
@@ -128,12 +130,31 @@ class TestRecoverDie:
         qi_ts = spend_die(qi_ts, DieType.D4, em)
         result = recover_die(qi_ts, DieType.D4, em)
         assert len(result.dice) == 4
+        assert result.spent_dice == []
 
-    def test_recover_any_die_type(self, em, qi_ts):
-        # Can recover a d6 even if original had only d4s
+    def test_capacity_is_preserved(self, em, qi_ts):
+        # 6d6 pool: spend 2, capacity (dice + spent) stays 6.
+        ts = TraitSetting(
+            id="x:res", entity_id="x", trait_id="t", traitset_id="ts",
+            rating_type=RatingType.RESOURCE,
+            dice=[DieType.D6] * 6,
+        )
+        ts = spend_die(ts, DieType.D6, em)
+        ts = spend_die(ts, DieType.D6, em)
+        assert len(ts.dice) == 4
+        assert len(ts.spent_dice) == 2
+        assert len(ts.dice) + len(ts.spent_dice) == 6
+
+    def test_recover_unspent_type_raises(self, em, qi_ts):
+        # Recovery is bounded by the ledger: you can't recover a die that
+        # was never spent.
         qi_ts = spend_die(qi_ts, DieType.D4, em)
-        result = recover_die(qi_ts, DieType.D6, em)
-        assert DieType.D6 in result.dice
+        with pytest.raises(ResourcePoolError, match="No spent d6 die"):
+            recover_die(qi_ts, DieType.D6, em)
+
+    def test_recover_with_nothing_spent_raises(self, em, qi_ts):
+        with pytest.raises(ResourcePoolError, match="No spent d4 die"):
+            recover_die(qi_ts, DieType.D4, em)
 
 
 class TestStepUp:
