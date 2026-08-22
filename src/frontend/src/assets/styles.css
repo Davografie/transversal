@@ -647,15 +647,11 @@ input:focus, select:focus {
 /* Dice roller — pinned at bottom of wrapper */
 .dice-panel-wrapper > .dice-roller {
   flex-shrink: 0;
-  transition: background 0.45s ease;
+  transition: background 1s ease;
 }
-/* Hold-pin cue: subtle animated hue on the roller while a click pins it open */
+/* Hold-pin cue: minimal dark-greenish tint while a click pins the panel open */
 .dice-panel-wrapper.hold-active > .dice-roller {
-  animation: hold-hue 1.8s ease-in-out infinite;
-}
-@keyframes hold-hue {
-  0%, 100% { background: var(--bg-panel); }
-  50% { background: rgba(64, 136, 212, 0.30); }
+  background: rgba(22, 40, 28, 0.9);
 }
 .embedded-sheet.sheet-hidden {
   opacity: 0;
