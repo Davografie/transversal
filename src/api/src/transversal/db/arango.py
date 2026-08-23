@@ -60,6 +60,8 @@ ENTITY_IMAGES = "entity_images"    # generated image metadata
 LIFE_PATHS = "life_paths"          # life path definitions
 ROLL_TABLES = "roll_tables"        # reusable roll tables (life path steps + general)
 HISTORICAL_RECORDS = "historical_records"  # append-only entity event log
+PLAN_ENTITIES = "plan_entities"            # document: staged entity drafts
+PLAN_RELATIONSHIPS = "plan_relationships"  # edge: staged relationship drafts
 
 COLLECTIONS = {
     ENTITIES: False,
@@ -77,6 +79,8 @@ COLLECTIONS = {
     LIFE_PATHS: False,    # document
     ROLL_TABLES: False,   # document
     HISTORICAL_RECORDS: False,  # document
+    PLAN_ENTITIES: False,     # document
+    PLAN_RELATIONSHIPS: True,  # edge
 }
 
 
@@ -149,6 +153,10 @@ def _ensure_indexes(db) -> None:
     # roll tables
     _add_hash_index(db, ROLL_TABLES, ["life_path"])
     _add_hash_index(db, ROLL_TABLES, ["universe"])
+
+    # plan staging
+    _add_hash_index(db, PLAN_ENTITIES, ["plan_id"])
+    _add_hash_index(db, PLAN_RELATIONSHIPS, ["plan_id"])
 
     # historical records
     _add_hash_index(db, HISTORICAL_RECORDS, ["entity_id"])

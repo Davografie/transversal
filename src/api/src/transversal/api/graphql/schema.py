@@ -104,7 +104,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         id=e.id, type=e.type, name=e.name, razmerit=e.razmerit,
         current_universe=e.current_universe, current_location=e.current_location,
         current_projection=e.current_projection,
-        hidden=e.hidden, known_to=e.known_to,
+        hidden=e.hidden, unpublished=e.unpublished, known_to=e.known_to,
         _background_image=e.background_image, overlay=e.overlay,
         zones=[Zone(name=z.name, background_image=z.background_image, location_id=z.location_id, x=z.x, y=z.y) for z in e.zones],
         map_x=e.map_x, map_y=e.map_y,
@@ -796,12 +796,16 @@ class Mutation:
             e.current_location = input.current_location
         if input.hidden is not None:
             e.hidden = input.hidden
+        if input.unpublished is not None:
+            e.unpublished = input.unpublished
         if input.known_to is not None:
             e.known_to = input.known_to
         if input.background_image is not None:
             e.background_image = input.background_image
         if input.owned_by is not None:
             e.owned_by = input.owned_by
+        if input.suitable_life_path_ids is not None:
+            e.suitable_life_path_ids = input.suitable_life_path_ids
         if input.overlay is not None:
             e.overlay = input.overlay if input.overlay != "" else None
         if input.nav_positions is not None:
@@ -1211,16 +1215,20 @@ class Mutation:
 
     @strawberry.mutation
     def create_relationship(self, info: strawberry.Info, input: CreateRelationshipInput) -> Relationship:
-        """Create (or update) a directional relationship edge between two entities."""
+        """Create (or update) a directional relationship edge between two entities.
+
+        Returns the real ArangoDB edge key as ``id`` so callers can attach
+        relationship-scoped trait settings (e.g. conspyramid rank/role) to it.
+        """
         repo = _em(info).repo
         # Upsert: delete first if exists, then create fresh
         repo.delete_relationship(str(input.from_entity_id), str(input.to_entity_id), input.type)
-        repo.create_relationship(
+        edge = repo.create_relationship(
             str(input.from_entity_id), str(input.to_entity_id),
             input.type, description=input.description,
         )
         return Relationship(
-            id="",
+            id=edge["_key"],
             from_entity_id=str(input.from_entity_id),
             to_entity_id=str(input.to_entity_id),
             type=input.type,
@@ -1238,22 +1246,28 @@ class Mutation:
     @strawberry.mutation
     def add_relationship_trait(self, info: strawberry.Info, from_entity_id: strawberry.ID,
                                to_entity_id: strawberry.ID, rel_type: str = "relation",
-                               trait_id: strawberry.ID = "", die: GqlDieType = GqlDieType.D6) -> TraitSetting:
-        """Create a rated trait on a relationship edge."""
+                               trait_id: strawberry.ID = "", die: GqlDieType = GqlDieType.D6,
+                               traitset_id: str = "ts-relations-b114",
+                               statement: str = "") -> TraitSetting:
+        """Create a rated trait on a relationship edge.
+
+        Attaches to the *real* ArangoDB edge key (not a synthetic key), so the
+        faction canvas can read rank/role traits back.
+        """
         repo = _em(info).repo
-        edge_key = f"edge:{from_entity_id}:{to_entity_id}:{rel_type}"
-        # Ensure the relationship edge exists
         rel = repo.get_relationship(str(from_entity_id), str(to_entity_id), rel_type)
         if not rel:
-            repo.create_relationship(str(from_entity_id), str(to_entity_id), rel_type)
+            rel = repo.create_relationship(str(from_entity_id), str(to_entity_id), rel_type)
+        edge_key = rel["_key"]
 
         ts = DomainTraitSetting(
             id=f"{edge_key}:{trait_id}",
             entity_id=edge_key,
             trait_id=str(trait_id),
-            traitset_id="ts-relations",
+            traitset_id=traitset_id,
             from_type="relationship",
             dice=[die],
+            statement=statement,
         )
         created = repo.create_traitsetting(ts)
         return _ts_to_gql(created)

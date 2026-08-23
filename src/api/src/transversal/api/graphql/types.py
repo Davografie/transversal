@@ -648,6 +648,7 @@ class Entity:
     current_location: Optional[str] = None
     current_projection: Optional[str] = None
     hidden: bool = False
+    unpublished: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     _background_image: strawberry.Private[Optional[str]] = None
     _sheet_portrait: strawberry.Private[Optional[str]] = None
@@ -787,11 +788,13 @@ class UpdateEntityInput:
     current_universe: Optional[str] = None
     current_location: Optional[str] = None
     hidden: Optional[bool] = None
+    unpublished: Optional[bool] = None
     known_to: Optional[list[str]] = None
     background_image: Optional[str] = None
     overlay: Optional[str] = None
     nav_positions: Optional[str] = None
     owned_by: Optional[str] = None
+    suitable_life_path_ids: Optional[list[str]] = None
     lora_config: Optional[str] = None
 
 

@@ -17,20 +17,23 @@ from transversal.db.arango import (
     ENTITY_IMAGES,
     HISTORICAL_RECORDS,
     LIFE_PATHS,
+    MESSAGES,
+    PLAN_ENTITIES,
+    PLAN_RELATIONSHIPS,
     PLAYERS,
     PROJECTIONS,
     RELATIONSHIPS,
     ROLL_TABLES,
-    SFXS,
     SFX_OWNERS,
+    SFXS,
     TRAITS,
     TRAITSETS,
-    TRAITSETTINGS,
     TRAITSETSETTINGS,
-    MESSAGES,
+    TRAITSETTINGS,
     get_db,
 )
 from transversal.domain import (
+    SFX,
     AttunementScope,
     CharacterView,
     Entity,
@@ -42,13 +45,13 @@ from transversal.domain import (
     Message,
     Projection,
     RollTable,
-    SFX,
     SfxOwner,
     Trait,
     TraitSet,
     TraitSetSetting,
     TraitSetting,
     TransversalType,
+    Zone,
     dice_list_to_rating,
 )
 
@@ -77,6 +80,8 @@ class EntityRepository:
         self._entity_images = self.db.collection(ENTITY_IMAGES)
         self._messages = self.db.collection(MESSAGES)
         self._historical_records = self.db.collection(HISTORICAL_RECORDS)
+        self._plan_entities = self.db.collection(PLAN_ENTITIES)
+        self._plan_relationships = self.db.collection(PLAN_RELATIONSHIPS)
 
     # ── Entity CRUD ───────────────────────────────────
 
@@ -227,7 +232,8 @@ class EntityRepository:
             bind_vars={"eid": entity_id},
         )
         # Delete media files from disk
-        import shutil, glob
+        import glob
+        import shutil
         media_root = "/app/media"
         # Generated images directory
         imagen_dir = f"{media_root}/imagen/{entity_id}"
@@ -1104,7 +1110,30 @@ class EntityRepository:
         }
         if description:
             edge["description"] = description
-        return self._relationships.insert(edge)
+        created = self._relationships.insert(edge)
+
+        # A sub-location needs a matching zone hotspot on its parent's background
+        # or it is invisible in the location viewer. Register one (centered) on
+        # ``super`` edge creation so API/MCP-authored children show up immediately;
+        # the GM can drag the dot into place afterwards.
+        if rel_type == "super":
+            self._ensure_child_zone(from_id, to_id)
+
+        return created
+
+    def _ensure_child_zone(self, child_id: str, parent_id: str) -> None:
+        """Add a default zone to ``parent_id`` for the child sub-location, if absent."""
+        parent = self.get_entity(parent_id)
+        child = self.get_entity(child_id)
+        if parent is None or child is None:
+            return
+        if parent.type != EntityType.LOCATION or child.type != EntityType.LOCATION:
+            return
+        for zone in parent.zones:
+            if zone.location_id == child_id or (not zone.location_id and zone.name == child.name):
+                return  # already registered
+        parent.zones.append(Zone(name=child.name, x=50.0, y=50.0, location_id=child_id))
+        self.update_entity(parent)
 
     def get_relationship(
         self, from_id: str, to_id: str, rel_type: str
@@ -1139,6 +1168,55 @@ class EntityRepository:
             "rel_type": rel_type,
         })
         return bool(list(result))
+
+    # ── Plan (staging) CRUD ──────────────────────────
+
+    def create_plan_entity(self, doc: dict) -> dict:
+        """Insert a staged entity draft (document must include ``plan_id``)."""
+        return self._plan_entities.insert(doc)
+
+    def get_plan_entity(self, key: str) -> dict | None:
+        return self._plan_entities.get(key)
+
+    def list_plan_entities(self, plan_id: str) -> list[dict]:
+        query = f"""
+            FOR e IN {PLAN_ENTITIES}
+            FILTER e.plan_id == @pid
+            SORT e._key
+            RETURN e
+        """
+        return list(self.db.aql.execute(query, bind_vars={"pid": plan_id}))
+
+    def delete_plan_entities(self, plan_id: str) -> int:
+        query = f"""
+            FOR e IN {PLAN_ENTITIES}
+            FILTER e.plan_id == @pid
+            REMOVE e IN {PLAN_ENTITIES}
+            RETURN OLD
+        """
+        return len(list(self.db.aql.execute(query, bind_vars={"pid": plan_id})))
+
+    def create_plan_relationship(self, doc: dict) -> dict:
+        """Insert a staged relationship draft (edge; must include ``plan_id``)."""
+        return self._plan_relationships.insert(doc)
+
+    def list_plan_relationships(self, plan_id: str) -> list[dict]:
+        query = f"""
+            FOR r IN {PLAN_RELATIONSHIPS}
+            FILTER r.plan_id == @pid
+            SORT r._key
+            RETURN r
+        """
+        return list(self.db.aql.execute(query, bind_vars={"pid": plan_id}))
+
+    def delete_plan_relationships(self, plan_id: str) -> int:
+        query = f"""
+            FOR r IN {PLAN_RELATIONSHIPS}
+            FILTER r.plan_id == @pid
+            REMOVE r IN {PLAN_RELATIONSHIPS}
+            RETURN OLD
+        """
+        return len(list(self.db.aql.execute(query, bind_vars={"pid": plan_id})))
 
     def get_related_entities(self, entity_id: str, name_query: str = "") -> list[dict]:
         """Get entities connected via any relationship edge, optionally filtered by name."""
@@ -1958,7 +2036,7 @@ class EntityRepository:
                 FILTER e._key IN occupant_ids OR e.current_location == @lid
                 RETURN {{
                     name: e.name, type: e.type, id: e._key,
-                    map_x: e.map_x, map_y: e.map_y
+                    map_x: e.map_x, map_y: e.map_y, unpublished: e.unpublished == true
                 }}
             )
             RETURN {{

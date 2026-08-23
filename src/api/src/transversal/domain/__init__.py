@@ -558,6 +558,7 @@ class Entity(BaseModel):
     current_location: Optional[str] = None
     current_projection: Optional[str] = None  # active projection id (occupant types)
     hidden: bool = False
+    unpublished: bool = False  # GM draft: real in-world but not yet revealed to players
     known_to: list[str] = Field(default_factory=list)
     # Location
     background_image: Optional[str] = None
