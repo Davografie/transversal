@@ -110,6 +110,7 @@ class DieSpec(BaseModel):
     source_id: str = ""
     label: str = ""
     ts_id: Optional[str] = None
+    resource: bool = False  # resource-pool die: rolled separately, highest applies to total
 
 
 class DieRoll(DieSpec):
@@ -199,6 +200,8 @@ class PoolResult(BaseModel):
     rolls: list[DieRoll]
     kept: list[DieRoll]
     total: int
+    resource_rolls: list[DieRoll] = Field(default_factory=list)
+    resource_kept: Optional[DieRoll] = None
     effect_die: Optional[DieType]
     effect_die_value: Optional[int]
     unused: list[DieRoll]

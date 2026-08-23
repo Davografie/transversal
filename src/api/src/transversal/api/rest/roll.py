@@ -57,6 +57,7 @@ def _dice_to_specs(dice: list[dict]) -> list[DieSpec]:
             source_id=d.get("source_id", ""),
             label=d.get("label", ""),
             ts_id=d.get("ts_id"),
+            resource=d.get("resource", False),
         )
         for d in dice
     ]

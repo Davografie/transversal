@@ -27,6 +27,7 @@ class PoolDieIn(BaseModel):
     source_id: str = ""
     label: str = ""
     ts_id: Optional[str] = None
+    resource: bool = False  # resource-pool die: rolled separately, highest applies to total
 
 
 class SavePoolRequest(BaseModel):
@@ -64,7 +65,7 @@ async def get_pool(location_id: str, entity_id: str):
 @router.put("/{location_id}/pools/{entity_id}")
 async def save_pool(location_id: str, entity_id: str, req: SavePoolRequest):
     """Persist (in-memory) an entity's assembled dice pool for a location."""
-    dice = [d.model_dump() for d in req.dice]
+    dice = [d.model_dump(exclude_unset=True) for d in req.dice]
     get_scene_store().save_pool(location_id, entity_id, dice)
     logger.info(f"[init] save_pool loc={location_id} entity={entity_id} dice={len(dice)}")
     broadcast_pool_change(location_id, entity_id, dice=dice, phase="adding")

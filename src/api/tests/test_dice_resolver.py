@@ -554,3 +554,52 @@ class TestDecomposedCallables:
         assert compare_totals(15, 12) == ContestWinner.PLAYER
         assert compare_totals(10, 14) == ContestWinner.OPPONENT
         assert compare_totals(13, 13) == ContestWinner.PLAYER  # tie → initiator
+
+
+class TestResourceDice:
+    """Resource dice roll separately; only the highest applies to the total."""
+
+    def _patch_rolls(self, monkeypatch, results):
+        from transversal.services import dice_resolver
+        it = iter(results)
+        monkeypatch.setattr(
+            dice_resolver,
+            "_roll_die",
+            lambda spec: DieRoll(**spec.model_dump(), result=next(it)),
+        )
+
+    def test_resource_highest_added_to_total(self, monkeypatch):
+        self._patch_rolls(monkeypatch, [5, 3, 7, 2])  # main 5+3, resource 7 (kept) & 2
+        request = DicePoolRequest(
+            entity_id="e", universe="earth",
+            dice=[
+                DieSpec(die=DieType.D8, label="main1"),
+                DieSpec(die=DieType.D6, label="main2"),
+                DieSpec(die=DieType.D6, label="res1", resource=True),
+                DieSpec(die=DieType.D4, label="res2", resource=True),
+            ],
+        )
+        result = resolve(request)
+        assert isinstance(result, PoolResult)
+        assert result.total == 5 + 3 + 7
+        assert len(result.resource_rolls) == 2
+        assert result.resource_kept.result == 7
+        # kept/effect come from main dice only
+        assert len(result.kept) == 2
+        assert all(not r.resource for r in result.kept)
+        assert all(not r.resource for r in result.unused)
+
+    def test_resource_forces_pool_pipeline(self, monkeypatch):
+        # 2 dice total, but one is a resource — must resolve as a pool.
+        self._patch_rolls(monkeypatch, [4, 6])
+        request = DicePoolRequest(
+            entity_id="e", universe="earth",
+            dice=[
+                DieSpec(die=DieType.D8, label="main"),
+                DieSpec(die=DieType.D6, label="res", resource=True),
+            ],
+        )
+        result = resolve(request)
+        assert isinstance(result, PoolResult)
+        assert result.total == 4 + 6
+        assert result.resource_kept.result == 6

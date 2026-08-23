@@ -239,21 +239,33 @@ def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:
 
 
 def _resolve_pool(request: DicePoolRequest) -> PoolResult:
-    """Resolve a dice pool pipeline roll (3+ dice, Cortex Prime)."""
-    rolls = roll_dice(request.dice)
-    hitches = detect_hitches(rolls) if request.hitches_apply else []
-    botch = is_botch(rolls) if request.hitches_apply else False
+    """Resolve a dice pool pipeline roll (3+ dice, Cortex Prime).
+
+    Resource dice are rolled as a separate pool: only the highest result is
+    added to the total.  Main dice keep the standard keep-two/effect model.
+    """
+    main_specs = [d for d in request.dice if not d.resource]
+    resource_specs = [d for d in request.dice if d.resource]
+
+    main_rolls = roll_dice(main_specs)
+    resource_rolls = roll_dice(resource_specs)
+    resource_kept = max(resource_rolls, key=lambda r: r.result) if resource_rolls else None
+
+    # Hitch/botch detection sees every rolled die (main + resource).
+    all_rolls = main_rolls + resource_rolls
+    hitches = detect_hitches(all_rolls) if request.hitches_apply else []
+    botch = is_botch(all_rolls) if request.hitches_apply else False
     hitches_count = len(hitches)
 
-    # Keep the two highest dice for the total; the rest stay unused.
-    order = sorted(range(len(rolls)), key=lambda i: rolls[i].result, reverse=True)
+    # Keep the two highest MAIN dice for the total; the rest stay unused.
+    order = sorted(range(len(main_rolls)), key=lambda i: main_rolls[i].result, reverse=True)
     kept_indices = order[:2]
-    kept = [rolls[i] for i in kept_indices]
-    total = pick_total(rolls, kept_indices)
-    unused = [rolls[i] for i in order[2:]]
+    kept = [main_rolls[i] for i in kept_indices]
+    total = pick_total(main_rolls, kept_indices) + (resource_kept.result if resource_kept else 0)
+    unused = [main_rolls[i] for i in order[2:]]
 
-    # Effect die: choose from unused dice via the shared callable.
-    effect_roll = pick_effect_die(rolls, kept_indices, request.hitches_apply)
+    # Effect die: choose from unused MAIN dice (resource dice are ineligible).
+    effect_roll = pick_effect_die(main_rolls, kept_indices, request.hitches_apply)
     effect_die = effect_roll.die if effect_roll else DieType.D4
     effect_die_value = effect_roll.result if effect_roll else None
 
@@ -289,9 +301,11 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
 
     return PoolResult(
         kind=request.kind,
-        rolls=rolls,
+        rolls=all_rolls,
         kept=kept,
         total=total,
+        resource_rolls=resource_rolls,
+        resource_kept=resource_kept,
         effect_die=effect_die,
         effect_die_value=effect_die_value,
         unused=unused,
@@ -320,8 +334,11 @@ def resolve(request: DicePoolRequest) -> RollResult:
         return _resolve_simplified(request)
 
     pool_size = len(request.dice)
+    has_resource = any(d.resource for d in request.dice)
 
-    if pool_size <= 2:
+    # Resource dice only make sense in a keep-and-sum context — force the
+    # pool pipeline so the highest resource die can be added to the total.
+    if pool_size <= 2 and not has_resource:
         return _resolve_simplified(request)
     else:
         return _resolve_pool(request)

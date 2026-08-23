@@ -600,7 +600,7 @@ async function onTraitClick(t) {
   }
 
   if (!dieType) return  // no die rating — nothing to add
-  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative })
+  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative, resource: t.ratingType === 'RESOURCE' })
 }
 
 function resolvedDieType(t) {

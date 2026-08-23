@@ -188,18 +188,31 @@
         </div>
       </div>
 
-      <div v-else-if="result && isPicking()" class="roll-dice">
-        <div
-          v-for="(r, i) in result.rolls"
-          :key="i"
-          class="roll-die-wrap"
-          :class="[rollClass(i)]"
-          :draggable="!isHitch(i)"
-          @dragstart="onDieDragStart($event, i)"
-          @touchstart="onDieTouchStart($event, i)"
-          @click="toggleDie(i)"
-        >
-          <DieIcon :die="r.die" :result="r.result" :is-hitch="isHitch(i)" :label="r.label || r.source_id || r.die" />
+      <div v-else-if="result && isPicking()" class="roll-pick">
+        <div class="roll-dice">
+          <div
+            v-for="x in mainDice"
+            :key="x.i"
+            class="roll-die-wrap"
+            :class="[rollClass(x.i)]"
+            :draggable="!isHitch(x.i)"
+            @dragstart="onDieDragStart($event, x.i)"
+            @touchstart="onDieTouchStart($event, x.i)"
+            @click="toggleDie(x.i)"
+          >
+            <DieIcon :die="x.r.die" :result="x.r.result" :is-hitch="isHitch(x.i)" :label="x.r.label || x.r.source_id || x.r.die" />
+          </div>
+        </div>
+        <div v-if="resourceDice.length" class="resource-rolls">
+          <span class="resource-label">resource</span>
+          <div
+            v-for="x in resourceDice"
+            :key="x.i"
+            class="roll-die-wrap resource-die"
+            :class="[rollClass(x.i)]"
+          >
+            <DieIcon :die="x.r.die" :result="x.r.result" :is-hitch="isHitch(x.i)" :label="x.r.label || x.r.source_id || x.r.die" />
+          </div>
         </div>
       </div>
 
@@ -226,6 +239,13 @@
         </template>
         <template v-else>
           <div class="resolved-result">
+            <span v-if="totalBreakdown.length" class="resolved-breakdown">
+              <template v-for="(p, i) in totalBreakdown" :key="i">
+                <span v-if="i"> + </span>
+                <span :class="{ 'resource-addend': p.resource }">{{ p.value }}</span>
+              </template>
+              <span> = </span>
+            </span>
             <strong class="resolved-total result-num">{{ computedTotal }}</strong>
             <DieIcon v-if="effectDie" :die="effectDie" class="resolved-eff-die" />
           </div>
@@ -695,7 +715,7 @@ function committedResult() {
   const r = result.value
   if (!r) return null
   if (r.pipeline === 'pool') {
-    const total = selection.total.reduce((sum, idx) => sum + (idx !== null ? r.rolls[idx].result : 0), 0)
+    const total = selection.total.reduce((sum, idx) => sum + (idx !== null ? r.rolls[idx].result : 0), 0) + resourceKeptResult.value
     const effIdx = selection.effect[0]
     const effectDie = effIdx !== null ? r.rolls[effIdx].die : 'd4'
     return { total, effect_die: effectDie, pipeline: 'pool' }
@@ -968,7 +988,7 @@ function setDifficulty(die) {
 function addFromSheet(payload) {
   ensureSelfTab()
   // Accept a single-die { die } payload or a multi-die { dice: [...] } payload.
-  const { source, label, tsId, negative } = payload || {}
+  const { source, label, tsId, negative, resource } = payload || {}
   const dice = Array.isArray(payload?.dice) ? payload.dice : (payload?.die ? [payload.die] : [])
   if (!dice.length) return
   // Negative trait during a contest contributes to the opponent's pool.
@@ -983,7 +1003,7 @@ function addFromSheet(payload) {
   }
   markPurpose('gmc')
   for (const die of dice) {
-    pool.push({ die, source, label: label || source, tsId: tsId ?? null, sourceKind: 'trait' })
+    pool.push({ die, source, label: label || source, tsId: tsId ?? null, sourceKind: 'trait', resource: !!resource })
   }
   panelOpen.value = true
   notifyPool()
@@ -1049,6 +1069,7 @@ function isHitch(idx) {
 function toggleDie(idx) {
   if (!result.value || result.value.pipeline !== 'pool') return
   if (isHitch(idx)) return
+  if (result.value.rolls[idx].resource) return  // resource dice auto-pick
   ensureSlots()
 
   // If die is already placed, remove it
@@ -1243,7 +1264,7 @@ function assignBestTotal() {
   if (!result.value || result.value.pipeline !== 'pool') return
   clearAllSlots()
   const r = result.value.rolls
-  const valid = r.map((roll, i) => isHitch(i) ? -1 : i).filter(i => i !== -1)
+  const valid = r.map((roll, i) => (isHitch(i) || roll.resource) ? -1 : i).filter(i => i !== -1)
   const K = Math.min(props.keepCount, valid.length)
   const E = Math.min(props.effectCount, valid.length - K)
   if (K === 0) return
@@ -1297,7 +1318,7 @@ function assignBestEffect() {
   if (!result.value || result.value.pipeline !== 'pool') return
   clearAllSlots()
   const r = result.value.rolls
-  const valid = r.map((roll, i) => isHitch(i) ? -1 : i).filter(i => i !== -1)
+  const valid = r.map((roll, i) => (isHitch(i) || roll.resource) ? -1 : i).filter(i => i !== -1)
   const E = Math.min(props.effectCount, valid.length)
   const K = Math.min(props.keepCount, valid.length - E)
   if (E === 0) return
@@ -1350,16 +1371,56 @@ const nextSlot = computed(() => {
   return ''
 })
 
+// Resource dice roll as a separate pool — the highest one auto-applies.
+const resourceIndices = computed(() => {
+  if (!result.value) return []
+  return result.value.rolls.map((r, i) => (r.resource ? i : -1)).filter(i => i !== -1)
+})
+
+const resourceKeptIndex = computed(() => {
+  const idxs = resourceIndices.value
+  const r = result.value?.rolls
+  if (!idxs.length || !r) return null
+  return idxs.reduce((a, b) => (r[b].result > r[a].result ? b : a), idxs[0])
+})
+
+const resourceKeptResult = computed(() => {
+  const i = resourceKeptIndex.value
+  if (i == null || !result.value) return 0
+  return result.value.rolls[i].result
+})
+
+// Display helpers: main dice vs resource dice, and the total breakdown.
+const mainDice = computed(() => {
+  if (!result.value) return []
+  return result.value.rolls.map((r, i) => ({ r, i })).filter(x => !x.r.resource)
+})
+
+const resourceDice = computed(() => {
+  if (!result.value) return []
+  return result.value.rolls.map((r, i) => ({ r, i })).filter(x => x.r.resource)
+})
+
+const totalBreakdown = computed(() => {
+  if (!result.value || result.value.pipeline !== 'pool') return []
+  const r = result.value.rolls
+  const parts = selection.total.filter(i => i !== null).map(i => ({ value: r[i].result, resource: false }))
+  if (resourceKeptIndex.value != null) parts.push({ value: r[resourceKeptIndex.value].result, resource: true })
+  return parts
+})
+
 function rollClass(idx) {
   if (selection.total.includes(idx)) return 'selected-total'
   if (selection.effect.includes(idx)) return 'selected-effect'
+  if (resourceKeptIndex.value === idx) return 'resource-kept'
+  if (resourceIndices.value.includes(idx)) return 'resource-other'
   return ''
 }
 
 const computedTotal = computed(() => {
   if (!result.value || result.value.pipeline !== 'pool') return 0
   const r = result.value.rolls
-  return selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0)
+  return selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0) + resourceKeptResult.value
 })
 
 const rollTableHighest = computed(() => {
@@ -1439,13 +1500,18 @@ function lockDie(i, result_) {
 async function doRoll() {
   youTabBlink.value = false
   setPhase(Phase.ROLLING)
-  const dice = pool.map(d => ({
-    die: d.die,
-    source_kind: d.sourceKind || 'manual',
-    source_id: d.tsId || d.source || '',
-    label: d.label || d.source || d.die,
-    ts_id: d.tsId || null,
-  }))
+  const dice = pool.map(d => {
+    const spec = {
+      die: d.die,
+      source_kind: d.sourceKind || 'manual',
+      source_id: d.tsId || d.source || '',
+      label: d.label || d.source || d.die,
+      ts_id: d.tsId || null,
+    }
+    if (d.resource) spec.resource = true
+    return spec
+  })
+  const hasResource = dice.some(d => d.resource)
   const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
   const key = poolEntityKey()
 
@@ -1460,7 +1526,7 @@ async function doRoll() {
   const anim = startRollAnimation(dice)
   const result_ = isDifficulty
     ? await apiDifficultyRoll(props.locationId, key)
-    : dice.length <= 2
+    : dice.length <= 2 && !hasResource
       ? await apiSimplifiedRoll(props.locationId, key)
       : await apiCortexRoll(props.locationId, key)
 
@@ -1496,7 +1562,7 @@ function commitPicks() {
   // Player (or GM acting as an entity): emit final picked result for sharing
   if (result.value?.pipeline === 'pool') {
     const r = result.value.rolls
-    const total = selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0)
+    const total = selection.total.reduce((sum, idx) => sum + (idx !== null ? r[idx].result : 0), 0) + resourceKeptResult.value
     const effIdx = selection.effect[0]
     const effDie = effIdx !== null ? r[effIdx].die : 'd4'
     emit('picked', { total, effect_die: effDie, pipeline: 'pool', botch: result.value.botch })
@@ -1584,7 +1650,8 @@ function restoreRolledResult(dice) {
   // Reconstruct the rolled result + selection from the stateful pool dice.
   const hitches = dice.filter(d => d.hitch)
   const botch = dice.length > 0 && dice.every(d => d.hitch)
-  if (dice.length <= 2) {
+  const hasResource = dice.some(d => d.resource)
+  if (dice.length <= 2 && !hasResource) {
     const highest = Math.max(...dice.map(d => d.result))
     const tier = highest <= 2 ? 'FAIL' : highest <= 5 ? 'MARGINAL' : highest <= 8 ? 'SUCCESS' : highest <= 11 ? 'EXCEPTIONAL' : 'PERFECT'
     const effect = { FAIL: null, MARGINAL: 'd4', SUCCESS: 'd6', EXCEPTIONAL: 'd8', PERFECT: 'd10' }[tier]
@@ -1616,6 +1683,7 @@ async function loadPoolIntoEditor(id) {
       label: d.label || d.die,
       tsId: d.ts_id || null,
       sourceKind: d.source_kind || 'manual',
+      resource: !!d.resource,
     })
   }
   resetEditor()
@@ -1882,6 +1950,14 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .resolved-eff-die {
   width: 72px; height: 80px;
 }
+.resolved-breakdown {
+  font-size: 18px; color: var(--text-dim);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-variant-numeric: lining-nums;
+}
+.resolved-breakdown .resource-addend {
+  color: var(--accent); font-weight: 700;
+}
 
 .botch {
   color: var(--danger); font-size: 20px; font-weight: 800;
@@ -1918,6 +1994,21 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .roll-die-wrap.selected-total { border-color: var(--accent); background: rgba(64,136,212,0.1); }
 .roll-die-wrap.selected-effect { border-color: var(--success); background: rgba(64,184,96,0.1); }
 .roll-die-wrap.unused { opacity: 0.3; }
+
+.roll-pick {
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.resource-rolls {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  flex-wrap: wrap; padding-top: 6px;
+  border-top: 1px dashed rgba(255,255,255,0.12);
+}
+.resource-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim);
+}
+.roll-die-wrap.resource-die { cursor: default; }
+.roll-die-wrap.resource-kept { border-color: var(--accent); background: rgba(64,136,212,0.1); }
+.roll-die-wrap.resource-other { opacity: 0.35; }
 
 .selection-row {
   display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; font-size: 13px;
