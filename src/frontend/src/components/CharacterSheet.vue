@@ -89,59 +89,86 @@
         <div v-if="editingTrait && !showAddTrait" class="trait-edit-panel">
           <button class="set-back" @click="cancelEdit">← Back</button>
           <h4 class="edit-title">{{ displayName(editingTrait.name) }}</h4>
-          <div class="edit-rating-type">
-            <button
-              v-for="rt in RATING_TYPES"
-              :key="rt.id"
-              type="button"
-              class="rating-type-btn"
-              :class="{ active: editRatingType === rt.id }"
-              @click="setRatingType(rt.id)"
-            >{{ rt.label }}</button>
-          </div>
-          <div class="edit-dice">
-            <button v-for="(d, i) in editDice" :key="i" class="die-chip die-chip-icon" :title="`Change ${d}`" @click="pickIdx = i; showDiePicker = true">
-              <DieIcon :die="d" />
-            </button>
-            <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
-          </div>
-          <div v-if="editRatingType === 'RESOURCE' && (editingTrait.spentDice || []).length" class="edit-spent-dice">
-            <span class="edit-spent-label">Recoverable</span>
-            <button
-              v-for="(die, i) in editingTrait.spentDice"
-              :key="'spent' + i"
-              class="die-chip ghost-chip die-chip-icon"
-              :title="`Recover one ${die.toLowerCase()}`"
-              @click="recoverSpentDie(die)"
-            ><DieIcon :die="die.toLowerCase()" /></button>
-          </div>
-          <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
-          <div v-if="editingTrait.possibleSfxIds?.length" class="edit-sfx">
-            <span class="edit-sfx-label">SFX</span>
-            <button v-for="sfxId in editingTrait.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
-              {{ sfxId.replace('sfx-', '') }}
-            </button>
-          </div>
-          <input v-if="editingTrait.statement !== undefined" v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" @blur="splitStatement" />
-          <textarea v-if="editingTrait.notes !== undefined || editNotes" v-model="editNotes" class="edit-notes" placeholder="Notes…" @input="onStatementInput"></textarea>
-          <button type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
-          <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
-            {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
-          </button>
-          <div v-if="!editIsEgo" class="edit-projection">
-            <span class="edit-projection-label">on</span>
-            <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
-            <div v-if="showProjectionPicker" class="projection-dropdown">
+
+          <div class="edit-field">
+            <span class="edit-label">Rating</span>
+            <div class="edit-rating-type">
               <button
-                v-for="p in editProjectionOptions"
-                :key="p.id"
+                v-for="rt in RATING_TYPES"
+                :key="rt.id"
                 type="button"
-                class="projection-option"
-                :class="{ selected: p.id === editProjectionId }"
-                @click="selectProjection(p)"
-              >{{ p.name || universeDisplay(p.originUniverse) }}</button>
+                class="rating-type-btn"
+                :class="{ active: editRatingType === rt.id }"
+                @click="setRatingType(rt.id)"
+              >{{ rt.label }}</button>
             </div>
           </div>
+
+          <div class="edit-field">
+            <span class="edit-label">Dice</span>
+            <div class="edit-dice">
+              <button v-for="(d, i) in editDice" :key="i" class="die-chip die-chip-icon" :title="`Change ${d}`" @click="pickIdx = i; showDiePicker = true">
+                <DieIcon :die="d" />
+              </button>
+              <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
+            </div>
+            <div v-if="editRatingType === 'RESOURCE' && (editingTrait.spentDice || []).length" class="edit-spent-dice">
+              <span class="edit-spent-label">Recoverable</span>
+              <button
+                v-for="(die, i) in editingTrait.spentDice"
+                :key="'spent' + i"
+                class="die-chip ghost-chip die-chip-icon"
+                :title="`Recover one ${die.toLowerCase()}`"
+                @click="recoverSpentDie(die)"
+              ><DieIcon :die="die.toLowerCase()" /></button>
+            </div>
+          </div>
+
+          <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
+
+          <div v-if="editingTrait.possibleSfxIds?.length" class="edit-field">
+            <span class="edit-label">SFX</span>
+            <div class="edit-sfx">
+              <button v-for="sfxId in editingTrait.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
+                {{ sfxId.replace('sfx-', '') }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="editingTrait.statement !== undefined" class="edit-field">
+            <span class="edit-label">Statement</span>
+            <input v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" @blur="splitStatement" />
+          </div>
+
+          <div v-if="editingTrait.notes !== undefined || editNotes" class="edit-field">
+            <span class="edit-label">Notes</span>
+            <textarea v-model="editNotes" class="edit-notes" placeholder="Notes…" @input="onStatementInput"></textarea>
+          </div>
+
+          <div class="edit-field">
+            <span class="edit-label">Type</span>
+            <div class="edit-flags">
+              <button type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
+              <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
+                {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
+              </button>
+            </div>
+            <div v-if="!editIsEgo" class="edit-projection">
+              <span class="edit-projection-label">on</span>
+              <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
+              <div v-if="showProjectionPicker" class="projection-dropdown">
+                <button
+                  v-for="p in editProjectionOptions"
+                  :key="p.id"
+                  type="button"
+                  class="projection-option"
+                  :class="{ selected: p.id === editProjectionId }"
+                  @click="selectProjection(p)"
+                >{{ p.name || universeDisplay(p.originUniverse) }}</button>
+              </div>
+            </div>
+          </div>
+
           <div class="edit-actions">
             <button class="edit-done-btn" @click="cancelEdit">Done</button>
             <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === editingTrait.id }" @click="onDeleteClick(editingTrait)">
@@ -1547,11 +1574,29 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-edit-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 14px;
+  padding: 4px 0 8px;
+}
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.edit-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.edit-flags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .edit-title {
-  margin: 0;
+  margin: 0 0 2px;
   font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1562,7 +1607,6 @@ watch(() => props.externalPoolSources, (sources) => {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
 }
 .edit-dice .die-chip {
   font-size: 14px;
@@ -1594,7 +1638,6 @@ watch(() => props.externalPoolSources, (sources) => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
 }
 .edit-spent-label {
   font-size: 12px;
@@ -1656,15 +1699,7 @@ watch(() => props.externalPoolSources, (sources) => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 6px;
   align-items: center;
-}
-.edit-sfx-label {
-  font-size: 10px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-right: 4px;
 }
 .sfx-chip {
   font-size: 10px;
@@ -1686,24 +1721,34 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--accent);
 }
 
-.edit-statement {
-  font-size: 12px;
-  padding: 5px 8px;
+.edit-statement,
+.edit-notes {
   width: 100%;
   box-sizing: border-box;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 8px;
+  transition: border-color 0.15s;
+}
+.edit-statement:focus,
+.edit-notes:focus {
+  outline: none;
+  border-color: var(--accent-dim);
 }
 .edit-notes {
-  font-size: 12px;
-  padding: 5px 8px;
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 48px;
+  min-height: 56px;
   resize: vertical;
 }
 .edit-actions {
   display: flex;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 .edit-done-btn {
   flex: 1;
@@ -1928,7 +1973,6 @@ watch(() => props.externalPoolSources, (sources) => {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
   position: relative;
 }
 .edit-projection-label {
