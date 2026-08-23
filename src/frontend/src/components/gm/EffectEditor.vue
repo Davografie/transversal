@@ -80,6 +80,14 @@
             <div v-else class="ee-field">
               <label>Scope</label>
               <ScopeBuilder v-model="newEffect.scope" :universe="universe" />
+              <template v-if="relevantFilterFields.length">
+                <label>Only</label>
+                <label v-for="ff in relevantFilterFields" :key="ff.field" class="ee-check">
+                  <input type="checkbox" :checked="!!newEffect.targetFilter[ff.field]" @change="toggleFilter(ff.field, $event)" />
+                  {{ ff.label }}
+                </label>
+              </template>
+              <div v-if="previewText" class="ee-preview">{{ previewText }}</div>
             </div>
           </template>
 
@@ -156,8 +164,10 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
+import { useEffectTargets } from '@/composables/useEffectTargets.js'
+import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import GmTraitPicker from './GmTraitPicker.vue'
 import GmRollTablePicker from './GmRollTablePicker.vue'
 import GmLocationPicker from './GmLocationPicker.vue'
@@ -187,16 +197,53 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', targetFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
 
 onMounted(() => { load() })
 
+const { load: loadSfxMeta, targetFilterFields } = useSfxMeta()
+const { fetchTargets: fetchPreviewTargets } = useEffectTargets()
+const previewText = ref('')
+onMounted(() => { loadSfxMeta() })
+
 const selectedAction = computed(() => {
   if (!newEffect.actionId) return null
   return effectActions.value.find(a => a.actionId === newEffect.actionId) || null
 })
+
+function toggleFilter(field, e) {
+  const next = { ...newEffect.targetFilter }
+  if (e.target.checked) next[field] = true
+  else delete next[field]
+  newEffect.targetFilter = next
+}
+
+// Live preview: resolve the current scope/filter against the backend and show
+// how many candidates match (authoring has no concrete entity, so entityId is
+// null and the backend resolves with a synthetic universe context).
+watch(
+  () => [newEffect.targetMode, newEffect.scope, newEffect.targetFilter, selectedAction.value?.targetKind, selectedAction.value?.effectAction],
+  async () => {
+    previewText.value = ''
+    const meta = selectedAction.value
+    if (!meta?.targetKind) return
+    const mode = newEffect.targetMode
+    if (mode === 'literal' || mode === 'return') return
+    const cands = await fetchPreviewTargets(
+      meta.targetKind,
+      newEffect.scope || null,
+      null,
+      meta.effectAction || null,
+      Object.keys(newEffect.targetFilter).length ? newEffect.targetFilter : null,
+    )
+    previewText.value = cands.length
+      ? `${cands.length} match — ${cands.slice(0, 3).map(c => c.name).join(', ')}${cands.length > 3 ? ' …' : ''}`
+      : 'no candidates match'
+  },
+  { immediate: true, deep: true }
+)
 
 const isPortalTravel = computed(() => !!props.portalDestination && selectedAction.value?.effectType === 'travel')
 const isPortalLocation = computed(() => isPortalTravel.value && props.portalTargetType === 'location')
@@ -234,6 +281,12 @@ function isScopedTargetField(f) {
   return f.name === 'target' && !!selectedAction.value?.targetKind
 }
 
+const relevantFilterFields = computed(() => {
+  const kind = selectedAction.value?.targetKind
+  if (!kind) return []
+  return targetFilterFields.value.filter(ff => !ff.kinds?.length || ff.kinds.includes(kind))
+})
+
 function isEntityField(f) {
   return f.name === 'entity'
 }
@@ -259,6 +312,7 @@ function onActionChange() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.targetFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entityScope = ''
@@ -319,6 +373,7 @@ function buildEffect(meta) {
     entity,
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope,
+    targetFilter: (kind && mode !== 'literal') ? (newEffect.targetFilter || {}) : {},
     entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context,
@@ -362,6 +417,7 @@ function editEffect(i) {
   newEffect.fields = {}
   newEffect.targetMode = detectTargetMode(eff, meta)
   newEffect.scope = eff.targetScope || ''
+  newEffect.targetFilter = eff.targetFilter || {}
   newEffect.entityMode = detectEntityMode(eff)
   newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
@@ -403,6 +459,7 @@ function closeEditor() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
+  newEffect.targetFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entityScope = ''
@@ -472,5 +529,6 @@ function rowClassFn(eff) {
 .ee-result-mode button.active { background: rgba(64,136,212,0.2); border-color: var(--accent-dim); color: var(--accent); }
 .ee-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text); text-transform: none; letter-spacing: 0; cursor: pointer; }
 .ee-check input { width: auto; }
+.ee-preview { font-size: 10px; color: var(--accent); font-style: italic; margin-top: 2px; }
 .ee-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }
 </style>

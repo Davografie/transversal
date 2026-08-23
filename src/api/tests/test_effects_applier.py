@@ -395,7 +395,8 @@ def test_travel_random_starter_location_relocates():
 
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="travel", action="move",
-        target="{random_starter_location}", target_scope="universe:earth",
+        target="{random:location}", target_scope="universe:earth",
+        target_filter={"starter_location": True},
         context={"transversal_type": "inapposite"},
     )
     result = apply_effects(entity, [effect], Repo())
@@ -432,7 +433,8 @@ def test_set_location_random_starter_relocates():
 
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="location", action="set",
-        target="{random_starter_location}", target_scope="universe:earth",
+        target="{random:location}", target_scope="universe:earth",
+        target_filter={"starter_location": True},
     )
     result = apply_effects(entity, [effect], Repo())
     assert entity.current_location == "loc-a"

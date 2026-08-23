@@ -686,6 +686,7 @@ class Effect(BaseModel):
     result: Optional[str] = None
     target_scope: Optional[str] = None  # narrowing hint for runtime target choice
     entity_scope: Optional[str] = None  # narrowing hint for runtime entity choice
+    target_filter: dict = Field(default_factory=dict)  # candidate field predicates, e.g. {"starter_location": True}
     negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)
     context: dict = Field(default_factory=dict)  # e.g. relationship description
     duration: Optional["EffectDuration"] = None  # when set, schedules the inverse effect on expiry

@@ -250,8 +250,9 @@ def test_ensure_starter_location_sfx_creates_once():
     assert in_universe.target == "earth"
     assert sfx.effects[0].type == "location"
     assert sfx.effects[0].action == "set"
-    assert sfx.effects[0].target == "{random_starter_location}"
+    assert sfx.effects[0].target == "{random:location}"
     assert sfx.effects[0].target_scope == "universe:earth"
+    assert sfx.effects[0].target_filter == {"starter_location": True}
     ensure_starter_location_sfx(repo)
     assert len(repo.sfxs) == 1
 
@@ -276,6 +277,8 @@ def test_ensure_starter_location_sfx_migrates_travel_shape():
     eff = repo.sfxs["sfx-starter-location"].effects[0]
     assert eff.type == "location"
     assert eff.action == "set"
+    assert eff.target == "{random:location}"
+    assert eff.target_filter == {"starter_location": True}
     assert eff.context == {}  # inapposite context dropped
 
 

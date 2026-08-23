@@ -8,20 +8,20 @@ export function useEffectTargets() {
   const loading = ref(false)
   const candidates = ref([])
 
-  async function fetchTargets(kind, scope, entityId, action) {
-    if (!kind || !entityId) {
+  async function fetchTargets(kind, scope, entityId, action, filter) {
+    if (!kind) {
       candidates.value = []
       return []
     }
     loading.value = true
     try {
       const data = await graphql(
-        `query($kind: String!, $entityId: ID!, $scope: String, $action: String) {
-          targetCandidates(kind: $kind, entityId: $entityId, scope: $scope, action: $action) {
+        `query($kind: String!, $entityId: ID, $scope: String, $action: String, $filter: JSON) {
+          targetCandidates(kind: $kind, entityId: $entityId, scope: $scope, action: $action, filter: $filter) {
             id name universe
           }
         }`,
-        { kind, entityId, scope: scope || null, action: action || null }
+        { kind, entityId: entityId || null, scope: scope || null, action: action || null, filter: filter || null }
       )
       candidates.value = data?.targetCandidates || []
       return candidates.value

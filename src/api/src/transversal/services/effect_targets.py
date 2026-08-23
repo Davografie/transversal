@@ -31,8 +31,24 @@ class TargetCandidate:
     universe: str = ""
 
 
-# Resolver signature: (kind, value, entity, repo) -> list[TargetCandidate]
-ScopeResolver = Callable[[str, str, Entity, object], list[TargetCandidate]]
+@dataclass(frozen=True)
+class FilterField:
+    """A target-candidate field the author may filter on, with editor metadata."""
+    field: str
+    label: str
+    value_type: str = "boolean"  # "boolean" | "string" | "number"
+    kinds: tuple[str, ...] = ("location",)  # target kinds this filter applies to
+
+
+# Candidate filters the SFX editor can build. Each maps an entity field to a
+# required value (AND-ed). Adding an entry here makes it available in the UI.
+FILTER_FIELDS: tuple[FilterField, ...] = (
+    FilterField("starter_location", "Starter location", "boolean", ("location",)),
+)
+
+
+# Resolver signature: (kind, value, entity, repo, filter) -> list[TargetCandidate]
+ScopeResolver = Callable[[str, str, Entity, object, dict], list[TargetCandidate]]
 
 _SCOPE_RESOLVERS: dict[str, ScopeResolver] = {}
 
@@ -64,7 +80,17 @@ def _die_candidates() -> list[TargetCandidate]:
     return [TargetCandidate(id=d.value, name=d.value) for d in DieType]
 
 
-def _default_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCandidate]:
+def _apply_filter(entities, filter_dict: dict):
+    """Return entities matching every field-equality predicate (identity when empty)."""
+    if not filter_dict:
+        return entities
+    return [
+        e for e in entities
+        if all(getattr(e, field, None) == value for field, value in filter_dict.items())
+    ]
+
+
+def _default_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
     """No explicit scope: narrow by the entity's current context."""
     if kind == "rating_die":
         return _die_candidates()
@@ -72,14 +98,7 @@ def _default_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCa
         universe = value or entity.current_universe
         return [
             _candidate(e.id, e.name, e.current_universe)
-            for e in repo.list_entities_by_type(EntityType.LOCATION, universe=universe)
-        ]
-    if kind == "starter_location":
-        universe = value or entity.current_universe
-        return [
-            _candidate(e.id, e.name, e.current_universe)
-            for e in repo.list_entities_by_type(EntityType.LOCATION, universe=universe)
-            if e.starter_location
+            for e in _apply_filter(repo.list_entities_by_type(EntityType.LOCATION, universe=universe), filter)
         ]
     if kind == "occupant":
         location_id = value or entity.current_location
@@ -121,7 +140,7 @@ def _default_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCa
     return []
 
 
-def _location_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCandidate]:
+def _location_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
     if kind == "occupant":
         return [
             _candidate(e.id, e.name, e.current_universe)
@@ -138,7 +157,7 @@ def _location_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetC
         location_ids = [value] + list(repo.list_location_descendants(value))
         return [
             _candidate(e.id, e.name, e.current_universe)
-            for e in repo.get_entities_by_ids(location_ids)
+            for e in _apply_filter(repo.get_entities_by_ids(location_ids), filter)
         ]
     if kind == "projection":
         location_ids = [value] + list(repo.list_location_descendants(value))
@@ -150,12 +169,12 @@ def _location_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetC
     return []
 
 
-def _subtree_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCandidate]:
+def _subtree_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
     location_ids = [value] + list(repo.list_location_descendants(value))
     if kind == "location":
         return [
             _candidate(e.id, e.name, e.current_universe)
-            for e in repo.get_entities_by_ids(location_ids)
+            for e in _apply_filter(repo.get_entities_by_ids(location_ids), filter)
         ]
     if kind in ("occupant", "entity"):
         occupants = repo.list_entities_by_locations(location_ids)
@@ -173,7 +192,7 @@ def _subtree_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCa
     return []
 
 
-def _faction_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCandidate]:
+def _faction_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
     if kind == "entity":
         return [
             _candidate(e.id, e.name, e.current_universe)
@@ -183,7 +202,7 @@ def _faction_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCa
     return []
 
 
-def _traitset_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCandidate]:
+def _traitset_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
     if kind == "trait":
         return [
             _candidate(t.id, t.name, t.universes[0] if t.universes else "")
@@ -205,16 +224,19 @@ register_scope("faction", _faction_scope)
 register_scope("traitset", _traitset_scope)
 
 
-def resolve_candidates(kind: str, scope: Optional[str], entity: Entity, repo, action: Optional[str] = None) -> list[TargetCandidate]:
-    """Return the selectable candidates for a ``(kind, scope)`` pair.
+def resolve_candidates(kind: str, scope: Optional[str], entity: Entity, repo, action: Optional[str] = None, filter: Optional[dict] = None) -> list[TargetCandidate]:
+    """Return the selectable candidates for a ``(kind, scope, filter)`` triple.
 
     ``action`` (the effect's action) narrows trait picks: actions that only
     mutate an existing trait (``step_down``/``step_up``/``set``/``remove``)
     must choose from the entity's own instances, not the whole registry.
+
+    ``filter`` is a map of candidate entity fields to required values (e.g.
+    ``{"starter_location": True}``); every predicate must match.
     """
     prefix, value = parse_scope(scope)
     resolver = _SCOPE_RESOLVERS.get(prefix, _default_scope)
-    candidates = resolver(kind, value, entity, repo)
+    candidates = resolver(kind, value, entity, repo, filter or {})
     if kind == "trait" and prefix == "traitset" and action in _MUTATE_EXISTING_TRAIT_ACTIONS:
         owned = {s.trait_id for s in repo.get_traitsettings_by_traitset(entity.id, value)}
         candidates = [c for c in candidates if c.id in owned]

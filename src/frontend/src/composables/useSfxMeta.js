@@ -6,11 +6,13 @@ import { useApi } from './useApi.js'
 const META_QUERY = `{
   triggers { value label }
   conditionTypes { value label needsTarget targetPlaceholder }
+  targetFilterFields { field label valueType kinds }
 }`
 
 // Module-level cache so the SFX editor and condition editor share one fetch.
 const triggers = ref([])
 const conditionTypes = ref([])
+const targetFilterFields = ref([])
 let loaded = false
 let pending = null
 
@@ -24,11 +26,12 @@ export function useSfxMeta() {
       .then((data) => {
         triggers.value = data?.triggers || []
         conditionTypes.value = data?.conditionTypes || []
+        targetFilterFields.value = data?.targetFilterFields || []
         loaded = true
       })
       .finally(() => { pending = null })
     return pending
   }
 
-  return { load, triggers, conditionTypes }
+  return { load, triggers, conditionTypes, targetFilterFields }
 }

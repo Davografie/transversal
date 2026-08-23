@@ -20,6 +20,7 @@ from transversal.api.graphql.types import (
     EffectApplicationResult,
     EffectInput,
     EffectTargetResolutionInput,
+    FilterFieldOption,
     Entity,
     EntityType,
     HistoricalRecord,
@@ -182,6 +183,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, entity=e.entity, result=e.result,
         target_scope=e.target_scope, entity_scope=e.entity_scope,
+        target_filter=e.target_filter or None,
         negative=e.negative,
         context=e.context,
         duration=_duration_to_gql(e.duration),
@@ -226,6 +228,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         timing=e.timing, type=e.type, action=e.action,
         target=e.target, entity=e.entity, result=e.result,
         target_scope=e.target_scope, entity_scope=e.entity_scope,
+        target_filter=e.target_filter or {},
         negative=e.negative,
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),
@@ -477,9 +480,10 @@ class Query:
     def target_candidates(
         self, info: strawberry.Info,
         kind: str,
-        entity_id: strawberry.ID,
+        entity_id: Optional[strawberry.ID] = None,
         scope: Optional[str] = None,
         action: Optional[str] = None,
+        filter: Optional[strawberry.scalars.JSON] = None,
     ) -> list[TargetCandidate]:
         """Resolve the selectable targets for a ``choose``/``random`` effect target.
 
@@ -488,16 +492,37 @@ class Query:
         ``target_scope`` narrowing string (``faction:X``, ``subtree:X``, etc.).
         ``action`` narrows trait picks to the entity's own instances for
         mutate-only actions (``step_down``/``step_up``/``set``/``remove``).
+        ``filter`` is a map of candidate entity fields to required values
+        (e.g. ``{"starter_location": true}``).
+
+        ``entity_id`` may be omitted for authoring previews; the resolver then
+        uses a synthetic context whose universe comes from ``scope``.
         """
-        from transversal.services.effect_targets import resolve_candidates
+        from transversal.services.effect_targets import resolve_candidates, parse_scope
 
         repo = _em(info).repo
-        entity = repo.get_entity(str(entity_id))
+        entity = repo.get_entity(str(entity_id)) if entity_id else None
         if entity is None:
-            return []
+            universe = ""
+            prefix, value = parse_scope(scope)
+            if prefix == "universe":
+                universe = value
+            entity = DomainEntity(
+                id="__preview__", type=DomainEntityType.UNIVERSE,
+                name="", current_universe=universe,
+            )
         return [
             TargetCandidate(id=c.id, name=c.name, universe=c.universe)
-            for c in resolve_candidates(kind, scope, entity, repo, action)
+            for c in resolve_candidates(kind, scope, entity, repo, action, filter or {})
+        ]
+
+    @strawberry.field
+    def target_filter_fields(self, info: strawberry.Info) -> list[FilterFieldOption]:
+        """Candidate filter fields the SFX editor can build, sourced from the backend."""
+        from transversal.services.effect_targets import FILTER_FIELDS
+        return [
+            FilterFieldOption(field=f.field, label=f.label, value_type=f.value_type, kinds=list(f.kinds))
+            for f in FILTER_FIELDS
         ]
 
     @strawberry.field

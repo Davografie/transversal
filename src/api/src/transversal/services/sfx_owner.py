@@ -64,8 +64,9 @@ def ensure_starter_location_sfx(repo) -> None:
         timing=EffectTiming.IMMEDIATE,
         type="location",
         action="set",
-        target="{random_starter_location}",
+        target="{random:location}",
         target_scope="universe:earth",
+        target_filter={"starter_location": True},
     )
 
     existing = repo.get_sfx("sfx-starter-location")
@@ -83,11 +84,17 @@ def ensure_starter_location_sfx(repo) -> None:
         ))
         return
 
-    # Migrate the legacy travel/move shape (with its inapposite context) in place.
+    # Migrate legacy shapes in place:
+    #   - travel/move (with {random_starter_location} + inapposite context)
+    #   - location/set with the old {random_starter_location} placeholder
     changed = False
     for i, eff in enumerate(existing.effects):
         if eff.type == "travel" and eff.action == "move":
             existing.effects[i] = desired
+            changed = True
+        elif eff.type == "location" and eff.action == "set" and eff.target == "{random_starter_location}":
+            eff.target = desired.target
+            eff.target_filter = desired.target_filter
             changed = True
     if changed:
         repo.update_sfx(existing)

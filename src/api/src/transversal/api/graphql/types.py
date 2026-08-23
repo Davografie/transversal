@@ -181,6 +181,7 @@ class Effect:
     result: Optional[str] = None
     target_scope: Optional[str] = None
     entity_scope: Optional[str] = None
+    target_filter: Optional[strawberry.scalars.JSON] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDuration] = None
@@ -196,6 +197,7 @@ class EffectInput:
     result: Optional[str] = None
     target_scope: Optional[str] = None
     entity_scope: Optional[str] = None
+    target_filter: Optional[strawberry.scalars.JSON] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDurationInput] = None
@@ -207,6 +209,15 @@ class TargetCandidate:
     id: strawberry.ID
     name: str
     universe: str = ""
+
+
+@strawberry.type
+class FilterFieldOption:
+    """A candidate field the author may filter on, plus editor metadata."""
+    field: str
+    label: str
+    value_type: str = "boolean"
+    kinds: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.type
