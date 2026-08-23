@@ -1,4 +1,4 @@
-import { RESONANCE, morphWaves, groupByTraitsetDie, sampleAt, totalAmplitude, easeInOutCubic, radialHarmonics } from './resonance.js'
+import { RESONANCE, morphWaves, groupByTraitsetDie, sampleAt, totalAmplitude, easeInOutCubic, radialHarmonics, sinApprox } from './resonance.js'
 
 const FALLBACK_DIE_COLORS = {
   d4: '#e88830',
@@ -64,7 +64,7 @@ function applyBreath(osc, timeMs, depth, rate) {
   const t = timeMs / 1000
   return osc.map((o) => {
     const w = 2 * Math.PI * rate * (o.driftMul ?? 1) * t + (o.phase ?? 0)
-    const factor = 1 + depth * Math.sin(w)
+    const factor = 1 + depth * sinApprox(w)
     return { ...o, amp: o.amp * Math.max(0.05, factor) }
   })
 }
@@ -153,7 +153,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   }
   // Signed amplitude offset of one oscillator at trace position t.
   const ownOff = (o, strength, t) =>
-    Math.sin(2 * Math.PI * o.freq * waveTime(o, t) + o.phase) * ampScale * (0.35 + 0.65 * strength)
+    sinApprox(2 * Math.PI * o.freq * waveTime(o, t) + o.phase) * ampScale * (0.35 + 0.65 * strength)
 
   ctx.save()
   ctx.lineJoin = 'round'
@@ -161,22 +161,24 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   ctx.globalCompositeOperation = 'lighter'
 
   // Draw one oscillator, lerping its offset toward a per-column target offset.
+  // Compute the points once and stroke twice (halo + core) so the sin/lerp work
+  // isn't duplicated.
   const drawOsc = (o, conv, targetOff, color, strength, opacity = 1) => {
-    const trace = (lineWidth, alpha) => {
+    const pts = columns.map((t, j) => {
+      const own = ownOff(o, strength, t)
+      const off = own + (targetOff(t, j) - own) * conv
+      return project(t, off)
+    })
+    const stroke = (lineWidth, alpha) => {
       ctx.beginPath()
       ctx.strokeStyle = color
       ctx.globalAlpha = alpha
       ctx.lineWidth = lineWidth
-      columns.forEach((t, j) => {
-        const own = ownOff(o, strength, t)
-        const off = own + (targetOff(t, j) - own) * conv
-        const [px, py] = project(t, off)
-        j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
-      })
+      pts.forEach(([px, py], j) => { j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py) })
       ctx.stroke()
     }
-    trace(3.2, 0.12 * strength * opacity) // halo
-    trace(1.05, 0.85 * opacity) // core
+    stroke(3.2, 0.12 * strength * opacity) // halo
+    stroke(1.05, 0.85 * opacity) // core
   }
 
   // Collapse amount c: 0 = individual dice, 1 = entity composite. The first
@@ -226,19 +228,18 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
       return (a * (1 - tf) + b * tf) * ampScale
     })
 
-    const trace = (lineWidth, alpha) => {
+    const pts = columns.map((t, j) => project(t, offs[j]))
+
+    const stroke = (lineWidth, alpha) => {
       ctx.beginPath()
       ctx.strokeStyle = '#dceaff'
       ctx.globalAlpha = alpha
       ctx.lineWidth = lineWidth
-      columns.forEach((t, j) => {
-        const [px, py] = project(t, offs[j])
-        j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
-      })
+      pts.forEach(([px, py], j) => { j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py) })
       ctx.stroke()
     }
-    trace(4, 0.15 * opacity) // cheap halo instead of per-frame shadowBlur
-    trace(1.5, 0.9 * opacity)
+    stroke(4, 0.15 * opacity) // cheap halo instead of per-frame shadowBlur
+    stroke(1.5, 0.9 * opacity)
   }
 
   // Draw a set with an amplitude envelope (used by crossfade/morph).
@@ -249,20 +250,17 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
       const strength = o.amp / max
       const color = getDieColor(o.die, o.negative)
 
-      const trace = (lineWidth, alpha) => {
+      const pts = columns.map((t) => project(t, ownOff(o, strength, t) * envelope(t)))
+      const stroke = (lineWidth, alpha) => {
         ctx.beginPath()
         ctx.strokeStyle = color
         ctx.globalAlpha = alpha
         ctx.lineWidth = lineWidth
-        columns.forEach((t, j) => {
-          const off = ownOff(o, strength, t) * envelope(t)
-          const [px, py] = project(t, off)
-          j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
-        })
+        pts.forEach(([px, py], j) => { j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py) })
         ctx.stroke()
       }
-      trace(3.2, 0.12 * strength * gain) // halo
-      trace(1.05, 0.85 * gain) // core
+      stroke(3.2, 0.12 * strength * gain) // halo
+      stroke(1.05, 0.85 * gain) // core
     }
   }
 

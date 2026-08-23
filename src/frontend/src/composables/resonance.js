@@ -62,6 +62,27 @@ export function easeInOutCubic(x) {
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2
 }
 
+// Sine lookup table for the hot render loop. 2048 samples is visually
+// indistinguishable at these scales and avoids a transcendental per column.
+const SINE_LUT_SIZE = 2048
+const SINE_LUT = new Float32Array(SINE_LUT_SIZE)
+for (let i = 0; i < SINE_LUT_SIZE; i++) {
+  SINE_LUT[i] = Math.sin((i / SINE_LUT_SIZE) * Math.PI * 2)
+}
+
+/**
+ * Approximate sin(x) via a linearly-interpolated lookup table.
+ */
+export function sinApprox(x) {
+  const t = x * (1 / (Math.PI * 2))
+  const turns = t - Math.floor(t)
+  const idx = turns * SINE_LUT_SIZE
+  const i0 = idx | 0
+  const frac = idx - i0
+  const i1 = (i0 + 1) & (SINE_LUT_SIZE - 1)
+  return SINE_LUT[i0] + (SINE_LUT[i1] - SINE_LUT[i0]) * frac
+}
+
 // Deterministic tiny detune per traitset so same-die traitsets still read as
 // distinct voices rather than a braid.
 function hashString(s) {
@@ -150,7 +171,7 @@ export function sampleAt(osc, t) {
   let sum = 0
   for (let i = 0; i < osc.length; i++) {
     const o = osc[i]
-    sum += o.amp * Math.sin(2 * Math.PI * o.freq * t + o.phase)
+    sum += o.amp * sinApprox(2 * Math.PI * o.freq * t + o.phase)
   }
   return sum
 }
