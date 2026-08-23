@@ -217,6 +217,14 @@ mutation($input: TraitInput!) {
 }
 """
 
+_MUT_UPDATE_TRAIT = """
+mutation($id: ID!, $input: TraitUpdateInput!) {
+  updateTrait(id: $id, input: $input) {
+    id name universes traitsetId defaultDieType defaultRatingType
+  }
+}
+"""
+
 _MUT_CREATE_TRAITSET = """
 mutation(
   $id: String!, $name: String!, $universes: [String!]!,
@@ -710,6 +718,25 @@ def update_traitset(args: dict) -> dict:
                           args.get("dry_run", True), "updateTraitset")
 
 
+def update_trait(args: dict) -> dict:
+    """Update a registry trait (most useful: universe scoping, default dice)."""
+    inp = {}
+    for key, gql_key in (
+        ("name", "name"),
+        ("universes", "universes"),
+        ("default_die_type", "defaultDieType"),
+        ("default_rating_type", "defaultRatingType"),
+        ("polarity", "polarity"),
+        ("location_restricted", "locationRestricted"),
+        ("default_ego", "defaultEgo"),
+    ):
+        if args.get(key) is not None:
+            inp[gql_key] = args[key]
+    variables = {"id": args["id"], "input": inp}
+    return _call_mutation("updateTrait", _MUT_UPDATE_TRAIT, variables,
+                          args.get("dry_run", True), "updateTrait")
+
+
 def delete_entity(args: dict) -> dict:
     """Delete an entity (optionally its subtree)."""
     variables = {"id": args["entity_id"], "rmtree": args.get("rmtree", False)}
@@ -834,6 +861,7 @@ TOOLS = {
     "update_entity": update_entity,
     "set_faction_life_paths": set_faction_life_paths,
     "update_traitset": update_traitset,
+    "update_trait": update_trait,
     "delete_entity": delete_entity,
     "list_traitsets": list_traitsets,
     "list_traits": list_traits,
@@ -1094,7 +1122,7 @@ TOOL_SCHEMAS = {
     },
     "update_entity": {
         "name": "update_entity",
-        "description": "Update an entity's mutable fields (name, universe, location, owner, flags).",
+        "description": "Update an entity's mutable fields (name, universe, location, owner).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1139,6 +1167,25 @@ TOOL_SCHEMAS = {
                 "description": {"type": "string"},
                 "order": {"type": "integer"},
                 "limit": {"type": "integer"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["id"],
+        },
+    },
+    "update_trait": {
+        "name": "update_trait",
+        "description": "Update a registry trait (universe scoping, default dice, polarity).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+                "universes": {"type": "array", "items": {"type": "string"}},
+                "default_die_type": {"type": "string"},
+                "default_rating_type": {"type": "string"},
+                "polarity": {"type": "string", "description": "POSITIVE|NEGATIVE"},
+                "location_restricted": {"type": "boolean"},
+                "default_ego": {"type": "boolean"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["id"],
