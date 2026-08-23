@@ -1027,8 +1027,9 @@ function addFromSheet(payload) {
     addToOpponentPool(dice, source, label, tsId)
     return
   }
-  // Toggle: if the trait is already in the pool, remove all of its dice.
-  if (tsId != null && pool.some(d => d.tsId === tsId)) {
+  // Toggle: if a non-resource trait is already in the pool, remove its dice.
+  // Resource dice stack — each click spends another die of the chosen type.
+  if (!resource && tsId != null && pool.some(d => d.tsId === tsId)) {
     removeByTsId(tsId)
     return
   }

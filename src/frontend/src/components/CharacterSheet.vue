@@ -225,7 +225,13 @@
                     </div>
                   </div>
                   <div v-else-if="t.ratingType === 'RESOURCE'" class="trait-die-groups resource">
-                    <div v-for="(group, gi) in resourceDiceGroups(t)" :key="'a' + gi" class="trait-die-group">
+                    <div
+                      v-for="(group, gi) in resourceDiceGroups(t)"
+                      :key="'a' + gi"
+                      class="trait-die-group clickable"
+                      :title="`Add ${group[0]} to pool`"
+                      @click.stop="spendResourceGroup(t, group[0])"
+                    >
                       <DieIcon
                         v-for="(die, i) in group"
                         :key="i"
@@ -568,30 +574,11 @@ async function addTrait(trait) {
 async function onTraitClick(t) {
   if (props.phase !== 'adding') return
 
+  // Resource traits are spent per die group, not by clicking the row.
+  if (t.ratingType === 'RESOURCE') return
+
   const negative = t.polarity === 'NEGATIVE'
-  let dieType = (t.dice && t.dice.length ? t.dice[0] : '').toLowerCase()
-
-  if (t.ratingType === 'RESOURCE') {
-    const dice = t.dice || []
-
-    if (spentResources.value[t.id]) {
-      // Toggle OFF: recover the die
-      dieType = spentResources.value[t.id]
-      delete spentResources.value[t.id]
-      recoverResourceDie(t.id, dieType).catch(() => {
-        spentResources.value[t.id] = dieType  // rollback
-      })
-    } else {
-      // Toggle ON: spend a die (first available type)
-      if (dice.length === 0) return  // depleted
-      dieType = dice[0].toLowerCase()
-      spentResources.value[t.id] = dieType
-      spendResourceDie(t.id, dieType).catch(() => {
-        delete spentResources.value[t.id]  // rollback
-      })
-    }
-    fetchEntity()
-  }
+  const dieType = (t.dice && t.dice.length ? t.dice[0] : '').toLowerCase()
 
   // Multi-die static traits contribute one pool die per rating entry.
   if (t.ratingType === 'STATIC' && (t.dice || []).length > 1) {
@@ -600,7 +587,17 @@ async function onTraitClick(t) {
   }
 
   if (!dieType) return  // no die rating — nothing to add
-  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative, resource: t.ratingType === 'RESOURCE' })
+  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative })
+}
+
+async function spendResourceGroup(t, dieType) {
+  // Spend one die of the chosen type from the resource and add it to the pool.
+  if (props.phase !== 'adding') return
+  await spendResourceDie(t.id, dieType)
+  if (!spentResources.value[t.id]) spentResources.value[t.id] = []
+  spentResources.value[t.id].push(dieType)
+  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative: t.polarity === 'NEGATIVE', resource: true })
+  await fetchEntity()
 }
 
 function resolvedDieType(t) {
@@ -655,7 +652,7 @@ function resourceSpentGroups(t) {
 
 function isResourceDepleted(t) {
   if (t.ratingType !== 'RESOURCE') return false
-  return (!t.dice || t.dice.length === 0) && !spentResources.value[t.id]
+  return (!t.dice || t.dice.length === 0)
 }
 
 async function recoverSpentDie(die) {
@@ -713,26 +710,25 @@ function setPoolSources(sources) {
   // (e.g. via chip click in DiceRoller).  Only during adding phase —
   // once dice are rolled they stay spent.
   if (props.phase !== 'adding') return
+  let recovered = false
   for (const tsId of Object.keys(spentResources.value)) {
-    const dieType = spentResources.value[tsId]
-    // Check if this trait's die is still in the pool
-    let found = false
-    for (const ts of traitSets.value) {
-      for (const t of ts.traits) {
-        if (t.id === tsId && poolSources.value.includes(t.id)) {
-          found = true
-          break
-        }
+    const spent = [...spentResources.value[tsId]]
+    const inPool = sources.filter(s => s.tsId === tsId).map(s => s.die)
+    const remaining = []
+    for (const dieType of spent) {
+      const at = inPool.indexOf(dieType)
+      if (at !== -1) {
+        inPool.splice(at, 1)
+        remaining.push(dieType)
+      } else {
+        recoverResourceDie(tsId, dieType)
+        recovered = true
       }
-      if (found) break
     }
-    if (!found) {
-      // Die was removed — recover it
-      recoverResourceDie(tsId, dieType)
-      delete spentResources.value[tsId]
-      fetchEntity()
-    }
+    if (remaining.length) spentResources.value[tsId] = remaining
+    else delete spentResources.value[tsId]
   }
+  if (recovered) fetchEntity()
 }
 
 defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, fetchEntity })
@@ -2207,6 +2203,8 @@ watch(() => props.externalPoolSources, (sources) => {
   display: flex;
   align-items: flex-start;
 }
+.trait-die-group.clickable { cursor: pointer; }
+.trait-die-group.clickable:hover .trait-die-icon { filter: brightness(1.25); }
 .trait-die-icon {
   width: 32px;
   height: 34px;
