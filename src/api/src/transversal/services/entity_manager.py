@@ -31,7 +31,8 @@ def _publish_location_changed(entity: Entity, old_location: Optional[str], old_u
               "to": entity.current_location or "", "universe": entity.current_universe},
     ))
     from transversal.services.scheduled_events import dispatch_event
-    dispatch_event(None, "location_changed", entity_id=entity.id, universe=entity.current_universe)
+    dispatch_event(None, "location_changed", entity_id=entity.id, universe=entity.current_universe,
+                   context={"from_location": old_location, "to_location": entity.current_location, "universe": entity.current_universe})
 from transversal.domain import (
     CharacterView,
     Effect,

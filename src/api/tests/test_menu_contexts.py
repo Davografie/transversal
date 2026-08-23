@@ -66,3 +66,82 @@ def test_triggers_registry_declares_labels_and_variables():
     assert _names(list(by_value["on_character_create"].variables)) == ["entity_created"]
     # Variables live beside their trigger in the same registry.
     assert "effect_die" in _names(list(by_value["on_contest_win"].variables))
+
+
+def _fake_fire(monkeypatch, get_entity):
+    """Patch the app singletons so ``fire_state_sfx``/``fire_contest_outcome_sfx``
+    capture their GameEvent instead of mutating state."""
+    from types import SimpleNamespace
+
+    captured = []
+
+    class FakeEngine:
+        def process_event_outcome(self, event, sfx_ids, razmerit, repo=None):
+            captured.append(event)
+            return SimpleNamespace(applied=[], pending=[])
+
+    monkeypatch.setattr("transversal.main._get_engine", lambda: FakeEngine())
+    monkeypatch.setattr("transversal.main._get_repo", lambda: SimpleNamespace(get_entity=get_entity))
+    monkeypatch.setattr("transversal.services.sfx_owner.get_available_sfx_ids", lambda *a, **k: [])
+    return captured
+
+
+def test_state_fire_sites_populate_declared_variables(monkeypatch):
+    """Every trigger variable a state trigger declares is actually populated."""
+    from transversal.services import state_events
+
+    # event_type → trigger string (mirrors EffectsEngine._trigger_matches).
+    event_trigger = {
+        "character_created": "on_character_create",
+        "location_changed": "on_location_change",
+        "trait_updated": "on_trait_change",
+        "relationship_created": "on_relationship_create",
+    }
+    cases = {
+        "character_created": {"entity_created": "c1"},
+        "location_changed": {"from_location": "a", "to_location": "b", "universe": "earth"},
+        "trait_updated": {"trait_id": "t1", "traitset_id": "ts1"},
+        "relationship_created": {"target_entity": "e2", "relationship_type": "ally"},
+        "on_trait_learn": {"trait_id": "t1", "trait_setting_id": "s1", "owner": "o", "learner": "l"},
+        "on_trait_offered": {"trait_id": "t1", "trait_setting_id": "s1", "owner": "o", "opponent": "p", "newly_revealed": "true"},
+        "on_give_in": {"gave_in": True, "opponent_id": "x"},
+        "on_push": {"pushed": True},
+        "on_taken_out": {"taken_out": True, "opponent_id": "x"},
+        "on_prevent_taken_out": {"prevented": True, "effect_die": "d6"},
+    }
+
+    from types import SimpleNamespace
+
+    captured = _fake_fire(
+        monkeypatch,
+        lambda eid: SimpleNamespace(razmerit=0, current_universe="earth"),
+    )
+    for event_type, context in cases.items():
+        captured.clear()
+        state_events.fire_state_sfx("e1", "earth", event_type, context)
+        assert len(captured) == 1, event_type
+        trigger = event_trigger.get(event_type, event_type)
+        declared = {v.name for v in trigger_variables(trigger)}
+        missing = declared - set(captured[0].context)
+        assert not missing, f"{trigger}: declared {sorted(missing)} but fire site did not populate them"
+
+
+def test_contest_fire_site_populates_declared_variables(monkeypatch):
+    """Contest triggers declare variables the contest fire site actually produces."""
+    from types import SimpleNamespace
+
+    from transversal.services import state_events
+
+    captured = _fake_fire(
+        monkeypatch,
+        lambda eid: SimpleNamespace(razmerit=0, current_universe="earth", current_projection=None),
+    )
+    state_events.fire_contest_outcome_sfx(
+        "winner", "loser", "earth", effect_die="d6", high_stakes=True, taken_out=False
+    )
+
+    declared = {v.name for v in trigger_variables("on_contest_win")}
+    assert len(captured) == 2  # winner + loser
+    for event in captured:
+        missing = declared - set(event.context)
+        assert not missing, f"contest: declared {sorted(missing)} but fire site did not populate them"

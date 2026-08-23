@@ -77,11 +77,15 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("contest_entity_opponent", "entity"),
         Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
+        Variable("high_stakes", "boolean"),
+        Variable("taken_out", "boolean"),
     )),
     TriggerDef("on_contest_loss", "On Contest Loss", (
         Variable("contest_entity_opponent", "entity"),
         Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
+        Variable("high_stakes", "boolean"),
+        Variable("taken_out", "boolean"),
     )),
     TriggerDef("on_give_in", "On Give In", (
         Variable("opponent_id", "entity"),
@@ -96,8 +100,15 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("effect_die", "die"),
         Variable("prevented", "string"),
     )),
-    TriggerDef("on_location_change", "On Location Change"),
-    TriggerDef("on_trait_change", "On Trait Change"),
+    TriggerDef("on_location_change", "On Location Change", (
+        Variable("from_location", "location"),
+        Variable("to_location", "location"),
+        Variable("universe", "universe"),
+    )),
+    TriggerDef("on_trait_change", "On Trait Change", (
+        Variable("trait_id", "string"),
+        Variable("traitset_id", "string"),
+    )),
     TriggerDef("on_trait_learn", "On Trait Learned", (
         Variable("trait_id", "string"),
         Variable("trait_setting_id", "string"),
@@ -111,7 +122,10 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("opponent", "entity"),
         Variable("newly_revealed", "string"),
     )),
-    TriggerDef("on_relationship_create", "On Relationship Create"),
+    TriggerDef("on_relationship_create", "On Relationship Create", (
+        Variable("target_entity", "entity"),
+        Variable("relationship_type", "string"),
+    )),
     TriggerDef("on_character_create", "On Character Created", (Variable("entity_created", "entity"),)),
 )
 
