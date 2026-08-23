@@ -115,6 +115,34 @@ def test_fire_roll_sfx_emits_choose_target_instead_of_applying(monkeypatch):
     assert [p.effect.target for p in emitted] == ["{choose_trait}"]
 
 
+def test_emit_pending_choices_includes_target_filter(monkeypatch):
+    from transversal.services.effects_engine import PendingSfxEffect
+
+    eff = Effect(
+        timing=EffectTiming.IMMEDIATE, type="location", action="set",
+        target="{choose_location}", target_scope="universe:earth",
+        target_filter={"starter_location": True},
+    )
+    pending = [PendingSfxEffect(effect=eff, sfx_name="Starter", sfx_description="")]
+
+    published = []
+    monkeypatch.setattr(
+        "transversal.services.session_manager.session_manager.list_active",
+        lambda: [SimpleNamespace(id="s1")],
+    )
+    monkeypatch.setattr(
+        "transversal.api.sse.bus.event_bus.publish",
+        lambda evt: published.append(evt),
+    )
+
+    roll_orchestrator._emit_pending_choices("e1", "earth", pending)
+
+    assert len(published) == 1
+    choice = published[0].data["choices"][0]
+    assert choice["filter"] == {"starter_location": True}
+    assert choice["effect"]["target_filter"] == {"starter_location": True}
+
+
 def test_is_choose_target_and_choose_kind():
     assert is_choose_target("{choose_trait}") is True
     assert is_choose_target("{random:location}") is False

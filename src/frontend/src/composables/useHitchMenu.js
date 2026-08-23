@@ -15,7 +15,7 @@ export function useHitchMenu() {
         `query {
           hitchMenu {
             id label side source
-            effects { timing type action target entity result targetScope negative context }
+            effects { timing type action target entity result targetScope targetFilter negative context }
           }
         }`
       )

@@ -947,7 +947,11 @@ def _apply_set_location(entity, effect, repo, result):
     The destination location's universe, when known, is authoritative — matching
     the REST ``move`` endpoint. Unlike ``travel``, no body/transversal policy
     applies: the active body simply relocates.
+
+    If the subject has no active body, a fresh native body is created — mirroring
+    ``EntityManager.move_to`` — so an unplaced character is never left bodiless.
     """
+    from transversal.domain import Projection, TransversalType
     from transversal.services.entity_manager import touch_projection
 
     subject = _effect_subject(entity, effect, result, repo)
@@ -971,6 +975,18 @@ def _apply_set_location(entity, effect, repo, result):
         proj.universe = dest_universe
         touch_projection(proj)
         result.updated_projections.append(proj)
+    else:
+        proj = Projection(
+            id=_next_projection_id(subject.id, dest_universe, repo),
+            entity_id=subject.id,
+            origin_universe=dest_universe,
+            universe=dest_universe,
+            current_location=location_id,
+            transversal_type=TransversalType.NATIVE,
+        )
+        touch_projection(proj)
+        result.new_projections.append(proj)
+        subject.current_projection = proj.id
 
     result.applied.append(AppliedEffect(effect, f"placed at {location_id}"))
 

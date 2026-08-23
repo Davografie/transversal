@@ -46,6 +46,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list) -> None:
             "kind": kind,
             "field": field,
             "scope": scope,
+            "filter": p.effect.target_filter or None,
             "sfx_name": p.sfx_name,
             "sfx_description": p.sfx_description,
             "effect": p.effect.model_dump(),

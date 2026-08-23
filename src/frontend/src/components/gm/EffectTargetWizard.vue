@@ -15,6 +15,7 @@
         :kind="current.kind"
         :scope="current.scope || ''"
         :action="current.effect?.action || ''"
+        :filter="current.filter || null"
         :entity-id="targetEntityId"
         :placeholder="`Choose ${current.kind}…`"
         @update:model-value="targets[current.index] = $event"

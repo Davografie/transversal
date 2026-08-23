@@ -130,7 +130,7 @@ async function onSave() {
   errorMsg.value = ''
   try {
     const result = await graphql(
-      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope negative context duration { timers { event remaining } combine } } } }`,
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
       { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
@@ -150,7 +150,7 @@ async function onCreate() {
   const sfxId = generateSfxId(form.name)
   try {
     const result = await graphql(
-      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope negative context duration { timers { event remaining } combine } } } }`,
+      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
       { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) {

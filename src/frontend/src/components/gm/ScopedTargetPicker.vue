@@ -35,6 +35,7 @@ const props = defineProps({
   scope: { type: String, default: '' },
   entityId: { type: String, default: '' },
   action: { type: String, default: '' },
+  filter: { type: Object, default: null },
   placeholder: { type: String, default: 'Choose target…' },
 })
 
@@ -44,11 +45,11 @@ const { candidates, fetchTargets } = useEffectTargets()
 
 async function load() {
   if (!props.entityId) return
-  await fetchTargets(props.kind, props.scope || null, props.entityId, props.action || null)
+  await fetchTargets(props.kind, props.scope || null, props.entityId, props.action || null, props.filter || null)
 }
 
 onMounted(load)
-watch(() => [props.kind, props.scope, props.entityId, props.action], load)
+watch(() => [props.kind, props.scope, props.entityId, props.action, props.filter], load)
 
 function pick(opt) {
   emit('update:modelValue', opt.id)

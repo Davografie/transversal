@@ -255,7 +255,7 @@ def _effects_result_to_gql(result) -> EffectApplicationResult:
     return EffectApplicationResult(
         applied=[a.summary for a in result.applied],
         pending_choices=[
-            PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, field=c.field, effect=_effect_to_gql(c.effect))
+            PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, field=c.field, filter=c.effect.target_filter or None, effect=_effect_to_gql(c.effect))
             for i, c in enumerate(result.pending_choices)
         ],
     )

@@ -268,6 +268,7 @@ class PendingChoiceRef:
     kind: str
     scope: Optional[str] = None
     field: str = "target"  # which Effect field holds this target ("target" | "entity")
+    filter: Optional[strawberry.scalars.JSON] = None  # candidate-field predicates (e.g. {"starter_location": true})
     effect: Effect
 
 
