@@ -52,35 +52,45 @@ def ensure_sfx_owners(repo) -> None:
 
 
 def ensure_starter_location_sfx(repo) -> None:
-    """Create the character-scatter SFX. Idempotent.
+    """Create/migrate the character-scatter SFX. Idempotent.
 
-    Fires on ``on_character_create`` for unplaced Earth characters and
-    relocates them to a random ``starter_location`` within Earth.
+    Fires on ``on_character_create`` for unplaced Earth characters and places
+    them at a random ``starter_location`` within Earth. Migrates the earlier
+    ``travel``/``move`` shape to the dedicated ``location``/``set`` effect.
     """
     from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
-    if repo.get_sfx("sfx-starter-location") is not None:
+    desired = Effect(
+        timing=EffectTiming.IMMEDIATE,
+        type="location",
+        action="set",
+        target="{random_starter_location}",
+        target_scope="universe:earth",
+    )
+
+    existing = repo.get_sfx("sfx-starter-location")
+    if existing is None:
+        repo.create_sfx(SFX(
+            id="sfx-starter-location",
+            name="Scatter to Starter Location",
+            description="A newly created, unplaced Earth character arrives at a random starter location.",
+            trigger="on_character_create",
+            conditions=[
+                Condition(type=ConditionType.UNPLACED),
+                Condition(type=ConditionType.IN_UNIVERSE, target="earth"),
+            ],
+            effects=[desired],
+        ))
         return
-    repo.create_sfx(SFX(
-        id="sfx-starter-location",
-        name="Scatter to Starter Location",
-        description="A newly created, unplaced Earth character arrives at a random starter location.",
-        trigger="on_character_create",
-        conditions=[
-            Condition(type=ConditionType.UNPLACED),
-            Condition(type=ConditionType.IN_UNIVERSE, target="earth"),
-        ],
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="travel",
-                action="move",
-                target="{random_starter_location}",
-                target_scope="universe:earth",
-                context={"transversal_type": "inapposite"},
-            ),
-        ],
-    ))
+
+    # Migrate the legacy travel/move shape (with its inapposite context) in place.
+    changed = False
+    for i, eff in enumerate(existing.effects):
+        if eff.type == "travel" and eff.action == "move":
+            existing.effects[i] = desired
+            changed = True
+    if changed:
+        repo.update_sfx(existing)
 
 
 def ensure_give_in_sfx(repo) -> None:

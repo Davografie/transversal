@@ -413,6 +413,23 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         ],
     ),
 
+    # ── Set Location ───────────────────────────────────
+    EffectActionMeta(
+        action_id="set_location",
+        label="Set Location",
+        description="Place the entity at a specific or random location (its active body relocates in sync)",
+        category="either",
+        effect_type="location",
+        effect_action="set",
+        valid_timings=["IMMEDIATE"],
+        target_kind="location",
+        fields=[
+            _ENTITY_FIELD,
+            EffectFieldDef(name="target", label="Destination Location", field_type="text",
+                          required=True, default=""),
+        ],
+    ),
+
     # ── Trait gain / complications ─────────────────────
     EffectActionMeta(
         action_id="gain_trait",

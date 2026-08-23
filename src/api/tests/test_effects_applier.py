@@ -404,6 +404,44 @@ def test_travel_random_starter_location_relocates():
     assert proj.current_location == "loc-a"
 
 
+def test_set_location_random_starter_relocates():
+    from transversal.domain import Projection, TransversalType
+
+    entity = _entity()
+    entity.current_projection = "char-1:earth"
+    proj = Projection(
+        id="char-1:earth", entity_id="char-1", origin_universe="earth",
+        universe="earth", current_location=None, transversal_type=TransversalType.NATIVE,
+    )
+    loc_a = Entity(id="loc-a", type=EntityType.LOCATION, name="A",
+                   current_universe="earth", starter_location=True)
+    loc_b = Entity(id="loc-b", type=EntityType.LOCATION, name="B",
+                   current_universe="earth", starter_location=False)
+
+    class Repo:
+        def list_entities_by_type(self, entity_type, universe=None):
+            if entity_type == EntityType.LOCATION:
+                return [loc_a, loc_b]
+            return []
+
+        def get_projection(self, pid):
+            return proj if pid == proj.id else None
+
+        def get_entity(self, eid):
+            return {"loc-a": loc_a, "loc-b": loc_b}.get(eid)
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="location", action="set",
+        target="{random_starter_location}", target_scope="universe:earth",
+    )
+    result = apply_effects(entity, [effect], Repo())
+    assert entity.current_location == "loc-a"
+    assert entity.current_universe == "earth"
+    assert proj.current_location == "loc-a"
+    assert proj.universe == "earth"
+    assert proj.transversal_type == TransversalType.NATIVE  # untouched
+
+
 def test_resolve_choice_returns_reappliable_effect():
     entity = _entity()
     effect = Effect(

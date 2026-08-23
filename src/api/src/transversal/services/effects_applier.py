@@ -183,6 +183,7 @@ def _register_core_handlers(em, raz):
         commit_effects(entity, [a], em.repo)
 
     effect_registry.register("travel", "move", _travel)
+    effect_registry.register("location", "set", _commit)
 
     # Dice pool operations (handled by resolver, not state changes)
     effect_registry.register("modify_roll", "*",
@@ -940,6 +941,41 @@ def _scope_universe(scope: Optional[str]) -> Optional[str]:
     return None
 
 
+def _apply_set_location(entity, effect, repo, result):
+    """Place an entity at a location without crossing a universal boundary.
+
+    Sets the entity's ``current_location`` (and its active body's location).
+    The destination location's universe, when known, is authoritative — matching
+    the REST ``move`` endpoint. Unlike ``travel``, no body/transversal policy
+    applies: the active body simply relocates.
+    """
+    from transversal.services.entity_manager import touch_projection
+
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    location_id = _resolve_target(subject, effect, result, "location", repo)
+    if location_id is None:
+        return  # pending choice recorded
+
+    loc = repo.get_entity(location_id)
+    dest_universe = loc.current_universe if loc is not None and loc.current_universe else subject.current_universe
+
+    subject.current_location = location_id
+    subject.current_universe = dest_universe
+
+    proj = repo.get_projection(subject.current_projection) if subject.current_projection else None
+    if proj is not None:
+        proj.current_location = location_id
+        proj.universe = dest_universe
+        touch_projection(proj)
+        result.updated_projections.append(proj)
+
+    result.applied.append(AppliedEffect(effect, f"placed at {location_id}"))
+
+
 def _apply_travel(entity, effect, repo, result):
     """Cross a universal boundary, honoring subject/location/mechanism/body/universe.
 
@@ -1084,6 +1120,7 @@ _MUTATION_HANDLERS = {
     ("life_path", "discover"): _apply_discover,
     ("relationship", "create"): _apply_relationship_create,
     ("travel", "move"): _apply_travel,
+    ("location", "set"): _apply_set_location,
 }
 
 

@@ -248,12 +248,35 @@ def test_ensure_starter_location_sfx_creates_once():
     assert {c.type.value for c in sfx.conditions} == {"unplaced", "in_universe"}
     in_universe = [c for c in sfx.conditions if c.type.value == "in_universe"][0]
     assert in_universe.target == "earth"
-    assert sfx.effects[0].type == "travel"
-    assert sfx.effects[0].action == "move"
+    assert sfx.effects[0].type == "location"
+    assert sfx.effects[0].action == "set"
     assert sfx.effects[0].target == "{random_starter_location}"
     assert sfx.effects[0].target_scope == "universe:earth"
     ensure_starter_location_sfx(repo)
     assert len(repo.sfxs) == 1
+
+
+def test_ensure_starter_location_sfx_migrates_travel_shape():
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.sfx_owner import ensure_starter_location_sfx
+
+    repo = SetupRepo()
+    repo.sfxs["sfx-starter-location"] = SFX(
+        id="sfx-starter-location",
+        name="Scatter to Starter Location",
+        trigger="on_character_create",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="travel", action="move",
+            target="{random_starter_location}", target_scope="universe:earth",
+            context={"transversal_type": "inapposite"},
+        )],
+    )
+    ensure_starter_location_sfx(repo)
+    eff = repo.sfxs["sfx-starter-location"].effects[0]
+    assert eff.type == "location"
+    assert eff.action == "set"
+    assert eff.context == {}  # inapposite context dropped
 
 
 def test_ensure_offer_negative_sfx_creates_once():
