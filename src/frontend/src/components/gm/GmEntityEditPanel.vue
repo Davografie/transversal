@@ -2,12 +2,20 @@
   <div>
     <div class="panel-top">
       <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
-      <button
-        class="publish-btn"
-        :class="{ 'is-published': !form.unpublished }"
-        :title="form.unpublished ? 'Publish — make visible to players' : 'Unpublish — GM-only again'"
-        @click="form.unpublished = !form.unpublished"
-      >{{ form.unpublished ? '⬆ Publish' : '⬇ Unpublish' }}</button>
+      <div class="panel-top-actions">
+        <button
+          v-if="form.type === 'CHARACTER' || form.type === 'GMC'"
+          class="assume-btn"
+          title="Act as this character"
+          @click="assumeCharacter"
+        >🎭 Assume</button>
+        <button
+          class="publish-btn"
+          :class="{ 'is-published': !form.unpublished }"
+          :title="form.unpublished ? 'Publish — make visible to players' : 'Unpublish — GM-only again'"
+          @click="form.unpublished = !form.unpublished"
+        >{{ form.unpublished ? '⬆ Publish' : '⬇ Unpublish' }}</button>
+      </div>
     </div>
     <GmEntityForm
       v-model="form"
@@ -372,6 +380,10 @@ function openCanvas() {
   }
 }
 
+function assumeCharacter() {
+  if (props.entityId) bus.emit('switch-perspective', props.entityId)
+}
+
 function openProjectionEditor(p) {
   panel.open({
     component: GmProjectionEditPanel,
@@ -599,6 +611,12 @@ defineExpose({ refresh: loadImages })
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 
 .panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.panel-top-actions { display: flex; align-items: center; gap: 6px; }
+.assume-btn {
+  padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
+  border: 1px solid var(--accent-dim); background: rgba(64,136,212,0.12); color: var(--accent);
+}
+.assume-btn:hover { background: rgba(64,136,212,0.22); }
 .publish-btn {
   font-size: 11px; padding: 4px 10px; border-radius: 4px;
   border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
