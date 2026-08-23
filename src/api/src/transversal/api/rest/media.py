@@ -12,6 +12,15 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from PIL import Image
 
+# Optional HEIC/HEIF support (iOS camera photos). Registers a PIL opener so
+# Image.open can decode .heic/.heif. Guarded so the app still starts if the
+# wheel is unavailable (HEIC uploads then fail at conversion, as before).
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 from transversal.domain import EntityImage, ImageType
 from transversal.db.repository import EntityRepository
 
@@ -19,7 +28,7 @@ router = APIRouter(prefix="/api/v1", tags=["media"])
 
 MEDIA_DIR = Path("/app/media")
 IMAGEN_DIR = MEDIA_DIR / "imagen"
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".heic", ".heif"}
 MAX_SIZE = 10 * 1024 * 1024  # 10 MB
 WEBP_QUALITY = 85
 

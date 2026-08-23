@@ -53,10 +53,11 @@
             <button class="bb-image-remove" @click="composeImages.splice(i, 1)" title="Remove image">✕</button>
           </div>
           <label class="bb-image-add" :class="{ uploading: uploadingImage }">
-            <input type="file" ref="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" @change="uploadImage" hidden />
+            <input type="file" ref="imageInput" accept="image/*" @change="uploadImage" hidden />
             {{ uploadingImage ? '…' : '📷' }}
           </label>
         </div>
+        <div v-if="uploadError" class="bb-upload-error">{{ uploadError }}</div>
         <div class="bb-compose-actions">
           <button class="bb-send" @click="send" :disabled="!(composeBody.trim() || composeImages.length || composeTitle.trim()) || sending">{{ sending ? '…' : sendLabel }}</button>
           <button class="bb-cancel" @click="cancelCompose()">Cancel</button>
@@ -132,6 +133,7 @@ const composeBody = ref('')
 const composeThreads = ref('')
 const composeImages = ref([])
 const uploadingImage = ref(false)
+const uploadError = ref('')
 const imageInput = ref(null)
 const entriesEl = ref(null)
 const composeRecipientId = ref('')
@@ -486,6 +488,7 @@ async function uploadImage(e) {
   const file = input.files?.[0]
   if (!file) return
   uploadingImage.value = true
+  uploadError.value = ''
   try {
     const form = new FormData()
     form.append('file', file)
@@ -494,14 +497,17 @@ async function uploadImage(e) {
       const xhr = new XMLHttpRequest()
       xhr.open('POST', '/api/v1/media/upload')
       xhr.onload = () => {
-        try { resolve(JSON.parse(xhr.responseText)) }
-        catch { reject(new Error(`Upload failed: ${xhr.status}`)) }
+        let payload
+        try { payload = JSON.parse(xhr.responseText) } catch { payload = null }
+        if (xhr.status >= 200 && xhr.status < 300 && payload?.path) resolve(payload)
+        else reject(new Error(payload?.detail || `Upload failed (${xhr.status})`))
       }
       xhr.onerror = () => reject(new Error('Network error'))
       xhr.send(form)
     })
     if (data.path) composeImages.value.push(data.path)
   } catch (err) {
+    uploadError.value = err.message || 'Image upload failed'
     console.error('[BB] image upload failed', err.message)
   } finally {
     uploadingImage.value = false
@@ -676,6 +682,7 @@ onUnmounted(() => {
 .bb-image-add{cursor:pointer;width:48px;height:48px;border:1px dashed var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-dim);transition:color 0.15s,border-color 0.15s}
 .bb-image-add:hover{color:var(--accent);border-color:var(--accent)}
 .bb-image-add.uploading{opacity:0.5;pointer-events:none}
+.bb-upload-error{font-size:11px;color:#e06060;margin-top:4px}
 .bb-entry-actions{margin-top:4px}
 .bb-reply-btn{background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px}
 .bb-reply-btn:hover{background:var(--bg-hover)}
