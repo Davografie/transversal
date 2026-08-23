@@ -69,20 +69,41 @@ function applyBreath(osc, timeMs, depth, rate) {
   })
 }
 
+function hexToRgb(s) {
+  if (!s || s[0] !== '#') return [255, 255, 255]
+  const n = parseInt(s.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+function rgbString(r, g, b) {
+  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`
+}
+
 function mixColor(a, b, t) {
   if (t <= 0) return a
   if (t >= 1) return b
-  const hex = (s) => {
-    if (!s || s[0] !== '#') return [255, 255, 255]
-    const n = parseInt(s.slice(1), 16)
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+  const [ar, ag, ab] = hexToRgb(a)
+  const [br, bg, bb] = hexToRgb(b)
+  return rgbString(ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t)
+}
+
+// Amplitude-weighted blend of an oscillator set's die colors — the "signature
+// hue" an entity collapses toward instead of draining to white.
+function weightedColor(osc) {
+  let r = 0
+  let g = 0
+  let b = 0
+  let total = 0
+  for (const o of osc || []) {
+    const [cr, cg, cb] = hexToRgb(getDieColor(o.die, o.negative))
+    const w = o.amp || 0
+    r += cr * w
+    g += cg * w
+    b += cb * w
+    total += w
   }
-  const [ar, ag, ab] = hex(a)
-  const [br, bg, bb] = hex(b)
-  const r = Math.round(ar + (br - ar) * t)
-  const g = Math.round(ag + (bg - ag) * t)
-  const bl = Math.round(ab + (bb - ab) * t)
-  return `rgb(${r},${g},${bl})`
+  if (!total) return '#dceaff'
+  return rgbString(r / total, g / total, b / total)
 }
 
 /**
@@ -208,19 +229,21 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
         const v = totalG > 0 ? sampleAt(groups, sampleTime(t)) / totalG : 0
         return v * ampScale
       })
+      const entityColor = weightedColor(groups)
       const maxG = maxAmp(groups) || 1
       for (const g of groups) {
         const gStrength = g.amp / maxG
-        const color = mixColor(getDieColor(g.die, g.negative), '#ffffff', s2)
+        const color = mixColor(getDieColor(g.die, g.negative), entityColor, s2)
         drawOsc(g, s2, (t, j) => entityOff[j], color, gStrength, opacity)
       }
     }
   }
 
-  // A single white trace blending the source and target entity composites.
+  // A single trace blending the source and target entity composites.
   const drawCompositeBlend = (fromOsc, toOsc, tf, opacity = 1) => {
     const totalA = totalAmplitude(fromOsc, [])
     const totalB = totalAmplitude([], toOsc)
+    const color = mixColor(weightedColor(fromOsc), weightedColor(toOsc), tf)
     const offs = columns.map((t) => {
       const tt = sampleTime(t)
       const a = totalA > 0 ? sampleAt(fromOsc, tt) / totalA : 0
@@ -232,7 +255,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
 
     const stroke = (lineWidth, alpha) => {
       ctx.beginPath()
-      ctx.strokeStyle = '#dceaff'
+      ctx.strokeStyle = color
       ctx.globalAlpha = alpha
       ctx.lineWidth = lineWidth
       pts.forEach(([px, py], j) => { j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py) })
