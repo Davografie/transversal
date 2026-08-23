@@ -166,14 +166,22 @@
     <div class="dice-stage">
       <div v-if="isAdding()" class="dice-pool">
         <div
-          v-for="(die, i) in pool"
-          :key="i"
+          v-for="x in poolGroups.regular"
+          :key="x.i"
           class="die-chip"
-          :class="{ 'resource-die': die.resource }"
-          @click="removeDie(i)"
+          @click="removeDie(x.i)"
         >
-          <DieIcon :die="die.die" :label="die.label || die.source" />
-          <span v-if="die.resource" class="resource-badge"></span>
+          <DieIcon :die="x.die.die" :label="x.die.label || x.die.source" />
+        </div>
+        <div v-if="poolGroups.resource.length" class="resource-subset">
+          <div
+            v-for="x in poolGroups.resource"
+            :key="x.i"
+            class="die-chip"
+            @click="removeDie(x.i)"
+          >
+            <DieIcon :die="x.die.die" :label="x.die.label || x.die.source" />
+          </div>
         </div>
         <button
           v-if="mode !== 'roll_table'"
@@ -324,9 +332,13 @@
           </div>
         </div>
         <div v-else class="dice-pool">
-          <div v-for="(die, i) in viewPoolDice" :key="i" class="die-chip" :class="{ 'peer-rolling': remotePhase === 'rolling', 'resource-die': die.resource }" :style="remotePhase === 'rolling' ? { animationDelay: (i * 90) + 'ms' } : null">
-            <DieIcon :die="die.die" :label="die.label || die.source_id || die.die" />
-            <span v-if="die.resource" class="resource-badge"></span>
+          <div v-for="x in viewPoolGroups.regular" :key="x.i" class="die-chip" :class="{ 'peer-rolling': remotePhase === 'rolling' }" :style="remotePhase === 'rolling' ? { animationDelay: (x.i * 90) + 'ms' } : null">
+            <DieIcon :die="x.die.die" :label="x.die.label || x.die.source_id || x.die.die" />
+          </div>
+          <div v-if="viewPoolGroups.resource.length" class="resource-subset">
+            <div v-for="x in viewPoolGroups.resource" :key="x.i" class="die-chip" :class="{ 'peer-rolling': remotePhase === 'rolling' }" :style="remotePhase === 'rolling' ? { animationDelay: (x.i * 90) + 'ms' } : null">
+              <DieIcon :die="x.die.die" :label="x.die.label || x.die.source_id || x.die.die" />
+            </div>
           </div>
           <div v-if="!viewPoolDice.length" class="empty-pool">No dice assembled</div>
         </div>
@@ -417,6 +429,20 @@ const viewPoolDice = computed(() => {
   const rp = props.remotePools?.[activeId.value]
   if (rp && Array.isArray(rp.dice)) return rp.dice
   return viewPool.value
+})
+// Split a dice pool into regular and resource subsets (keeping original
+// indices so the caller can still remove/sync by index).
+const poolGroups = computed(() => {
+  const regular = []
+  const resource = []
+  pool.forEach((die, i) => (die.resource ? resource : regular).push({ die, i }))
+  return { regular, resource }
+})
+const viewPoolGroups = computed(() => {
+  const regular = []
+  const resource = []
+  viewPoolDice.value.forEach((die, i) => (die.resource ? resource : regular).push({ die, i }))
+  return { regular, resource }
 })
 const opponentId = ref('')
 const contestResult = ref(null)
@@ -1878,17 +1904,16 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .die-chip {
   cursor: pointer; transition: opacity 0.2s;
 }
-.die-chip.resource-die { position: relative; }
-.die-chip .resource-badge {
-  position: absolute;
-  top: -3px; right: -3px;
-  width: 12px; height: 12px;
-  border-radius: 4px;
-  background: var(--resource);
-  box-shadow: 0 0 0 2px #0a0a0f;
-  pointer-events: none;
-}
 .die-chip:hover { opacity: 0.7; }
+
+.resource-subset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  background: rgba(176,111,240,0.10);
+}
 .die-chip.peer-rolling { animation: die-pulse 0.7s ease-in-out infinite; }
 @keyframes die-pulse { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.12); filter: brightness(1.5); } }
 
