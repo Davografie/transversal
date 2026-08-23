@@ -156,6 +156,9 @@ status: canonical
 | Search-driven login with debounced suggestions | Players type their name; partial-match results appear as you type. "New transverser" option visible when no exact match exists — creation is discoverable without a separate button. | 2026-06-06 |
 | Effects toggle per-device in localStorage | Performance escape hatch for lower-powered devices. Only shown on locations that actually have effects set. No server round-trip needed. | 2026-06-06 |
 | Relational Canvas (D3 + Vue Flow) | D3-hierarchy for tree layout, Vue Flow for canvas UX. Lazy-load on expand, auto-layout, focus-aware collapse. GM-only. | 2026-08-12 |
+| Starter-location spawn via filter (not roll table) | New unplaced Earth characters auto-place via `on_character_create` → `location`/`set` with `{random:location}` + `target_filter: {starter_location: true}`. Uniform random over flagged locations; the earlier "roll-table default" idea was dropped for simplicity. | 2026-08-24 |
+| `set_location` effect distinct from `travel` | `location`/`set` places an entity (syncs its active body, follows the location's universe) without `travel`'s transversal-type/body policy. | 2026-08-24 |
+| Composable target filters + backend-served editor vocabularies | `Effect.target_filter` narrows candidates across every scope; trigger/condition/filter lists are served via GraphQL so new entries need no frontend edits. | 2026-08-24 |
 
 ## Next
 

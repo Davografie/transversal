@@ -29,11 +29,13 @@ status: canonical
 | Effect action registry (what actions exist, their fields, category, valid timings, inverse, supports-duration) | `src/api/src/transversal/services/effects_registry.py` |
 | Effects engine (trigger matching, scheduling, event → applied/pending effects) | `src/api/src/transversal/services/effects_engine.py` |
 | Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier.py` |
+| Target-candidate resolution (scope resolvers, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/effect_targets.py` |
+| Condition evaluation + condition-type vocabulary (`CONDITION_TYPES`) | `src/api/src/transversal/services/conditions.py` |
 | Scheduled events / duration (timers, combine, central `dispatch_event`, `advance_events`) | `src/api/src/transversal/services/scheduled_events.py` |
 | SFX ownership resolution + seeding of table/contest SFX | `src/api/src/transversal/services/sfx_owner.py` |
 | State-change event wiring (takeout, contest win/loss, give-in, push) | `src/api/src/transversal/services/state_events.py` |
 | Consequence menu assembly (base + entity + SFX moves) | `src/api/src/transversal/services/consequence_menu.py` |
-| Menu-context / trigger variable contract | `src/api/src/transversal/services/menu_contexts.py` |
+| Menu-context / trigger / filter-field vocabularies (`TRIGGERS`, `MENU_CONTEXT_VARIABLES`) | `src/api/src/transversal/services/menu_contexts.py` |
 | Contest lifecycle endpoints (challenge, set, give-in, push, prevent-taken-out) | `src/api/src/transversal/api/rest/contest_pools.py` |
 | Targeting bans (membership) + takeout clearing | `src/api/src/transversal/services/targeting_bans.py` |
 
@@ -60,13 +62,14 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | Field | Type | Meaning |
 |-------|------|---------|
 | `timing` | `EffectTiming` | When the effect fires (default `IMMEDIATE`) |
-| `type` | `str` | Effect family: `modify_roll`, `modify_outcome`, `modify_trait`, `transfer_razmerit`, `create_entity`, `attune`, `travel`, `life_path`, `relationship`, `entity` |
+| `type` | `str` | Effect family: `modify_roll`, `modify_outcome`, `modify_trait`, `transfer_razmerit`, `create_entity`, `attune`, `travel`, `location`, `life_path`, `relationship`, `entity` |
 | `action` | `str` | Operation within the family (see registry below) |
 | `target` | `str` | Literal id, `"self"`, or a `{choose_*}` / `{random:*}` placeholder |
 | `entity` | `str` | Explicit subject entity; `""` or `"self"` = the entity the effect is applied to |
 | `result` | `Optional[str]` | Die rating, integer amount, relationship type, or `{context_key}` placeholder |
 | `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) |
 | `entity_scope` | `Optional[str]` | Narrowing hint for runtime entity choice |
+| `target_filter` | `dict` | Candidate field predicates for the target (e.g. `{"starter_location": true}`), AND-ed and applied across every scope |
 | `negative` | `bool` | Trait-grant effects only: bake the created trait as `polarity=NEGATIVE` (complication) |
 | `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`, `learner`, `steps`) |
 | `duration` | `Optional[EffectDuration]` | When set, the inverse effect is scheduled to fire on expiry (see below) |
@@ -169,9 +172,9 @@ class Attunement(BaseModel):
     source_sfx_id: Optional[str] = None
 ```
 
-### `Condition` (line 771) and `ConditionType` (line 760)
+### `Condition` and `ConditionType`
 
-Conditions are authored alongside effects and evaluated against entity state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks. See `src/api/src/transversal/services/conditions.py`.
+Conditions are authored alongside effects and evaluated against entity state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `unplaced`, `in_universe`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`. The editor's condition-type list is served from `CONDITION_TYPES` in `src/api/src/transversal/services/conditions.py` (value + label + needs-target + placeholder).
 
 ## Effect action registry
 
@@ -204,6 +207,7 @@ Conditions are authored alongside effects and evaluated against entity state (`a
 | `create_entity` | `create_asset` → `create_asset` | benefit |
 | `attune` | `attune` → `enable` | benefit |
 | `travel` | `travel` → `move` | benefit |
+| `location` | `set_location` → `set` | either |
 | `life_path` | `discover_life_path` → `discover` | benefit |
 | | `next_step` → `next_step` | either |
 | | `draft_life_path` → `draft` | either |
@@ -270,6 +274,7 @@ The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_se
 | `on_location_change` | event type `location_changed` |
 | `on_trait_change` | event type `trait_updated` |
 | `on_relationship_create` | event type `relationship_created` |
+| `on_character_create` | event type `character_created` |
 | `on_contest_loss` | `event.context["contest_winner"] == "opponent"` |
 | `on_contest_win` | `event.context["contest_winner"] == "player"` |
 | `on_success` | `roll_result.tier` is present and not `FAIL` |
@@ -293,14 +298,15 @@ The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_se
 
 ### Target placeholders
 
-- `_parse_placeholder` (line 304) parses `{mode:kind}` and `{mode_kind}` targets. Recognised modes are `choose` and `random`; recognised kinds are `location`, `occupant`, `trait`, `entity`, `rating_die`, `life_path`, `roll_table`.
-- `is_choose_target` (line 324) and `choose_kind` (line 330) are what the engine uses to decide whether an effect needs user resolution.
-- `_resolve_target` (line 348): `"self"` → the entity's id; `{choose_*}` / empty-when-required → a `PendingChoice`; `{random:*}` → a random in-scope candidate via `effect_targets.resolve_candidates`; anything else → a literal target id.
-- `resolve_choice` (line 377) re-applies a `PendingChoice` with a concrete target.
+- `_parse_placeholder` parses `{mode:kind}` and `{mode_kind}` targets. Recognised modes are `choose` and `random`; recognised kinds are `location`, `occupant`, `trait`, `entity`, `rating_die`, `life_path`, `roll_table`, `universe`, `projection` (the `_TARGET_KINDS` map).
+- `is_choose_target` / `choose_kind` decide whether an effect needs user resolution.
+- `_resolve_target`: `"self"` → the entity's id; `{choose_*}` / empty-when-required → a `PendingChoice`; `{random:*}` → a random in-scope candidate via `effect_targets.resolve_candidates`; anything else → a literal target id.
+- `resolve_choice` re-applies a `PendingChoice` with a concrete target.
+- **Candidate filters**: `Effect.target_filter` (e.g. `{"starter_location": true}`) further narrows `choose`/`random` candidates — `_random_candidate`/`_resolve_target` pass it into `resolve_candidates`, which ANDs the field predicates across every scope resolver. This replaces the retired `starter_location` target kind.
 
-### `target_scope`
+### `target_scope` and `target_filter`
 
-A `target_scope` like `traitset:ts-complications-a190` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). This is how the contest complication SFX restrict the "pick a complication" choice to the complications trait set.
+A `target_scope` like `traitset:ts-complications-a190` or `universe:earth` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). Scope grammar is `prefix:value` — prefixes `universe`, `location`, `subtree`, `faction`, `traitset`; a bare value defaults to universe (or current location for occupants); empty means current context. `target_filter` (e.g. `{"starter_location": true}`) adds candidate field predicates that compose with any scope. The GraphQL `targetCandidates` query resolves both for the runtime picker and the editor's live preview (`entityId` is optional; when omitted the resolver uses a synthetic universe context derived from `scope`).
 
 ### Complication trait set id
 
@@ -371,10 +377,15 @@ The SFX ids available to an entity in a universe are the sorted union of:
 | `apply-complication` | `manual` → menu `contest_win` | `modify_trait`/`cortex_gain`/`{choose_trait}` @ `{effect_die}` (negative), scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
 | `take-complication` | `manual` → menu `contest_give_in` | same effect as `apply-complication` | Conceder takes a complication on their own projection |
 | `prevent-taken-out` | `on_prevent_taken_out` | `transfer_razmerit`/`spend`/`self`/`1` | Spend 1 razmerit to avoid being taken out |
+| `sfx-starter-location` | `on_character_create` | `location`/`set`/`{random:location}` @ scope `universe:earth`, filter `{starter_location: true}`; conditions `UNPLACED` + `IN_UNIVERSE(earth)` | New unplaced Earth characters arrive at a random starter location |
 
 `ensure_contest_complication_sfx` creates/migrates **two** SFX (`apply-complication`, `take-complication`) with identical `cortex_gain` + negative effects but different `menu_context` (`contest_win` vs `contest_give_in`), so the frontend surfaces the right one at each end of a contest. The migration also rewrites stale `gain_complication` effects in place.
 
 `remove_legacy_contest_complication_sfx` (line 164) deletes the retired `sfx-contest-loss-complication` row and its `table` reference so a stale DB doesn't keep auto-firing it on `on_contest_loss` (P2.10d moved contest-loss complications into the manual consequence menu).
+
+### Editor vocabularies (backend-served)
+
+The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py`), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
 
 ## State events and takeout
 

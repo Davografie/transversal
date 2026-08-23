@@ -158,8 +158,19 @@ type Query {
   # Trait registry
   traitsByUniverse(universe: String!): [TraitRef!]!
   traitsetsByUniverse(universe: String!): [TraitSetRef!]!
+
+  # Effect authoring (served vocabularies + candidate resolution)
+  effectActions: [EffectActionMeta!]!
+  triggers: [TriggerOption!]!
+  conditionTypes: [ConditionTypeOption!]!
+  targetFilterFields: [FilterFieldOption!]!
+  scopeVariables(trigger: String, menuContext: String): [ScopeVariable!]!
+  targetCandidates(kind: String!, entityId: ID, scope: String, action: String, filter: JSON): [TargetCandidate!]!
 }
 ```
+
+> [!note] Effect target fields
+> `Effect` and `EffectInput` carry a `targetFilter` map (candidate field predicates, e.g. `{"starter_location": true}`) that composes with `targetScope`. `targetCandidates` accepts the same `filter` and an optional `entityId` (omitted → authoring preview against a synthetic universe context derived from `scope`).
 
 ### Mutations
 
