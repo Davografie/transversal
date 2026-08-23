@@ -134,3 +134,15 @@ Once `API_URL` was set, the whole build ran in one pass: 51 entities + 41 edges
 reads rank (`d4`…`d12`) and role back correctly; `location_tree` shows the
 universe → region → city hierarchy. `apply_plan`'s `created` mapping makes the
 `draft_ref` → real-id hop for post-apply tools straightforward.
+
+## Resolved (2026-08-23)
+
+Added 8 MCP tools: `update_entity`, `set_faction_life_paths`, `update_traitset`,
+`delete_entity`, `list_traitsets`, `list_traits`, `list_life_paths`,
+`list_roll_tables`. Plus `suitable_life_path_ids` on `UpdateEntityInput` (the
+missing write-path for faction → life path). This closes the "no update", "no
+life-path wiring", and "no registry read" gaps above.
+
+Still open: zone/map-position authoring (no MCP tool; see the API-auto-register
+question), and the frontend `GmTraitEditPanel` hardcodes universe options to
+`earth`/`three_realms` (roll-table editor fetches them dynamically — inconsistent).
