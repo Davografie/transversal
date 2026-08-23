@@ -100,7 +100,9 @@
             >{{ rt.label }}</button>
           </div>
           <div class="edit-dice">
-            <button v-for="(d, i) in editDice" :key="i" class="die-chip" @click="pickIdx = i; showDiePicker = true">{{ d }}</button>
+            <button v-for="(d, i) in editDice" :key="i" class="die-chip die-chip-icon" :title="`Change ${d}`" @click="pickIdx = i; showDiePicker = true">
+              <DieIcon :die="d" />
+            </button>
             <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
           </div>
           <div v-if="editRatingType === 'RESOURCE' && (editingTrait.spentDice || []).length" class="edit-spent-dice">
@@ -108,10 +110,10 @@
             <button
               v-for="(die, i) in editingTrait.spentDice"
               :key="'spent' + i"
-              class="die-chip ghost-chip"
+              class="die-chip ghost-chip die-chip-icon"
               :title="`Recover one ${die.toLowerCase()}`"
               @click="recoverSpentDie(die)"
-            >{{ die.toLowerCase() }}</button>
+            ><DieIcon :die="die.toLowerCase()" /></button>
           </div>
           <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
           <div v-if="editingTrait.possibleSfxIds?.length" class="edit-sfx">
@@ -629,10 +631,17 @@ function isResourceDepleted(t) {
 
 async function recoverSpentDie(die) {
   // Recover one spent die back into the resource pool (editor affordance).
+  // Patch local state from the REST response so both the recoverable row
+  // and the available-dice chips update without a full refetch.
   const t = editingTrait.value
   if (!t) return
-  await recoverResourceDie(t.id, die.toLowerCase())
-  await fetchEntity()
+  const res = await recoverResourceDie(t.id, die.toLowerCase())
+  if (!res) return
+  const toUpper = (arr) => (arr || []).map((d) => d.toUpperCase())
+  t.dice = toUpper(res.dice)
+  t.spentDice = toUpper(res.spent)
+  t.rating = null  // force fallback to dice display
+  editDice.value = (res.dice || []).map((d) => d.toLowerCase())
 }
 
 function isInPool(t) {
@@ -1605,6 +1614,22 @@ watch(() => props.externalPoolSources, (sources) => {
 .edit-spent-dice .die-chip:hover {
   border-color: var(--accent);
   color: var(--text);
+}
+.edit-dice .die-chip.die-chip-icon,
+.edit-spent-dice .die-chip.die-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  line-height: 0;
+}
+.edit-dice .die-chip.die-chip-icon .die-icon,
+.edit-spent-dice .die-chip.die-chip-icon .die-icon {
+  width: 28px;
+  height: 30px;
+}
+.edit-spent-dice .die-chip.die-chip-icon .die-icon {
+  opacity: 0.45;
 }
 .edit-rating-type {
   display: flex;
