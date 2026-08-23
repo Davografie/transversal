@@ -25,7 +25,7 @@
             📤 Upload
             <input type="file" accept="image/*" @change="onUpload" hidden />
           </label>
-          <button class="imagen-btn" :class="{ cancelling: imagenStatus.cancelling }" @click="onImagenClick">
+          <button class="imagen-btn" :class="{ cancelling: imagenStatus.cancelling }" @click="onImagenClick()">
             <span class="btn-label">{{ imagenStatus.label }}</span>
             <span v-if="imagenStatus.status" class="btn-status">{{ imagenStatus.status }}</span>
           </button>
