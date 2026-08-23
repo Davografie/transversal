@@ -42,6 +42,7 @@ The rule of thumb: **prefer a general primitive over a bespoke effect.** "Reveal
 ## Current primitive inventory (verified)
 
 - **Triggers (18):** `manual`, `on_roll`, `on_result`, `on_complication`, `on_botch`, `on_success`, `on_failure`, `on_contest_win`, `on_contest_loss`, `on_give_in`, `on_push`, `on_taken_out`, `on_prevent_taken_out`, `on_location_change`, `on_trait_change`, `on_trait_learn`, `on_trait_offered`, `on_relationship_create`, `on_character_create`.
+- **Menu contexts (5):** `test_success`, `simplified_roll`, `contest_win`, `contest_give_in`, `hitch` — a parallel activation vocabulary with its own variable list (`MENU_CONTEXT_VARIABLES`). To be merged into `TRIGGERS` (see [[#Trigger vs. menu context]]).
 - **Conditions (9):** `always`, `at_location`, `has_trait`, `has_trait_in_traitset`, `trait_rating`, `has_relationship`, `unplaced`, `in_universe`, `narrative`.
 - **Target kinds (9):** `location`, `occupant`, `trait`, `entity`, `universe`, `projection`, `rating_die`, `life_path`, `roll_table`.
 - **Scopes:** `universe`, `location`, `subtree`, `faction`, `traitset`, bare/current-context.
@@ -72,6 +73,27 @@ The correct model is a **typed reference**: an `entity` variable *carries* its s
 > [!note] Decision
 > Expose **one** variable for a created entity — `{entity_created}` (type `entity`) — not a parallel `{entity_created_universe}`. The universe is part of the entity reference's payload.
 
+## Trigger vs. menu context
+
+`SFX` currently splits "how does this activate" across two fields:
+
+- `trigger` — the auto-fire event (`on_success`, `on_character_create`, `manual`, …).
+- `menu_context` — the post-roll menu this SFX is an *option* in (`test_success`, `contest_win`, `hitch`, …). When set, the SFX is offered as a choice; when `None`, it is trigger-driven.
+
+This split is artificial. A consequence menu **is** a manual trigger: the player activates it by choosing it from that specific menu, with that menu's variables in scope. Every seeded menu SFX is authored `trigger="manual"` + `menu_context="…"` — the `trigger` field is a meaningless placeholder for them. And the two fields each carry their own parallel variable vocabulary (`TRIGGERS` vs `MENU_CONTEXT_VARIABLES`), which is the same two-halves drift problem, one level up.
+
+### Direction: fold `menu_context` into `trigger`
+
+1. Make the menu contexts first-class triggers (`test_success`, `contest_win`, `hitch`, …), declared in `TRIGGERS` with their variables — merging `MENU_CONTEXT_VARIABLES` into `TRIGGERS`.
+2. Drop `SFX.menu_context`, migrating it to `trigger`; keep the legacy `on_consequence` shim during migration.
+3. Collapse the editor's two activation selects into one.
+
+> [!note] Ownership already encodes "who"
+> No separate `side` field is needed. The owner buckets (`table` / `gm` / `players`) plus entity/projection/trait ownership already encode who an SFX is offered to — the hitch menu already derives side from the bucket. Ownership stays exactly as-is.
+
+> [!note] Side-sourcing wrinkle (orthogonal)
+> The consequence menu (`test_success`/`contest_win`/…) currently hardcodes SFX moves as `side="player"` and sources from `get_available_sfx_ids`, while the hitch menu derives side from owner buckets. Reconciling the two is a separate ownership/sourcing ticket — not part of this trigger/menu unification.
+
 ## Design principles
 
 1. **Declarative over procedural** — an effect is data; the engine interprets it.
@@ -92,8 +114,9 @@ The correct model is a **typed reference**: an `entity` variable *carries* its s
    - `on_relationship_create` → `{target_entity}`, `{relationship_type}`.
    - `on_trait_change` → `{trait_id}`, `{traitset_id}`.
    - Contest triggers → add the missing declared aliases (`opponent_id`, `high_stakes`, `taken_out`).
+5. **Fold `menu_context` into `trigger`** — merge the two variable vocabularies, migrate `menu_context` → `trigger`, and collapse the editor's two activation selects into one (see [[#Trigger vs. menu context]]).
 
-*Deliverable:* every trigger honestly advertises what it can give authors, and it cannot rot.
+*Deliverable:* every trigger honestly advertises what it can give authors, it cannot rot, and there is a single activation axis instead of two.
 
 ### Phase 2 — Typed variables drive authoring
 
@@ -130,8 +153,9 @@ Each step lands independently and is verified before the next.
 1. Write this plan (done).
 2. **`on_character_create` slice** — add `{entity_created}` (entity) to the trigger, populate it at the `create_entity` fire site, add the declaration↔data test, and add the typed scope input so `universe:{entity_created}` is authorable.
 3. Batch the remaining trigger enrichments (Phase 1.4) behind the same mechanism.
-4. Typed-variable-driven authoring (Phase 2).
-5. Authoring validation (Phase 4).
+4. Fold `menu_context` into `trigger` (Phase 1.5) — merge the variable vocabularies and collapse the activation controls.
+5. Typed-variable-driven authoring (Phase 2).
+6. Authoring validation (Phase 4).
 
 Phase 3 is explicitly **not** started until the above is green and the content needs surface.
 
@@ -140,6 +164,7 @@ Phase 3 is explicitly **not** started until the above is green and the content n
 - **Full mutation dry-run** — descoped; candidate-resolution preview only for now.
 - **Field-dereference syntax breadth** — start with `universe:{entity_created}` (universe of an entity reference); generalize later if more fields are needed.
 - **Faction / traitset targeting, razmerit `set`, relationship `remove`, fog-of-war** — deferred (Phase 3).
+- **Side-sourcing consistency** — reconcile the consequence menu's hardcoded `side="player"` sourcing with the hitch menu's owner-bucket-derived side. Orthogonal to the trigger/menu unification.
 
 ## Related
 
