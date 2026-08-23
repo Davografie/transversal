@@ -38,7 +38,7 @@ def ensure_sfx_owners(repo) -> None:
             "sfx-starter-location",
         ],
         "gm": ["hitch-gain-complication"],
-        "players": [],
+        "players": ["opportunity-step-down-complication"],
     }
     for owner_id, sfx_ids in defaults.items():
         owner = repo.get_sfx_owner(owner_id)
@@ -264,6 +264,44 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
                 target="self",
                 entity="{hitch_entity}",
                 result="1",
+            ),
+        ],
+    ))
+
+
+def ensure_opportunity_sfx(repo) -> None:
+    """Create the player opportunity SFX (buy a hitch to step down a complication).
+
+    The player spends 1 razmerit and steps down one of their own complications.
+    ``{buying_entity}`` is the player doing the buying; ``{hitch_entity}`` is
+    the roller whose 1 was bought.
+    """
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    if repo.get_sfx("opportunity-step-down-complication") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="opportunity-step-down-complication",
+        name="Step down a complication",
+        description="Spend 1 razmerit to step down one of your complications",
+        trigger="manual",
+        menu_context="hitch",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="transfer_razmerit",
+                action="spend",
+                target="self",
+                entity="{buying_entity}",
+                result="1",
+            ),
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="modify_trait",
+                action="step_down",
+                target="{choose_trait}",
+                entity="{buying_entity}",
+                target_scope="traitset:ts-complications-a190",
             ),
         ],
     ))

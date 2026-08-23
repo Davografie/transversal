@@ -331,12 +331,12 @@
         <div v-if="remoteView?.hitches?.length" class="hitches">
           {{ remoteView.hitches.length }} hitch{{ remoteView.hitches.length > 1 ? 'es' : '' }}
         </div>
-        <div v-if="gmMode && showHitchMenu && selectedHitches.length" class="hitch-menu-panel">
+        <div v-if="showHitchMenu && selectedHitches.length" class="hitch-menu-panel">
           <HitchMenu :entity-id="activeId" :count="selectedHitches.length" @apply="applyHitchOption" @close="closeHitchMenu" />
         </div>
       </div>
     </template>
-    <div v-if="gmMode && buyHitchChoices.length" class="sfx-choice-panel">
+    <div v-if="buyHitchChoices.length" class="sfx-choice-panel">
       <EffectTargetWizard
         :entity-id="buyHitchTargetId"
         :pending-choices="buyHitchChoices"
@@ -800,9 +800,9 @@ function clearSfxChoices() {
   emit('sfx-choice-resolved')
 }
 
-// ── GM buy-hitch (hitch menu) ────────────────────────
+// ── Buy-hitch / opportunity (hitch menu) ────────────
 function toggleHitch(r, i) {
-  if (!props.gmMode || r.result !== 1 || r.bought) return
+  if (r.result !== 1 || r.bought) return
   selectedHitches.value = selectedHitches.value.includes(i)
     ? selectedHitches.value.filter((x) => x !== i)
     : [...selectedHitches.value, i]
@@ -822,7 +822,9 @@ async function applyHitchOption(opt) {
     const vars = {
       number_of_hitches: selectedHitches.value.length,
       hitch_entity: rollerId,
-      buying_entity: props.actingEntityId || props.fallbackEntityId || '',
+      buying_entity: props.gmMode
+        ? (props.actingEntityId || props.fallbackEntityId || '')
+        : (props.entityId || ''),
     }
     const result = await applyHitchEffect(rollerId, opt, vars)
     if (result?.pendingChoices?.length) {

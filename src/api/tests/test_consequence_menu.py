@@ -161,13 +161,14 @@ def test_legacy_on_consequence_sfx_appears_in_all_contexts():
         assert "sfx:sfx-flashback" in options
 
 
-def test_assemble_hitch_menu_filters_gm_table_and_context():
+def test_assemble_hitch_menu_filters_owners_and_context():
     from transversal.services.consequence_menu import assemble_hitch_menu
 
     repo = MenuRepo()
     repo.sfx_owners = {
         "gm": SimpleNamespace(sfx_ids=["hitch-gain-complication", "other-gm"]),
         "table": SimpleNamespace(sfx_ids=["hitch-table", "contest-only"]),
+        "players": SimpleNamespace(sfx_ids=["opportunity-step-down-complication", "non-hitch-player"]),
     }
     repo.sfxs = {
         "hitch-gain-complication": SFX(id="hitch-gain-complication", name="Gain a complication",
@@ -177,8 +178,16 @@ def test_assemble_hitch_menu_filters_gm_table_and_context():
                            menu_context="hitch", effects=[]),
         "contest-only": SFX(id="contest-only", name="Contest", trigger="manual",
                             menu_context="contest_win", effects=[]),
+        "opportunity-step-down-complication": SFX(
+            id="opportunity-step-down-complication", name="Step down a complication",
+            trigger="manual", menu_context="hitch", effects=[],
+        ),
+        "non-hitch-player": SFX(id="non-hitch-player", name="Not hitch", trigger="manual",
+                                menu_context=None, effects=[]),
     }
 
     options = assemble_hitch_menu(repo)
-    assert [o.id for o in options] == ["sfx:hitch-gain-complication", "sfx:hitch-table"]
-    assert all(o.side == "gm" for o in options)
+    assert [o.id for o in options] == [
+        "sfx:hitch-gain-complication", "sfx:hitch-table", "sfx:opportunity-step-down-complication",
+    ]
+    assert [o.side for o in options] == ["gm", "either", "player"]

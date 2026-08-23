@@ -132,21 +132,25 @@ def assemble_consequence_menu(
 
 
 def assemble_hitch_menu(repo) -> list[ConsequenceOption]:
-    """Return the GM hitch menu — SFX from the ``gm``/``table`` owner buckets
-    whose ``menu_context`` is ``hitch`` (no base or entity moves)."""
-    ids: list[str] = []
-    for owner_id in ("gm", "table"):
-        owner = repo.get_sfx_owner(owner_id)
-        if owner is not None:
-            ids.extend(owner.sfx_ids or [])
+    """Return the hitch/opportunity menu — SFX from the ``gm``/``table``/``players``
+    owner buckets whose ``menu_context`` is ``hitch`` (no base or entity moves)."""
+    owner_sides = {"gm": "gm", "table": "either", "players": "player"}
 
     options: list[ConsequenceOption] = []
-    for sfx_id in dict.fromkeys(ids):
-        sfx = repo.get_sfx(sfx_id)
-        if sfx is None or sfx.menu_context != "hitch":
+    seen: set[str] = set()
+    for owner_id, side in owner_sides.items():
+        owner = repo.get_sfx_owner(owner_id)
+        if owner is None:
             continue
-        options.append(ConsequenceOption(
-            id=f"sfx:{sfx.id}", label=sfx.name, side="gm",
-            effects=sfx.effects, source="sfx",
-        ))
+        for sfx_id in owner.sfx_ids or []:
+            if sfx_id in seen:
+                continue
+            seen.add(sfx_id)
+            sfx = repo.get_sfx(sfx_id)
+            if sfx is None or sfx.menu_context != "hitch":
+                continue
+            options.append(ConsequenceOption(
+                id=f"sfx:{sfx.id}", label=sfx.name, side=side,
+                effects=sfx.effects, source="sfx",
+            ))
     return options
