@@ -1567,8 +1567,8 @@ watch(() => props.externalPoolSources, (sources) => {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .trait-row.offered {
-  background: rgba(176, 111, 240, 0.12);
-  box-shadow: inset 2px 0 0 var(--resource);
+  background: rgba(242, 144, 138, 0.14);
+  box-shadow: inset 2px 0 0 var(--offered);
 }
 .trait-row.limit-reached {
   opacity: 0.3;
