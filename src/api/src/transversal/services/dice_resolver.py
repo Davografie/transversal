@@ -249,7 +249,13 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
 
     main_rolls = roll_dice(main_specs)
     resource_rolls = roll_dice(resource_specs)
-    resource_kept = max(resource_rolls, key=lambda r: r.result) if resource_rolls else None
+    # Only the highest non-hitch resource die applies — a rolled 1 is a hitch
+    # and doesn't count toward the total (the same rule as every other die).
+    eligible_resource = (
+        [r for r in resource_rolls if r.result != 1]
+        if request.hitches_apply else resource_rolls
+    )
+    resource_kept = max(eligible_resource, key=lambda r: r.result) if eligible_resource else None
 
     # Hitch/botch detection sees every rolled die (main + resource).
     all_rolls = main_rolls + resource_rolls

@@ -603,3 +603,22 @@ class TestResourceDice:
         assert isinstance(result, PoolResult)
         assert result.total == 4 + 6
         assert result.resource_kept.result == 6
+
+    def test_resource_hitch_does_not_apply(self, monkeypatch):
+        # Both resource dice roll 1 (hitches) — neither adds to the total.
+        self._patch_rolls(monkeypatch, [5, 3, 1, 1])
+        request = DicePoolRequest(
+            entity_id="e", universe="earth",
+            dice=[
+                DieSpec(die=DieType.D8, label="main1"),
+                DieSpec(die=DieType.D6, label="main2"),
+                DieSpec(die=DieType.D6, label="res1", resource=True),
+                DieSpec(die=DieType.D4, label="res2", resource=True),
+            ],
+        )
+        result = resolve(request)
+        assert isinstance(result, PoolResult)
+        assert result.total == 5 + 3  # no resource contribution
+        assert result.resource_kept is None
+        assert len([r for r in result.resource_rolls if r.result == 1]) == 2
+        assert result.hitches_count == 2

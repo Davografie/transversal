@@ -1381,7 +1381,10 @@ const resourceKeptIndex = computed(() => {
   const idxs = resourceIndices.value
   const r = result.value?.rolls
   if (!idxs.length || !r) return null
-  return idxs.reduce((a, b) => (r[b].result > r[a].result ? b : a), idxs[0])
+  // Hitches (1s) don't count toward the total — exclude them from the pick.
+  const eligible = idxs.filter(i => !isHitch(i))
+  if (!eligible.length) return null
+  return eligible.reduce((a, b) => (r[b].result > r[a].result ? b : a), eligible[0])
 })
 
 const resourceKeptResult = computed(() => {
