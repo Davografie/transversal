@@ -233,12 +233,19 @@ class ImagenOrchestrator:
         variants = _save_image_variants(image_data, output_full, base_name)
 
         # 4. Record metadata
+        owner = projection_id or None
+        # Auto-select all three roles when this is the sole image for its owner
+        # (entity or projection), matching upload/drop behaviour.
+        existing = self.repo.get_images_for_owner(entity_id, owner)
+        roles = ["background", "sheet", "navdot"] if not existing else []
+
         entity_image = EntityImage(
             id=short_hash,
             entity_id=entity_id,
-            projection_id=projection_id or None,
+            projection_id=owner,
             universe=universe,
             image_type=ImageType.IMAGEN,
+            roles=roles,
             prompt=prompt,
             negative_prompt=negative,
             loras=loras,
