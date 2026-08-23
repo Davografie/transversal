@@ -1,7 +1,10 @@
 <template>
   <div>
     <div class="panel-top">
-      <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
+      <div class="panel-top-left">
+        <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
+        <span class="entity-id" :title="entityId">{{ entityId }}</span>
+      </div>
       <div class="panel-top-actions">
         <button
           v-if="form.type === 'CHARACTER' || form.type === 'GMC'"
@@ -611,6 +614,12 @@ defineExpose({ refresh: loadImages })
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 
 .panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.panel-top-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.entity-id {
+  font-size: 10px; font-family: monospace; color: var(--text-dim);
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  padding: 1px 6px; border-radius: 4px; user-select: all;
+}
 .panel-top-actions { display: flex; align-items: center; gap: 6px; }
 .assume-btn {
   padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;

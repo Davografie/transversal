@@ -12,13 +12,13 @@
     </template>
 
     <label>
-      <input v-model="local.hidden" type="checkbox" @change="emitUpdate" />
+      <input :checked="local.hidden" type="checkbox" @change="onToggleBool('hidden', $event)" />
       Hidden
     </label>
 
     <template v-if="local.type === 'LOCATION'">
       <label>
-        <input v-model="local.starter_location" type="checkbox" @change="emitUpdate" />
+        <input :checked="local.starter_location" type="checkbox" @change="onToggleBool('starter_location', $event)" />
         Starter Location
       </label>
     </template>
@@ -40,6 +40,13 @@ const local = ref({ ...props.modelValue })
 watch(() => props.modelValue, (v) => { local.value = { ...v } }, { deep: true })
 
 function emitUpdate() {
+  emit('update:modelValue', { ...local.value })
+}
+
+// Boolean checkboxes: read the DOM state explicitly and emit in one step,
+// avoiding the v-model + @change ordering ambiguity.
+function onToggleBool(field, e) {
+  local.value = { ...local.value, [field]: e.target.checked }
   emit('update:modelValue', { ...local.value })
 }
 
