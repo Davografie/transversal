@@ -574,8 +574,13 @@ async function addTrait(trait) {
 async function onTraitClick(t) {
   if (props.phase !== 'adding') return
 
-  // Resource traits are spent per die group, not by clicking the row.
-  if (t.ratingType === 'RESOURCE') return
+  // Resource traits: the row click spends only when the pool has a single
+  // die type; mixed-type resources are spent per die group.
+  if (t.ratingType === 'RESOURCE') {
+    const types = [...new Set((t.dice || []).map(d => (typeof d === 'string' ? d.toLowerCase() : d)))]
+    if (types.length === 1) await spendResourceGroup(t, types[0])
+    return
+  }
 
   const negative = t.polarity === 'NEGATIVE'
   const dieType = (t.dice && t.dice.length ? t.dice[0] : '').toLowerCase()
