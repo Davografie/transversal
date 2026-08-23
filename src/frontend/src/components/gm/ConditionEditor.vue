@@ -8,6 +8,8 @@
         <option value="HAS_TRAIT_IN_TRAITSET">Has trait in traitset</option>
         <option value="HAS_RELATIONSHIP">Has relationship</option>
         <option value="TRAIT_RATING">Trait rating</option>
+        <option value="UNPLACED">Unplaced (no location)</option>
+        <option value="IN_UNIVERSE">In universe</option>
         <option value="NARRATIVE">Narrative</option>
       </select>
       <input v-if="needsTarget(c.type)" v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
@@ -44,6 +46,7 @@ const TARGET_PLACEHOLDERS = {
   HAS_TRAIT_IN_TRAITSET: 'traitset id',
   HAS_RELATIONSHIP: 'entity id',
   TRAIT_RATING: 'trait id',
+  IN_UNIVERSE: 'universe key',
 }
 
 function needsTarget(type) {

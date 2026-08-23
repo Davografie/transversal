@@ -27,6 +27,7 @@
         <option value="on_trait_learn">On Trait Learned</option>
         <option value="on_trait_offered">On Trait Offered</option>
         <option value="on_relationship_create">On Relationship Create</option>
+        <option value="on_character_create">On Character Created</option>
       </select>
       <label>Consequence menu</label>
       <select v-model="form.menuContext">
