@@ -51,40 +51,69 @@ MENU_CONTEXT_VARIABLES: dict[str, list[Variable]] = {
     ],
 }
 
-# ── Auto-fire trigger variables ──────────────────────
+# ── Auto-fire triggers ──────────────────────────────
 #
-# The same vocabulary for triggers that auto-fire SFX (no menu).  Kept separate
-# from menu contexts so an SFX can be trigger-driven or menu-driven.
+# Single source of truth for the trigger vocabulary. Each entry declares the
+# trigger string, its editor label, and the ``{variable}`` tokens in scope when
+# authoring its effects. The SFX editor renders this list (via GraphQL), so a
+# new trigger is authored here and appears in the UI without frontend edits.
 
-TRIGGER_VARIABLES: dict[str, list[Variable]] = {
-    "on_contest_win": [
+@dataclass(frozen=True)
+class TriggerDef:
+    value: str
+    label: str
+    variables: tuple[Variable, ...] = ()
+
+
+TRIGGERS: tuple[TriggerDef, ...] = (
+    TriggerDef("manual", "Manual (player activates)"),
+    TriggerDef("on_roll", "On Roll"),
+    TriggerDef("on_result", "On Result"),
+    TriggerDef("on_complication", "On Complication (hitch)"),
+    TriggerDef("on_botch", "On Botch"),
+    TriggerDef("on_success", "On Success"),
+    TriggerDef("on_failure", "On Failure"),
+    TriggerDef("on_contest_win", "On Contest Win", (
         Variable("contest_entity_opponent", "entity"),
         Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
-    ],
-    "on_contest_loss": [
+    )),
+    TriggerDef("on_contest_loss", "On Contest Loss", (
         Variable("contest_entity_opponent", "entity"),
         Variable("contest_projection_opponent", "entity"),
         Variable("effect_die", "die"),
-    ],
-    "on_give_in": [Variable("opponent_id", "entity"), Variable("gave_in", "string")],
-    "on_push": [Variable("pushed", "string")],
-    "on_taken_out": [Variable("opponent_id", "entity"), Variable("taken_out", "string")],
-    "on_prevent_taken_out": [Variable("effect_die", "die"), Variable("prevented", "string")],
-    "on_trait_learn": [
+    )),
+    TriggerDef("on_give_in", "On Give In", (
+        Variable("opponent_id", "entity"),
+        Variable("gave_in", "string"),
+    )),
+    TriggerDef("on_push", "On Push", (Variable("pushed", "string"),)),
+    TriggerDef("on_taken_out", "On Taken Out", (
+        Variable("opponent_id", "entity"),
+        Variable("taken_out", "string"),
+    )),
+    TriggerDef("on_prevent_taken_out", "On Prevent Taken Out", (
+        Variable("effect_die", "die"),
+        Variable("prevented", "string"),
+    )),
+    TriggerDef("on_location_change", "On Location Change"),
+    TriggerDef("on_trait_change", "On Trait Change"),
+    TriggerDef("on_trait_learn", "On Trait Learned", (
         Variable("trait_id", "string"),
         Variable("trait_setting_id", "string"),
         Variable("owner", "entity"),
         Variable("learner", "entity"),
-    ],
-    "on_trait_offered": [
+    )),
+    TriggerDef("on_trait_offered", "On Trait Offered", (
         Variable("trait_id", "string"),
         Variable("trait_setting_id", "string"),
         Variable("owner", "entity"),
         Variable("opponent", "entity"),
         Variable("newly_revealed", "string"),
-    ],
-}
+    )),
+    TriggerDef("on_relationship_create", "On Relationship Create"),
+    TriggerDef("on_character_create", "On Character Created"),
+)
 
 
 def menu_context_variables(menu_context: str) -> list[Variable]:
@@ -94,4 +123,7 @@ def menu_context_variables(menu_context: str) -> list[Variable]:
 
 def trigger_variables(trigger: str) -> list[Variable]:
     """Return the typed variables exposed by an auto-fire trigger (empty when unknown)."""
-    return list(TRIGGER_VARIABLES.get(trigger, []))
+    for t in TRIGGERS:
+        if t.value == trigger:
+            return list(t.variables)
+    return []

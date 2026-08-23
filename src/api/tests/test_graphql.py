@@ -60,6 +60,23 @@ class TestGraphQLQueries:
         assert "attributes" in names
         assert "skills" in names
 
+    def test_sfx_editor_vocabularies(self, client):
+        result = _gql(client, """
+            {
+              triggers { value label }
+              conditionTypes { value label needsTarget targetPlaceholder }
+            }
+        """)
+        trigger_values = {t["value"] for t in result["triggers"]}
+        assert "manual" in trigger_values
+        assert "on_character_create" in trigger_values
+        ctypes = {c["value"]: c for c in result["conditionTypes"]}
+        assert "UNPLACED" in ctypes
+        assert "IN_UNIVERSE" in ctypes
+        assert ctypes["UNPLACED"]["needsTarget"] is False
+        assert ctypes["IN_UNIVERSE"]["needsTarget"] is True
+        assert ctypes["IN_UNIVERSE"]["targetPlaceholder"] == "universe key"
+
 
 class TestGraphQLMutations:
     def test_create_entity(self, client):

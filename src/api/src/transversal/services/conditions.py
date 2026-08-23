@@ -58,3 +58,35 @@ def evaluate_condition(entity: Entity, condition: Condition, repo: "EntityReposi
 def evaluate_conditions(entity: Entity, conditions: list[Condition], repo: "EntityRepository") -> bool:
     """All conditions must pass (empty list is always true)."""
     return all(evaluate_condition(entity, c, repo) for c in conditions)
+
+
+# ── Authoring metadata ───────────────────────────────
+#
+# Single source of truth for the condition-type vocabulary the SFX editor
+# renders (via GraphQL). ``value`` is the GraphQL enum name; ``needs_target`` /
+# ``target_placeholder`` drive the target field in the editor. Adding a new
+# condition type here (plus its evaluator branch above) makes it appear in the
+# UI without frontend edits.
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ConditionTypeDef:
+    value: str
+    label: str
+    needs_target: bool = False
+    target_placeholder: str = ""
+
+
+CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
+    ConditionTypeDef(ConditionType.ALWAYS.name, "Always"),
+    ConditionTypeDef(ConditionType.AT_LOCATION.name, "At location", needs_target=True, target_placeholder="location id"),
+    ConditionTypeDef(ConditionType.HAS_TRAIT.name, "Has trait", needs_target=True, target_placeholder="trait id"),
+    ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id"),
+    ConditionTypeDef(ConditionType.HAS_RELATIONSHIP.name, "Has relationship", needs_target=True, target_placeholder="entity id"),
+    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id"),
+    ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),
+    ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key"),
+    ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
+)

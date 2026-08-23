@@ -9,25 +9,7 @@
       <textarea v-model="form.description" rows="2" placeholder="What it does…"></textarea>
       <label>Trigger</label>
       <select v-model="form.trigger">
-        <option value="manual">Manual (player activates)</option>
-        <option value="on_roll">On Roll</option>
-        <option value="on_result">On Result</option>
-        <option value="on_complication">On Complication (hitch)</option>
-        <option value="on_botch">On Botch</option>
-        <option value="on_success">On Success</option>
-        <option value="on_failure">On Failure</option>
-        <option value="on_contest_win">On Contest Win</option>
-        <option value="on_contest_loss">On Contest Loss</option>
-        <option value="on_give_in">On Give In</option>
-        <option value="on_push">On Push</option>
-        <option value="on_taken_out">On Taken Out</option>
-        <option value="on_prevent_taken_out">On Prevent Taken Out</option>
-        <option value="on_location_change">On Location Change</option>
-        <option value="on_trait_change">On Trait Change</option>
-        <option value="on_trait_learn">On Trait Learned</option>
-        <option value="on_trait_offered">On Trait Offered</option>
-        <option value="on_relationship_create">On Relationship Create</option>
-        <option value="on_character_create">On Character Created</option>
+        <option v-for="t in triggerOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
       </select>
       <label>Consequence menu</label>
       <select v-model="form.menuContext">
@@ -74,11 +56,12 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { useScopeVariables } from '@/composables/useScopeVariables.js'
+import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import EffectEditor from './EffectEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
@@ -123,6 +106,19 @@ const form = reactive({
 
 const { variables: scopeVariables, fetchVariables } = useScopeVariables()
 watch(() => [form.trigger, form.menuContext], ([t, m]) => { fetchVariables(t || '', m || '') }, { immediate: true })
+
+const { load: loadSfxMeta, triggers } = useSfxMeta()
+loadSfxMeta()
+
+// Backend trigger vocabulary, plus the current value if it isn't listed yet
+// (so saving never silently drops a legacy/unknown trigger string).
+const triggerOptions = computed(() => {
+  const opts = [...triggers.value]
+  if (form.trigger && !opts.some(t => t.value === form.trigger)) {
+    opts.push({ value: form.trigger, label: form.trigger })
+  }
+  return opts
+})
 
 function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')

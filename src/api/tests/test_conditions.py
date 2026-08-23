@@ -8,7 +8,11 @@ from transversal.domain import (
     EntityType,
     TraitSetting,
 )
-from transversal.services.conditions import evaluate_condition, evaluate_conditions
+from transversal.services.conditions import (
+    CONDITION_TYPES,
+    evaluate_condition,
+    evaluate_conditions,
+)
 
 
 class FakeRepo:
@@ -105,3 +109,13 @@ def test_in_universe():
     assert not evaluate_condition(
         _entity(current_universe="three_realms"), Condition(type=ConditionType.IN_UNIVERSE, target="earth"), FakeRepo()
     )
+
+
+def test_condition_types_registry_declares_editor_metadata():
+    by_value = {c.value: c for c in CONDITION_TYPES}
+    assert "UNPLACED" in by_value
+    assert "IN_UNIVERSE" in by_value
+    assert by_value["UNPLACED"].needs_target is False
+    assert by_value["IN_UNIVERSE"].needs_target is True
+    assert by_value["IN_UNIVERSE"].target_placeholder == "universe key"
+    assert all(c.label for c in CONDITION_TYPES)

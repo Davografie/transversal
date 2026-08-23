@@ -2,15 +2,7 @@
   <div class="ce-root">
     <div v-for="(c, i) in conditions" :key="i" class="ce-row">
       <select v-model="c.type">
-        <option value="ALWAYS">Always</option>
-        <option value="AT_LOCATION">At location</option>
-        <option value="HAS_TRAIT">Has trait</option>
-        <option value="HAS_TRAIT_IN_TRAITSET">Has trait in traitset</option>
-        <option value="HAS_RELATIONSHIP">Has relationship</option>
-        <option value="TRAIT_RATING">Trait rating</option>
-        <option value="UNPLACED">Unplaced (no location)</option>
-        <option value="IN_UNIVERSE">In universe</option>
-        <option value="NARRATIVE">Narrative</option>
+        <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
       </select>
       <input v-if="needsTarget(c.type)" v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
       <select v-if="c.type === 'TRAIT_RATING'" v-model="c.value" class="ce-value">
@@ -29,6 +21,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useSfxMeta } from '@/composables/useSfxMeta.js'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -40,21 +33,28 @@ const conditions = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
-const TARGET_PLACEHOLDERS = {
-  AT_LOCATION: 'location id',
-  HAS_TRAIT: 'trait id',
-  HAS_TRAIT_IN_TRAITSET: 'traitset id',
-  HAS_RELATIONSHIP: 'entity id',
-  TRAIT_RATING: 'trait id',
-  IN_UNIVERSE: 'universe key',
-}
+const { load: loadSfxMeta, conditionTypes } = useSfxMeta()
+loadSfxMeta()
+
+// Backend condition-type vocabulary, plus any current type not listed yet
+// (so saving never silently drops a legacy/unknown type).
+const typeOptions = computed(() => {
+  const opts = [...conditionTypes.value]
+  for (const c of props.modelValue) {
+    if (c.type && !opts.some(o => o.value === c.type)) {
+      opts.push({ value: c.type, label: c.type })
+    }
+  }
+  return opts
+})
 
 function needsTarget(type) {
-  return type in TARGET_PLACEHOLDERS
+  return conditionTypes.value.some(c => c.value === type && c.needsTarget)
 }
 
 function targetPlaceholder(type) {
-  return TARGET_PLACEHOLDERS[type] || 'target id'
+  const meta = conditionTypes.value.find(c => c.value === type)
+  return meta?.targetPlaceholder || 'target id'
 }
 
 function add() {

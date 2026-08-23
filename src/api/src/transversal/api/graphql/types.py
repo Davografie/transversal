@@ -217,6 +217,22 @@ class ScopeVariable:
 
 
 @strawberry.type
+class TriggerOption:
+    """One auto-fire trigger selectable in the SFX editor."""
+    value: str
+    label: str
+
+
+@strawberry.type
+class ConditionTypeOption:
+    """One condition type selectable in the SFX editor, plus target hints."""
+    value: str
+    label: str
+    needs_target: bool = False
+    target_placeholder: str = ""
+
+
+@strawberry.type
 class ConsequenceOption:
     """A selectable entry in the post-roll consequence menu."""
     id: strawberry.ID

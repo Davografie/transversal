@@ -8,6 +8,7 @@ from transversal.api.graphql.types import (
     CharacterView,
     Condition,
     ConditionInput,
+    ConditionTypeOption,
     CreateEntityInput,
     CreateRelationshipInput,
     ConsequenceOption,
@@ -68,6 +69,7 @@ from transversal.api.graphql.types import (
     TraitUpdateInput,
     Attunement,
     TransversalTypeEnum,
+    TriggerOption,
     UpdateEntityInput,
     UpdateMessageInput,
     Zone,
@@ -452,6 +454,24 @@ class Query:
                 seen.add(v.name)
                 out.append(ScopeVariable(name=v.name, type=v.type))
         return out
+
+    @strawberry.field
+    def triggers(self, info: strawberry.Info) -> list[TriggerOption]:
+        """The auto-fire trigger vocabulary for the SFX editor, sourced from the backend."""
+        from transversal.services.menu_contexts import TRIGGERS
+        return [TriggerOption(value=t.value, label=t.label) for t in TRIGGERS]
+
+    @strawberry.field
+    def condition_types(self, info: strawberry.Info) -> list[ConditionTypeOption]:
+        """The condition-type vocabulary for the SFX editor, sourced from the backend."""
+        from transversal.services.conditions import CONDITION_TYPES
+        return [
+            ConditionTypeOption(
+                value=c.value, label=c.label,
+                needs_target=c.needs_target, target_placeholder=c.target_placeholder,
+            )
+            for c in CONDITION_TYPES
+        ]
 
     @strawberry.field
     def target_candidates(
