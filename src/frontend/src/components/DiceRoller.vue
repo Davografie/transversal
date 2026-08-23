@@ -169,9 +169,11 @@
           v-for="(die, i) in pool"
           :key="i"
           class="die-chip"
+          :class="{ 'resource-die': die.resource }"
           @click="removeDie(i)"
         >
           <DieIcon :die="die.die" :label="die.label || die.source" />
+          <span v-if="die.resource" class="resource-badge"></span>
         </div>
         <button
           v-if="mode !== 'roll_table'"
@@ -322,8 +324,9 @@
           </div>
         </div>
         <div v-else class="dice-pool">
-          <div v-for="(die, i) in viewPoolDice" :key="i" class="die-chip" :class="{ 'peer-rolling': remotePhase === 'rolling' }" :style="remotePhase === 'rolling' ? { animationDelay: (i * 90) + 'ms' } : null">
+          <div v-for="(die, i) in viewPoolDice" :key="i" class="die-chip" :class="{ 'peer-rolling': remotePhase === 'rolling', 'resource-die': die.resource }" :style="remotePhase === 'rolling' ? { animationDelay: (i * 90) + 'ms' } : null">
             <DieIcon :die="die.die" :label="die.label || die.source_id || die.die" />
+            <span v-if="die.resource" class="resource-badge"></span>
           </div>
           <div v-if="!viewPoolDice.length" class="empty-pool">No dice assembled</div>
         </div>
@@ -1875,6 +1878,16 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .die-chip {
   cursor: pointer; transition: opacity 0.2s;
 }
+.die-chip.resource-die { position: relative; }
+.die-chip .resource-badge {
+  position: absolute;
+  top: -3px; right: -3px;
+  width: 12px; height: 12px;
+  border-radius: 4px;
+  background: var(--resource);
+  box-shadow: 0 0 0 2px #0a0a0f;
+  pointer-events: none;
+}
 .die-chip:hover { opacity: 0.7; }
 .die-chip.peer-rolling { animation: die-pulse 0.7s ease-in-out infinite; }
 @keyframes die-pulse { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.12); filter: brightness(1.5); } }
@@ -1961,7 +1974,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   font-variant-numeric: lining-nums;
 }
 .resolved-breakdown .resource-addend {
-  color: var(--accent); font-weight: 700;
+  color: var(--resource); font-weight: 700;
 }
 
 .botch {
@@ -2012,7 +2025,7 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim);
 }
 .roll-die-wrap.resource-die { cursor: default; }
-.roll-die-wrap.resource-kept { border-color: var(--accent); background: rgba(64,136,212,0.1); }
+.roll-die-wrap.resource-kept { border-color: var(--resource); background: rgba(176,111,240,0.12); }
 .roll-die-wrap.resource-other { opacity: 0.35; }
 
 .selection-row {
