@@ -57,7 +57,7 @@
       <div v-if="showContest && !contestResult" class="challenge-target">
         <select v-if="!challenged" v-model="opponentId" @change="doChallenge" class="challenge-select">
           <option value="" disabled>Challenge target</option>
-          <option v-for="e in peers.filter(e => e.id !== editingEntityId && !bannedTargetIds.includes(e.id))" :key="e.id" :value="e.id">{{ e.name }}</option>
+          <option v-for="e in peers.filter(e => e.type !== 'LOCATION' && e.id !== editingEntityId && !bannedTargetIds.includes(e.id))" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
         <span v-else class="contest-status">
           ⚔️ {{ opponentName }}

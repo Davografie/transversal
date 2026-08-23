@@ -250,14 +250,14 @@
   />
   <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, 'hold-active': hoverHoldActive }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="wrapperOpen && peers.length" class="peers-bar">
-        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: (gmMode ? actingEntityId : viewingEntityId) === p.id || (!(gmMode ? actingEntityId : viewingEntityId) && entityId === p.id) }" @click.stop="onPeerClick(p.id)" :title="p.name">
+        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: isPeerActive(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
           <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
           <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
           <span class="peer-label">{{ p.name }}</span>
         </button>
       </div>
       <CharacterSheet
-        v-show="sheetVisible && (phase === 'adding' || forceSheet) && (!gmMode || actingEntityId)"
+        v-show="sheetVisible && (phase === 'adding' || forceSheet) && (!gmMode || actingEntityId || viewingEntityId)"
         ref="sheetRef"
         class="embedded-sheet"
         :class="{ 'sheet-hidden': !sheetVisible }"
@@ -781,6 +781,7 @@ async function switchPerspective(id) {
   const sameLocation = targetLoc != null && targetLoc === currentLocationId.value
   entityId.value = id
   actingEntityId.value = id
+  viewingEntityId.value = null  // clear any read-only location inspect
   if (!sameLocation) await initLocation()
 }
 
@@ -807,6 +808,7 @@ async function switchViewLocation(locId) {
 function returnToSelf() {
   entityId.value = selfEntityId.value
   actingEntityId.value = null
+  viewingEntityId.value = null  // clear any read-only location inspect
 }
 
 function onInspectEntity(id) {
@@ -837,8 +839,24 @@ function onInspectEntity(id) {
   }
 }
 
+function isPeerActive(p) {
+  const viewed = viewingEntityId.value
+  const acted = gmMode.value ? actingEntityId.value : null
+  if (viewed && viewed === p.id) return true
+  if (acted && acted === p.id) return true
+  if (!viewed && !acted && entityId.value === p.id) return true
+  return false
+}
+
 function onPeerClick(id) {
   if (gmMode.value) {
+    const isLocation = peers.value.find(p => p.id === id)?.type === 'LOCATION'
+    if (isLocation) {
+      // View the location's read-only sheet instead of assuming it.
+      viewingEntityId.value = viewingEntityId.value === id ? null : id
+      forceSheet.value = true
+      return
+    }
     if (actingEntityId.value === id) returnToSelf()
     else switchPerspective(id)
   } else {
