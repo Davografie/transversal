@@ -192,6 +192,10 @@ def _traitset_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetC
     return []
 
 
+# Trait actions that only make sense on a trait the entity already has.
+_MUTATE_EXISTING_TRAIT_ACTIONS = {"step_down", "step_up", "set", "remove"}
+
+
 # ── Default registrations ────────────────────────────
 
 register_scope("universe", _default_scope)
@@ -201,8 +205,17 @@ register_scope("faction", _faction_scope)
 register_scope("traitset", _traitset_scope)
 
 
-def resolve_candidates(kind: str, scope: Optional[str], entity: Entity, repo) -> list[TargetCandidate]:
-    """Return the selectable candidates for a ``(kind, scope)`` pair."""
+def resolve_candidates(kind: str, scope: Optional[str], entity: Entity, repo, action: Optional[str] = None) -> list[TargetCandidate]:
+    """Return the selectable candidates for a ``(kind, scope)`` pair.
+
+    ``action`` (the effect's action) narrows trait picks: actions that only
+    mutate an existing trait (``step_down``/``step_up``/``set``/``remove``)
+    must choose from the entity's own instances, not the whole registry.
+    """
     prefix, value = parse_scope(scope)
     resolver = _SCOPE_RESOLVERS.get(prefix, _default_scope)
-    return resolver(kind, value, entity, repo)
+    candidates = resolver(kind, value, entity, repo)
+    if kind == "trait" and prefix == "traitset" and action in _MUTATE_EXISTING_TRAIT_ACTIONS:
+        owned = {s.trait_id for s in repo.get_traitsettings_by_traitset(entity.id, value)}
+        candidates = [c for c in candidates if c.id in owned]
+    return candidates

@@ -507,14 +507,14 @@ def _resolve_scope(scope: Optional[str], entity: Entity, repo) -> Optional[str]:
     return scope
 
 
-def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo) -> Optional[str]:
+def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo, action: Optional[str] = None) -> Optional[str]:
     """Return a random in-scope candidate id for the given target kind.
 
     Delegates to the shared :mod:`effect_targets` resolver so the ``random``
     target mode and the frontend choose-picker see the same candidates.
     """
     scope = _resolve_scope(scope, entity, repo)
-    candidates = resolve_candidates(kind, scope, entity, repo)
+    candidates = resolve_candidates(kind, scope, entity, repo, action)
     return random.choice([c.id for c in candidates]) if candidates else None
 
 
@@ -534,7 +534,7 @@ def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind:
         mode, choose_kind = parsed
         resolved_kind = choose_kind or kind
         if mode == "random":
-            return _random_candidate(resolved_kind, effect.target_scope, entity, repo)
+            return _random_candidate(resolved_kind, effect.target_scope, entity, repo, effect.action)
         result.pending_choices.append(
             PendingChoice(effect=effect, kind=resolved_kind, scope=effect.target_scope)
         )
@@ -562,7 +562,7 @@ def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo)
         mode, kind = parsed
         resolved_kind = kind or "entity"
         if mode == "random":
-            cid = _random_candidate(resolved_kind, effect.entity_scope, entity, repo)
+            cid = _random_candidate(resolved_kind, effect.entity_scope, entity, repo, effect.action)
             return repo.get_entity(cid) if cid else None
         result.pending_choices.append(
             PendingChoice(effect=effect, kind=resolved_kind, scope=effect.entity_scope, field="entity")

@@ -73,6 +73,9 @@ class TargetRepo:
     def get_traits_by_traitset(self, traitset_id):
         return self.traits_traitset.get(traitset_id, [])
 
+    def get_traitsettings_by_traitset(self, entity_id, traitset_id):
+        return getattr(self, "trait_settings_by_traitset", {}).get((entity_id, traitset_id), [])
+
     def list_lifepaths_by_universe(self, universe):
         return self.lifepaths.get(universe, [])
 
@@ -182,6 +185,22 @@ def test_traitset_scope_lists_traits():
     out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo)
     assert _ids(out) == ["medicine"]
     assert out[0].name == "medicine"
+
+
+def test_traitset_scope_step_down_filters_to_owned():
+    repo = TargetRepo()
+    repo.traits_traitset = {"ts-skills": [_t("medicine"), _t("surgery")]}
+    repo.trait_settings_by_traitset = {("char-1", "ts-skills"): [SimpleNamespace(trait_id="medicine")]}
+    out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action="step_down")
+    assert _ids(out) == ["medicine"]
+
+
+def test_traitset_scope_gain_lists_all_traits():
+    repo = TargetRepo()
+    repo.traits_traitset = {"ts-skills": [_t("medicine"), _t("surgery")]}
+    repo.trait_settings_by_traitset = {("char-1", "ts-skills"): [SimpleNamespace(trait_id="medicine")]}
+    out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action="gain_or_step_up")
+    assert _ids(out) == ["medicine", "surgery"]
 
 
 # ── universe / projection kinds ─────────────────────

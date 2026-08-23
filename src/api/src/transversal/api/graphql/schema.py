@@ -459,12 +459,15 @@ class Query:
         kind: str,
         entity_id: strawberry.ID,
         scope: Optional[str] = None,
+        action: Optional[str] = None,
     ) -> list[TargetCandidate]:
         """Resolve the selectable targets for a ``choose``/``random`` effect target.
 
         ``kind`` is one of the target kinds (``location``, ``occupant``, ``trait``,
         ``rating_die``, ``entity``, ``life_path``, ``roll_table``); ``scope`` is the
         ``target_scope`` narrowing string (``faction:X``, ``subtree:X``, etc.).
+        ``action`` narrows trait picks to the entity's own instances for
+        mutate-only actions (``step_down``/``step_up``/``set``/``remove``).
         """
         from transversal.services.effect_targets import resolve_candidates
 
@@ -474,7 +477,7 @@ class Query:
             return []
         return [
             TargetCandidate(id=c.id, name=c.name, universe=c.universe)
-            for c in resolve_candidates(kind, scope, entity, repo)
+            for c in resolve_candidates(kind, scope, entity, repo, action)
         ]
 
     @strawberry.field
