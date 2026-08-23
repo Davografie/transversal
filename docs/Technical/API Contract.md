@@ -102,7 +102,8 @@ type TraitSetting {
   entityId: ID!
   traitId: ID!
   traitsetId: ID!
-  dice: [DieType!]!        # the actual dice, e.g. [D8] or [D4, D4, D4, D4]
+  dice: [DieType!]!        # currently-available dice, e.g. [D8] or [D4, D4, D4, D4]
+  spentDice: [DieType!]!   # spent-but-recoverable dice (resource pools); capacity = dice + spentDice
   ratingType: RatingType!  # STATIC | RESOURCE | CHALLENGE | EMPTY
   dieType: DieType!        # computed: first die in dice, or D6 if empty
   rating: String!          # computed: human-readable, e.g. "d8" or "4d4"
@@ -411,17 +412,19 @@ Uploaded files are served at `GET /media/{filename}` via StaticFiles.
 
 **`POST /api/v1/resource-pool/{traitsetting_id}/spend`**
 
-Spend dice from a resource trait's pool.  Removes one die of the given
-type from the trait's `dice` array and persists.
+Spend dice from a resource trait's pool.  Moves one die of the given type
+from `dice` to `spent_dice` and persists.  Fails (400) if fewer dice of that
+type are available than `count`.
 
 Request: `{"die": "d4", "count": 1}`
 
-Response: `{"traitsetting_id": "...", "die_type": "d4", "rating": "3d4", "dice": ["d4","d4","d4"], "total": 3}`
+Response: `{"traitsetting_id": "...", "die_type": "d4", "rating": "3d4", "dice": ["d4","d4","d4"], "spent": ["d4"], "max_rating": "4d4", "total": 3, "max_total": 4}`
 
 **`POST /api/v1/resource-pool/{traitsetting_id}/recover`**
 
-Recover spent dice back to the pool.  Appends one die of the given type
-to the trait's `dice` array and persists.
+Recover spent dice back to the pool.  Moves one die of the given type from
+`spent_dice` back to `dice` and persists.  Recovery is bounded by the ledger:
+fails (400) if fewer dice of that type are in `spent_dice` than `count`.
 
 Request: `{"die": "d4", "count": 1}`
 

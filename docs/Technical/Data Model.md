@@ -83,7 +83,7 @@ The Transversal backend uses **ArangoDB 3.12** — a graph + document database. 
 | Value | Behaviour |
 |-------|-----------|
 | `static` | Fixed die — always available at this value |
-| `resource` | Pool of dice — spend dice (removes), recover dice (appends). Depletion possible. |
+| `resource` | Pool of dice — spend moves a die to `spent_dice`, recovery moves it back (bounded by the ledger). Capacity = `dice + spent_dice`; depletion possible. |
 | `challenge` | Opposition pool — GM spends dice against players. See [[#Polarity]]. |
 | `empty` | No die — trait is present but unrated (flavor, narrative only) |
 
@@ -230,7 +230,8 @@ Per-entity trait configuration. The edge connects an entity to a registry trait,
 | `trait_id` | string | ✅ | Denormalized |
 | `traitset_id` | string | ✅ | Denormalized |
 | `rating_type` | RatingType | | `static`, `resource`, `challenge`, `empty` (default `static`) |
-| `dice` | DieType[] | | The actual dice this trait contributes (e.g. `[d4, d4, d4, d4]` for 4d4 resource) |
+| `dice` | DieType[] | | Currently-available dice this trait contributes (e.g. `[d4, d4, d4, d4]` for a full 4d4 resource). For a resource this is the unspent remainder |
+| `spent_dice` | DieType[] | | Spent-but-recoverable dice (resource pools). Capacity = `dice + spent_dice`; recovery moves a die back into `dice` |
 | `polarity` | Polarity | ✅ | Baked sign: `positive` (benefit/asset) or `negative` (complication). Resolved from trait/traitset defaults at creation |
 | `statement` | string | | Distinction statement or flavor text |
 | `ego` | bool | | If `true`, persists across all universes/projections |
