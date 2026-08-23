@@ -633,6 +633,8 @@ function groupByDieType(dice) {
     }
     byType.get(die).push(die)
   }
+  // Ascending die size: d4 → d6 → d8 → d10 → d12.
+  groups.sort((a, b) => parseInt(a[0].slice(1), 10) - parseInt(b[0].slice(1), 10))
   return groups
 }
 
