@@ -196,23 +196,25 @@
                     </div>
                   </div>
                   <div v-else-if="t.ratingType === 'RESOURCE'" class="trait-die-groups resource">
-                    <div class="trait-die-group">
+                    <div v-for="(group, gi) in resourceDiceGroups(t)" :key="'a' + gi" class="trait-die-group">
                       <DieIcon
-                        v-for="(die, i) in (t.dice || [])"
-                        :key="'a' + i"
-                        :die="die.toLowerCase()"
+                        v-for="(die, i) in group"
+                        :key="i"
+                        :die="die"
                         class="trait-die-icon"
                         :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
                       />
+                    </div>
+                    <div v-for="(group, gi) in resourceSpentGroups(t)" :key="'s' + gi" class="trait-die-group">
                       <DieIcon
-                        v-for="(die, i) in (t.spentDice || [])"
-                        :key="'s' + i"
-                        :die="die.toLowerCase()"
+                        v-for="(die, i) in group"
+                        :key="i"
+                        :die="die"
                         class="trait-die-icon ghost"
                         :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
                       />
-                      <span v-if="!(t.dice || []).length && !(t.spentDice || []).length" class="trait-die depleted">depleted</span>
                     </div>
+                    <span v-if="!(t.dice || []).length && !(t.spentDice || []).length" class="trait-die depleted">depleted</span>
                   </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
                   <button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.teachable"
@@ -588,15 +590,12 @@ function resourceDisplay(t) {
   return t.rating || (t.dice ? t.dice.join(', ') : '')
 }
 
-function traitDiceGroups(t) {
-  // Group the trait's dice by type so each type forms its own little
+function groupByDieType(dice) {
+  // Group a dice array by type so each type forms its own little
   // staircase (e.g. 3d4 + 2d6 → [['d4','d4','d4'], ['d6','d6']]).
-  // Resources/empty keep their text form (resources — see P2.16).
-  if (t.ratingType === 'RESOURCE' || t.ratingType === 'EMPTY') return []
-  const dice = t.dice || []
   const groups = []
   const byType = new Map()
-  for (const d of dice) {
+  for (const d of (dice || [])) {
     const die = d.toLowerCase()
     if (!byType.has(die)) {
       const group = []
@@ -606,6 +605,21 @@ function traitDiceGroups(t) {
     byType.get(die).push(die)
   }
   return groups
+}
+
+function traitDiceGroups(t) {
+  // Static traits render grouped dice.  Resources/empty have their own
+  // rendering (resources use resourceDiceGroups/resourceSpentGroups).
+  if (t.ratingType === 'RESOURCE' || t.ratingType === 'EMPTY') return []
+  return groupByDieType(t.dice)
+}
+
+function resourceDiceGroups(t) {
+  return groupByDieType(t.dice)
+}
+
+function resourceSpentGroups(t) {
+  return groupByDieType(t.spentDice)
 }
 
 function isResourceDepleted(t) {
@@ -2128,9 +2142,6 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .trait-die-icon.ghost {
   opacity: 0.32;
-}
-.trait-die-groups.resource .trait-die-group {
-  gap: 0;
 }
 .trait-die.depleted {
   color: var(--text-dim);
