@@ -332,7 +332,7 @@
           {{ remoteView.hitches.length }} hitch{{ remoteView.hitches.length > 1 ? 'es' : '' }}
         </div>
         <div v-if="showHitchMenu && selectedHitches.length" class="hitch-menu-panel">
-          <HitchMenu :entity-id="activeId" :count="selectedHitches.length" @apply="applyHitchOption" @close="closeHitchMenu" />
+          <HitchMenu :entity-id="activeId" :count="selectedHitches.length" :side="props.gmMode ? 'gm' : 'player'" @apply="applyHitchOption" @close="closeHitchMenu" />
         </div>
       </div>
     </template>

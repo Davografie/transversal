@@ -1,9 +1,9 @@
 <template>
   <div class="hm-root">
     <div class="hm-title">Buy hitches · {{ count }} selected</div>
-    <div v-if="options.length" class="hm-menu">
+    <div v-if="visibleOptions.length" class="hm-menu">
       <button
-        v-for="opt in options"
+        v-for="opt in visibleOptions"
         :key="opt.id"
         class="hm-option"
         :disabled="applying"
@@ -19,18 +19,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useHitchMenu } from '@/composables/useHitchMenu.js'
 
 const props = defineProps({
   entityId: { type: String, required: true },
   count: { type: Number, default: 0 },
+  side: { type: String, default: 'either' },  // 'gm' | 'player' | 'either'
 })
 const emit = defineEmits(['apply', 'close'])
 
 const { loading, fetchHitchMenu } = useHitchMenu()
 const options = ref([])
 const applying = ref(false)
+
+// Only show options available to this viewer: its own bucket plus shared.
+const visibleOptions = computed(() =>
+  options.value.filter(o => o.side === 'either' || o.side === props.side)
+)
 
 onMounted(async () => {
   options.value = await fetchHitchMenu()
