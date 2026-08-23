@@ -25,7 +25,7 @@ export function useEntityCrud() {
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
-      hidden loraConfig
+      hidden unpublished loraConfig
       projections {
         id originUniverse universe name backgroundImage currentLocation transversalType
       }
@@ -39,7 +39,7 @@ export function useEntityCrud() {
     const data = await graphql(
       `query($type: EntityType) {
         entities(type: $type) {
-          id type name razmerit currentUniverse currentLocation hidden
+          id type name razmerit currentUniverse currentLocation hidden unpublished
           traitSettings {
             id name dieType rating ratingType statement ego sfxIds traitsetName universe
           }
@@ -70,6 +70,7 @@ export function useEntityCrud() {
         razmerit: data.entity.razmerit,
         overlay: data.entity.overlay || null,
         hidden: data.entity.hidden,
+        unpublished: data.entity.unpublished ?? false,
         lora_config: data.entity.loraConfig || '{}',
       }
       return alreadyEditing
@@ -84,7 +85,7 @@ export function useEntityCrud() {
     const result = await graphql(
       `mutation($input: UpdateEntityInput!) {
         updateEntity(input: $input) {
-          id name razmerit currentUniverse currentLocation hidden loraConfig
+          id name razmerit currentUniverse currentLocation hidden unpublished loraConfig
         }
       }`,
       {
@@ -95,6 +96,7 @@ export function useEntityCrud() {
           currentUniverse: form.value.current_universe,
           currentLocation: form.value.current_location || null,
           hidden: form.value.hidden,
+          unpublished: form.value.unpublished,
           overlay: form.value.overlay,
           loraConfig: form.value.lora_config,
         },
@@ -108,6 +110,7 @@ export function useEntityCrud() {
         selected.value.currentUniverse = ue.currentUniverse
         selected.value.currentLocation = ue.currentLocation
         selected.value.hidden = ue.hidden
+        selected.value.unpublished = ue.unpublished
       }
     }
     saving.value = false

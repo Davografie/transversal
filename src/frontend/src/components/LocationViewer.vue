@@ -62,18 +62,19 @@
     </template>
 
     <!-- Occupant dots (non-self only, always expanded) -->
-    <template v-for="(o, i) in occupants.filter(x => x.id !== entityId)" :key="'o-' + o.id">
+    <template v-for="(o, i) in occupantDots" :key="'o-' + o.id">
     <MapDot
       v-if="!travelAnim.active && showElements"
       type="occupant"
       :variant="o.type"
+      :class="{ 'dot-draft': o.unpublished }"
       :x="parallaxX(o.map_x ?? occupantX(i, o))" :y="parallaxY(o.map_y ?? occupantY(i, o))"
       :image="o.image"
       :initials="occupantInitials(o.name)"
       :expanded="true"
       :draggable="canDragOccupant(o)"
       :lerping="lerpActive"
-      :title="canDragOccupant(o) ? 'Drag to reposition' : o.name"
+      :title="canDragOccupant(o) ? 'Drag to reposition' : (o.unpublished ? o.name + ' (draft)' : o.name)"
       @click="onDotClick('occupant', o)"
       @overlay-click="onExpandedClick('occupant', o)"
       @drag-start="(e) => onOccupantDragStart(e, o, i)"
@@ -191,6 +192,11 @@ const isVideoBg = computed(() => isVideoUrl(currentImage.value))
 const nav = ref({})
 const zones = ref([])
 const occupants = ref([])
+// Occupants shown as navdots: players never see unpublished (GM-only draft)
+// entities; the architect sees them (marked as drafts).
+const occupantDots = computed(() =>
+  occupants.value.filter(o => o.id !== props.entityId && (props.gmMode || !o.unpublished))
+)
 const viewerEl = ref(null)
 const activeElement = ref(null)  // { type: 'zone'|'occupant', name?, id? } — which dot is popped out
 const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })

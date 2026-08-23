@@ -168,4 +168,11 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   0%, 100% { border-color: var(--accent); }
   50% { border-color: rgba(64,136,212,0.3); }
 }
+
+/* GM-only draft (unpublished) entity marker */
+.map-dot.dot-draft {
+  opacity: 0.55;
+  outline: 2px dashed rgba(255,255,255,0.6);
+  outline-offset: 3px;
+}
 </style>

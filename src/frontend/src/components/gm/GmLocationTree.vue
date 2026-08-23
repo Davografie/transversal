@@ -26,6 +26,7 @@
       <span v-else-if="node.kind === 'location'" class="entity-type-badge type-LOCATION">LOC</span>
       <span v-else class="entity-type-badge" :class="'type-' + node.entityType">{{ shortType(node.entityType) }}</span>
       <span class="entity-name">{{ node.name }}</span>
+      <span v-if="node.kind === 'occupant' && node.entity?.unpublished" class="draft-badge" title="Unpublished — GM-only">draft</span>
       <span
         class="tree-drag-handle"
         :class="{ inactive: !isDraggable(node) }"

@@ -356,6 +356,12 @@ onUnmounted(() => {
 .canvas-btn-row .create-btn { flex: 1; }
 .faction-canvas-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
 .faction-canvas-btn:hover { background: var(--accent); }
+.draft-badge {
+  flex: 0 0 auto; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 1px 5px; border-radius: 3px; color: #93c5fd;
+  background: rgba(64,136,212,0.16); border: 1px solid rgba(64,136,212,0.4);
+  margin-left: 6px;
+}
 
 .fab-create {
   position: sticky; bottom: 16px; z-index: 20;

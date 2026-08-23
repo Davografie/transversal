@@ -2,6 +2,12 @@
   <div>
     <div class="panel-top">
       <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
+      <button
+        class="publish-btn"
+        :class="{ 'is-published': !form.unpublished }"
+        :title="form.unpublished ? 'Publish — make visible to players' : 'Unpublish — GM-only again'"
+        @click="form.unpublished = !form.unpublished"
+      >{{ form.unpublished ? '⬆ Publish' : '⬇ Unpublish' }}</button>
     </div>
     <GmEntityForm
       v-model="form"
@@ -592,7 +598,14 @@ defineExpose({ refresh: loadImages })
 .imagen-btn .btn-label { padding: 4px 8px; }
 .imagen-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 
-.panel-top { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.publish-btn {
+  font-size: 11px; padding: 4px 10px; border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+  color: var(--text-dim); cursor: pointer; transition: all 0.15s;
+}
+.publish-btn:hover { border-color: var(--accent); color: var(--text); }
+.publish-btn.is-published { background: rgba(64,184,96,0.16); border-color: rgba(64,184,96,0.5); color: #86efac; }
 .danger-zone {
   margin-top: 12px; padding: 10px;
   border: 1px solid rgba(220,64,64,0.25); border-radius: 6px;

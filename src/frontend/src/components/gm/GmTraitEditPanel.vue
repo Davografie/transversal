@@ -152,16 +152,21 @@ const saving = ref(false)
 
 // allSfxs is now provided by useTraitsConfig() composable — no local fallback needed
 
-const universeOptions = [
-  { label: 'Earth', value: 'earth' },
-  { label: 'Three Realms', value: 'three_realms' },
-]
+const universeOptions = ref([])
+
+async function loadUniverseOptions() {
+  try {
+    const res = await graphql(`query($type: EntityType){ entities(type: $type){ id name currentUniverse } }`, { type: 'UNIVERSE' })
+    universeOptions.value = (res?.entities || []).map(u => ({ value: u.currentUniverse, label: u.name }))
+  } catch { /* leave empty */ }
+}
+onMounted(loadUniverseOptions)
 
 // Only universes the trait's own trait set is enabled in — traits can't widen scope.
 const allowedUniverses = computed(() => {
   const ts = (traitsets.value || []).find(ts => ts.id === trait.value?.traitsetId)
   if (!ts) return []
-  return (ts.universes || []).map(u => universeOptions.find(o => o.value === u) || { label: u, value: u })
+  return (ts.universes || []).map(u => universeOptions.value.find(o => o.value === u) || { label: u, value: u })
 })
 
 // ── Edit mode form ──
@@ -199,10 +204,9 @@ const sortedDisplayNames = computed(() => {
 })
 
 function universeLabel(u) {
-  if (u === 'earth') return 'Earth'
-  if (u === 'three_realms') return 'Three Realms'
   if (u === '*') return '*'
-  return u || ''
+  const opt = universeOptions.value.find(o => o.value === u)
+  return opt?.label || u || ''
 }
 
 function syncDisplayNamesFromTrait(t) {

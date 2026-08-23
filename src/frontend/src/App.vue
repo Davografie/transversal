@@ -421,12 +421,13 @@ async function fetchLocationBg() {
 async function fetchPeers() {
   DIAG.mark('fetchPeers-start', { currentLocationId: currentLocationId.value })
   const data = await graphql(`query {
-    entities { id type name sheetImage: image(role: "sheet") currentLocation }
+    entities { id type name sheetImage: image(role: "sheet") currentLocation unpublished }
   }`)
   if (data?.entities) {
     const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
     peers.value = data.entities
       .filter(e => e.currentLocation === currentLocationId.value)
+      .filter(e => gmMode.value || !e.unpublished)
       .sort((a, b) => {
         if (a.id === entityId.value) return -1
         if (b.id === entityId.value) return 1
