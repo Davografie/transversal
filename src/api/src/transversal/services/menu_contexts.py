@@ -112,7 +112,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("newly_revealed", "string"),
     )),
     TriggerDef("on_relationship_create", "On Relationship Create"),
-    TriggerDef("on_character_create", "On Character Created"),
+    TriggerDef("on_character_create", "On Character Created", (Variable("entity_created", "entity"),)),
 )
 
 

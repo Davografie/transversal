@@ -723,7 +723,7 @@ class Mutation:
         )
         if input.type == EntityType.CHARACTER:
             from transversal.services.state_events import fire_state_sfx
-            fire_state_sfx(e.id, input.universe, "character_created", {})
+            fire_state_sfx(e.id, input.universe, "character_created", {"entity_created": e.id})
         return _entity_to_gql(e)
 
     @strawberry.mutation
