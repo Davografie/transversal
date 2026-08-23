@@ -15,7 +15,7 @@
         :kind="current.kind"
         :scope="current.scope || ''"
         :action="current.effect?.action || ''"
-        :entity-id="entityId"
+        :entity-id="targetEntityId"
         :placeholder="`Choose ${current.kind}…`"
         @update:model-value="targets[current.index] = $event"
       />
@@ -47,6 +47,14 @@ const targets = ref({})
 const current = computed(() => props.pendingChoices[stepIndex.value] || null)
 const currentTarget = computed(() => (current.value ? targets.value[current.value.index] || '' : ''))
 const isLast = computed(() => stepIndex.value >= props.pendingChoices.length - 1)
+
+// Resolve candidates against the effect's own subject entity (e.g. {buying_entity}
+// for an opportunity, {hitch_entity} for a GM hitch), falling back to the roller.
+const targetEntityId = computed(() => {
+  const e = current.value?.effect?.entity
+  if (typeof e === 'string' && e.trim() && e !== 'self' && !e.includes('{')) return e.trim()
+  return props.entityId
+})
 
 watch(() => props.pendingChoices, () => {
   stepIndex.value = 0
