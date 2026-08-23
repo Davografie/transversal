@@ -35,6 +35,7 @@ def ensure_sfx_owners(repo) -> None:
             "take-complication",
             "prevent-taken-out",
             "sfx-offer-negative-trait",
+            "sfx-starter-location",
         ],
         "gm": ["hitch-gain-complication"],
         "players": [],
@@ -48,6 +49,38 @@ def ensure_sfx_owners(repo) -> None:
             if merged != (owner.sfx_ids or []):
                 owner.sfx_ids = merged
                 repo.update_sfx_owner(owner)
+
+
+def ensure_starter_location_sfx(repo) -> None:
+    """Create the character-scatter SFX. Idempotent.
+
+    Fires on ``on_character_create`` for unplaced Earth characters and
+    relocates them to a random ``starter_location`` within Earth.
+    """
+    from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
+
+    if repo.get_sfx("sfx-starter-location") is not None:
+        return
+    repo.create_sfx(SFX(
+        id="sfx-starter-location",
+        name="Scatter to Starter Location",
+        description="A newly created, unplaced Earth character arrives at a random starter location.",
+        trigger="on_character_create",
+        conditions=[
+            Condition(type=ConditionType.UNPLACED),
+            Condition(type=ConditionType.IN_UNIVERSE, target="earth"),
+        ],
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE,
+                type="travel",
+                action="move",
+                target="{random_starter_location}",
+                target_scope="universe:earth",
+                context={"transversal_type": "inapposite"},
+            ),
+        ],
+    ))
 
 
 def ensure_give_in_sfx(repo) -> None:

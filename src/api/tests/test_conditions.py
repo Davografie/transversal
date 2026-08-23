@@ -89,3 +89,19 @@ def test_all_must_pass():
 
 def test_empty_conditions_true():
     assert evaluate_conditions(_entity(), [], FakeRepo())
+
+
+def test_unplaced():
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.UNPLACED), FakeRepo())
+    assert not evaluate_condition(
+        _entity(current_location="loc-x"), Condition(type=ConditionType.UNPLACED), FakeRepo()
+    )
+
+
+def test_in_universe():
+    assert evaluate_condition(
+        _entity(current_universe="earth"), Condition(type=ConditionType.IN_UNIVERSE, target="earth"), FakeRepo()
+    )
+    assert not evaluate_condition(
+        _entity(current_universe="three_realms"), Condition(type=ConditionType.IN_UNIVERSE, target="earth"), FakeRepo()
+    )

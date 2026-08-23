@@ -12,6 +12,7 @@ from transversal.domain import (
     EntityType,
     Projection,
 
+    SfxOwner,
     Trait,
     TraitSet,
     TraitSetting,
@@ -68,6 +69,9 @@ class InMemoryRepository(EntityRepository):
         return p
     def get_projections_for_entity(self, eid: str) -> list[Projection]:
         return [Projection.model_validate(d) for d in self._projections.values() if d["entity_id"] == eid]
+    def get_projection(self, pid: str) -> Projection | None:
+        d = self._projections.get(pid)
+        return Projection.model_validate(d) if d else None
     def update_projection(self, p: Projection) -> Projection:
         self._store(self._projections, p.id, p.model_dump())
         return p
@@ -113,6 +117,11 @@ class InMemoryRepository(EntityRepository):
         return TraitSetting.model_validate(d) if d else None
     def delete_traitsetting(self, tsid: str) -> bool:
         return self._traitsettings.pop(tsid, None) is not None
+
+    # sfx owners
+    def get_sfx_owner(self, owner_id: str) -> SfxOwner | None:
+        d = self._sfx_owners.get(owner_id)
+        return SfxOwner.model_validate(d) if d else None
 
     # effective traits
     def get_effective_traitsettings(self, eid: str, universes: list[str]) -> list[TraitSetting]:

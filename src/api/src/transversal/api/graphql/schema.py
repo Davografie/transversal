@@ -106,6 +106,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         current_projection=e.current_projection,
         hidden=e.hidden, unpublished=e.unpublished, known_to=e.known_to,
         _background_image=e.background_image, overlay=e.overlay,
+        starter_location=e.starter_location,
         zones=[Zone(name=z.name, background_image=z.background_image, location_id=z.location_id, x=z.x, y=z.y) for z in e.zones],
         map_x=e.map_x, map_y=e.map_y,
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
@@ -670,7 +671,11 @@ class Mutation:
             universe=input.universe,
             location=input.location,
             razmerit=input.razmerit,
+            starter_location=input.starter_location,
         )
+        if input.type == EntityType.CHARACTER:
+            from transversal.services.state_events import fire_state_sfx
+            fire_state_sfx(e.id, input.universe, "character_created", {})
         return _entity_to_gql(e)
 
     @strawberry.mutation
@@ -808,6 +813,8 @@ class Mutation:
             e.suitable_life_path_ids = input.suitable_life_path_ids
         if input.overlay is not None:
             e.overlay = input.overlay if input.overlay != "" else None
+        if input.starter_location is not None:
+            e.starter_location = input.starter_location
         if input.nav_positions is not None:
             e.nav_positions = json.loads(input.nav_positions)
         if input.lora_config is not None:

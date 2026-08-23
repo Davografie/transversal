@@ -87,6 +87,7 @@ class EntityManager:
         razmerit: int = 0,
         entity_id: Optional[str] = None,
         session_id: Optional[str] = None,
+        starter_location: bool = False,
     ) -> Entity:
         eid = entity_id or _generate_id(name, entity_type)
         if entity_type == EntityType.UNIVERSE:
@@ -100,6 +101,7 @@ class EntityManager:
             current_universe=universe,
             current_location=location,
             current_projection=proj_id,
+            starter_location=starter_location,
         )
         validate_entity(entity)
         self.repo.create_entity(entity)

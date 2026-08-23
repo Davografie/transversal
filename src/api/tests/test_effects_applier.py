@@ -369,6 +369,41 @@ def test_target_scope_populates_pending_choice_scope():
     assert result.pending_choices[0].scope == "earth"
 
 
+def test_travel_random_starter_location_relocates():
+    from transversal.domain import Projection, TransversalType
+
+    entity = _entity()
+    entity.current_projection = "char-1:earth"
+    proj = Projection(
+        id="char-1:earth", entity_id="char-1", origin_universe="earth",
+        universe="earth", current_location=None, transversal_type=TransversalType.NATIVE,
+    )
+
+    class Repo:
+        def list_entities_by_type(self, entity_type, universe=None):
+            if entity_type == EntityType.LOCATION:
+                return [
+                    Entity(id="loc-a", type=EntityType.LOCATION, name="A",
+                           current_universe="earth", starter_location=True),
+                    Entity(id="loc-b", type=EntityType.LOCATION, name="B",
+                           current_universe="earth", starter_location=False),
+                ]
+            return []
+
+        def get_projection(self, pid):
+            return proj if pid == proj.id else None
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="travel", action="move",
+        target="{random_starter_location}", target_scope="universe:earth",
+        context={"transversal_type": "inapposite"},
+    )
+    result = apply_effects(entity, [effect], Repo())
+    assert entity.current_location == "loc-a"
+    assert entity.current_universe == "earth"
+    assert proj.current_location == "loc-a"
+
+
 def test_resolve_choice_returns_reappliable_effect():
     entity = _entity()
     effect = Effect(

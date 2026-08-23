@@ -25,7 +25,7 @@ export function useEntityCrud() {
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
-      hidden unpublished loraConfig
+      hidden unpublished starterLocation loraConfig
       projections {
         id originUniverse universe name backgroundImage currentLocation transversalType
       }
@@ -71,6 +71,7 @@ export function useEntityCrud() {
         overlay: data.entity.overlay || null,
         hidden: data.entity.hidden,
         unpublished: data.entity.unpublished ?? false,
+        starter_location: data.entity.starterLocation ?? false,
         lora_config: data.entity.loraConfig || '{}',
       }
       return alreadyEditing
@@ -85,7 +86,7 @@ export function useEntityCrud() {
     const result = await graphql(
       `mutation($input: UpdateEntityInput!) {
         updateEntity(input: $input) {
-          id name razmerit currentUniverse currentLocation hidden unpublished loraConfig
+          id name razmerit currentUniverse currentLocation hidden unpublished starterLocation loraConfig
         }
       }`,
       {
@@ -98,6 +99,7 @@ export function useEntityCrud() {
           hidden: form.value.hidden,
           unpublished: form.value.unpublished,
           overlay: form.value.overlay,
+          starterLocation: form.value.starter_location,
           loraConfig: form.value.lora_config,
         },
       }
@@ -111,6 +113,7 @@ export function useEntityCrud() {
         selected.value.currentLocation = ue.currentLocation
         selected.value.hidden = ue.hidden
         selected.value.unpublished = ue.unpublished
+        selected.value.starterLocation = ue.starterLocation
       }
     }
     saving.value = false

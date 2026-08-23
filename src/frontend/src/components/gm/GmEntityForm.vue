@@ -15,6 +15,13 @@
       <input v-model="local.hidden" type="checkbox" @change="emitUpdate" />
       Hidden
     </label>
+
+    <template v-if="local.type === 'LOCATION'">
+      <label>
+        <input v-model="local.starter_location" type="checkbox" @change="emitUpdate" />
+        Starter Location
+      </label>
+    </template>
   </div>
 </template>
 

@@ -56,6 +56,20 @@ class TestNewTriggers:
         event = GameEvent(type="on_roll", entity_id="e1", universe="earth")
         assert not engine._trigger_matches(sfx, event)
 
+    def test_on_character_create_matches(self):
+        engine = EffectsEngine()
+        sfx = SFX(id="sfx-spawn", name="Scatter",
+                  trigger="on_character_create")
+        event = GameEvent(type="character_created", entity_id="e1", universe="earth")
+        assert engine._trigger_matches(sfx, event)
+
+    def test_on_character_create_no_match_on_other(self):
+        engine = EffectsEngine()
+        sfx = SFX(id="sfx-spawn", name="Scatter",
+                  trigger="on_character_create")
+        event = GameEvent(type="location_changed", entity_id="e1", universe="earth")
+        assert not engine._trigger_matches(sfx, event)
+
     def test_on_contest_loss_matches_when_opponent_wins(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-loss", name="Sore Loser",

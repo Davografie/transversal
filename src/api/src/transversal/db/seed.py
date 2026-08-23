@@ -442,7 +442,7 @@ def seed_locations(em) -> None:
         {"id": "loc-platform", "name": "The Arrival Platform", "universe": "three_realms"},
         {"id": "loc-mistwood", "name": "The Mistwood", "universe": "three_realms"},
         {"id": "loc-sect", "name": "Verdant Steps Sect Grounds", "universe": "three_realms"},
-        {"id": "loc-krasnoyarsk", "name": "Krasnoyarsk-45", "universe": "earth"},
+        {"id": "loc-krasnoyarsk", "name": "Krasnoyarsk-45", "universe": "earth", "starter_location": True},
     ]
 
     for loc in locations:
@@ -451,7 +451,13 @@ def seed_locations(em) -> None:
                 id=loc["id"], type=EntityType.LOCATION,
                 name=loc["name"], current_universe=loc["universe"],
                 current_location=loc["id"], razmerit=0,
+                starter_location=loc.get("starter_location", False),
             ))
+        elif loc.get("starter_location"):
+            existing = repo.get_entity(loc["id"])
+            if not existing.starter_location:
+                existing.starter_location = True
+                repo.update_entity(existing)
 
     # Helper: create edge only if it doesn't already exist
     def _edge_key(from_id, to_id, rel_type):

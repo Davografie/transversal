@@ -258,6 +258,10 @@ class EffectsEngine:
         if trigger == "on_relationship_create" and event.type == "relationship_created":
             return True
 
+        # on_character_create
+        if trigger == "on_character_create" and event.type == "character_created":
+            return True
+
         # on_contest_loss / on_contest_win (from context)
         if trigger in ("on_contest_loss", "on_contest_win"):
             contest_winner = event.context.get("contest_winner")

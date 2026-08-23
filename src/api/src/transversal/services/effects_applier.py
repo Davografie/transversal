@@ -386,6 +386,7 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
 # default kind.
 _TARGET_KINDS = {
     "location": "location",
+    "starter_location": "starter_location",
     "occupant": "occupant",
     "trait": "trait",
     "entity": "entity",

@@ -565,6 +565,7 @@ class Entity(BaseModel):
     known_to: list[str] = Field(default_factory=list)
     # Location
     background_image: Optional[str] = None
+    starter_location: bool = False  # location is a valid random-spawn destination
     zones: list[Zone] = Field(default_factory=list)
     # Map positioning (percentage, per-location)
     map_x: Optional[float] = None
@@ -796,6 +797,8 @@ class ConditionType(str, Enum):
     HAS_RELATIONSHIP = "has_relationship"  # target = related entity id
     TRAIT_RATING = "trait_rating"        # target = trait id; value = rating threshold (e.g. d8)
     NARRATIVE = "narrative"              # human-readable only, never auto-blocks
+    UNPLACED = "unplaced"                # entity has no current location yet
+    IN_UNIVERSE = "in_universe"          # target = universe key; entity is currently there
 
 
 class Condition(BaseModel):

@@ -46,6 +46,12 @@ def evaluate_condition(entity: Entity, condition: Condition, repo: "EntityReposi
             for r in repo.get_related_entities(entity.id)
         )
 
+    if condition.type == ConditionType.UNPLACED:
+        return entity.current_location in (None, "")
+
+    if condition.type == ConditionType.IN_UNIVERSE:
+        return entity.current_universe == condition.target
+
     return False
 
 

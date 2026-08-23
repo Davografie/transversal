@@ -656,6 +656,7 @@ class Entity:
     map_x: Optional[float] = None
     map_y: Optional[float] = None
     overlay: Optional[str] = None
+    starter_location: bool = False
     nav_positions: str = "{}"
     node_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     owned_by: Optional[str] = None
@@ -778,6 +779,7 @@ class CreateEntityInput:
     universe: str
     location: Optional[str] = None
     razmerit: int = 0
+    starter_location: bool = False
 
 
 @strawberry.input
@@ -792,6 +794,7 @@ class UpdateEntityInput:
     known_to: Optional[list[str]] = None
     background_image: Optional[str] = None
     overlay: Optional[str] = None
+    starter_location: Optional[bool] = None
     nav_positions: Optional[str] = None
     owned_by: Optional[str] = None
     suitable_life_path_ids: Optional[list[str]] = None

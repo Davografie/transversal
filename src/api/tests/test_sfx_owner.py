@@ -163,6 +163,7 @@ def test_ensure_sfx_owners_creates_buckets_and_table_reward():
         "take-complication",
         "prevent-taken-out",
         "sfx-offer-negative-trait",
+        "sfx-starter-location",
     }
     assert repo.owners["gm"].sfx_ids == ["hitch-gain-complication"]
     assert repo.owners["players"].sfx_ids == []
@@ -233,7 +234,26 @@ def test_ensure_sfx_owners_table_defaults():
         "take-complication",
         "prevent-taken-out",
         "sfx-offer-negative-trait",
+        "sfx-starter-location",
     }
+
+
+def test_ensure_starter_location_sfx_creates_once():
+    from transversal.services.sfx_owner import ensure_starter_location_sfx
+
+    repo = SetupRepo()
+    ensure_starter_location_sfx(repo)
+    sfx = repo.sfxs["sfx-starter-location"]
+    assert sfx.trigger == "on_character_create"
+    assert {c.type.value for c in sfx.conditions} == {"unplaced", "in_universe"}
+    in_universe = [c for c in sfx.conditions if c.type.value == "in_universe"][0]
+    assert in_universe.target == "earth"
+    assert sfx.effects[0].type == "travel"
+    assert sfx.effects[0].action == "move"
+    assert sfx.effects[0].target == "{random_starter_location}"
+    assert sfx.effects[0].target_scope == "universe:earth"
+    ensure_starter_location_sfx(repo)
+    assert len(repo.sfxs) == 1
 
 
 def test_ensure_offer_negative_sfx_creates_once():

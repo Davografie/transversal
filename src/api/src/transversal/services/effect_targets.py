@@ -74,6 +74,13 @@ def _default_scope(kind: str, value: str, entity: Entity, repo) -> list[TargetCa
             _candidate(e.id, e.name, e.current_universe)
             for e in repo.list_entities_by_type(EntityType.LOCATION, universe=universe)
         ]
+    if kind == "starter_location":
+        universe = value or entity.current_universe
+        return [
+            _candidate(e.id, e.name, e.current_universe)
+            for e in repo.list_entities_by_type(EntityType.LOCATION, universe=universe)
+            if e.starter_location
+        ]
     if kind == "occupant":
         location_id = value or entity.current_location
         if not location_id:

@@ -215,6 +215,27 @@ def test_projection_kind_filters_by_universe_scope():
     assert _ids(out) == ["char-1:three_realms"]
 
 
+# ── starter_location kind ──────────────────────────
+
+def test_starter_location_kind_filters_flag():
+    repo = TargetRepo()
+    l1 = _e("l1", universe="earth"); l1.starter_location = True
+    l2 = _e("l2", universe="earth"); l2.starter_location = False
+    l3 = _e("l3", universe="three_realms"); l3.starter_location = True
+    repo.locations = [l1, l2, l3]
+    out = resolve_candidates("starter_location", None, _entity(), repo)
+    assert _ids(out) == ["l1"]
+
+
+def test_starter_location_kind_respects_universe_scope():
+    repo = TargetRepo()
+    l1 = _e("l1", universe="earth"); l1.starter_location = True
+    l2 = _e("l2", universe="three_realms"); l2.starter_location = True
+    repo.locations = [l1, l2]
+    out = resolve_candidates("starter_location", "universe:three_realms", _entity(), repo)
+    assert _ids(out) == ["l2"]
+
+
 # ── extensibility ────────────────────────────────────
 
 def test_register_scope_adds_a_new_prefix():
