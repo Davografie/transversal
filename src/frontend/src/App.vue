@@ -425,14 +425,19 @@ async function fetchPeers() {
   }`)
   if (data?.entities) {
     const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
-    peers.value = data.entities
+    const atLocation = data.entities
       .filter(e => e.currentLocation === currentLocationId.value)
       .filter(e => gmMode.value || !e.unpublished)
-      .sort((a, b) => {
-        if (a.id === entityId.value) return -1
-        if (b.id === entityId.value) return 1
-        return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
-      })
+    // Also surface the current location itself so its sheet can be opened.
+    const here = data.entities.find(e => e.id === currentLocationId.value)
+    const combined = here && !atLocation.some(e => e.id === here.id)
+      ? [here, ...atLocation]
+      : atLocation
+    peers.value = combined.sort((a, b) => {
+      if (a.id === entityId.value) return -1
+      if (b.id === entityId.value) return 1
+      return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
+    })
     DIAG.mark('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
   } else {
     DIAG.mark('fetchPeers-no-data')
