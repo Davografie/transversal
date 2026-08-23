@@ -184,6 +184,10 @@ The complete data model — collection schemas, field definitions, edge patterns
 ## Frontend
 
 The frontend is a Vue3 PWA served by Vite in development.
+### Build prod
+```
+docker compose -f docker-compose.yaml build frontend-prod && docker compose -f docker-compose.yaml up -d frontend-prod
+```
 
 ### Components
 
