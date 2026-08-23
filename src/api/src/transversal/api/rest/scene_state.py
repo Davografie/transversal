@@ -110,7 +110,7 @@ async def offer_negative(location_id: str, entity_id: str, req: OfferNegativeReq
     if any(d.get("ts_id") == req.trait_setting_id for d in opponent_pool):
         filtered = [d for d in opponent_pool if d.get("ts_id") != req.trait_setting_id]
         store.save_pool(location_id, req.opponent_id, filtered)
-        broadcast_pool_change(location_id, req.opponent_id, dice=filtered, phase="adding")
+        broadcast_pool_change(location_id, req.opponent_id, dice=filtered, phase="adding", actor_id=entity_id)
         return {"offered": False, "removed": True, "newly_revealed": False}
 
     added = [
@@ -120,7 +120,7 @@ async def offer_negative(location_id: str, entity_id: str, req: OfferNegativeReq
     ]
     new_pool = opponent_pool + added
     store.save_pool(location_id, req.opponent_id, new_pool)
-    broadcast_pool_change(location_id, req.opponent_id, dice=new_pool, phase="adding")
+    broadcast_pool_change(location_id, req.opponent_id, dice=new_pool, phase="adding", actor_id=entity_id)
 
     from transversal.main import _get_repo
     from transversal.services.trait_reveal import reveal_trait_to

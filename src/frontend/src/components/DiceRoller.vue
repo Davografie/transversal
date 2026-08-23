@@ -391,7 +391,7 @@ const props = defineProps({
   remoteResults: { type: Object, default: () => ({}) }, // entity_id → { rolls, committed, ... } from SSE
 })
 
-const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange'])
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change'])
 
 const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
@@ -445,6 +445,7 @@ const viewPoolGroups = computed(() => {
   return { regular, resource }
 })
 const opponentId = ref('')
+const offeredTraitIds = ref([])  // trait-setting ids routed to the opponent's pool
 const contestResult = ref(null)
 const contestCompare = ref(null)
 const contestError = ref('')
@@ -1044,7 +1045,7 @@ function addFromSheet(payload) {
 async function addToOpponentPool(dice, source, label, tsId) {
   if (!props.locationId || !opponentId.value) return
   // Server-authoritative toggle + reveal + reward (on_trait_offered).
-  await apiOfferNegative(
+  const res = await apiOfferNegative(
     props.locationId,
     editingEntityId.value,
     opponentId.value,
@@ -1052,6 +1053,14 @@ async function addToOpponentPool(dice, source, label, tsId) {
     dice,
     label || source || '',
   )
+  if (res) {
+    if (res.removed) {
+      offeredTraitIds.value = offeredTraitIds.value.filter(id => id !== tsId)
+    } else if (res.offered && tsId && !offeredTraitIds.value.includes(tsId)) {
+      offeredTraitIds.value = [...offeredTraitIds.value, tsId]
+    }
+    emit('offered-change', offeredTraitIds.value)
+  }
   panelOpen.value = true
 }
 
@@ -1087,7 +1096,7 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -1651,6 +1660,30 @@ function resetEditor() {
   showConsequences.value = false
   opponentCommitted.value = null
   showDiePicker.value = false
+  if (offeredTraitIds.value.length) {
+    offeredTraitIds.value = []
+    emit('offered-change', [])
+  }
+}
+
+function syncPool(dice) {
+  // Replace the local pool with the server's authoritative dice (e.g. when
+  // another entity offers a negative trait into this entity's pool).
+  if (phase.value !== Phase.ADDING) return
+  if (!Array.isArray(dice)) return
+  pool.splice(0, pool.length)
+  for (const d of dice) {
+    pool.push({
+      die: d.die,
+      source: d.source_id || d.source || '',
+      label: d.label || d.die,
+      tsId: d.ts_id || null,
+      sourceKind: d.source_kind || 'manual',
+      resource: !!d.resource,
+    })
+  }
+  panelOpen.value = true
+  notifyPool()
 }
 
 function clearPool() {

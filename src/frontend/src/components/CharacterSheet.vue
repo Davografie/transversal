@@ -193,7 +193,7 @@
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
           <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">{{ activeSetName }}</h4>
             <template v-for="t in currentTraits" :key="t.id">
-              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
+              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
@@ -453,8 +453,12 @@ const SFX_PHASES = {
 }
 const poolSources = ref([])
 
+// Trait-setting ids routed to the opponent's pool (negative traits offered
+// during a contest) — highlighted in the sheet and counted toward the set limit.
+const offeredTraits = ref(new Set())
+
 // Track resource trait dice that have been spent into the pool
-// { tsId: dieType } — cleared when the die is removed from the pool
+// { tsId: [dieType, ...] } — cleared when a die is removed from the pool
 const spentResources = ref({})
 
 // Trait editing (full-panel view)
@@ -676,7 +680,15 @@ async function recoverSpentDie(die) {
 }
 
 function isInPool(t) {
-  return poolSources.value.includes(t.id)
+  return poolSources.value.includes(t.id) || offeredTraits.value.has(t.id)
+}
+
+function isOffered(t) {
+  return offeredTraits.value.has(t.id)
+}
+
+function setOfferedTraits(ids) {
+  offeredTraits.value = new Set(ids || [])
 }
 
 function isKnown(t) {
@@ -736,7 +748,7 @@ function setPoolSources(sources) {
   if (recovered) fetchEntity()
 }
 
-defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, fetchEntity })
+defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity })
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0
@@ -1553,6 +1565,10 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-row.in-pool {
   background: rgba(64, 136, 212, 0.12);
   box-shadow: inset 2px 0 0 var(--accent);
+}
+.trait-row.offered {
+  background: rgba(176, 111, 240, 0.12);
+  box-shadow: inset 2px 0 0 var(--resource);
 }
 .trait-row.limit-reached {
   opacity: 0.3;

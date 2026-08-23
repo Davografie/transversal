@@ -117,3 +117,28 @@ def test_offer_negative_toggles_removal(monkeypatch):
     data = r.json()
     assert data == {"offered": False, "removed": True, "newly_revealed": False}
     assert ss_module.get_scene_store().get_pool("loc-1", "opponent") == []
+
+
+def test_offer_negative_broadcasts_actor(monkeypatch):
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda entity_id, universe, event_type, context: None,
+    )
+    calls = []
+    monkeypatch.setattr(
+        "transversal.api.rest.scene_state.broadcast_pool_change",
+        lambda location_id, entity_id, dice=None, phase="adding", actor_id=None: calls.append({
+            "entity_id": entity_id, "actor_id": actor_id, "dice": dice,
+        }),
+    )
+    trait = _trait(known_to=[])
+    client = _client(monkeypatch, trait, _occupants("opponent"))
+
+    r = client.post(
+        "/api/v1/locations/loc-1/pools/player/offer-negative",
+        json={"opponent_id": "opponent", "trait_setting_id": "ts-neg-1", "dice": ["d8"]},
+    )
+    assert r.status_code == 200, r.text
+    assert calls == [{"entity_id": "opponent", "actor_id": "player", "dice": [
+        {"die": "d8", "source_kind": "trait", "source_id": "ts-neg-1", "label": "d8", "ts_id": "ts-neg-1"},
+    ]}]

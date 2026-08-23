@@ -480,14 +480,17 @@ def broadcast_pool_change(
     entity_id: str,
     dice: Optional[list[dict]] = None,
     phase: str = "adding",
+    actor_id: Optional[str] = None,
 ) -> None:
     """Publish a pool_updated SSE event to all active sessions.
 
     ``dice`` is the DieSpec wire shape (list of dicts).  When omitted, the
-    current pool is read from the shared scene store.
+    current pool is read from the shared scene store.  ``actor_id`` identifies
+    who caused the change (defaults to the pool owner — i.e. self-initiated);
+    it differs when one entity modifies another's pool (offer-negative).
 
     Payload matches the frontend's pool_updated handler:
-      { player_id, entity_id, dice, phase, location_id }
+      { player_id, entity_id, actor_id, dice, phase, location_id }
     """
     from transversal.api.sse.bus import StreamEvent, event_bus
     from transversal.services.scene_state import get_scene_store
@@ -496,6 +499,7 @@ def broadcast_pool_change(
     if dice is None:
         dice = get_scene_store().get_pool(location_id, entity_id)
 
+    actor = actor_id or entity_id
     wire_dice = [d if isinstance(d, dict) else {"die": str(d)} for d in dice]
 
     for s in session_manager.list_active():
@@ -503,8 +507,9 @@ def broadcast_pool_change(
             event="pool_updated",
             session_id=s.id,
             data={
-                "player_id": entity_id,
+                "player_id": actor,
                 "entity_id": entity_id,
+                "actor_id": actor,
                 "dice": wire_dice,
                 "phase": phase,
                 "location_id": location_id,
