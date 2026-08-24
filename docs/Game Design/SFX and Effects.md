@@ -184,7 +184,7 @@ class Condition(BaseModel):
 
 Conditions are authored alongside effects and evaluated against an entity's state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `unplaced`, `in_universe`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`.
 
-`subject` selects **which entity** the condition tests: blank = the current entity (the event's entity for auto-fire, the acting entity for a consequence menu), a literal entity id, or a `{variable}` resolved from the trigger/menu context (e.g. `{buying_entity}`). The hitch menu has no default entity, so its conditions must reference `{hitch_entity}` / `{buying_entity}` explicitly. `target` is also `{variable}`-resolvable. The editor's condition-type list is served from `CONDITION_TYPES` in `src/api/src/transversal/services/conditions.py` (value + label + needs-target + placeholder).
+`subject` selects **which entity** the condition tests: blank = the current entity (the event's entity for auto-fire, the acting entity for a consequence menu), a literal entity id, or a `{variable}` resolved from the trigger/menu context (e.g. `{buying_entity}`). The hitch menu has no default entity, so its conditions must reference `{hitch_entity}` / `{buying_entity}` explicitly. `target` is also `{variable}`-resolvable. The editor's condition-type list is served from `CONDITION_TYPES` in `src/api/src/transversal/services/conditions.py` (value + label + needs-target + placeholder + **target-kind**); the target kind (`universe` / `location` / `trait` / `entity`) drives a picker in `ConditionEditor.vue` instead of a text field (`IN_UNIVERSE` uses a universe-*key* picker, not a universe entity id).
 
 ## Effect action registry
 
@@ -285,6 +285,7 @@ The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_se
 | `on_trait_change` | event type `trait_updated` |
 | `on_relationship_create` | event type `relationship_created` |
 | `on_character_create` | event type `character_created` |
+| `on_projection_create` | event type `projection_created` |
 | `on_contest_loss` | `event.context["contest_winner"] == "opponent"` |
 | `on_contest_win` | `event.context["contest_winner"] == "player"` |
 | `on_success` | `roll_result.tier` is present and not `FAIL` |
@@ -397,7 +398,7 @@ The SFX ids available to an entity in a universe are the sorted union of:
 
 ### Editor vocabularies (backend-served)
 
-The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`auto`/`menu`); menu contexts are first-class triggers), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py`), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
+The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`auto`/`menu`); menu contexts are first-class triggers), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
 
 The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, and missing required fields. Warnings are advisory, not a save gate.
 
