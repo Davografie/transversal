@@ -501,6 +501,11 @@ class TraitSetting:
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID]
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
+    # Relationship-anchored traits carry their edge's contact for display.
+    relationship_contact_id: Optional[strawberry.ID] = None
+    relationship_contact_name: Optional[str] = None
+    relationship_contact_type: Optional[str] = None
+    relationship_type: Optional[str] = None
 
     @strawberry.field
     def ego(self, info: strawberry.Info) -> bool:
@@ -679,6 +684,27 @@ class PendingTerm:
     continuation: list[str]
 
 
+def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
+    """Build a GQL TraitSetting from a domain setting + optional relationship contact."""
+    contact = contact or {}
+    return TraitSetting(
+        id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
+        traitset_id=s.traitset_id,
+        rating_type=s.rating_type, dice=s.dice,
+        spent_dice=s.spent_dice,
+        polarity=s.polarity,
+        statement=s.statement,
+        notes=s.notes,
+        from_type=s.from_type, projection_id=s.projection_id,
+        sfx_ids=s.sfx_ids,
+        known_to=s.known_to,
+        relationship_contact_id=contact.get("contact_id"),
+        relationship_contact_name=contact.get("contact_name"),
+        relationship_contact_type=contact.get("contact_type"),
+        relationship_type=contact.get("edge_type"),
+    )
+
+
 @strawberry.type
 class Entity:
     id: strawberry.ID
@@ -772,42 +798,21 @@ class Entity:
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
         settings = em.get_traitsettings(self.id)
-        return [
-            TraitSetting(
-                id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
-                traitset_id=s.traitset_id,
-                rating_type=s.rating_type, dice=s.dice,
-                spent_dice=s.spent_dice,
-                polarity=s.polarity,
-                statement=s.statement,
-                notes=s.notes,
-                from_type=s.from_type, projection_id=s.projection_id,
-                sfx_ids=s.sfx_ids,
-                known_to=s.known_to,
-            )
-            for s in settings
-        ]
+        result = [_gql_trait_setting(s) for s in settings]
+        for enriched in em.repo.get_relationship_traitsettings_for_entity(str(self.id)):
+            result.append(_gql_trait_setting(enriched["setting"], enriched))
+        return result
 
     @strawberry.field
     def effective_trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
         settings = em.get_effective_traitsettings(str(self.id))
-        return [
-            TraitSetting(
-                id=s.id, entity_id=s.entity_id, trait_id=s.trait_id,
-                traitset_id=s.traitset_id,
-                rating_type=s.rating_type, dice=s.dice,
-                spent_dice=s.spent_dice,
-                polarity=s.polarity,
-                statement=s.statement,
-                notes=s.notes,
-                from_type=s.from_type, projection_id=s.projection_id,
-                sfx_ids=s.sfx_ids,
-                known_to=s.known_to,
-            )
-            for s in settings
-        ]
+        result = [_gql_trait_setting(s) for s in settings]
+        # Relationship traits are universe-agnostic — always include them.
+        for enriched in em.repo.get_relationship_traitsettings_for_entity(str(self.id)):
+            result.append(_gql_trait_setting(enriched["setting"], enriched))
+        return result
 
 
 @strawberry.input

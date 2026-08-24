@@ -108,6 +108,9 @@ class InMemoryRepository(EntityRepository):
         return ts
     def get_traitsettings_for_entity(self, eid: str) -> list[TraitSetting]:
         return [TraitSetting.model_validate(d) for d in self._traitsettings.values() if d["entity_id"] == eid]
+    def get_relationship_traitsettings_for_entity(self, entity_id: str) -> list[dict]:
+        # No relationship edges in the plain in-memory double.
+        return []
     def get_traitsettings_by_traitset(self, eid, tsid) -> list[TraitSetting]:
         return [TraitSetting.model_validate(d) for d in self._traitsettings.values()
                 if d["entity_id"] == eid and d["traitset_id"] == tsid]

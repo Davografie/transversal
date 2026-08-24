@@ -8,7 +8,7 @@ lookup used to resolve ego/morph for relationship trait settings.
 import pytest
 
 from transversal.db.repository import EntityRepository
-from transversal.domain import Entity, EntityType, Projection, TransversalType
+from transversal.domain import DieType, Entity, EntityType, Projection, TraitSetting, TransversalType
 
 try:
     _repo = EntityRepository()
@@ -66,3 +66,43 @@ def test_get_relationship_by_key(data):
     assert fetched is not None
     assert fetched["_key"] == edge["_key"]
     assert fetched["_to"] == f"projections/{PROJ_ID}"
+
+
+def test_relationship_traitsettings_for_entity_readback(data):
+    repo = data
+    # Entity-target edge + trait.
+    e1 = repo.create_relationship(A_ID, B_ID, "relation")
+    ts1 = repo.create_traitsetting(TraitSetting(
+        id=f"{e1['_key']}:trust", entity_id=e1["_key"], trait_id="trait-relation-trust",
+        traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+    ))
+    # Projection-target edge + trait.
+    e2 = repo.create_relationship(A_ID, PROJ_ID, "relation", to_projection=True)
+    ts2 = repo.create_traitsetting(TraitSetting(
+        id=f"{e2['_key']}:fear", entity_id=e2["_key"], trait_id="trait-relation-fear",
+        traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+    ))
+
+    try:
+        got = {g["setting"].trait_id: g for g in repo.get_relationship_traitsettings_for_entity(A_ID)}
+        assert set(got) == {"trait-relation-trust", "trait-relation-fear"}
+
+        # Entity-target contact is the other entity.
+        assert got["trait-relation-trust"]["contact_id"] == B_ID
+        assert got["trait-relation-trust"]["contact_name"] == "B"
+        assert got["trait-relation-trust"]["contact_type"] == "character"
+        assert got["trait-relation-trust"]["edge_type"] == "relation"
+
+        # Projection-target contact resolves to its owning entity.
+        assert got["trait-relation-fear"]["contact_id"] == B_ID
+        assert got["trait-relation-fear"]["contact_name"] == "B"
+
+        # The other entity also sees both (its contact is A).
+        got_b = repo.get_relationship_traitsettings_for_entity(B_ID)
+        assert {g["setting"].trait_id for g in got_b} == {"trait-relation-trust", "trait-relation-fear"}
+        assert all(g["contact_id"] == A_ID for g in got_b)
+    finally:
+        repo.delete_traitsetting(ts1.id)
+        repo.delete_traitsetting(ts2.id)
+        repo._relationships.delete(e1["_key"])
+        repo._relationships.delete(e2["_key"])

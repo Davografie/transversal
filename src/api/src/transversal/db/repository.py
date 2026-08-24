@@ -913,11 +913,59 @@ class EntityRepository:
         results: list[TraitSetting] = []
         for rel_type in ["relation", "associate", "gifted", "suspects", "hostile_to"]:
             for frm, to in [(entity_id_a, entity_id_b), (entity_id_b, entity_id_a)]:
-                edge_key = f"edge:{frm}:{to}:{rel_type}"
                 rel = self.get_relationship(frm, to, rel_type)
                 if rel:
-                    results.extend(self.get_relationship_traitsettings(edge_key))
+                    results.extend(self.get_relationship_traitsettings(rel["_key"]))
         return results
+
+    def get_relationship_traitsettings_for_entity(self, entity_id: str) -> list[dict]:
+        """Relationship trait settings where ``entity_id`` sits on either end of the edge.
+
+        Returns enriched dicts (``setting`` + ``contact_*``/``edge_type``) so the
+        character sheet can show who/what a relationship trait refers to.
+        """
+        proj_ids = [p.id for p in self.get_projections_for_entity(entity_id)]
+        from_ref = f"{ENTITIES}/{entity_id}"
+        to_refs = [f"{ENTITIES}/{entity_id}"] + [f"{PROJECTIONS}/{pid}" for pid in proj_ids]
+
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @from_ref OR r._to IN @to_refs
+            RETURN r
+        """
+        edges = list(self.db.aql.execute(
+            query, bind_vars={"from_ref": from_ref, "to_refs": to_refs}
+        ))
+
+        results: list[dict] = []
+        for edge in edges:
+            contact_ref = edge["_to"] if edge["_from"] == from_ref else edge["_from"]
+            contact = self._resolve_relationship_contact(contact_ref)
+            if contact is None:
+                continue
+            for ts in self.get_relationship_traitsettings(edge["_key"]):
+                results.append({
+                    "setting": ts,
+                    "contact_id": contact["id"],
+                    "contact_name": contact["name"],
+                    "contact_type": contact["type"],
+                    "edge_type": edge.get("type", ""),
+                })
+        return results
+
+    def _resolve_relationship_contact(self, ref: str) -> dict | None:
+        """Resolve a relationship endpoint ref to {id, name, type}."""
+        if ref.startswith(f"{ENTITIES}/"):
+            e = self.get_entity(ref[len(f"{ENTITIES}/"):])
+            if e is not None:
+                return {"id": e.id, "name": e.name, "type": e.type.value}
+        elif ref.startswith(f"{PROJECTIONS}/"):
+            p = self.get_projection(ref[len(f"{PROJECTIONS}/"):])
+            if p is not None:
+                e = self.get_entity(p.entity_id)
+                if e is not None:
+                    return {"id": e.id, "name": e.name, "type": e.type.value}
+        return None
 
     # ── Character Assembly ────────────────────────────
 

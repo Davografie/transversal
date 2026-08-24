@@ -1327,14 +1327,19 @@ class Mutation:
     def add_relationship_trait(self, info: strawberry.Info, from_entity_id: strawberry.ID,
                                to_entity_id: strawberry.ID, rel_type: str = "relation",
                                trait_id: strawberry.ID = "", die: GqlDieType = GqlDieType.D6,
-                               traitset_id: str = "ts-relations-b114",
+                               traitset_id: Optional[str] = None,
                                statement: str = "") -> TraitSetting:
         """Create a rated trait on a relationship edge.
 
         Attaches to the *real* ArangoDB edge key (not a synthetic key), so the
-        faction canvas can read rank/role traits back.
+        faction canvas can read rank/role traits back. The trait set is derived
+        from the trait registry entry unless explicitly overridden.
         """
         repo = _em(info).repo
+        trait = repo.get_trait(str(trait_id))
+        ts_id = traitset_id or (trait.traitset_id if trait else None)
+        if not ts_id:
+            raise ValueError(f"Cannot resolve traitset for trait '{trait_id}'")
         rel = repo.get_relationship(str(from_entity_id), str(to_entity_id), rel_type)
         if not rel:
             rel = repo.create_relationship(str(from_entity_id), str(to_entity_id), rel_type)
@@ -1344,7 +1349,7 @@ class Mutation:
             id=f"{edge_key}:{trait_id}",
             entity_id=edge_key,
             trait_id=str(trait_id),
-            traitset_id=traitset_id,
+            traitset_id=ts_id,
             from_type="relationship",
             dice=[die],
             statement=statement,
