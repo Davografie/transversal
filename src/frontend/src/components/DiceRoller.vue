@@ -577,9 +577,11 @@ const rollKind = computed(() => {
   if (challenged.value) return isChallenger.value ? 'challenger-contest' : 'defendant-contest'
   if (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) return 'difficulty'
   if (isAdding() && pool.length === 0) return 'empty-pool'
-  // Test: use the rolled pipeline when known, else predict from assembled size
-  // (the resolver routes ≤2 dice to simplified, 3+ to pool).
-  const pipeline = result.value?.pipeline ?? (pool.length > 2 ? 'pool' : 'simplified')
+  // Test: use the rolled pipeline when known, else predict from assembled size.
+  // A resource die or a set test difficulty forces the Cortex pipeline even for
+  // a 2-die pool (contests are handled above).
+  const forcePool = pool.length > 2 || pool.some(d => d.resource) || props.difficulty != null
+  const pipeline = result.value?.pipeline ?? (forcePool ? 'pool' : 'simplified')
   return pipeline === 'pool' ? 'cortex-test' : 'simple-test'
 })
 const rollKindLabel = computed(() => ROLL_KIND_LABELS[rollKind.value] || '')
@@ -1482,7 +1484,8 @@ const rollTableSum = computed(() => {
 const effectDie = computed(() => {
   if (!result.value || result.value.pipeline !== 'pool') return null
   const idx = selection.effect.find(i => i !== null)
-  return idx !== undefined && idx !== null ? result.value.rolls[idx].die : null
+  // No leftover die to serve as the effect die → it defaults to a d4.
+  return idx !== undefined && idx !== null ? result.value.rolls[idx].die : 'd4'
 })
 
 // Effect die for the consequence menu: pool uses the picked die, simplified
@@ -1559,6 +1562,19 @@ async function doRoll() {
   })
   const hasResource = dice.some(d => d.resource)
   const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
+  // A set test difficulty (player or GM-as-entity) or an active contest must
+  // resolve as a full Cortex test (keep-2 + effect die), never the simplified
+  // 1-2 die pipeline.
+  const hasTestDifficulty = props.difficulty != null && !isDifficulty
+  const inContest = challenged.value
+  const useCortex = hasResource || hasTestDifficulty || inContest || dice.length > 2
+  // A Cortex test always needs at least 3 dice (2 to keep + 1 effect); pad
+  // short pools with d4s. The GM difficulty roll keeps its exact dice.
+  if (useCortex && !isDifficulty && dice.length < 3) {
+    while (dice.length < 3) {
+      dice.push({ die: 'd4', source_kind: 'manual', source_id: '', label: 'd4', ts_id: null })
+    }
+  }
   const key = poolEntityKey()
 
   // Persist the assembled pool (entity or difficulty) before the server rolls it.
@@ -1572,9 +1588,9 @@ async function doRoll() {
   const anim = startRollAnimation(dice)
   const result_ = isDifficulty
     ? await apiDifficultyRoll(props.locationId, key)
-    : dice.length <= 2 && !hasResource
-      ? await apiSimplifiedRoll(props.locationId, key)
-      : await apiCortexRoll(props.locationId, key)
+    : useCortex
+      ? await apiCortexRoll(props.locationId, key)
+      : await apiSimplifiedRoll(props.locationId, key)
 
   await sleep(Math.max(0, FIRST_LOCK_MS - (Date.now() - t0)))
   for (let i = 0; i < rollingFaces.value.length; i++) {
