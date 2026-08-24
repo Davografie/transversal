@@ -138,6 +138,24 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
     )
 
 
+def _trait_to_gql(t) -> TraitRef:
+    """Convert a domain Trait to a GraphQL TraitRef."""
+    return TraitRef(
+        id=t.id, name=t.name, universes=t.universes,
+        traitset_id=t.traitset_id, default_die_type=t.default_die_type,
+        default_rating_type=t.default_rating_type,
+        possible_sfx_ids=t.possible_sfx_ids,
+        default_sfx_ids=t.default_sfx_ids,
+        location_restricted=t.location_restricted,
+        default_ego=t.default_ego,
+        polarity=t.polarity,
+        display_names=[
+            GqlTraitDisplayName(name=dn.name, universe=dn.universe, ratings=dn.ratings)
+            for dn in t.display_names
+        ],
+    )
+
+
 def _message_to_gql(m: "Message", repo) -> Message:
     """Convert a domain Message to GraphQL Message, resolving the
     ``associate`` relationship description between sender and recipient."""
@@ -400,24 +418,20 @@ class Query:
     @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:
         traits = _em(info).repo.get_traits_by_universe(universe)
-        return [
-            TraitRef(
-                id=t.id, name=t.name, universes=t.universes,
-                traitset_id=t.traitset_id, default_die_type=t.default_die_type,
-                default_rating_type=t.default_rating_type,
-                possible_sfx_ids=t.possible_sfx_ids,
-                default_sfx_ids=t.default_sfx_ids,
-                location_restricted=t.location_restricted,
-                default_ego=t.default_ego,
-                polarity=t.polarity,
-                display_names=[
-                    GqlTraitDisplayName(name=dn.name, universe=dn.universe,
-                                        ratings=dn.ratings)
-                    for dn in t.display_names
-                ],
-            )
-            for t in traits
-        ]
+        return [_trait_to_gql(t) for t in traits]
+
+    @strawberry.field
+    def traits_by_traitsets(self, info: strawberry.Info, traitset_ids: list[strawberry.ID]) -> list[TraitRef]:
+        """Traits belonging to the given trait sets (across universes)."""
+        repo = _em(info).repo
+        seen: set[str] = set()
+        result: list[TraitRef] = []
+        for tsid in traitset_ids:
+            for t in repo.get_traits_by_traitset(str(tsid)):
+                if t.id not in seen:
+                    seen.add(t.id)
+                    result.append(_trait_to_gql(t))
+        return result
 
     @strawberry.field
     def traitsets_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitSetRef]:
@@ -642,10 +656,15 @@ class Query:
         from_entity_id: strawberry.ID,
         to_entity_id: strawberry.ID,
         type: str = "associate",
+        to_projection_id: Optional[strawberry.ID] = None,
     ) -> Optional[Relationship]:
         """Get a directional relationship edge between two entities, or null."""
         repo = _em(info).repo
-        edge = repo.get_relationship(str(from_entity_id), str(to_entity_id), type)
+        to_proj_id = str(to_projection_id) if to_projection_id else None
+        edge = repo.get_relationship(
+            str(from_entity_id), to_proj_id or str(to_entity_id), type,
+            to_projection=bool(to_proj_id),
+        )
         if edge is None:
             return None
         return Relationship(
@@ -1297,19 +1316,30 @@ class Mutation:
     def create_relationship(self, info: strawberry.Info, input: CreateRelationshipInput) -> Relationship:
         """Create (or update) a directional relationship edge between two entities.
 
-        Returns the real ArangoDB edge key as ``id`` so callers can attach
+        When ``to_projection_id`` is given the edge targets that projection
+        (a morph relationship); otherwise it targets the entity (ego). Returns
+        the real ArangoDB edge key as ``id`` so callers can attach
         relationship-scoped trait settings (e.g. conspyramid rank/role) to it.
         """
         repo = _em(info).repo
-        # Upsert: delete first if exists, then create fresh
-        repo.delete_relationship(str(input.from_entity_id), str(input.to_entity_id), input.type)
-        edge = repo.create_relationship(
-            str(input.from_entity_id), str(input.to_entity_id),
-            input.type, description=input.description,
-        )
+        from_id = str(input.from_entity_id)
+        to_proj_id = str(input.to_projection_id) if input.to_projection_id else None
+        # Upsert: delete first if exists, then create fresh.
+        if to_proj_id:
+            repo.delete_relationship(from_id, to_proj_id, input.type, to_projection=True)
+            edge = repo.create_relationship(
+                from_id, to_proj_id, input.type,
+                description=input.description, to_projection=True,
+            )
+        else:
+            repo.delete_relationship(from_id, str(input.to_entity_id), input.type)
+            edge = repo.create_relationship(
+                from_id, str(input.to_entity_id), input.type,
+                description=input.description,
+            )
         return Relationship(
             id=edge["_key"],
-            from_entity_id=str(input.from_entity_id),
+            from_entity_id=from_id,
             to_entity_id=str(input.to_entity_id),
             type=input.type,
             description=input.description,
@@ -1319,8 +1349,10 @@ class Mutation:
     def delete_relationship(self, info: strawberry.Info, input: DeleteRelationshipInput) -> bool:
         """Delete a directional relationship edge between two entities."""
         repo = _em(info).repo
+        to_proj_id = str(input.to_projection_id) if input.to_projection_id else None
         return repo.delete_relationship(
-            str(input.from_entity_id), str(input.to_entity_id), input.type,
+            str(input.from_entity_id), to_proj_id or str(input.to_entity_id), input.type,
+            to_projection=bool(to_proj_id),
         )
 
     @strawberry.mutation
@@ -1328,21 +1360,32 @@ class Mutation:
                                to_entity_id: strawberry.ID, rel_type: str = "relation",
                                trait_id: strawberry.ID = "", die: GqlDieType = GqlDieType.D6,
                                traitset_id: Optional[str] = None,
+                               to_projection_id: Optional[strawberry.ID] = None,
                                statement: str = "") -> TraitSetting:
         """Create a rated trait on a relationship edge.
 
         Attaches to the *real* ArangoDB edge key (not a synthetic key), so the
         faction canvas can read rank/role traits back. The trait set is derived
-        from the trait registry entry unless explicitly overridden.
+        from the trait registry entry unless explicitly overridden. When
+        ``to_projection_id`` is given the edge targets that projection (morph);
+        otherwise it targets the entity (ego).
         """
         repo = _em(info).repo
         trait = repo.get_trait(str(trait_id))
         ts_id = traitset_id or (trait.traitset_id if trait else None)
         if not ts_id:
             raise ValueError(f"Cannot resolve traitset for trait '{trait_id}'")
-        rel = repo.get_relationship(str(from_entity_id), str(to_entity_id), rel_type)
+
+        to_proj_id = str(to_projection_id) if to_projection_id else None
+        rel = repo.get_relationship(
+            str(from_entity_id), to_proj_id or str(to_entity_id), rel_type,
+            to_projection=bool(to_proj_id),
+        )
         if not rel:
-            rel = repo.create_relationship(str(from_entity_id), str(to_entity_id), rel_type)
+            rel = repo.create_relationship(
+                str(from_entity_id), to_proj_id or str(to_entity_id), rel_type,
+                to_projection=bool(to_proj_id),
+            )
         edge_key = rel["_key"]
 
         ts = DomainTraitSetting(

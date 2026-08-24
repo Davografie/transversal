@@ -196,6 +196,7 @@
               <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
+                  <span v-if="t.fromType === 'relationship' && t.relationshipContactName" class="trait-contact">→ {{ t.relationshipContactName }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
                   <span v-if="t.notes" class="trait-notes">{{ t.notes }}</span>
                   <div v-if="t.sfxIds?.length" class="sfx-cards">
@@ -280,6 +281,7 @@
         </div> <!-- .trait-list -->
       <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
       <button v-if="!overrideEntityId && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
+      <button v-if="isForeignSheet && !showAddTrait" class="add-trait-btn" @click="openAddRelationshipTrait">+ Add relationship trait</button>
       <!-- 2-phase trait picker -->
       <div v-if="showAddTrait" class="trait-picker">
         <template v-if="addPhase === 'sets'">
@@ -512,6 +514,7 @@ let longPressTimer = null
 // ── Add trait picker ────────────────────────────
 const showAddTrait = ref(false)
 const addPhase = ref('sets')
+const addMode = ref('trait')  // 'trait' | 'relationship'
 const availableTraitSets = ref([])
 const availableTraits = ref([])
 const selectedTraitSet = ref(null)
@@ -539,6 +542,7 @@ const emptySetMessage = computed(() => {
 })
 
 async function openAddTrait() {
+  addMode.value = 'trait'
   addPhase.value = 'sets'
   selectedTraitSet.value = null
   const [tsData, trData] = await Promise.all([
@@ -562,12 +566,57 @@ async function openAddTrait() {
   showAddTrait.value = true
 }
 
+async function openAddRelationshipTrait() {
+  addMode.value = 'relationship'
+  addPhase.value = 'sets'
+  selectedTraitSet.value = null
+  // Relationship traits are universe-agnostic: offer every trait set that is
+  // usable on the 'relation' entity type.
+  const tsData = await graphql(`query { traitsets { id name order limit entityTypes } }`)
+  const relationSets = (tsData?.traitsets || [])
+    .filter(ts => (ts.entityTypes || []).includes('RELATION'))
+    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+  availableTraitSets.value = relationSets
+  const ids = relationSets.map(ts => ts.id)
+  if (ids.length) {
+    const trData = await graphql(
+      `query($ids: [ID!]!) { traitsByTraitsets(traitsetIds: $ids) { id name traitsetId defaultDieType defaultRatingType } }`,
+      { ids },
+    )
+    availableTraits.value = trData?.traitsByTraitsets || []
+  } else {
+    availableTraits.value = []
+  }
+  showAddTrait.value = true
+}
+
 function selectSet(ts) {
   selectedTraitSet.value = ts
   addPhase.value = 'traits'
 }
 
 async function addTrait(trait) {
+  if (addMode.value === 'relationship') {
+    const result = await graphql(`mutation($from: ID!, $to: ID!, $toProj: ID, $traitId: ID!, $die: DieType!) {
+      addRelationshipTrait(fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj, traitId: $traitId, die: $die) { id }
+    }`, {
+      from: props.viewerEntityId,
+      to: props.overrideEntityId,
+      toProj: entity.value?.currentProjection || null,
+      traitId: trait.id,
+      die: (trait.defaultDieType || 'd6').toUpperCase(),
+    })
+    if (!result?.addRelationshipTrait) {
+      console.error('addRelationshipTrait failed:', error.value || 'unknown error')
+      return
+    }
+    showAddTrait.value = false
+    addPhase.value = 'sets'
+    selectedTraitSet.value = null
+    fetchEntity()
+    return
+  }
+
   const result = await graphql(`mutation($eid: ID!, $input: TraitSettingInput!) {
     addTraitSetting(entityId: $eid, input: $input) { id name traitsetName }
   }`, {
@@ -842,6 +891,10 @@ const QUERY = `
         knownTo
         possibleSfxIds
         transferFlags
+        relationshipContactId
+        relationshipContactName
+        relationshipContactType
+        relationshipType
       }
       effectiveTraitSettings {
         id
@@ -867,6 +920,10 @@ const QUERY = `
         knownTo
         possibleSfxIds
         transferFlags
+        relationshipContactId
+        relationshipContactName
+        relationshipContactType
+        relationshipType
       }
     }
   }
@@ -901,6 +958,9 @@ function applyEntity(e) {
   allTraitSettings.value = e.traitSettings || []
   effectiveSettings.value = e.effectiveTraitSettings || []
   recomputeTraitSets()
+  // The relationship widget keys on the target's active projection, which is
+  // only known after the entity loads — refresh it here.
+  if (isForeignSheet.value) fetchRelationship()
 }
 
 async function resolveNames(e) {
@@ -1292,9 +1352,10 @@ async function fetchRelationship() {
     relationship.value = null
     return
   }
+  const toProj = entity.value?.currentProjection || null
   const query = `
-    query($viewer: ID!, $target: ID!) {
-      relationship(fromEntityId: $viewer, toEntityId: $target) {
+    query($viewer: ID!, $target: ID!, $toProj: ID) {
+      relationship(fromEntityId: $viewer, toEntityId: $target, toProjectionId: $toProj) {
         description
       }
     }
@@ -1302,6 +1363,7 @@ async function fetchRelationship() {
   const data = await graphql(query, {
     viewer: props.viewerEntityId,
     target: props.overrideEntityId,
+    toProj,
   })
   relationship.value = data?.relationship || null
 }
@@ -1309,8 +1371,8 @@ async function fetchRelationship() {
 async function saveRelationship() {
   if (!props.viewerEntityId || !props.overrideEntityId) return
   const query = `
-    mutation($from: ID!, $to: ID!, $desc: String!) {
-      createRelationship(input: { fromEntityId: $from, toEntityId: $to, description: $desc }) {
+    mutation($from: ID!, $to: ID!, $toProj: ID, $desc: String!) {
+      createRelationship(input: { fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj, description: $desc }) {
         description
       }
     }
@@ -1318,6 +1380,7 @@ async function saveRelationship() {
   await graphql(query, {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
+    toProj: entity.value?.currentProjection || null,
     desc: relDescription.value,
   })
   showRelEditor.value = false
@@ -1327,8 +1390,8 @@ async function saveRelationship() {
 async function createImmediateRelationship() {
   if (!props.viewerEntityId || !props.overrideEntityId) return
   const query = `
-    mutation($from: ID!, $to: ID!) {
-      createRelationship(input: { fromEntityId: $from, toEntityId: $to }) {
+    mutation($from: ID!, $to: ID!, $toProj: ID) {
+      createRelationship(input: { fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj }) {
         description
       }
     }
@@ -1336,6 +1399,7 @@ async function createImmediateRelationship() {
   await graphql(query, {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
+    toProj: entity.value?.currentProjection || null,
   })
   await fetchRelationship()
 }
@@ -1353,13 +1417,14 @@ function openBlueBookLetter() {
 async function removeRelationship() {
   if (!props.viewerEntityId || !props.overrideEntityId) return
   const query = `
-    mutation($from: ID!, $to: ID!) {
-      deleteRelationship(input: { fromEntityId: $from, toEntityId: $to })
+    mutation($from: ID!, $to: ID!, $toProj: ID) {
+      deleteRelationship(input: { fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj })
     }
   `
   await graphql(query, {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
+    toProj: entity.value?.currentProjection || null,
   })
   relationship.value = null
   showRelEditor.value = false
@@ -2220,6 +2285,12 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .trait-name.disabled:hover {
   color: inherit;
+}
+
+.trait-contact {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: 4px;
 }
 
 .trait-statement {

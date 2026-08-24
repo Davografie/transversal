@@ -946,6 +946,7 @@ class CreateRelationshipInput:
     to_entity_id: strawberry.ID
     type: str = "associate"
     description: str = ""
+    to_projection_id: Optional[strawberry.ID] = None
 
 
 @strawberry.input
@@ -954,6 +955,7 @@ class DeleteRelationshipInput:
     from_entity_id: strawberry.ID
     to_entity_id: strawberry.ID
     type: str = "associate"
+    to_projection_id: Optional[strawberry.ID] = None
 
 
 # ── Related Entity ────────────────────────────────────

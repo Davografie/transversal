@@ -1188,9 +1188,13 @@ class EntityRepository:
         self.update_entity(parent)
 
     def get_relationship(
-        self, from_id: str, to_id: str, rel_type: str
+        self, from_id: str, to_id: str, rel_type: str, to_projection: bool = False
     ) -> dict | None:
-        """Get a directional relationship edge between two entities."""
+        """Get a directional relationship edge between two entities.
+
+        ``to_projection=True`` matches edges whose target is a projection.
+        """
+        to_ref = f"{PROJECTIONS}/{to_id}" if to_projection else f"{ENTITIES}/{to_id}"
         query = f"""
             FOR r IN {RELATIONSHIPS}
             FILTER r._from == @from_ref AND r._to == @to_ref AND r.type == @rel_type
@@ -1199,7 +1203,7 @@ class EntityRepository:
         """
         cursor = list(self.db.aql.execute(query, bind_vars={
             "from_ref": f"{ENTITIES}/{from_id}",
-            "to_ref": f"{ENTITIES}/{to_id}",
+            "to_ref": to_ref,
             "rel_type": rel_type,
         }))
         return cursor[0] if cursor else None
@@ -1209,9 +1213,10 @@ class EntityRepository:
         return self._relationships.get(edge_key)
 
     def delete_relationship(
-        self, from_id: str, to_id: str, rel_type: str
+        self, from_id: str, to_id: str, rel_type: str, to_projection: bool = False
     ) -> bool:
         """Delete a directional relationship edge between two entities."""
+        to_ref = f"{PROJECTIONS}/{to_id}" if to_projection else f"{ENTITIES}/{to_id}"
         query = f"""
             FOR r IN {RELATIONSHIPS}
             FILTER r._from == @from_ref AND r._to == @to_ref AND r.type == @rel_type
@@ -1220,7 +1225,7 @@ class EntityRepository:
         """
         result = self.db.aql.execute(query, bind_vars={
             "from_ref": f"{ENTITIES}/{from_id}",
-            "to_ref": f"{ENTITIES}/{to_id}",
+            "to_ref": to_ref,
             "rel_type": rel_type,
         })
         return bool(list(result))
