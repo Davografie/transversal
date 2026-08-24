@@ -136,3 +136,40 @@ def test_cascade_cleanup_removes_projection_target_edges():
     finally:
         repo.delete_entity(A)
         repo.delete_entity(B)
+
+
+def test_is_transversal_derivation():
+    repo = _repo
+    A = "test-transversal-a"   # one native projection → not multiversal
+    B = "test-transversal-b"   # two native projections → multiversal
+    F = "test-transversal-f"   # faction with two active universes → multiversal
+    for eid in (A, B, F):
+        repo.delete_entity(eid)
+    try:
+        repo.create_entity(Entity(id=A, type=EntityType.CHARACTER, name="A", current_universe="earth"))
+        repo.create_projection(Projection(
+            id=f"{A}:earth", entity_id=A, origin_universe="earth", universe="earth",
+            transversal_type=TransversalType.NATIVE,
+        ))
+
+        repo.create_entity(Entity(id=B, type=EntityType.CHARACTER, name="B", current_universe="earth"))
+        repo.create_projection(Projection(
+            id=f"{B}:earth", entity_id=B, origin_universe="earth", universe="earth",
+            transversal_type=TransversalType.NATIVE,
+        ))
+        repo.create_projection(Projection(
+            id=f"{B}:emberline", entity_id=B, origin_universe="emberline", universe="emberline",
+            transversal_type=TransversalType.NATIVE,
+        ))
+
+        repo.create_entity(Entity(
+            id=F, type=EntityType.FACTION, name="F", current_universe="earth",
+            active_universes=["earth", "emberline"],
+        ))
+
+        assert repo.is_transversal(repo.get_entity(A)) is False
+        assert repo.is_transversal(repo.get_entity(B)) is True
+        assert repo.is_transversal(repo.get_entity(F)) is True
+    finally:
+        for eid in (A, B, F):
+            repo.delete_entity(eid)

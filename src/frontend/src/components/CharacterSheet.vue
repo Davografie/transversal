@@ -597,12 +597,11 @@ function selectSet(ts) {
 
 async function addTrait(trait) {
   if (addMode.value === 'relationship') {
-    const result = await graphql(`mutation($from: ID!, $to: ID!, $toProj: ID, $traitId: ID!, $die: DieType!) {
-      addRelationshipTrait(fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj, traitId: $traitId, die: $die) { id }
+    const result = await graphql(`mutation($from: ID!, $to: ID!, $traitId: ID!, $die: DieType!) {
+      addRelationshipTrait(fromEntityId: $from, toEntityId: $to, traitId: $traitId, die: $die) { id }
     }`, {
       from: props.viewerEntityId,
       to: props.overrideEntityId,
-      toProj: entity.value?.currentProjection || null,
       traitId: trait.id,
       die: (trait.defaultDieType || 'd6').toUpperCase(),
     })
@@ -958,9 +957,6 @@ function applyEntity(e) {
   allTraitSettings.value = e.traitSettings || []
   effectiveSettings.value = e.effectiveTraitSettings || []
   recomputeTraitSets()
-  // The relationship widget keys on the target's active projection, which is
-  // only known after the entity loads — refresh it here.
-  if (isForeignSheet.value) fetchRelationship()
 }
 
 async function resolveNames(e) {
@@ -1352,10 +1348,9 @@ async function fetchRelationship() {
     relationship.value = null
     return
   }
-  const toProj = entity.value?.currentProjection || null
   const query = `
-    query($viewer: ID!, $target: ID!, $toProj: ID) {
-      relationship(fromEntityId: $viewer, toEntityId: $target, toProjectionId: $toProj) {
+    query($viewer: ID!, $target: ID!) {
+      relationship(fromEntityId: $viewer, toEntityId: $target) {
         description
       }
     }
@@ -1363,7 +1358,6 @@ async function fetchRelationship() {
   const data = await graphql(query, {
     viewer: props.viewerEntityId,
     target: props.overrideEntityId,
-    toProj,
   })
   relationship.value = data?.relationship || null
 }
@@ -1371,8 +1365,8 @@ async function fetchRelationship() {
 async function saveRelationship() {
   if (!props.viewerEntityId || !props.overrideEntityId) return
   const query = `
-    mutation($from: ID!, $to: ID!, $toProj: ID, $desc: String!) {
-      createRelationship(input: { fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj, description: $desc }) {
+    mutation($from: ID!, $to: ID!, $desc: String!) {
+      createRelationship(input: { fromEntityId: $from, toEntityId: $to, description: $desc }) {
         description
       }
     }
@@ -1380,7 +1374,6 @@ async function saveRelationship() {
   await graphql(query, {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
-    toProj: entity.value?.currentProjection || null,
     desc: relDescription.value,
   })
   showRelEditor.value = false
@@ -1390,8 +1383,8 @@ async function saveRelationship() {
 async function createImmediateRelationship() {
   if (!props.viewerEntityId || !props.overrideEntityId) return
   const query = `
-    mutation($from: ID!, $to: ID!, $toProj: ID) {
-      createRelationship(input: { fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj }) {
+    mutation($from: ID!, $to: ID!) {
+      createRelationship(input: { fromEntityId: $from, toEntityId: $to }) {
         description
       }
     }
@@ -1399,7 +1392,6 @@ async function createImmediateRelationship() {
   await graphql(query, {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
-    toProj: entity.value?.currentProjection || null,
   })
   await fetchRelationship()
 }
@@ -1417,14 +1409,13 @@ function openBlueBookLetter() {
 async function removeRelationship() {
   if (!props.viewerEntityId || !props.overrideEntityId) return
   const query = `
-    mutation($from: ID!, $to: ID!, $toProj: ID) {
-      deleteRelationship(input: { fromEntityId: $from, toEntityId: $to, toProjectionId: $toProj })
+    mutation($from: ID!, $to: ID!) {
+      deleteRelationship(input: { fromEntityId: $from, toEntityId: $to })
     }
   `
   await graphql(query, {
     from: props.viewerEntityId,
     to: props.overrideEntityId,
-    toProj: entity.value?.currentProjection || null,
   })
   relationship.value = null
   showRelEditor.value = false

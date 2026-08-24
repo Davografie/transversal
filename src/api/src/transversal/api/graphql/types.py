@@ -511,8 +511,8 @@ class TraitSetting:
     def ego(self, info: strawberry.Info) -> bool:
         """Entity-anchored traits (from_type='entity') are ego; others morph.
 
-        Relationship traits follow their relationship edge's target endpoint:
-        an entity target is ego, a projection target is morph.
+        Relationship traits are ego only when their edge is entity→entity
+        (both soul-level); any projection endpoint makes them morph.
         """
         if self.from_type == "entity":
             return True
@@ -520,7 +520,10 @@ class TraitSetting:
             em = info.context["entity_manager"]
             edge = em.repo.get_relationship_by_key(str(self.entity_id))
             if edge is not None:
-                return not str(edge.get("_to", "")).startswith("projections/")
+                return (
+                    str(edge.get("_from", "")).startswith("entities/")
+                    and str(edge.get("_to", "")).startswith("entities/")
+                )
             return False
         return False
 
@@ -946,7 +949,7 @@ class CreateRelationshipInput:
     to_entity_id: strawberry.ID
     type: str = "associate"
     description: str = ""
-    to_projection_id: Optional[strawberry.ID] = None
+    elevated: bool = False  # True → entity→entity (both multiversal); False → projection→projection
 
 
 @strawberry.input
@@ -955,7 +958,7 @@ class DeleteRelationshipInput:
     from_entity_id: strawberry.ID
     to_entity_id: strawberry.ID
     type: str = "associate"
-    to_projection_id: Optional[strawberry.ID] = None
+    elevated: bool = False
 
 
 # ── Related Entity ────────────────────────────────────

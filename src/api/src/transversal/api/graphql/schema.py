@@ -102,6 +102,30 @@ def _raz(info: strawberry.Info) -> RazmeritService:
     return info.context["razmerit_service"]
 
 
+# Relationship types that model a *personal* relationship between two beings
+# (and therefore resolve to entity/projection handles). Structural edges
+# (super/transversal/membership/commands/gifted/suspects/hostile_to) stay
+# entity→entity and are not routed through this resolver.
+PERSONAL_RELATIONSHIP_TYPES = {"associate", "relation"}
+
+
+def _resolve_relationship_endpoint(repo, entity_id, elevated: bool = False):
+    """Resolve a personal-relationship endpoint to ``(id, is_projection)``.
+
+    Elevated + multiversal → the entity itself (soul-level, universal).
+    Otherwise the entity's active projection (body-level, universe-local),
+    falling back to the entity when it has no projection.
+    """
+    entity = repo.get_entity(str(entity_id))
+    if entity is None:
+        return str(entity_id), False
+    if elevated and repo.is_transversal(entity):
+        return str(entity_id), False
+    if entity.current_projection:
+        return str(entity.current_projection), True
+    return str(entity_id), False
+
+
 def _entity_to_gql(e: DomainEntity) -> Entity:
     return Entity(
         id=e.id, type=e.type, name=e.name, razmerit=e.razmerit,
@@ -656,21 +680,25 @@ class Query:
         from_entity_id: strawberry.ID,
         to_entity_id: strawberry.ID,
         type: str = "associate",
-        to_projection_id: Optional[strawberry.ID] = None,
+        elevated: bool = False,
     ) -> Optional[Relationship]:
         """Get a directional relationship edge between two entities, or null."""
         repo = _em(info).repo
-        to_proj_id = str(to_projection_id) if to_projection_id else None
-        edge = repo.get_relationship(
-            str(from_entity_id), to_proj_id or str(to_entity_id), type,
-            to_projection=bool(to_proj_id),
-        )
+        from_id = str(from_entity_id)
+        to_id = str(to_entity_id)
+        if type in PERSONAL_RELATIONSHIP_TYPES:
+            frm, from_proj = _resolve_relationship_endpoint(repo, from_id, elevated)
+            to, to_proj = _resolve_relationship_endpoint(repo, to_id, elevated)
+        else:
+            frm, from_proj = from_id, False
+            to, to_proj = to_id, False
+        edge = repo.get_relationship(frm, to, type, from_projection=from_proj, to_projection=to_proj)
         if edge is None:
             return None
         return Relationship(
             id=edge["_key"],
-            from_entity_id=str(from_entity_id),
-            to_entity_id=str(to_entity_id),
+            from_entity_id=from_id,
+            to_entity_id=to_id,
             type=edge.get("type", type),
             description=edge.get("description", ""),
         )
@@ -1316,31 +1344,30 @@ class Mutation:
     def create_relationship(self, info: strawberry.Info, input: CreateRelationshipInput) -> Relationship:
         """Create (or update) a directional relationship edge between two entities.
 
-        When ``to_projection_id`` is given the edge targets that projection
-        (a morph relationship); otherwise it targets the entity (ego). Returns
-        the real ArangoDB edge key as ``id`` so callers can attach
-        relationship-scoped trait settings (e.g. conspyramid rank/role) to it.
+        Personal types (``associate``/``relation``) resolve each endpoint to the
+        entity (elevated + multiversal) or its active projection (default).
+        Structural types (super/transversal/membership/…) stay entity→entity.
+        Returns the real ArangoDB edge key as ``id``.
         """
         repo = _em(info).repo
         from_id = str(input.from_entity_id)
-        to_proj_id = str(input.to_projection_id) if input.to_projection_id else None
-        # Upsert: delete first if exists, then create fresh.
-        if to_proj_id:
-            repo.delete_relationship(from_id, to_proj_id, input.type, to_projection=True)
-            edge = repo.create_relationship(
-                from_id, to_proj_id, input.type,
-                description=input.description, to_projection=True,
-            )
+        to_id = str(input.to_entity_id)
+        if input.type in PERSONAL_RELATIONSHIP_TYPES:
+            frm, from_proj = _resolve_relationship_endpoint(repo, from_id, input.elevated)
+            to, to_proj = _resolve_relationship_endpoint(repo, to_id, input.elevated)
         else:
-            repo.delete_relationship(from_id, str(input.to_entity_id), input.type)
-            edge = repo.create_relationship(
-                from_id, str(input.to_entity_id), input.type,
-                description=input.description,
-            )
+            frm, from_proj = from_id, False
+            to, to_proj = to_id, False
+        # Upsert: delete first if exists, then create fresh.
+        repo.delete_relationship(frm, to, input.type, from_projection=from_proj, to_projection=to_proj)
+        edge = repo.create_relationship(
+            frm, to, input.type, description=input.description,
+            from_projection=from_proj, to_projection=to_proj,
+        )
         return Relationship(
             id=edge["_key"],
             from_entity_id=from_id,
-            to_entity_id=str(input.to_entity_id),
+            to_entity_id=to_id,
             type=input.type,
             description=input.description,
         )
@@ -1349,10 +1376,16 @@ class Mutation:
     def delete_relationship(self, info: strawberry.Info, input: DeleteRelationshipInput) -> bool:
         """Delete a directional relationship edge between two entities."""
         repo = _em(info).repo
-        to_proj_id = str(input.to_projection_id) if input.to_projection_id else None
+        from_id = str(input.from_entity_id)
+        to_id = str(input.to_entity_id)
+        if input.type in PERSONAL_RELATIONSHIP_TYPES:
+            frm, from_proj = _resolve_relationship_endpoint(repo, from_id, input.elevated)
+            to, to_proj = _resolve_relationship_endpoint(repo, to_id, input.elevated)
+        else:
+            frm, from_proj = from_id, False
+            to, to_proj = to_id, False
         return repo.delete_relationship(
-            str(input.from_entity_id), to_proj_id or str(input.to_entity_id), input.type,
-            to_projection=bool(to_proj_id),
+            frm, to, input.type, from_projection=from_proj, to_projection=to_proj,
         )
 
     @strawberry.mutation
@@ -1360,15 +1393,15 @@ class Mutation:
                                to_entity_id: strawberry.ID, rel_type: str = "relation",
                                trait_id: strawberry.ID = "", die: GqlDieType = GqlDieType.D6,
                                traitset_id: Optional[str] = None,
-                               to_projection_id: Optional[strawberry.ID] = None,
+                               elevated: bool = False,
                                statement: str = "") -> TraitSetting:
         """Create a rated trait on a relationship edge.
 
         Attaches to the *real* ArangoDB edge key (not a synthetic key), so the
         faction canvas can read rank/role traits back. The trait set is derived
-        from the trait registry entry unless explicitly overridden. When
-        ``to_projection_id`` is given the edge targets that projection (morph);
-        otherwise it targets the entity (ego).
+        from the trait registry entry unless explicitly overridden. Personal
+        relationship types resolve to projection→projection by default, or
+        entity→entity when ``elevated`` and both sides are multiversal.
         """
         repo = _em(info).repo
         trait = repo.get_trait(str(trait_id))
@@ -1376,16 +1409,16 @@ class Mutation:
         if not ts_id:
             raise ValueError(f"Cannot resolve traitset for trait '{trait_id}'")
 
-        to_proj_id = str(to_projection_id) if to_projection_id else None
-        rel = repo.get_relationship(
-            str(from_entity_id), to_proj_id or str(to_entity_id), rel_type,
-            to_projection=bool(to_proj_id),
-        )
+        if rel_type in PERSONAL_RELATIONSHIP_TYPES:
+            frm, from_proj = _resolve_relationship_endpoint(repo, str(from_entity_id), elevated)
+            to, to_proj = _resolve_relationship_endpoint(repo, str(to_entity_id), elevated)
+        else:
+            frm, from_proj = str(from_entity_id), False
+            to, to_proj = str(to_entity_id), False
+
+        rel = repo.get_relationship(frm, to, rel_type, from_projection=from_proj, to_projection=to_proj)
         if not rel:
-            rel = repo.create_relationship(
-                str(from_entity_id), to_proj_id or str(to_entity_id), rel_type,
-                to_projection=bool(to_proj_id),
-            )
+            rel = repo.create_relationship(frm, to, rel_type, from_projection=from_proj, to_projection=to_proj)
         edge_key = rel["_key"]
 
         ts = DomainTraitSetting(

@@ -1069,6 +1069,24 @@ class EntityRepository:
         result.update(self._domain_attunement_universes(entity))
         return sorted(result)
 
+    def is_transversal(self, entity: Entity) -> bool:
+        """Whether an entity exists in multiple universes (multiversal).
+
+        Occupant types (character/gmc/asset) are transversal when they hold more
+        than one NATIVE projection in distinct universes. Factions are
+        transversal when they list more than one active universe. Everything else
+        (locations, universes, subtraits, relations) is universe-local.
+        """
+        if entity.type == EntityType.FACTION:
+            return len(set(entity.active_universes or [])) > 1
+        if entity.type in (EntityType.CHARACTER, EntityType.GMC, EntityType.ASSET):
+            native = {
+                p.universe for p in self.get_projections_for_entity(entity.id)
+                if p.transversal_type == TransversalType.NATIVE and p.universe
+            }
+            return len(native) > 1
+        return False
+
     def _domain_attunement_universes(self, entity: Entity) -> set[str]:
         """Universes from domain-scoped attunements over this entity's active location chain."""
         location = self._active_location(entity)
@@ -1189,10 +1207,10 @@ class EntityRepository:
 
     def create_relationship(
         self, from_id: str, to_id: str, rel_type: str, description: str = "",
-        to_projection: bool = False,
+        from_projection: bool = False, to_projection: bool = False,
     ) -> dict:
         edge = {
-            "_from": f"{ENTITIES}/{from_id}",
+            "_from": f"{PROJECTIONS}/{from_id}" if from_projection else f"{ENTITIES}/{from_id}",
             "_to": f"{PROJECTIONS}/{to_id}" if to_projection else f"{ENTITIES}/{to_id}",
             "type": rel_type,
         }
@@ -1224,12 +1242,15 @@ class EntityRepository:
         self.update_entity(parent)
 
     def get_relationship(
-        self, from_id: str, to_id: str, rel_type: str, to_projection: bool = False
+        self, from_id: str, to_id: str, rel_type: str,
+        from_projection: bool = False, to_projection: bool = False,
     ) -> dict | None:
         """Get a directional relationship edge between two entities.
 
-        ``to_projection=True`` matches edges whose target is a projection.
+        ``from_projection`` / ``to_projection`` match edges whose respective
+        endpoint is a projection.
         """
+        from_ref = f"{PROJECTIONS}/{from_id}" if from_projection else f"{ENTITIES}/{from_id}"
         to_ref = f"{PROJECTIONS}/{to_id}" if to_projection else f"{ENTITIES}/{to_id}"
         query = f"""
             FOR r IN {RELATIONSHIPS}
@@ -1238,7 +1259,7 @@ class EntityRepository:
             RETURN r
         """
         cursor = list(self.db.aql.execute(query, bind_vars={
-            "from_ref": f"{ENTITIES}/{from_id}",
+            "from_ref": from_ref,
             "to_ref": to_ref,
             "rel_type": rel_type,
         }))
@@ -1249,9 +1270,11 @@ class EntityRepository:
         return self._relationships.get(edge_key)
 
     def delete_relationship(
-        self, from_id: str, to_id: str, rel_type: str, to_projection: bool = False
+        self, from_id: str, to_id: str, rel_type: str,
+        from_projection: bool = False, to_projection: bool = False,
     ) -> bool:
         """Delete a directional relationship edge between two entities."""
+        from_ref = f"{PROJECTIONS}/{from_id}" if from_projection else f"{ENTITIES}/{from_id}"
         to_ref = f"{PROJECTIONS}/{to_id}" if to_projection else f"{ENTITIES}/{to_id}"
         query = f"""
             FOR r IN {RELATIONSHIPS}
@@ -1260,7 +1283,7 @@ class EntityRepository:
             RETURN OLD
         """
         result = self.db.aql.execute(query, bind_vars={
-            "from_ref": f"{ENTITIES}/{from_id}",
+            "from_ref": from_ref,
             "to_ref": to_ref,
             "rel_type": rel_type,
         })
