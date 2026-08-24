@@ -142,6 +142,11 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("relationship_type", "string"),
     )),
     TriggerDef("on_character_create", "On Character Created", (Variable("entity_created", "entity"),)),
+    TriggerDef("on_projection_create", "On Projection Created", (
+        Variable("entity_created", "entity"),
+        Variable("projection_created", "projection"),
+        Variable("universe", "universe"),
+    )),
 ) + tuple(
     TriggerDef(value, _MENU_TRIGGER_LABELS[value], tuple(MENU_CONTEXT_VARIABLES[value]), group="menu")
     for value in MENU_CONTEXT_IDS

@@ -262,6 +262,10 @@ class EffectsEngine:
         if trigger == "on_character_create" and event.type == "character_created":
             return True
 
+        # on_projection_create
+        if trigger == "on_projection_create" and event.type == "projection_created":
+            return True
+
         # on_contest_loss / on_contest_win (from context)
         if trigger in ("on_contest_loss", "on_contest_win"):
             contest_winner = event.context.get("contest_winner")

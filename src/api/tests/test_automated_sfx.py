@@ -70,6 +70,20 @@ class TestNewTriggers:
         event = GameEvent(type="location_changed", entity_id="e1", universe="earth")
         assert not engine._trigger_matches(sfx, event)
 
+    def test_on_projection_create_matches(self):
+        engine = EffectsEngine()
+        sfx = SFX(id="sfx-proj", name="Projection Starter",
+                  trigger="on_projection_create")
+        event = GameEvent(type="projection_created", entity_id="e1", universe="three_realms")
+        assert engine._trigger_matches(sfx, event)
+
+    def test_on_projection_create_no_match_on_other(self):
+        engine = EffectsEngine()
+        sfx = SFX(id="sfx-proj", name="Projection Starter",
+                  trigger="on_projection_create")
+        event = GameEvent(type="character_created", entity_id="e1", universe="earth")
+        assert not engine._trigger_matches(sfx, event)
+
     def test_on_contest_loss_matches_when_opponent_wins(self):
         engine = EffectsEngine()
         sfx = SFX(id="sfx-loss", name="Sore Loser",

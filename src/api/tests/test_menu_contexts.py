@@ -56,6 +56,15 @@ def test_on_character_create_exposes_created_entity():
     assert {v.name: v.type for v in vs} == {"entity_created": "entity"}
 
 
+def test_on_projection_create_exposes_projection_context():
+    vs = trigger_variables("on_projection_create")
+    assert {v.name: v.type for v in vs} == {
+        "entity_created": "entity",
+        "projection_created": "projection",
+        "universe": "universe",
+    }
+
+
 def test_triggers_registry_declares_labels_and_variables():
     by_value = {t.value: t for t in TRIGGERS}
     # Every trigger the editor renders has a human label.
@@ -93,12 +102,14 @@ def test_state_fire_sites_populate_declared_variables(monkeypatch):
     # event_type → trigger string (mirrors EffectsEngine._trigger_matches).
     event_trigger = {
         "character_created": "on_character_create",
+        "projection_created": "on_projection_create",
         "location_changed": "on_location_change",
         "trait_updated": "on_trait_change",
         "relationship_created": "on_relationship_create",
     }
     cases = {
         "character_created": {"entity_created": "c1"},
+        "projection_created": {"entity_created": "c1", "projection_created": "c1:three_realms", "universe": "three_realms"},
         "location_changed": {"from_location": "a", "to_location": "b", "universe": "earth"},
         "trait_updated": {"trait": "t1", "traitset": "ts1"},
         "relationship_created": {"target_entity": "e2", "relationship_type": "ally"},
