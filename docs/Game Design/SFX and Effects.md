@@ -414,6 +414,10 @@ Every target picker in the GM panel routes through one component, `src/frontend/
 
 Fires matching condition-gated SFX for a single state event. A re-entrancy guard (`_firing` set of `(entity_id, event_type)`) prevents an SFX-triggered mutation from re-entering the same event. Pending `{choose_*}` effects are emitted via `roll_orchestrator._emit_pending_choices`.
 
+### Projection creation (`fire_projection_created`)
+
+`fire_projection_created(entity_id, universe, projection_id)` is the single fire site for `on_projection_create`, called from every runtime path that produces a new Projection record: character/GMC/asset creation (the initial NATIVE body, in `create_entity`), `add_projection`, a universe move that spawns a fallback body (`move_to`), and travel-spawned bodies (`effects_commit`). Seed-time `create` / `create_projection` deliberately do not fire it.
+
 ### Contest outcome (`fire_contest_outcome_sfx`, line 54)
 
 Fires `on_contest_win` / `on_contest_loss` for both sides of a resolved manual contest. The event context carries `contest_winner`, `opponent_id`, `effect_die`, `high_stakes`, and `taken_out`; `{effect_die}` in an SFX result is substituted from this context. If `taken_out` is true, `_mark_taken_out` is called for the loser.
