@@ -307,6 +307,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
+import { useEntityCache } from '../composables/entityCache.js'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
@@ -336,6 +337,7 @@ function displayName(name) {
 }
 
 const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
+const entityCache = useEntityCache()
 const entity = ref(null)
 const activeProjection = computed(() => {
   const e = entity.value
@@ -861,13 +863,30 @@ async function fetchEntity() {
   if (!id) return
   const data = await graphql(QUERY, { id })
   if (data?.entity) {
-    entity.value = data.entity
-    resolveNames(data.entity)
-
-    allTraitSettings.value = data.entity.traitSettings || []
-    effectiveSettings.value = data.entity.effectiveTraitSettings || []
-    recomputeTraitSets()
+    entityCache.setSheet(id, data.entity)
+    applyEntity(data.entity)
   }
+}
+
+// Render the cached sheet immediately when we have it; otherwise fetch fresh.
+// Used on open/switch so re-opening a sheet doesn't re-download the whole entity.
+function loadCachedEntity() {
+  const id = props.overrideEntityId || props.entityId
+  if (!id) return
+  const cached = entityCache.getSheet(id)
+  if (cached) {
+    applyEntity(cached)
+    return
+  }
+  fetchEntity()
+}
+
+function applyEntity(e) {
+  entity.value = e
+  resolveNames(e)
+  allTraitSettings.value = e.traitSettings || []
+  effectiveSettings.value = e.effectiveTraitSettings || []
+  recomputeTraitSets()
 }
 
 async function resolveNames(e) {
@@ -1244,12 +1263,12 @@ onUnmounted(() => {
 
 onMounted(() => {
   console.log('[diag] CharacterSheet fetchEntity mounted', { entityId: props.entityId })
-  fetchEntity()
+  loadCachedEntity()
   fetchSfxCatalog()
 })
-watch(() => props.entityId, fetchEntity)
-watch(() => props.universe, fetchEntity)
-watch(() => props.overrideEntityId, fetchEntity)
+watch(() => props.entityId, loadCachedEntity)
+watch(() => props.universe, loadCachedEntity)
+watch(() => props.overrideEntityId, loadCachedEntity)
 watch(() => [props.entityId, props.overrideEntityId], () => { activeSetName.value = null })
 watch(showAllTraits, recomputeTraitSets)
 

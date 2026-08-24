@@ -303,11 +303,13 @@ import { useApi } from './composables/useApi.js'
 import { usePanelBus } from './composables/usePanelBus.js'
 import { useEntityCrud } from './composables/useEntityCrud.js'
 import { useMediaQuality } from './composables/useMediaQuality.js'
+import { useEntityCache } from './composables/entityCache.js'
 import ToastBar from './components/ToastBar.vue'
 
 const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools } = useApi()
 const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
+const entityCache = useEntityCache()
 const bus = usePanelBus()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
@@ -388,7 +390,7 @@ async function initLocation() {
         locationName.value = 'err: ' + e.message
       }
       fetchLocationBg()
-      fetchPeers()
+      fetchPeers(true)
     } else {
       DIAG.mark('initLocation-no-entity', { graphqlResponse: json })
       locationName.value = 'no entity'
@@ -418,26 +420,40 @@ async function fetchLocationBg() {
   }
 }
 
-async function fetchPeers() {
+// The full entity list (with sheet images) is location-independent, so we cache
+// it and only re-fetch when the data itself may have changed (SSE / location
+// events pass force=true). Panel-open refreshes reuse the cache.
+let peersCache = null  // { entities, at }
+const PEERS_TTL_MS = 30_000
+
+function applyPeers(entities) {
+  const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
+  const atLocation = entities
+    .filter(e => e.currentLocation === currentLocationId.value)
+    .filter(e => gmMode.value || !e.unpublished)
+  const here = entities.find(e => e.id === currentLocationId.value)
+  const combined = here && !atLocation.some(e => e.id === here.id)
+    ? [here, ...atLocation]
+    : atLocation
+  peers.value = combined.sort((a, b) => {
+    if (a.id === entityId.value) return -1
+    if (b.id === entityId.value) return 1
+    return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
+  })
+}
+
+async function fetchPeers(force = false) {
+  if (!force && peersCache && Date.now() - peersCache.at < PEERS_TTL_MS) {
+    applyPeers(peersCache.entities)
+    return
+  }
   DIAG.mark('fetchPeers-start', { currentLocationId: currentLocationId.value })
   const data = await graphql(`query {
     entities { id type name sheetImage: image(role: "sheet") currentLocation unpublished }
   }`)
   if (data?.entities) {
-    const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
-    const atLocation = data.entities
-      .filter(e => e.currentLocation === currentLocationId.value)
-      .filter(e => gmMode.value || !e.unpublished)
-    // Also surface the current location itself so its sheet can be opened.
-    const here = data.entities.find(e => e.id === currentLocationId.value)
-    const combined = here && !atLocation.some(e => e.id === here.id)
-      ? [here, ...atLocation]
-      : atLocation
-    peers.value = combined.sort((a, b) => {
-      if (a.id === entityId.value) return -1
-      if (b.id === entityId.value) return 1
-      return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
-    })
+    peersCache = { entities: data.entities, at: Date.now() }
+    applyPeers(data.entities)
     DIAG.mark('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
   } else {
     DIAG.mark('fetchPeers-no-data')
@@ -449,7 +465,7 @@ function onMoved(data) {
   if (data.universe) universe.value = data.universe
   currentLocationId.value = data.location_id || data.location
   fetchLocationBg()
-  fetchPeers()
+  fetchPeers(true)
 }
 
 const selfEntityId = ref(localStorage.getItem('entityId') || 'kael-1')  // stable identity (SSE/login); for GM this is not a "main" entity
@@ -795,7 +811,7 @@ async function setViewLocation(locId) {
     locationName.value = nav.location?.name || locId
   } catch {}
   fetchLocationBg()
-  fetchPeers()
+  fetchPeers(true)
 }
 
 async function switchViewLocation(locId) {
@@ -955,6 +971,7 @@ watch(lastEvent, (evt) => {
 
   switch (evt.type) {
     case 'razmerit_changed':
+      entityCache.invalidateSheet(evt.data?.entity_id)
       if (evt.data?.new_balance != null) {
         sheetRef.value?.setRazmerit(evt.data.new_balance, evt.data.entity_id)
       }
@@ -968,6 +985,7 @@ watch(lastEvent, (evt) => {
       break
     case 'trait_updated':
       // local patch handles display; SSE sync deferred
+      entityCache.invalidateSheet(evt.data?.entity_id)
       if (evt.data?.entity_id === entityId.value && evt.data?.trait_setting_id) {
         diceRef.value?.resyncTraitDie(evt.data.trait_setting_id, evt.data.new_dice ?? [evt.data.new_rating])
       }
@@ -981,7 +999,7 @@ watch(lastEvent, (evt) => {
         currentLocationId.value = evt.data.to
         if (evt.data?.universe) universe.value = evt.data.universe
         fetchLocationBg()
-        fetchPeers()
+        fetchPeers(true)
         fetch(`/api/v1/locations/${evt.data.to}/navigate`)
           .then(r => r.json())
           .then(nav => { locationName.value = nav.location?.name || evt.data.to })
@@ -995,6 +1013,7 @@ watch(lastEvent, (evt) => {
       }
       break
     case 'entity_updated':
+      entityCache.invalidateSheet(eid)
       if (eid === currentLocationId.value) fetchLocationBg()
       locationRef.value?.fetchNavWithLerp()
       break
@@ -1424,8 +1443,6 @@ function openSettings() {
   charSearching.value = false
   charSearchSearched.value = false
   charSearchError.value = ''
-  allCharactersCache = null
-  locationNamesLoaded = false
   fetchPlayerEntities()
   showLoginOverlay.value = true
 }
@@ -1505,18 +1522,17 @@ async function fetchEntitiesFor(pid) {
   try {
     const r = await fetch(`/api/v1/players/${pid}`)
     const p = await r.json()
-    if (p && p.entity_ids) {
-      const results = []
-      for (const eid of p.entity_ids) {
-        try {
-          const r2 = await fetch('/api/v1/graphql', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: `query($id: ID!) { entity(id: $id) { id name type sheetPortrait currentLocation currentUniverse } }`, variables: { id: eid } })
-          })
-          const json = await r2.json()
-          if (json.data?.entity) results.push(json.data.entity)
-        } catch {}
-      }
+    if (p && p.entity_ids?.length) {
+      const r2 = await fetch('/api/v1/graphql', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `query($ids: [ID!]!) { entities(ids: $ids) { id name type sheetPortrait currentLocation currentUniverse } }`,
+          variables: { ids: p.entity_ids }
+        })
+      })
+      const json = await r2.json()
+      const results = json.data?.entities || []
+      for (const e of results) entityCache.setEntity(e.id, e)
       return results
     }
   } catch {}
