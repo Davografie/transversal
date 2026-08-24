@@ -129,9 +129,12 @@
           <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.context[f.name]" type="number" :placeholder="f.default || ''" />
           <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
         </div>
-        <div v-if="newEffect.extraContext" class="ee-field">
-          <label>Other context (JSON)</label>
-          <textarea v-model="newEffect.extraContext" rows="2" placeholder='{"key": "value"}'></textarea>
+        <div v-if="hasExtraContext" class="ee-field">
+          <label>Other context</label>
+          <div v-for="(value, key) in newEffect.extraContext" :key="key" class="ee-extra-row">
+            <span class="ee-extra-key">{{ key }}</span>
+            <input v-model="newEffect.extraContext[key]" type="text" :placeholder="key" />
+          </div>
         </div>
         <div v-if="selectedAction.supportsDuration" class="ee-field">
           <label>Duration</label>
@@ -180,7 +183,7 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: '', duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', targetFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', targetFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
 
@@ -195,6 +198,8 @@ const selectedAction = computed(() => {
   if (!newEffect.actionId) return null
   return effectActions.value.find(a => a.actionId === newEffect.actionId) || null
 })
+
+const hasExtraContext = computed(() => Object.keys(newEffect.extraContext).length > 0)
 
 function toggleFilter(field, e) {
   const next = { ...newEffect.targetFilter }
@@ -300,7 +305,7 @@ function detectEntityMode(eff) {
 function onActionChange() {
   newEffect.fields = {}
   newEffect.context = {}
-  newEffect.extraContext = ''
+  newEffect.extraContext = {}
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = defaultScopeFor(selectedAction.value?.targetKind)
@@ -326,11 +331,6 @@ function strVal(v) {
   return (v === null || v === undefined) ? null : String(v)
 }
 
-function parseContext(s) {
-  if (!s) return {}
-  try { return JSON.parse(s) } catch { return {} }
-}
-
 function cleanContext(obj) {
   const out = {}
   for (const [k, v] of Object.entries(obj || {})) {
@@ -350,7 +350,7 @@ function buildEffect(meta) {
   let entity = newEffect.fields.entity || ''
   if (entityMode === 'choose') entity = '{choose_entity}'
   if (entityMode === 'random') entity = '{random:entity}'
-  const context = { ...cleanContext(newEffect.context), ...parseContext(newEffect.extraContext) }
+  const context = { ...cleanContext(newEffect.context), ...newEffect.extraContext }
   if ((context.transversal_type || 'inapposite') !== 'consciousness') {
     context.projection = 'active'
   }
@@ -428,10 +428,11 @@ function editEffect(i) {
   const extraCtx = {}
   for (const [k, v] of Object.entries(ctx)) {
     if (known.has(k)) knownCtx[k] = v
+    else if (k === 'projection' && v === 'active') continue // implicit morph-by-default
     else extraCtx[k] = v
   }
   newEffect.context = knownCtx
-  newEffect.extraContext = Object.keys(extraCtx).length ? JSON.stringify(extraCtx) : ''
+  newEffect.extraContext = extraCtx
   newEffect.duration = eff.duration
     ? {
         timers: (eff.duration.timers || []).map(t => ({ event: t.event || 'scene', remaining: t.remaining ?? 0 })),
@@ -447,7 +448,7 @@ function closeEditor() {
   newEffect.fields = {}
   newEffect.timing = 'IMMEDIATE'
   newEffect.context = {}
-  newEffect.extraContext = ''
+  newEffect.extraContext = {}
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
@@ -506,6 +507,9 @@ function rowClassFn(eff) {
 .ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
 .ee-form textarea { resize: vertical; min-height: 34px; }
 .ee-field { display: flex; flex-direction: column; gap: 2px; }
+.ee-extra-row { display: flex; align-items: center; gap: 6px; }
+.ee-extra-key { font-size: 9px; color: var(--text-dim); font-family: monospace; flex: none; min-width: 90px; }
+.ee-extra-row input { flex: 1; min-width: 0; }
 .ee-mode-row { display: flex; margin-top: 2px; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
