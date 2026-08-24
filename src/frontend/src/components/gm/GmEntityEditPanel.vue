@@ -3,7 +3,6 @@
     <div class="panel-top">
       <div class="panel-top-left">
         <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
-        <span class="entity-id" :title="entityId">{{ entityId }}</span>
       </div>
       <div class="panel-top-actions">
         <button
@@ -391,6 +390,7 @@ function openProjectionEditor(p) {
   panel.open({
     component: GmProjectionEditPanel,
     title: `Projection: ${p.originUniverse || p.universe}`,
+    id: p.id,
     props: { projection: p },
   })
 }
@@ -615,11 +615,6 @@ defineExpose({ refresh: loadImages })
 
 .panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .panel-top-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.entity-id {
-  font-size: 10px; font-family: monospace; color: var(--text-dim);
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-  padding: 1px 6px; border-radius: 4px; user-select: all;
-}
 .panel-top-actions { display: flex; align-items: center; gap: 6px; }
 .assume-btn {
   padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;

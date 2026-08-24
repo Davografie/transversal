@@ -9,6 +9,7 @@
       <header v-if="title" class="panel-header">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
+          <span v-if="id" class="panel-id" :title="id">{{ id }}</span>
         </slot>
       </header>
       <div class="panel-body">
@@ -24,6 +25,7 @@
       :depth="depth + 1"
       :min-visible-depth="minVisibleDepth"
       :title="child.title"
+      :id="child.id"
       closable
       :on-close="() => { child = null }"
       :on-replace="(spec) => { child = normalizeSpec(spec) }"
@@ -42,6 +44,7 @@ import { panelKey } from '@/composables/usePanel.js'
 
 const props = defineProps({
   title: { type: String, default: '' },
+  id: { type: String, default: '' },
   closable: { type: Boolean, default: false },
   nested: { type: Boolean, default: false },
   depth: { type: Number, default: 0 },
@@ -152,8 +155,21 @@ provide(panelKey, {
   flex-shrink: 0;
 }
 .panel-title {
+  flex: 1; min-width: 0;
   font-size: 12px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.5px;
+}
+.panel-id {
+  flex-shrink: 0;
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: none;
+  letter-spacing: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-body {

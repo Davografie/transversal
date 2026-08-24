@@ -1,6 +1,5 @@
 <template>
   <div>
-    <div v-if="sfx" class="sfx-id">ID: {{ sfx.id }}</div>
     <div class="sfx-summary">{{ sfxSummary }}</div>
     <!-- Shared form -->
     <div class="ps-form">
@@ -285,7 +284,7 @@ async function onDelete() {
   font-family: inherit; width: 100%; box-sizing: border-box;
 }
 .ps-form textarea { resize: vertical; min-height: 48px; }
-.sfx-id { font-size: 10px; color: var(--text-dim); font-family: monospace; margin-bottom: 6px; }
+
 .sfx-summary { font-size: 11px; color: var(--accent); font-family: monospace; background: rgba(64,136,212,0.08); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; line-height: 1.4; }
 .sfx-warnings { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .sfx-warning { font-size: 11px; color: #e8b54a; background: rgba(212,160,64,0.1); border: 1px solid rgba(212,160,64,0.3); border-radius: 4px; padding: 5px 8px; font-family: monospace; }

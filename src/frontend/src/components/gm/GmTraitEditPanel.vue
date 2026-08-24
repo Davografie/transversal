@@ -2,7 +2,6 @@
   <div>
     <!-- Trait details form (auto-save in edit mode) -->
     <template v-if="trait">
-      <div class="trait-id">ID: {{ trait.id }}</div>
       <div class="ps-form">
         <label>Name</label>
         <input v-model="form.name" />
@@ -380,6 +379,7 @@ function onSfxClick(sfx) {
   panel.open({
     component: GmSfxEditPanel,
     title: sfx.name || 'Edit SFX',
+    id: sfx.id,
     props: { sfx: sfx },
     listeners: {},
   })
@@ -396,7 +396,7 @@ async function onDelete() {
 
 <style scoped>
 .ps-form input, .ps-form select { font-size: 12px; padding: 6px 8px; }
-.trait-id { font-family: monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: none; cursor: pointer; }
 .checkbox-label input { width: auto; }
 .default-ego-row { display: flex; align-items: center; gap: 8px; }

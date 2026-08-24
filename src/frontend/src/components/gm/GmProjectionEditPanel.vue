@@ -1,6 +1,5 @@
 <template>
   <div>
-    <div class="proj-id">ID: {{ projection.id }}</div>
     <div class="ps-form">
       <label>Name</label>
       <input v-model="name" placeholder="Projection name (falls back to entity)" />
@@ -59,12 +58,6 @@ async function save() {
 </script>
 
 <style scoped>
-.proj-id {
-  font-family: monospace;
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-bottom: 8px;
-}
 .ps-form {
   display: flex;
   flex-direction: column;

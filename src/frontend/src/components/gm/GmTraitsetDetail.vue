@@ -1,6 +1,5 @@
 <template>
   <div>
-    <div class="traitset-id">ID: {{ traitset?.id || traitsetId }}</div>
     <div class="ps-form">
       <label>Name</label>
       <input v-model="form.name" />
@@ -130,6 +129,7 @@ function onTraitClick(t) {
   panel.open({
     component: GmTraitEditPanel,
     title: t.name,
+    id: t.id,
     props: { traitId: t.id, traitsetId: props.traitsetId },
   })
 }
@@ -163,7 +163,7 @@ async function onDeleteTraitset() {
 
 <style scoped>
 .ps-form input { font-size: 12px; padding: 6px 8px; }
-.traitset-id { font-family: monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+
 .trait-head-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
 .trait-head-actions .ps-add-btn { margin-top: 0; width: auto; }
 </style>

@@ -59,6 +59,7 @@ function onClick(ts) {
   panel.open({
     component: GmTraitsetDetail,
     title: ts.name,
+    id: ts.id,
     props: { traitsetId: ts.id },
   })
 }

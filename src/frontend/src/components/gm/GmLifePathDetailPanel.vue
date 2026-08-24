@@ -79,7 +79,7 @@ onMounted(() => {
 onUnmounted(() => { if (offLifepathSaved) offLifepathSaved() })
 
 function openTable(t) {
-  panel.open({ component: GmRollTableDetailPanel, title: t.name, props: { tableId: t.id, name: t.name } })
+  panel.open({ component: GmRollTableDetailPanel, title: t.name, id: t.id, props: { tableId: t.id, name: t.name } })
 }
 
 function addTable() {

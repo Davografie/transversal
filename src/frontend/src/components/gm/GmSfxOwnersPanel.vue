@@ -153,6 +153,7 @@ function openSfx(sfx) {
   panel.open({
     component: GmSfxEditPanel,
     title: sfx.name || 'Edit SFX',
+    id: sfx.id,
     props: { sfx },
     listeners: {},
   })
