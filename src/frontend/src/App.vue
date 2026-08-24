@@ -955,6 +955,15 @@ watch(peers, (p) => {
   }
 }, { deep: true })
 
+// A GMC is a GM-controlled character (no player owner) — the target the GM
+// must switch to when a player challenges it.
+function isGmcEntity(id) {
+  if (!id) return false
+  const atLocation = peers.value.find(e => e.id === id)
+  if (atLocation) return atLocation.type === 'GMC'
+  return (peersCache?.entities || []).some(e => e.id === id && e.type === 'GMC')
+}
+
 const remotePools = ref({})  // entity_id → { dice: [...], player_id, phase }
 const remoteResults = ref({})  // entity_id → { result, rolls, kept, total, effect_die }
 
@@ -1110,7 +1119,14 @@ watch(lastEvent, (evt) => {
       }
       break
     case 'contest_challenged':
-      if (gmMode.value) addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
+      if (gmMode.value) {
+        addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
+        // Auto-switch to a challenged GMC so the GM can roll its side at once.
+        const oppId = evt.data?.opponent_id
+        if (oppId && isGmcEntity(oppId) && actingEntityId.value !== oppId) {
+          switchPerspective(oppId)
+        }
+      }
       if (evt.data?.opponent_id === entityId.value) {
         diceRef.value?.onChallenged(evt.data.challenger_id)
         if (!gmMode.value) addToast(`You've been challenged by ${entName(evt.data?.challenger_id)}`, 'dice')
