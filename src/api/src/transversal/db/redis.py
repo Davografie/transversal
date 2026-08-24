@@ -11,7 +11,6 @@ import os
 from typing import Optional
 
 import redis as redis_sync
-import redis.asyncio as redis_async
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
@@ -38,8 +37,3 @@ def get_redis_client() -> Optional[redis_sync.Redis]:
     except Exception:
         _client = None
     return _client
-
-
-def get_async_redis_client() -> redis_async.Redis:
-    """Return an async Redis client (used by the cross-worker SSE subscriber)."""
-    return redis_async.from_url(REDIS_URL, decode_responses=True)

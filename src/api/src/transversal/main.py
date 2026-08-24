@@ -9,8 +9,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from strawberry.fastapi import GraphQLRouter
 
-import asyncio
-
 from transversal.api.graphql.schema import schema
 from transversal.api.rest.roll import router as roll_router
 from transversal.api.rest.effects import router as effects_router
@@ -153,7 +151,7 @@ async def on_startup():
 
     # Cross-worker SSE fan-in (no-op when Redis is unavailable).
     from transversal.api.sse.bus import event_bus
-    asyncio.create_task(event_bus.run_redis_subscriber())
+    event_bus.start_redis_subscriber()
 
     # Default session creation is disabled — IDs are no longer hardcoded.
     # Sessions are created on-demand via the API by the frontend.

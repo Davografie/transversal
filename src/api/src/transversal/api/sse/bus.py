@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import AsyncIterator
 
-from transversal.db.redis import get_async_redis_client, get_redis_client
+from transversal.db.redis import REDIS_URL, get_redis_client
 
 CHANNEL_PREFIX = "sse:"
 
@@ -68,40 +69,50 @@ class EventBus:
         for q in dead:
             queues.remove(q)
 
-    async def run_redis_subscriber(self) -> None:
-        """Background task: forward events published by other workers into the
-        local bus so this worker's SSE clients see cross-worker events."""
+    def start_redis_subscriber(self) -> None:
+        """Start a daemon thread forwarding other workers' events into the
+        local bus, so this worker's SSE clients see cross-worker events.
+
+        A thread + sync pub/sub is used instead of an asyncio task because it
+        has no shutdown-cleanup hazards (daemon threads die with the process).
+        """
         if self._redis is None:
             return
-        r = get_async_redis_client()
-        pubsub = r.pubsub()
         try:
-            await pubsub.psubscribe(f"{CHANNEL_PREFIX}*")
-            async for message in pubsub.listen():
-                if message.get("type") != "pmessage":
-                    continue
-                try:
-                    payload = json.loads(message["data"])
-                except Exception:
-                    continue
-                if payload.get("source_worker") == self._worker_id:
-                    continue  # echo of our own publish
-                self._deliver_local(StreamEvent(
-                    event=payload.get("event", ""),
-                    data=payload.get("data", {}),
-                    session_id=payload.get("session_id", ""),
-                ))
-        except asyncio.CancelledError:
-            raise
-        finally:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        threading.Thread(
+            target=self._run_redis_subscriber_thread,
+            args=(loop,),
+            daemon=True,
+            name="sse-redis-sub",
+        ).start()
+
+    def _run_redis_subscriber_thread(self, loop) -> None:
+        import redis as redis_sync
+
+        r = redis_sync.Redis.from_url(
+            REDIS_URL, decode_responses=True, socket_connect_timeout=1
+        )
+        pubsub = r.pubsub(ignore_subscribe_messages=True)
+        pubsub.psubscribe(f"{CHANNEL_PREFIX}*")
+        for message in pubsub.listen():
+            if message.get("type") != "pmessage":
+                continue
             try:
-                await pubsub.aclose()
+                payload = json.loads(message["data"])
             except Exception:
-                pass
-            try:
-                await r.aclose()
-            except Exception:
-                pass
+                continue
+            if payload.get("source_worker") == self._worker_id:
+                continue  # echo of our own publish
+            event = StreamEvent(
+                event=payload.get("event", ""),
+                data=payload.get("data", {}),
+                session_id=payload.get("session_id", ""),
+            )
+            if loop is not None:
+                loop.call_soon_threadsafe(self._deliver_local, event)
 
     def subscribe(self, session_id: str) -> "Subscription":
         """Create a subscription for a session."""
