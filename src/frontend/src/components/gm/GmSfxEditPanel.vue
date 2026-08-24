@@ -38,7 +38,7 @@
 
     <!-- Action buttons: differ by mode -->
     <button v-if="sfx" class="save-btn save-main" @click="onSave" :disabled="saving">
-      {{ saving ? 'Saving…' : 'Save SFX' }}
+      {{ saving ? 'Saving…' : (savedAt ? 'Saved ✓' : 'Save now') }}
     </button>
     <button v-else class="save-btn save-main" @click="onCreate" :disabled="saving || !form.name.trim()">
       {{ saving ? 'Creating…' : 'Create SFX' }}
@@ -80,6 +80,7 @@ const emit = defineEmits(['sfx-created', 'sfx-updated', 'sfx-deleted'])
 const saving = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
+const savedAt = ref(null)
 
 function initialConditions(sfx) {
   if (sfx?.conditions?.length) {
@@ -189,6 +190,19 @@ watch(() => [form.trigger, form.conditions, form.effects], () => {
   validationTimer = setTimeout(runValidation, 400)
 }, { deep: true })
 
+// Auto-save (debounced) — edits persist without an explicit save click.
+let saveTimer = null
+watch(
+  () => [form.name, form.description, form.trigger, form.conditions, form.effects],
+  () => {
+    if (!props.sfx?.id) return
+    savedAt.value = null // dirty again
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => { onSave() }, 700)
+  },
+  { deep: true }
+)
+
 function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
@@ -206,6 +220,7 @@ async function onSave() {
     patchData('sfxs', props.sfx.id, {
       name: form.name, trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
+    savedAt.value = Date.now()
     emit('sfx-updated', {
       id: props.sfx.id, name: form.name, trigger: form.trigger,
       description: form.description, conditions: [...form.conditions], effects: [...form.effects],
