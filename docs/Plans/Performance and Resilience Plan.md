@@ -10,10 +10,15 @@ tags:
 aliases:
   - Performance Plan
   - Caching Plan
-status: planned
+status: implemented
 ---
 
 # Performance and Resilience Plan
+
+> [!note] Status
+> Phases A–D are implemented and verified (559 backend tests pass; frontend builds;
+> cross-worker SSE + session sharing verified manually against Redis).
+> `registerType` stays `'autoUpdate'`; the reload-grace-period notice is a follow-up.
 
 Targets the mobile experience: client-side caching of entity/sheet data, draft persistence across standby-to-wake reloads, backend connection-churn + N+1 fixes, and multi-worker FastAPI.
 
