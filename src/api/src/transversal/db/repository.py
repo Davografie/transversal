@@ -95,22 +95,6 @@ class EntityRepository:
         doc = self._entities.get(entity_id)
         return Entity.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
-    def get_entities_by_ids(self, entity_ids: list[str]) -> list[Entity]:
-        """Fetch multiple entities by id in one query, preserving input order."""
-        if not entity_ids:
-            return []
-        ids = list(dict.fromkeys(entity_ids))  # dedupe, preserve order
-        query = f"""
-            FOR e IN {ENTITIES}
-            FILTER e._key IN @ids
-            RETURN e
-        """
-        by_id = {
-            doc["_key"]: self._doc_to_entity(doc)
-            for doc in self.db.aql.execute(query, bind_vars={"ids": ids})
-        }
-        return [by_id[eid] for eid in ids if eid in by_id]
-
     def update_entity(self, entity: Entity) -> Entity:
         doc = entity.model_dump()
         doc["_key"] = entity.id
@@ -317,14 +301,17 @@ class EntityRepository:
         ]
 
     def get_entities_by_ids(self, entity_ids: list[str]) -> list[Entity]:
-        """Fetch entities by their keys, preserving existence (missing ones dropped)."""
+        """Fetch entities by their keys in one query, preserving input order
+        (missing ids are dropped)."""
         if not entity_ids:
             return []
+        ids = list(dict.fromkeys(entity_ids))  # dedupe, preserve order
         query = f"FOR e IN {ENTITIES} FILTER e._key IN @ids RETURN e"
-        return [
-            self._doc_to_entity(doc)
-            for doc in self.db.aql.execute(query, bind_vars={"ids": entity_ids})
-        ]
+        by_id = {
+            doc["_key"]: self._doc_to_entity(doc)
+            for doc in self.db.aql.execute(query, bind_vars={"ids": ids})
+        }
+        return [by_id[eid] for eid in ids if eid in by_id]
 
     # ── Projections ───────────────────────────────────
 
