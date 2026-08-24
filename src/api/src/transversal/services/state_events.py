@@ -51,6 +51,19 @@ def fire_state_sfx(
         _firing.discard(key)
 
 
+def fire_projection_created(entity_id: str, universe: str, projection_id: str) -> None:
+    """Fire ``on_projection_create`` for a newly-created projection body.
+
+    Single fire site for every runtime path that produces a Projection record,
+    so the trigger's variables can't drift from any one creation path.
+    """
+    fire_state_sfx(entity_id, universe, "projection_created", {
+        "entity_created": entity_id,
+        "projection_created": projection_id,
+        "universe": universe,
+    })
+
+
 def fire_contest_outcome_sfx(
     winner_id: str,
     loser_id: str,

@@ -203,7 +203,12 @@ class EntityManager:
 
         entity.current_universe = universe
         entity.current_projection = proj.id
-        return self.repo.update_entity(entity)
+        updated = self.repo.update_entity(entity)
+
+        from transversal.services.state_events import fire_projection_created
+        fire_projection_created(updated.id, universe, proj.id)
+
+        return updated
 
     def remove_projection(self, projection_id: str) -> Entity:
         proj = self.repo.get_projection(projection_id)
@@ -420,6 +425,7 @@ class EntityManager:
         new_universe = entity.current_universe
         proj_id = entity.current_projection or f"{entity.id}:{old_universe or new_universe}"
         proj = self.repo.get_projection(proj_id)
+        created_projection = False
         if proj is None:
             proj = Projection(
                 id=f"{entity.id}:{new_universe}",
@@ -432,6 +438,7 @@ class EntityManager:
             touch_projection(proj)
             self.repo.create_projection(proj)
             entity.current_projection = proj.id
+            created_projection = True
         else:
             proj.current_location = location
             proj.universe = new_universe
@@ -439,6 +446,10 @@ class EntityManager:
             self.repo.update_projection(proj)
 
         result = self.repo.update_entity(entity)
+
+        if created_projection:
+            from transversal.services.state_events import fire_projection_created
+            fire_projection_created(entity.id, new_universe, proj.id)
 
         event = StreamEvent(
             event="location_changed",

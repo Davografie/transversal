@@ -746,6 +746,9 @@ class Mutation:
         if input.type == EntityType.CHARACTER:
             from transversal.services.state_events import fire_state_sfx
             fire_state_sfx(e.id, input.universe, "character_created", {"entity_created": e.id})
+        if input.type in (EntityType.CHARACTER, EntityType.GMC, EntityType.ASSET):
+            from transversal.services.state_events import fire_projection_created
+            fire_projection_created(e.id, input.universe, e.current_projection)
         return _entity_to_gql(e)
 
     @strawberry.mutation
@@ -836,15 +839,6 @@ class Mutation:
     def add_projection(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str, type: TransversalTypeEnum = TransversalTypeEnum.CONSCIOUSNESS, location: Optional[strawberry.ID] = None) -> Entity:
         e = _em(info).get(str(entity_id))
         updated = _em(info).add_projection(e, universe, type, location=str(location) if location else None)
-        from transversal.services.state_events import fire_state_sfx
-        fire_state_sfx(
-            updated.id, universe, "projection_created",
-            {
-                "entity_created": updated.id,
-                "projection_created": updated.current_projection,
-                "universe": universe,
-            },
-        )
         return _entity_to_gql(updated)
 
     @strawberry.mutation

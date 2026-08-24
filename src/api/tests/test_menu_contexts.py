@@ -156,3 +156,23 @@ def test_contest_fire_site_populates_declared_variables(monkeypatch):
     for event in captured:
         missing = declared - set(event.context)
         assert not missing, f"contest: declared {sorted(missing)} but fire site did not populate them"
+
+
+def test_fire_projection_created_populates_context(monkeypatch):
+    """The shared projection-created fire site populates its declared variables."""
+    from types import SimpleNamespace
+
+    from transversal.services import state_events
+
+    captured = _fake_fire(
+        monkeypatch,
+        lambda eid: SimpleNamespace(razmerit=0, current_universe="three_realms"),
+    )
+    state_events.fire_projection_created("e1", "three_realms", "e1:three_realms")
+    assert len(captured) == 1
+    assert captured[0].type == "projection_created"
+    assert captured[0].context == {
+        "entity_created": "e1",
+        "projection_created": "e1:three_realms",
+        "universe": "three_realms",
+    }

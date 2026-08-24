@@ -81,6 +81,8 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     # Projections produced/updated by travel effects.
     for proj in result.new_projections:
         repo.create_projection(proj)
+        from transversal.services.state_events import fire_projection_created
+        fire_projection_created(proj.entity_id, proj.universe, proj.id)
     for proj in result.updated_projections:
         repo.update_projection(proj)
 
