@@ -5,6 +5,7 @@ Ownership lives on the *owner* side (owners point at SFX ids), not on the
 use right now by unioning every owner surface, universe-gated:
 
   - ``table`` owner bucket (everyone)
+  - ``players`` owner bucket (everyone, player-facing)
   - direct entity ownership (``Entity.sfx_ids``)
   - active projection ownership (``Projection.sfx_ids``)
   - trait-level grants (``TraitSetting.sfx_ids`` + ``Trait.default_sfx_ids``)
@@ -388,10 +389,11 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
             if proj is not None:
                 ids.update(proj.sfx_ids or [])
 
-    # Table-wide ownership (everyone).
-    table = repo.get_sfx_owner("table")
-    if table is not None:
-        ids.update(table.sfx_ids or [])
+    # Table-wide + player-facing ownership (available to every entity).
+    for bucket_id in ("table", "players"):
+        bucket = repo.get_sfx_owner(bucket_id)
+        if bucket is not None:
+            ids.update(bucket.sfx_ids or [])
 
     # Trait-level grants, universe-gated via effective trait settings.
     for ts in repo.get_effective_traitsettings(entity_id, [universe]):

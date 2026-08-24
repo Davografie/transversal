@@ -75,6 +75,13 @@ def test_table_owner_included():
     assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-table"]
 
 
+def test_players_owner_included():
+    repo = Repo()
+    repo.entity = _entity()
+    repo.owners = {"players": SimpleNamespace(sfx_ids=["sfx-arrival"])}
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-arrival"]
+
+
 def test_gm_owner_is_excluded():
     repo = Repo()
     repo.entity = _entity()
