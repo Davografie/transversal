@@ -211,16 +211,52 @@ class EntityRepository:
     def _cascade_cleanup(self, entity_id: str) -> None:
         """Remove projections, trait settings, relationships, images, and media."""
         eref = f"{ENTITIES}/{entity_id}"
-        for proj in self._projections.find({"entity_id": entity_id}):
-            self._projections.delete(proj["_key"])
+
+        # Projection targets of incoming relationship edges (morph relationships).
+        proj_docs = list(self._projections.find({"entity_id": entity_id}))
+        proj_keys = [p["_key"] for p in proj_docs]
+        proj_refs = [f"{PROJECTIONS}/{k}" for k in proj_keys]
+
+        # Relationship edges touching the entity directly, or one of its projections.
+        edge_keys = list(self.db.aql.execute(
+            f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @eref OR r._to == @eref OR r._to IN @proj_refs
+            RETURN r._key
+            """,
+            bind_vars={"eref": eref, "proj_refs": proj_refs},
+        ))
+
+        # Relationship trait settings anchored to those edges.
+        if edge_keys:
+            self.db.aql.execute(
+                f"""
+                FOR ts IN {TRAITSETTINGS}
+                FILTER ts.from_type == 'relationship' AND ts.entity_id IN @edge_keys
+                REMOVE ts IN {TRAITSETTINGS}
+                """,
+                bind_vars={"edge_keys": edge_keys},
+            )
+
+        # The relationship edges themselves.
+        self.db.aql.execute(
+            f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @eref OR r._to == @eref OR r._to IN @proj_refs
+            REMOVE r IN {RELATIONSHIPS}
+            """,
+            bind_vars={"eref": eref, "proj_refs": proj_refs},
+        )
+
+        # Entity/projection-anchored trait settings (non-relationship).
         self.db.aql.execute(
             f"FOR ts IN {TRAITSETTINGS} FILTER ts.entity_id == @eid REMOVE ts IN {TRAITSETTINGS}",
             bind_vars={"eid": entity_id},
         )
-        self.db.aql.execute(
-            f"FOR r IN {RELATIONSHIPS} FILTER r._from == @eref OR r._to == @eref REMOVE r IN {RELATIONSHIPS}",
-            bind_vars={"eref": eref},
-        )
+
+        for key in proj_keys:
+            self._projections.delete(key)
+
         # Delete entity image records from DB
         self.db.aql.execute(
             f"FOR img IN {ENTITY_IMAGES} FILTER img.entity_id == @eid REMOVE img IN {ENTITY_IMAGES}",

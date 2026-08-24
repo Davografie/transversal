@@ -106,3 +106,33 @@ def test_relationship_traitsettings_for_entity_readback(data):
         repo.delete_traitsetting(ts2.id)
         repo._relationships.delete(e1["_key"])
         repo._relationships.delete(e2["_key"])
+
+
+def test_cascade_cleanup_removes_projection_target_edges():
+    repo = _repo
+    A = "test-cascade-a"
+    B = "test-cascade-b"
+    PROJ = f"{B}:earth"
+    # Self-heal any leftover from an interrupted prior run.
+    repo.delete_entity(A)
+    repo.delete_entity(B)
+    repo.create_entity(Entity(id=A, type=EntityType.CHARACTER, name="A", current_universe="earth"))
+    repo.create_entity(Entity(id=B, type=EntityType.CHARACTER, name="B", current_universe="earth"))
+    repo.create_projection(Projection(
+        id=PROJ, entity_id=B, origin_universe="earth", universe="earth",
+        transversal_type=TransversalType.NATIVE,
+    ))
+    try:
+        edge = repo.create_relationship(A, PROJ, "relation", to_projection=True)
+        ts = repo.create_traitsetting(TraitSetting(
+            id=f"{edge['_key']}:trust", entity_id=edge["_key"], trait_id="trait-relation-trust",
+            traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+        ))
+
+        # Deleting the *target* must remove the incoming projection edge + its trait.
+        repo.delete_entity(B)
+        assert repo.get_relationship_by_key(edge["_key"]) is None
+        assert repo.get_traitsetting(ts.id) is None
+    finally:
+        repo.delete_entity(A)
+        repo.delete_entity(B)
