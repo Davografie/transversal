@@ -363,6 +363,7 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit,
+                    conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                 )
                 for s in db_sfxs
@@ -374,6 +375,7 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit,
+                    conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                 ) for s in engine.get_all()
             ]
