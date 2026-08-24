@@ -8,6 +8,10 @@ change is persisted, and matching condition-gated SFX will fire immediately.
 
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger("transversal.sfx")
+
 # Re-entrancy guard: an SFX fired from a state change may itself mutate state
 # and re-enter the same event (e.g. an on_trait_gain SFX that gains a trait).
 _firing: set[tuple[str, str]] = set()
@@ -39,6 +43,10 @@ def fire_state_sfx(
             universe = entity.current_universe
 
         sfx_ids = get_available_sfx_ids(entity_id, universe, repo)
+        log.info(
+            "[fire_state_sfx] entity=%s event=%s universe=%s available=%s",
+            entity_id, event_type, universe, sfx_ids,
+        )
         event = GameEvent(
             type=event_type,
             entity_id=entity_id,

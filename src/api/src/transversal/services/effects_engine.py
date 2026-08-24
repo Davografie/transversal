@@ -11,6 +11,7 @@ can register handlers for (type, action) pairs.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -24,6 +25,8 @@ from transversal.domain import (
 )
 import transversal.services.effects_applier as _effects_applier
 from transversal.services.conditions import evaluate_conditions
+
+log = logging.getLogger("transversal.sfx")
 
 
 # ── Event Types ──────────────────────────────────────
@@ -144,11 +147,18 @@ class EffectsEngine:
         for sfx_id in available_sfx_ids:
             sfx = self._sfx_registry.get(sfx_id)
             if sfx is None:
+                log.info("[process_event] sfx=%s NOT in registry (skip)", sfx_id)
                 continue
 
             # Trigger match
             if not self._trigger_matches(sfx, event):
                 continue
+
+            log.info(
+                "[process_event] sfx=%s trigger=%s matches event=%s conditions=%s",
+                sfx.id, sfx.trigger, event.type,
+                [(c.type.value, c.target) for c in (sfx.conditions or [])],
+            )
 
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:
@@ -179,6 +189,7 @@ class EffectsEngine:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
                         outcome.applied.append(effect)
                         sfx_applied = True
+                        log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, effect.target)
                 else:
                     # Fold deferred effects into persisted scheduled events when a
                     # repo is available (survives restart); fall back to the
