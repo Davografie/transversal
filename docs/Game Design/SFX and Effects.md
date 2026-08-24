@@ -31,11 +31,12 @@ status: canonical
 | Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier.py` |
 | Target-candidate resolution (scope resolvers, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/effect_targets.py` |
 | Condition evaluation + condition-type vocabulary (`CONDITION_TYPES`) | `src/api/src/transversal/services/conditions.py` |
+| Authoring validation (`validate_sfx` — unknown variables, filter/target-kind, missing required fields) | `src/api/src/transversal/services/sfx_validation.py` |
 | Scheduled events / duration (timers, combine, central `dispatch_event`, `advance_events`) | `src/api/src/transversal/services/scheduled_events.py` |
 | SFX ownership resolution + seeding of table/contest SFX | `src/api/src/transversal/services/sfx_owner.py` |
 | State-change event wiring (takeout, contest win/loss, give-in, push) | `src/api/src/transversal/services/state_events.py` |
 | Consequence menu assembly (base + entity + SFX moves) | `src/api/src/transversal/services/consequence_menu.py` |
-| Menu-context / trigger / filter-field vocabularies (`TRIGGERS`, `MENU_CONTEXT_VARIABLES`) | `src/api/src/transversal/services/menu_contexts.py` |
+| Trigger vocabulary (`TRIGGERS` — auto-fire + manual + menu triggers, each with `group` + `{variables}`) + `MENU_TRIGGERS` | `src/api/src/transversal/services/menu_contexts.py` |
 | Contest lifecycle endpoints (challenge, set, give-in, push, prevent-taken-out) | `src/api/src/transversal/api/rest/contest_pools.py` |
 | Targeting bans (membership) + takeout clearing | `src/api/src/transversal/services/targeting_bans.py` |
 
@@ -115,15 +116,13 @@ class SFX(BaseModel):
     name: str
     description: str = ""
     trigger: str
-    menu_context: Optional[str] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
 ```
 
-- `trigger` names the auto-fire event (see trigger semantics below).
-- `menu_context` names the consequence menu this SFX appears in (`test_success`, `simplified_roll`, `contest_win`, `contest_give_in`); `None` = not a menu option. Distinct from `trigger`.
-- `conditions` gate which instance of that event applies.
-- A legacy `limit` string is folded into a `NARRATIVE` condition by the `@model_validator` `_fold_legacy_limit`.
+- `trigger` is the single activation axis: an auto-fire event (`on_*`), `manual`, or a consequence menu (`test_success`, `simplified_roll`, `contest_win`, `contest_give_in`, `hitch`). Menu triggers carry that menu's `{variables}`.
+- `conditions` gate which instance of that activation applies.
+- Legacy `menu_context` and `limit` strings are folded into `trigger` / a `NARRATIVE` condition by `@model_validator`s (`_fold_legacy_menu_context`, `_fold_legacy_limit`).
 
 ### `SfxOwner` (line 746)
 
@@ -137,7 +136,7 @@ class SfxOwner(BaseModel):
 
 ### `ConsequenceOption` (line 660)
 
-A selectable post-roll consequence entry. Authored directly on entities (location/lair moves), registered as base moves, or derived from `menu_context` SFX.
+A selectable post-roll consequence entry. Authored directly on entities (location/lair moves), registered as base moves, or derived from SFX whose `trigger` is a menu trigger.
 
 | Field | Meaning |
 |-------|---------|
@@ -174,7 +173,18 @@ class Attunement(BaseModel):
 
 ### `Condition` and `ConditionType`
 
-Conditions are authored alongside effects and evaluated against entity state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `unplaced`, `in_universe`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`. The editor's condition-type list is served from `CONDITION_TYPES` in `src/api/src/transversal/services/conditions.py` (value + label + needs-target + placeholder).
+```python
+class Condition(BaseModel):
+    type: ConditionType = ConditionType.ALWAYS
+    subject: str = ""       # "" = current entity; literal id; or {variable}
+    target: str = ""        # trait / location / entity id (or {variable})
+    value: Optional[str] = None
+    narrative: str = ""
+```
+
+Conditions are authored alongside effects and evaluated against an entity's state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `unplaced`, `in_universe`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`.
+
+`subject` selects **which entity** the condition tests: blank = the current entity (the event's entity for auto-fire, the acting entity for a consequence menu), a literal entity id, or a `{variable}` resolved from the trigger/menu context (e.g. `{buying_entity}`). The hitch menu has no default entity, so its conditions must reference `{hitch_entity}` / `{buying_entity}` explicitly. `target` is also `{variable}`-resolvable. The editor's condition-type list is served from `CONDITION_TYPES` in `src/api/src/transversal/services/conditions.py` (value + label + needs-target + placeholder).
 
 ## Effect action registry
 
@@ -306,7 +316,7 @@ The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_se
 
 ### `target_scope` and `target_filter`
 
-A `target_scope` like `traitset:ts-complications-a190` or `universe:earth` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). Scope grammar is `prefix:value` — prefixes `universe`, `location`, `subtree`, `faction`, `traitset`; a bare value defaults to universe (or current location for occupants); empty means current context. `target_filter` (e.g. `{"starter_location": true}`) adds candidate field predicates that compose with any scope. The GraphQL `targetCandidates` query resolves both for the runtime picker and the editor's live preview (`entityId` is optional; when omitted the resolver uses a synthetic universe context derived from `scope`).
+A `target_scope` like `traitset:ts-complications-a190` or `universe:earth` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). Scope grammar is `prefix:value` — prefixes `universe`, `location`, `subtree`, `faction`, `traitset`; a bare value defaults to universe (or current location for occupants); empty means current context; `universe:current` explicitly means the entity's current universe. `target_filter` (e.g. `{"starter_location": true}`) adds candidate field predicates that compose with any scope. The GraphQL `targetCandidates` query resolves both for the runtime picker and the editor's live preview (`entityId` is optional; when omitted the resolver uses a synthetic universe context derived from `scope`).
 
 ### Complication trait set id
 
@@ -374,18 +384,20 @@ The SFX ids available to an entity in a universe are the sorted union of:
 |--------|---------|-----------|---------|
 | `sfx-give-in-get-razmerit` | `on_give_in` | `transfer_razmerit`/`earn`/`self`/`1` | Conceder gains 1 razmerit |
 | `sfx-give-in-targeting-ban` | `on_give_in` | `entity`/`targeting_ban`/`""`/`1` | Conceder can't target that opponent for the scene |
-| `apply-complication` | `manual` → menu `contest_win` | `modify_trait`/`cortex_gain`/`{choose_trait}` @ `{effect_die}` (negative), scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
-| `take-complication` | `manual` → menu `contest_give_in` | same effect as `apply-complication` | Conceder takes a complication on their own projection |
+| `apply-complication` | trigger `contest_win` (menu) | `modify_trait`/`cortex_gain`/`{choose_trait}` @ `{effect_die}` (negative), scope `traitset:ts-complications-a190` | Winner applies a complication to the opponent |
+| `take-complication` | trigger `contest_give_in` (menu) | same effect as `apply-complication` | Conceder takes a complication on their own projection |
 | `prevent-taken-out` | `on_prevent_taken_out` | `transfer_razmerit`/`spend`/`self`/`1` | Spend 1 razmerit to avoid being taken out |
 | `sfx-starter-location` | `on_character_create` | `location`/`set`/`{random:location}` @ scope `universe:earth`, filter `{starter_location: true}`; conditions `UNPLACED` + `IN_UNIVERSE(earth)` | New unplaced Earth characters arrive at a random starter location |
 
-`ensure_contest_complication_sfx` creates/migrates **two** SFX (`apply-complication`, `take-complication`) with identical `cortex_gain` + negative effects but different `menu_context` (`contest_win` vs `contest_give_in`), so the frontend surfaces the right one at each end of a contest. The migration also rewrites stale `gain_complication` effects in place.
+`ensure_contest_complication_sfx` creates/migrates **two** SFX (`apply-complication`, `take-complication`) with identical `cortex_gain` + negative effects but different `trigger` (`contest_win` vs `contest_give_in`), so the frontend surfaces the right one at each end of a contest. The migration also rewrites stale `gain_complication` effects in place.
 
 `remove_legacy_contest_complication_sfx` (line 164) deletes the retired `sfx-contest-loss-complication` row and its `table` reference so a stale DB doesn't keep auto-firing it on `on_contest_loss` (P2.10d moved contest-loss complications into the manual consequence menu).
 
 ### Editor vocabularies (backend-served)
 
-The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py`), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
+The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`auto`/`menu`); menu contexts are first-class triggers), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py`), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
+
+The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, and missing required fields. Warnings are advisory, not a save gate.
 
 ## State events and takeout
 
@@ -439,7 +451,7 @@ Scene advance (`advance_scene` in `src/api/src/transversal/api/rest/targeting_ba
 
 1. **Base moves** (`BASE_CONSEQUENCE_OPTIONS`) — always available, keyed by `"player"` / `"gm"`.
 2. **Entity moves** — `Entity.consequence_options` on the acting entity's current location and its ancestors (lair moves), filtered by `side`.
-3. **SFX moves** — SFX whose `menu_context` matches the requested menu context, wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`. Legacy SFX with no `menu_context` but `trigger="on_consequence"` are included in all contexts for backward compatibility.
+3. **SFX moves** — SFX whose `trigger` equals the requested menu trigger, wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`. Legacy `trigger="on_consequence"` SFX are included in all contexts for backward compatibility.
 
 Choosing an option applies its effects through the shared applier, resolving any `{choose_*}` targets via the wizard.
 
