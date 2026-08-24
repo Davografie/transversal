@@ -316,7 +316,9 @@ The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_se
 
 ### `target_scope` and `target_filter`
 
-A `target_scope` like `traitset:ts-complications-a190` or `universe:earth` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). Scope grammar is `prefix:value` — prefixes `universe`, `location`, `subtree`, `faction`, `traitset`; a bare value defaults to universe (or current location for occupants); empty means current context; `universe:current` explicitly means the entity's current universe. `target_filter` (e.g. `{"starter_location": true}`) adds candidate field predicates that compose with any scope. The GraphQL `targetCandidates` query resolves both for the runtime picker and the editor's live preview (`entityId` is optional; when omitted the resolver uses a synthetic universe context derived from `scope`).
+A `target_scope` like `traitset:ts-complications-a190` or `universe:earth` narrows the candidate set the picker/random resolver presents (see `effect_targets.resolve_candidates`). Scope grammar is `prefix:value` — prefixes `universe`, `location`, `subtree`, `faction`, `traitset`, `life_path`; a bare value defaults to universe (or current location for occupants); empty means current context; `universe:current` explicitly means the entity's current universe. `target_filter` (e.g. `{"starter_location": true}`) adds candidate field predicates that compose with any scope. The GraphQL `targetCandidates` query resolves both for the runtime picker and the editor's live preview (`entityId` is optional; when omitted the resolver uses a synthetic universe context derived from `scope`).
+
+`roll_table` targets honour `universe:` (bare = current universe), `life_path:` (tables in one life path) and `faction:` (tables whose owning life path is in the faction's `suitable_life_path_ids`). A `trait` target with an empty scope resolves to the full trait registry in authoring (no concrete universe); with a universe it resolves to that universe's traits, and with `traitset:` to that trait set's traits.
 
 ### Complication trait set id
 
@@ -398,6 +400,10 @@ The SFX ids available to an entity in a universe are the sorted union of:
 The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`auto`/`menu`); menu contexts are first-class triggers), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py`), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
 
 The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, and missing required fields. Warnings are advisory, not a save gate.
+
+### Target pickers (frontend)
+
+Every target picker in the GM panel routes through one component, `src/frontend/src/components/gm/TargetPicker.vue`, which renders the backend `targetCandidates` resolver's result via the shared `SearchDropdown`. The bespoke `GmTraitPicker` / `GmLocationPicker` / `GmRollTablePicker` / `ScopedTargetPicker` were retired, so the authoring picker and the runtime `{random:*}` resolver share the same candidate source and cannot drift. In the effect editor, `literal` / `choose` / `random` target modes all use the same `scope` + `filter`; `literal` merely picks one of those candidates now, and its scope/filter are persisted so re-opening an effect keeps its context.
 
 ## State events and takeout
 
