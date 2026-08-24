@@ -359,9 +359,15 @@ function groupTraitSettings(settings) {
     sets[key].push(ts)
   }
   return Object.entries(sets)
-    .map(([name, traits]) => ({ name, traits, order: traits[0]?.traitsetOrder ?? 99, limit: traits[0]?.traitsetLimit ?? 1 }))
+    .map(([name, traits]) => ({
+      name,
+      traits,
+      traitsetId: traits[0]?.traitsetId ?? null,
+      order: traits[0]?.traitsetOrder ?? 99,
+      limit: traits[0]?.traitsetLimit ?? 1,
+    }))
     .sort((a, b) => a.order - b.order)
-    .map(({ name, traits, order, limit }) => ({ name, traits, limit }))
+    .map(({ name, traits, traitsetId, order, limit }) => ({ name, traits, traitsetId, limit }))
 }
 
 function recomputeTraitSets() {
@@ -550,7 +556,7 @@ async function openAddTrait() {
   }
   // If already drilled into a trait set, preselect it and jump straight to its traits.
   if (activeSetName.value) {
-    const current = availableTraitSets.value.find(ts => ts.name === activeSetName.value)
+    const current = availableTraitSets.value.find(ts => ts.id === currentSet.value?.traitsetId)
     if (current) selectSet(current)
   }
   showAddTrait.value = true
@@ -815,6 +821,7 @@ const QUERY = `
       traitSettings {
         id
         traitId
+        traitsetId
         name
         traitsetName
         dieType
@@ -839,6 +846,7 @@ const QUERY = `
       effectiveTraitSettings {
         id
         traitId
+        traitsetId
         name
         traitsetName
         dieType
