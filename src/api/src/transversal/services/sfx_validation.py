@@ -11,6 +11,8 @@ import re
 
 from transversal.domain import Effect, SFX
 from transversal.services.menu_contexts import trigger_variables
+from transversal.services.effect_targets import FILTER_FIELDS
+from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
 
 _TOKEN = re.compile(r"\{([^{}]+)\}")
 
@@ -19,6 +21,8 @@ _TOKEN = re.compile(r"\{([^{}]+)\}")
 # context keys that happen to appear in authored fields.
 _RESERVED_PREFIXES = ("choose", "random", "return")
 _RESERVED_TOKENS = {"source_trait", "term_faction"}
+
+_FILTER_KINDS = {f.field: f.kinds for f in FILTER_FIELDS}
 
 
 def _tokens(*values) -> list[str]:
@@ -43,6 +47,38 @@ def _effect_tokens(effect: Effect) -> list[str]:
     return _tokens(effect.target, effect.entity, effect.result, effect.target_scope, effect.entity_scope)
 
 
+def _action_meta(effect: Effect):
+    """Return the action-registry metadata for an effect, if any."""
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.effect_type == effect.type and meta.effect_action == effect.action:
+            return meta
+    return None
+
+
+def _target_kind(effect: Effect):
+    meta = _action_meta(effect)
+    return meta.target_kind if meta else None
+
+
+def _missing_required(effect: Effect) -> list[str]:
+    """Return the names of required fields the effect leaves empty."""
+    meta = _action_meta(effect)
+    if meta is None:
+        return []
+    missing = []
+    for f in meta.fields:
+        if not f.required:
+            continue
+        value = (
+            getattr(effect, f.name, None)
+            if f.name in ("target", "result", "entity")
+            else (effect.context or {}).get(f.name)
+        )
+        if value in (None, ""):
+            missing.append(f.name)
+    return missing
+
+
 def validate_sfx(sfx: SFX) -> list[str]:
     """Return authoring warnings for unknown ``{variables}`` (empty = valid).
 
@@ -57,6 +93,15 @@ def validate_sfx(sfx: SFX) -> list[str]:
         for token in _effect_tokens(effect):
             if token not in known and not _reserved(token):
                 warnings.append(f"Effect {i + 1}: unknown variable {{{token}}}")
+
+        target_kind = _target_kind(effect)
+        for field in (effect.target_filter or {}):
+            kinds = _FILTER_KINDS.get(field)
+            if kinds and target_kind and target_kind not in kinds:
+                warnings.append(f"Effect {i + 1}: filter '{field}' does not apply to {target_kind} targets")
+
+        for name in _missing_required(effect):
+            warnings.append(f"Effect {i + 1}: missing required field '{name}'")
 
     for i, condition in enumerate(sfx.conditions):
         for token in _tokens(condition.subject, condition.target):
