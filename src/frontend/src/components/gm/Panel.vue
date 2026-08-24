@@ -9,7 +9,7 @@
       <header v-if="title" class="panel-header">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
-          <span v-if="id" class="panel-id" :title="id">{{ id }}</span>
+          <button v-if="id" type="button" class="panel-id-btn" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</button>
         </slot>
       </header>
       <div class="panel-body">
@@ -39,7 +39,7 @@
 </template>
 
 <script setup>
-import { shallowRef, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
+import { shallowRef, ref, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
 import { panelKey } from '@/composables/usePanel.js'
 
 const props = defineProps({
@@ -56,6 +56,20 @@ const props = defineProps({
 })
 
 defineEmits(['close'])
+
+// Copy-ID helper — the header shows a # button that copies the panel id.
+const copied = ref(false)
+let copyTimer = null
+async function copyId() {
+  if (!props.id) return
+  try {
+    await navigator.clipboard.writeText(props.id)
+    copied.value = true
+    clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => { copied.value = false }, 1200)
+  } catch { /* clipboard unavailable — ignore */ }
+}
+onUnmounted(() => { if (copyTimer) clearTimeout(copyTimer) })
 
 // ⚠ shallowRef — must NOT be ref() because Vue deeply unwraps nested refs inside
 // reactive objects. If child.props contains computed refs (e.g. filteredTraitsets),
@@ -159,18 +173,20 @@ provide(panelKey, {
   font-size: 12px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.5px;
 }
-.panel-id {
+.panel-id-btn {
   flex-shrink: 0;
   font-family: monospace;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-dim);
-  text-transform: none;
-  letter-spacing: 0;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  padding: 1px 7px;
+  line-height: 1.4;
+  cursor: pointer;
 }
+.panel-id-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
 
 .panel-body {
   flex: 1; overflow-y: auto; padding: 10px;
