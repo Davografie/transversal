@@ -741,16 +741,26 @@ class ConsequenceOption(BaseModel):
 class SFX(BaseModel):
     """SFX registry entry.
 
-    Stored in the `sfxs` collection. ``trigger`` names the event; ``conditions``
-    filter which instance of that event applies (target/threshold/narrative).
+    Stored in the `sfxs` collection. ``trigger`` names the single activation
+    axis — an auto-fire event, ``manual``, or a consequence menu; ``conditions``
+    filter which instance of that activation applies (target/threshold/narrative).
     """
     id: str
     name: str
     description: str = ""
     trigger: str
-    menu_context: Optional[str] = None  # consequence menu this SFX is an option in; None = trigger-driven (auto-fire)
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fold_legacy_menu_context(cls, data):
+        """Migrate ``menu_context`` into ``trigger`` (single activation axis)."""
+        if isinstance(data, dict) and data.get("menu_context"):
+            data = {**data}
+            data["trigger"] = data["menu_context"]
+            data.pop("menu_context", None)
+        return data
 
     @model_validator(mode="before")
     @classmethod

@@ -95,8 +95,9 @@ def assemble_consequence_menu(
 ) -> list[ConsequenceOption]:
     """Return the consequence options offered to ``side`` in ``menu_context``.
 
-    SFX are sourced by ``SFX.menu_context``; SFX with no ``menu_context`` but the
-    legacy ``on_consequence`` trigger are included for backward compatibility.
+    ``menu_context`` is a menu trigger value (e.g. ``test_success``). SFX are
+    selected by their ``trigger``; the legacy ``on_consequence`` trigger still
+    matches every consequence menu for backward compatibility.
     """
     options: list[ConsequenceOption] = list(BASE_CONSEQUENCE_OPTIONS.get(side, []))
 
@@ -112,16 +113,13 @@ def assemble_consequence_menu(
             if option.side in (side, "either"):
                 options.append(option)
 
-    # SFX moves: SFX whose menu_context matches; legacy on_consequence SFX with
-    # no menu_context are included for backward compatibility.
+    # SFX moves: selected by trigger (menu contexts are triggers now); the legacy
+    # on_consequence trigger matches every consequence menu for backward compat.
     for sfx_id in get_available_sfx_ids(entity.id, entity.current_universe, repo):
         sfx = repo.get_sfx(sfx_id)
         if sfx is None:
             continue
-        if sfx.menu_context:
-            if sfx.menu_context != menu_context:
-                continue
-        elif sfx.trigger != "on_consequence":
+        if sfx.trigger != menu_context and sfx.trigger != "on_consequence":
             continue
         options.append(ConsequenceOption(
             id=f"sfx:{sfx.id}", label=sfx.name, side="player",
@@ -133,7 +131,7 @@ def assemble_consequence_menu(
 
 def assemble_hitch_menu(repo) -> list[ConsequenceOption]:
     """Return the hitch/opportunity menu — SFX from the ``gm``/``table``/``players``
-    owner buckets whose ``menu_context`` is ``hitch`` (no base or entity moves)."""
+    owner buckets whose trigger is ``hitch`` (no base or entity moves)."""
     owner_sides = {"gm": "gm", "table": "either", "players": "player"}
 
     options: list[ConsequenceOption] = []
@@ -147,7 +145,7 @@ def assemble_hitch_menu(repo) -> list[ConsequenceOption]:
                 continue
             seen.add(sfx_id)
             sfx = repo.get_sfx(sfx_id)
-            if sfx is None or sfx.menu_context != "hitch":
+            if sfx is None or sfx.trigger != "hitch":
                 continue
             options.append(ConsequenceOption(
                 id=f"sfx:{sfx.id}", label=sfx.name, side=side,

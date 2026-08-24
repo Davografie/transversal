@@ -187,8 +187,7 @@ def ensure_contest_complication_sfx(repo) -> None:
                 id=sfx_id,
                 name=name,
                 description=description,
-                trigger="manual",
-                menu_context=menu_context,
+                trigger=menu_context,
                 effects=[_complication_effect()],
             ))
             return
@@ -201,11 +200,8 @@ def ensure_contest_complication_sfx(repo) -> None:
                 if eff.action != desired.action or not eff.negative:
                     existing.effects[i] = desired
                     changed = True
-        if existing.menu_context != menu_context:
-            existing.menu_context = menu_context
-            changed = True
-        if existing.trigger == "on_consequence":
-            existing.trigger = "manual"
+        if existing.trigger != menu_context:
+            existing.trigger = menu_context
             changed = True
         if changed:
             repo.update_sfx(existing)
@@ -260,8 +256,7 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
         id="hitch-gain-complication",
         name="Gain a complication",
         description="Roller takes a complication stepped up by the bought hitches, then earns 1 razmerit",
-        trigger="manual",
-        menu_context="hitch",
+        trigger="hitch",
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE,
@@ -301,8 +296,7 @@ def ensure_opportunity_sfx(repo) -> None:
         id="opportunity-step-down-complication",
         name="Step down a complication",
         description="Spend 1 razmerit to step down one of your complications",
-        trigger="manual",
-        menu_context="hitch",
+        trigger="hitch",
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE,

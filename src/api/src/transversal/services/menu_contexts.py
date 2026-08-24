@@ -1,13 +1,14 @@
-"""Consequence-menu contexts and the outcome variables they expose.
+"""The trigger vocabulary — auto-fire triggers and consequence menus.
 
-A *menu context* names the post-roll consequence menu shown to a side after a
-specific outcome. It is distinct from an SFX ``trigger`` (which auto-fires).
-Each context declares the outcome variables that are in scope when authoring
-its options — these are the ``{variable}`` tokens the SFX editor may offer.
+A *trigger* is the single activation axis for an SFX: it either names an
+auto-fire event (``on_*``), manual activation (``manual``), or a post-roll
+consequence menu (``test_success``, ``contest_win``, ``hitch``, …). Menu
+triggers are the same kind of thing as auto-fire triggers: they carry the
+``{variable}`` tokens in scope when authoring their effects.
 
 Each variable carries a type so the editor can present the right input and the
-hitch menu can substitute the right value: ``number``, ``entity_id``, ``die``,
-or ``string``.
+hitch menu can substitute the right value: ``number``, ``entity``, ``die``,
+``string``, ``location``, ``universe``, …
 """
 
 from __future__ import annotations
@@ -51,22 +52,36 @@ MENU_CONTEXT_VARIABLES: dict[str, list[Variable]] = {
     ],
 }
 
-# ── Auto-fire triggers ──────────────────────────────
+# The subset of trigger values that are consequence-menu placements (used by
+# menu assembly and by the editor to group the dropdown).
+MENU_TRIGGERS: frozenset[str] = frozenset(MENU_CONTEXT_IDS)
+
+_MENU_TRIGGER_LABELS: dict[str, str] = {
+    "test_success": "Menu — Test Success",
+    "simplified_roll": "Menu — Simplified Roll",
+    "contest_win": "Menu — Contest Win",
+    "contest_give_in": "Menu — Contest Give In",
+    "hitch": "Menu — Hitch / Opportunity",
+}
+
+# ── The trigger vocabulary ──────────────────────────
 #
-# Single source of truth for the trigger vocabulary. Each entry declares the
-# trigger string, its editor label, and the ``{variable}`` tokens in scope when
-# authoring its effects. The SFX editor renders this list (via GraphQL), so a
-# new trigger is authored here and appears in the UI without frontend edits.
+# Single source of truth for every way an SFX can activate. Each entry declares
+# the trigger string, its editor label, the ``{variable}`` tokens in scope when
+# authoring its effects, and a group for the editor dropdown. The SFX editor
+# renders this list (via GraphQL), so a new trigger is authored here and
+# appears in the UI without frontend edits.
 
 @dataclass(frozen=True)
 class TriggerDef:
     value: str
     label: str
     variables: tuple[Variable, ...] = ()
+    group: str = "auto"  # "auto" | "manual" | "menu"
 
 
 TRIGGERS: tuple[TriggerDef, ...] = (
-    TriggerDef("manual", "Manual (player activates)"),
+    TriggerDef("manual", "Manual (player activates)", group="manual"),
     TriggerDef("on_roll", "On Roll"),
     TriggerDef("on_result", "On Result"),
     TriggerDef("on_complication", "On Complication (hitch)"),
@@ -127,17 +142,25 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("relationship_type", "string"),
     )),
     TriggerDef("on_character_create", "On Character Created", (Variable("entity_created", "entity"),)),
+) + tuple(
+    TriggerDef(value, _MENU_TRIGGER_LABELS[value], tuple(MENU_CONTEXT_VARIABLES[value]), group="menu")
+    for value in MENU_CONTEXT_IDS
 )
 
 
 def menu_context_variables(menu_context: str) -> list[Variable]:
-    """Return the typed variables exposed by a menu context (empty when unknown)."""
-    return list(MENU_CONTEXT_VARIABLES.get(menu_context, []))
+    """Deprecated alias — menu contexts are triggers now."""
+    return trigger_variables(menu_context)
 
 
 def trigger_variables(trigger: str) -> list[Variable]:
-    """Return the typed variables exposed by an auto-fire trigger (empty when unknown)."""
+    """Return the typed variables exposed by a trigger or menu context (empty when unknown)."""
     for t in TRIGGERS:
         if t.value == trigger:
             return list(t.variables)
     return []
+
+
+def is_menu_trigger(trigger: str) -> bool:
+    """True if ``trigger`` names a post-roll consequence menu."""
+    return trigger in MENU_TRIGGERS

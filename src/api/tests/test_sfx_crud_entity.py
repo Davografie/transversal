@@ -55,7 +55,7 @@ mutation($input: SfxInput!) {
 def test_create_sfx_round_trips_entity_fields():
     repo = SfxRepo()
     data = _run(repo, QUERY, {"input": {
-        "id": "sfx-x", "name": "X", "trigger": "manual", "menuContext": "hitch",
+        "id": "sfx-x", "name": "X", "trigger": "hitch",
         "effects": [{
             "timing": "IMMEDIATE", "type": "modify_trait", "action": "gain_or_step_up",
             "target": "{choose_trait}", "entity": "{hitch_entity}",

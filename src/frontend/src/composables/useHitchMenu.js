@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEffectApplication } from '@/composables/useEffectApplication.js'
 
-// Fetch + apply the GM hitch menu (SFX whose menu_context is 'hitch').
+// Fetch + apply the GM hitch menu (SFX whose trigger is 'hitch').
 export function useHitchMenu() {
   const { graphql } = useApi()
   const { applyEffects, resolveEffectTargets } = useEffectApplication()

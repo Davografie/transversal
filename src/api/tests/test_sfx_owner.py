@@ -303,10 +303,8 @@ def test_ensure_contest_complication_sfx_creates_once():
     ensure_contest_complication_sfx(repo)
     apply_sfx = repo.sfxs["apply-complication"]
     take_sfx = repo.sfxs["take-complication"]
-    assert apply_sfx.trigger == "manual"
-    assert take_sfx.trigger == "manual"
-    assert apply_sfx.menu_context == "contest_win"
-    assert take_sfx.menu_context == "contest_give_in"
+    assert apply_sfx.trigger == "contest_win"
+    assert take_sfx.trigger == "contest_give_in"
     assert apply_sfx.name == "Apply a complication"
     assert take_sfx.name == "Take a complication"
     # Identical effect, different label.
@@ -341,8 +339,7 @@ def test_ensure_contest_complication_sfx_migrates_stale_effect():
     assert apply_sfx.effects[0].action == "cortex_gain"
     assert apply_sfx.effects[0].negative is True
     assert apply_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
-    assert apply_sfx.menu_context == "contest_win"
-    assert apply_sfx.trigger == "manual"
+    assert apply_sfx.trigger == "contest_win"
 
 
 def test_ensure_prevent_taken_out_sfx_creates_once():
@@ -366,8 +363,7 @@ def test_ensure_hitch_gain_complication_sfx_creates_once():
     repo = SetupRepo()
     ensure_hitch_gain_complication_sfx(repo)
     sfx = repo.sfxs["hitch-gain-complication"]
-    assert sfx.trigger == "manual"
-    assert sfx.menu_context == "hitch"
+    assert sfx.trigger == "hitch"
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "modify_trait"
     assert sfx.effects[0].action == "gain_or_step_up"
@@ -390,8 +386,7 @@ def test_ensure_opportunity_sfx_creates_once():
     repo = SetupRepo()
     ensure_opportunity_sfx(repo)
     sfx = repo.sfxs["opportunity-step-down-complication"]
-    assert sfx.trigger == "manual"
-    assert sfx.menu_context == "hitch"
+    assert sfx.trigger == "hitch"
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "transfer_razmerit"
     assert sfx.effects[0].action == "spend"

@@ -359,7 +359,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, menu_context=s.menu_context, limit=s.limit,
+                    trigger=s.trigger, limit=s.limit,
                     effects=[_effect_to_gql(e) for e in s.effects],
                 )
                 for s in db_sfxs
@@ -370,7 +370,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, menu_context=s.menu_context, limit=s.limit,
+                    trigger=s.trigger, limit=s.limit,
                     effects=[_effect_to_gql(e) for e in s.effects],
                 ) for s in engine.get_all()
             ]
@@ -444,25 +444,18 @@ class Query:
     def scope_variables(
         self, info: strawberry.Info,
         trigger: str = "",
-        menu_context: str = "",
     ) -> list[ScopeVariable]:
         """Typed ``{variable}`` tokens available to authored effects for a trigger
-        and/or menu context (``number``, ``entity_id``, ``die``, ``string``)."""
-        from transversal.services.menu_contexts import trigger_variables, menu_context_variables
+        (auto-fire, manual, or menu)."""
+        from transversal.services.menu_contexts import trigger_variables
 
-        seen: set[str] = set()
-        out: list[ScopeVariable] = []
-        for v in list(trigger_variables(trigger)) + list(menu_context_variables(menu_context)):
-            if v.name not in seen:
-                seen.add(v.name)
-                out.append(ScopeVariable(name=v.name, type=v.type))
-        return out
+        return [ScopeVariable(name=v.name, type=v.type) for v in trigger_variables(trigger)]
 
     @strawberry.field
     def triggers(self, info: strawberry.Info) -> list[TriggerOption]:
-        """The auto-fire trigger vocabulary for the SFX editor, sourced from the backend."""
+        """The activation-trigger vocabulary for the SFX editor, sourced from the backend."""
         from transversal.services.menu_contexts import TRIGGERS
-        return [TriggerOption(value=t.value, label=t.label) for t in TRIGGERS]
+        return [TriggerOption(value=t.value, label=t.label, group=t.group) for t in TRIGGERS]
 
     @strawberry.field
     def condition_types(self, info: strawberry.Info) -> list[ConditionTypeOption]:
@@ -535,9 +528,9 @@ class Query:
         """Assemble the post-roll consequence menu for a side in a menu context.
 
         ``side`` is ``"player"`` or ``"gm"``. ``menu_context`` is one of the
-        declared consequence-menu contexts (``test_success``, ``simplified_roll``,
-        ``contest_win``, ``contest_give_in``). Options come from base moves, the
-        acting entity's location chain, and SFX whose ``menu_context`` matches.
+        menu triggers (``test_success``, ``simplified_roll``, ``contest_win``,
+        ``contest_give_in``). Options come from base moves, the acting entity's
+        location chain, and SFX whose ``trigger`` matches.
         """
         from transversal.services.consequence_menu import assemble_consequence_menu
 
@@ -1086,7 +1079,7 @@ class Mutation:
 
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
-            trigger=input.trigger, menu_context=input.menu_context, conditions=conditions,
+            trigger=input.trigger, conditions=conditions,
             effects=[_effect_input_to_domain(e) for e in input.effects],
         )
         created = _em(info).repo.create_sfx(s)
@@ -1096,7 +1089,7 @@ class Mutation:
             engine.register(created)
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
-            trigger=created.trigger, menu_context=created.menu_context, limit=created.limit,
+            trigger=created.trigger, limit=created.limit,
             conditions=[_condition_to_gql(c) for c in created.conditions],
             effects=[_effect_to_gql(e) for e in created.effects],
         )
@@ -1129,8 +1122,6 @@ class Mutation:
                 )
         if input.trigger is not None:
             existing.trigger = input.trigger
-        if input.menu_context is not None:
-            existing.menu_context = input.menu_context
         if input.effects is not None:
             existing.effects = [_effect_input_to_domain(e) for e in input.effects]
         updated = _em(info).repo.update_sfx(existing)
@@ -1140,7 +1131,7 @@ class Mutation:
             engine.register(updated)
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
-            trigger=updated.trigger, menu_context=updated.menu_context, limit=updated.limit,
+            trigger=updated.trigger, limit=updated.limit,
             conditions=[_condition_to_gql(c) for c in updated.conditions],
             effects=[_effect_to_gql(e) for e in updated.effects],
         )

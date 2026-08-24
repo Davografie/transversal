@@ -27,7 +27,7 @@ export function useTraitsConfig() {
       }`),
       graphql(`query {
         sfxs {
-          id name description trigger menuContext limit
+          id name description trigger limit
           conditions { type target value narrative }
           effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } }
         }

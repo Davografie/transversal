@@ -9,16 +9,10 @@
       <textarea v-model="form.description" rows="2" placeholder="What it does…"></textarea>
       <label>Trigger</label>
       <select v-model="form.trigger">
-        <option v-for="t in triggerOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
-      </select>
-      <label>Consequence menu</label>
-      <select v-model="form.menuContext">
-        <option value="">(none — trigger only)</option>
-        <option value="test_success">Test success</option>
-        <option value="simplified_roll">Simplified roll</option>
-        <option value="contest_win">Contest win</option>
-        <option value="contest_give_in">Contest give in</option>
-        <option value="hitch">Hitch</option>
+        <optgroup v-for="g in triggerGroups" :key="g.label" :label="g.label">
+          <option v-for="t in g.options" :key="t.value" :value="t.value">{{ t.label }}</option>
+        </optgroup>
+        <option v-if="!knownTrigger" :value="form.trigger">{{ form.trigger }}</option>
       </select>
       <div v-if="scopeVariables.length" class="sfx-vars">
         <span class="sfx-vars-label">Available variables:</span>
@@ -99,26 +93,30 @@ const form = reactive({
   name: props.sfx?.name || '',
   description: props.sfx?.description || '',
   trigger: props.sfx?.trigger || 'manual',
-  menuContext: props.sfx?.menuContext || '',
   conditions: initialConditions(props.sfx),
   effects: (props.sfx?.effects || []).map(e => ({ ...e })),
 })
 
 const { variables: scopeVariables, fetchVariables } = useScopeVariables()
-watch(() => [form.trigger, form.menuContext], ([t, m]) => { fetchVariables(t || '', m || '') }, { immediate: true })
+watch(() => form.trigger, (t) => { fetchVariables(t || '') }, { immediate: true })
 
 const { load: loadSfxMeta, triggers } = useSfxMeta()
 loadSfxMeta()
 
-// Backend trigger vocabulary, plus the current value if it isn't listed yet
-// (so saving never silently drops a legacy/unknown trigger string).
-const triggerOptions = computed(() => {
-  const opts = [...triggers.value]
-  if (form.trigger && !opts.some(t => t.value === form.trigger)) {
-    opts.push({ value: form.trigger, label: form.trigger })
+// Backend trigger vocabulary grouped into Manual / Auto-fire / Menus. A legacy
+// value not in the vocabulary is still offered so saving never drops it.
+const triggerGroups = computed(() => {
+  const byGroup = { manual: [], auto: [], menu: [] }
+  for (const t of triggers.value) {
+    ;(byGroup[t.group] || (byGroup[t.group] = [])).push(t)
   }
-  return opts
+  return [
+    { label: 'Manual', options: byGroup.manual },
+    { label: 'Auto-fire', options: byGroup.auto },
+    { label: 'Menus', options: byGroup.menu },
+  ]
 })
+const knownTrigger = computed(() => !form.trigger || triggers.value.some(t => t.value === form.trigger))
 
 function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -130,15 +128,15 @@ async function onSave() {
   errorMsg.value = ''
   try {
     const result = await graphql(
-      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
-      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: form.conditions, effects: form.effects } }
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
+      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
     patchData('sfxs', props.sfx.id, {
-      name: form.name, trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      name: form.name, trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     emit('sfx-updated', {
-      id: props.sfx.id, name: form.name, trigger: form.trigger, menuContext: form.menuContext,
+      id: props.sfx.id, name: form.name, trigger: form.trigger,
       description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
   } finally { saving.value = false }
@@ -150,8 +148,8 @@ async function onCreate() {
   const sfxId = generateSfxId(form.name)
   try {
     const result = await graphql(
-      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger menuContext limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
-      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: form.conditions, effects: form.effects } }
+      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
+      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
     )
     if (!result) {
       const msg = apiError.value || ''
@@ -165,11 +163,11 @@ async function onCreate() {
     errorMsg.value = ''
     await fetchTraitsConfig()
     patchData('sfxs', sfxId, {
-      id: sfxId, name: form.name.trim(), trigger: form.trigger, menuContext: form.menuContext, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     successMsg.value = `Created "${form.name}"`
     emit('sfx-created', {
-      id: sfxId, name: form.name.trim(), trigger: form.trigger, menuContext: form.menuContext,
+      id: sfxId, name: form.name.trim(), trigger: form.trigger,
       description: form.description, conditions: [...form.conditions], effects: [...form.effects],
     })
     setTimeout(() => { panel.close() }, 600)

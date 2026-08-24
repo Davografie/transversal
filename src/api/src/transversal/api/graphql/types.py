@@ -229,9 +229,10 @@ class ScopeVariable:
 
 @strawberry.type
 class TriggerOption:
-    """One auto-fire trigger selectable in the SFX editor."""
+    """One activation trigger selectable in the SFX editor."""
     value: str
     label: str
+    group: str = "auto"  # "auto" | "manual" | "menu"
 
 
 @strawberry.type
@@ -294,7 +295,6 @@ class SfxRef:
     name: str
     description: str = ""
     trigger: str = ""
-    menu_context: Optional[str] = None
     limit: str = ""
     conditions: list[Condition] = strawberry.field(default_factory=list)
     effects: list[Effect] = strawberry.field(default_factory=list)
@@ -307,7 +307,6 @@ class SfxInput:
     name: str
     description: str = ""
     trigger: str = ""
-    menu_context: Optional[str] = None
     limit: str = ""
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
@@ -320,7 +319,6 @@ class SfxUpdateInput:
     name: Optional[str] = None
     description: Optional[str] = None
     trigger: Optional[str] = None
-    menu_context: Optional[str] = None
     limit: Optional[str] = None
     conditions: Optional[list[ConditionInput]] = None
     effects: Optional[list[EffectInput]] = None
