@@ -1679,7 +1679,7 @@ async function createCharacter() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: `mutation($input: CreateEntityInput!) { createEntity(input: $input) { id name type } }`,
-        variables: { input: { name, type: 'CHARACTER', universe: universe.value } }
+        variables: { input: { name, type: 'CHARACTER', universe: 'earth' } }
       })
     })
     const json = await r.json()
