@@ -6,7 +6,8 @@ The backend ``random`` target mode and the frontend choose-picker both consume
 
 Scope grammar (``Effect.target_scope``)::
 
-    prefix:value    e.g. ``faction:ru-maffia``, ``subtree:krasnoyarsk``
+    prefix:value    e.g. ``faction:ru-maffia``, ``subtree:krasnoyarsk``,
+                    ``life_path:path-1``
     bare value      legacy default — universe for universe-scoped kinds,
                     current location for occupants
     empty           current context
@@ -127,7 +128,11 @@ def _default_scope(kind: str, value: str, entity: Entity, repo, filter: dict) ->
         universe = _current_universe(value, entity)
         return [_candidate(lp.id, lp.name, lp.universe) for lp in repo.list_lifepaths_by_universe(universe)]
     if kind == "roll_table":
-        return [_candidate(t.id, t.name, t.universe) for t in repo.list_roll_tables()]
+        universe = _current_universe(value, entity)
+        tables = repo.list_roll_tables()
+        if universe:
+            tables = [t for t in tables if t.universe == universe]
+        return [_candidate(t.id, t.name, t.universe) for t in tables]
     if kind == "universe":
         return [
             _candidate(e.id, e.name, e.current_universe)
@@ -204,6 +209,24 @@ def _faction_scope(kind: str, value: str, entity: Entity, repo, filter: dict) ->
             for e in repo.list_faction_members(value)
             if e.id != entity.id
         ]
+    if kind == "roll_table":
+        faction = repo.get_entity(value)
+        suitable = set(getattr(faction, "suitable_life_path_ids", []) or [])
+        return [
+            _candidate(t.id, t.name, t.universe)
+            for t in repo.list_roll_tables()
+            if t.life_path in suitable
+        ]
+    return []
+
+
+def _life_path_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
+    if kind == "roll_table":
+        return [
+            _candidate(t.id, t.name, t.universe)
+            for t in repo.list_roll_tables()
+            if t.life_path == value
+        ]
     return []
 
 
@@ -227,6 +250,7 @@ register_scope("location", _location_scope)
 register_scope("subtree", _subtree_scope)
 register_scope("faction", _faction_scope)
 register_scope("traitset", _traitset_scope)
+register_scope("life_path", _life_path_scope)
 
 
 def resolve_candidates(kind: str, scope: Optional[str], entity: Entity, repo, action: Optional[str] = None, filter: Optional[dict] = None) -> list[TargetCandidate]:

@@ -23,6 +23,10 @@ def _n(id, name="", universe=""):
     return SimpleNamespace(id=id, name=name or id, universe=universe)
 
 
+def _rt(id, name="", universe="", life_path=None):
+    return SimpleNamespace(id=id, name=name or id, universe=universe, life_path=life_path)
+
+
 def _proj(id, name="", universe="", entity_id="char-1"):
     return SimpleNamespace(id=id, name=name, universe=universe, entity_id=entity_id)
 
@@ -90,6 +94,9 @@ class TargetRepo:
 
     def list_faction_members(self, faction_id):
         return self.faction_members.get(faction_id, [])
+
+    def get_entity(self, entity_id):
+        return self.by_id.get(entity_id)
 
 
 def _entity(**overrides):
@@ -260,6 +267,48 @@ def test_location_kind_filter_respects_universe_scope():
     repo.locations = [l1, l2]
     out = resolve_candidates("location", "universe:three_realms", _entity(), repo, filter={"starter_location": True})
     assert _ids(out) == ["l2"]
+
+
+# ── roll_table scopes ───────────────────────────────
+
+def test_roll_table_bare_uses_current_universe():
+    repo = TargetRepo()
+    repo.roll_tables = [_rt("t1", universe="earth"), _rt("t2", universe="three_realms")]
+    out = resolve_candidates("roll_table", None, _entity(), repo)
+    assert _ids(out) == ["t1"]
+
+
+def test_roll_table_universe_scope_filters():
+    repo = TargetRepo()
+    repo.roll_tables = [_rt("t1", universe="earth"), _rt("t2", universe="three_realms")]
+    out = resolve_candidates("roll_table", "universe:three_realms", _entity(), repo)
+    assert _ids(out) == ["t2"]
+
+
+def test_roll_table_life_path_scope_filters():
+    repo = TargetRepo()
+    repo.roll_tables = [
+        _rt("t1", life_path="lp-1"),
+        _rt("t2", life_path="lp-2"),
+        _rt("t3", life_path=None),
+    ]
+    out = resolve_candidates("roll_table", "life_path:lp-1", _entity(), repo)
+    assert _ids(out) == ["t1"]
+
+
+def test_roll_table_faction_scope_filters_by_suitable_paths():
+    repo = TargetRepo()
+    repo.by_id["mafia"] = SimpleNamespace(
+        id="mafia", name="Mafia", suitable_life_path_ids=["lp-1", "lp-2"]
+    )
+    repo.roll_tables = [
+        _rt("t1", life_path="lp-1"),
+        _rt("t2", life_path="lp-2"),
+        _rt("t3", life_path="lp-3"),
+        _rt("t4", life_path=None),
+    ]
+    out = resolve_candidates("roll_table", "faction:mafia", _entity(), repo)
+    assert _ids(out) == ["t1", "t2"]
 
 
 # ── extensibility ────────────────────────────────────
