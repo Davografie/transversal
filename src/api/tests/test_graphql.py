@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from transversal.main import app
-from transversal.db.seed import seed_trait_registry
+from tests.seed_registry import seed_test_trait_registry
 from tests.test_entity_manager import InMemoryRepository
 
 
@@ -20,7 +20,7 @@ def client():
     api_main._razmerit_service = None
 
     # Seed trait registry
-    seed_trait_registry(mem_repo)
+    seed_test_trait_registry(mem_repo)
 
     return TestClient(app)
 

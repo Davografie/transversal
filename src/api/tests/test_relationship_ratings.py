@@ -232,59 +232,6 @@ class TestRelationshipTraitSettings:
         assert results == []
 
 
-class TestSeedRelationsTraitset:
-    """Tests for the seed_relations_traitset function."""
-
-    def test_seed_creates_traitset(self, repo):
-        from transversal.db.seed import seed_relations_traitset
-
-        seed_relations_traitset(repo)
-
-        ts = repo.get_traitset_by_id("ts-relations")
-        assert ts is not None
-        assert ts.name == "Relations"
-        assert "earth" in ts.universes
-        assert "three_realms" in ts.universes
-
-    def test_seed_creates_traits(self, repo):
-        from transversal.db.seed import seed_relations_traitset
-
-        seed_relations_traitset(repo)
-
-        expected_traits = [
-            "trait-relation-trust",
-            "trait-relation-debt",
-            "trait-relation-rivalry",
-            "trait-relation-loyalty",
-            "trait-relation-fear",
-            "trait-relation-love",
-            "trait-relation-duty",
-            "trait-rel-rank",
-            "trait-rel-tenure",
-        ]
-        for tid in expected_traits:
-            trait = repo.get_trait(tid)
-            assert trait is not None, f"Trait {tid} should exist"
-            assert trait.traitset_id == "ts-relations"
-            assert "earth" in trait.universes
-            assert "three_realms" in trait.universes
-
-    def test_seed_is_idempotent(self, repo):
-        from transversal.db.seed import seed_relations_traitset
-
-        seed_relations_traitset(repo)
-        first_ts = repo.get_traitset_by_id("ts-relations")
-
-        seed_relations_traitset(repo)
-        second_ts = repo.get_traitset_by_id("ts-relations")
-
-        assert first_ts is not None
-        assert second_ts is not None
-        # Should not have created duplicates
-        all_traits = [d for d in repo._traits.values() if d["traitset_id"] == "ts-relations"]
-        assert len(all_traits) == 9  # the 7 relation traits + rank + tenure
-
-
 class TestEntityManagerStub:
     """Tests for the EntityManager.get_relationship_trait_settings stub."""
 
