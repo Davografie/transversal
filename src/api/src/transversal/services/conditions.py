@@ -10,23 +10,56 @@ if TYPE_CHECKING:
     from transversal.db.repository import EntityRepository
 
 
-def evaluate_condition(entity: Entity, condition: Condition, repo: "EntityRepository") -> bool:
-    """Evaluate a single condition against an entity's current state."""
+def _resolve_condition_value(value, context: dict) -> str:
+    """Resolve a ``{variable}`` token from context; return the literal otherwise."""
+    if isinstance(value, str) and value.startswith("{") and value.endswith("}"):
+        key = value[1:-1]
+        resolved = (context or {}).get(key)
+        return str(resolved) if resolved is not None else ""
+    return value
+
+
+def _resolve_subject(condition: Condition, default_entity, context: dict, repo) -> "Entity | None":
+    """Resolve the entity a condition is evaluated against.
+
+    Blank → the default entity (the current entity for the evaluation context).
+    A ``{variable}`` → the entity referenced by that variable in ``context``.
+    Anything else → a literal entity id.
+    """
+    subject = (condition.subject or "").strip()
+    if not subject:
+        return default_entity
+    if subject.startswith("{") and subject.endswith("}"):
+        key = subject[1:-1]
+        eid = (context or {}).get(key)
+        if not eid:
+            return None
+        return repo.get_entity(str(eid))
+    return repo.get_entity(subject)
+
+
+def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "EntityRepository", context: dict | None = None) -> bool:
+    """Evaluate a single condition against the resolved subject's current state."""
     if condition.type in (ConditionType.ALWAYS, ConditionType.NARRATIVE):
         return True  # narrative limits are not auto-blocking
 
+    subject = _resolve_subject(condition, entity, context or {}, repo)
+    if subject is None:
+        return False
+    target = _resolve_condition_value(condition.target, context or {})
+
     if condition.type == ConditionType.AT_LOCATION:
-        return entity.current_location == condition.target
+        return subject.current_location == target
 
     if condition.type == ConditionType.HAS_TRAIT:
-        for ts in repo.get_traitsettings_for_entity(entity.id):
-            if ts.trait_id == condition.target:
+        for ts in repo.get_traitsettings_for_entity(subject.id):
+            if ts.trait_id == target:
                 return True
         return False
 
     if condition.type == ConditionType.HAS_TRAIT_IN_TRAITSET:
-        for ts in repo.get_traitsettings_for_entity(entity.id):
-            if ts.traitset_id == condition.target:
+        for ts in repo.get_traitsettings_for_entity(subject.id):
+            if ts.traitset_id == target:
                 return True
         return False
 
@@ -34,30 +67,30 @@ def evaluate_condition(entity: Entity, condition: Condition, repo: "EntityReposi
         threshold = DieType(condition.value) if condition.value else None
         if threshold is None:
             return False
-        for ts in repo.get_traitsettings_for_entity(entity.id):
-            if ts.trait_id == condition.target and ts.dice:
+        for ts in repo.get_traitsettings_for_entity(subject.id):
+            if ts.trait_id == target and ts.dice:
                 if any(d.max_value >= threshold.max_value for d in ts.dice):
                     return True
         return False
 
     if condition.type == ConditionType.HAS_RELATIONSHIP:
         return any(
-            r.get("id") == condition.target
-            for r in repo.get_related_entities(entity.id)
+            r.get("id") == target
+            for r in repo.get_related_entities(subject.id)
         )
 
     if condition.type == ConditionType.UNPLACED:
-        return entity.current_location in (None, "")
+        return subject.current_location in (None, "")
 
     if condition.type == ConditionType.IN_UNIVERSE:
-        return entity.current_universe == condition.target
+        return subject.current_universe == target
 
     return False
 
 
-def evaluate_conditions(entity: Entity, conditions: list[Condition], repo: "EntityRepository") -> bool:
+def evaluate_conditions(entity: "Entity | None", conditions: list[Condition], repo: "EntityRepository", context: dict | None = None) -> bool:
     """All conditions must pass (empty list is always true)."""
-    return all(evaluate_condition(entity, c, repo) for c in conditions)
+    return all(evaluate_condition(entity, c, repo, context) for c in conditions)
 
 
 # ── Authoring metadata ───────────────────────────────

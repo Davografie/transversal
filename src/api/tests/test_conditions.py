@@ -16,15 +16,19 @@ from transversal.services.conditions import (
 
 
 class FakeRepo:
-    def __init__(self, traitsettings=None, related=None):
+    def __init__(self, traitsettings=None, related=None, entities=None):
         self.traitsettings = list(traitsettings or [])
         self.related = list(related or [])
+        self.entities = {e.id: e for e in (entities or [])}
 
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
 
     def get_related_entities(self, entity_id):
         return self.related
+
+    def get_entity(self, entity_id):
+        return self.entities.get(entity_id)
 
 
 def _entity(**overrides):
@@ -109,6 +113,33 @@ def test_in_universe():
     assert not evaluate_condition(
         _entity(current_universe="three_realms"), Condition(type=ConditionType.IN_UNIVERSE, target="earth"), FakeRepo()
     )
+
+
+def test_subject_variable_resolves_to_other_entity():
+    buyer = _entity(id="char-2", current_universe="earth")
+    repo = FakeRepo(entities=[buyer])
+    cond = Condition(type=ConditionType.IN_UNIVERSE, subject="{buying_entity}", target="earth")
+    assert evaluate_condition(_entity(), cond, repo, context={"buying_entity": "char-2"})
+    # Unresolved subject → condition fails (safe default).
+    assert not evaluate_condition(_entity(), cond, repo, context={})
+
+
+def test_subject_literal_id():
+    other = _entity(id="char-2", current_location="loc-x")
+    repo = FakeRepo(entities=[other])
+    cond = Condition(type=ConditionType.AT_LOCATION, subject="char-2", target="loc-x")
+    assert evaluate_condition(_entity(), cond, repo)
+
+
+def test_target_variable_resolves():
+    repo = FakeRepo(traitsettings=[_ts("iron-will")])
+    cond = Condition(type=ConditionType.HAS_TRAIT, target="{trait}")
+    assert evaluate_condition(_entity(), cond, repo, context={"trait": "iron-will"})
+
+
+def test_blank_subject_with_no_default_fails():
+    # The hitch menu passes no default entity, so a blank subject can't resolve.
+    assert not evaluate_condition(None, Condition(type=ConditionType.UNPLACED), FakeRepo())
 
 
 def test_condition_types_registry_declares_editor_metadata():

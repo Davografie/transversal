@@ -191,7 +191,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
 
 
 def _condition_to_gql(c: DomainCondition) -> Condition:
-    return Condition(type=c.type, target=c.target, value=c.value, narrative=c.narrative)
+    return Condition(type=c.type, subject=c.subject, target=c.target, value=c.value, narrative=c.narrative)
 
 
 def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
@@ -262,7 +262,7 @@ def _effects_result_to_gql(result) -> EffectApplicationResult:
 
 
 def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
-    return DomainCondition(type=c.type, target=c.target, value=c.value, narrative=c.narrative)
+    return DomainCondition(type=c.type, subject=c.subject, target=c.target, value=c.value, narrative=c.narrative)
 
 
 def _check_input_to_domain(c: RollTableCheckInput) -> DomainRollTableCheck:
@@ -544,13 +544,25 @@ class Query:
         ]
 
     @strawberry.field
-    def hitch_menu(self, info: strawberry.Info) -> list[ConsequenceOption]:
-        """Return the GM hitch menu — SFX from the gm/table owners whose
-        ``menu_context`` is ``hitch`` (no base or entity moves)."""
+    def hitch_menu(
+        self, info: strawberry.Info,
+        roller_id: Optional[strawberry.ID] = None,
+        buyer_id: Optional[strawberry.ID] = None,
+    ) -> list[ConsequenceOption]:
+        """Return the GM hitch menu — SFX from the gm/table/players owners whose
+        trigger is ``hitch``. ``roller_id``/``buyer_id`` populate ``{hitch_entity}``
+        and ``{buying_entity}`` so conditions can reference them."""
         from transversal.services.consequence_menu import assemble_hitch_menu
 
         repo = _em(info).repo
-        return [_consequence_option_to_gql(o) for o in assemble_hitch_menu(repo)]
+        return [
+            _consequence_option_to_gql(o)
+            for o in assemble_hitch_menu(
+                repo,
+                str(roller_id) if roller_id else "",
+                str(buyer_id) if buyer_id else "",
+            )
+        ]
 
     @strawberry.field
     def incoming_messages(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[Message]:

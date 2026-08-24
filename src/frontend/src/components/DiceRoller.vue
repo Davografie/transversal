@@ -347,7 +347,7 @@
           {{ remoteView.hitches.length }} hitch{{ remoteView.hitches.length > 1 ? 'es' : '' }}
         </div>
         <div v-if="showHitchMenu && selectedHitches.length" class="hitch-menu-panel">
-          <HitchMenu :entity-id="activeId" :count="selectedHitches.length" :side="props.gmMode ? 'gm' : 'player'" @apply="applyHitchOption" @close="closeHitchMenu" />
+          <HitchMenu :entity-id="activeId" :buyer-id="hitchBuyerId" :count="selectedHitches.length" :side="props.gmMode ? 'gm' : 'player'" @apply="applyHitchOption" @close="closeHitchMenu" />
         </div>
       </div>
     </template>
@@ -420,6 +420,8 @@ const showHitchMenu = ref(false)
 const DIFFICULTY_TAB = '__difficulty__'
 const poolPurpose = ref(null) // GM mode: 'difficulty' | 'gmc' | null
 const activeId = ref(props.gmMode ? DIFFICULTY_TAB : props.entityId)
+// The entity on whose behalf a hitch is being bought (GM acts as another entity).
+const hitchBuyerId = computed(() => props.gmMode ? (props.actingEntityId || props.fallbackEntityId || '') : (props.entityId || ''))
 const viewPool = ref([])
 // Live remote view for the read-only peer tab: prefer rolled/committed state,
 // then the live assembled pool, then the fetched snapshot.

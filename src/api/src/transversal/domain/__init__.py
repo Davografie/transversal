@@ -818,7 +818,8 @@ class Condition(BaseModel):
     Parallel to Effect: authored once, evaluated against an entity's state.
     """
     type: ConditionType = ConditionType.ALWAYS
-    target: str = ""                  # trait / location / entity id
+    subject: str = ""                # "" = current entity; else literal id or {variable}
+    target: str = ""                  # trait / location / entity id (or {variable})
     value: Optional[str] = None       # threshold, e.g. rank number
     narrative: str = ""               # human-readable fallback text
 

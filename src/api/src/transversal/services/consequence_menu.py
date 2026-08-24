@@ -23,6 +23,7 @@ from transversal.domain import (
 
 
 from transversal.services.sfx_owner import get_available_sfx_ids
+from transversal.services.conditions import evaluate_conditions
 
 
 # Base moves. The doom-pool step-up/down targets are intentionally generic
@@ -121,6 +122,8 @@ def assemble_consequence_menu(
             continue
         if sfx.trigger != menu_context and sfx.trigger != "on_consequence":
             continue
+        if sfx.conditions and not evaluate_conditions(entity, sfx.conditions, repo):
+            continue
         options.append(ConsequenceOption(
             id=f"sfx:{sfx.id}", label=sfx.name, side="player",
             effects=sfx.effects, source="sfx",
@@ -129,10 +132,14 @@ def assemble_consequence_menu(
     return options
 
 
-def assemble_hitch_menu(repo) -> list[ConsequenceOption]:
+def assemble_hitch_menu(repo, roller_id: str = "", buyer_id: str = "") -> list[ConsequenceOption]:
     """Return the hitch/opportunity menu — SFX from the ``gm``/``table``/``players``
-    owner buckets whose trigger is ``hitch`` (no base or entity moves)."""
+    owner buckets whose trigger is ``hitch`` (no base or entity moves).
+
+    ``roller_id`` and ``buyer_id`` populate ``{hitch_entity}`` / ``{buying_entity}``
+    so conditions can reference them."""
     owner_sides = {"gm": "gm", "table": "either", "players": "player"}
+    context = {"hitch_entity": roller_id, "buying_entity": buyer_id}
 
     options: list[ConsequenceOption] = []
     seen: set[str] = set()
@@ -146,6 +153,10 @@ def assemble_hitch_menu(repo) -> list[ConsequenceOption]:
             seen.add(sfx_id)
             sfx = repo.get_sfx(sfx_id)
             if sfx is None or sfx.trigger != "hitch":
+                continue
+            # No default entity here — hitch conditions must reference
+            # {hitch_entity} or {buying_entity} explicitly (blank subject skips).
+            if sfx.conditions and not evaluate_conditions(None, sfx.conditions, repo, context):
                 continue
             options.append(ConsequenceOption(
                 id=f"sfx:{sfx.id}", label=sfx.name, side=side,

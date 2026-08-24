@@ -153,7 +153,7 @@ class EffectsEngine:
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:
                 entity = repo.get_entity(event.entity_id)
-                if entity is None or not evaluate_conditions(entity, sfx.conditions, repo):
+                if entity is None or not evaluate_conditions(entity, sfx.conditions, repo, event.context):
                     continue
 
             # Cost check: sum razmerit costs from spend effects

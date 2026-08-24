@@ -191,3 +191,36 @@ def test_assemble_hitch_menu_filters_owners_and_context():
         "sfx:hitch-gain-complication", "sfx:hitch-table", "sfx:opportunity-step-down-complication",
     ]
     assert [o.side for o in options] == ["gm", "either", "player"]
+
+
+def test_hitch_menu_filters_by_buyer_condition():
+    from transversal.domain import Condition, ConditionType, TraitSetting
+    from transversal.services.consequence_menu import assemble_hitch_menu
+
+    repo = MenuRepo()
+    repo.sfx_owners = {"players": SimpleNamespace(sfx_ids=["opportunity-step-down-complication"])}
+    repo.sfxs = {
+        "opportunity-step-down-complication": SFX(
+            id="opportunity-step-down-complication", name="Step down", trigger="hitch",
+            conditions=[Condition(
+                type=ConditionType.HAS_TRAIT_IN_TRAITSET,
+                subject="{buying_entity}", target="ts-complications",
+            )],
+            effects=[],
+        ),
+    }
+    buyer = Entity(id="buyer-1", type=EntityType.CHARACTER, name="Buyer", current_universe="earth")
+    repo.locations["buyer-1"] = buyer  # get_entity resolves the buyer via locations
+
+    # Buyer has a complication → the SFX appears.
+    repo.trait_settings = [
+        TraitSetting(id="buyer-1:comp", entity_id="buyer-1", trait_id="comp",
+                     traitset_id="ts-complications", dice=[]),
+    ]
+    assert [o.id for o in assemble_hitch_menu(repo, roller_id="roller-1", buyer_id="buyer-1")] == [
+        "sfx:opportunity-step-down-complication"
+    ]
+
+    # Buyer has no complications → the SFX is filtered out.
+    repo.trait_settings = []
+    assert assemble_hitch_menu(repo, roller_id="roller-1", buyer_id="buyer-1") == []

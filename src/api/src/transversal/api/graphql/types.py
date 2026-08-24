@@ -44,6 +44,7 @@ TimerCombineGql = strawberry.enum(DomainTimerCombine)
 class Condition:
     """A configurable, automatically-evaluated gate or limit."""
     type: ConditionType
+    subject: str = ""
     target: str = ""
     value: Optional[str] = None
     narrative: str = ""
@@ -52,6 +53,7 @@ class Condition:
 @strawberry.input
 class ConditionInput:
     type: ConditionType = ConditionType.ALWAYS
+    subject: str = ""
     target: str = ""
     value: Optional[str] = None
     narrative: str = ""

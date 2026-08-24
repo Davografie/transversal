@@ -78,13 +78,14 @@ function initialConditions(sfx) {
   if (sfx?.conditions?.length) {
     return sfx.conditions.map(c => ({
       type: c.type || 'ALWAYS',
+      subject: c.subject || '',
       target: c.target || '',
       value: c.value || '',
       narrative: c.narrative || '',
     }))
   }
   if (sfx?.limit) {
-    return [{ type: 'NARRATIVE', target: '', value: '', narrative: sfx.limit }]
+    return [{ type: 'NARRATIVE', subject: '', target: '', value: '', narrative: sfx.limit }]
   }
   return []
 }

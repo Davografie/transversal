@@ -8,16 +8,17 @@ export function useHitchMenu() {
   const { applyEffects, resolveEffectTargets } = useEffectApplication()
   const loading = ref(false)
 
-  async function fetchHitchMenu() {
+  async function fetchHitchMenu(rollerId = '', buyerId = '') {
     loading.value = true
     try {
       const data = await graphql(
-        `query {
-          hitchMenu {
+        `query($rollerId: ID, $buyerId: ID) {
+          hitchMenu(rollerId: $rollerId, buyerId: $buyerId) {
             id label side source
             effects { timing type action target entity result targetScope targetFilter negative context }
           }
-        }`
+        }`,
+        { rollerId: rollerId || null, buyerId: buyerId || null }
       )
       return data?.hitchMenu || []
     } finally {

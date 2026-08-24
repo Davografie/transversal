@@ -24,6 +24,7 @@ import { useHitchMenu } from '@/composables/useHitchMenu.js'
 
 const props = defineProps({
   entityId: { type: String, required: true },
+  buyerId: { type: String, default: '' },
   count: { type: Number, default: 0 },
   side: { type: String, default: 'either' },  // 'gm' | 'player' | 'either'
 })
@@ -39,7 +40,7 @@ const visibleOptions = computed(() =>
 )
 
 onMounted(async () => {
-  options.value = await fetchHitchMenu()
+  options.value = await fetchHitchMenu(props.entityId, props.buyerId)
 })
 
 async function apply(opt) {
