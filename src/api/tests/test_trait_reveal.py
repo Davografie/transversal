@@ -105,14 +105,14 @@ def test_reveal_pool_traits_fires_on_trait_learn(monkeypatch):
 
     assert fired == [
         ("owner", "on_trait_learn", {
-            "trait_id": "hidden",
-            "trait_setting_id": "ts-1",
+            "trait": "hidden",
+            "trait_setting": "ts-1",
             "owner": "owner",
             "learner": "owner",
         }),
         ("viewer-a", "on_trait_learn", {
-            "trait_id": "hidden",
-            "trait_setting_id": "ts-1",
+            "trait": "hidden",
+            "trait_setting": "ts-1",
             "owner": "owner",
             "learner": "viewer-a",
         }),
@@ -128,8 +128,8 @@ def test_fire_on_trait_learn_passes_context(monkeypatch):
     fire_on_trait_learn("owner", "learner", "hidden", "ts-1")
     assert fired == [
         ("learner", "", "on_trait_learn", {
-            "trait_id": "hidden",
-            "trait_setting_id": "ts-1",
+            "trait": "hidden",
+            "trait_setting": "ts-1",
             "owner": "owner",
             "learner": "learner",
         })

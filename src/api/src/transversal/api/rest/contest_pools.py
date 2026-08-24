@@ -185,7 +185,7 @@ async def give_in(location_id: str, entity_id: str):
     # Fire automatic SFX for the conceding side (give-in → +1 razmerit + ban).
     from transversal.services.state_events import fire_state_sfx
     opponent_id = defendant.entity_id if entity_id == challenger.entity_id else challenger.entity_id
-    fire_state_sfx(entity_id, "", "on_give_in", {"gave_in": True, "opponent_id": opponent_id})
+    fire_state_sfx(entity_id, "", "on_give_in", {"gave_in": True, "contest_entity_opponent": opponent_id})
 
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None

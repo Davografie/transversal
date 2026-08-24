@@ -138,8 +138,8 @@ async def offer_negative(location_id: str, entity_id: str, req: OfferNegativeReq
     if newly_revealed and ts is not None:
         from transversal.services.state_events import fire_state_sfx
         fire_state_sfx(entity_id, "", "on_trait_offered", {
-            "trait_id": ts.trait_id,
-            "trait_setting_id": ts.id,
+            "trait": ts.trait_id,
+            "trait_setting": ts.id,
             "owner": ts.entity_id,
             "opponent": req.opponent_id,
             "newly_revealed": "true",

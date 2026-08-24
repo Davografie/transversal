@@ -143,7 +143,7 @@ def _register_core_handlers(em, raz):
         entity = em.repo.get_entity(eid)
         if entity is None:
             return
-        target = ctx.get("opponent_id") or (a.target or "")
+        target = ctx.get("contest_entity_opponent") or (a.target or "")
         if not target or target == "self":
             return
         apply_targeting_ban(entity, target)

@@ -93,8 +93,8 @@ def fire_on_trait_learn(owner_id: str, learner_id: str, trait_id: str, trait_set
         "",
         "on_trait_learn",
         {
-            "trait_id": trait_id,
-            "trait_setting_id": trait_setting_id,
+            "trait": trait_id,
+            "trait_setting": trait_setting_id,
             "owner": owner_id,
             "learner": learner_id,
         },

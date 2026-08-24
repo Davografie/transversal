@@ -63,8 +63,8 @@ def test_offer_negative_reveals_and_fires_when_unknown(monkeypatch):
     assert trait.known_to == ["opponent", "bystander"]
     assert fired == [
         ("player", "on_trait_offered", {
-            "trait_id": "trait-neg",
-            "trait_setting_id": "ts-neg-1",
+            "trait": "trait-neg",
+            "trait_setting": "ts-neg-1",
             "owner": "player",
             "opponent": "opponent",
             "newly_revealed": "true",

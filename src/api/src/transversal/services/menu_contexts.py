@@ -88,12 +88,12 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("taken_out", "boolean"),
     )),
     TriggerDef("on_give_in", "On Give In", (
-        Variable("opponent_id", "entity"),
+        Variable("contest_entity_opponent", "entity"),
         Variable("gave_in", "string"),
     )),
     TriggerDef("on_push", "On Push", (Variable("pushed", "string"),)),
     TriggerDef("on_taken_out", "On Taken Out", (
-        Variable("opponent_id", "entity"),
+        Variable("contest_entity_opponent", "entity"),
         Variable("taken_out", "string"),
     )),
     TriggerDef("on_prevent_taken_out", "On Prevent Taken Out", (
@@ -106,18 +106,18 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("universe", "universe"),
     )),
     TriggerDef("on_trait_change", "On Trait Change", (
-        Variable("trait_id", "string"),
-        Variable("traitset_id", "string"),
+        Variable("trait", "trait"),
+        Variable("traitset", "traitset"),
     )),
     TriggerDef("on_trait_learn", "On Trait Learned", (
-        Variable("trait_id", "string"),
-        Variable("trait_setting_id", "string"),
+        Variable("trait", "trait"),
+        Variable("trait_setting", "trait_setting"),
         Variable("owner", "entity"),
         Variable("learner", "entity"),
     )),
     TriggerDef("on_trait_offered", "On Trait Offered", (
-        Variable("trait_id", "string"),
-        Variable("trait_setting_id", "string"),
+        Variable("trait", "trait"),
+        Variable("trait_setting", "trait_setting"),
         Variable("owner", "entity"),
         Variable("opponent", "entity"),
         Variable("newly_revealed", "string"),

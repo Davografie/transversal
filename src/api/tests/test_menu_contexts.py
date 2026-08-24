@@ -45,7 +45,7 @@ def test_trigger_variables_for_contests():
 
 def test_trigger_variables_for_state_events():
     vs = _names(trigger_variables("on_give_in"))
-    assert "opponent_id" in vs
+    assert "contest_entity_opponent" in vs
     assert "gave_in" in vs
     assert "pushed" in _names(trigger_variables("on_push"))
     assert "effect_die" in _names(trigger_variables("on_prevent_taken_out"))
@@ -100,13 +100,13 @@ def test_state_fire_sites_populate_declared_variables(monkeypatch):
     cases = {
         "character_created": {"entity_created": "c1"},
         "location_changed": {"from_location": "a", "to_location": "b", "universe": "earth"},
-        "trait_updated": {"trait_id": "t1", "traitset_id": "ts1"},
+        "trait_updated": {"trait": "t1", "traitset": "ts1"},
         "relationship_created": {"target_entity": "e2", "relationship_type": "ally"},
-        "on_trait_learn": {"trait_id": "t1", "trait_setting_id": "s1", "owner": "o", "learner": "l"},
-        "on_trait_offered": {"trait_id": "t1", "trait_setting_id": "s1", "owner": "o", "opponent": "p", "newly_revealed": "true"},
-        "on_give_in": {"gave_in": True, "opponent_id": "x"},
+        "on_trait_learn": {"trait": "t1", "trait_setting": "s1", "owner": "o", "learner": "l"},
+        "on_trait_offered": {"trait": "t1", "trait_setting": "s1", "owner": "o", "opponent": "p", "newly_revealed": "true"},
+        "on_give_in": {"gave_in": True, "contest_entity_opponent": "x"},
         "on_push": {"pushed": True},
-        "on_taken_out": {"taken_out": True, "opponent_id": "x"},
+        "on_taken_out": {"taken_out": True, "contest_entity_opponent": "x"},
         "on_prevent_taken_out": {"prevented": True, "effect_die": "d6"},
     }
 

@@ -89,7 +89,6 @@ def fire_contest_outcome_sfx(
             universe=universe,
             context={
                 "contest_winner": contest_winner,
-                "opponent_id": opponent_id,                    # legacy alias
                 "contest_entity_opponent": opponent_id,
                 "contest_projection_opponent": opponent_projection,
                 "effect_die": effect_die,
@@ -126,7 +125,7 @@ def _mark_taken_out(repo, loser_id: str, opponent_id: str) -> None:
 
     fire_state_sfx(loser_id, loser.current_universe, "on_taken_out", {
         "taken_out": True,
-        "opponent_id": opponent_id,
+        "contest_entity_opponent": opponent_id,
     })
 
 
