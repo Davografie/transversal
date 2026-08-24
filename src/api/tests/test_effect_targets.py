@@ -145,6 +145,13 @@ def test_universe_scope_overrides_current():
     assert _ids(out) == ["l2"]
 
 
+def test_universe_current_token_uses_current_universe():
+    repo = TargetRepo()
+    repo.locations = [_e("l1", universe="earth"), _e("l2", universe="three_realms")]
+    out = resolve_candidates("location", "universe:current", _entity(), repo)
+    assert _ids(out) == ["l1"]
+
+
 def test_location_scope_lists_occupants():
     repo = TargetRepo()
     repo.occupants = {"railyard": [_e("dmitry"), _e("char-1")]}

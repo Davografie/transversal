@@ -27,6 +27,7 @@
     <template v-else-if="mode === 'universe'">
       <select v-model="value" @change="emitScope">
         <option value="">-- pick a universe --</option>
+        <option value="current">Current universe</option>
         <option v-for="u in universeKeys" :key="u" :value="u">{{ universeName(u) }}</option>
       </select>
     </template>

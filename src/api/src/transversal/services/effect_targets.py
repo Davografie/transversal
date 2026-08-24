@@ -90,12 +90,17 @@ def _apply_filter(entities, filter_dict: dict):
     ]
 
 
+def _current_universe(value: str, entity: Entity) -> str:
+    """Resolve a scope universe: ``""`` and ``"current"`` mean the entity's current universe."""
+    return entity.current_universe if value in ("", "current") else value
+
+
 def _default_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
     """No explicit scope: narrow by the entity's current context."""
     if kind == "rating_die":
         return _die_candidates()
     if kind == "location":
-        universe = value or entity.current_universe
+        universe = _current_universe(value, entity)
         return [
             _candidate(e.id, e.name, e.current_universe)
             for e in _apply_filter(repo.list_entities_by_type(EntityType.LOCATION, universe=universe), filter)
@@ -110,16 +115,16 @@ def _default_scope(kind: str, value: str, entity: Entity, repo, filter: dict) ->
             if e.id != entity.id
         ]
     if kind == "entity":
-        universe = value or entity.current_universe
+        universe = _current_universe(value, entity)
         return [
             _candidate(e.id, e.name, e.current_universe)
             for e in repo.list_all_entities(universe=universe)
         ]
     if kind == "trait":
-        universe = value or entity.current_universe
+        universe = _current_universe(value, entity)
         return [_candidate(t.id, t.name, universe) for t in repo.get_traits_by_universe(universe)]
     if kind == "life_path":
-        universe = value or entity.current_universe
+        universe = _current_universe(value, entity)
         return [_candidate(lp.id, lp.name, lp.universe) for lp in repo.list_lifepaths_by_universe(universe)]
     if kind == "roll_table":
         return [_candidate(t.id, t.name, t.universe) for t in repo.list_roll_tables()]
