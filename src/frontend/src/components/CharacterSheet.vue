@@ -548,6 +548,11 @@ async function openAddTrait() {
   if (trData?.traitsByUniverse) {
     availableTraits.value = trData.traitsByUniverse
   }
+  // If already drilled into a trait set, preselect it and jump straight to its traits.
+  if (activeSetName.value) {
+    const current = availableTraitSets.value.find(ts => ts.name === activeSetName.value)
+    if (current) selectSet(current)
+  }
   showAddTrait.value = true
 }
 
