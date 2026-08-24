@@ -9,8 +9,13 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import AsyncIterator
+
+from transversal.db.redis import get_async_redis_client, get_redis_client
+
+CHANNEL_PREFIX = "sse:"
 
 
 @dataclass
@@ -31,9 +36,28 @@ class EventBus:
 
     def __init__(self):
         self._queues: dict[str, list[asyncio.Queue]] = {}  # session_id → [queues]
+        self._worker_id = uuid.uuid4().hex
+        self._redis = get_redis_client()  # None when Redis is unavailable (single-worker)
 
     def publish(self, event: StreamEvent) -> None:
-        """Push an event to all subscribers of its session."""
+        """Push an event to local subscribers and (if Redis is up) other workers."""
+        self._deliver_local(event)
+        if self._redis is not None:
+            try:
+                self._redis.publish(
+                    f"{CHANNEL_PREFIX}{event.session_id}",
+                    json.dumps({
+                        "source_worker": self._worker_id,
+                        "session_id": event.session_id,
+                        "event": event.event,
+                        "data": event.data,
+                    }),
+                )
+            except Exception:
+                pass  # Redis hiccup must not break the local publish
+
+    def _deliver_local(self, event: StreamEvent) -> None:
+        """Push an event to all subscribers of its session (this process only)."""
         queues = self._queues.get(event.session_id, [])
         dead = []
         for q in queues:
@@ -43,6 +67,41 @@ class EventBus:
                 dead.append(q)
         for q in dead:
             queues.remove(q)
+
+    async def run_redis_subscriber(self) -> None:
+        """Background task: forward events published by other workers into the
+        local bus so this worker's SSE clients see cross-worker events."""
+        if self._redis is None:
+            return
+        r = get_async_redis_client()
+        pubsub = r.pubsub()
+        try:
+            await pubsub.psubscribe(f"{CHANNEL_PREFIX}*")
+            async for message in pubsub.listen():
+                if message.get("type") != "pmessage":
+                    continue
+                try:
+                    payload = json.loads(message["data"])
+                except Exception:
+                    continue
+                if payload.get("source_worker") == self._worker_id:
+                    continue  # echo of our own publish
+                self._deliver_local(StreamEvent(
+                    event=payload.get("event", ""),
+                    data=payload.get("data", {}),
+                    session_id=payload.get("session_id", ""),
+                ))
+        except asyncio.CancelledError:
+            raise
+        finally:
+            try:
+                await pubsub.aclose()
+            except Exception:
+                pass
+            try:
+                await r.aclose()
+            except Exception:
+                pass
 
     def subscribe(self, session_id: str) -> "Subscription":
         """Create a subscription for a session."""
