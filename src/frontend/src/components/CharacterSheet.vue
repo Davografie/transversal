@@ -308,6 +308,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEntityCache } from '../composables/entityCache.js'
+import { usePersistedRef } from '../composables/usePersistedState.js'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
@@ -378,7 +379,7 @@ const relInput = ref(null)
 const blueBookRef = ref(null)
 
 
-const activeSheetView = ref('traits')  // 'traits' | 'profile' | 'lifepath' | 'bluebook'
+const activeSheetView = usePersistedRef('sheet.activeView', 'traits')  // 'traits' | 'profile' | 'lifepath' | 'bluebook'
 watch(activeSheetView, (v) => emit('sheetViewChange', v))
 
 const isForeignSheet = computed(() =>
@@ -464,7 +465,7 @@ const offeredTraits = ref(new Set())
 const spentResources = ref({})
 
 // Trait editing (full-panel view)
-const editingTraitId = ref(null)
+const editingTraitId = usePersistedRef('sheet.editTraitId', null)
 
 const editingTrait = computed(() => {
   if (!editingTraitId.value) return null
@@ -475,17 +476,17 @@ const editingTrait = computed(() => {
   return profileTraits.value.find(t => t.id === editingTraitId.value) || null
 })
 
-const editDice = ref([])
-const editRatingType = ref('STATIC')
-const editPolarity = ref(null)
-const editStatement = ref('')
-const editNotes = ref('')
+const editDice = usePersistedRef('sheet.editDice', [])
+const editRatingType = usePersistedRef('sheet.editRatingType', 'STATIC')
+const editPolarity = usePersistedRef('sheet.editPolarity', null)
+const editStatement = usePersistedRef('sheet.editStatement', '')
+const editNotes = usePersistedRef('sheet.editNotes', '')
 const showDiePicker = ref(false)
 const pickIdx = ref(0)
 const pickedDie = ref('')
-const editSfxIds = ref([])
-const editIsEgo = ref(true)
-const editProjectionId = ref(null)
+const editSfxIds = usePersistedRef('sheet.editSfxIds', [])
+const editIsEgo = usePersistedRef('sheet.editIsEgo', true)
+const editProjectionId = usePersistedRef('sheet.editProjectionId', null)
 const showProjectionPicker = ref(false)
 
 const RATING_TYPES = [
