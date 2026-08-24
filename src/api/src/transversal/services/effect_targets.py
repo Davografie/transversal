@@ -123,7 +123,13 @@ def _default_scope(kind: str, value: str, entity: Entity, repo, filter: dict) ->
         ]
     if kind == "trait":
         universe = _current_universe(value, entity)
-        return [_candidate(t.id, t.name, universe) for t in repo.get_traits_by_universe(universe)]
+        if universe:
+            return [_candidate(t.id, t.name, universe) for t in repo.get_traits_by_universe(universe)]
+        # Empty scope in authoring (no concrete entity universe) → the full registry.
+        return [
+            _candidate(t.id, t.name, t.universes[0] if t.universes else "")
+            for t in repo.get_all_traits()
+        ]
     if kind == "life_path":
         universe = _current_universe(value, entity)
         return [_candidate(lp.id, lp.name, lp.universe) for lp in repo.list_lifepaths_by_universe(universe)]

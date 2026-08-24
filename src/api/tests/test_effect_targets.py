@@ -77,6 +77,12 @@ class TargetRepo:
     def get_traits_by_traitset(self, traitset_id):
         return self.traits_traitset.get(traitset_id, [])
 
+    def get_all_traits(self):
+        out = []
+        for traits in self.traits_universe.values():
+            out.extend(traits)
+        return out
+
     def get_traitsettings_by_traitset(self, entity_id, traitset_id):
         return getattr(self, "trait_settings_by_traitset", {}).get((entity_id, traitset_id), [])
 
@@ -215,6 +221,17 @@ def test_traitset_scope_gain_lists_all_traits():
     repo.trait_settings_by_traitset = {("char-1", "ts-skills"): [SimpleNamespace(trait_id="medicine")]}
     out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action="gain_or_step_up")
     assert _ids(out) == ["medicine", "surgery"]
+
+
+def test_trait_empty_scope_lists_full_registry():
+    repo = TargetRepo()
+    repo.traits_universe = {
+        "earth": [_t("medicine", universes=["earth"]), _t("surgery", universes=["earth"])],
+        "three_realms": [_t("dao", universes=["three_realms"])],
+    }
+    # Preview context has no concrete universe → the whole registry is shown.
+    out = resolve_candidates("trait", None, _entity(current_universe=""), repo)
+    assert _ids(out) == ["medicine", "surgery", "dao"]
 
 
 # ── universe / projection kinds ─────────────────────
