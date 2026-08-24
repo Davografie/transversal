@@ -46,6 +46,7 @@ status: canonical
 - [[Release Plan]] — scope, decisions, and the 6-phase **build order** (start here for "what to build next")
 - [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
 - [[Tickets]] — the ticket-level breakdown (per-ticket dependencies + context to load)
+- [[Performance and Resilience Plan]] — client caching, draft persistence, backend latency, multi-worker
 
 ### 🎨 Design
 
