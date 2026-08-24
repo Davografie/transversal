@@ -84,12 +84,29 @@ COLLECTIONS = {
 }
 
 
-def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
-    """Return a connection, creating database and collections if needed."""
-    from arango import ArangoClient
+# Per-process connection cache. get_db() was previously re-running the full
+# bootstrap (ArangoClient + has_database + has_collection x16 + _ensure_indexes)
+# on every call — every EntityRepository() construction paid that cost, and the
+# GraphQL media resolvers construct a fresh repository per field per entity.
+# The connection pool is safe to share across the process.
+_db_cache: dict[tuple, "StandardDatabase"] = {}
 
+
+def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
+    """Return a (cached) connection, creating database and collections if needed.
+
+    Memoized per process on (url, username, password, database); the
+    create-db/collection/index bootstrap runs once and is skipped afterwards.
+    """
     if config is None:
         config = ArangoConfig.from_env()
+
+    cache_key = (config.url, config.username, config.password, config.database)
+    cached = _db_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    from arango import ArangoClient
 
     client = ArangoClient(hosts=config.url)
     sys_db = client.db("_system", username=config.username, password=config.password)
@@ -104,6 +121,7 @@ def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
             db.create_collection(name, edge=is_edge)
 
     _ensure_indexes(db)
+    _db_cache[cache_key] = db
     return db
 
 

@@ -41,46 +41,44 @@ async def navigate(location_id: str):
     Returns parent (up), children (down), and transversal destinations (lateral).
     """
     logger.info(f"[init] navigate loc={location_id}")
-    result = _repo().navigate_from(location_id)
+    repo = _repo()
+    result = repo.navigate_from(location_id)
     if result["location"] is None:
         raise HTTPException(status_code=404, detail=f"Location '{location_id}' not found")
 
-    # Resolve navdot images from entity_images (role="navdot")
-    from transversal.db.repository import EntityRepository
-    from transversal.domain import ImageType
-    repo = EntityRepository()
+    # Resolve navdot images from entity_images (role="navdot") in one query.
+    def _eid(entity: dict) -> str | None:
+        return (entity or {}).get("_key") or (entity or {}).get("id")
 
-    def _resolve_navdot(entity: dict) -> str | None:
-        eid = (entity or {}).get("_key") or (entity or {}).get("id")
-        if not eid:
-            return None
-        images = repo.get_entity_images(eid)
-        for img in images:
-            if "navdot" in img.roles:
-                if img.image_type == ImageType.ANIMATED:
-                    return f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}"
-                else:
-                    return f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}"
-        return None
+    nav_targets = [
+        *result.get("occupants", []),
+        *result.get("children", []),
+        *result.get("transversal", []),
+    ]
+    parent = result.get("parent")
+    if parent:
+        nav_targets.append(parent)
+    navdot_images = repo.get_navdot_images(
+        [eid for eid in (_eid(e) for e in nav_targets) if eid]
+    )
 
     for occ in result.get("occupants", []):
-        nav = _resolve_navdot(occ)
+        nav = navdot_images.get(_eid(occ))
         if nav:
             occ["image"] = nav
 
     for child in result.get("children", []):
-        nav = _resolve_navdot(child)
+        nav = navdot_images.get(_eid(child))
         if nav:
             child["navdot_image"] = nav
 
     for trans in result.get("transversal", []):
-        nav = _resolve_navdot(trans)
+        nav = navdot_images.get(_eid(trans))
         if nav:
             trans["navdot_image"] = nav
 
-    parent = result.get("parent")
     if parent:
-        nav = _resolve_navdot(parent)
+        nav = navdot_images.get(_eid(parent))
         if nav:
             parent["navdot_image"] = nav
 

@@ -331,9 +331,12 @@ class Query:
         self, info: strawberry.Info,
         type: Optional[EntityType] = None,
         universe: Optional[str] = None,
+        ids: Optional[list[strawberry.ID]] = None,
     ) -> list[Entity]:
         repo = _em(info).repo
-        if type is not None:
+        if ids is not None:
+            results = repo.get_entities_by_ids([str(i) for i in ids])
+        elif type is not None:
             domain_type = DomainEntityType(type.value)
             results = repo.list_entities_by_type(domain_type, universe)
         else:

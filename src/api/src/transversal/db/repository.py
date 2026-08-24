@@ -95,6 +95,22 @@ class EntityRepository:
         doc = self._entities.get(entity_id)
         return Entity.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
+    def get_entities_by_ids(self, entity_ids: list[str]) -> list[Entity]:
+        """Fetch multiple entities by id in one query, preserving input order."""
+        if not entity_ids:
+            return []
+        ids = list(dict.fromkeys(entity_ids))  # dedupe, preserve order
+        query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e._key IN @ids
+            RETURN e
+        """
+        by_id = {
+            doc["_key"]: self._doc_to_entity(doc)
+            for doc in self.db.aql.execute(query, bind_vars={"ids": ids})
+        }
+        return [by_id[eid] for eid in ids if eid in by_id]
+
     def update_entity(self, entity: Entity) -> Entity:
         doc = entity.model_dump()
         doc["_key"] = entity.id
@@ -2411,6 +2427,31 @@ class EntityRepository:
             if not img.projection_id and role in img.roles:
                 return self._image_url(img, variant)
         return None
+
+    def get_navdot_images(self, entity_ids: list[str]) -> dict[str, str]:
+        """Resolve navdot role image URLs for many entities in one query.
+
+        Returns ``{entity_id: media_url}`` for the newest navdot image per
+        entity. The location navigate endpoint uses this to avoid one AQL
+        round-trip per occupant/child/transversal.
+        """
+        if not entity_ids:
+            return {}
+        ids = list(dict.fromkeys(entity_ids))  # dedupe, preserve order
+        query = f"""
+            FOR doc IN {ENTITY_IMAGES}
+            FILTER doc.entity_id IN @ids AND 'navdot' IN doc.roles
+            SORT doc.created_at DESC
+            RETURN doc
+        """
+        resolved: dict[str, str] = {}
+        for doc in self.db.aql.execute(query, bind_vars={"ids": ids}):
+            img = EntityImage.model_validate({**doc, "id": doc["_key"]})
+            eid = img.entity_id
+            if eid in resolved:
+                continue  # already kept the newest (results are DESC by created_at)
+            resolved[eid] = self._image_url(img, "Large")
+        return resolved
 
     # ── Helpers ───────────────────────────────────────
 

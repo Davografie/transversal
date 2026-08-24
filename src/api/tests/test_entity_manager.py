@@ -62,6 +62,8 @@ class InMemoryRepository(EntityRepository):
     def list_entities_by_type(self, et, universe=None):
         return [Entity.model_validate(d) for d in self._entities.values()
                 if d["type"] == et.value and (universe is None or d.get("current_universe") == universe)]
+    def get_entities_by_ids(self, entity_ids):
+        return [Entity.model_validate(self._entities[eid]) for eid in entity_ids if eid in self._entities]
 
     # projections
     def create_projection(self, p: Projection) -> Projection:

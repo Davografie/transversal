@@ -630,10 +630,10 @@ class Projection:
     transversal_type: TransversalTypeEnum
 
     @strawberry.field
-    def sheet_image(self) -> Optional[str]:
+    def sheet_image(self, info: strawberry.Info) -> Optional[str]:
         """This body's sheet role image (with entity-level fallback)."""
-        from transversal.db.repository import EntityRepository
-        return EntityRepository().resolve_role_image(
+        em = info.context["entity_manager"]
+        return em.repo.resolve_role_image(
             str(self.entity_id), "sheet", str(self.id), "Small"
         )
 
@@ -704,22 +704,20 @@ class Entity:
         ]
 
     @strawberry.field
-    def background_image(self) -> Optional[str]:
-        from transversal.db.repository import EntityRepository
-        repo = EntityRepository()
-        url = repo.resolve_role_image(str(self.id), "background", None, "Large")
+    def background_image(self, info: strawberry.Info) -> Optional[str]:
+        em = info.context["entity_manager"]
+        url = em.repo.resolve_role_image(str(self.id), "background", None, "Large")
         return url if url is not None else self._background_image
 
     @strawberry.field
-    def sheet_portrait(self) -> Optional[str]:
-        from transversal.db.repository import EntityRepository
-        repo = EntityRepository()
+    def sheet_portrait(self, info: strawberry.Info) -> Optional[str]:
+        em = info.context["entity_manager"]
         # Sheet portraits render at ~40px — serve the small variant.
-        url = repo.resolve_role_image(str(self.id), "sheet", None, "Small")
+        url = em.repo.resolve_role_image(str(self.id), "sheet", None, "Small")
         if url is not None:
             return url
         # Fall back to background image
-        return self.background_image()
+        return self.background_image(info)
 
     # Canonical role-based media resolver. The only valid roles are
     # "background", "sheet", and "navdot" — resolved from the image's roles
@@ -730,17 +728,16 @@ class Entity:
     _ROLE_VARIANT = {"background": "Large", "sheet": "Small", "navdot": "Large"}
 
     @strawberry.field
-    def image(self, role: str, projection_id: Optional[strawberry.ID] = None) -> Optional[str]:
-        from transversal.db.repository import EntityRepository
+    def image(self, info: strawberry.Info, role: str, projection_id: Optional[strawberry.ID] = None) -> Optional[str]:
         variant = self._ROLE_VARIANT.get(role)
         if variant is None:
             return None
-        repo = EntityRepository()
+        em = info.context["entity_manager"]
         # When no explicit projection is given, resolve through the entity's
         # active body (current_projection) so callers asking for "the entity's"
         # image get the active body's image first, falling back to entity level.
         pid = str(projection_id) if projection_id else (self.current_projection or None)
-        return repo.resolve_role_image(str(self.id), role, pid, variant)
+        return em.repo.resolve_role_image(str(self.id), role, pid, variant)
 
     @strawberry.field
     def pending_term(self, info: strawberry.Info) -> Optional[PendingTerm]:
