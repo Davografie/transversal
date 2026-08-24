@@ -702,11 +702,6 @@ input:focus, select:focus {
 /* Dice roller — pinned at bottom of wrapper */
 .dice-panel-wrapper > .dice-roller {
   flex-shrink: 0;
-  transition: background 0.2s ease;
-}
-/* Hold-pin cue: minimal dark-greenish tint while a click pins the panel open */
-.dice-panel-wrapper.hold-active > .dice-roller {
-  background: rgba(22, 40, 28, 0.9);
 }
 .embedded-sheet.sheet-hidden {
   opacity: 0;

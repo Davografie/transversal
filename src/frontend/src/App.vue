@@ -248,7 +248,7 @@
     :initial-universe="fullCanvas.mode === 'location' && fullCanvas.scope === 'tree' ? fullCanvas.entityId : ''"
     @close-full="fullCanvas = null"
   />
-  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, 'hold-active': hoverHoldActive }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="wrapperOpen && peers.length" class="peers-bar">
         <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: isPeerActive(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
           <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
@@ -1291,17 +1291,9 @@ function onPanelOpen(v) {
 // leave without the hover-close firing. Tune HOVER_HOLD_MS to adjust feel.
 const HOVER_HOLD_MS = 2500
 const hoverHoldUntil = ref(0)
-const hoverHoldActive = ref(false)  // drives the hold-pin hue cue
-let holdResetTimer = null
 
 function armHoverHold() {
-  hoverHoldActive.value = true
   hoverHoldUntil.value = Date.now() + HOVER_HOLD_MS
-  if (holdResetTimer) clearTimeout(holdResetTimer)
-  holdResetTimer = setTimeout(() => {
-    holdResetTimer = null
-    hoverHoldActive.value = false
-  }, HOVER_HOLD_MS)
 }
 
 function onWrapperEnter() {
