@@ -94,6 +94,31 @@ This split is artificial. A consequence menu **is** a manual trigger: the player
 > [!note] Side-sourcing wrinkle (orthogonal)
 > The consequence menu (`test_success`/`contest_win`/…) currently hardcodes SFX moves as `side="player"` and sources from `get_available_sfx_ids`, while the hitch menu derives side from owner buckets. Reconciling the two is a separate ownership/sourcing ticket — not part of this trigger/menu unification.
 
+## Conditions and their subject
+
+Conditions are gates evaluated against an entity. They previously had a hardcoded
+subject (the event's entity). Now a condition can declare its own subject:
+
+```
+Condition:
+  type      (has_trait / has_trait_in_traitset / at_location / …)
+  subject   "" | literal entity id | {variable}
+  target    trait / location / entity id  (also {variable})
+  value     (trait_rating threshold)
+  narrative
+```
+
+- **Blank subject** → the *current entity*: the event's entity for auto-fire, the acting entity for the consequence menu. (No bare ``self`` keyword — it was ambiguous.)
+- **`{variable}` subject** → the referenced entity, resolved from the trigger/menu context (e.g. `{buying_entity}`, `{contest_entity_opponent}`).
+- **Literal subject** → a specific entity id.
+- **`target`** is also variable-resolvable (e.g. `has_trait` with `target: {trait}`).
+
+Where conditions are evaluated:
+
+- **Auto-fire** — against the event's entity, with `event.context` in scope.
+- **Consequence menu** — against the acting entity.
+- **Hitch menu** — no default entity; conditions must reference `{hitch_entity}` or `{buying_entity}` explicitly (a blank subject skips the SFX).
+
 ## Design principles
 
 1. **Declarative over procedural** — an effect is data; the engine interprets it.
@@ -151,11 +176,13 @@ Make illegal or silently-broken effects hard to write:
 Each step lands independently and is verified before the next.
 
 1. Write this plan (done).
-2. **`on_character_create` slice** — add `{entity_created}` (entity) to the trigger, populate it at the `create_entity` fire site, add the declaration↔data test, and add the typed scope input so `universe:{entity_created}` is authorable.
-3. Batch the remaining trigger enrichments (Phase 1.4) behind the same mechanism.
-4. Fold `menu_context` into `trigger` (Phase 1.5) — merge the variable vocabularies and collapse the activation controls.
-5. Typed-variable-driven authoring (Phase 2).
-6. Authoring validation (Phase 4).
+2. `on_character_create` → `{entity_created}` (done).
+3. Batch trigger enrichments + drift-proof test (done).
+4. Variable naming normalized — `trait`/`traitset`/`trait_setting`/`contest_entity_opponent` (done).
+5. Fold `menu_context` into `trigger` (done).
+6. Variable-subject conditions + menu condition evaluation (done).
+7. Typed-variable-driven authoring (Phase 2).
+8. Authoring validation (Phase 4).
 
 Phase 3 is explicitly **not** started until the above is green and the content needs surface.
 
@@ -163,6 +190,8 @@ Phase 3 is explicitly **not** started until the above is green and the content n
 
 - **Full mutation dry-run** — descoped; candidate-resolution preview only for now.
 - **Field-dereference syntax breadth** — start with `universe:{entity_created}` (universe of an entity reference); generalize later if more fields are needed.
+- **Consequence-menu condition variables** — `effect_die` / `contest_entity_opponent` are not yet plumbed into `consequence_options`; consequence-menu conditions currently see no `{variables}`.
+- **Projection-level subjects** — conditions are entity-scoped; `{contest_projection_opponent}` cannot yet be a condition subject.
 - **Faction / traitset targeting, razmerit `set`, relationship `remove`, fog-of-war** — deferred (Phase 3).
 - **Side-sourcing consistency** — reconcile the consequence menu's hardcoded `side="player"` sourcing with the hitch menu's owner-bucket-derived side. Orthogonal to the trigger/menu unification.
 
