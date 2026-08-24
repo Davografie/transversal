@@ -156,7 +156,7 @@ const sfxSummary = computed(() => {
   let out = triggerPhrase(form.trigger)
   const conds = (form.conditions || []).map(conditionPhrase).filter(Boolean)
   if (conds.length) out += ` · if ${conds.join(', ')}`
-  const effs = (form.effects || []).map(summarizeEffect).filter(Boolean)
+  const effs = (form.effects || []).map((e) => summarizeEffect(e)).filter(Boolean)
   if (effs.length) out += ` → ${effs.join(' then ')}`
   return out
 })
