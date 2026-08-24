@@ -1157,8 +1157,11 @@ watch(lastEvent, (evt) => {
       }
       break
     case 'sfx_triggered':
-      if (evt.data?.entity_id === entityId.value) {
-        addToast(`SFX: ${evt.data?.sfx_name || evt.data?.sfx_id}`, 'sfx')
+      // Show for the viewer's own entity, or for any entity in GM mode.
+      if (evt.data?.entity_id === entityId.value || gmMode.value) {
+        const sfxLabel = evt.data?.sfx_name || evt.data?.sfx_id
+        const who = evt.data?.entity_id === entityId.value ? '' : ` (${name})`
+        addToast(`SFX: ${sfxLabel}${who}`, 'sfx')
       }
       break
     case 'sfx_choice_required':
