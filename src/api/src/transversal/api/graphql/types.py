@@ -244,6 +244,7 @@ class ConditionTypeOption:
     label: str
     needs_target: bool = False
     target_placeholder: str = ""
+    target_kind: str = ""
 
 
 @strawberry.type

@@ -468,6 +468,7 @@ class Query:
             ConditionTypeOption(
                 value=c.value, label=c.label,
                 needs_target=c.needs_target, target_placeholder=c.target_placeholder,
+                target_kind=c.target_kind,
             )
             for c in CONDITION_TYPES
         ]

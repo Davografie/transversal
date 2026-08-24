@@ -150,3 +150,13 @@ def test_condition_types_registry_declares_editor_metadata():
     assert by_value["IN_UNIVERSE"].needs_target is True
     assert by_value["IN_UNIVERSE"].target_placeholder == "universe key"
     assert all(c.label for c in CONDITION_TYPES)
+
+
+def test_condition_types_declare_picker_target_kinds():
+    by_value = {c.value: c for c in CONDITION_TYPES}
+    assert by_value["IN_UNIVERSE"].target_kind == "universe"
+    assert by_value["AT_LOCATION"].target_kind == "location"
+    assert by_value["HAS_TRAIT"].target_kind == "trait"
+    assert by_value["TRAIT_RATING"].target_kind == "trait"
+    assert by_value["HAS_RELATIONSHIP"].target_kind == "entity"
+    assert by_value["ALWAYS"].target_kind == ""

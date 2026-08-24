@@ -5,7 +5,15 @@
         <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
       </select>
       <input v-if="needsSubject(c.type)" v-model="c.subject" placeholder="entity (blank = current)" class="ce-subject" />
-      <input v-if="needsTarget(c.type)" v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
+      <template v-if="needsTarget(c.type)">
+        <div v-if="targetKind(c.type) === 'universe'" class="ce-target ce-picker">
+          <UniversePicker v-model="c.target" />
+        </div>
+        <div v-else-if="targetKind(c.type)" class="ce-target ce-picker">
+          <TargetPicker v-model="c.target" :kind="targetKind(c.type)" :placeholder="targetPlaceholder(c.type)" />
+        </div>
+        <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
+      </template>
       <select v-if="c.type === 'TRAIT_RATING'" v-model="c.value" class="ce-value">
         <option value="d4">d4</option>
         <option value="d6">d6</option>
@@ -23,6 +31,8 @@
 <script setup>
 import { computed } from 'vue'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
+import TargetPicker from './TargetPicker.vue'
+import UniversePicker from './UniversePicker.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -62,6 +72,11 @@ function targetPlaceholder(type) {
   return meta?.targetPlaceholder || 'target id'
 }
 
+function targetKind(type) {
+  const meta = conditionTypes.value.find(c => c.value === type)
+  return meta?.targetKind || ''
+}
+
 function add() {
   const next = [...props.modelValue, { type: 'ALWAYS', subject: '', target: '', value: '', narrative: '' }]
   emit('update:modelValue', next)
@@ -86,6 +101,7 @@ function remove(i) {
 .ce-target { flex: 2 !important; }
 .ce-subject { flex: 1.5 !important; }
 .ce-value { flex: 1 !important; }
+.ce-picker { min-width: 0; }
 .ce-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
 .ce-add { font-size: 10px; padding: 3px 8px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
 .ce-add:hover { color: var(--text); }
