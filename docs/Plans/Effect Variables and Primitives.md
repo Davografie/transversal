@@ -181,8 +181,8 @@ Each step lands independently and is verified before the next.
 4. Variable naming normalized — `trait`/`traitset`/`trait_setting`/`contest_entity_opponent` (done).
 5. Fold `menu_context` into `trigger` (done).
 6. Variable-subject conditions + menu condition evaluation (done).
-7. Typed-variable-driven authoring (Phase 2).
-8. Authoring validation (Phase 4).
+7. Typed-variable-driven authoring (Phase 2) — plain-English summary + `universe:current` scope done; typed inputs remaining.
+8. Authoring validation (Phase 4) — unknown variables, filter/target-kind mismatch, missing required fields (done).
 
 Phase 3 is explicitly **not** started until the above is green and the content needs surface.
 
