@@ -1,6 +1,7 @@
 <template>
   <div>
     <div v-if="sfx" class="sfx-id">ID: {{ sfx.id }}</div>
+    <div class="sfx-summary">{{ sfxSummary }}</div>
     <!-- Shared form -->
     <div class="ps-form">
       <label>Name</label>
@@ -59,6 +60,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import EffectEditor from './EffectEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
+import { useEffectActions } from '@/composables/useEffectActions.js'
 
 const { graphql, error: apiError } = useApi()
 const panel = usePanel()
@@ -104,6 +106,9 @@ watch(() => form.trigger, (t) => { fetchVariables(t || '') }, { immediate: true 
 const { load: loadSfxMeta, triggers } = useSfxMeta()
 loadSfxMeta()
 
+const { load: loadActions, summarize: summarizeEffect } = useEffectActions()
+loadActions()
+
 // Backend trigger vocabulary grouped into Manual / Auto-fire / Menus. A legacy
 // value not in the vocabulary is still offered so saving never drops it.
 const triggerGroups = computed(() => {
@@ -118,6 +123,38 @@ const triggerGroups = computed(() => {
   ]
 })
 const knownTrigger = computed(() => !form.trigger || triggers.value.some(t => t.value === form.trigger))
+
+// ── Plain-English summary ────────────────────────────
+
+function triggerPhrase(trigger) {
+  const t = triggers.value.find(t => t.value === trigger)
+  return t?.label || trigger || 'Manual'
+}
+
+function conditionPhrase(c) {
+  if (!c || !c.type) return ''
+  switch (c.type) {
+    case 'ALWAYS': return ''
+    case 'NARRATIVE': return c.narrative || ''
+    case 'UNPLACED': return 'unplaced'
+    case 'AT_LOCATION': return `at ${c.target}`
+    case 'HAS_TRAIT': return `has ${c.target}`
+    case 'HAS_TRAIT_IN_TRAITSET': return `has a trait in ${c.target}`
+    case 'HAS_RELATIONSHIP': return `related to ${c.target}`
+    case 'TRAIT_RATING': return `${c.target} ≥ ${c.value}`
+    case 'IN_UNIVERSE': return `in ${c.target}`
+    default: return `${c.type}`
+  }
+}
+
+const sfxSummary = computed(() => {
+  let out = triggerPhrase(form.trigger)
+  const conds = (form.conditions || []).map(conditionPhrase).filter(Boolean)
+  if (conds.length) out += ` · if ${conds.join(', ')}`
+  const effs = (form.effects || []).map(summarizeEffect).filter(Boolean)
+  if (effs.length) out += ` → ${effs.join(' then ')}`
+  return out
+})
 
 function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -201,6 +238,7 @@ async function onDelete() {
 }
 .ps-form textarea { resize: vertical; min-height: 48px; }
 .sfx-id { font-size: 10px; color: var(--text-dim); font-family: monospace; margin-bottom: 6px; }
+.sfx-summary { font-size: 11px; color: var(--accent); font-family: monospace; background: rgba(64,136,212,0.08); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; line-height: 1.4; }
 .sfx-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
 .sfx-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }
