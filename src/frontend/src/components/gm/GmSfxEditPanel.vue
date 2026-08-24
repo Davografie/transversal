@@ -31,6 +31,11 @@
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
     <div v-if="successMsg" class="success-msg">{{ successMsg }}</div>
 
+    <!-- Validation warnings (live) -->
+    <div v-if="validationWarnings.length" class="sfx-warnings">
+      <div v-for="w in validationWarnings" :key="w" class="sfx-warning">⚠ {{ w }}</div>
+    </div>
+
     <!-- Action buttons: differ by mode -->
     <button v-if="sfx" class="save-btn save-main" @click="onSave" :disabled="saving">
       {{ saving ? 'Saving…' : 'Save SFX' }}
@@ -156,6 +161,34 @@ const sfxSummary = computed(() => {
   return out
 })
 
+// ── Authoring validation (live, debounced) ─────────
+const validationWarnings = ref([])
+let validationTimer = null
+
+async function runValidation() {
+  try {
+    const input = {
+      id: props.sfx?.id || generateSfxId(form.name) || 'sfx-draft',
+      name: form.name || 'Draft',
+      trigger: form.trigger,
+      conditions: form.conditions || [],
+      effects: form.effects || [],
+    }
+    const data = await graphql(
+      `query($input: SfxInput!) { validateSfx(input: $input) }`,
+      { input }
+    )
+    validationWarnings.value = data?.validateSfx || []
+  } catch {
+    validationWarnings.value = []
+  }
+}
+
+watch(() => [form.trigger, form.conditions, form.effects], () => {
+  clearTimeout(validationTimer)
+  validationTimer = setTimeout(runValidation, 400)
+}, { deep: true })
+
 function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
@@ -239,6 +272,8 @@ async function onDelete() {
 .ps-form textarea { resize: vertical; min-height: 48px; }
 .sfx-id { font-size: 10px; color: var(--text-dim); font-family: monospace; margin-bottom: 6px; }
 .sfx-summary { font-size: 11px; color: var(--accent); font-family: monospace; background: rgba(64,136,212,0.08); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; line-height: 1.4; }
+.sfx-warnings { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.sfx-warning { font-size: 11px; color: #e8b54a; background: rgba(212,160,64,0.1); border: 1px solid rgba(212,160,64,0.3); border-radius: 4px; padding: 5px 8px; font-family: monospace; }
 .sfx-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
 .sfx-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }

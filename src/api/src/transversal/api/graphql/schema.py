@@ -470,6 +470,19 @@ class Query:
         ]
 
     @strawberry.field
+    def validate_sfx(self, info: strawberry.Info, input: SfxInput) -> list[str]:
+        """Return authoring warnings for an SFX draft (unknown variables, etc.)."""
+        from transversal.domain import SFX as DomainSFX
+        from transversal.services.sfx_validation import validate_sfx
+
+        draft = DomainSFX(
+            id=input.id, name=input.name, trigger=input.trigger,
+            conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
+            effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
+        )
+        return validate_sfx(draft)
+
+    @strawberry.field
     def target_candidates(
         self, info: strawberry.Info,
         kind: str,
