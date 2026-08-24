@@ -49,35 +49,7 @@
                 <option value="random">Random</option>
               </select>
             </div>
-            <template v-if="newEffect.targetMode === 'literal'">
-              <GmTraitPicker
-                v-if="isTraitTarget(f)"
-                :model-value="newEffect.fields[f.name] || ''"
-                @update:model-value="newEffect.fields[f.name] = $event"
-                :universe="universe"
-              />
-              <GmRollTablePicker
-                v-else-if="isRollTableTarget(f)"
-                :model-value="newEffect.fields[f.name] || ''"
-                @update:model-value="newEffect.fields[f.name] = $event"
-                :universe="universe"
-                :faction="faction"
-                :life-path="lifePath"
-              />
-              <GmLocationPicker
-                v-else-if="isPortalTravel && f.name === 'target'"
-                :model-value="newEffect.fields[f.name] || ''"
-                @update:model-value="newEffect.fields[f.name] = $event"
-                :universe="portalUniverse"
-                :root-id="portalRootId"
-              />
-              <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
-            </template>
-            <div v-else-if="newEffect.targetMode === 'return'" class="ee-field">
-              <label>Exit name</label>
-              <input v-model="newEffect.returnExit" type="text" placeholder="e.g. survived" />
-            </div>
-            <div v-else class="ee-field">
+            <div v-if="newEffect.targetMode !== 'return' && !isPortalTravel" class="ee-field">
               <label>Scope</label>
               <ScopeBuilder v-model="newEffect.scope" :universe="universe" />
               <template v-if="relevantFilterFields.length">
@@ -87,8 +59,22 @@
                   {{ ff.label }}
                 </label>
               </template>
-              <div v-if="previewText" class="ee-preview">{{ previewText }}</div>
             </div>
+            <TargetPicker
+              v-if="newEffect.targetMode === 'literal'"
+              :model-value="newEffect.fields[f.name] || ''"
+              :kind="selectedAction.targetKind"
+              :scope="literalTargetScope"
+              :filter="newEffect.targetFilter"
+              :action="selectedAction.effectAction"
+              :placeholder="`Pick ${selectedAction.targetKind}…`"
+              @update:model-value="newEffect.fields[f.name] = $event"
+            />
+            <div v-else-if="newEffect.targetMode === 'return'" class="ee-field">
+              <label>Exit name</label>
+              <input v-model="newEffect.returnExit" type="text" placeholder="e.g. survived" />
+            </div>
+            <div v-else-if="previewText" class="ee-preview">{{ previewText }}</div>
           </template>
 
           <template v-else-if="isEntityField(f)">
@@ -168,9 +154,7 @@ import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import { useEffectTargets } from '@/composables/useEffectTargets.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
-import GmTraitPicker from './GmTraitPicker.vue'
-import GmRollTablePicker from './GmRollTablePicker.vue'
-import GmLocationPicker from './GmLocationPicker.vue'
+import TargetPicker from './TargetPicker.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
 import GmList from './GmList.vue'
@@ -179,7 +163,6 @@ import ReturnMapEditor from './ReturnMapEditor.vue'
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   universe: { type: String, default: '' },
-  faction: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
   portalDestination: { type: String, default: '' },
@@ -249,6 +232,23 @@ const isPortalTravel = computed(() => !!props.portalDestination && selectedActio
 const isPortalLocation = computed(() => isPortalTravel.value && props.portalTargetType === 'location')
 const isPortalUniverse = computed(() => isPortalTravel.value && props.portalTargetType === 'universe')
 
+// The literal picker resolves over the same scope/filter as choose/random.
+// Portal travel is the one exception: its destination scope is fixed by the
+// portal config, so derive it from the portal props rather than the free scope.
+const literalTargetScope = computed(() => {
+  if (isPortalTravel.value && props.portalRootId) return `subtree:${props.portalRootId}`
+  if (isPortalTravel.value && props.portalUniverse) return `universe:${props.portalUniverse}`
+  return newEffect.scope || ''
+})
+
+// Owner-context default: when an effect is authored inside a universe or life
+// path, pre-scope its target so the picker starts in the right place.
+function defaultScopeFor(kind) {
+  if (kind === 'roll_table' && props.lifePath) return `life_path:${props.lifePath}`
+  if (props.universe) return `universe:${props.universe}`
+  return ''
+}
+
 const visibleFields = computed(() => {
   if (!selectedAction.value) return []
   return (selectedAction.value.fields || []).filter(f => {
@@ -264,14 +264,6 @@ const visibleContextFields = computed(() => {
     return true
   })
 })
-
-function isTraitTarget(f) {
-  return f.name === 'target' && selectedAction.value?.targetKind === 'trait'
-}
-
-function isRollTableTarget(f) {
-  return f.name === 'target' && selectedAction.value?.targetKind === 'roll_table'
-}
 
 function isResultDieField(f) {
   return f.name === 'result' && f.fieldType === 'die_select'
@@ -311,7 +303,7 @@ function onActionChange() {
   newEffect.extraContext = ''
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
-  newEffect.scope = ''
+  newEffect.scope = defaultScopeFor(selectedAction.value?.targetKind)
   newEffect.targetFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
@@ -362,7 +354,7 @@ function buildEffect(meta) {
   if ((context.transversal_type || 'inapposite') !== 'consciousness') {
     context.projection = 'active'
   }
-  let targetScope = (kind && mode !== 'literal') ? (newEffect.scope || null) : null
+  let targetScope = kind ? (newEffect.scope || null) : null
   if (isPortalLocation.value) targetScope = '{location:transversal_target}'
   if (isPortalUniverse.value) targetScope = '{universe:transversal_target}'
   return {
@@ -373,7 +365,7 @@ function buildEffect(meta) {
     entity,
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope,
-    targetFilter: (kind && mode !== 'literal') ? (newEffect.targetFilter || {}) : {},
+    targetFilter: kind ? (newEffect.targetFilter || {}) : {},
     entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context,

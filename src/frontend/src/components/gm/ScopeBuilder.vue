@@ -11,9 +11,10 @@
     </select>
 
     <template v-if="mode === 'location' || mode === 'subtree'">
-      <GmLocationPicker
+      <TargetPicker
         :model-value="value"
-        :universe="universe"
+        kind="location"
+        :scope="universe ? `universe:${universe}` : ''"
         placeholder="Pick a location…"
         @update:model-value="setValue"
       />
@@ -44,7 +45,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
-import GmLocationPicker from './GmLocationPicker.vue'
+import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },

@@ -110,7 +110,7 @@
         </div>
       </div>
       <div class="projection-add">
-        <GmLocationPicker v-model="newProjLocationId" placeholder="Search location…" class="proj-picker" @select="onLocationSelect" />
+        <TargetPicker v-model="newProjLocationId" kind="location" placeholder="Search location…" class="proj-picker" @select="onLocationSelect" />
         <select v-model="newProjType" class="proj-type-select">
           <option value="NATIVE">native</option>
           <option value="CONSCIOUSNESS">consciousness</option>
@@ -136,7 +136,7 @@
         </div>
       </div>
       <div class="transversal-add">
-        <GmLocationPicker v-model="newTransversalLocationId" placeholder="Add link to location…" class="proj-picker" @select="onTransversalLocationSelect" />
+        <TargetPicker v-model="newTransversalLocationId" kind="location" placeholder="Add link to location…" class="proj-picker" @select="onTransversalLocationSelect" />
         <button class="section-btn proj-add-btn" @click="createTransversalLinkLocal">+ Add</button>
       </div>
     </div>
@@ -194,7 +194,7 @@ import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmRollTablesPanel from '@/components/gm/GmRollTablesPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
-import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
+import TargetPicker from '@/components/gm/TargetPicker.vue'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import MediaImage from '@/components/MediaImage.vue'
 

@@ -6,7 +6,7 @@
       <input v-model="name" placeholder="Projection name (falls back to entity)" />
 
       <label>Current Location</label>
-      <GmLocationPicker v-model="currentLocation" placeholder="Search location…" :universe="projection.universe" @select="onLocationSelect" />
+      <TargetPicker v-model="currentLocation" kind="location" :scope="projection.universe ? `universe:${projection.universe}` : ''" placeholder="Search location…" />
 
       <div class="readonly-row">
         <span>Origin: {{ universeName(projection.originUniverse) }}</span>
@@ -27,7 +27,7 @@ import { ref, onMounted } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
-import GmLocationPicker from '@/components/gm/GmLocationPicker.vue'
+import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps({
   projection: { type: Object, required: true },
@@ -43,10 +43,6 @@ const saving = ref(false)
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
 
 onMounted(loadUniverseNames)
-
-function onLocationSelect(loc) {
-  currentLocation.value = loc.id
-}
 
 async function save() {
   saving.value = true

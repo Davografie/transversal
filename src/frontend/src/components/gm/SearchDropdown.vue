@@ -4,11 +4,18 @@
       ref="inputEl"
       v-model="search"
       class="sd-input"
+      :class="{ 'sd-input-clearable': clearable && hasValue }"
       :placeholder="selectedLabel || placeholder"
       @focus="openDrop"
       @blur="scheduleClose"
       @input="open = true"
     />
+    <button
+      v-if="clearable && hasValue"
+      class="sd-clear"
+      title="Clear"
+      @mousedown.prevent="clear"
+    >×</button>
     <div v-if="open" class="sd-drop" :class="{ 'sd-drop-up': dropUp }">
       <div v-if="!filtered.length" class="sd-empty">No matches</div>
       <div
@@ -37,9 +44,10 @@ const props = defineProps({
   valueKey: { type: String, default: 'id' },
   labelKey: { type: String, default: 'name' },
   maxResults: { type: Number, default: 20 },
+  clearable: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'clear'])
 
 const search = ref('')
 const open = ref(false)
@@ -52,6 +60,8 @@ const selectedLabel = computed(() => {
   const opt = props.options.find(o => o[props.valueKey] === props.modelValue)
   return opt ? opt[props.labelKey] : ''
 })
+
+const hasValue = computed(() => props.modelValue !== '' && props.modelValue != null)
 
 const filtered = computed(() => {
   const s = search.value.trim().toLowerCase()
@@ -68,6 +78,12 @@ const filtered = computed(() => {
 
 function pick(opt) {
   emit('select', opt)
+  search.value = ''
+  open.value = false
+}
+
+function clear() {
+  emit('clear')
   search.value = ''
   open.value = false
 }
@@ -99,6 +115,12 @@ onUnmounted(() => clearTimeout(closeTimer))
   border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text);
 }
 .sd-input::placeholder { color: var(--text-dim); }
+.sd-input-clearable { padding-right: 20px; }
+.sd-clear {
+  position: absolute; right: 4px; top: 4px; font-size: 12px; line-height: 1;
+  padding: 0 2px; cursor: pointer; background: none; border: none; color: var(--text-dim);
+}
+.sd-clear:hover { color: #e06060; }
 .sd-drop {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
   max-height: 140px; overflow-y: auto;

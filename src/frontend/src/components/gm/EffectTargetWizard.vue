@@ -10,7 +10,7 @@
         <div class="etw-sfx-name">{{ current.sfx_name }}</div>
         <div v-if="current.sfx_description" class="etw-sfx-desc">{{ current.sfx_description }}</div>
       </div>
-      <ScopedTargetPicker
+      <TargetPicker
         :model-value="targets[current.index] || ''"
         :kind="current.kind"
         :scope="current.scope || ''"
@@ -18,6 +18,7 @@
         :filter="current.filter || null"
         :entity-id="targetEntityId"
         :placeholder="`Choose ${current.kind}…`"
+        allow-random
         @update:model-value="targets[current.index] = $event"
       />
     </div>
@@ -33,7 +34,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import ScopedTargetPicker from './ScopedTargetPicker.vue'
+import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
