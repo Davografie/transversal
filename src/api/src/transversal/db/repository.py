@@ -1104,11 +1104,12 @@ class EntityRepository:
     # ── Relationships ─────────────────────────────────
 
     def create_relationship(
-        self, from_id: str, to_id: str, rel_type: str, description: str = ""
+        self, from_id: str, to_id: str, rel_type: str, description: str = "",
+        to_projection: bool = False,
     ) -> dict:
         edge = {
             "_from": f"{ENTITIES}/{from_id}",
-            "_to": f"{ENTITIES}/{to_id}",
+            "_to": f"{PROJECTIONS}/{to_id}" if to_projection else f"{ENTITIES}/{to_id}",
             "type": rel_type,
         }
         if description:
@@ -1154,6 +1155,10 @@ class EntityRepository:
             "rel_type": rel_type,
         }))
         return cursor[0] if cursor else None
+
+    def get_relationship_by_key(self, edge_key: str) -> dict | None:
+        """Get a relationship edge by its ArangoDB ``_key``."""
+        return self._relationships.get(edge_key)
 
     def delete_relationship(
         self, from_id: str, to_id: str, rel_type: str

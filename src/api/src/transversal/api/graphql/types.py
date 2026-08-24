@@ -503,9 +503,21 @@ class TraitSetting:
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
 
     @strawberry.field
-    def ego(self) -> bool:
-        """Entity-anchored traits (from_type='entity') are ego; others morph."""
-        return self.from_type == "entity"
+    def ego(self, info: strawberry.Info) -> bool:
+        """Entity-anchored traits (from_type='entity') are ego; others morph.
+
+        Relationship traits follow their relationship edge's target endpoint:
+        an entity target is ego, a projection target is morph.
+        """
+        if self.from_type == "entity":
+            return True
+        if self.from_type == "relationship":
+            em = info.context["entity_manager"]
+            edge = em.repo.get_relationship_by_key(str(self.entity_id))
+            if edge is not None:
+                return not str(edge.get("_to", "")).startswith("projections/")
+            return False
+        return False
 
     @strawberry.field
     def die_type(self) -> DieType:
