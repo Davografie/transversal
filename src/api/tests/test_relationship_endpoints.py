@@ -97,10 +97,9 @@ def test_relationship_traitsettings_for_entity_readback(data):
         assert got["trait-relation-fear"]["contact_id"] == B_ID
         assert got["trait-relation-fear"]["contact_name"] == "B"
 
-        # The other entity also sees both (its contact is A).
+        # The target entity does NOT see these traits (directional visibility).
         got_b = repo.get_relationship_traitsettings_for_entity(B_ID)
-        assert {g["setting"].trait_id for g in got_b} == {"trait-relation-trust", "trait-relation-fear"}
-        assert all(g["contact_id"] == A_ID for g in got_b)
+        assert got_b == []
     finally:
         repo.delete_traitsetting(ts1.id)
         repo.delete_traitsetting(ts2.id)
@@ -175,7 +174,7 @@ def test_is_transversal_derivation():
             repo.delete_entity(eid)
 
 
-def test_p2p_relationship_visible_from_both_sides():
+def test_p2p_relationship_is_directional():
     repo = _repo
     A = "test-p2p-a"
     B = "test-p2p-b"
@@ -206,11 +205,9 @@ def test_p2p_relationship_visible_from_both_sides():
         assert len(a_trust) == 1
         assert a_trust[0]["contact_id"] == B
 
-        # The to-side (B) must see it too, with A as its contact.
+        # The to-side (B) must NOT see it (directional visibility).
         b_got = repo.get_relationship_traitsettings_for_entity(B)
-        b_trust = [g for g in b_got if g["setting"].trait_id == "trait-relation-trust"]
-        assert len(b_trust) == 1
-        assert b_trust[0]["contact_id"] == A
+        assert [g for g in b_got if g["setting"].trait_id == "trait-relation-trust"] == []
     finally:
         repo.delete_entity(A)
         repo.delete_entity(B)
