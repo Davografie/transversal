@@ -6,7 +6,7 @@
       </div>
       <div class="panel-top-actions">
         <button
-          v-if="form.type === 'CHARACTER' || form.type === 'GMC'"
+          v-if="(form.type === 'CHARACTER' || form.type === 'GMC') && entityId !== currentEntityId"
           class="assume-btn"
           title="Act as this character"
           @click="assumeCharacter"
@@ -347,6 +347,7 @@ function onImageTouchEnd(e) {
 
 const props = defineProps({
   entityId: { type: String, default: null },
+  currentEntityId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['switch-to-sheet', 'image-open', 'go-to-location'])

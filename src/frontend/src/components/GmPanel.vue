@@ -162,7 +162,7 @@ function openEntityEdit() {
     component: GmEntityEditPanel,
     title: selected.value.name || 'Edit Entity',
     id: selectedId.value,
-    props: { entityId: selectedId.value },
+    props: { entityId: selectedId.value, currentEntityId: props.currentEntityId },
     listeners: {
       'switch-to-sheet': switchToSheet,
       'image-open': onImageOpen,
