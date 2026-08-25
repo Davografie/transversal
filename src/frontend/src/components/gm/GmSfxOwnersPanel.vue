@@ -117,10 +117,16 @@ function removeSelected(o) {
   selected.value = selected.value.filter(s => ownerKey(s) !== ownerKey(o))
 }
 
-// Intersection of every selected owner's sfxIds.
+// Intersection of every selected owner's sfxIds. Resolve sfxIds from the
+// live ownersByType list (not the stale copy in `selected`) so the shared
+// list reflects add/remove SFX immediately.
 const sharedSfxIds = computed(() => {
   if (selected.value.length === 0) return []
-  const sets = selected.value.map(o => new Set(o.sfxIds || []))
+  const sets = selected.value.map((s) => {
+    const list = ownersByType.value[s.ownerType] || []
+    const owner = list.find((o) => o.ownerId === s.ownerId)
+    return new Set(owner ? (owner.sfxIds || []) : (s.sfxIds || []))
+  })
   const first = sets[0]
   return [...first].filter(id => sets.every(s => s.has(id)))
 })
