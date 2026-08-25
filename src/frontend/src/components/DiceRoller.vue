@@ -274,7 +274,7 @@
     </div>
 
     <div class="controls" v-if="isResolved() && mode !== 'roll_table' && !challenged">
-      <button @click="clearResult" class="roll-btn">New Pool</button>
+      <button @click="clearResult" class="roll-btn">Clear Pool</button>
       <button v-if="!gmMode" @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
     </div>
 
