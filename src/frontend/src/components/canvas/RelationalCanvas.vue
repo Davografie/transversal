@@ -206,7 +206,7 @@ function onFactionChange() {
 function openTable(tableId) {
   const node = nodes.value.find((n) => n.id === `rt:${tableId}`)
   const name = node?.data?.name || tableId
-  panel.open({ component: GmRollTableDetailPanel, title: name, props: { tableId, name } })
+  panel.open({ component: GmRollTableDetailPanel, title: name, id: tableId, props: { tableId, name } })
 }
 
 function openFull() {
