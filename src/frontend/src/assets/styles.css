@@ -67,6 +67,14 @@ input:focus, select:focus {
   border-color: var(--accent);
 }
 
+/* Native <select> dropdowns inherit the light text color, which renders as
+   light-grey on the browser's white option list. Pin the option list to the
+   dark theme so it stays legible. */
+select option {
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
 .panel {
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
