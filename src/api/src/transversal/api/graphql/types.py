@@ -133,6 +133,7 @@ class TraitSetRef:
                 traitset_id=t.traitset_id, default_die_type=t.default_die_type,
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
+                default_sfx_ids=t.default_sfx_ids,
                 location_restricted=t.location_restricted,
                 default_ego=t.default_ego,
                 polarity=t.polarity,

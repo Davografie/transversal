@@ -20,7 +20,7 @@ export function useTraitsConfig() {
           traits {
             id name defaultDieType traitsetId universes
             locationRestricted defaultEgo polarity
-            possibleSfxIds
+            possibleSfxIds defaultSfxIds
             displayNames { name universe ratings }
           }
         }

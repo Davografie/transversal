@@ -70,10 +70,13 @@
         @click="onSfxClick"
       >
         <template #item="{ item: s }">
-          <label class="checkbox-inner" @click.stop>
-            <input type="checkbox" :checked="form.defaultSfxIds.includes(s.id)"
-              @change="toggleDefaultSfx(s.id)" title="Default SFX for this trait" />
-          </label>
+          <button
+            type="button"
+            class="vx-toggle"
+            :class="{ 'is-on': form.defaultSfxIds.includes(s.id) }"
+            :title="form.defaultSfxIds.includes(s.id) ? 'Default SFX — click to unset' : 'Not default — click to make default'"
+            @click.stop="toggleDefaultSfx(s.id)"
+          >{{ form.defaultSfxIds.includes(s.id) ? '✓' : '✗' }}</button>
           <span class="sfx-name">{{ s.name }}</span>
           <span class="sfx-trigger">{{ s.trigger || '' }}</span>
           <button class="row-del-btn" @click.stop="removePossibleSfx(s.id)" title="Remove from trait">✕</button>
@@ -439,8 +442,23 @@ async function onDelete() {
   background: rgba(212, 64, 64, 0.10);
 }
 .sfx-name { flex: 1; font-weight: 500; }
-.checkbox-inner { display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0; }
-.checkbox-inner input { width: auto; margin: 0; cursor: pointer; }
+.vx-toggle {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; font-weight: 700;
+  border-radius: 4px;
+  border: 1px solid var(--text-dim);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+}
+.vx-toggle.is-on {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(64, 184, 96, 0.12);
+}
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }
 
 .create-actions { display: flex; gap: 6px; margin-top: 4px; }
