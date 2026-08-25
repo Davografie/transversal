@@ -957,25 +957,25 @@ class EntityRepository:
     def get_relationship_traitsettings_for_entity(self, entity_id: str) -> list[dict]:
         """Relationship trait settings where ``entity_id`` sits on either end of the edge.
 
-        Returns enriched dicts (``setting`` + ``contact_*``/``edge_type``) so the
-        character sheet can show who/what a relationship trait refers to.
+        Matches the entity itself or any of its projections on either the ``_from``
+        or ``_to`` side, so a projection→projection relationship shows up on both
+        parties' sheets. Returns enriched dicts (``setting`` + ``contact_*``/
+        ``edge_type``) so the character sheet can show who/what a relationship
+        trait refers to.
         """
         proj_ids = [p.id for p in self.get_projections_for_entity(entity_id)]
-        from_ref = f"{ENTITIES}/{entity_id}"
-        to_refs = [f"{ENTITIES}/{entity_id}"] + [f"{PROJECTIONS}/{pid}" for pid in proj_ids]
+        refs = [f"{ENTITIES}/{entity_id}"] + [f"{PROJECTIONS}/{pid}" for pid in proj_ids]
 
         query = f"""
             FOR r IN {RELATIONSHIPS}
-            FILTER r._from == @from_ref OR r._to IN @to_refs
+            FILTER r._from IN @refs OR r._to IN @refs
             RETURN r
         """
-        edges = list(self.db.aql.execute(
-            query, bind_vars={"from_ref": from_ref, "to_refs": to_refs}
-        ))
+        edges = list(self.db.aql.execute(query, bind_vars={"refs": refs}))
 
         results: list[dict] = []
         for edge in edges:
-            contact_ref = edge["_to"] if edge["_from"] == from_ref else edge["_from"]
+            contact_ref = edge["_to"] if edge["_from"] in refs else edge["_from"]
             contact = self._resolve_relationship_contact(contact_ref)
             if contact is None:
                 continue

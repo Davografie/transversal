@@ -173,3 +173,44 @@ def test_is_transversal_derivation():
     finally:
         for eid in (A, B, F):
             repo.delete_entity(eid)
+
+
+def test_p2p_relationship_visible_from_both_sides():
+    repo = _repo
+    A = "test-p2p-a"
+    B = "test-p2p-b"
+    APROJ = f"{A}:earth"
+    BPROJ = f"{B}:earth"
+    for eid in (A, B):
+        repo.delete_entity(eid)
+    repo.create_entity(Entity(id=A, type=EntityType.CHARACTER, name="A", current_universe="earth"))
+    repo.create_entity(Entity(id=B, type=EntityType.CHARACTER, name="B", current_universe="earth"))
+    repo.create_projection(Projection(
+        id=APROJ, entity_id=A, origin_universe="earth", universe="earth",
+        transversal_type=TransversalType.NATIVE,
+    ))
+    repo.create_projection(Projection(
+        id=BPROJ, entity_id=B, origin_universe="earth", universe="earth",
+        transversal_type=TransversalType.NATIVE,
+    ))
+    try:
+        edge = repo.create_relationship(APROJ, BPROJ, "relation", from_projection=True, to_projection=True)
+        repo.create_traitsetting(TraitSetting(
+            id=f"{edge['_key']}:trust", entity_id=edge["_key"], trait_id="trait-relation-trust",
+            traitset_id="ts-relations-b114", from_type="relationship", dice=[DieType.D6],
+        ))
+
+        # The from-side (A) must see the trait, with B as its contact.
+        a_got = repo.get_relationship_traitsettings_for_entity(A)
+        a_trust = [g for g in a_got if g["setting"].trait_id == "trait-relation-trust"]
+        assert len(a_trust) == 1
+        assert a_trust[0]["contact_id"] == B
+
+        # The to-side (B) must see it too, with A as its contact.
+        b_got = repo.get_relationship_traitsettings_for_entity(B)
+        b_trust = [g for g in b_got if g["setting"].trait_id == "trait-relation-trust"]
+        assert len(b_trust) == 1
+        assert b_trust[0]["contact_id"] == A
+    finally:
+        repo.delete_entity(A)
+        repo.delete_entity(B)
