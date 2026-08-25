@@ -554,11 +554,13 @@ watch(localImagenJob, (now, prev) => {
 // ── Delete / prune (two-click confirm handled by DangerButton) ──
 async function onDeleteConfirmed() {
   await deleteEntity(props.entityId)
+  bus.emit('locations-changed')
   panel.close()
 }
 
 async function onPruneConfirmed() {
   await deleteEntity(props.entityId, true)
+  bus.emit('locations-changed')
   panel.close()
 }
 
@@ -582,6 +584,8 @@ function openImage(img) {
     props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: props.entityId, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
     listeners: {
       'close': () => { openedImageId.value = null },
+      'refresh': () => { loadImages() },
+      'deleted': () => { loadImages(); openedImageId.value = null },
     },
   })
 }
