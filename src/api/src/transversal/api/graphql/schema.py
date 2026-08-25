@@ -967,7 +967,7 @@ class Mutation:
             ts.statement = input.statement
         if input.notes is not None:
             ts.notes = input.notes
-        if input.from_type is not None:
+        if input.from_type is not None and ts.from_type != "relationship":
             if input.from_type == "projection":
                 if input.projection_id is None:
                     raise ValueError("projectionId is required when fromType is 'projection'")

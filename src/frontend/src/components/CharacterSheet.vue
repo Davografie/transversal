@@ -148,12 +148,12 @@
           <div class="edit-field">
             <span class="edit-label">Type</span>
             <div class="edit-flags">
-              <button type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
+              <button v-if="editingTrait.fromType !== 'relationship'" type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
               <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
                 {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
               </button>
             </div>
-            <div v-if="!editIsEgo" class="edit-projection">
+            <div v-if="!editIsEgo && editingTrait.fromType !== 'relationship'" class="edit-projection">
               <span class="edit-projection-label">on</span>
               <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
               <div v-if="showProjectionPicker" class="projection-dropdown">
@@ -1189,6 +1189,7 @@ function ensureEditProjection() {
 async function doSave() {
   if (!editingTraitId.value) return
   ensureEditProjection()
+  const isRel = editingTrait.value?.fromType === 'relationship'
   const newDice = editDice.value.map(d => d.toUpperCase())
   const query = `mutation($id: ID!, $dice: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $notes: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID) {
     updateTraitSetting(id: $id, input: { dice: $dice, ratingType: $ratingType, polarity: $polarity, statement: $statement, notes: $notes, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId }) { id }
@@ -1201,8 +1202,9 @@ async function doSave() {
     statement: editStatement.value ?? null,
     notes: editNotes.value ?? null,
     sfxIds: editSfxIds.value,
-    fromType: editIsEgo.value ? 'entity' : 'projection',
-    projectionId: editIsEgo.value ? null : editProjectionId.value,
+    // Relationship traits keep their anchor; only entity/projection traits toggle it.
+    fromType: isRel ? null : (editIsEgo.value ? 'entity' : 'projection'),
+    projectionId: isRel ? null : (editIsEgo.value ? null : editProjectionId.value),
   }
   await fetch('/api/v1/graphql', {
     method: 'POST',
@@ -1218,9 +1220,11 @@ async function doSave() {
     t.sfxIds = [...editSfxIds.value]
     t.statement = editStatement.value
     t.notes = editNotes.value
-    t.ego = editIsEgo.value
-    t.fromType = editIsEgo.value ? 'entity' : 'projection'
-    t.projectionId = editIsEgo.value ? null : editProjectionId.value
+    if (!isRel) {
+      t.ego = editIsEgo.value
+      t.fromType = editIsEgo.value ? 'entity' : 'projection'
+      t.projectionId = editIsEgo.value ? null : editProjectionId.value
+    }
   }
   for (const ts of traitSets.value) {
     const t = ts.traits.find(t => t.id === editingTraitId.value)
