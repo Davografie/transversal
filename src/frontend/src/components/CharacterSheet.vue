@@ -104,7 +104,7 @@
             </div>
           </div>
 
-          <div class="edit-field">
+          <div v-if="editRatingType !== 'EMPTY'" class="edit-field">
             <span class="edit-label">Dice</span>
             <div class="edit-dice">
               <button v-for="(d, i) in editDice" :key="i" class="die-chip die-chip-icon" :title="`Change ${d}`" @click="pickIdx = i; showDiePicker = true">
@@ -191,7 +191,7 @@
 
         <!-- Set detail (traits) or profile: flat trait list -->
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
-          <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">{{ activeSetName }}</h4>
+          <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">← {{ activeSetName }}</h4>
             <template v-for="t in currentTraits" :key="t.id">
               <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
@@ -292,7 +292,7 @@
           <button class="picker-back" @click="addPhase = 'sets'">← {{ selectedTraitSet?.name }}</button>
           <button v-for="t in filteredTraits" :key="t.id" class="picker-item" @click="addTrait(t)">
             {{ t.name }}
-            <span class="picker-die">{{ t.defaultDieType }}</span>
+            <span v-if="t.defaultRatingType !== 'EMPTY'" class="picker-die">{{ t.defaultDieType }}</span>
           </button>
           <div v-if="!filteredTraits.length" class="empty">{{ emptySetMessage }}</div>
         </template>
