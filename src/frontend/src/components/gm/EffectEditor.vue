@@ -143,6 +143,7 @@
           v-model:rating-type="newEffect.context.rating_type"
           v-model:statement="newEffect.context.statement"
           v-model:notes="newEffect.context.notes"
+          :variables="dieVariables"
           allow-variable
         />
         <div v-for="f in visibleContextFields" :key="f.name" class="ee-field">
@@ -237,6 +238,14 @@ function timingLabel(t) { return TIMING_LABELS[t] || t }
 
 const ROLL_TIMINGS = ['ON_RESULT', 'ON_SET', 'ON_ROLL']
 const isRollTiming = computed(() => ROLL_TIMINGS.includes(newEffect.timing))
+
+const ROLL_CONTEXT_VARIABLES = ['effect_die', 'total', 'triggered_die_tier', 'triggered_die_effect_die', 'triggered_die_result', 'triggered_die_die']
+const dieVariables = computed(() => {
+  const names = (props.variables || []).map(v => v.name || v)
+  const out = [...names]
+  if (isRollTiming.value) for (const v of ROLL_CONTEXT_VARIABLES) if (!out.includes(v)) out.push(v)
+  return out
+})
 
 function dieRole() {
   if (!newEffect.dieFilter || !('role' in newEffect.dieFilter)) return ''

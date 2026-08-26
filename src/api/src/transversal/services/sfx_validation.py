@@ -22,6 +22,14 @@ _TOKEN = re.compile(r"\{([^{}]+)\}")
 _RESERVED_PREFIXES = ("choose", "random", "return")
 _RESERVED_TOKENS = {"source_trait", "term_faction"}
 
+# Roll-event timings: these effects fire at roll time, so the roll context
+# (outcome scalars + the matched die's properties) is in scope.
+_ROLL_TIMINGS = {"on_result", "on_set", "on_roll"}
+_ROLL_CONTEXT_VARIABLES = {
+    "effect_die", "total",
+    "triggered_die_tier", "triggered_die_effect_die", "triggered_die_result", "triggered_die_die",
+}
+
 _FILTER_KINDS = {f.field: f.kinds for f in FILTER_FIELDS}
 
 
@@ -90,8 +98,11 @@ def validate_sfx(sfx: SFX) -> list[str]:
     known = {v.name for v in trigger_variables(sfx.trigger)}
 
     for i, effect in enumerate(sfx.effects):
+        known_here = known
+        if effect.timing.value in _ROLL_TIMINGS:
+            known_here = known | _ROLL_CONTEXT_VARIABLES
         for token in _effect_tokens(effect):
-            if token not in known and not _reserved(token):
+            if token not in known_here and not _reserved(token):
                 warnings.append(f"Effect {i + 1}: unknown variable {{{token}}}")
 
         target_kind = _target_kind(effect)

@@ -7,7 +7,9 @@
         <button type="button" :class="{ active: isVariable }" @click="setVariableMode(true)">Variable</button>
       </div>
       <DiePicker v-if="!isVariable" :model-value="die" @update:model-value="emit('update:die', $event)" />
-      <input v-else :value="die" type="text" placeholder="{effect_die}" @input="emit('update:die', $event.target.value)" />
+      <select v-else :value="die" @change="emit('update:die', $event.target.value)">
+        <option v-for="v in variableOptions" :key="v" :value="v">{{ v }}</option>
+      </select>
     </div>
 
     <div class="tie-field">
@@ -40,7 +42,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import DiePicker from '@/components/DiePicker.vue'
 
 const props = defineProps({
@@ -50,6 +52,7 @@ const props = defineProps({
   statement: { type: String, default: '' },
   notes: { type: String, default: '' },
   allowVariable: { type: Boolean, default: false },
+  variables: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:die', 'update:negative', 'update:ratingType', 'update:statement', 'update:notes'])
@@ -61,10 +64,17 @@ watch(() => props.die, (d) => {
   isVariable.value = (d || '').startsWith('{')
 })
 
+const variableOptions = computed(() => {
+  const opts = (props.variables || []).map(v => `{${v}}`)
+  const cur = props.die
+  if (cur && cur.startsWith('{') && !opts.includes(cur)) opts.push(cur)
+  return opts
+})
+
 function setVariableMode(variable) {
   isVariable.value = variable
   if (variable) {
-    if (!(props.die || '').startsWith('{')) emit('update:die', '{effect_die}')
+    if (!(props.die || '').startsWith('{')) emit('update:die', variableOptions.value[0] || '{effect_die}')
   } else {
     if ((props.die || '').startsWith('{')) emit('update:die', 'd6')
   }

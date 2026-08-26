@@ -67,6 +67,21 @@ def test_reserved_tokens_not_flagged():
     assert validate_sfx(sfx) == []
 
 
+def test_roll_context_variables_allowed_only_for_roll_timings():
+    on_result = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="gain",
+        target="hazard", result="{triggered_die_effect_die}", entity="{effect_die}",
+    )
+    assert validate_sfx(_sfx(trigger="manual", effects=[on_result])) == []
+
+    immediate = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="hazard", result="{triggered_die_effect_die}",
+    )
+    warnings = validate_sfx(_sfx(trigger="manual", effects=[immediate]))
+    assert any("unknown variable {triggered_die_effect_die}" in w for w in warnings)
+
+
 def test_empty_is_valid():
     assert validate_sfx(_sfx()) == []
 
