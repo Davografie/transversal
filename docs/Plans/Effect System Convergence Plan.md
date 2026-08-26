@@ -59,6 +59,7 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 - [ ] Increase/set trait-set limit (needs `TraitSetSetting.limit`)
 - [ ] Create new/temporary projection (disguise / alt-ID)
 - [ ] End entity/projection active effect
+- [ ] Gain-trait inline trait editor (editor-only authoring; supersedes the auto-fill stopgap)
 
 ### Batch 4 — New triggers (fire sites + `menu_contexts` + `_trigger_matches`)
 
@@ -85,10 +86,6 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 ### Management
 
 - [ ] Rename "Manage SFX Owners" → "Manage SFX"; the SFX Owners panel becomes an SFX management panel with "Owners" as a filter type, plus SFX name search and primitive filters (trigger, condition, effect action).
-
-### Deferred
-
-- [ ] Gain-trait inline trait editor — will supersede the auto-fill stopgap.
 
 ## Decisions recorded
 
