@@ -538,8 +538,9 @@ class Query:
     ) -> list[TargetCandidate]:
         """Resolve the selectable targets for a ``choose``/``random`` effect target.
 
-        ``kind`` is one of the target kinds (``location``, ``occupant``, ``trait``,
-        ``rating_die``, ``entity``, ``life_path``, ``roll_table``); ``scope`` is the
+        ``kind`` is one of the target kinds (``location``, ``occupant``, ``entity``,
+        ``trait``, ``traitset``, ``life_path``, ``roll_table``, ``rating_die``,
+        ``universe``, ``projection``); ``scope`` is the
         ``target_scope`` narrowing string (``faction:X``, ``subtree:X``, etc.).
         ``action`` narrows trait picks to the entity's own instances for
         mutate-only actions (``step_down``/``step_up``/``set``/``remove``).
