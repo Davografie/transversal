@@ -84,7 +84,7 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(entity, [a], em.repo)
 
-    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal"):
+    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)

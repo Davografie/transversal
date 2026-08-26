@@ -288,6 +288,25 @@ def test_cancel_scheduled_event_missing_is_noop():
     assert result.applied and "no active effect" in result.applied[0].summary
 
 
+def test_core_handlers_register_disable_enable_toggle():
+    """Duration reverts fire via effect_registry — the disable/toggle actions
+    must be registered on the global registry, not just _MUTATION_HANDLERS."""
+    from types import SimpleNamespace
+    import transversal.services.effects_applier as applier
+    from transversal.services.effects_applier import EffectRegistry
+
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        raz = SimpleNamespace(spend=lambda *a, **k: None, earn=lambda *a, **k: None, transfer=lambda *a, **k: None)
+        em = SimpleNamespace(repo=None, create=lambda *a, **k: None)
+        applier._register_core_handlers(em, raz)
+        for action in ("disable", "enable", "toggle"):
+            assert ("modify_trait", action) in applier.effect_registry._handlers
+    finally:
+        applier.effect_registry = original
+
+
 # ── Complications (unified polarity) ─────────────────
 
 def test_gain_negative_sets_negative():
