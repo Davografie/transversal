@@ -59,7 +59,7 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 - [x] Increase/set trait-set limit — `modify_traitset`/`set_limit` → `TraitSetSetting.limit` override
 - [x] Create new/temporary projection (disguise / alt-ID) — `projection`/`create` + `projection`/`restore`
 - [x] End entity/projection active effect — `end_active_effect` action (scoped `scheduled_event` picker)
-- [ ] Gain-trait inline trait editor (editor-only authoring; supersedes the auto-fill stopgap)
+- [x] Gain-trait inline trait editor (editor-only authoring; supersedes the auto-fill stopgap) — `statement`/`notes` context fields on gain actions
 
 ### Batch 4 — New triggers (fire sites + `menu_contexts` + `_trigger_matches`)
 
