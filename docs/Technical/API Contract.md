@@ -166,8 +166,14 @@ type Query {
   targetFilterFields: [FilterFieldOption!]!
   scopeVariables(trigger: String, menuContext: String): [ScopeVariable!]!
   targetCandidates(kind: String!, entityId: ID, scope: String, action: String, filter: JSON): [TargetCandidate!]!
+
+  # Scheduled timers (central store)
+  scheduledEvents(targetType: String, targetId: ID, targetIds: [ID!]): [ScheduledEvent!]!
 }
 ```
+
+> [!note] Scheduled timers
+> `scheduledEvents` lists running centrally-scheduled timers. `targetType` is `"entity"` or `"trait_setting"`; `targetId` scopes to one owner, `targetIds` to a set of owners (all filters combine; omitting all returns the full store). Each `ScheduledEvent` carries `id`, `targetType`, `targetId`, the revert `effect`, `timers` (`{event, remaining}`), `combine`, and `sourceSfxId`.
 
 > [!note] Effect target fields
 > `Effect` and `EffectInput` carry a `targetFilter` map (candidate field predicates, e.g. `{"starter_location": true}`) that composes with `targetScope`. `targetCandidates` accepts the same `filter` and an optional `entityId` (omitted → authoring preview against a synthetic universe context derived from `scope`).

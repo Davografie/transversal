@@ -30,7 +30,7 @@ Transversal's depth comes from a **small set of primitives composed into a large
 
 ## Current state (verified)
 
-The effect layer is built and the primitives are largely in place. Verified by 571 backend tests + a passing frontend build.
+The effect layer is built and the primitives are largely in place. Verified by 575 backend tests + a passing frontend build.
 
 **Five closed vocabularies, each owned by one backend module:**
 
@@ -128,7 +128,7 @@ Replace the hardcoded `self.location`/`self.universe`/`self.projection` with a d
 
 Consolidate the two timer mechanisms into a single persisted collection of running timers.
 
-> [!note] Status: done (2026-08-26). One persisted `scheduled_events` collection with `target_type`/`target_id`; `EffectsEngine._schedule` removed; REST beat/scene endpoints advance via `dispatch_event`. Follow-up: migrate legacy owner-scoped `Entity`/`TraitSetting.scheduled_events` lists into the collection and drop the now-unused fields.
+> [!note] Status: done (2026-08-26). One persisted `scheduled_events` collection with `target_type`/`target_id`; `EffectsEngine._schedule` removed; REST beat/scene endpoints advance via `dispatch_event`. Queryable + surfaced: `scheduledEvents(targetType, targetId, targetIds)` GraphQL query, `useScheduledEvents` frontend composable, and a `⏳` countdown on the character sheet (entity header + per-trait). Follow-up: migrate legacy owner-scoped `Entity`/`TraitSetting.scheduled_events` lists into the collection and drop the now-unused fields.
 
 - **Current shape:** two parallel mechanisms — owner-scoped `ScheduledEvent` lists (`Entity.scheduled_events`, `TraitSetting.scheduled_events`, advanced by full-table scans in `dispatch_event`) plus an in-memory `EffectsEngine._schedule` (ticked by `tick_beat`/`tick_scene`/`tick_session`, lost on restart). `scheduled_events.py` claims to replace the in-memory schedule but hasn't.
 - **Target shape:** one `scheduled_events` collection:
@@ -155,14 +155,14 @@ Consolidate the two timer mechanisms into a single persisted collection of runni
 
 **Build with contract tests, live-test in play.** No full-coverage manual matrix up front — it's deferred until the scope is built. Instead:
 
-- **Contract test per primitive** — each new action/condition/trigger lands with a backend unit test asserting its contract (the 571-test suite grows this way).
+- **Contract test per primitive** — each new action/condition/trigger lands with a backend unit test asserting its contract (the 575-test suite grows this way).
 - **Drift-proof test** — one automated test (from [[Effect Variables and Primitives]] Phase 1) asserting every trigger's fire-site context matches its declared `{variables}`; catches the "declared vs populated" bug class wholesale.
 - **Live-test the SFX actually used in play** — focused, usage-driven manual verification as each SFX is wanted; this drives which scenarios get the attention.
 
 Build order:
 
 1. ~~**Owner model**~~ — done (condition + availability filtering + migration; panel filter pending).
-2. **Central timers** (one persisted timer repository; absorbs `EffectsEngine._schedule`) — fixes the split-brain and is the foundation for duration-based actions + loop-prevention.
+2. ~~**Central timers**~~ — done (one persisted timer repository absorbing `EffectsEngine._schedule`; GraphQL `scheduledEvents` query + filters + sheet display). Foundation for duration-based actions + loop-prevention.
 3. **Batch 3 actions** — disable/toggle trait first (already designed; duration reverts ride the new timers), then challenge rating, temporary projection, etc.
 4. **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
 5. **Drillthrough schema** (field schema + recursive resolver + wizard) — enhancement/polish, not on the critical path.

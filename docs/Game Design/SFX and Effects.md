@@ -32,7 +32,7 @@ status: canonical
 | Target-candidate resolution (scope resolvers, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/effect_targets.py` |
 | Condition evaluation + condition-type vocabulary (`CONDITION_TYPES`) | `src/api/src/transversal/services/conditions.py` |
 | Authoring validation (`validate_sfx` — unknown variables, filter/target-kind, missing required fields) | `src/api/src/transversal/services/sfx_validation.py` |
-| Scheduled events / duration (timers, combine, central `dispatch_event`, `advance_events`) | `src/api/src/transversal/services/scheduled_events.py` |
+| Scheduled events / duration (timers, combine, central `dispatch_event`, `advance_scheduled_events`) | `src/api/src/transversal/services/scheduled_events.py` |
 | SFX ownership resolution + seeding of table/contest SFX | `src/api/src/transversal/services/sfx_owner.py` |
 | State-change event wiring (takeout, contest win/loss, give-in, push) | `src/api/src/transversal/services/state_events.py` |
 | Consequence menu assembly (base + entity + SFX moves) | `src/api/src/transversal/services/consequence_menu.py` |
@@ -97,16 +97,20 @@ class EffectDuration(BaseModel):
 
 class ScheduledEvent(BaseModel):
     id: str
-    effect: Effect        # the REVERT effect to fire on expiry
+    target_type: str = "entity"   # "entity" | "trait_setting"
+    target_id: str = ""           # entity id or trait-setting id
+    effect: Effect                # the REVERT effect to fire on expiry
     timers: list[Timer]
     combine: TimerCombine
     source_sfx_id: Optional[str] = None
 ```
 
-The owner holds the scheduled events: `Entity.scheduled_events` (line 527) and
-`TraitSetting.scheduled_events` (line 424). The forward effect is applied
-immediately (mutating the owner's concrete state); only the *revert* is
-scheduled. See [[#Duration / scheduled events]] below.
+Scheduled events live in one persisted `scheduled_events` collection, not on the
+owner documents. `target_type` + `target_id` reconnect each event to the owner
+(entity or trait setting) it will fire against, resolved at fire time so a
+deleted target is a no-op. The forward effect is applied immediately (mutating
+the owner's concrete state); only the *revert* is scheduled. See
+[[#Duration / scheduled events]] below.
 
 ### `SFX` (line 710)
 
@@ -153,7 +157,7 @@ A selectable post-roll consequence entry. Authored directly on entities (locatio
 - `attunements: list[Attunement]` — active temporary universe grants (effect-managed).
 - `targeting_bans: list[TargetingBan]` — directional bans, membership only; expiry via scheduled events (`TargetingBan`, line 518).
 - `taken_out: bool = False` — scene-scoped; a high-stakes contest removed this entity from the scene.
-- `scheduled_events: list[ScheduledEvent]` — pending timed reverts.
+- `scheduled_events: list[ScheduledEvent]` — legacy owner-scoped field, no longer used (timers live in the central `scheduled_events` collection).
 - `sfx_ids: list[str]` — SFX owned directly by this entity.
 - `consequence_options: list[ConsequenceOption]` — location/lair moves.
 
@@ -257,21 +261,15 @@ For each available SFX id:
 3. If `conditions` exist and a repo is provided, `evaluate_conditions` gates on current entity state.
 4. A razmerit cost check sums `transfer_razmerit`/`spend` effect results and skips the SFX if it exceeds the balance.
 5. `_substitute_effect_context` replaces `{context_key}` placeholders in each effect's `result` from the event context (this is how `{effect_die}` becomes a concrete die rating).
-6. `IMMEDIATE` effects with a `{choose_*}` target are returned as `pending`; otherwise they are applied via `effects_applier.effect_registry.apply`. Non-`IMMEDIATE` effects are persisted as `ScheduledEvent`s on the entity when a repo is available (see [[#Duration / scheduled events]]); an in-memory schedule remains only as a fallback for the no-repo, life-path, and `ON_CONDITION` cases.
+6. `IMMEDIATE` effects with a `{choose_*}` target are returned as `pending`; otherwise they are applied via `effects_applier.effect_registry.apply`. Non-`IMMEDIATE` effects are persisted as `ScheduledEvent`s in the central store (see [[#Duration / scheduled events]]).
 
 `attune`/`enable` no longer special-cases the schedule: the `_attune` handler applies the enable now and `schedule_revert` schedules the `disable` via the same duration model.
 
 ### Scheduling
 
-The in-memory `ScheduledEffect` schedule backs `tick_beat`/`tick_scene`/`tick_session` for deferred life-path and `ON_CONDITION` effects. Ordinary timed reverts are persisted and driven by `scheduled_events.dispatch_event` (see [[#Duration / scheduled events]]).
+There is a single persisted timer store — no in-memory schedule. The old in-memory `ScheduledEffect` schedule and its `tick_beat`/`tick_scene`/`tick_session` methods were removed; every deferred/life-path/duration effect with a mappable timing routes through `scheduled_events.dispatch_event` (see [[#Duration / scheduled events]]).
 
-| Method | Fires |
-|--------|-------|
-| `tick_beat` (line 296) | in-memory `END_OF_BEAT` / `AFTER_BEATS` effects |
-| `tick_scene` (line 320) | in-memory `END_OF_SCENE` effects |
-| `tick_session` (line 336) | everything remaining on the in-memory schedule |
-
-`AFTER_BEATS` defaults to 3 beats (`_beats_for_timing`).
+`AFTER_BEATS` maps to a 3-beat timer (`timing_to_timer`).
 
 ### Trigger semantics (`_trigger_matches`, line 205)
 
@@ -332,14 +330,21 @@ The complications trait set is **`ts-complications-a190`**. The negative-trait f
 A temporary effect is modeled as **apply now + schedule a revert**:
 
 1. The forward effect mutates the owner's concrete state immediately (a trait's `dice`, an entity's `targeting_bans` / `taken_out` / `attunements`, a created asset).
-2. `schedule_revert` / `schedule_traitsetting_revert` / `queue_revert` / `queue_event` append a `ScheduledEvent` holding the inverse effect and its `timers`.
+2. `schedule_revert` / `schedule_effect` / `schedule_event` / `schedule_deferred` append a `ScheduledEvent` holding the inverse effect and its `timers`.
 3. `dispatch_event(repo, event_type, entity_id, …)` advances timers on the boundary and applies the stored revert when they expire.
 
 ### Advancement (central point)
 
-- **Global boundaries** (`beat` / `scene` / `session`, no entity): `dispatch_event` advances every entity + trait setting's scheduled events.
-- **Entity-scoped events** (`location_changed`, `trait_updated`, `relationship_created`): advance that entity + its trait settings, then fire state SFX.
+- **Global boundaries** (`beat` / `scene` / `session`, no entity): `dispatch_event` advances every scheduled event in the central store.
+- **Entity-scoped events** (`location_changed`, `trait_updated`, `relationship_created`): advance only that entity's and its trait-settings' events, then fire state SFX.
 - `next_beat` → `dispatch_event(repo, "beat")`; `advance_scene` → `dispatch_event(repo, "scene")`; `entity_manager._publish_location_changed` and `effects_commit` publish through `dispatch_event`.
+
+### Querying (GraphQL + UI)
+
+Running timers are exposed so the UI can reconnect a timer to its owner:
+
+- `scheduledEvents(targetType, targetId, targetIds)` — `targetType` is `"entity"` or `"trait_setting"`; `targetId` scopes to one owner, `targetIds` to a set (e.g. a sheet's trait-setting ids). All filters combine; omitting all returns the full store.
+- Frontend `useScheduledEvents` (`fetchFor`) fetches them and `formatTimers` renders a game-boundary countdown (`"2 scenes"`, `"1 beat"`) — never wall-clock. The character sheet shows a `⏳` line on the entity header (GM) and a per-trait badge when a trait has a pending revert.
 
 ### Inverse mappings (registry)
 
@@ -361,7 +366,7 @@ A temporary effect is modeled as **apply now + schedule a revert**:
 
 ### Deferred SFX effects
 
-Non-`IMMEDIATE` effects from the effects engine are persisted as scheduled events when a repo is available (`scheduled_events.schedule_deferred` → `timing_to_timer` maps `END_OF_BEAT` / `END_OF_SCENE` / `END_OF_SESSION` / `AFTER_BEATS` to a timer). The in-memory `ScheduledEffect` schedule remains only for life-path deferrals and `ON_CONDITION`.
+Non-`IMMEDIATE` effects from the effects engine are persisted as scheduled events (`scheduled_events.schedule_deferred` → `timing_to_timer` maps `END_OF_BEAT` / `END_OF_SCENE` / `END_OF_SESSION` / `AFTER_BEATS` to a timer). There is no in-memory fallback — life-path deferrals and duration reverts share the same central store.
 
 ## SFX ownership and seeding
 
