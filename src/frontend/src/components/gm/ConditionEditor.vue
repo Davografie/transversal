@@ -12,6 +12,10 @@
         <div v-else-if="targetKind(c.type)" class="ce-target ce-picker">
           <TargetPicker v-model="c.target" :kind="targetKind(c.type)" :placeholder="targetPlaceholder(c.type)" />
         </div>
+        <select v-else-if="targetOptions(c.type).length" v-model="c.target" class="ce-target">
+          <option value="">-- entity type --</option>
+          <option v-for="o in targetOptions(c.type)" :key="o" :value="o">{{ o }}</option>
+        </select>
         <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
       </template>
       <select v-if="valueKind(c.type) === 'die'" v-model="c.value" class="ce-value">
@@ -91,6 +95,11 @@ function valueKind(type) {
 function operators(type) {
   const meta = conditionTypes.value.find(c => c.value === type)
   return meta?.operators || []
+}
+
+function targetOptions(type) {
+  const meta = conditionTypes.value.find(c => c.value === type)
+  return meta?.targetOptions || []
 }
 
 function add() {
