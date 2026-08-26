@@ -164,14 +164,16 @@ class EffectsEngine:
 
             # Execute each effect with its own timing
             sfx_applied = False
+            roll_effects = [e for e in sfx.effects if e.timing in _roll_timings]
+            if roll_effects:
+                # Arm the SFX's roll-timing effects as a unit for its duration.
+                from transversal.services.roll_deferral import arm_sfx
+                arm_sfx(event.entity_id, roll_effects, source_sfx_id=sfx.id, duration=sfx.duration)
+                sfx_applied = True
+
             for effect in sfx.effects:
-                # Roll-event timings arm the effect (raw) for the next matching
-                # roll event; roll-context variables are substituted at fire time.
                 if effect.timing in _roll_timings:
-                    from transversal.services.roll_deferral import arm_effect
-                    arm_effect(event.entity_id, effect, source_sfx_id=sfx.id)
-                    sfx_applied = True
-                    continue
+                    continue  # armed above (raw; substituted at fire time)
 
                 effect = _substitute_effect_context(effect, event.context)
                 if effect.timing == EffectTiming.IMMEDIATE:

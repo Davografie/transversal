@@ -233,7 +233,6 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         negative=e.negative,
         context=e.context,
         duration=_duration_to_gql(e.duration),
-        rolls=e.rolls,
     )
 
 
@@ -292,7 +291,6 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         negative=e.negative,
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),
-        rolls=e.rolls,
     )
 
 
@@ -426,6 +424,7 @@ class Query:
                     trigger=s.trigger, limit=s.limit,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
+                    duration=_duration_to_gql(s.duration),
                 )
                 for s in db_sfxs
             ]
@@ -438,6 +437,7 @@ class Query:
                     trigger=s.trigger, limit=s.limit,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
+                    duration=_duration_to_gql(s.duration),
                 ) for s in engine.get_all()
             ]
         return []
@@ -563,6 +563,7 @@ class Query:
             id=input.id, name=input.name, trigger=input.trigger,
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
+            duration=_duration_input_to_domain(input.duration),
         )
         return validate_sfx(draft)
 
@@ -1205,6 +1206,7 @@ class Mutation:
             id=input.id, name=input.name, description=input.description,
             trigger=input.trigger, conditions=conditions,
             effects=[_effect_input_to_domain(e) for e in input.effects],
+            duration=_duration_input_to_domain(input.duration),
         )
         created = _em(info).repo.create_sfx(s)
         # Also register with the in-memory engine
@@ -1216,6 +1218,7 @@ class Mutation:
             trigger=created.trigger, limit=created.limit,
             conditions=[_condition_to_gql(c) for c in created.conditions],
             effects=[_effect_to_gql(e) for e in created.effects],
+            duration=_duration_to_gql(created.duration),
         )
 
     @strawberry.mutation
@@ -1248,6 +1251,8 @@ class Mutation:
             existing.trigger = input.trigger
         if input.effects is not None:
             existing.effects = [_effect_input_to_domain(e) for e in input.effects]
+        if input.duration is not None:
+            existing.duration = _duration_input_to_domain(input.duration)
         updated = _em(info).repo.update_sfx(existing)
         # Also update in-memory engine
         engine = info.context.get("effects_engine")
@@ -1258,6 +1263,7 @@ class Mutation:
             trigger=updated.trigger, limit=updated.limit,
             conditions=[_condition_to_gql(c) for c in updated.conditions],
             effects=[_effect_to_gql(e) for e in updated.effects],
+            duration=_duration_to_gql(updated.duration),
         )
 
     @strawberry.mutation

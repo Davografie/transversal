@@ -190,7 +190,6 @@ class Effect:
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDuration] = None
-    rolls: int = 1
 
 
 @strawberry.input
@@ -208,7 +207,6 @@ class EffectInput:
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDurationInput] = None
-    rolls: int = 1
 
 
 @strawberry.type
@@ -324,6 +322,7 @@ class SfxRef:
     limit: str = ""
     conditions: list[Condition] = strawberry.field(default_factory=list)
     effects: list[Effect] = strawberry.field(default_factory=list)
+    duration: Optional[EffectDuration] = None
 
 
 @strawberry.input
@@ -336,6 +335,7 @@ class SfxInput:
     limit: str = ""
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
+    duration: Optional[EffectDurationInput] = None
 
 
 @strawberry.input
@@ -348,6 +348,7 @@ class SfxUpdateInput:
     limit: Optional[str] = None
     conditions: Optional[list[ConditionInput]] = None
     effects: Optional[list[EffectInput]] = None
+    duration: Optional[EffectDurationInput] = None
 
 
 @strawberry.type
