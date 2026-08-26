@@ -128,7 +128,7 @@ Replace the hardcoded `self.location`/`self.universe`/`self.projection` with a d
 
 Consolidate the two timer mechanisms into a single persisted collection of running timers.
 
-> [!note] Status: planned — precedes disable/toggle duration-reverts and loop-prevention.
+> [!note] Status: done (2026-08-26). One persisted `scheduled_events` collection with `target_type`/`target_id`; `EffectsEngine._schedule` removed; REST beat/scene endpoints advance via `dispatch_event`. Follow-up: migrate legacy owner-scoped `Entity`/`TraitSetting.scheduled_events` lists into the collection and drop the now-unused fields.
 
 - **Current shape:** two parallel mechanisms — owner-scoped `ScheduledEvent` lists (`Entity.scheduled_events`, `TraitSetting.scheduled_events`, advanced by full-table scans in `dispatch_event`) plus an in-memory `EffectsEngine._schedule` (ticked by `tick_beat`/`tick_scene`/`tick_session`, lost on restart). `scheduled_events.py` claims to replace the in-memory schedule but hasn't.
 - **Target shape:** one `scheduled_events` collection:
