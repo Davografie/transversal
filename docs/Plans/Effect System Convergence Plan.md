@@ -53,8 +53,8 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 - [ ] Create temporary location asset (context: duration)
 - [ ] Challenge rating (effect die vs challenge die)
 - [ ] Step down target-entity's trait (likely already expressible — verify)
-- [ ] Disable a trait (via `locations_disabled` + duration revert)
-- [ ] Toggle trait
+- [ ] Disable a trait (new `TraitSetting.enabled` flag — not location-scoped; + duration revert)
+- [ ] Toggle trait (same `enabled` flag)
 - [ ] Increase/decrease result/effect limit *(decision below)*
 - [ ] Increase/set trait-set limit (needs `TraitSetSetting.limit`)
 - [ ] Create new/temporary projection (disguise / alt-ID)
@@ -97,6 +97,7 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 - **Result/effect limit** = standard 2 result dice + 1 effect die; scale dice raise the result limit, multi-opponent SFX raise the effect limit.
 - **Owner model** = `entity_type` condition + `gm` owner (see below).
 - **Drillthrough** = dynamic, target-type field schema (see below).
+- **Disable/toggle trait** = a new `TraitSetting.enabled` boolean flag (not `locations_enabled`/`locations_disabled`); a disabled trait must not contribute dice to the pool.
 
 ## Owner model → `entity_type` condition + GM owner
 
