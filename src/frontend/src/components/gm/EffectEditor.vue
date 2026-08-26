@@ -25,7 +25,9 @@
       <div class="ee-form-title">{{ editingIndex !== null ? 'Edit effect' : 'Add effect' }}</div>
       <select v-model="newEffect.actionId" @change="onActionChange">
         <option value="">-- pick an action --</option>
-        <option v-for="a in effectActions" :key="a.actionId" :value="a.actionId">{{ a.label }}</option>
+        <optgroup v-for="g in actionGroups" :key="g.name" :label="g.name">
+          <option v-for="a in g.actions" :key="a.actionId" :value="a.actionId">{{ a.label }}</option>
+        </optgroup>
       </select>
       <template v-if="selectedAction">
         <div class="ee-help">{{ selectedAction.description }}</div>
@@ -54,10 +56,19 @@
               <ScopeBuilder v-model="newEffect.scope" :universe="universe" />
               <template v-if="relevantFilterFields.length">
                 <label>Only</label>
-                <label v-for="ff in relevantFilterFields" :key="ff.field" class="ee-check">
-                  <input type="checkbox" :checked="!!newEffect.targetFilter[ff.field]" @change="toggleFilter(ff.field, $event)" />
-                  {{ ff.label }}
-                </label>
+                <template v-for="ff in relevantFilterFields" :key="ff.field">
+                  <label v-if="ff.valueType === 'boolean'" class="ee-check">
+                    <input type="checkbox" :checked="!!newEffect.targetFilter[ff.field]" @change="toggleFilter(ff.field, $event)" />
+                    {{ ff.label }}
+                  </label>
+                  <label v-else class="ee-check">
+                    {{ ff.label }}
+                    <select :value="newEffect.targetFilter[ff.field] || ''" @change="setFilterValue(ff.field, $event.target.value)">
+                      <option value="">—</option>
+                      <option v-for="o in (ff.options || [])" :key="o" :value="o">{{ o }}</option>
+                    </select>
+                  </label>
+                </template>
               </template>
             </div>
             <TargetPicker
@@ -199,11 +210,28 @@ const selectedAction = computed(() => {
   return effectActions.value.find(a => a.actionId === newEffect.actionId) || null
 })
 
+const actionGroups = computed(() => {
+  const groups = {}
+  for (const a of effectActions.value) {
+    const g = a.group || 'Other'
+    if (!groups[g]) groups[g] = []
+    groups[g].push(a)
+  }
+  return Object.entries(groups).map(([name, actions]) => ({ name, actions }))
+})
+
 const hasExtraContext = computed(() => Object.keys(newEffect.extraContext).length > 0)
 
 function toggleFilter(field, e) {
   const next = { ...newEffect.targetFilter }
   if (e.target.checked) next[field] = true
+  else delete next[field]
+  newEffect.targetFilter = next
+}
+
+function setFilterValue(field, value) {
+  const next = { ...newEffect.targetFilter }
+  if (value) next[field] = value
   else delete next[field]
   newEffect.targetFilter = next
 }

@@ -518,6 +518,20 @@ def _random_candidate(kind: str, scope: Optional[str], entity: Entity, repo, act
     return random.choice([c.id for c in candidates]) if candidates else None
 
 
+_SELF_FIELDS = {
+    "location": "current_location",
+    "universe": "current_universe",
+    "projection": "current_projection",
+}
+
+
+def _parse_self_field(token: str) -> Optional[str]:
+    """Return the entity attribute for a ``self.<field>`` token, else ``None``."""
+    if token.startswith("self."):
+        return _SELF_FIELDS.get(token[len("self."):])
+    return None
+
+
 def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind: str, repo) -> Optional[str]:
     """Resolve a target to an id, record a PendingChoice, or pick a random candidate.
 
@@ -529,6 +543,9 @@ def _resolve_target(entity: Entity, effect: Effect, result: EffectsResult, kind:
     target = effect.target or ""
     if target == "self":
         return entity.id
+    attr = _parse_self_field(target)
+    if attr is not None:
+        return getattr(entity, attr, None)
     parsed = _parse_placeholder(target)
     if parsed is not None:
         mode, choose_kind = parsed
@@ -557,6 +574,10 @@ def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo)
     subject = (effect.entity or "").strip()
     if subject in ("", "self") or subject == entity.id:
         return entity
+    attr = _parse_self_field(subject)
+    if attr is not None:
+        ref_id = getattr(entity, attr, None)
+        return repo.get_entity(ref_id) if ref_id else None
     parsed = _parse_placeholder(subject)
     if parsed is not None:
         mode, kind = parsed

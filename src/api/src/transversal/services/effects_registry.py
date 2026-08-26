@@ -36,6 +36,7 @@ class EffectActionMeta:
     category: str               # "cost" | "benefit" | "either" (UI hint)
     effect_type: str            # maps to Effect.type
     effect_action: str          # maps to Effect.action
+    group: str = ""             # functional group for the editor dropdown (optgroup)
     valid_timings: list[str] = field(default_factory=lambda: [
         "IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
     ])
@@ -278,8 +279,6 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
             _ENTITY_FIELD,
-            EffectFieldDef(name="result", label="Deferral", field_type="text",
-                          required=False, default="after_resolution"),
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD],
         supports_duration=True,
@@ -616,6 +615,34 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         inverse=("entity", "remove_targeting_ban"),
     ),
 ]
+
+# ── Functional grouping (editor optgroups) ─────────────
+# Assigned after construction so each action's group lives beside the section
+# it belongs to, without repeating the label in every constructor call.
+_ACTION_GROUPS: dict[str, str] = {
+    "play_as_rating": "Dice Pool", "step_up_die": "Dice Pool",
+    "step_down_die": "Dice Pool", "double_die": "Dice Pool",
+    "reroll_die": "Dice Pool", "add_die": "Dice Pool",
+    "remove_die": "Dice Pool", "split_die": "Dice Pool",
+    "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
+    "negate_complication": "Outcome", "convert_complication": "Outcome",
+    "reroll_highest": "Outcome",
+    "step_up_trait": "Trait", "step_down_trait": "Trait", "set_trait": "Trait",
+    "gain_trait": "Trait", "gain_or_step_up_trait": "Trait",
+    "cortex_gain_trait": "Trait", "reveal_trait": "Trait",
+    "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",
+    "transfer_razmerit": "Razmerit",
+    "create_asset": "Entity", "attune": "Attunement",
+    "travel": "Travel", "set_location": "Travel",
+    "discover_life_path": "Life Path", "next_step": "Life Path",
+    "draft_life_path": "Life Path", "force_muster": "Life Path",
+    "muster": "Life Path", "enroll_life_path": "Life Path",
+    "create_relationship": "Relationship", "entity_targeting_ban": "Relationship",
+}
+
+for _m in EFFECT_ACTION_REGISTRY:
+    _m.group = _ACTION_GROUPS.get(_m.action_id, "Other")
+
 
 # ── Lookup helpers ────────────────────────────────────
 

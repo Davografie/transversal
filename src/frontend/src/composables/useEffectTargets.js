@@ -18,7 +18,7 @@ export function useEffectTargets() {
       const data = await graphql(
         `query($kind: String!, $entityId: ID, $scope: String, $action: String, $filter: JSON) {
           targetCandidates(kind: $kind, entityId: $entityId, scope: $scope, action: $action, filter: $filter) {
-            id name universe
+            id name universe subtitle
           }
         }`,
         { kind, entityId: entityId || null, scope: scope || null, action: action || null, filter: filter || null }

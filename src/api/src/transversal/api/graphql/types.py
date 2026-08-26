@@ -214,6 +214,7 @@ class TargetCandidate:
     id: strawberry.ID
     name: str
     universe: str = ""
+    subtitle: str = ""
 
 
 @strawberry.type
@@ -223,6 +224,7 @@ class FilterFieldOption:
     label: str
     value_type: str = "boolean"
     kinds: list[str] = strawberry.field(default_factory=list)
+    options: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.type
@@ -443,6 +445,7 @@ class EffectActionMeta:
     category: str
     effect_type: str
     effect_action: str
+    group: str = ""
     valid_timings: list[str]
     fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
     context_fields: list[EffectFieldDef] = strawberry.field(default_factory=list)

@@ -30,6 +30,7 @@ class TargetCandidate:
     id: str
     name: str
     universe: str = ""
+    subtitle: str = ""  # kind-specific secondary label (e.g. trait → traitset name)
 
 
 @dataclass(frozen=True)
@@ -39,12 +40,15 @@ class FilterField:
     label: str
     value_type: str = "boolean"  # "boolean" | "string" | "number"
     kinds: tuple[str, ...] = ("location",)  # target kinds this filter applies to
+    options: tuple[str, ...] = ()  # allowed values for "string" filters (e.g. entity types)
 
 
 # Candidate filters the SFX editor can build. Each maps an entity field to a
 # required value (AND-ed). Adding an entry here makes it available in the UI.
 FILTER_FIELDS: tuple[FilterField, ...] = (
     FilterField("starter_location", "Starter location", "boolean", ("location",)),
+    FilterField("type", "Entity type", "string", ("entity", "occupant"),
+                options=("character", "gmc", "asset")),
 )
 
 
@@ -73,8 +77,17 @@ def parse_scope(scope: Optional[str]) -> tuple[Optional[str], str]:
     return None, scope
 
 
-def _candidate(id: str, name: str, universe: str = "") -> TargetCandidate:
-    return TargetCandidate(id=id, name=name, universe=universe)
+def _candidate(id: str, name: str, universe: str = "", subtitle: str = "") -> TargetCandidate:
+    return TargetCandidate(id=id, name=name, universe=universe, subtitle=subtitle)
+
+
+def _traitset_name(repo, traitset_id: str) -> str:
+    """Resolve a trait's traitset display name (falls back to the id)."""
+    getter = getattr(repo, "get_traitset_by_id", None)
+    if getter is None:
+        return traitset_id
+    ts = getter(traitset_id)
+    return ts.name if ts else traitset_id
 
 
 def _die_candidates() -> list[TargetCandidate]:
@@ -124,10 +137,13 @@ def _default_scope(kind: str, value: str, entity: Entity, repo, filter: dict) ->
     if kind == "trait":
         universe = _current_universe(value, entity)
         if universe:
-            return [_candidate(t.id, t.name, universe) for t in repo.get_traits_by_universe(universe)]
+            return [
+                _candidate(t.id, t.name, universe, _traitset_name(repo, getattr(t, "traitset_id", "")))
+                for t in repo.get_traits_by_universe(universe)
+            ]
         # Empty scope in authoring (no concrete entity universe) → the full registry.
         return [
-            _candidate(t.id, t.name, t.universes[0] if t.universes else "")
+            _candidate(t.id, t.name, t.universes[0] if t.universes else "", _traitset_name(repo, getattr(t, "traitset_id", "")))
             for t in repo.get_all_traits()
         ]
     if kind == "traitset":

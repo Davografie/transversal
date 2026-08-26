@@ -6,7 +6,7 @@ import { useApi } from './useApi.js'
 const META_QUERY = `{
   triggers { value label group }
   conditionTypes { value label needsTarget targetPlaceholder targetKind valueKind operators }
-  targetFilterFields { field label valueType kinds }
+  targetFilterFields { field label valueType kinds options }
 }`
 
 // Module-level cache so the SFX editor and condition editor share one fetch.

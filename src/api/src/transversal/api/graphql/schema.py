@@ -473,7 +473,7 @@ class Query:
         return [
             GqlEffectActionMeta(
                 action_id=m.action_id, label=m.label, description=m.description,
-                category=m.category, effect_type=m.effect_type, effect_action=m.effect_action,
+                category=m.category, group=m.group, effect_type=m.effect_type, effect_action=m.effect_action,
                 valid_timings=m.valid_timings,
                 fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.fields],
                 context_fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.context_fields],
@@ -564,7 +564,7 @@ class Query:
                 name="", current_universe=universe,
             )
         return [
-            TargetCandidate(id=c.id, name=c.name, universe=c.universe)
+            TargetCandidate(id=c.id, name=c.name, universe=c.universe, subtitle=c.subtitle)
             for c in resolve_candidates(kind, scope, entity, repo, action, filter or {})
         ]
 
@@ -573,7 +573,7 @@ class Query:
         """Candidate filter fields the SFX editor can build, sourced from the backend."""
         from transversal.services.effect_targets import FILTER_FIELDS
         return [
-            FilterFieldOption(field=f.field, label=f.label, value_type=f.value_type, kinds=list(f.kinds))
+            FilterFieldOption(field=f.field, label=f.label, value_type=f.value_type, kinds=list(f.kinds), options=list(f.options))
             for f in FILTER_FIELDS
         ]
 

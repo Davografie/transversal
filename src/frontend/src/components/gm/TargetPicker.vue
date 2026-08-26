@@ -14,7 +14,7 @@
       >
         <template #option="{ option }">
           <span class="tp-name">{{ option.name }}</span>
-          <span v-if="option.universe" class="tp-universe">{{ option.universe }}</span>
+          <span v-if="option.subtitle || option.universe" class="tp-universe">{{ option.subtitle || option.universe }}</span>
         </template>
       </SearchDropdown>
     </div>
