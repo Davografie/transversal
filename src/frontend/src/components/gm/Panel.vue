@@ -63,7 +63,21 @@ let copyTimer = null
 async function copyId() {
   if (!props.id) return
   try {
-    await navigator.clipboard.writeText(props.id)
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(props.id)
+    } else {
+      // Fallback for non-secure contexts (HTTP on a non-localhost host) where
+      // navigator.clipboard is unavailable.
+      const ta = document.createElement('textarea')
+      ta.value = props.id
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
     copied.value = true
     clearTimeout(copyTimer)
     copyTimer = setTimeout(() => { copied.value = false }, 1200)

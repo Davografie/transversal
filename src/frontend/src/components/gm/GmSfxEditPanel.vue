@@ -122,11 +122,12 @@ loadActions()
 // Backend trigger vocabulary grouped into Manual / Auto-fire / Menus. A legacy
 // value not in the vocabulary is still offered so saving never drops it.
 const triggerGroups = computed(() => {
-  const byGroup = { manual: [], auto: [], menu: [] }
+  const byGroup = { dicepool: [], manual: [], auto: [], menu: [] }
   for (const t of triggers.value) {
     ;(byGroup[t.group] || (byGroup[t.group] = [])).push(t)
   }
   return [
+    { label: 'Dice Pool', options: byGroup.dicepool },
     { label: 'Manual', options: byGroup.manual },
     { label: 'Auto-fire', options: byGroup.auto },
     { label: 'Menus', options: byGroup.menu },
