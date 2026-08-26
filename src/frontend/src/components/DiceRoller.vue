@@ -985,6 +985,7 @@ function persistPool() {
     source_id: d.tsId || d.source || '',
     label: d.label || d.source || d.die,
     ts_id: d.tsId || null,
+    armed_sfx_ids: d.armedSfxIds || [],
   }))
   apiSavePool(props.locationId, key, dice)
 }
@@ -1024,7 +1025,7 @@ function setDifficulty(die) {
 function addFromSheet(payload) {
   ensureSelfTab()
   // Accept a single-die { die } payload or a multi-die { dice: [...] } payload.
-  const { source, label, tsId, negative, resource } = payload || {}
+  const { source, label, tsId, negative, resource, armedSfxIds } = payload || {}
   const dice = Array.isArray(payload?.dice) ? payload.dice : (payload?.die ? [payload.die] : [])
   if (!dice.length) return
   // Negative trait during a contest contributes to the opponent's pool.
@@ -1040,7 +1041,7 @@ function addFromSheet(payload) {
   }
   markPurpose('gmc')
   for (const die of dice) {
-    pool.push({ die, source, label: label || source, tsId: tsId ?? null, sourceKind: 'trait', resource: !!resource })
+    pool.push({ die, source, label: label || source, tsId: tsId ?? null, sourceKind: 'trait', resource: !!resource, armedSfxIds: armedSfxIds || [] })
   }
   panelOpen.value = true
   notifyPool()
@@ -1556,6 +1557,7 @@ async function doRoll() {
       source_id: d.tsId || d.source || '',
       label: d.label || d.source || d.die,
       ts_id: d.tsId || null,
+      armed_sfx_ids: d.armedSfxIds || [],
     }
     if (d.resource) spec.resource = true
     return spec

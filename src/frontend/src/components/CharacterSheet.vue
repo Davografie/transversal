@@ -701,12 +701,12 @@ async function onTraitClick(t) {
 
   // Multi-die static traits contribute one pool die per rating entry.
   if (t.ratingType === 'STATIC' && (t.dice || []).length > 1) {
-    emit('addToPool', { dice: t.dice.map(d => d.toLowerCase()), source: t.name, label: displayName(t.name), tsId: t.id, negative })
+    emit('addToPool', { dice: t.dice.map(d => d.toLowerCase()), source: t.name, label: displayName(t.name), tsId: t.id, negative, armedSfxIds: armedSfxIdsForTrait(t) })
     return
   }
 
   if (!dieType) return  // no die rating — nothing to add
-  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative })
+  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative, armedSfxIds: armedSfxIdsForTrait(t) })
 }
 
 async function spendResourceGroup(t, dieType) {
@@ -716,7 +716,7 @@ async function spendResourceGroup(t, dieType) {
   await spendResourceDie(t.id, dieType)
   if (!spentResources.value[t.id]) spentResources.value[t.id] = []
   spentResources.value[t.id].push(dieType)
-  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative: t.polarity === 'NEGATIVE', resource: true })
+  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative: t.polarity === 'NEGATIVE', resource: true, armedSfxIds: armedSfxIdsForTrait(t) })
   await fetchEntity()
 }
 
@@ -863,6 +863,11 @@ defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fe
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0
+}
+
+function armedSfxIdsForTrait(t) {
+  // SFX attached to this trait that the player has armed (activated) this roll.
+  return (t.sfxIds || []).filter(sfxId => sfxActive(sfxId))
 }
 
 function sfxUsed(sfxId) {
@@ -1058,7 +1063,7 @@ async function activateSfx(sfxId) {
 
   if (!active) {
     // Activate
-    await triggerSfx(props.entityId, sfxId, props.universe)
+    await triggerSfx(props.entityId, sfxId, props.universe, { phase: props.phase })
     sfxActivations.value[sfxId] = 1
     await fetchEntity()
 
