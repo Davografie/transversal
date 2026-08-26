@@ -194,10 +194,11 @@
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
           <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">← {{ activeSetName }}</h4>
             <template v-for="t in currentTraits" :key="t.id">
-              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
+              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE', 'trait-disabled': t.enabled === false }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                   <span v-if="traitTimerLabel(t)" class="trait-timer" :title="'Re-enables after ' + traitTimerLabel(t)">⏳ {{ traitTimerLabel(t) }}</span>
+                  <span v-if="t.enabled === false" class="trait-disabled-badge">disabled</span>
                   <span v-if="t.fromType === 'relationship' && t.relationshipContactName" class="trait-contact">→ {{ t.relationshipContactName }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
                   <span v-if="t.notes" class="trait-notes">{{ t.notes }}</span>
@@ -685,6 +686,7 @@ async function addTrait(trait) {
 
 async function onTraitClick(t) {
   if (props.phase !== 'adding') return
+  if (t.enabled === false) return  // disabled trait contributes no dice
 
   // Resource traits: the row click spends only when the pool has a single
   // die type; mixed-type resources are spent per die group.
@@ -710,6 +712,7 @@ async function onTraitClick(t) {
 async function spendResourceGroup(t, dieType) {
   // Spend one die of the chosen type from the resource and add it to the pool.
   if (props.phase !== 'adding') return
+  if (t.enabled === false) return
   await spendResourceDie(t.id, dieType)
   if (!spentResources.value[t.id]) spentResources.value[t.id] = []
   spentResources.value[t.id].push(dieType)
@@ -931,6 +934,7 @@ const QUERY = `
         dice
         spentDice
         polarity
+        enabled
         traitsetOrder
         traitsetLimit
         knownTo
@@ -960,6 +964,7 @@ const QUERY = `
         dice
         spentDice
         polarity
+        enabled
         traitsetOrder
         traitsetLimit
         knownTo
@@ -2336,6 +2341,20 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 10px;
   color: var(--accent, #d9b45a);
   margin-left: 6px;
+  white-space: nowrap;
+}
+.trait-disabled {
+  opacity: 0.45;
+}
+.trait-disabled-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--text-dim);
+  border-radius: 999px;
   white-space: nowrap;
 }
 

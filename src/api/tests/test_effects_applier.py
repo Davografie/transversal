@@ -214,6 +214,57 @@ def test_set_overrides_dice():
     assert result.updated_trait_settings[0].dice == [DieType.D10]
 
 
+def test_disable_sets_enabled_false():
+    repo = FakeRepo(traitsettings=[_ts("trait", [DieType.D6])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "disable", "trait")], repo)
+    assert result.updated_trait_settings[0].enabled is False
+    assert result.updated_trait_settings[0].dice == [DieType.D6]  # rating untouched
+
+
+def test_disable_noop_when_already_disabled():
+    repo = FakeRepo(traitsettings=[_ts("trait", [DieType.D6], enabled=False)])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "disable", "trait")], repo)
+    assert result.updated_trait_settings == []
+
+
+def test_enable_sets_enabled_true():
+    repo = FakeRepo(traitsettings=[_ts("trait", [DieType.D6], enabled=False)])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "enable", "trait")], repo)
+    assert result.updated_trait_settings[0].enabled is True
+
+
+def test_toggle_flips_enabled():
+    repo = FakeRepo(traitsettings=[_ts("trait", [DieType.D6])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "toggle", "trait")], repo)
+    assert result.updated_trait_settings[0].enabled is False
+
+    # toggling again flips back
+    repo2 = FakeRepo(traitsettings=[_ts("trait", [DieType.D6], enabled=False)])
+    result2 = apply_effects(_entity(), [_effect("modify_trait", "toggle", "trait")], repo2)
+    assert result2.updated_trait_settings[0].enabled is True
+
+
+def test_disable_with_duration_schedules_enable_revert():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo(traitsettings=[_ts("trait", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="disable", target="trait",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.updated_trait_settings[0].enabled is False
+    assert len(repo.scheduled_events) == 1
+    revert = repo.scheduled_events[0]
+    assert revert.target_type == "trait_setting"
+    assert revert.target_id == "char-1:trait"
+    assert revert.effect.action == "enable"
+
+
 # ── Complications (unified polarity) ─────────────────
 
 def test_gain_negative_sets_negative():

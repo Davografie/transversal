@@ -783,6 +783,69 @@ def _apply_set(entity, effect, repo, result):
     _queue_trait_revert(repo, existing, effect, prior_result=prior)
 
 
+def _apply_disable(entity, effect, repo, result):
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
+    if target is None:
+        return
+    owner = _trait_owner(subject, effect, repo)
+    ts = _find_traitsetting(owner, repo, target)
+    if ts is None:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to disable"))
+        return
+    if not ts.enabled:
+        result.applied.append(AppliedEffect(effect, f"{target} already disabled"))
+        return
+    ts.enabled = False
+    result.updated_trait_settings.append(ts)
+    result.applied.append(AppliedEffect(effect, f"disabled {target}", ts.id))
+    _queue_trait_revert(repo, ts, effect)
+
+
+def _apply_enable(entity, effect, repo, result):
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
+    if target is None:
+        return
+    owner = _trait_owner(subject, effect, repo)
+    ts = _find_traitsetting(owner, repo, target)
+    if ts is None:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to enable"))
+        return
+    if ts.enabled:
+        result.applied.append(AppliedEffect(effect, f"{target} already enabled"))
+        return
+    ts.enabled = True
+    result.updated_trait_settings.append(ts)
+    result.applied.append(AppliedEffect(effect, f"enabled {target}", ts.id))
+
+
+def _apply_toggle(entity, effect, repo, result):
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
+    if target is None:
+        return
+    owner = _trait_owner(subject, effect, repo)
+    ts = _find_traitsetting(owner, repo, target)
+    if ts is None:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to toggle"))
+        return
+    ts.enabled = not ts.enabled
+    result.updated_trait_settings.append(ts)
+    state = "enabled" if ts.enabled else "disabled"
+    result.applied.append(AppliedEffect(effect, f"toggled {target} → {state}", ts.id))
+    _queue_trait_revert(repo, ts, effect)
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1146,6 +1209,9 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
     ("modify_trait", "set"): _apply_set,
+    ("modify_trait", "disable"): _apply_disable,
+    ("modify_trait", "enable"): _apply_enable,
+    ("modify_trait", "toggle"): _apply_toggle,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

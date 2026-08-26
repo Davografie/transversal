@@ -455,6 +455,7 @@ class TraitSetting(BaseModel):
     sfx_ids: list[str] = Field(default_factory=list)
     locations_enabled: list[str] = Field(default_factory=list)
     locations_disabled: list[str] = Field(default_factory=list)
+    enabled: bool = True  # false = disabled; contributes no dice until re-enabled
     known_to: list[str] = Field(default_factory=list)
     # Provenance — how this trait was acquired
     source_type: Optional[str] = None

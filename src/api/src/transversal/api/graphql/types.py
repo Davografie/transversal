@@ -521,6 +521,7 @@ class TraitSetting:
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID]
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
+    enabled: bool = True
     # Relationship-anchored traits carry their edge's contact for display.
     relationship_contact_id: Optional[strawberry.ID] = None
     relationship_contact_name: Optional[str] = None
@@ -642,6 +643,7 @@ class TraitSettingInput:
     from_type: Optional[str] = None  # "entity" | "projection"
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+    enabled: bool = True
 
 
 @strawberry.input
@@ -655,6 +657,7 @@ class TraitSettingUpdateInput:
     projection_id: Optional[strawberry.ID] = None
     sfx_ids: Optional[list[strawberry.ID]] = None
     known_to: Optional[list[strawberry.ID]] = None
+    enabled: Optional[bool] = None
 
 
 # ── Projection ───────────────────────────────────────

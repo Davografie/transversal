@@ -161,6 +161,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         from_type=s.from_type, projection_id=s.projection_id,
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
+        enabled=s.enabled,
     )
 
 
@@ -1021,6 +1022,8 @@ class Mutation:
             ts.sfx_ids = [str(s) for s in input.sfx_ids]
         if input.known_to is not None:
             ts.known_to = [str(k) for k in input.known_to]
+        if input.enabled is not None:
+            ts.enabled = input.enabled
         updated = _em(info).update_traitsetting(ts)
         return _ts_to_gql(updated)
 
