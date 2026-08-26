@@ -225,13 +225,18 @@ def dispatch_event(
 
         repo = _get_repo()
     fired = advance_scheduled_events(repo, event_type, entity_id=entity_id)
+    from transversal.services.roll_deferral import expire_armed
+
     if entity_id is not None:
+        expire_armed(entity_id, event_type)
         from transversal.services.state_events import fire_state_sfx
 
         fire_state_sfx(entity_id, universe, event_type, context or {})
     else:
-        # Global timing boundary (beat/scene): fire the matching auto-fire SFX
-        # for every entity after their timers have been ticked.
+        # Global timing boundary: drop armed SFX bound to this event, then fire
+        # the matching auto-fire SFX for every entity.
+        for entity in repo.list_all_entities():
+            expire_armed(entity.id, event_type)
         sfx_trigger = _GLOBAL_BOUNDARY_SFX.get(event_type)
         if sfx_trigger:
             from transversal.services.state_events import fire_global_state_sfx

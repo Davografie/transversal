@@ -6,12 +6,21 @@ state-change / global events). This module keeps *armed SFXs* in memory, keyed
 by entity, and fires their roll-timing effects when the matching roll event
 happens. It is the "rolls" side of the temporal spine: an SFX is armed at
 trigger time for its ``SFX.duration`` (default one roll), and its effects fire
-on each matching roll event until that duration's roll budget is exhausted.
+on each matching roll event until that duration is exhausted.
+
+``SFX.duration`` splits into two axes:
+
+- **rolls** — a roll-event budget, decremented on each matching roll event.
+  ``None`` (no ``rolls`` timer) = no roll limit.
+- **boundary events** — ``beat``/``scene``/``session`` or a state-change event
+  (``location_changed``/``trait_updated``) that drops the armed SFX from the
+  tracker when that event fires (see :func:`expire_armed`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 from transversal.domain import Effect, EffectTiming
 
@@ -27,21 +36,25 @@ ROLL_TIMINGS = frozenset({
 @dataclass
 class ArmedSfx:
     effects: list[Effect] = field(default_factory=list)  # the SFX's roll-timing effects
-    rolls: int = 1  # remaining roll-event budget (>= 1)
+    rolls: Optional[int] = None  # remaining roll-event budget; None = no roll limit
+    expiry_events: list[str] = field(default_factory=list)  # boundary/state events that drop it
     source_sfx_id: str | None = None  # SFX id the client stamps on its dice
 
 
 _armed: dict[str, list[ArmedSfx]] = {}
 
 
-def _rolls_budget(duration) -> int:
-    """Remaining fire budget from an SFX duration's ``rolls`` timer (default 1)."""
-    if not duration or not getattr(duration, "timers", None):
-        return 1
-    for timer in duration.timers:
-        if timer.event == "rolls":
-            return max(1, timer.remaining)
-    return 1
+def _split_duration(duration) -> tuple[Optional[int], list[str]]:
+    """Split an SFX duration into ``(rolls_budget, boundary_events)``."""
+    rolls: Optional[int] = None
+    expiry_events: list[str] = []
+    if duration and getattr(duration, "timers", None):
+        for timer in duration.timers:
+            if timer.event == "rolls":
+                rolls = max(1, timer.remaining)
+            else:
+                expiry_events.append(timer.event)
+    return rolls, expiry_events
 
 
 def arm_sfx(
@@ -53,15 +66,18 @@ def arm_sfx(
 ) -> None:
     """Arm an SFX's roll-timing ``effects`` so they fire at their roll events.
 
-    ``duration`` is the SFX's effective lifetime (``SFX.duration``); its
-    ``rolls`` timer (default 1) is the roll-event budget. Effects are stored
-    raw — roll-context ``{variables}`` substitute at fire time, because the roll
-    state does not exist at arm time.
+    ``duration`` is the SFX's effective lifetime (``SFX.duration``): its
+    ``rolls`` timer is the roll-event budget (``None`` = no roll limit), and any
+    other timer (``beat``/``scene``/``session``/state-change) is a boundary that
+    drops the SFX. Effects are stored raw — roll-context ``{variables}``
+    substitute at fire time, because the roll state does not exist at arm time.
     """
+    rolls, expiry_events = _split_duration(duration)
     _armed.setdefault(entity_id, []).append(
         ArmedSfx(
             effects=list(effects),
-            rolls=_rolls_budget(duration),
+            rolls=rolls,
+            expiry_events=expiry_events,
             source_sfx_id=source_sfx_id,
         )
     )
@@ -76,7 +92,7 @@ def fire_armed(
     """Fire armed-SFX effects whose timing matches ``event_type``; consume a roll.
 
     Returns the applied effects. Each armed SFX survives ``rolls`` matching
-    events; a one-shot SFX (no ``rolls`` duration) fires once and is dropped.
+    events (``None`` = indefinite); a one-roll SFX fires once and is dropped.
     """
     if entity_id not in _armed:
         return []
@@ -111,13 +127,22 @@ def fire_armed(
                     applied.append(resolved)
 
             # One roll event consumed (a matching event happened for this SFX).
-            armed.rolls -= 1
-            if armed.rolls > 0:
-                kept.append(armed)
+            if armed.rolls is not None:
+                armed.rolls -= 1
+                if armed.rolls <= 0:
+                    continue  # exhausted — drop
+            kept.append(armed)
         else:
             kept.append(armed)
     _armed[entity_id] = kept
     return applied
+
+
+def expire_armed(entity_id: str, event_type: str) -> None:
+    """Drop armed SFX whose boundary expiry matches ``event_type``."""
+    if entity_id not in _armed:
+        return
+    _armed[entity_id] = [a for a in _armed[entity_id] if event_type not in a.expiry_events]
 
 
 def _selects_die(source_sfx_id: str | None, effect: Effect, die: dict) -> bool:

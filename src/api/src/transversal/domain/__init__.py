@@ -778,9 +778,12 @@ class SFX(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
     # How long the SFX stays in effect once triggered (the in-memory effective
-    # tracker). ``None`` = one roll (one-shot). ``rolls``/``beat``/``scene``
-    # timers extend it across roll events / a beat / a scene.
-    duration: Optional["EffectDuration"] = None
+    # tracker). Default = one roll. ``rolls``/``beat``/``scene``/``session`` or
+    # a state-change event (``location_changed``/``trait_updated``) timer
+    # extends it; ``None`` = indefinite (until cleared).
+    duration: Optional["EffectDuration"] = Field(
+        default_factory=lambda: EffectDuration(timers=[Timer(event="rolls", remaining=1)])
+    )
 
     @model_validator(mode="before")
     @classmethod

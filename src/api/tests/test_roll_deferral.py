@@ -38,14 +38,13 @@ def test_arm_and_fire_one_shot(monkeypatch):
 
     monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
 
-    roll_deferral.arm_sfx("e1", [_make_effect()])
+    roll_deferral.arm_sfx("e1", [_make_effect()], duration=_rolls_duration(1))
     assert len(roll_deferral.list_armed("e1")) == 1
 
     fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
 
     assert len(fired) == 1
     assert len(applied) == 1
-    # one-shot (no rolls duration) is consumed after firing
     assert roll_deferral.list_armed("e1") == []
 
 
@@ -70,6 +69,24 @@ def test_rolls_budget_fires_n_times(monkeypatch):
     assert roll_deferral.list_armed("e1") == []  # budget exhausted
 
 
+def test_none_duration_is_indefinite(monkeypatch):
+    roll_deferral.reset()
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    roll_deferral.arm_sfx("e1", [_make_effect()], duration=None)
+
+    roll_deferral.fire_armed("e1", "on_result", "earth", {})
+    roll_deferral.fire_armed("e1", "on_result", "earth", {})
+    assert len(applied) == 2
+    assert len(roll_deferral.list_armed("e1")) == 1  # never expires
+
+
 def test_nonmatching_timing_is_kept(monkeypatch):
     roll_deferral.reset()
     applied = []
@@ -80,9 +97,9 @@ def test_nonmatching_timing_is_kept(monkeypatch):
 
     monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
 
-    roll_deferral.arm_sfx("e1", [_make_effect(timing=EffectTiming.ON_RESULT)])
+    roll_deferral.arm_sfx("e1", [_make_effect(timing=EffectTiming.ON_RESULT)], duration=_rolls_duration(1))
 
-    # An on_set event must not fire an on_result-armed effect.
+    # An on_set event must not fire (nor consume) an on_result-armed effect.
     roll_deferral.fire_armed("e1", "on_set", "earth", {})
     assert applied == []
     assert len(roll_deferral.list_armed("e1")) == 1
@@ -98,12 +115,24 @@ def test_substitutes_roll_context_at_fire_time(monkeypatch):
 
     monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
 
-    roll_deferral.arm_sfx("e1", [_make_effect(result="{effect_die}")])
+    roll_deferral.arm_sfx("e1", [_make_effect(result="{effect_die}")], duration=_rolls_duration(1))
 
     roll_deferral.fire_armed("e1", "on_result", "earth", {"effect_die": "d8"})
 
     assert len(applied) == 1
     assert applied[0].result == "d8"
+
+
+def test_expire_armed_removes_matching_boundary():
+    roll_deferral.reset()
+    beat = EffectDuration(timers=[Timer(event="beat", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE)
+    roll_deferral.arm_sfx("e1", [_make_effect()], duration=beat)
+    roll_deferral.arm_sfx("e1", [_make_effect()], duration=_rolls_duration(1))
+    assert len(roll_deferral.list_armed("e1")) == 2
+
+    roll_deferral.expire_armed("e1", "beat")
+    # The beat-bound SFX is dropped; the rolls-bound one remains.
+    assert len(roll_deferral.list_armed("e1")) == 1
 
 
 def test_clear_armed():
@@ -114,12 +143,16 @@ def test_clear_armed():
     assert roll_deferral.list_armed("e1") == []
 
 
-def test_rolls_budget_defaults_to_one():
-    assert roll_deferral._rolls_budget(None) == 1
-    assert roll_deferral._rolls_budget(_rolls_duration(4)) == 4
-    # A non-rolls duration (e.g. scene) has no roll budget → one-shot.
+def test_split_duration():
+    assert roll_deferral._split_duration(None) == (None, [])
+    assert roll_deferral._split_duration(_rolls_duration(4)) == (4, [])
     scene = EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE)
-    assert roll_deferral._rolls_budget(scene) == 1
+    assert roll_deferral._split_duration(scene) == (None, ["scene"])
+    mixed = EffectDuration(
+        timers=[Timer(event="rolls", remaining=2), Timer(event="beat", remaining=1)],
+        combine=TimerCombine.FIRST_TO_FIRE,
+    )
+    assert roll_deferral._split_duration(mixed) == (2, ["beat"])
 
 
 def test_die_filter_iterates_matching_dice(monkeypatch):
@@ -134,7 +167,7 @@ def test_die_filter_iterates_matching_dice(monkeypatch):
 
     roll_deferral.arm_sfx("e1", [
         _make_effect(result="{triggered_die_effect_die}", die_filter={"role": None}),
-    ])
+    ], duration=_rolls_duration(1))
 
     rolls = [
         {"die": "d8", "result": 7, "role": None, "tier": "success", "effect_die": "d6", "ts_id": "ts-x"},
@@ -143,7 +176,6 @@ def test_die_filter_iterates_matching_dice(monkeypatch):
     ]
     fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"rolls": rolls})
 
-    # Two unchosen dice match; each yields a hazard at its own tier's effect die.
     assert [e.result for e in fired] == ["d6", "d4"]
     assert len(applied) == 2
     assert roll_deferral.list_armed("e1") == []
@@ -161,7 +193,7 @@ def test_die_filter_scope_by_ts_id(monkeypatch):
 
     roll_deferral.arm_sfx("e1", [
         _make_effect(result="{triggered_die_tier}", die_filter={"role": None, "ts_id": "ts-crimson"}),
-    ])
+    ], duration=_rolls_duration(1))
 
     rolls = [
         {"die": "d8", "result": 7, "role": None, "tier": "success", "effect_die": "d6", "ts_id": "ts-crimson"},
@@ -169,7 +201,6 @@ def test_die_filter_scope_by_ts_id(monkeypatch):
     ]
     fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"rolls": rolls})
 
-    # Only the ts-crimson unchosen die matches.
     assert [e.result for e in fired] == ["success"]
 
 
@@ -185,7 +216,7 @@ def test_die_filter_no_match_consumes_budget(monkeypatch):
 
     roll_deferral.arm_sfx("e1", [
         _make_effect(die_filter={"role": None}),
-    ])
+    ], duration=_rolls_duration(1))
 
     rolls = [{"die": "d8", "result": 5, "role": "total", "tier": "marginal", "effect_die": "d4", "ts_id": "ts-x"}]
     fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"rolls": rolls})
@@ -214,7 +245,7 @@ def test_source_sfx_id_matches_armed_dice(monkeypatch):
 
     roll_deferral.arm_sfx("e1", [
         _make_effect(result="{triggered_die_effect_die}", die_filter={"role": None}),
-    ], source_sfx_id="sfx-crimson")
+    ], source_sfx_id="sfx-crimson", duration=_rolls_duration(1))
 
     rolls = [
         {"die": "d8", "result": 7, "role": None, "tier": "success", "effect_die": "d6", "armed_sfx_ids": ["sfx-crimson"]},
@@ -223,5 +254,4 @@ def test_source_sfx_id_matches_armed_dice(monkeypatch):
     ]
     fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"rolls": rolls})
 
-    # Only the unchosen die the client stamped with sfx-crimson matches.
     assert [e.result for e in fired] == ["d6"]
