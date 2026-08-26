@@ -18,6 +18,16 @@
     </div>
 
     <div class="tie-field">
+      <label>Rating Type</label>
+      <select :value="ratingType" @change="emit('update:ratingType', $event.target.value)">
+        <option value="static">Static</option>
+        <option value="resource">Resource</option>
+        <option value="challenge">Challenge</option>
+        <option value="empty">Empty</option>
+      </select>
+    </div>
+
+    <div class="tie-field">
       <label>Statement</label>
       <input :value="statement" type="text" placeholder="Distinction statement…" @input="emit('update:statement', $event.target.value)" />
     </div>
@@ -36,12 +46,13 @@ import DiePicker from '@/components/DiePicker.vue'
 const props = defineProps({
   die: { type: String, default: '' },
   negative: { type: Boolean, default: false },
+  ratingType: { type: String, default: 'static' },
   statement: { type: String, default: '' },
   notes: { type: String, default: '' },
   allowVariable: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:die', 'update:negative', 'update:statement', 'update:notes'])
+const emit = defineEmits(['update:die', 'update:negative', 'update:ratingType', 'update:statement', 'update:notes'])
 
 const isVariable = computed(() => (props.die || '').startsWith('{'))
 
@@ -72,7 +83,7 @@ function setVariableMode(variable) {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.tie-field input, .tie-field textarea {
+.tie-field input, .tie-field textarea, .tie-field select {
   width: 100%;
   padding: 6px 8px;
   background: rgba(0, 0, 0, 0.25);

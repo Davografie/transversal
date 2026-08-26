@@ -2,15 +2,12 @@
 
 from transversal.domain import (
     Effect,
-    EffectDuration,
     EffectTiming,
-    Timer,
-    TimerCombine,
 )
 from transversal.services import roll_deferral
 
 
-def _make_effect(timing=EffectTiming.ON_RESULT, target="hazard", result=None, duration=None):
+def _make_effect(timing=EffectTiming.ON_RESULT, target="hazard", result=None, duration=None, rolls=1):
     return Effect(
         timing=timing,
         type="modify_trait",
@@ -18,6 +15,7 @@ def _make_effect(timing=EffectTiming.ON_RESULT, target="hazard", result=None, du
         target=target,
         result=result,
         duration=duration,
+        rolls=rolls,
     )
 
 
@@ -53,11 +51,7 @@ def test_rolls_budget_fires_n_times(monkeypatch):
 
     monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
 
-    duration = EffectDuration(
-        timers=[Timer(event="rolls", remaining=2)],
-        combine=TimerCombine.FIRST_TO_FIRE,
-    )
-    eff = _make_effect(duration=duration)
+    eff = _make_effect(rolls=2)
     roll_deferral.arm_effect("e1", eff)
 
     roll_deferral.fire_armed("e1", "on_result", "earth", {})
@@ -117,11 +111,7 @@ def test_clear_armed(monkeypatch):
 
 def test_rolls_budget_defaults_to_one():
     assert roll_deferral._rolls_budget(_make_effect()) == 1
-    duration = EffectDuration(
-        timers=[Timer(event="rolls", remaining=4)],
-        combine=TimerCombine.FIRST_TO_FIRE,
-    )
-    assert roll_deferral._rolls_budget(_make_effect(duration=duration)) == 4
+    assert roll_deferral._rolls_budget(_make_effect(rolls=4)) == 4
 
 
 def test_die_filter_iterates_matching_dice(monkeypatch):

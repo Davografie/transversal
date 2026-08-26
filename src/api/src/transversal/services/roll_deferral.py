@@ -34,13 +34,8 @@ _armed: dict[str, list[ArmedEffect]] = {}
 
 
 def _rolls_budget(effect: Effect) -> int:
-    """Remaining fire budget from ``duration: rolls: N`` (default 1 = one-shot)."""
-    if not effect.duration or not effect.duration.timers:
-        return 1
-    for timer in effect.duration.timers:
-        if timer.event == "rolls":
-            return max(1, timer.remaining)
-    return 1
+    """Remaining fire budget from ``Effect.rolls`` (default 1 = one-shot)."""
+    return max(1, effect.rolls or 1)
 
 
 def arm_effect(entity_id: str, effect: Effect, source_sfx_id: str | None = None) -> None:

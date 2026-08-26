@@ -12,7 +12,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from transversal.domain import DieType, Effect, Entity, Polarity, TraitSetting, TraitSetSetting
+from transversal.domain import DieType, Effect, Entity, Polarity, RatingType, TraitSetting, TraitSetSetting
 from transversal.services.effect_targets import resolve_candidates
 from transversal.services.trait_reveal import reveal_trait_to
 
@@ -361,7 +361,16 @@ def _ctx(effect: Effect, key: str) -> str:
     return str((effect.context or {}).get(key) or "")
 
 
-def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False, statement: str = "", notes: str = "") -> TraitSetting:
+def _rating_type(effect: Effect) -> RatingType:
+    """Rating type authored on a trait-gain effect (default STATIC)."""
+    raw = _ctx(effect, "rating_type").lower() or "static"
+    try:
+        return RatingType(raw)
+    except ValueError:
+        return RatingType.STATIC
+
+
+def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False, statement: str = "", notes: str = "", rating_type: RatingType = RatingType.STATIC) -> TraitSetting:
     from transversal.services.polarity import default_polarity
 
     from_type, owner_id = owner
@@ -388,6 +397,7 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
         from_type=from_type,
         projection_id=projection_id,
         dice=[die],
+        rating_type=rating_type,
         polarity=polarity,
         statement=statement,
         notes=notes,
@@ -650,7 +660,7 @@ def _apply_gain(entity, effect, repo, result):
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
-                           statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
+                           rating_type=_rating_type(effect), statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
     _queue_entity_revert(repo, subject, effect, target=target)
@@ -681,7 +691,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
-                           statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
+                           rating_type=_rating_type(effect), statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
     if _has_steps(effect):
         _step_up_trait(subject, ts, target, effect, result, repo, steps=steps)
     result.new_trait_settings.append(ts)
@@ -727,7 +737,7 @@ def _apply_cortex_gain(entity, effect, repo, result):
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         return
     ts = _new_traitsetting(owner, target, die, repo, negative=negative,
-                           statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
+                           rating_type=_rating_type(effect), statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
 

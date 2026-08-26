@@ -190,6 +190,7 @@ class Effect:
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDuration] = None
+    rolls: int = 1
 
 
 @strawberry.input
@@ -207,6 +208,7 @@ class EffectInput:
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDurationInput] = None
+    rolls: int = 1
 
 
 @strawberry.type

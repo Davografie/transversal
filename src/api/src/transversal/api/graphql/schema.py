@@ -233,6 +233,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         negative=e.negative,
         context=e.context,
         duration=_duration_to_gql(e.duration),
+        rolls=e.rolls,
     )
 
 
@@ -291,6 +292,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         negative=e.negative,
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),
+        rolls=e.rolls,
     )
 
 

@@ -709,6 +709,7 @@ class Effect(BaseModel):
     negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)
     context: dict = Field(default_factory=dict)  # e.g. relationship description
     duration: Optional["EffectDuration"] = None  # when set, schedules the inverse effect on expiry
+    rolls: int = 1  # roll-deferred armed lifetime: how many matching roll events the effect survives (1 = one-shot)
 
 
 class Timer(BaseModel):

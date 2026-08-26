@@ -9,6 +9,7 @@ from transversal.domain import (
     PendingTerm,
     Polarity,
     Projection,
+    RatingType,
     TraitSetting,
     TraitSetSetting,
     TransversalType,
@@ -165,6 +166,19 @@ def test_gain_sets_statement_and_notes_from_context():
     assert ts.polarity == Polarity.NEGATIVE
     assert ts.statement == "Crimson Scar"
     assert ts.notes == "Blood-red glowing scars…"
+
+
+def test_gain_sets_rating_type_from_context():
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-complications")])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="hazard", result="d6",
+        context={"rating_type": "resource"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.rating_type == RatingType.RESOURCE
 
 
 def test_gain_noop_when_present():

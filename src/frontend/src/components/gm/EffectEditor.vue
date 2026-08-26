@@ -125,6 +125,7 @@
           v-if="isGainAction"
           v-model:die="newEffect.fields.result"
           v-model:negative="newEffect.negative"
+          v-model:rating-type="newEffect.context.rating_type"
           v-model:statement="newEffect.context.statement"
           v-model:notes="newEffect.context.notes"
           allow-variable
