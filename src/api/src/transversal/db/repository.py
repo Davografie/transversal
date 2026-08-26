@@ -2530,29 +2530,14 @@ class EntityRepository:
         return None
 
     def get_navdot_images(self, entity_ids: list[str]) -> dict[str, str]:
-        """Resolve navdot role image URLs for many entities in one query.
+        """Resolve navdot role image URLs for many entities.
 
-        Returns ``{entity_id: media_url}`` for the newest navdot image per
-        entity. The location navigate endpoint uses this to avoid one AQL
-        round-trip per occupant/child/transversal.
+        Resolves through each entity's active projection (body) first, falling
+        back to entity-level images. Returns ``{entity_id: media_url}``. The
+        location navigate endpoint uses this for occupants, children,
+        transversal destinations, and the parent.
         """
-        if not entity_ids:
-            return {}
-        ids = list(dict.fromkeys(entity_ids))  # dedupe, preserve order
-        query = f"""
-            FOR doc IN {ENTITY_IMAGES}
-            FILTER doc.entity_id IN @ids AND 'navdot' IN doc.roles
-            SORT doc.created_at DESC
-            RETURN doc
-        """
-        resolved: dict[str, str] = {}
-        for doc in self.db.aql.execute(query, bind_vars={"ids": ids}):
-            img = EntityImage.model_validate({**doc, "id": doc["_key"]})
-            eid = img.entity_id
-            if eid in resolved:
-                continue  # already kept the newest (results are DESC by created_at)
-            resolved[eid] = self._image_url(img, "Large")
-        return resolved
+        return self._navdot_urls(entity_ids)
 
     # ── Helpers ───────────────────────────────────────
 
