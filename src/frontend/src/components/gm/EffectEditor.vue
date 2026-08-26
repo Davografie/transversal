@@ -449,6 +449,12 @@ function onActionChange() {
       if (f.default) newEffect.context[f.name] = f.default
     }
     if ((meta.validTimings || []).length === 1) newEffect.timing = meta.validTimings[0]
+    if (['gain', 'gain_or_step_up', 'cortex_gain'].includes(meta.effectAction)) {
+      // Inline trait-editor field (bound by TraitInstanceEditor, not a rendered
+      // context field). Default to STATIC to match the backend default and keep
+      // the round-trip explicit.
+      newEffect.context.rating_type = 'static'
+    }
   }
 }
 
@@ -550,7 +556,10 @@ function editEffect(i) {
   if (eff.result && eff.result !== (meta?.implicitResult || '')) newEffect.fields.result = eff.result
   if (newEffect.entityMode === 'literal' && eff.entity) newEffect.fields.entity = eff.entity
   const ctx = eff.context || {}
-  const known = new Set((meta?.contextFields || []).map(f => f.name))
+  const known = new Set([
+    ...(meta?.contextFields || []).map(f => f.name),
+    'rating_type', // inline trait-editor field, bound by TraitInstanceEditor (not a rendered context field)
+  ])
   const knownCtx = {}
   const extraCtx = {}
   for (const [k, v] of Object.entries(ctx)) {
