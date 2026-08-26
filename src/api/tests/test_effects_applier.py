@@ -8,7 +8,9 @@ from transversal.domain import (
     EntityType,
     PendingTerm,
     Polarity,
+    Projection,
     TraitSetting,
+    TransversalType,
 )
 from transversal.services.effects_applier import apply_effects, resolve_choice
 
@@ -27,6 +29,7 @@ class FakeRepo:
         self.traitsettings = list(traitsettings or [])
         self.entities = {e.id: e for e in (entities or [])}
         self.scheduled_events = []
+        self.projections = []
 
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
@@ -39,6 +42,15 @@ class FakeRepo:
 
     def get_entity(self, entity_id):
         return self.entities.get(entity_id)
+
+    def get_projection(self, projection_id):
+        for p in self.projections:
+            if p.id == projection_id:
+                return p
+        return None
+
+    def get_projections_for_entity(self, entity_id):
+        return [p for p in self.projections if p.entity_id == entity_id]
 
     def get_traitsetting(self, ts_id):
         for ts in self.traitsettings:
@@ -305,6 +317,41 @@ def test_core_handlers_register_disable_enable_toggle():
             assert ("modify_trait", action) in applier.effect_registry._handlers
     finally:
         applier.effect_registry = original
+
+
+def test_create_projection_activates_new_body_and_schedules_restore():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    prior = Projection(id="char-1:earth", entity_id="char-1", universe="earth", current_location="loc-1")
+    repo = FakeRepo()
+    repo.projections = [prior]
+    entity = _entity(current_projection="char-1:earth", current_universe="earth", current_location="loc-1")
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="projection", action="create", target="phantom",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_projections) == 1
+    disguise = result.new_projections[0]
+    assert entity.current_projection == disguise.id
+    assert disguise.universe == "earth"
+    assert disguise.current_location == "loc-1"
+    assert len(repo.scheduled_events) == 1
+    revert = repo.scheduled_events[0]
+    assert revert.effect.action == "restore"
+    assert revert.effect.result == "char-1:earth"
+
+
+def test_restore_projection_reactivates_prior_and_removes_disguise():
+    prior = Projection(id="char-1:earth", entity_id="char-1", universe="earth", current_location="loc-1")
+    disguise = Projection(id="char-1:earth:2", entity_id="char-1", universe="earth", current_location="loc-2")
+    repo = FakeRepo()
+    repo.projections = [prior, disguise]
+    entity = _entity(current_projection="char-1:earth:2", current_universe="earth", current_location="loc-2")
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="projection", action="restore", result="char-1:earth")
+    result = apply_effects(entity, [effect], repo)
+    assert entity.current_projection == "char-1:earth"
+    assert [p.id for p in result.removed_projections] == ["char-1:earth:2"]
+    assert prior.current_location == "loc-2"  # prior body imported to current location
 
 
 # ── Complications (unified polarity) ─────────────────

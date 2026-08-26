@@ -85,6 +85,8 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
         fire_projection_created(proj.entity_id, proj.universe, proj.id)
     for proj in result.updated_projections:
         repo.update_projection(proj)
+    for proj in result.removed_projections:
+        repo.delete_projection(proj.id)
 
     if entity.current_location != old_location or entity.current_universe != old_universe:
         _publish("location_changed", {

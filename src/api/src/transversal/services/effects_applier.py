@@ -88,6 +88,8 @@ def _register_core_handlers(em, raz):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
+    effect_registry.register("projection", "create", _commit)
+    effect_registry.register("projection", "restore", _commit)
 
     # Entity operations
     def _create_asset(a, eid, u, ctx):
@@ -233,6 +235,7 @@ class EffectsResult:
     new_relationships: list[dict] = field(default_factory=list)
     new_projections: list = field(default_factory=list)
     updated_projections: list = field(default_factory=list)
+    removed_projections: list = field(default_factory=list)
     entities_to_update: list[Entity] = field(default_factory=list)
     pending_choices: list[PendingChoice] = field(default_factory=list)
     passthrough: list[Effect] = field(default_factory=list)
@@ -862,6 +865,65 @@ def _apply_cancel_scheduled_event(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"no active effect {target} to end"))
 
 
+def _apply_create_projection(entity, effect, repo, result):
+    """Create + activate a temporary alternate body (disguise) in the current
+    universe/location; schedule a restore of the prior body on expiry."""
+    from transversal.domain import Projection, TransversalType
+    from transversal.services.entity_manager import touch_projection
+
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    ctx = effect.context or {}
+    name = (effect.target or "").strip() or (ctx.get("name") or "").strip() or "disguise"
+    prior = subject.current_projection
+    proj = Projection(
+        id=_next_projection_id(subject.id, subject.current_universe, repo),
+        entity_id=subject.id,
+        origin_universe=subject.current_universe,
+        universe=subject.current_universe,
+        name=name,
+        current_location=subject.current_location,
+        transversal_type=TransversalType.NATIVE,
+    )
+    touch_projection(proj)
+    result.new_projections.append(proj)
+    subject.current_projection = proj.id
+    result.applied.append(AppliedEffect(effect, f"disguised as {name} ({proj.id})", proj.id))
+    _queue_entity_revert(repo, subject, effect, prior_result=prior)
+
+
+def _apply_restore_projection(entity, effect, repo, result):
+    """Revert a temporary projection: re-activate the prior body at the current
+    location and delete the temporary (disguise) body."""
+    from transversal.services.entity_manager import touch_projection
+
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    prior_id = (effect.result or "").strip()
+    if not prior_id:
+        return
+    prior = repo.get_projection(prior_id)
+    if prior is None:
+        result.applied.append(AppliedEffect(effect, f"prior body {prior_id} not found"))
+        return
+    disguise_id = subject.current_projection
+    if disguise_id and disguise_id != prior_id:
+        disguise = repo.get_projection(disguise_id)
+        if disguise is not None:
+            result.removed_projections.append(disguise)
+    prior.current_location = subject.current_location
+    touch_projection(prior)
+    result.updated_projections.append(prior)
+    subject.current_projection = prior.id
+    result.applied.append(AppliedEffect(effect, f"restored body {prior.id}"))
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -991,11 +1053,11 @@ def _queue_trait_revert(repo, ts, effect, prior_result=None):
     schedule_revert(repo, "trait_setting", ts.id, effect, prior_result=prior_result)
 
 
-def _queue_entity_revert(repo, entity, effect, target=None):
+def _queue_entity_revert(repo, entity, effect, target=None, prior_result=None):
     """Schedule the inverse of ``effect`` on an entity in the central store."""
     from transversal.services.scheduled_events import schedule_revert
 
-    schedule_revert(repo, "entity", entity.id, effect, target=target)
+    schedule_revert(repo, "entity", entity.id, effect, target=target, prior_result=prior_result)
 
 
 def _queue_explicit(repo, owner, effect, action, target):
@@ -1229,6 +1291,8 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "enable"): _apply_enable,
     ("modify_trait", "toggle"): _apply_toggle,
     ("entity", "cancel_scheduled_event"): _apply_cancel_scheduled_event,
+    ("projection", "create"): _apply_create_projection,
+    ("projection", "restore"): _apply_restore_projection,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

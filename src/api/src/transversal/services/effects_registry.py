@@ -421,6 +421,22 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         target_kind="scheduled_event",
         requires_choice=True,
     ),
+    EffectActionMeta(
+        action_id="create_projection",
+        label="Temporary Projection (Disguise)",
+        description="Create and activate a temporary alternate body in the current universe/location; reverts to the prior body on expiry",
+        category="benefit",
+        effect_type="projection",
+        effect_action="create",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            _ENTITY_FIELD,
+            EffectFieldDef(name="target", label="Disguise Name", field_type="text", required=False, default="disguise"),
+        ],
+        supports_duration=True,
+        inverse=("projection", "restore"),
+        inverse_captures_prior=True,
+    ),
 
     # ── Attunement ─────────────────────────────────────
     EffectActionMeta(
@@ -687,7 +703,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "cortex_gain_trait": "Trait", "reveal_trait": "Trait",
     "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",
     "transfer_razmerit": "Razmerit",
-    "create_asset": "Entity", "end_active_effect": "Entity", "attune": "Attunement",
+    "create_asset": "Entity", "end_active_effect": "Entity", "create_projection": "Entity", "attune": "Attunement",
     "travel": "Travel", "set_location": "Travel",
     "discover_life_path": "Life Path", "next_step": "Life Path",
     "draft_life_path": "Life Path", "force_muster": "Life Path",
