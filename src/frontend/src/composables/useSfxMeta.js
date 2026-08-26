@@ -5,7 +5,7 @@ import { useApi } from './useApi.js'
 // `conditionTypes` resolvers (single source of truth — no frontend hardcoding).
 const META_QUERY = `{
   triggers { value label group }
-  conditionTypes { value label needsTarget targetPlaceholder targetKind }
+  conditionTypes { value label needsTarget targetPlaceholder targetKind valueKind operators }
   targetFilterFields { field label valueType kinds }
 }`
 

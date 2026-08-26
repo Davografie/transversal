@@ -807,6 +807,7 @@ class ConditionType(str, Enum):
     HAS_TRAIT_IN_TRAITSET = "has_trait_in_traitset"  # target = traitset id
     HAS_RELATIONSHIP = "has_relationship"  # target = related entity id
     TRAIT_RATING = "trait_rating"        # target = trait id; value = rating threshold (e.g. d8)
+    HAS_RAZMERIT = "has_razmerit"        # value = integer; operator = numeric comparator
     NARRATIVE = "narrative"              # human-readable only, never auto-blocks
     UNPLACED = "unplaced"                # entity has no current location yet
     IN_UNIVERSE = "in_universe"          # target = universe key; entity is currently there
@@ -821,6 +822,7 @@ class Condition(BaseModel):
     subject: str = ""                # "" = current entity; else literal id or {variable}
     target: str = ""                  # trait / location / entity id (or {variable})
     value: Optional[str] = None       # threshold, e.g. rank number
+    operator: str = ">="              # numeric comparator for HAS_RAZMERIT ("<", "<=", "==", "!=", ">=", ">")
     narrative: str = ""               # human-readable fallback text
 
 

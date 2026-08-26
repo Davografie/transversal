@@ -38,6 +38,21 @@ def _resolve_subject(condition: Condition, default_entity, context: dict, repo) 
     return repo.get_entity(subject)
 
 
+def _compare(a: int, op: str, b: int) -> bool:
+    """Compare ``a`` against ``b`` using a numeric comparator (default ``>=``)."""
+    if op == "<":
+        return a < b
+    if op == "<=":
+        return a <= b
+    if op == "==":
+        return a == b
+    if op == "!=":
+        return a != b
+    if op == ">":
+        return a > b
+    return a >= b
+
+
 def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "EntityRepository", context: dict | None = None) -> bool:
     """Evaluate a single condition against the resolved subject's current state."""
     if condition.type in (ConditionType.ALWAYS, ConditionType.NARRATIVE):
@@ -85,6 +100,13 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     if condition.type == ConditionType.IN_UNIVERSE:
         return subject.current_universe == target
 
+    if condition.type == ConditionType.HAS_RAZMERIT:
+        try:
+            threshold = int(condition.value or "0")
+        except ValueError:
+            return False
+        return _compare(subject.razmerit, condition.operator or ">=", threshold)
+
     return False
 
 
@@ -110,16 +132,19 @@ class ConditionTypeDef:
     label: str
     needs_target: bool = False
     target_placeholder: str = ""
-    target_kind: str = ""  # "" | "location" | "trait" | "entity" | "universe"
+    target_kind: str = ""  # "" | "location" | "trait" | "entity" | "universe" | "traitset"
+    value_kind: str = ""  # "" | "die" | "number"
+    operators: tuple[str, ...] = ()  # numeric comparators (HAS_RAZMERIT)
 
 
 CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.ALWAYS.name, "Always"),
     ConditionTypeDef(ConditionType.AT_LOCATION.name, "At location", needs_target=True, target_placeholder="location id", target_kind="location"),
     ConditionTypeDef(ConditionType.HAS_TRAIT.name, "Has trait", needs_target=True, target_placeholder="trait id", target_kind="trait"),
-    ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id"),
+    ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id", target_kind="traitset"),
     ConditionTypeDef(ConditionType.HAS_RELATIONSHIP.name, "Has relationship", needs_target=True, target_placeholder="entity id", target_kind="entity"),
-    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait"),
+    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die"),
+    ConditionTypeDef(ConditionType.HAS_RAZMERIT.name, "Has razmerit", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">")),
     ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),
     ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe"),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),

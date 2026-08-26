@@ -115,6 +115,20 @@ def test_in_universe():
     )
 
 
+def test_has_razmerit():
+    # Default comparator is ">=".
+    assert evaluate_condition(_entity(razmerit=5), Condition(type=ConditionType.HAS_RAZMERIT, value="3"), FakeRepo())
+    assert not evaluate_condition(_entity(razmerit=2), Condition(type=ConditionType.HAS_RAZMERIT, value="3"), FakeRepo())
+    assert evaluate_condition(_entity(razmerit=3), Condition(type=ConditionType.HAS_RAZMERIT, value="3", operator="=="), FakeRepo())
+    assert not evaluate_condition(_entity(razmerit=4), Condition(type=ConditionType.HAS_RAZMERIT, value="3", operator="=="), FakeRepo())
+    assert evaluate_condition(_entity(razmerit=1), Condition(type=ConditionType.HAS_RAZMERIT, value="3", operator="<"), FakeRepo())
+    assert evaluate_condition(_entity(razmerit=3), Condition(type=ConditionType.HAS_RAZMERIT, value="3", operator="<="), FakeRepo())
+    assert evaluate_condition(_entity(razmerit=4), Condition(type=ConditionType.HAS_RAZMERIT, value="3", operator=">"), FakeRepo())
+    assert evaluate_condition(_entity(razmerit=2), Condition(type=ConditionType.HAS_RAZMERIT, value="3", operator="!="), FakeRepo())
+    # Non-integer value fails safe.
+    assert not evaluate_condition(_entity(razmerit=5), Condition(type=ConditionType.HAS_RAZMERIT, value="abc"), FakeRepo())
+
+
 def test_subject_variable_resolves_to_other_entity():
     buyer = _entity(id="char-2", current_universe="earth")
     repo = FakeRepo(entities=[buyer])
@@ -157,6 +171,15 @@ def test_condition_types_declare_picker_target_kinds():
     assert by_value["IN_UNIVERSE"].target_kind == "universe"
     assert by_value["AT_LOCATION"].target_kind == "location"
     assert by_value["HAS_TRAIT"].target_kind == "trait"
+    assert by_value["HAS_TRAIT_IN_TRAITSET"].target_kind == "traitset"
     assert by_value["TRAIT_RATING"].target_kind == "trait"
     assert by_value["HAS_RELATIONSHIP"].target_kind == "entity"
     assert by_value["ALWAYS"].target_kind == ""
+
+
+def test_condition_types_declare_value_kind_and_operators():
+    by_value = {c.value: c for c in CONDITION_TYPES}
+    assert by_value["TRAIT_RATING"].value_kind == "die"
+    assert by_value["HAS_RAZMERIT"].value_kind == "number"
+    assert by_value["HAS_RAZMERIT"].operators == ("<", "<=", "==", "!=", ">=", ">")
+    assert by_value["HAS_RAZMERIT"].needs_target is False

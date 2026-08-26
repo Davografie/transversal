@@ -14,13 +14,19 @@
         </div>
         <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
       </template>
-      <select v-if="c.type === 'TRAIT_RATING'" v-model="c.value" class="ce-value">
+      <select v-if="valueKind(c.type) === 'die'" v-model="c.value" class="ce-value">
         <option value="d4">d4</option>
         <option value="d6">d6</option>
         <option value="d8">d8</option>
         <option value="d10">d10</option>
         <option value="d12">d12</option>
       </select>
+      <template v-else-if="valueKind(c.type) === 'number'">
+        <select v-if="operators(c.type).length" v-model="c.operator" class="ce-operator">
+          <option v-for="op in operators(c.type)" :key="op" :value="op">{{ op }}</option>
+        </select>
+        <input v-model="c.value" type="number" placeholder="amount" class="ce-value" />
+      </template>
       <input v-if="c.type === 'NARRATIVE'" v-model="c.narrative" placeholder="narrative text" class="ce-target" />
       <button class="ce-del" @click="remove(i)">✕</button>
     </div>
@@ -77,8 +83,18 @@ function targetKind(type) {
   return meta?.targetKind || ''
 }
 
+function valueKind(type) {
+  const meta = conditionTypes.value.find(c => c.value === type)
+  return meta?.valueKind || ''
+}
+
+function operators(type) {
+  const meta = conditionTypes.value.find(c => c.value === type)
+  return meta?.operators || []
+}
+
 function add() {
-  const next = [...props.modelValue, { type: 'ALWAYS', subject: '', target: '', value: '', narrative: '' }]
+  const next = [...props.modelValue, { type: 'ALWAYS', subject: '', target: '', value: '', operator: '>=', narrative: '' }]
   emit('update:modelValue', next)
 }
 
@@ -101,6 +117,7 @@ function remove(i) {
 .ce-target { flex: 2 !important; }
 .ce-subject { flex: 1.5 !important; }
 .ce-value { flex: 1 !important; }
+.ce-operator { flex: none !important; width: 58px; }
 .ce-picker { min-width: 0; }
 .ce-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
 .ce-add { font-size: 10px; padding: 3px 8px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }

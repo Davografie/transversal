@@ -233,7 +233,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
 
 
 def _condition_to_gql(c: DomainCondition) -> Condition:
-    return Condition(type=c.type, subject=c.subject, target=c.target, value=c.value, narrative=c.narrative)
+    return Condition(type=c.type, subject=c.subject, target=c.target, value=c.value, operator=c.operator, narrative=c.narrative)
 
 
 def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
@@ -304,7 +304,7 @@ def _effects_result_to_gql(result) -> EffectApplicationResult:
 
 
 def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
-    return DomainCondition(type=c.type, subject=c.subject, target=c.target, value=c.value, narrative=c.narrative)
+    return DomainCondition(type=c.type, subject=c.subject, target=c.target, value=c.value, operator=c.operator, narrative=c.narrative)
 
 
 def _check_input_to_domain(c: RollTableCheckInput) -> DomainRollTableCheck:
@@ -508,7 +508,8 @@ class Query:
             ConditionTypeOption(
                 value=c.value, label=c.label,
                 needs_target=c.needs_target, target_placeholder=c.target_placeholder,
-                target_kind=c.target_kind,
+                target_kind=c.target_kind, value_kind=c.value_kind,
+                operators=list(c.operators),
             )
             for c in CONDITION_TYPES
         ]

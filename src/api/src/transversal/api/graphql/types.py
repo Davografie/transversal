@@ -47,6 +47,7 @@ class Condition:
     subject: str = ""
     target: str = ""
     value: Optional[str] = None
+    operator: str = ">="
     narrative: str = ""
 
 
@@ -56,6 +57,7 @@ class ConditionInput:
     subject: str = ""
     target: str = ""
     value: Optional[str] = None
+    operator: str = ">="
     narrative: str = ""
 
 
@@ -246,6 +248,8 @@ class ConditionTypeOption:
     needs_target: bool = False
     target_placeholder: str = ""
     target_kind: str = ""
+    value_kind: str = ""
+    operators: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.type
