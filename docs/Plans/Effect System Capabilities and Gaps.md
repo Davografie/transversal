@@ -97,10 +97,10 @@ Note the **two durations** and where they live: the *effect's* `duration` (`roll
 
 Each batch is a coherent, testable increment; contract tests land with each primitive (per [[Effect System Convergence Plan#Sequencing & testing]]).
 
-1. ~~**Temporal spine**~~ — done (`roll_deferral` service + `EffectTiming.ON_ROLL/ON_SET/ON_RESULT` + `rolls` duration unit; effects arm at trigger time and fire at the matching roll event). *Makes `timing: on result` + `duration: rolls: 1` expressible.*
+1. ~~**Temporal spine**~~ — done (`roll_deferral` service + `EffectTiming.ON_ROLL/ON_SET/ON_RESULT`; effects arm at trigger time and fire at the matching roll event, consuming `Effect.rolls`). *Makes `timing: on result` + `rolls: 1` expressible.*
 2. ~~**Effect gating + die references**~~ — done (`Effect.die_filter` predicates + `{triggered_die_*}` substitution + iteration; the effect's own dice are identified by `source_sfx_id` matching the client-stamped `armed_sfx_ids` on the pool dice). *Makes `condition: die.role==None` + `rating: {triggered_die_effect_die}` + per-die iteration expressible.*
-3. **Trait model** — `rating_type` (resource/static) + trait duration in the inline trait editor and `_new_traitsetting`. *Makes `rating-type: resource` + `duration: scene: 1` on the created trait expressible.*
-4. **Authoring UX** — the phase-condition category (`on adding`), the editor layout (timing top, duration bottom), and exposing "what's armed" so the client can re-stamp across rolls for longer durations. *Makes the full SFX authorable end-to-end.*
+3. ~~**Trait model**~~ — done (`gain_*` honor `context.rating_type`; `TraitInstanceEditor` exposes a Rating Type select; `Effect.duration` remains the trait's persistence/revert). *Makes `rating-type: resource` + `duration: scene: 1` on the created trait expressible.*
+4. **Authoring UX** — the phase-condition category (`on adding`), the `rolls` editor input, the editor layout (timing top, duration bottom), and exposing "what's armed" so the client can re-stamp across rolls for longer durations. *Makes the full SFX authorable end-to-end.*
 
 ### Deferred: selective stamping
 
