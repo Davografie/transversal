@@ -20,6 +20,9 @@ from transversal.domain import (
     TimerCombine,
 )
 
+# Global timing boundaries that also fire an auto-fire SFX trigger.
+_GLOBAL_BOUNDARY_SFX = {"beat": "on_beat", "scene": "on_scene"}
+
 
 def build_revert(effect: Effect, *, prior_result: Optional[str] = None) -> Optional[Effect]:
     """Return the inverse effect for ``effect``, or None if it has no inverse.
@@ -226,4 +229,12 @@ def dispatch_event(
         from transversal.services.state_events import fire_state_sfx
 
         fire_state_sfx(entity_id, universe, event_type, context or {})
+    else:
+        # Global timing boundary (beat/scene): fire the matching auto-fire SFX
+        # for every entity after their timers have been ticked.
+        sfx_trigger = _GLOBAL_BOUNDARY_SFX.get(event_type)
+        if sfx_trigger:
+            from transversal.services.state_events import fire_global_state_sfx
+
+            fire_global_state_sfx(sfx_trigger)
     return fired

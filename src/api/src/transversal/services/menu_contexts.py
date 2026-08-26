@@ -147,6 +147,12 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("projection_created", "projection"),
         Variable("universe", "universe"),
     )),
+    TriggerDef("on_set", "On Set", (
+        Variable("effect_die", "die"),
+        Variable("total", "number"),
+    ), group="dicepool"),
+    TriggerDef("on_beat", "On Beat Advance", group="auto"),
+    TriggerDef("on_scene", "On Scene Advance", group="auto"),
 ) + tuple(
     TriggerDef(value, _MENU_TRIGGER_LABELS[value], tuple(MENU_CONTEXT_VARIABLES[value]), group="menu")
     for value in MENU_CONTEXT_IDS

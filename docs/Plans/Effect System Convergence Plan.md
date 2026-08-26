@@ -63,9 +63,9 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 
 ### Batch 4 — New triggers (fire sites + `menu_contexts` + `_trigger_matches`)
 
-- [ ] On scene advance
-- [ ] On beat advance
-- [ ] On set *(decision below)*
+- [x] On scene advance — `on_scene` trigger, global fire in `dispatch_event` (fires for every entity)
+- [x] On beat advance — `on_beat` trigger, global fire in `dispatch_event` (fires for every entity)
+- [x] On set — `on_set` trigger + fire site in `set_result` (`/set`), context `{effect_die}`/`{total}`; contest set only, non-contest "Done" commit is local-only (follow-up if needed)
 
 ### Batch 5 — Cross-cutting behavior
 

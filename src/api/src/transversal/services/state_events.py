@@ -59,6 +59,32 @@ def fire_state_sfx(
         _firing.discard(key)
 
 
+def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
+    """Fire automatic SFX for a global (non-entity-scoped) boundary event.
+
+    Beat/scene advances tick every entity's timers and should also fire their
+    matching ``on_beat``/``on_scene`` SFX. Iterates every entity; non-owners
+    resolve to an empty SFX set and no-op.
+    """
+    from transversal.main import _get_engine, _get_repo
+    from transversal.services.effects_engine import GameEvent
+    from transversal.services.roll_orchestrator import _emit_pending_choices
+    from transversal.services.sfx_owner import get_available_sfx_ids
+
+    engine = _get_engine()
+    repo = _get_repo()
+    for entity in repo.list_all_entities():
+        sfx_ids = get_available_sfx_ids(entity.id, entity.current_universe, repo)
+        event = GameEvent(
+            type=event_type,
+            entity_id=entity.id,
+            universe=entity.current_universe,
+            context=context or {},
+        )
+        outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
+        _emit_pending_choices(entity.id, entity.current_universe, outcome.pending)
+
+
 def fire_projection_created(entity_id: str, universe: str, projection_id: str) -> None:
     """Fire ``on_projection_create`` for a newly-created projection body.
 

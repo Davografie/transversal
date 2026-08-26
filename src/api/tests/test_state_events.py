@@ -54,3 +54,31 @@ def test_contest_context_carries_opponent_entity_projection_and_effect_die(monke
     assert loser_event.context["contest_winner"] == "opponent"
     assert loser_event.context["contest_entity_opponent"] == "winner"
     assert loser_event.context["contest_projection_opponent"] == "proj-w"
+
+
+def test_fire_global_state_sfx_iterates_entities(monkeypatch):
+    """Beat/scene advance fires the matching trigger for every entity."""
+    import transversal.main as main
+
+    repo = SimpleNamespace(list_all_entities=lambda: [
+        SimpleNamespace(id="a", current_universe="earth", razmerit=2),
+        SimpleNamespace(id="b", current_universe="three_realms", razmerit=0),
+    ])
+    engine = CaptureEngine()
+    monkeypatch.setattr(main, "_repo", repo)
+    monkeypatch.setattr(main, "_effects_engine", engine)
+    monkeypatch.setattr(
+        "transversal.services.sfx_owner.get_available_sfx_ids",
+        lambda entity_id, universe, repo: [],
+    )
+    monkeypatch.setattr(
+        "transversal.services.roll_orchestrator._emit_pending_choices",
+        lambda *a, **k: None,
+    )
+
+    se.fire_global_state_sfx("on_beat")
+
+    assert [(e.entity_id, e.type, e.universe) for e in engine.events] == [
+        ("a", "on_beat", "earth"),
+        ("b", "on_beat", "three_realms"),
+    ]

@@ -295,6 +295,18 @@ def test_on_trait_learn_trigger_ignores_other_events():
     assert not engine._trigger_matches(sfx, event)
 
 
+def test_batch4_triggers_match_their_fire_events():
+    """on_set / on_beat / on_scene fire directly with those event types."""
+    engine = EffectsEngine()
+    for trigger in ("on_set", "on_beat", "on_scene"):
+        sfx = _make_sfx(f"sfx-{trigger}", trigger, trigger)
+        event = GameEvent(type=trigger, entity_id="char-1", universe="earth")
+        assert engine._trigger_matches(sfx, event), trigger
+        # They must not fire for unrelated events.
+        other = GameEvent(type="manual", entity_id="char-1", universe="earth")
+        assert not engine._trigger_matches(sfx, other), trigger
+
+
 def test_substitute_effect_context_across_fields():
     from transversal.services.effects_engine import _substitute_effect_context
 

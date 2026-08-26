@@ -98,6 +98,13 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
     ct = get_contest_tracker()
     result = ct.set_result(location_id, entity_id, _to_committed(body))
 
+    # The total + effect dice are now locked — fire ``on_set``.
+    from transversal.services.state_events import fire_state_sfx
+    fire_state_sfx(entity_id, "", "on_set", {
+        "effect_die": body.effect_die,
+        "total": body.total,
+    })
+
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None
     defendant_id = defendant.entity_id if defendant else None

@@ -56,6 +56,21 @@ def test_on_character_create_exposes_created_entity():
     assert {v.name: v.type for v in vs} == {"entity_created": "entity"}
 
 
+def test_on_set_exposes_total_and_effect_die():
+    vs = trigger_variables("on_set")
+    assert {v.name: v.type for v in vs} == {"effect_die": "die", "total": "number"}
+
+
+def test_beat_and_scene_triggers_are_declared():
+    by_value = {t.value: t for t in TRIGGERS}
+    assert by_value["on_beat"].label == "On Beat Advance"
+    assert by_value["on_beat"].group == "auto"
+    assert list(by_value["on_beat"].variables) == []
+    assert by_value["on_scene"].label == "On Scene Advance"
+    assert by_value["on_scene"].group == "auto"
+    assert list(by_value["on_scene"].variables) == []
+
+
 def test_on_projection_create_exposes_projection_context():
     vs = trigger_variables("on_projection_create")
     assert {v.name: v.type for v in vs} == {
@@ -119,6 +134,7 @@ def test_state_fire_sites_populate_declared_variables(monkeypatch):
         "on_push": {"pushed": True},
         "on_taken_out": {"taken_out": True, "contest_entity_opponent": "x"},
         "on_prevent_taken_out": {"prevented": True, "effect_die": "d6"},
+        "on_set": {"effect_die": "d6", "total": 11},
     }
 
     from types import SimpleNamespace
