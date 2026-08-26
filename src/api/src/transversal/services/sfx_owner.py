@@ -5,7 +5,6 @@ Ownership lives on the *owner* side (owners point at SFX ids), not on the
 use right now by unioning every owner surface, universe-gated:
 
   - ``table`` owner bucket (everyone)
-  - ``players`` owner bucket (everyone, player-facing)
   - direct entity ownership (``Entity.sfx_ids``)
   - active projection ownership (``Projection.sfx_ids``)
   - trait-level grants (``TraitSetting.sfx_ids`` + ``Trait.default_sfx_ids``)
@@ -444,7 +443,7 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
 # ── Owner index + batch management ────────────────────
 #
 # The GM ownership panel reads a flattened view of every owner surface (the
-# three ``sfx_owners`` buckets plus entity/projection/trait/trait-instance/
+# two ``sfx_owners`` buckets plus entity/projection/trait/trait-instance/
 # trait-set ``sfx_ids`` fields) and writes add/remove operations back through
 # a dispatcher so the frontend doesn't need to know which collection each
 # owner type lives in.

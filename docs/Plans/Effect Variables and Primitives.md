@@ -89,7 +89,7 @@ This split is artificial. A consequence menu **is** a manual trigger: the player
 3. Collapse the editor's two activation selects into one.
 
 > [!note] Ownership already encodes "who"
-> No separate `side` field is needed. The owner buckets (`table` / `gm` / `players`) plus entity/projection/trait ownership already encode who an SFX is offered to — the hitch menu already derives side from the bucket. Ownership stays exactly as-is.
+> No separate `side` field is needed. The owner buckets (`table` / `gm`) plus entity/projection/trait ownership already encode who an SFX is offered to — the hitch menu derives side from the bucket. The `players` bucket was folded into `table`; "player-character-only" is now an `ENTITY_TYPE` condition, not a grant surface.
 
 > [!note] Side-sourcing wrinkle (orthogonal)
 > The consequence menu (`test_success`/`contest_win`/…) currently hardcodes SFX moves as `side="player"` and sources from `get_available_sfx_ids`, while the hitch menu derives side from owner buckets. Reconciling the two is a separate ownership/sourcing ticket — not part of this trigger/menu unification.

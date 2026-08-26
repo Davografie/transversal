@@ -134,7 +134,7 @@ Ownership lives on the *owner* side, not the SFX. An owner bucket is a named set
 
 ```python
 class SfxOwner(BaseModel):
-    id: str            # "table" | "gm" | "players"
+    id: str            # "table" | "gm"
     sfx_ids: list[str]
 ```
 
@@ -374,7 +374,7 @@ Non-`IMMEDIATE` effects from the effects engine are persisted as scheduled event
 
 ### Owner buckets
 
-`ensure_sfx_owners` (line 22) seeds three owner buckets: `table` (everyone), `gm` (GM-context only, not entity-derived), `players` (reserved, currently empty). The `gm` bucket is intentionally excluded from entity-derived resolution.
+`ensure_sfx_owners` (line 22) seeds two owner buckets: `table` (everyone) and `gm` (GM-context only, not entity-derived). The `gm` bucket is intentionally excluded from entity-derived resolution. There is no `players` bucket — "player-character-only" is expressed as an `ENTITY_TYPE` condition (target `character`) on the SFX, not a grant surface. The legacy `players` bucket is migrated into `table` and dropped on seed.
 
 ### Available SFX resolution (`get_available_sfx_ids`, line 181)
 
@@ -385,6 +385,8 @@ The SFX ids available to an entity in a universe are the sorted union of:
 3. The `table` owner bucket.
 4. Trait-level grants from effective `TraitSetting.sfx_ids` plus the trait's `Trait.default_sfx_ids`.
 5. Trait-set-as-unit grants from effective `TraitSetSetting.sfx_ids`.
+
+Then context-free conditions are evaluated (`static_conditions`) so listing matches fireability: an SFX whose `entity_type` / `in_universe` condition doesn't hold for this entity is dropped from the available list; variable-gated conditions are left to fire-time.
 
 ### Seeded table/contest SFX
 

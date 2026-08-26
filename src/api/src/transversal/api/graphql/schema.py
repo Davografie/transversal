@@ -642,7 +642,7 @@ class Query:
         roller_id: Optional[strawberry.ID] = None,
         buyer_id: Optional[strawberry.ID] = None,
     ) -> list[ConsequenceOption]:
-        """Return the GM hitch menu — SFX from the gm/table/players owners whose
+        """Return the GM hitch menu — SFX from the gm/table owners whose
         trigger is ``hitch``. ``roller_id``/``buyer_id`` populate ``{hitch_entity}``
         and ``{buying_entity}`` so conditions can reference them."""
         from transversal.services.consequence_menu import assemble_hitch_menu
