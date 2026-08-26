@@ -31,6 +31,12 @@
       </select>
       <template v-if="selectedAction">
         <div class="ee-help">{{ selectedAction.description }}</div>
+        <div class="ee-timing-top">
+          <label class="ee-timing-label">Timing</label>
+          <select v-model="newEffect.timing">
+            <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ t }}</option>
+          </select>
+        </div>
         <div v-if="isPortalLocation" class="ee-fixed-dest">Scope <b>{location:transversal_target}</b> → {{ portalDestination }} (+ zones)</div>
         <div v-else-if="isPortalUniverse" class="ee-fixed-dest">Scope <b>{universe:transversal_target}</b> → any location in {{ portalUniverse }}</div>
         <div v-if="variables.length" class="ee-vars">
@@ -130,10 +136,6 @@
           v-model:notes="newEffect.context.notes"
           allow-variable
         />
-        <label class="ee-timing-label">Timing</label>
-        <select v-model="newEffect.timing">
-          <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ t }}</option>
-        </select>
         <div v-for="f in visibleContextFields" :key="f.name" class="ee-field">
           <label>{{ f.label }}</label>
           <select v-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
@@ -578,6 +580,7 @@ function rowClassFn(eff) {
 .ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
 .ee-form textarea { resize: vertical; min-height: 34px; }
 .ee-field { display: flex; flex-direction: column; gap: 2px; }
+.ee-timing-top { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
 .ee-extra-row { display: flex; align-items: center; gap: 6px; }
 .ee-extra-key { font-size: 9px; color: var(--text-dim); font-family: monospace; flex: none; min-width: 90px; }
 .ee-extra-row input { flex: 1; min-width: 0; }

@@ -20,13 +20,13 @@
       </div>
       <label>Conditions</label>
       <ConditionEditor v-model="form.conditions" />
-      <label>Duration (in effect)</label>
-      <DurationBuilder v-model="form.duration" allow-rolls />
     </div>
 
     <!-- Effects (shared editor) -->
     <h4 class="ps-section-title">Effects</h4>
     <EffectEditor v-model="form.effects" :variables="scopeVariables" />
+    <label>Duration (in effect)</label>
+    <DurationBuilder v-model="form.duration" allow-rolls />
 
     <!-- Status messages -->
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>

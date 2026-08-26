@@ -99,13 +99,6 @@ _NOTES_CONTEXT_FIELD = EffectFieldDef(
     field_type="text",
     required=False,
 )
-_RATING_TYPE_CONTEXT_FIELD = EffectFieldDef(
-    name="rating_type",
-    label="Rating Type",
-    field_type="select",
-    required=False,
-    options=["static", "resource", "challenge", "empty"],
-)
 
 
 # ── The Registry ──────────────────────────────────────
@@ -555,7 +548,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _RATING_TYPE_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
         supports_duration=True,
         supports_polarity=True,
         inverse=("modify_trait", "remove"),
@@ -575,7 +568,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Create At", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD, _RATING_TYPE_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
         supports_duration=True,
         supports_polarity=True,
         target_kind="trait",
@@ -594,7 +587,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _RATING_TYPE_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
+        context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
         target_kind="trait",
         supports_polarity=True,
     ),
