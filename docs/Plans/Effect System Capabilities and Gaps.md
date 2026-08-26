@@ -50,7 +50,7 @@ Three rigid joints and two missing axes:
 ## The convergence (decisions)
 
 1. **Triggers = timings.** `on_result` / `on_set` / `end_of_scene` are *one* event vocabulary used in two positions: **trigger** = which event *arms* the SFX, **timing** = which event *fires* the effect. The only asymmetric members are `manual` (trigger-only) and `immediate` (timing-only).
-2. **`rolls` as a duration unit.** `duration: rolls: 1` = "this effect lives for one roll" — the honest home for roll-scoped (per-roll, non-persisted) deferral.
+2. **`SFX.duration`** is the SFX's effective lifetime: `rolls`/`beat`/`scene`/`session` or a state-change event (`location_changed`/`trait_updated`). Default `rolls: 1` (one-shot); `None` = indefinite. This is the roll-scoped (per-roll, non-persisted) deferral.
 3. **Effect-level conditions, distinct from SFX-level conditions.** SFX conditions gate *whether the SFX can arm*; effect conditions gate *whether the effect fires*. They operate at different times on different state (the effect condition sees the roll state; the SFX condition does not). This is a separation, not a conflation.
 4. **`rating_type` in the inline trait editor.** The created trait can be minted as `resource` (or other rating types), not only a static die.
 5. **A phase-condition category.** `on adding` is a *phase* predicate ("are we in the pool-building phase"), distinct from *state* predicates (`AT_LOCATION`, `HAS_TRAIT`).
@@ -66,16 +66,14 @@ And it is authored as:
 
 ```
 SFX — sfx-crimson-scars
-  Trait:     <this trait>            (the SFX's attachment point)
   Name:      Crimson Scars
   Trigger:   manual                   (player-initiated)
   Condition: on adding                (phase gate: only armable while building the pool)
+  Duration:  rolls: 1                 (default one-shot; beat: 1 for the multi-roll reading)
 
   Effect: gain trait
     timing:    on result              (fire when the result is set)
-    scope:     traitsetting           (only <this trait>'s dice)
     condition: die.role == None       (effect-level gate, available because timing is on_result)
-    duration:  rolls: 1               (arm for one roll — the next result — then expire)
     target:    self.location          (the environmental hazard lives where the roll happened)
     rating:    {triggered_die_effect_die}   (variable = the die's outcome-tier effect die)
     statement: Crimson Scar
@@ -86,7 +84,7 @@ SFX — sfx-crimson-scars
       duration:    scene: 1           (the hazard itself expires at end of scene)
 ```
 
-Note the **two durations** and where they live: the *effect's* `duration` (`rolls: 1`) is "how long the effect stays armed"; the *created trait's* `duration` (`scene: 1`) is "how long the hazard persists." The editor keeps them apart by position — timing at the top ("this is when it goes off"), duration at the bottom ("this is how long it stays").
+Three temporal axes, three different owners: **`SFX.duration`** (`rolls: 1`) is how long the SFX stays in effect; **`Effect.timing`** (`on result`) is when the effect fires while it's in effect; **`Effect.duration`** (`scene: 1`) is how long the created hazard persists. The editor keeps them apart by position — the SFX's duration at the SFX level, timing at the top of the effect, the result's duration at the bottom.
 
 ## What remains outside this (adjacent, not effect-pipeline)
 
@@ -97,10 +95,10 @@ Note the **two durations** and where they live: the *effect's* `duration` (`roll
 
 Each batch is a coherent, testable increment; contract tests land with each primitive (per [[Effect System Convergence Plan#Sequencing & testing]]).
 
-1. ~~**Temporal spine**~~ — done (`roll_deferral` service + `EffectTiming.ON_ROLL/ON_SET/ON_RESULT`; effects arm at trigger time and fire at the matching roll event, consuming `Effect.rolls`). *Makes `timing: on result` + `rolls: 1` expressible.*
+1. ~~**Temporal spine**~~ — done (`roll_deferral` service + `EffectTiming.ON_ROLL/ON_SET/ON_RESULT` + `SFX.duration`; the SFX arms at trigger time and fires its roll-timing effects on each matching event until the duration expires — `rolls` budget, `None` indefinite, boundary events drop it). *Makes `timing: on result` + `duration: rolls: 1` expressible.*
 2. ~~**Effect gating + die references**~~ — done (`Effect.die_filter` predicates + `{triggered_die_*}` substitution + iteration; the effect's own dice are identified by `source_sfx_id` matching the client-stamped `armed_sfx_ids` on the pool dice). *Makes `condition: die.role==None` + `rating: {triggered_die_effect_die}` + per-die iteration expressible.*
 3. ~~**Trait model**~~ — done (`gain_*` honor `context.rating_type`; `TraitInstanceEditor` exposes a Rating Type select; `Effect.duration` remains the trait's persistence/revert). *Makes `rating-type: resource` + `duration: scene: 1` on the created trait expressible.*
-4. **Authoring UX** — the phase-condition category (`on adding`), the `rolls` editor input, the editor layout (timing top, duration bottom), and exposing "what's armed" so the client can re-stamp across rolls for longer durations. *Makes the full SFX authorable end-to-end.*
+4. **Authoring UX** — the phase-condition category (`on adding`), the `SFX.duration` editor input, the editor layout (timing top, duration bottom), and exposing "what's armed" so the client can re-stamp across rolls for longer durations. *Makes the full SFX authorable end-to-end.*
 
 ### Deferred: selective stamping
 
