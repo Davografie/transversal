@@ -77,6 +77,48 @@ class TestGraphQLQueries:
         assert ctypes["IN_UNIVERSE"]["needsTarget"] is True
         assert ctypes["IN_UNIVERSE"]["targetPlaceholder"] == "universe key"
 
+    def test_scheduled_events_resolver(self, client):
+        from transversal import main as api_main
+        from transversal.domain import (
+            Effect, ScheduledEvent, Timer, TimerCombine,
+        )
+
+        repo = api_main._repo
+        repo.create_scheduled_event(ScheduledEvent(
+            id="se-test-1",
+            target_type="entity",
+            target_id="kael",
+            effect=Effect(type="entity", action="targeting_ban", target="guard"),
+            timers=[Timer(event="scene", remaining=2)],
+            combine=TimerCombine.FIRST_TO_FIRE,
+            source_sfx_id="sfx-ban",
+        ))
+
+        result = _gql(client, """
+            query($t: String, $id: ID) {
+              scheduledEvents(targetType: $t, targetId: $id) {
+                id targetType targetId sourceSfxId combine
+                timers { event remaining }
+                effect { type action target }
+              }
+            }
+        """, {"t": "entity", "id": "kael"})
+
+        events = result["scheduledEvents"]
+        ev = next(e for e in events if e["id"] == "se-test-1")
+        assert ev["targetType"] == "entity"
+        assert ev["targetId"] == "kael"
+        assert ev["sourceSfxId"] == "sfx-ban"
+        assert ev["combine"] == "FIRST_TO_FIRE"
+        assert ev["timers"] == [{"event": "scene", "remaining": 2}]
+        assert ev["effect"]["action"] == "targeting_ban"
+
+        # target_type filter only (trait_setting) excludes the entity event.
+        result2 = _gql(client, """
+            query($t: String) { scheduledEvents(targetType: $t) { id } }
+        """, {"t": "trait_setting"})
+        assert all(e["id"] != "se-test-1" for e in result2["scheduledEvents"])
+
 
 class TestGraphQLMutations:
     def test_create_entity(self, client):

@@ -63,6 +63,7 @@
         <div v-if="gmMode" class="meta">
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
+          <span v-if="entityTimerLabel" class="active-effects" :title="'Timed effects pending: ' + entityTimerLabel">⏳ {{ entityTimerLabel }}</span>
         </div>
       </div>
       <BlueBook
@@ -196,6 +197,7 @@
               <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE' }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
+                  <span v-if="traitTimerLabel(t)" class="trait-timer" :title="'Re-enables after ' + traitTimerLabel(t)">⏳ {{ traitTimerLabel(t) }}</span>
                   <span v-if="t.fromType === 'relationship' && t.relationshipContactName" class="trait-contact">→ {{ t.relationshipContactName }}</span>
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
                   <span v-if="t.notes" class="trait-notes">{{ t.notes }}</span>
@@ -310,6 +312,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEntityCache } from '../composables/entityCache.js'
+import { useScheduledEvents } from '../composables/useScheduledEvents.js'
 import { usePersistedRef } from '../composables/usePersistedState.js'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
@@ -341,6 +344,7 @@ function displayName(name) {
 
 const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
 const entityCache = useEntityCache()
+const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
 const activeProjection = computed(() => {
   const e = entity.value
@@ -352,6 +356,48 @@ const traitSets = ref([])
 const allTraitSettings = ref([])
 const effectiveSettings = ref([])
 const showAllTraits = ref(false)
+
+// Running centrally-scheduled timers, reconnected to their owners for display.
+const entityTimers = ref([])
+const traitSettingTimers = ref([])
+
+const timersByTraitId = computed(() => {
+  const m = {}
+  for (const ev of traitSettingTimers.value) {
+    if (!m[ev.targetId]) m[ev.targetId] = []
+    m[ev.targetId].push(ev)
+  }
+  return m
+})
+
+const entityTimerLabel = computed(() => {
+  if (!entityTimers.value.length) return ''
+  return entityTimers.value
+    .map((ev) => formatTimers(ev.timers, ev.combine))
+    .filter(Boolean)
+    .join(' · ')
+})
+
+function traitTimerLabel(t) {
+  const evs = timersByTraitId.value[t.id]
+  if (!evs || !evs.length) return ''
+  return evs
+    .map((ev) => formatTimers(ev.timers, ev.combine))
+    .filter(Boolean)
+    .join(' · ')
+}
+
+async function fetchTimers() {
+  const eid = props.overrideEntityId || props.entityId
+  if (!eid) return
+  const [ent, ts] = await Promise.all([
+    fetchScheduledEvents('entity', eid),
+    fetchScheduledEvents('trait_setting', null),
+  ])
+  entityTimers.value = ent || []
+  const tsIds = new Set((allTraitSettings.value || []).map((t) => t.id))
+  traitSettingTimers.value = (ts || []).filter((ev) => tsIds.has(ev.targetId))
+}
 
 function groupTraitSettings(settings) {
   const sets = {}
@@ -957,6 +1003,7 @@ function applyEntity(e) {
   allTraitSettings.value = e.traitSettings || []
   effectiveSettings.value = e.effectiveTraitSettings || []
   recomputeTraitSets()
+  fetchTimers()
 }
 
 async function resolveNames(e) {
@@ -2049,6 +2096,10 @@ watch(() => props.externalPoolSources, (sources) => {
   text-transform: uppercase;
   letter-spacing: 1px;
 }
+.active-effects {
+  color: var(--accent, #d9b45a);
+  font-size: 11px;
+}
 .ego-toggle {
   padding: 3px 12px;
   border-radius: 999px;
@@ -2280,6 +2331,12 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .trait-name.disabled:hover {
   color: inherit;
+}
+.trait-timer {
+  font-size: 10px;
+  color: var(--accent, #d9b45a);
+  margin-left: 6px;
+  white-space: nowrap;
 }
 
 .trait-contact {

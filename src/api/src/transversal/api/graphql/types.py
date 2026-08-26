@@ -208,6 +208,18 @@ class EffectInput:
 
 
 @strawberry.type
+class ScheduledEvent:
+    """A running, centrally-scheduled timer and the effect it will fire."""
+    id: strawberry.ID
+    target_type: str = "entity"
+    target_id: str = ""
+    effect: Effect
+    timers: list[Timer] = strawberry.field(default_factory=list)
+    combine: TimerCombineGql = TimerCombineGql.FIRST_TO_FIRE
+    source_sfx_id: Optional[str] = None
+
+
+@strawberry.type
 class TargetCandidate:
     """A selectable target returned by the choose/random candidate resolver."""
     id: strawberry.ID

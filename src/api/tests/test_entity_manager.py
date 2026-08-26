@@ -61,6 +61,13 @@ class InMemoryRepository(EntityRepository):
         return event
     def list_all_scheduled_events(self):
         return [ScheduledEvent.model_validate(d) for d in self._scheduled_events.values()]
+    def list_scheduled_events(self, target_type=None, target_id=None):
+        events = self.list_all_scheduled_events()
+        if target_type is not None:
+            events = [e for e in events if e.target_type == target_type]
+        if target_id is not None:
+            events = [e for e in events if e.target_id == target_id]
+        return events
     def update_scheduled_event(self, event):
         self._store(self._scheduled_events, event.id, event.model_dump())
         return event

@@ -47,6 +47,7 @@ from transversal.api.graphql.types import (
     Effect as GqlEffect,
     EffectDuration as GqlEffectDuration,
     EffectDurationInput,
+    ScheduledEvent as GqlScheduledEvent,
     Timer as GqlTimer,
     TimerInput,
     SfxInput,
@@ -84,6 +85,7 @@ from transversal.domain import ConditionType as DomainConditionType
 from transversal.domain import Effect as DomainEffect
 from transversal.domain import EffectDuration as DomainEffectDuration
 from transversal.domain import Timer as DomainTimer
+from transversal.domain import ScheduledEvent as DomainScheduledEvent
 from transversal.domain import ConsequenceOption as DomainConsequenceOption
 from transversal.domain import RollTable as DomainRollTable
 from transversal.domain import RollTableEntry as DomainRollTableEntry
@@ -234,6 +236,18 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
 
 def _condition_to_gql(c: DomainCondition) -> Condition:
     return Condition(type=c.type, subject=c.subject, target=c.target, value=c.value, operator=c.operator, narrative=c.narrative)
+
+
+def _scheduled_event_to_gql(e: DomainScheduledEvent) -> GqlScheduledEvent:
+    return GqlScheduledEvent(
+        id=e.id,
+        target_type=e.target_type,
+        target_id=e.target_id,
+        effect=_effect_to_gql(e.effect),
+        timers=[GqlTimer(event=t.event, remaining=t.remaining) for t in e.timers],
+        combine=e.combine,
+        source_sfx_id=e.source_sfx_id,
+    )
 
 
 def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
@@ -438,6 +452,23 @@ class Query:
             )
             for r in refs
         ]
+
+    @strawberry.field
+    def scheduled_events(
+        self, info: strawberry.Info,
+        target_type: Optional[str] = None,
+        target_id: Optional[strawberry.ID] = None,
+    ) -> list[GqlScheduledEvent]:
+        """Running centrally-scheduled timers, optionally scoped to an owner.
+
+        ``target_type`` is ``"entity"`` or ``"trait_setting"``; ``target_id``
+        is the entity id or trait-setting id. Omit both for the full store.
+        """
+        events = _em(info).repo.list_scheduled_events(
+            target_type=target_type,
+            target_id=str(target_id) if target_id is not None else None,
+        )
+        return [_scheduled_event_to_gql(e) for e in events]
 
     @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:

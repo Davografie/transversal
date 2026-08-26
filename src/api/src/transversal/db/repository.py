@@ -965,6 +965,33 @@ class EntityRepository:
             for doc in self.db.aql.execute(query)
         ]
 
+    def list_scheduled_events(
+        self,
+        target_type: Optional[str] = None,
+        target_id: Optional[str] = None,
+    ) -> list[ScheduledEvent]:
+        """List scheduled events, optionally scoped to a target owner.
+
+        ``target_type`` is ``"entity"`` or ``"trait_setting"``; ``target_id``
+        is the entity id or trait-setting id. When both are omitted this is the
+        full store; otherwise the query is indexed on the owner columns.
+        """
+        if target_type is None and target_id is None:
+            return self.list_all_scheduled_events()
+        filters = []
+        bind_vars = {}
+        if target_type is not None:
+            filters.append("e.target_type == @target_type")
+            bind_vars["target_type"] = target_type
+        if target_id is not None:
+            filters.append("e.target_id == @target_id")
+            bind_vars["target_id"] = target_id
+        query = f"FOR e IN {SCHEDULED_EVENTS} FILTER {' AND '.join(filters)} RETURN e"
+        return [
+            ScheduledEvent.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars=bind_vars)
+        ]
+
     def list_sfx_owners(self) -> list[SfxOwner]:
         """Return every SFX owner bucket (``table``, ``gm``)."""
         return [
