@@ -1101,7 +1101,19 @@ function splitDie({ source, label }) {
   notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, panelOpen })
+function stampArmedSfx(tsId, sfxId) {
+  // Re-stamp dice already in the pool when the SFX is armed after adding.
+  let changed = false
+  for (const d of pool) {
+    if (d.tsId === tsId && !(d.armedSfxIds || []).includes(sfxId)) {
+      d.armedSfxIds = [...(d.armedSfxIds || []), sfxId]
+      changed = true
+    }
+  }
+  if (changed) notifyPool()
+}
+
+defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false

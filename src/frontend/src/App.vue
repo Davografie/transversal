@@ -276,6 +276,7 @@
         @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
         @split-die="(d) => diceRef?.splitDie(d)"
         @sfx-toggled="onSfxToggled"
+        @stamp-sfx="(d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId)"
         @sheet-view-change="onSheetViewChange"
       />
     <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
@@ -341,6 +342,7 @@ const gmRootPanel = computed(() => ({
     'start-session': () => onStartSession(),
     'end-session': () => onEndSession(),
     'add-to-pool': (d) => diceRef?.addFromSheet(d),
+    'stamp-sfx': (d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId),
   },
 }))
 

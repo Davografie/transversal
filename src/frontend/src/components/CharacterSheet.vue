@@ -334,7 +334,7 @@ const props = defineProps({
   visible: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'openSettings', 'sheetViewChange'])
+const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange'])
 
 function displayName(name) {
   return name
@@ -1065,6 +1065,9 @@ async function activateSfx(sfxId) {
     // Activate
     await triggerSfx(props.entityId, sfxId, props.universe, { phase: props.phase })
     sfxActivations.value[sfxId] = 1
+    // Re-stamp dice already in the pool (armed after adding).
+    const tsId = findTsIdForSfx(sfxId)
+    if (tsId) emit('stampSfx', { tsId, sfxId })
     await fetchEntity()
 
     if (sfxId === 'sfx-hinder') {
