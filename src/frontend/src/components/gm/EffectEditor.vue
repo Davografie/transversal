@@ -121,6 +121,14 @@
             <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
           </template>
         </div>
+        <TraitInstanceEditor
+          v-if="isGainAction"
+          v-model:die="newEffect.fields.result"
+          v-model:negative="newEffect.negative"
+          v-model:statement="newEffect.context.statement"
+          v-model:notes="newEffect.context.notes"
+          allow-variable
+        />
         <label class="ee-timing-label">Timing</label>
         <select v-model="newEffect.timing">
           <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ t }}</option>
@@ -151,7 +159,7 @@
           <label>Duration</label>
           <DurationBuilder v-model="newEffect.duration" />
         </div>
-        <div v-if="selectedAction.supportsPolarity" class="ee-field ee-polarity">
+        <div v-if="selectedAction.supportsPolarity && !isGainAction" class="ee-field ee-polarity">
           <label class="ee-check">
             <input type="checkbox" v-model="newEffect.negative" />
             Negative (complication)
@@ -172,6 +180,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from './TargetPicker.vue'
 import DurationBuilder from './DurationBuilder.vue'
+import TraitInstanceEditor from './TraitInstanceEditor.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
 import GmList from './GmList.vue'
 import ReturnMapEditor from './ReturnMapEditor.vue'
@@ -292,6 +301,10 @@ const isPortalTravel = computed(() => !!props.portalDestination && selectedActio
 const isPortalLocation = computed(() => isPortalTravel.value && props.portalTargetType === 'location')
 const isPortalUniverse = computed(() => isPortalTravel.value && props.portalTargetType === 'universe')
 
+// Gain-trait actions render the shared inline trait-instance editor (die,
+// polarity, statement, notes) instead of the generic field/context inputs.
+const isGainAction = computed(() => ['gain', 'gain_or_step_up', 'cortex_gain'].includes(selectedAction.value?.effectAction))
+
 // The literal picker resolves over the same scope/filter as choose/random.
 // Portal travel is the one exception: its destination scope is fixed by the
 // portal config, so derive it from the portal props rather than the free scope.
@@ -314,6 +327,7 @@ const visibleFields = computed(() => {
   return (selectedAction.value.fields || []).filter(f => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
+    if (f.name === 'result' && isGainAction.value) return false
     return true
   })
 })
@@ -321,6 +335,7 @@ const visibleFields = computed(() => {
 const visibleContextFields = computed(() => {
   return (selectedAction.value?.contextFields || []).filter(f => {
     if (f.name === 'projection' && (newEffect.context.transversal_type || 'inapposite') !== 'consciousness') return false
+    if (isGainAction.value && (f.name === 'statement' || f.name === 'notes')) return false
     return true
   })
 })
