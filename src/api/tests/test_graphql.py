@@ -93,6 +93,20 @@ class TestGraphQLQueries:
             combine=TimerCombine.FIRST_TO_FIRE,
             source_sfx_id="sfx-ban",
         ))
+        repo.create_scheduled_event(ScheduledEvent(
+            id="se-test-2",
+            target_type="trait_setting",
+            target_id="ts-1",
+            effect=Effect(type="modify_trait", action="set", target="trait-1", result="d6"),
+            timers=[Timer(event="beat", remaining=1)],
+        ))
+        repo.create_scheduled_event(ScheduledEvent(
+            id="se-test-3",
+            target_type="trait_setting",
+            target_id="ts-2",
+            effect=Effect(type="modify_trait", action="step_down", target="trait-2"),
+            timers=[Timer(event="scene", remaining=1)],
+        ))
 
         result = _gql(client, """
             query($t: String, $id: ID) {
@@ -117,7 +131,15 @@ class TestGraphQLQueries:
         result2 = _gql(client, """
             query($t: String) { scheduledEvents(targetType: $t) { id } }
         """, {"t": "trait_setting"})
-        assert all(e["id"] != "se-test-1" for e in result2["scheduledEvents"])
+        assert {e["id"] for e in result2["scheduledEvents"]} == {"se-test-2", "se-test-3"}
+
+        # target_ids list filter scopes to exactly the requested owners.
+        result3 = _gql(client, """
+            query($t: String, $ids: [ID!]) {
+              scheduledEvents(targetType: $t, targetIds: $ids) { id }
+            }
+        """, {"t": "trait_setting", "ids": ["ts-1"]})
+        assert [e["id"] for e in result3["scheduledEvents"]] == ["se-test-2"]
 
 
 class TestGraphQLMutations:

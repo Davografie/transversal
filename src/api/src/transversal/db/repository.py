@@ -969,14 +969,16 @@ class EntityRepository:
         self,
         target_type: Optional[str] = None,
         target_id: Optional[str] = None,
+        target_ids: Optional[list[str]] = None,
     ) -> list[ScheduledEvent]:
-        """List scheduled events, optionally scoped to a target owner.
+        """List scheduled events, optionally scoped to target owners.
 
-        ``target_type`` is ``"entity"`` or ``"trait_setting"``; ``target_id``
-        is the entity id or trait-setting id. When both are omitted this is the
-        full store; otherwise the query is indexed on the owner columns.
+        ``target_type`` is ``"entity"`` or ``"trait_setting"``. ``target_id``
+        scopes to a single owner (entity id or trait-setting id); ``target_ids``
+        scopes to a set of owners. When every filter is omitted this is the full
+        store; otherwise the query is filtered on the owner columns.
         """
-        if target_type is None and target_id is None:
+        if target_type is None and target_id is None and target_ids is None:
             return self.list_all_scheduled_events()
         filters = []
         bind_vars = {}
@@ -986,6 +988,9 @@ class EntityRepository:
         if target_id is not None:
             filters.append("e.target_id == @target_id")
             bind_vars["target_id"] = target_id
+        if target_ids is not None:
+            filters.append("e.target_id IN @target_ids")
+            bind_vars["target_ids"] = target_ids
         query = f"FOR e IN {SCHEDULED_EVENTS} FILTER {' AND '.join(filters)} RETURN e"
         return [
             ScheduledEvent.model_validate({**doc, "id": doc["_key"]})

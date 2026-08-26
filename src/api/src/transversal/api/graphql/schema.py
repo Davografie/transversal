@@ -458,15 +458,18 @@ class Query:
         self, info: strawberry.Info,
         target_type: Optional[str] = None,
         target_id: Optional[strawberry.ID] = None,
+        target_ids: Optional[list[strawberry.ID]] = None,
     ) -> list[GqlScheduledEvent]:
-        """Running centrally-scheduled timers, optionally scoped to an owner.
+        """Running centrally-scheduled timers, optionally scoped to owners.
 
-        ``target_type`` is ``"entity"`` or ``"trait_setting"``; ``target_id``
-        is the entity id or trait-setting id. Omit both for the full store.
+        ``target_type`` is ``"entity"`` or ``"trait_setting"``. ``target_id``
+        scopes to one owner; ``target_ids`` scopes to a set of owners (e.g. a
+        sheet's trait-setting ids). Omit all for the full store.
         """
         events = _em(info).repo.list_scheduled_events(
             target_type=target_type,
             target_id=str(target_id) if target_id is not None else None,
+            target_ids=[str(i) for i in target_ids] if target_ids is not None else None,
         )
         return [_scheduled_event_to_gql(e) for e in events]
 

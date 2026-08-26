@@ -390,13 +390,13 @@ function traitTimerLabel(t) {
 async function fetchTimers() {
   const eid = props.overrideEntityId || props.entityId
   if (!eid) return
+  const tsIds = (allTraitSettings.value || []).map((t) => t.id)
   const [ent, ts] = await Promise.all([
     fetchScheduledEvents('entity', eid),
-    fetchScheduledEvents('trait_setting', null),
+    tsIds.length ? fetchScheduledEvents('trait_setting', null, tsIds) : Promise.resolve([]),
   ])
   entityTimers.value = ent || []
-  const tsIds = new Set((allTraitSettings.value || []).map((t) => t.id))
-  traitSettingTimers.value = (ts || []).filter((ev) => tsIds.has(ev.targetId))
+  traitSettingTimers.value = ts || []
 }
 
 function groupTraitSettings(settings) {

@@ -41,10 +41,10 @@ export function formatTimers(timers = [], combine = 'FIRST_TO_FIRE') {
 export function useScheduledEvents() {
   const { graphql } = useApi()
 
-  async function fetchFor(targetType, targetId = null) {
+  async function fetchFor(targetType, targetId = null, targetIds = null) {
     const data = await graphql(
-      `query($targetType: String, $targetId: ID) {
-        scheduledEvents(targetType: $targetType, targetId: $targetId) {
+      `query($targetType: String, $targetId: ID, $targetIds: [ID!]) {
+        scheduledEvents(targetType: $targetType, targetId: $targetId, targetIds: $targetIds) {
           id
           targetType
           targetId
@@ -54,7 +54,7 @@ export function useScheduledEvents() {
           effect { type action target result }
         }
       }`,
-      { targetType, targetId: targetId || null },
+      { targetType, targetId: targetId || null, targetIds: targetIds || null },
     )
     return data?.scheduledEvents || []
   }
