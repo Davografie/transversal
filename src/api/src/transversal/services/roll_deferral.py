@@ -189,6 +189,11 @@ def list_armed(entity_id: str) -> list[Effect]:
     return out
 
 
+def list_armed_sfx_ids(entity_id: str) -> list[str]:
+    """The SFX ids currently armed for an entity (for client re-stamp/display)."""
+    return [a.source_sfx_id for a in _armed.get(entity_id, []) if a.source_sfx_id]
+
+
 def reset() -> None:
     """Clear the whole store (tests)."""
     _armed.clear()

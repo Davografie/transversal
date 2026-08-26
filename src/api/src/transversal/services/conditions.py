@@ -118,6 +118,11 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     if condition.type == ConditionType.ENTITY_TYPE:
         return subject.type.value == target
 
+    if condition.type == ConditionType.PHASE:
+        # Phase predicates read the trigger context (e.g. "on adding"), not
+        # entity state — so they only gate at trigger time.
+        return (context or {}).get("phase") == target
+
     return False
 
 
@@ -178,5 +183,6 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.ENTITY_TYPE.name, "Entity type", needs_target=True, target_placeholder="entity type", target_options=("character", "gmc", "asset")),
     ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),
     ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe"),
+    ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved")),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
 )

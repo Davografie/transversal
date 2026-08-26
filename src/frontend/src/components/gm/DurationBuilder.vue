@@ -2,6 +2,7 @@
   <div class="db-root">
     <div v-for="(t, i) in timers" :key="i" class="db-row">
       <select v-model="t.event" class="db-event">
+        <option v-if="allowRolls" value="rolls">Rolls</option>
         <option value="scene">Scene</option>
         <option value="beat">Beat</option>
         <option value="session">Session</option>
@@ -28,6 +29,7 @@ import { computed } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ timers: [], combine: 'FIRST_TO_FIRE' }) },
+  allowRolls: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 

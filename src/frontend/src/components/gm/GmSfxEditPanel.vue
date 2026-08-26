@@ -20,6 +20,8 @@
       </div>
       <label>Conditions</label>
       <ConditionEditor v-model="form.conditions" />
+      <label>Duration (in effect)</label>
+      <DurationBuilder v-model="form.duration" allow-rolls />
     </div>
 
     <!-- Effects (shared editor) -->
@@ -64,6 +66,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import EffectEditor from './EffectEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
+import DurationBuilder from './DurationBuilder.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 
 const { graphql, error: apiError } = useApi()
@@ -97,11 +100,26 @@ function initialConditions(sfx) {
   return []
 }
 
+function initialDuration(sfx) {
+  // Backend default = rolls:1; null = indefinite (empty timers).
+  if (sfx && sfx.duration) {
+    return {
+      timers: (sfx.duration.timers || []).map(t => ({ event: t.event, remaining: t.remaining })),
+      combine: sfx.duration.combine || 'FIRST_TO_FIRE',
+    }
+  }
+  if (sfx && sfx.duration === null) {
+    return { timers: [], combine: 'FIRST_TO_FIRE' }
+  }
+  return { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
+}
+
 const form = reactive({
   name: props.sfx?.name || '',
   description: props.sfx?.description || '',
   trigger: props.sfx?.trigger || 'manual',
   conditions: initialConditions(props.sfx),
+  duration: initialDuration(props.sfx),
   effects: (props.sfx?.effects || []).map(e => ({ ...e })),
 })
 
@@ -197,6 +215,7 @@ async function runValidation() {
       trigger: form.trigger,
       conditions: form.conditions || [],
       effects: form.effects || [],
+      duration: form.duration,
     }
     const data = await graphql(
       `query($input: SfxInput!) { validateSfx(input: $input) }`,
@@ -216,7 +235,7 @@ watch(() => [form.trigger, form.conditions, form.effects], () => {
 // Auto-save (debounced) — edits persist without an explicit save click.
 let saveTimer = null
 watch(
-  () => [form.name, form.description, form.trigger, form.conditions, form.effects],
+  () => [form.name, form.description, form.trigger, form.conditions, form.duration, form.effects],
   () => {
     if (!props.sfx?.id) return
     savedAt.value = null // dirty again
@@ -236,17 +255,17 @@ async function onSave() {
   errorMsg.value = ''
   try {
     const result = await graphql(
-      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
-      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
+      `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } duration { timers { event remaining } combine } } }`,
+      { input: { id: props.sfx.id, name: form.name, trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects, duration: form.duration } }
     )
     if (!result) { errorMsg.value = apiError.value || 'Save failed'; return }
     patchData('sfxs', props.sfx.id, {
-      name: form.name, trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      name: form.name, trigger: form.trigger, description: form.description, conditions: [...form.conditions], duration: form.duration, effects: [...form.effects],
     })
     savedAt.value = Date.now()
     emit('sfx-updated', {
       id: props.sfx.id, name: form.name, trigger: form.trigger,
-      description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      description: form.description, conditions: [...form.conditions], duration: form.duration, effects: [...form.effects],
     })
   } finally { saving.value = false }
 }
@@ -257,8 +276,8 @@ async function onCreate() {
   const sfxId = generateSfxId(form.name)
   try {
     const result = await graphql(
-      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } } }`,
-      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects } }
+      `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter negative context duration { timers { event remaining } combine } } duration { timers { event remaining } combine } } }`,
+      { input: { id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: form.conditions, effects: form.effects, duration: form.duration } }
     )
     if (!result) {
       const msg = apiError.value || ''
@@ -272,17 +291,18 @@ async function onCreate() {
     errorMsg.value = ''
     await fetchTraitsConfig()
     patchData('sfxs', sfxId, {
-      id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      id: sfxId, name: form.name.trim(), trigger: form.trigger, description: form.description, conditions: [...form.conditions], duration: form.duration, effects: [...form.effects],
     })
     successMsg.value = `Created "${form.name}"`
     emit('sfx-created', {
       id: sfxId, name: form.name.trim(), trigger: form.trigger,
-      description: form.description, conditions: [...form.conditions], effects: [...form.effects],
+      description: form.description, conditions: [...form.conditions], duration: form.duration, effects: [...form.effects],
     })
     setTimeout(() => { panel.close() }, 600)
     form.name = ''
     form.description = ''
     form.conditions = []
+    form.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
     form.effects = []
     setTimeout(() => { successMsg.value = '' }, 8000)
   } finally { saving.value = false }

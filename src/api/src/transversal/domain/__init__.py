@@ -846,6 +846,7 @@ class ConditionType(str, Enum):
     NARRATIVE = "narrative"              # human-readable only, never auto-blocks
     UNPLACED = "unplaced"                # entity has no current location yet
     IN_UNIVERSE = "in_universe"          # target = universe key; entity is currently there
+    PHASE = "phase"                      # target = dice-pool phase (e.g. "adding"); reads trigger context
 
 
 class Condition(BaseModel):

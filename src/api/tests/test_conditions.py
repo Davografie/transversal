@@ -105,6 +105,15 @@ def test_has_relationship():
     assert not evaluate_condition(_entity(), Condition(type=ConditionType.HAS_RELATIONSHIP, target="char-3"), repo)
 
 
+def test_phase_condition_reads_trigger_context():
+    repo = FakeRepo()
+    cond = Condition(type=ConditionType.PHASE, target="adding")
+    assert evaluate_condition(_entity(), cond, repo, context={"phase": "adding"})
+    assert not evaluate_condition(_entity(), cond, repo, context={"phase": "rolling"})
+    # No phase in context -> fails.
+    assert not evaluate_condition(_entity(), cond, repo)
+
+
 def test_all_must_pass():
     repo = FakeRepo(traitsettings=[_ts("iron-will")])
     conditions = [

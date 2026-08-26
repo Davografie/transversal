@@ -98,7 +98,11 @@ Each batch is a coherent, testable increment; contract tests land with each prim
 1. ~~**Temporal spine**~~ — done (`roll_deferral` service + `EffectTiming.ON_ROLL/ON_SET/ON_RESULT` + `SFX.duration`; the SFX arms at trigger time and fires its roll-timing effects on each matching event until the duration expires — `rolls` budget, `None` indefinite, boundary events drop it). *Makes `timing: on result` + `duration: rolls: 1` expressible.*
 2. ~~**Effect gating + die references**~~ — done (`Effect.die_filter` predicates + `{triggered_die_*}` substitution + iteration; the effect's own dice are identified by `source_sfx_id` matching the client-stamped `armed_sfx_ids` on the pool dice). *Makes `condition: die.role==None` + `rating: {triggered_die_effect_die}` + per-die iteration expressible.*
 3. ~~**Trait model**~~ — done (`gain_*` honor `context.rating_type`; `TraitInstanceEditor` exposes a Rating Type select; `Effect.duration` remains the trait's persistence/revert). *Makes `rating-type: resource` + `duration: scene: 1` on the created trait expressible.*
-4. **Authoring UX** — the phase-condition category (`on adding`), the `SFX.duration` editor input, the editor layout (timing top, duration bottom), and exposing "what's armed" so the client can re-stamp across rolls for longer durations. *Makes the full SFX authorable end-to-end.*
+4. ~~**Authoring UX**~~ — done (`ConditionType.PHASE` ("on adding") + `CONDITION_TYPES` metadata; `SFX.duration` editor input via `DurationBuilder` (`allowRolls`); timing top / duration bottom already in place; `armedSfxIds(entityId)` GraphQL query). *The full SFX is now authorable end-to-end.*
+
+### After the batches: runtime arming UX
+
+The primitives (batches 1–4) are in place, but the **runtime** arming flow is a separate frontend concern: during pool building the client must offer the arm toggle, stamp `armed_sfx_ids` on the trait's dice, and trigger the SFX with `context.phase: "adding"`. This is the piece that actually makes an authored Crimson Scars fire in play; it lives in the DiceRoller, not the effect system.
 
 ### Deferred: selective stamping
 

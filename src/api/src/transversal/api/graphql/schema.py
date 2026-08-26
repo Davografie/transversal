@@ -479,6 +479,13 @@ class Query:
         return [_scheduled_event_to_gql(e) for e in events]
 
     @strawberry.field
+    def armed_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[strawberry.ID]:
+        """SFX ids currently armed (roll-deferred, in effect) for an entity."""
+        from transversal.services.roll_deferral import list_armed_sfx_ids
+
+        return [strawberry.ID(i) for i in list_armed_sfx_ids(str(entity_id))]
+
+    @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:
         traits = _em(info).repo.get_traits_by_universe(universe)
         return [_trait_to_gql(t) for t in traits]
