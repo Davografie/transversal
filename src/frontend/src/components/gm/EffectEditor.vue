@@ -79,7 +79,7 @@
               :filter="newEffect.targetFilter"
               :action="selectedAction.effectAction"
               :placeholder="`Pick ${selectedAction.targetKind}…`"
-              @update:model-value="newEffect.fields[f.name] = $event"
+              @update:model-value="onTargetPicked(f, $event)"
             />
             <div v-else-if="newEffect.targetMode === 'return'" class="ee-field">
               <label>Exit name</label>
@@ -168,6 +168,7 @@ import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import { useEffectTargets } from '@/composables/useEffectTargets.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from './TargetPicker.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
@@ -204,6 +205,30 @@ const { load: loadSfxMeta, targetFilterFields } = useSfxMeta()
 const { fetchTargets: fetchPreviewTargets } = useEffectTargets()
 const previewText = ref('')
 onMounted(() => { loadSfxMeta() })
+
+const { traitsets, fetchTraitsConfig } = useTraitsConfig()
+onMounted(() => { if (!traitsets.value.length) fetchTraitsConfig() })
+
+const traitMeta = computed(() => {
+  const m = {}
+  for (const ts of traitsets.value) {
+    for (const t of (ts.traits || [])) m[t.id] = t
+  }
+  return m
+})
+
+const GAIN_ACTIONS = new Set(['gain', 'gain_or_step_up', 'cortex_gain'])
+
+function onTargetPicked(f, id) {
+  newEffect.fields[f.name] = id
+  if (f.name !== 'target' || selectedAction.value?.targetKind !== 'trait' || !GAIN_ACTIONS.has(selectedAction.value?.effectAction)) return
+  const t = traitMeta.value[id]
+  if (!t) return
+  if (t.defaultDieType) newEffect.fields.result = String(t.defaultDieType).toLowerCase()
+  let pol = t.polarity
+  if (!pol && t.traitsetId) pol = traitsets.value.find(s => s.id === t.traitsetId)?.polarity
+  newEffect.negative = String(pol || '').toLowerCase() === 'negative'
+}
 
 const selectedAction = computed(() => {
   if (!newEffect.actionId) return null

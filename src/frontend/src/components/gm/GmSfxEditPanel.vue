@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -68,7 +68,7 @@ import { useEffectActions } from '@/composables/useEffectActions.js'
 
 const { graphql, error: apiError } = useApi()
 const panel = usePanel()
-const { patchData, fetchTraitsConfig } = useTraitsConfig()
+const { patchData, fetchTraitsConfig, traitNameMap, traitsets } = useTraitsConfig()
 
 const props = defineProps({
   sfx: { type: Object, default: null },
@@ -112,6 +112,11 @@ const { load: loadSfxMeta, triggers } = useSfxMeta()
 loadSfxMeta()
 
 const { load: loadActions, summarize: summarizeEffect } = useEffectActions()
+
+onMounted(() => {
+  if (!traitsets.value.length) fetchTraitsConfig()
+  loadEntityNames()
+})
 loadActions()
 
 // Backend trigger vocabulary grouped into Manual / Auto-fire / Menus. A legacy
@@ -152,11 +157,29 @@ function conditionPhrase(c) {
   }
 }
 
+const entityNames = ref({})
+
+async function loadEntityNames() {
+  try {
+    const data = await graphql(`query { entities { id name } }`)
+    const m = {}
+    for (const e of (data?.entities || [])) m[e.id] = e.name
+    entityNames.value = m
+  } catch { /* summary stays id-based on failure */ }
+}
+
+function resolveName(id) {
+  if (!id) return id
+  if (traitNameMap.value[id]) return traitNameMap.value[id]
+  if (entityNames.value[id]) return entityNames.value[id]
+  return id
+}
+
 const sfxSummary = computed(() => {
   let out = triggerPhrase(form.trigger)
   const conds = (form.conditions || []).map(conditionPhrase).filter(Boolean)
   if (conds.length) out += ` · if ${conds.join(', ')}`
-  const effs = (form.effects || []).map((e) => summarizeEffect(e)).filter(Boolean)
+  const effs = (form.effects || []).map((e) => summarizeEffect(e, resolveName)).filter(Boolean)
   if (effs.length) out += ` → ${effs.join(' then ')}`
   return out
 })
