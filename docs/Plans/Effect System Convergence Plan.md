@@ -162,11 +162,12 @@ Consolidate the two timer mechanisms into a single persisted collection of runni
 Build order:
 
 1. ~~**Owner model**~~ — done (condition + availability filtering + migration; panel filter pending).
-2. **Drillthrough schema** (field schema + recursive resolver + wizard).
-3. **Central timers** (one persisted timer repository; absorbs `EffectsEngine._schedule`) — before disable/toggle.
-4. **Batch 3 actions** (disable/toggle after central timers), then **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
-5. **Batch 6 SFX seeds** once their primitives exist.
-6. **Full-coverage pass** — deferred; revisit only if a class of bugs surfaces that contract tests and live play keep missing.
+2. **Central timers** (one persisted timer repository; absorbs `EffectsEngine._schedule`) — fixes the split-brain and is the foundation for duration-based actions + loop-prevention.
+3. **Batch 3 actions** — disable/toggle trait first (already designed; duration reverts ride the new timers), then challenge rating, temporary projection, etc.
+4. **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
+5. **Drillthrough schema** (field schema + recursive resolver + wizard) — enhancement/polish, not on the critical path.
+6. **Batch 6 SFX seeds** once their primitives exist.
+7. **Full-coverage pass** — deferred; revisit only if a class of bugs surfaces that contract tests and live play keep missing.
 
 ## Related
 
