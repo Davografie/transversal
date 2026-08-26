@@ -124,6 +124,33 @@ Replace the hardcoded `self.location`/`self.universe`/`self.projection` with a d
   4. `{choose:*}`/`{random:*}` stays the terminal step; drillthrough picks the starting subject.
 - **Open:** cardinality of set-valued fields (`occupants` → pick-one vs iterate-all); nail the field-name vocabulary once.
 
+## Central Timers → one persisted scheduled-events repository
+
+Consolidate the two timer mechanisms into a single persisted collection of running timers.
+
+> [!note] Status: planned — precedes disable/toggle duration-reverts and loop-prevention.
+
+- **Current shape:** two parallel mechanisms — owner-scoped `ScheduledEvent` lists (`Entity.scheduled_events`, `TraitSetting.scheduled_events`, advanced by full-table scans in `dispatch_event`) plus an in-memory `EffectsEngine._schedule` (ticked by `tick_beat`/`tick_scene`/`tick_session`, lost on restart). `scheduled_events.py` claims to replace the in-memory schedule but hasn't.
+- **Target shape:** one `scheduled_events` collection:
+
+  ```
+  ScheduledEvent:
+    id
+    target_type   ("entity" | "trait_setting" | …)
+    target_id
+    effect        # deferred/inverse effect to apply at fire time
+    timers        [{event, remaining}]
+    combine        (FIRST_TO_FIRE | ALL_TRANSPIRED)
+    source_sfx_id
+  ```
+
+- **Why central wins:**
+  - Fixes an existing split-brain (one mechanism, one persistence story).
+  - Advancement becomes an indexed query on `timers[].event` instead of walking every entity + trait setting.
+  - One query surfaces "what's running now" — needed by the GM active-effects view, debugging, and loop detection.
+  - Timers are effect-system state, not entity/trait data (removes the owner-doc coupling).
+- **Orphans:** store `target_type` + `target_id`; fire-time resolution is a no-op when the target is gone (plus an optional cascade delete).
+
 ## Sequencing & testing
 
 **Build with contract tests, live-test in play.** No full-coverage manual matrix up front — it's deferred until the scope is built. Instead:
@@ -134,11 +161,12 @@ Replace the hardcoded `self.location`/`self.universe`/`self.projection` with a d
 
 Build order:
 
-1. **Owner model** (condition + availability filtering + migration + panel filter).
+1. ~~**Owner model**~~ — done (condition + availability filtering + migration; panel filter pending).
 2. **Drillthrough schema** (field schema + recursive resolver + wizard).
-3. **Batch 3 actions**, then **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
-4. **Batch 6 SFX seeds** once their primitives exist.
-5. **Full-coverage pass** — deferred; revisit only if a class of bugs surfaces that contract tests and live play keep missing.
+3. **Central timers** (one persisted timer repository; absorbs `EffectsEngine._schedule`) — before disable/toggle.
+4. **Batch 3 actions** (disable/toggle after central timers), then **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
+5. **Batch 6 SFX seeds** once their primitives exist.
+6. **Full-coverage pass** — deferred; revisit only if a class of bugs surfaces that contract tests and live play keep missing.
 
 ## Related
 
