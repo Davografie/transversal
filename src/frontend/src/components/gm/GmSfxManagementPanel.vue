@@ -1,7 +1,10 @@
 <template>
   <div class="mgmt-panel">
-    <!-- SFX name search -->
-    <input v-model="search" class="filter-input" placeholder="Search SFX…" />
+    <!-- Search + create -->
+    <div class="top-row">
+      <input v-model="search" class="filter-input" placeholder="Search SFX…" />
+      <button type="button" class="new-btn" @click="newSfx">+ New SFX</button>
+    </div>
 
     <!-- Primitive filters -->
     <div class="filter-row">
@@ -145,6 +148,15 @@ function openSfx(sfx) {
   panel.open({ component: GmSfxEditPanel, title: sfx.name || 'Edit SFX', id: sfx.id, props: { sfx }, listeners: {} })
 }
 
+function newSfx() {
+  panel.open({
+    component: GmSfxEditPanel,
+    title: 'New SFX',
+    props: { sfx: null },
+    listeners: { 'sfx-created': () => { fetchTraitsConfig() } },
+  })
+}
+
 async function openPicker() {
   if (!ownerRef.value) return
   const ref = { ownerType: ownerRef.value.ownerType, ownerId: ownerRef.value.ownerId }
@@ -169,6 +181,9 @@ async function removeSfx(id) {
 .mgmt-panel { display: flex; flex-direction: column; gap: 8px; }
 .filter-input { width: 100%; font-size: 12px; padding: 6px 8px; box-sizing: border-box;
   background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; }
+.top-row { display: flex; gap: 6px; }
+.top-row .filter-input { flex: 1; min-width: 0; }
+.new-btn { flex: none; background: var(--success); color: #0a0a0f; font-weight: 600; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; cursor: pointer; }
 .filter-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .filter-select { flex: 1; min-width: 110px; font-size: 11px; padding: 5px 6px;
   background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; }
