@@ -391,7 +391,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="create_asset",
         label="Create Asset",
-        description="Create a temporary asset entity (lasts for the scene)",
+        description="Create a temporary asset entity at a location (duration-scoped; deleted on revert)",
         category="benefit",
         effect_type="create_entity",
         effect_action="create_asset",
@@ -399,6 +399,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Asset Name", field_type="text",
                           required=True, default="anchor_point"),
+        ],
+        context_fields=[
+            EffectFieldDef(name="location", label="Location", field_type="text", required=False),
         ],
         supports_duration=True,
         inverse=("entity", "delete_entity"),

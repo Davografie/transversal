@@ -50,11 +50,11 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 
 ### Batch 3 — New effect actions (backend + registry + editor)
 
-- [ ] Create temporary location asset (context: duration)
+- [x] Create temporary location asset (context: duration) — `create_asset` + `location` context field, revert `delete_entity`
 - [ ] Challenge rating (effect die vs challenge die)
-- [ ] Step down target-entity's trait (likely already expressible — verify)
-- [ ] Disable a trait (new `TraitSetting.enabled` flag — not location-scoped; + duration revert)
-- [ ] Toggle trait (same `enabled` flag)
+- [x] Step down target-entity's trait — verified: already expressible via `step_down_trait`'s `entity` field
+- [x] Disable a trait (new `TraitSetting.enabled` flag — not location-scoped; + duration revert → `enable`)
+- [x] Toggle trait (same `enabled` flag, self-inverse revert)
 - [ ] Increase/decrease result/effect limit *(decision below)*
 - [ ] Increase/set trait-set limit (needs `TraitSetSetting.limit`)
 - [ ] Create new/temporary projection (disguise / alt-ID)
