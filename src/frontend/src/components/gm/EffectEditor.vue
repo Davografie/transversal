@@ -34,7 +34,16 @@
         <div class="ee-timing-top">
           <label class="ee-timing-label">Timing</label>
           <select v-model="newEffect.timing">
-            <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ t }}</option>
+            <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ timingLabel(t) }}</option>
+          </select>
+        </div>
+        <div v-if="isRollTiming" class="ee-field">
+          <label>Roll dice</label>
+          <select :value="dieRole()" @change="setDieRole($event.target.value)">
+            <option value="">any</option>
+            <option value="null">unchosen</option>
+            <option value="total">result</option>
+            <option value="effect">effect</option>
           </select>
         </div>
         <div v-if="isPortalLocation" class="ee-fixed-dest">Scope <b>{location:transversal_target}</b> → {{ portalDestination }} (+ zones)</div>
@@ -208,10 +217,43 @@ const effects = computed({
 const { load, actions: effectActions, summarize: effectSummary } = useEffectActions()
 const showEditor = ref(false)
 const editingIndex = ref(null)
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', targetFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
 const { copy } = useClipboard()
+
+const TIMING_LABELS = {
+  'IMMEDIATE': 'Immediate',
+  'ON_ROLL': 'On roll',
+  'ON_SET': 'On set',
+  'ON_RESULT': 'On result',
+  'END_OF_BEAT': 'End of beat',
+  'END_OF_SCENE': 'End of scene',
+  'END_OF_SESSION': 'End of session',
+  'AFTER_BEATS': 'After beats',
+  'ON_CONDITION': 'On condition',
+}
+function timingLabel(t) { return TIMING_LABELS[t] || t }
+
+const ROLL_TIMINGS = ['ON_RESULT', 'ON_SET', 'ON_ROLL']
+const isRollTiming = computed(() => ROLL_TIMINGS.includes(newEffect.timing))
+
+function dieRole() {
+  if (!newEffect.dieFilter || !('role' in newEffect.dieFilter)) return ''
+  const r = newEffect.dieFilter.role
+  return r === null ? 'null' : r
+}
+
+function setDieRole(v) {
+  if (v === '') {
+    const { role, ...rest } = newEffect.dieFilter || {}
+    newEffect.dieFilter = rest
+  } else if (v === 'null') {
+    newEffect.dieFilter = { ...newEffect.dieFilter, role: null }
+  } else {
+    newEffect.dieFilter = { ...newEffect.dieFilter, role: v }
+  }
+}
 
 onMounted(() => { load() })
 
@@ -383,6 +425,7 @@ function onActionChange() {
   newEffect.targetMode = 'literal'
   newEffect.scope = defaultScopeFor(selectedAction.value?.targetKind)
   newEffect.targetFilter = {}
+  newEffect.dieFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entityScope = ''
@@ -439,6 +482,7 @@ function buildEffect(meta) {
     result: meta.implicitResult || strVal(newEffect.fields.result),
     targetScope,
     targetFilter: kind ? (newEffect.targetFilter || {}) : {},
+    dieFilter: newEffect.dieFilter || {},
     entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context,
@@ -483,6 +527,7 @@ function editEffect(i) {
   newEffect.targetMode = detectTargetMode(eff, meta)
   newEffect.scope = eff.targetScope || ''
   newEffect.targetFilter = eff.targetFilter || {}
+  newEffect.dieFilter = eff.dieFilter || {}
   newEffect.entityMode = detectEntityMode(eff)
   newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
@@ -526,6 +571,7 @@ function closeEditor() {
   newEffect.targetMode = 'literal'
   newEffect.scope = ''
   newEffect.targetFilter = {}
+  newEffect.dieFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
   newEffect.entityScope = ''

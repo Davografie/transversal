@@ -40,7 +40,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, watch } from 'vue'
 import DiePicker from '@/components/DiePicker.vue'
 
 const props = defineProps({
@@ -54,15 +54,19 @@ const props = defineProps({
 
 const emit = defineEmits(['update:die', 'update:negative', 'update:ratingType', 'update:statement', 'update:notes'])
 
-const isVariable = computed(() => (props.die || '').startsWith('{'))
+// Explicit mode so toggling to Variable sticks (empty die ≠ die mode).
+const isVariable = ref((props.die || '').startsWith('{'))
+
+watch(() => props.die, (d) => {
+  isVariable.value = (d || '').startsWith('{')
+})
 
 function setVariableMode(variable) {
+  isVariable.value = variable
   if (variable) {
-    // Enter variable mode with an empty token (the author types the variable).
-    if (!isVariable.value) emit('update:die', '')
+    if (!(props.die || '').startsWith('{')) emit('update:die', '{effect_die}')
   } else {
-    // Enter die mode with a default rating.
-    if (isVariable.value) emit('update:die', 'd6')
+    if ((props.die || '').startsWith('{')) emit('update:die', 'd6')
   }
 }
 </script>

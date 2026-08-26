@@ -13,7 +13,7 @@
           <TargetPicker v-model="c.target" :kind="targetKind(c.type)" :placeholder="targetPlaceholder(c.type)" />
         </div>
         <select v-else-if="targetOptions(c.type).length" v-model="c.target" class="ce-target">
-          <option value="">-- entity type --</option>
+          <option value="">{{ targetPlaceholder(c.type) }}</option>
           <option v-for="o in targetOptions(c.type)" :key="o" :value="o">{{ o }}</option>
         </select>
         <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
@@ -74,7 +74,7 @@ function needsTarget(type) {
 }
 
 function needsSubject(type) {
-  return type !== 'ALWAYS' && type !== 'NARRATIVE'
+  return !['ALWAYS', 'NARRATIVE', 'PHASE'].includes(type)
 }
 
 function targetPlaceholder(type) {
