@@ -126,14 +126,19 @@ Replace the hardcoded `self.location`/`self.universe`/`self.projection` with a d
 
 ## Sequencing & testing
 
-**Verify, then build** — the layer has a lot of freshly-landed surface that only the dev client can exercise end-to-end (the backend suite doesn't cover GraphQL→editor→save→fire).
+**Build with contract tests, live-test in play.** No full-coverage manual matrix up front — it's deferred until the scope is built. Instead:
 
-1. **Baseline manual pass** — one firing scenario (create character → `sfx-starter-location` fires → toast → correct universe/location) + editor smoke-tests of the new inputs (`has_razmerit` comparator, `entity_type` filter, auto-fill, name summary).
-2. **Owner model** (condition + availability filtering + migration + panel filter).
-3. **Drillthrough schema** (field schema + recursive resolver + wizard).
-4. **Batch 3 actions**, then **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
-5. **Batch 6 SFX seeds** once their primitives exist.
-6. **Fuller pass** incl. seeded SFX.
+- **Contract test per primitive** — each new action/condition/trigger lands with a backend unit test asserting its contract (the 571-test suite grows this way).
+- **Drift-proof test** — one automated test (from [[Effect Variables and Primitives]] Phase 1) asserting every trigger's fire-site context matches its declared `{variables}`; catches the "declared vs populated" bug class wholesale.
+- **Live-test the SFX actually used in play** — focused, usage-driven manual verification as each SFX is wanted; this drives which scenarios get the attention.
+
+Build order:
+
+1. **Owner model** (condition + availability filtering + migration + panel filter).
+2. **Drillthrough schema** (field schema + recursive resolver + wizard).
+3. **Batch 3 actions**, then **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
+4. **Batch 6 SFX seeds** once their primitives exist.
+5. **Full-coverage pass** — deferred; revisit only if a class of bugs surfaces that contract tests and live play keep missing.
 
 ## Related
 
