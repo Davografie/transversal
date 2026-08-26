@@ -356,7 +356,12 @@ def _die(result: Optional[str]) -> DieType:
     return DieType(str(result).lower()) if result else DieType.D4
 
 
-def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False) -> TraitSetting:
+def _ctx(effect: Effect, key: str) -> str:
+    """Read a string context value (empty when absent)."""
+    return str((effect.context or {}).get(key) or "")
+
+
+def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo, *, negative: bool = False, statement: str = "", notes: str = "") -> TraitSetting:
     from transversal.services.polarity import default_polarity
 
     from_type, owner_id = owner
@@ -384,6 +389,8 @@ def _new_traitsetting(owner: tuple[str, str], trait_id: str, die: DieType, repo,
         projection_id=projection_id,
         dice=[die],
         polarity=polarity,
+        statement=statement,
+        notes=notes,
         source_type="effect",
     )
 
@@ -642,7 +649,8 @@ def _apply_gain(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
     die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
+    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
+                           statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
     _queue_entity_revert(repo, subject, effect, target=target)
@@ -672,7 +680,8 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
             _queue_explicit(repo, existing, effect, "step_down", target)
         return
     die = _die(effect.result)
-    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
+    ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),
+                           statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
     if _has_steps(effect):
         _step_up_trait(subject, ts, target, effect, result, repo, steps=steps)
     result.new_trait_settings.append(ts)
@@ -717,7 +726,8 @@ def _apply_cortex_gain(entity, effect, repo, result):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         return
-    ts = _new_traitsetting(owner, target, die, repo, negative=negative)
+    ts = _new_traitsetting(owner, target, die, repo, negative=negative,
+                           statement=_ctx(effect, "statement"), notes=_ctx(effect, "notes"))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
 

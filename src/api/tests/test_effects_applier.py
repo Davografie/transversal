@@ -152,6 +152,21 @@ def test_gain_creates_traitsetting():
     assert result.applied[0].summary == "gained iron-will at d6"
 
 
+def test_gain_sets_statement_and_notes_from_context():
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-complications")])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="hazard", result="d6", negative=True,
+        context={"statement": "Crimson Scar", "notes": "Blood-red glowing scars…"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.polarity == Polarity.NEGATIVE
+    assert ts.statement == "Crimson Scar"
+    assert ts.notes == "Blood-red glowing scars…"
+
+
 def test_gain_noop_when_present():
     repo = FakeRepo(traitsettings=[_ts("iron-will", [DieType.D6])])
     entity = _entity()
