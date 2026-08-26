@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useClipboard } from '@vueuse/core'
 import { RESONANCE, signatureOf } from '@/composables/resonance.js'
 import { drawResonanceFrame } from '@/composables/renderResonance.js'
 
@@ -30,7 +31,7 @@ const toName = ref('character-phaos-a2c7db71')
 const fromLabel = ref('Kael Drift')
 const toLabel = ref('Phaos Tyish')
 const loading = ref(true)
-const copied = ref(false)
+const { copy: copyToClipboard, copied } = useClipboard({ copiedDuring: 1500 })
 
 const canvasEl = ref(null)
 let rafId = null
@@ -135,13 +136,7 @@ function loop(now) {
 }
 
 async function copyOutput() {
-  try {
-    await navigator.clipboard.writeText(output.value)
-    copied.value = true
-    setTimeout(() => { copied.value = false }, 1500)
-  } catch {
-    // clipboard may be unavailable; the <pre> is still selectable
-  }
+  await copyToClipboard(output.value)
 }
 
 onMounted(() => {

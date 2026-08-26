@@ -39,7 +39,8 @@
 </template>
 
 <script setup>
-import { shallowRef, ref, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
+import { shallowRef, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
+import { useClipboard } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
 
 const props = defineProps({
@@ -58,32 +59,13 @@ const props = defineProps({
 defineEmits(['close'])
 
 // Copy-ID helper — the header shows a # button that copies the panel id.
-const copied = ref(false)
-let copyTimer = null
+// useClipboard handles the secure-context clipboard API + a legacy execCommand
+// fallback for HTTP/non-localhost hosts, and resets `copied` after a delay.
+const { copy, copied } = useClipboard({ copiedDuring: 1200 })
 async function copyId() {
   if (!props.id) return
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(props.id)
-    } else {
-      // Fallback for non-secure contexts (HTTP on a non-localhost host) where
-      // navigator.clipboard is unavailable.
-      const ta = document.createElement('textarea')
-      ta.value = props.id
-      ta.setAttribute('readonly', '')
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-    }
-    copied.value = true
-    clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => { copied.value = false }, 1200)
-  } catch { /* clipboard unavailable — ignore */ }
+  await copy(props.id)
 }
-onUnmounted(() => { if (copyTimer) clearTimeout(copyTimer) })
 
 // ⚠ shallowRef — must NOT be ref() because Vue deeply unwraps nested refs inside
 // reactive objects. If child.props contains computed refs (e.g. filteredTraitsets),

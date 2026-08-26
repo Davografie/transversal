@@ -165,6 +165,7 @@
 
 <script setup>
 import { ref, computed, reactive, watch, onMounted } from 'vue'
+import { useClipboard } from '@vueuse/core'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import { useEffectTargets } from '@/composables/useEffectTargets.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
@@ -198,6 +199,7 @@ const editingIndex = ref(null)
 const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', targetFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
+const { copy } = useClipboard()
 
 onMounted(() => { load() })
 
@@ -516,10 +518,10 @@ function closeEditor() {
 async function copyVariable(v) {
   const token = `{${v}}`
   try {
-    await navigator.clipboard.writeText(token)
-    copiedVar.value = v
-    setTimeout(() => { if (copiedVar.value === v) copiedVar.value = '' }, 1200)
+    await copy(token)
   } catch { /* non-fatal: token stays visible for manual copy */ }
+  copiedVar.value = v
+  setTimeout(() => { if (copiedVar.value === v) copiedVar.value = '' }, 1200)
 }
 
 function effectCategory(eff) {
