@@ -17,6 +17,7 @@ from transversal.domain import (
     Trait,
     TraitSet,
     TraitSetting,
+    TraitSetSetting,
     TransversalType,
 )
 from transversal.domain.validation import ValidationError, validate_entity
@@ -144,6 +145,17 @@ class InMemoryRepository(EntityRepository):
         return TraitSetting.model_validate(d) if d else None
     def delete_traitsetting(self, tsid: str) -> bool:
         return self._traitsettings.pop(tsid, None) is not None
+
+    # traitsetsettings
+    def create_traitsetsetting(self, tss: TraitSetSetting) -> TraitSetSetting:
+        self._store(self._traitsetsettings, tss.id, tss.model_dump())
+        return tss
+    def get_traitsetsettings_for_entity(self, eid: str) -> list[TraitSetSetting]:
+        return [
+            TraitSetSetting.model_validate(d)
+            for d in self._traitsetsettings.values()
+            if d["entity_id"] == eid
+        ]
 
     # sfx owners
     def get_sfx_owner(self, owner_id: str) -> SfxOwner | None:

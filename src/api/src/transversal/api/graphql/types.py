@@ -596,10 +596,15 @@ class TraitSetting:
 
     @strawberry.field
     def traitset_limit(self, info: strawberry.Info) -> int:
-        from transversal.services.entity_manager import EntityManager
+        """Effective trait-set limit: per-entity override, else registry default."""
         em = info.context["entity_manager"]
-        ts = em.repo.get_traitset_by_id(self.traitset_id)
-        return ts.limit if ts else 1
+        repo = em.repo
+        ts = repo.get_traitset_by_id(self.traitset_id)
+        default = ts.limit if ts else 1
+        for tss in repo.get_traitsetsettings_for_entity(str(self.entity_id)):
+            if tss.traitset_id == self.traitset_id and tss.from_type == "entity" and tss.limit is not None:
+                return tss.limit
+        return default
 
     @strawberry.field
     def transfer_flags(self, info: strawberry.Info) -> strawberry.scalars.JSON:

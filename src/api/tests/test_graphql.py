@@ -141,6 +141,36 @@ class TestGraphQLQueries:
         """, {"t": "trait_setting", "ids": ["ts-1"]})
         assert [e["id"] for e in result3["scheduledEvents"]] == ["se-test-2"]
 
+    def test_traitset_limit_merges_per_entity_override(self, client):
+        from transversal import main as api_main
+        from transversal.domain import (
+            DieType, Entity, EntityType, TraitSetting, TraitSetSetting,
+        )
+
+        repo = api_main._repo
+        eid = "char-limit"
+        repo.create_entity(Entity(id=eid, type=EntityType.CHARACTER, name="Limit", current_universe="earth"))
+        repo.create_traitsetting(TraitSetting(
+            id=f"{eid}:trait-earth-strength", entity_id=eid, trait_id="trait-earth-strength",
+            traitset_id="ts-earth-attributes", dice=[DieType.D6],
+        ))
+
+        def _limit():
+            r = _gql(client, """
+                query($id: ID!) { entity(id: $id) { traitSettings { traitsetId traitsetLimit } } }
+            """, {"id": eid})
+            return r["entity"]["traitSettings"][0]["traitsetLimit"]
+
+        # No override → registry default (attributes = 1).
+        assert _limit() == 1
+
+        # Per-entity override → effective limit.
+        repo.create_traitsetsetting(TraitSetSetting(
+            id=f"{eid}:ts-earth-attributes", entity_id=eid, traitset_id="ts-earth-attributes",
+            from_type="entity", limit=3,
+        ))
+        assert _limit() == 3
+
 
 class TestGraphQLMutations:
     def test_create_entity(self, client):

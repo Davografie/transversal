@@ -96,7 +96,7 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 - **Drillthrough** = dynamic, target-type field schema (see below).
 - **Disable/toggle trait** = a new `TraitSetting.enabled` boolean flag (not `locations_enabled`/`locations_disabled`); a disabled trait must not contribute dice to the pool.
 - **`has_effective_trait`** = possession (`has_trait`) is unaffected by disable; a new `HAS_EFFECTIVE_TRAIT` condition gates on `enabled` (a disabled trait is still owned, just not effective).
-- **Trait-set limit** = a per-entity `TraitSetSetting.limit` override (registry default when None); the sheet still reads the registry limit and has not yet merged the override (frontend follow-up).
+- **Trait-set limit** = a per-entity `TraitSetSetting.limit` override (registry default when None); `TraitSetting.traitset_limit` resolves the effective limit (override ?? registry), which the sheet already consumes via `traitsetLimit`.
 
 ## Owner model → `entity_type` condition + GM owner
 
