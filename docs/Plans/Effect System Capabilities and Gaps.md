@@ -88,7 +88,7 @@ Three temporal axes, three different owners: **`SFX.duration`** (`rolls: 1`) is 
 
 ## What remains outside this (adjacent, not effect-pipeline)
 
-- **Auto-contribution** — the hazard being a *resource* trait that automatically enters dice pools of entities at its location (the "negative traits auto-added to PC pools, excluded from select GMCs" idea). This is a **trait-model** capability, not an effect action.
+- ~~**Auto-contribution**~~ — **abandoned** (the hazard being a *resource* trait that automatically enters dice pools of entities at its location, i.e. negative traits auto-added to PC pools and excluded from select GMCs). Dropped as a trait-model track; not an effect action.
 - **Recursive drillthrough** — the full `die → traitsetting → entity → location` grammar. Crimson Scars needs only `self.location`, so the general wizard stays deferred.
 
 ## Primitive sequencing
@@ -108,7 +108,7 @@ The primitives (batches 1–4) are in place, but the **runtime** arming flow is 
 
 The `die_filter` supports arbitrary equality predicates on a die — including `ts_id` — but for now the client stamps `armed_sfx_ids` on **all** of the trait's dice ("stamp all"). The future "you may use *any* dice…" vs "these dice *will*…" distinction — letting the user pick *which* of the scoped dice feed the effect — is **not** built. `die_filter`/`ts_id` matching is the hook that would back it; the selection UI is the deferred work.
 
-After batch 4, Crimson Scars is a normal authored composition with no bespoke code; the auto-contribution and recursive-drillthrough tracks can proceed independently.
+After batch 4, Crimson Scars is a normal authored composition with no bespoke code; the recursive-drillthrough track can proceed independently.
 
 ## Related
 
