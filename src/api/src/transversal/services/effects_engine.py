@@ -165,6 +165,10 @@ class EffectsEngine:
             # Execute each effect with its own timing
             sfx_applied = False
             roll_effects = [e for e in sfx.effects if e.timing in _roll_timings]
+            log.info(
+                "[process_event] sfx=%s trigger=%s roll_effects=%s",
+                sfx.id, sfx.trigger, [e.timing.value for e in roll_effects],
+            )
             if roll_effects:
                 # Arm the SFX's roll-timing effects as a unit for its duration.
                 from transversal.services.roll_deferral import arm_sfx

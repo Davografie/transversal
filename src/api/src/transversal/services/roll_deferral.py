@@ -19,10 +19,13 @@ on each matching roll event until that duration is exhausted.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
 from transversal.domain import Effect, EffectTiming
+
+log = logging.getLogger("transversal.sfx")
 
 # EffectTiming values that defer to a per-roll event rather than a time
 # boundary or persisted state change.
@@ -73,6 +76,12 @@ def arm_sfx(
     substitute at fire time, because the roll state does not exist at arm time.
     """
     rolls, expiry_events = _split_duration(duration)
+    log.info(
+        "[roll_deferral.arm_sfx] entity=%s sfx=%s effects=%s rolls=%s expiry=%s",
+        entity_id, source_sfx_id,
+        [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
+        rolls, expiry_events,
+    )
     _armed.setdefault(entity_id, []).append(
         ArmedSfx(
             effects=list(effects),
@@ -96,6 +105,11 @@ def fire_armed(
     """
     if entity_id not in _armed:
         return []
+    log.info(
+        "[roll_deferral.fire_armed] entity=%s event=%s armed=%s",
+        entity_id, event_type,
+        [(a.source_sfx_id, [e.timing.value for e in a.effects], a.rolls) for a in _armed[entity_id]],
+    )
     if not universe:
         from transversal.main import _get_repo
 
@@ -117,6 +131,12 @@ def fire_armed(
                     continue
                 if armed.source_sfx_id is not None or bool(effect.die_filter):
                     dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
+                    log.info(
+                        "[roll_deferral.fire_armed] sfx=%s effect=%s/%s candidates=%s matched=%s",
+                        armed.source_sfx_id, effect.type, effect.action,
+                        [(d.get('armed_sfx_ids'), d.get('role'), d.get('ts_id')) for d in rolls],
+                        [(d.get('armed_sfx_ids'), d.get('role'), d.get('ts_id')) for d in dice],
+                    )
                     for die in dice:
                         resolved = _substitute_die_context(effect, die, context or {})
                         effect_registry.apply(resolved, entity_id, universe, context or {})
