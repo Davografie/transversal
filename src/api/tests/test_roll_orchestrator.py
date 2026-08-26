@@ -169,3 +169,38 @@ def test_fire_roll_sfx_gated_by_condition():
     # Wrong location -> condition gates it out.
     repo.entities["e1"].current_location = "loc-b"
     assert fire_roll_sfx(engine, repo, "e1", "earth", _simplified()) == []
+
+
+def test_fire_result_sfx_exposes_roll_state_in_context(monkeypatch):
+    """on_result fires with effect_die/total plus the rolled dice (role + tier)."""
+    import transversal.main as main
+    from transversal.services.effects_engine import EventOutcome
+
+    captured = []
+
+    class FakeEngine:
+        def process_event_outcome(self, event, sfx_ids, razmerit, repo=None):
+            captured.append(event)
+            return EventOutcome()
+
+    rolls = [
+        {"die": "d8", "result": 7, "role": None, "tier": "success", "effect_die": "d6", "ts_id": "ts-crimson"},
+        {"die": "d8", "result": 5, "role": "total", "tier": "marginal", "effect_die": "d4", "ts_id": "ts-other"},
+    ]
+
+    monkeypatch.setattr(main, "_get_engine", lambda: FakeEngine())
+    monkeypatch.setattr(main, "_get_repo", lambda: SimpleNamespace(
+        get_entity=lambda eid: SimpleNamespace(razmerit=3, sfx_ids=[], current_projection=None, current_universe="earth"),
+    ))
+    monkeypatch.setattr(roll_orchestrator, "get_available_sfx_ids", lambda *a, **k: [])
+    monkeypatch.setattr(roll_orchestrator, "_emit_pending_choices", lambda *a, **k: None)
+
+    applied = roll_orchestrator.fire_result_sfx("e1", "earth", rolls, effect_die="d6", total=12)
+
+    assert applied == []
+    assert len(captured) == 1
+    ev = captured[0]
+    assert ev.type == "on_result"
+    assert ev.context["effect_die"] == "d6"
+    assert ev.context["total"] == 12
+    assert ev.context["rolls"] == rolls

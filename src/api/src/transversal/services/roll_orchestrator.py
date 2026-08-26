@@ -81,3 +81,38 @@ def fire_roll_sfx(
     outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
     _emit_pending_choices(entity_id, universe, outcome.pending)
     return outcome.applied
+
+
+def fire_result_sfx(
+    entity_id: str,
+    universe: str,
+    rolls: list[dict],
+    effect_die: str | None = None,
+    total: int | None = None,
+) -> list:
+    """Fire automatic ``on_result`` SFX with the finalized roll state in context.
+
+    ``rolls`` is the enriched pool dice (each carrying ``result``/``role``/
+    ``tier``/``effect_die``/``ts_id``) so conditions and effects can inspect
+    which dice were rolled and whether any were left unchosen (``role`` is
+    None). ``effect_die``/``total`` are the committed scalars exposed as the
+    trigger's ``{effect_die}``/``{total}`` variables.
+    """
+    from transversal.main import _get_engine, _get_repo
+    from transversal.services.effects_engine import GameEvent
+
+    repo = _get_repo()
+    sfx_ids, razmerit = _entity_sfx_context(repo, entity_id, universe)
+    event = GameEvent(
+        type="on_result",
+        entity_id=entity_id,
+        universe=universe,
+        context={
+            "effect_die": effect_die,
+            "total": total,
+            "rolls": rolls,
+        },
+    )
+    outcome = _get_engine().process_event_outcome(event, sfx_ids, razmerit, repo=repo)
+    _emit_pending_choices(entity_id, universe, outcome.pending)
+    return outcome.applied

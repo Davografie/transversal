@@ -61,6 +61,11 @@ def test_on_set_exposes_total_and_effect_die():
     assert {v.name: v.type for v in vs} == {"effect_die": "die", "total": "number"}
 
 
+def test_on_result_exposes_total_and_effect_die():
+    vs = trigger_variables("on_result")
+    assert {v.name: v.type for v in vs} == {"effect_die": "die", "total": "number"}
+
+
 def test_beat_and_scene_triggers_are_declared():
     by_value = {t.value: t for t in TRIGGERS}
     assert by_value["on_beat"].label == "On Beat Advance"

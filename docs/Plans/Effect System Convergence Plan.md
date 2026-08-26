@@ -66,6 +66,7 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 - [x] On scene advance — `on_scene` trigger, global fire in `dispatch_event` (fires for every entity)
 - [x] On beat advance — `on_beat` trigger, global fire in `dispatch_event` (fires for every entity)
 - [x] On set — `on_set` trigger + fire site in `set_result` (`/set`), context `{effect_die}`/`{total}`; contest set only, non-contest "Done" commit is local-only (follow-up if needed)
+- [x] On result — `on_result` trigger + `fire_result_sfx`; context `{effect_die}`/`{total}` plus the roll state under `rolls` (dice with `role`/`tier`/`effect_die`/`ts_id`) — the foundation for Crimson Scars' "rolled but unchosen die" check. Contest set only (same caveat).
 
 ### Batch 5 — Cross-cutting behavior
 

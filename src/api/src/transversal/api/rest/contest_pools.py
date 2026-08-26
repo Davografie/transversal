@@ -105,6 +105,14 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
         "total": body.total,
     })
 
+    # Fire ``on_result`` with the finalized roll state (dice + roles + tiers),
+    # so SFX can inspect which dice were rolled and which were left unchosen.
+    from transversal.services.roll_orchestrator import fire_result_sfx
+    fire_result_sfx(
+        entity_id, "", get_scene_store().get_pool(location_id, entity_id),
+        effect_die=body.effect_die, total=body.total,
+    )
+
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None
     defendant_id = defendant.entity_id if defendant else None

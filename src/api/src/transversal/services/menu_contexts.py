@@ -83,7 +83,10 @@ class TriggerDef:
 TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("manual", "Manual (player activates)", group="manual"),
     TriggerDef("on_roll", "On Roll", group="dicepool"),
-    TriggerDef("on_result", "On Result", group="dicepool"),
+    TriggerDef("on_result", "On Result", (
+        Variable("effect_die", "die"),
+        Variable("total", "number"),
+    ), group="dicepool"),
     TriggerDef("on_complication", "On Complication (hitch)", group="dicepool"),
     TriggerDef("on_botch", "On Botch", group="dicepool"),
     TriggerDef("on_success", "On Success", group="dicepool"),
