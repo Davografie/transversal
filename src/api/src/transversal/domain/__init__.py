@@ -654,12 +654,22 @@ class PendingTerm(BaseModel):
 # Timing for deferred effects.
 
 class EffectTiming(str, Enum):
+    """When an effect fires relative to its trigger.
+
+    Time boundaries (``end_of_beat``…) are persisted timers advanced on the
+    matching global/state-change event. Roll events (``on_roll``/``on_set``/
+    ``on_result``) are ephemeral, per-roll deferrals — they arm the effect and
+    fire it at the next matching roll event (see ``services/roll_deferral``).
+    """
     IMMEDIATE = "immediate"
     END_OF_BEAT = "end_of_beat"
     END_OF_SCENE = "end_of_scene"
     END_OF_SESSION = "end_of_session"
     AFTER_BEATS = "after_beats"
     ON_CONDITION = "on_condition"
+    ON_ROLL = "on_roll"
+    ON_SET = "on_set"
+    ON_RESULT = "on_result"
 
 
 class AttunementScope(str, Enum):

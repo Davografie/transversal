@@ -5,6 +5,7 @@
         <option value="scene">Scene</option>
         <option value="beat">Beat</option>
         <option value="session">Session</option>
+        <option value="rolls">Rolls</option>
         <option value="location_changed">Location changed</option>
         <option value="trait_updated">Trait updated</option>
       </select>

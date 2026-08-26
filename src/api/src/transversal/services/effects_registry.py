@@ -39,6 +39,7 @@ class EffectActionMeta:
     group: str = ""             # functional group for the editor dropdown (optgroup)
     valid_timings: list[str] = field(default_factory=lambda: [
         "IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
+        "ON_ROLL", "ON_SET", "ON_RESULT",
     ])
     fields: list[EffectFieldDef] = field(default_factory=list)
     context_fields: list[EffectFieldDef] = field(default_factory=list)
@@ -271,7 +272,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="benefit",
         effect_type="modify_trait",
         effect_action="step_up",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
@@ -289,7 +290,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="cost",
         effect_type="modify_trait",
         effect_action="step_down",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
@@ -307,7 +308,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="either",
         effect_type="modify_trait",
         effect_action="set",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True),
@@ -328,7 +329,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="cost",
         effect_type="modify_trait",
         effect_action="disable",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
@@ -346,7 +347,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="either",
         effect_type="modify_trait",
         effect_action="toggle",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
@@ -459,7 +460,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="either",
         effect_type="modify_traitset",
         effect_action="set_limit",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             _ENTITY_FIELD,
             EffectFieldDef(name="target", label="Trait Set", field_type="text", required=True),
@@ -540,7 +541,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="either",
         effect_type="modify_trait",
         effect_action="gain",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
             _ENTITY_FIELD,
@@ -560,7 +561,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="either",
         effect_type="modify_trait",
         effect_action="gain_or_step_up",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
             _ENTITY_FIELD,
@@ -579,7 +580,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="either",
         effect_type="modify_trait",
         effect_action="cortex_gain",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
             _ENTITY_FIELD,
@@ -692,7 +693,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         category="either",
         effect_type="relationship",
         effect_action="create",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Entity", field_type="text", required=True),
             EffectFieldDef(name="result", label="Relationship Type", field_type="text", required=True),

@@ -401,3 +401,28 @@ def test_process_event_defers_choose_projection_in_context():
     assert len(outcome.applied) == 0
     assert len(outcome.pending) == 1
     assert outcome.pending[0].effect.context["projection"] == "{choose_projection}"
+
+
+def test_roll_timing_effect_is_armed_not_applied():
+    from transversal.services import roll_deferral
+
+    roll_deferral.reset()
+    try:
+        engine = EffectsEngine()
+        sfx = _make_sfx(
+            "sfx-arm", "Arm", "manual",
+            effects=[Effect(
+                timing=EffectTiming.ON_RESULT,
+                type="modify_trait", action="gain", target="hazard",
+            )],
+        )
+        engine.register(sfx)
+
+        event = GameEvent(type="manual", entity_id="char-1", universe="earth")
+        outcome = engine.process_event_outcome(event, ["sfx-arm"], 10)
+
+        # Roll-timing effects are armed, not applied immediately.
+        assert outcome.applied == []
+        assert [e.target for e in roll_deferral.list_armed("char-1")] == ["hazard"]
+    finally:
+        roll_deferral.reset()

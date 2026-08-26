@@ -80,6 +80,9 @@ def fire_roll_sfx(
     )
     outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
     _emit_pending_choices(entity_id, universe, outcome.pending)
+    # Fire roll-scoped deferred effects armed with ``on_roll`` timing.
+    from transversal.services.roll_deferral import fire_armed
+    fire_armed(entity_id, "on_roll", universe, {})
     return outcome.applied
 
 

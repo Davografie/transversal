@@ -25,6 +25,7 @@ from transversal.domain import (
 )
 import transversal.services.effects_applier as _effects_applier
 from transversal.services.conditions import evaluate_conditions
+from transversal.services.roll_deferral import ROLL_TIMINGS as _roll_timings
 
 log = logging.getLogger("transversal.sfx")
 
@@ -164,6 +165,14 @@ class EffectsEngine:
             # Execute each effect with its own timing
             sfx_applied = False
             for effect in sfx.effects:
+                # Roll-event timings arm the effect (raw) for the next matching
+                # roll event; roll-context variables are substituted at fire time.
+                if effect.timing in _roll_timings:
+                    from transversal.services.roll_deferral import arm_effect
+                    arm_effect(event.entity_id, effect)
+                    sfx_applied = True
+                    continue
+
                 effect = _substitute_effect_context(effect, event.context)
                 if effect.timing == EffectTiming.IMMEDIATE:
                     if _effects_applier.find_choose_placeholder(effect):
