@@ -169,7 +169,7 @@ class EffectsEngine:
                 # roll event; roll-context variables are substituted at fire time.
                 if effect.timing in _roll_timings:
                     from transversal.services.roll_deferral import arm_effect
-                    arm_effect(event.entity_id, effect)
+                    arm_effect(event.entity_id, effect, source_sfx_id=sfx.id)
                     sfx_applied = True
                     continue
 

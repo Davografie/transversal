@@ -98,9 +98,13 @@ Note the **two durations** and where they live: the *effect's* `duration` (`roll
 Each batch is a coherent, testable increment; contract tests land with each primitive (per [[Effect System Convergence Plan#Sequencing & testing]]).
 
 1. ~~**Temporal spine**~~ — done (`roll_deferral` service + `EffectTiming.ON_ROLL/ON_SET/ON_RESULT` + `rolls` duration unit; effects arm at trigger time and fire at the matching roll event). *Makes `timing: on result` + `duration: rolls: 1` expressible.*
-2. **Effect gating + die references** — *core done*: `Effect.die_filter` (roll-die predicates, e.g. `{"role": None}`), `{triggered_die_tier/effect_die/result/die}` variables, and iteration (one apply per matching die). *Remaining:* the auto `scope: traitsetting` — resolving *which* dice are the SFX's own (source-trait id at arm time vs an `armed_sfx_ids` flag on the die) — plus the editor UI for `die_filter`. *Makes `condition: die.role==None` + `rating: {triggered_die_effect_die}` expressible; source-scoping is the open piece.*
+2. ~~**Effect gating + die references**~~ — done (`Effect.die_filter` predicates + `{triggered_die_*}` substitution + iteration; the effect's own dice are identified by `source_sfx_id` matching the client-stamped `armed_sfx_ids` on the pool dice). *Makes `condition: die.role==None` + `rating: {triggered_die_effect_die}` + per-die iteration expressible.*
 3. **Trait model** — `rating_type` (resource/static) + trait duration in the inline trait editor and `_new_traitsetting`. *Makes `rating-type: resource` + `duration: scene: 1` on the created trait expressible.*
-4. **Authoring UX** — the phase-condition category (`on adding`) and the editor layout (timing top, duration bottom). *Makes the full SFX authorable end-to-end.*
+4. **Authoring UX** — the phase-condition category (`on adding`), the editor layout (timing top, duration bottom), and exposing "what's armed" so the client can re-stamp across rolls for longer durations. *Makes the full SFX authorable end-to-end.*
+
+### Deferred: selective stamping
+
+The `die_filter` supports arbitrary equality predicates on a die — including `ts_id` — but for now the client stamps `armed_sfx_ids` on **all** of the trait's dice ("stamp all"). The future "you may use *any* dice…" vs "these dice *will*…" distinction — letting the user pick *which* of the scoped dice feed the effect — is **not** built. `die_filter`/`ts_id` matching is the hook that would back it; the selection UI is the deferred work.
 
 After batch 4, Crimson Scars is a normal authored composition with no bespoke code; the auto-contribution and recursive-drillthrough tracks can proceed independently.
 

@@ -27,6 +27,7 @@ ROLL_TIMINGS = frozenset({
 class ArmedEffect:
     effect: Effect
     rolls: int  # remaining matching-event budget (>= 1)
+    source_sfx_id: str | None = None  # SFX id the client stamps on its dice
 
 
 _armed: dict[str, list[ArmedEffect]] = {}
@@ -42,13 +43,17 @@ def _rolls_budget(effect: Effect) -> int:
     return 1
 
 
-def arm_effect(entity_id: str, effect: Effect) -> None:
+def arm_effect(entity_id: str, effect: Effect, source_sfx_id: str | None = None) -> None:
     """Arm ``effect`` so it fires at its roll-event timing (see :func:`fire_armed`).
 
     The effect is stored *raw* — roll-context ``{variables}`` are substituted at
-    fire time, because the roll state does not exist at arm time.
+    fire time, because the roll state does not exist at arm time. ``source_sfx_id``
+    is the SFX id the client stamps onto its pool dice as ``armed_sfx_ids``, so the
+    effect can match its own dice at fire time.
     """
-    _armed.setdefault(entity_id, []).append(ArmedEffect(effect=effect, rolls=_rolls_budget(effect)))
+    _armed.setdefault(entity_id, []).append(
+        ArmedEffect(effect=effect, rolls=_rolls_budget(effect), source_sfx_id=source_sfx_id)
+    )
 
 
 def fire_armed(
@@ -78,8 +83,8 @@ def fire_armed(
     kept: list[ArmedEffect] = []
     for armed in _armed[entity_id]:
         if armed.effect.timing.value == event_type:
-            if armed.effect.die_filter:
-                dice = [d for d in (context or {}).get("rolls", []) if _die_matches(d, armed.effect.die_filter)]
+            if _selects_dice(armed):
+                dice = [d for d in (context or {}).get("rolls", []) if _selects_die(armed, d)]
                 for die in dice:
                     resolved = _substitute_die_context(armed.effect, die, context or {})
                     effect_registry.apply(resolved, entity_id, universe, context or {})
@@ -95,6 +100,23 @@ def fire_armed(
             kept.append(armed)
     _armed[entity_id] = kept
     return applied
+
+
+def _selects_dice(armed: ArmedEffect) -> bool:
+    """True when the armed effect iterates over a selected dice set."""
+    return armed.source_sfx_id is not None or bool(armed.effect.die_filter)
+
+
+def _selects_die(armed: ArmedEffect, die: dict) -> bool:
+    """True when ``die`` belongs to the armed effect's selected set.
+
+    The SFX id (stamped client-side as ``armed_sfx_ids``) identifies the effect's
+    own dice; ``die_filter`` adds further equality predicates (e.g. ``role: None``).
+    """
+    if armed.source_sfx_id is not None:
+        if armed.source_sfx_id not in (die.get("armed_sfx_ids") or []):
+            return False
+    return _die_matches(die, armed.effect.die_filter)
 
 
 def _die_matches(die: dict, die_filter: dict) -> bool:
