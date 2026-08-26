@@ -38,7 +38,7 @@
         <button class="create-btn canvas-btn" @click="openLocationTreeCanvas">🗺 Canvas</button>
       </div>
       <button class="create-btn" @click="openTraitsConfig">Manage Traits</button>
-      <button class="create-btn" @click="openSfxOwners">Manage SFX Owners</button>
+      <button class="create-btn" @click="openSfxManager">Manage SFX</button>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <GmList
@@ -74,7 +74,7 @@ import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmList from '@/components/gm/GmList.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
-import GmSfxOwnersPanel from '@/components/gm/GmSfxOwnersPanel.vue'
+import GmSfxManagementPanel from '@/components/gm/GmSfxManagementPanel.vue'
 import GmEntityEditPanel from '@/components/gm/GmEntityEditPanel.vue'
 import GmEntityCreatePanel from '@/components/gm/GmEntityCreatePanel.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
@@ -214,12 +214,12 @@ async function openTraitsConfig() {
   })
 }
 
-async function openSfxOwners() {
+async function openSfxManager() {
   editing.value = false; creating.value = false; selected.value = null; selectedId.value = null
   if (allSfxs.value.length === 0) await fetchTraitsConfig()
   panel.open({
-    component: GmSfxOwnersPanel,
-    title: 'SFX Owners',
+    component: GmSfxManagementPanel,
+    title: 'Manage SFX',
     props: {},
   })
 }
