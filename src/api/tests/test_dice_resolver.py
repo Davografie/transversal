@@ -62,6 +62,13 @@ class TestDetermineTier:
         assert OutcomeTier.EXCEPTIONAL.effect_die == DieType.D8
         assert OutcomeTier.PERFECT.effect_die == DieType.D10
 
+    def test_roll_dice_populates_outcome_tier(self):
+        specs = [DieSpec(die=DieType.D12, source_kind="manual", source_id="", label="x")]
+        (r,) = roll_dice(specs)
+        expected = _determine_tier(r.result)
+        assert r.tier == expected
+        assert r.tier.effect_die == expected.effect_die
+
 
 class TestBotch:
     def test_not_botch(self):

@@ -72,7 +72,9 @@ def _roll_stored_pool(location_id: str, entity_id: str, hitches_apply: bool) -> 
     dice = store.get_pool(location_id, entity_id)
     rolls = roll_pool_dice(_dice_to_specs(dice))
     enriched = [
-        {**d, "result": r.result, "hitch": r.result == 1, "role": None, "bought": False}
+        {**d, "result": r.result, "hitch": r.result == 1, "role": None, "bought": False,
+         "tier": r.tier.value if r.tier else None,
+         "effect_die": r.tier.effect_die.value if r.tier and r.tier.effect_die else None}
         for d, r in zip(dice, rolls)
     ]
     store.save_pool(location_id, entity_id, enriched)

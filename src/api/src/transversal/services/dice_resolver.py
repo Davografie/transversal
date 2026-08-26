@@ -32,7 +32,8 @@ from transversal.domain import (
 
 def _roll_die(spec: DieSpec) -> DieRoll:
     """Roll a single die using cryptographically secure randomness."""
-    return DieRoll(**spec.model_dump(), result=secrets.randbelow(spec.die.max_value) + 1)
+    result = secrets.randbelow(spec.die.max_value) + 1
+    return DieRoll(**spec.model_dump(), result=result, tier=determine_tier(result))
 
 
 def _determine_tier(highest: int) -> OutcomeTier:

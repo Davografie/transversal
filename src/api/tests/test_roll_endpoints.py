@@ -39,6 +39,19 @@ def test_cortex_roll_enriches_pool_with_result_and_hitch(client):
         assert "result" in d and isinstance(d["result"], int)
         assert "hitch" in d
         assert "role" in d and d["role"] is None
+        assert "tier" in d
+        assert "effect_die" in d
+        # The tier maps the raw result per the Outcome Tiers table.
+        if d["result"] <= 2:
+            assert d["tier"] == "fail" and d["effect_die"] is None
+        elif d["result"] <= 5:
+            assert d["tier"] == "marginal" and d["effect_die"] == "d4"
+        elif d["result"] <= 8:
+            assert d["tier"] == "success" and d["effect_die"] == "d6"
+        elif d["result"] <= 11:
+            assert d["tier"] == "exceptional" and d["effect_die"] == "d8"
+        else:
+            assert d["tier"] == "perfect" and d["effect_die"] == "d10"
     assert "total" not in data
     assert "effect_die" not in data
 

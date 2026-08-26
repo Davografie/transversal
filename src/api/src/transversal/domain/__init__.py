@@ -114,8 +114,13 @@ class DieSpec(BaseModel):
 
 
 class DieRoll(DieSpec):
-    """A rolled die — a DieSpec plus its result."""
+    """A rolled die — a DieSpec plus its result and outcome tier.
+
+    ``tier`` is the OutcomeTiers-table mapping of ``result`` (1–12) to an
+    outcome tier; ``tier.effect_die`` gives the tier's virtual effect die.
+    """
     result: int
+    tier: Optional[OutcomeTier] = None
 
 
 def _coerce_die_list(value) -> list[DieSpec]:
