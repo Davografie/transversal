@@ -133,6 +133,17 @@ class TestSceneStateEndpoints:
         assert r.status_code == 200, r.text
         assert r.json()["dice"] == dice
 
+    def test_pool_save_preserves_armed_sfx_ids(self, client):
+        # Regression: armed_sfx_ids must survive the save_pool REST boundary so
+        # roll_deferral.fire_armed can match the SFX's own dice at fire time.
+        die = _die()
+        die["armed_sfx_ids"] = ["sfx-crimson-scars"]
+        r = client.put("/api/v1/locations/loc-1/pools/kael-1", json={"dice": [die]})
+        assert r.status_code == 200, r.text
+
+        r = client.get("/api/v1/locations/loc-1/pools/kael-1")
+        assert r.json()["dice"][0]["armed_sfx_ids"] == ["sfx-crimson-scars"]
+
     def test_pool_is_entity_scoped(self, client):
         client.put("/api/v1/locations/loc-1/pools/kael-1", json={"dice": [_die()]})
         r = client.get("/api/v1/locations/loc-1/pools/kael-2")

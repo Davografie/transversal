@@ -28,6 +28,7 @@ class PoolDieIn(BaseModel):
     label: str = ""
     ts_id: Optional[str] = None
     resource: bool = False  # resource-pool die: rolled separately, highest applies to total
+    armed_sfx_ids: list[str] = Field(default_factory=list)  # client-stamped SFX ids arming this die
 
 
 class SavePoolRequest(BaseModel):
