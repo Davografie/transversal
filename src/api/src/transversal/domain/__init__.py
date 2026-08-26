@@ -808,6 +808,7 @@ class ConditionType(str, Enum):
     HAS_RELATIONSHIP = "has_relationship"  # target = related entity id
     TRAIT_RATING = "trait_rating"        # target = trait id; value = rating threshold (e.g. d8)
     HAS_RAZMERIT = "has_razmerit"        # value = integer; operator = numeric comparator
+    ENTITY_TYPE = "entity_type"          # target = entity type (character/gmc/asset); subject = the entity
     NARRATIVE = "narrative"              # human-readable only, never auto-blocks
     UNPLACED = "unplaced"                # entity has no current location yet
     IN_UNIVERSE = "in_universe"          # target = universe key; entity is currently there

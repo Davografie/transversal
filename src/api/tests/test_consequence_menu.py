@@ -162,13 +162,13 @@ def test_legacy_on_consequence_sfx_appears_in_all_contexts():
 
 
 def test_assemble_hitch_menu_filters_owners_and_context():
+    from transversal.domain import Condition, ConditionType
     from transversal.services.consequence_menu import assemble_hitch_menu
 
     repo = MenuRepo()
     repo.sfx_owners = {
         "gm": SimpleNamespace(sfx_ids=["hitch-gain-complication", "other-gm"]),
-        "table": SimpleNamespace(sfx_ids=["hitch-table", "contest-only"]),
-        "players": SimpleNamespace(sfx_ids=["opportunity-step-down-complication", "non-hitch-player"]),
+        "table": SimpleNamespace(sfx_ids=["hitch-table", "contest-only", "opportunity-step-down-complication", "non-hitch-player"]),
     }
     repo.sfxs = {
         "hitch-gain-complication": SFX(id="hitch-gain-complication", name="Gain a complication",
@@ -180,13 +180,16 @@ def test_assemble_hitch_menu_filters_owners_and_context():
                             menu_context="contest_win", effects=[]),
         "opportunity-step-down-complication": SFX(
             id="opportunity-step-down-complication", name="Step down a complication",
-            trigger="manual", menu_context="hitch", effects=[],
+            trigger="manual", menu_context="hitch",
+            conditions=[Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character")],
+            effects=[],
         ),
         "non-hitch-player": SFX(id="non-hitch-player", name="Not hitch", trigger="manual",
                                 menu_context=None, effects=[]),
     }
 
-    options = assemble_hitch_menu(repo)
+    repo.locations["buyer-1"] = Entity(id="buyer-1", type=EntityType.CHARACTER, name="Buyer", current_universe="earth")
+    options = assemble_hitch_menu(repo, roller_id="roller-1", buyer_id="buyer-1")
     assert [o.id for o in options] == [
         "sfx:hitch-gain-complication", "sfx:hitch-table", "sfx:opportunity-step-down-complication",
     ]
@@ -198,7 +201,7 @@ def test_hitch_menu_filters_by_buyer_condition():
     from transversal.services.consequence_menu import assemble_hitch_menu
 
     repo = MenuRepo()
-    repo.sfx_owners = {"players": SimpleNamespace(sfx_ids=["opportunity-step-down-complication"])}
+    repo.sfx_owners = {"table": SimpleNamespace(sfx_ids=["opportunity-step-down-complication"])}
     repo.sfxs = {
         "opportunity-step-down-complication": SFX(
             id="opportunity-step-down-complication", name="Step down", trigger="hitch",

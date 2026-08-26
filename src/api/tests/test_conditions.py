@@ -12,6 +12,7 @@ from transversal.services.conditions import (
     CONDITION_TYPES,
     evaluate_condition,
     evaluate_conditions,
+    static_conditions,
 )
 
 
@@ -129,6 +130,27 @@ def test_has_razmerit():
     assert not evaluate_condition(_entity(razmerit=5), Condition(type=ConditionType.HAS_RAZMERIT, value="abc"), FakeRepo())
 
 
+def test_entity_type():
+    assert evaluate_condition(_entity(type=EntityType.CHARACTER), Condition(type=ConditionType.ENTITY_TYPE, target="character"), FakeRepo())
+    assert not evaluate_condition(_entity(type=EntityType.GMC), Condition(type=ConditionType.ENTITY_TYPE, target="character"), FakeRepo())
+    # Variable subject resolves against context.
+    buyer = _entity(id="char-2", type=EntityType.CHARACTER, current_universe="earth")
+    repo = FakeRepo(entities=[buyer])
+    cond = Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character")
+    assert evaluate_condition(_entity(), cond, repo, context={"buying_entity": "char-2"})
+    assert not evaluate_condition(_entity(), cond, repo, context={})
+
+
+def test_static_conditions_excludes_variable_refs():
+    conds = [
+        Condition(type=ConditionType.ENTITY_TYPE, target="character"),
+        Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character"),
+        Condition(type=ConditionType.IN_UNIVERSE, target="earth"),
+    ]
+    static = static_conditions(conds)
+    assert [c.type for c in static] == [ConditionType.ENTITY_TYPE, ConditionType.IN_UNIVERSE]
+
+
 def test_subject_variable_resolves_to_other_entity():
     buyer = _entity(id="char-2", current_universe="earth")
     repo = FakeRepo(entities=[buyer])
@@ -183,3 +205,5 @@ def test_condition_types_declare_value_kind_and_operators():
     assert by_value["HAS_RAZMERIT"].value_kind == "number"
     assert by_value["HAS_RAZMERIT"].operators == ("<", "<=", "==", "!=", ">=", ">")
     assert by_value["HAS_RAZMERIT"].needs_target is False
+    assert by_value["ENTITY_TYPE"].target_options == ("character", "gmc", "asset")
+    assert by_value["ENTITY_TYPE"].needs_target is True

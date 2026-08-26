@@ -44,6 +44,9 @@ class Repo:
     def get_effective_traitsetsettings(self, entity_id, universes):
         return self.traitset_settings
 
+    def get_sfx(self, sfx_id):
+        return None
+
 
 def _entity(sfx_ids=None, current_projection=None):
     return SimpleNamespace(sfx_ids=sfx_ids or [], current_projection=current_projection)
@@ -75,11 +78,12 @@ def test_table_owner_included():
     assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-table"]
 
 
-def test_players_owner_included():
+def test_players_bucket_is_ignored():
+    # The players bucket was folded into table + an entity_type condition.
     repo = Repo()
     repo.entity = _entity()
     repo.owners = {"players": SimpleNamespace(sfx_ids=["sfx-arrival"])}
-    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-arrival"]
+    assert get_available_sfx_ids("e1", "earth", repo) == []
 
 
 def test_gm_owner_is_excluded():
@@ -141,6 +145,10 @@ class SetupRepo:
         self.owners[owner.id] = owner
         return owner
 
+    def delete_sfx_owner(self, owner_id):
+        self.owners.pop(owner_id, None)
+        return True
+
     def get_sfx(self, sfx_id):
         return self.sfxs.get(sfx_id)
 
@@ -162,7 +170,7 @@ class SetupRepo:
 def test_ensure_sfx_owners_creates_buckets_and_table_reward():
     repo = SetupRepo()
     ensure_sfx_owners(repo)
-    assert set(repo.owners.keys()) == {"table", "gm", "players"}
+    assert set(repo.owners.keys()) == {"table", "gm"}
     assert set(repo.owners["table"].sfx_ids) == {
         "sfx-give-in-get-razmerit",
         "sfx-give-in-targeting-ban",
@@ -171,9 +179,9 @@ def test_ensure_sfx_owners_creates_buckets_and_table_reward():
         "prevent-taken-out",
         "sfx-offer-negative-trait",
         "sfx-starter-location",
+        "opportunity-step-down-complication",
     }
     assert repo.owners["gm"].sfx_ids == ["hitch-gain-complication"]
-    assert repo.owners["players"].sfx_ids == ["opportunity-step-down-complication"]
 
 
 def test_ensure_sfx_owners_merges_into_existing_table():
@@ -230,8 +238,8 @@ def test_ensure_targeting_ban_sfx_migrates_legacy_result():
 
 
 def test_ensure_sfx_owners_table_defaults():
-    # The table bucket carries the give-in SFX plus the two contest-complication
-    # menu SFX (winner applies / conceder takes).
+    # The table bucket carries the give-in SFX, the two contest-complication
+    # menu SFX (winner applies / conceder takes), and the player opportunity SFX.
     repo = SetupRepo()
     ensure_sfx_owners(repo)
     assert set(repo.owners["table"].sfx_ids) == {
@@ -242,6 +250,7 @@ def test_ensure_sfx_owners_table_defaults():
         "prevent-taken-out",
         "sfx-offer-negative-trait",
         "sfx-starter-location",
+        "opportunity-step-down-complication",
     }
 
 

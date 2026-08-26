@@ -15,6 +15,7 @@ Choosing an option applies its effects through the shared effect applier
 from __future__ import annotations
 
 from transversal.domain import (
+    ConditionType,
     ConsequenceOption,
     Effect,
     EffectTiming,
@@ -132,18 +133,28 @@ def assemble_consequence_menu(
     return options
 
 
+def _hitch_side(owner_id: str, sfx) -> str:
+    """Side for a hitch-menu SFX: gm bucket → gm; a character-gated table SFX → player."""
+    if owner_id == "gm":
+        return "gm"
+    for c in (sfx.conditions or []):
+        if c.type == ConditionType.ENTITY_TYPE and c.target == "character":
+            return "player"
+    return "either"
+
+
 def assemble_hitch_menu(repo, roller_id: str = "", buyer_id: str = "") -> list[ConsequenceOption]:
-    """Return the hitch/opportunity menu — SFX from the ``gm``/``table``/``players``
+    """Return the hitch/opportunity menu — SFX from the ``gm``/``table``
     owner buckets whose trigger is ``hitch`` (no base or entity moves).
 
     ``roller_id`` and ``buyer_id`` populate ``{hitch_entity}`` / ``{buying_entity}``
-    so conditions can reference them."""
-    owner_sides = {"gm": "gm", "table": "either", "players": "player"}
+    so conditions can reference them. Side is derived from the bucket + the SFX's
+    ``entity_type`` condition (character-gated = player)."""
     context = {"hitch_entity": roller_id, "buying_entity": buyer_id}
 
     options: list[ConsequenceOption] = []
     seen: set[str] = set()
-    for owner_id, side in owner_sides.items():
+    for owner_id in ("gm", "table"):
         owner = repo.get_sfx_owner(owner_id)
         if owner is None:
             continue
@@ -159,7 +170,7 @@ def assemble_hitch_menu(repo, roller_id: str = "", buyer_id: str = "") -> list[C
             if sfx.conditions and not evaluate_conditions(None, sfx.conditions, repo, context):
                 continue
             options.append(ConsequenceOption(
-                id=f"sfx:{sfx.id}", label=sfx.name, side=side,
+                id=f"sfx:{sfx.id}", label=sfx.name, side=_hitch_side(owner_id, sfx),
                 effects=sfx.effects, source="sfx",
             ))
     return options

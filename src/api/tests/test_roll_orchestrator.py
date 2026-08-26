@@ -44,6 +44,9 @@ class Repo:
     def get_effective_traitsetsettings(self, entity_id, universes):
         return []
 
+    def get_sfx(self, sfx_id):
+        return None
+
 
 def _simplified(tier=OutcomeTier.SUCCESS, hitches=None, botch=False):
     return SimplifiedResult(

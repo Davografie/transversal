@@ -67,7 +67,6 @@ class SfxOwnerKind(str, Enum):
     """Every surface that can own SFX ids."""
     TABLE = "table"
     GM = "gm"
-    PLAYERS = "players"
     ENTITY = "entity"
     PROJECTION = "projection"
     TRAIT = "trait"
@@ -252,6 +251,7 @@ class ConditionTypeOption:
     target_kind: str = ""
     value_kind: str = ""
     operators: list[str] = strawberry.field(default_factory=list)
+    target_options: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.type

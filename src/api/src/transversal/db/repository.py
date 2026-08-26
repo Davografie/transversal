@@ -923,8 +923,15 @@ class EntityRepository:
         self._sfx_owners.replace(doc)
         return owner
 
+    def delete_sfx_owner(self, owner_id: str) -> bool:
+        try:
+            self._sfx_owners.delete(owner_id)
+            return True
+        except Exception:
+            return False
+
     def list_sfx_owners(self) -> list[SfxOwner]:
-        """Return every SFX owner bucket (``table``, ``gm``, ``players``)."""
+        """Return every SFX owner bucket (``table``, ``gm``)."""
         return [
             SfxOwner.model_validate({**doc, "id": doc["_key"]})
             for doc in self._sfx_owners.all()

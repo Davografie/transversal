@@ -24,9 +24,9 @@ def ensure_sfx_owners(repo) -> None:
     """Create/refresh the default SFX owner buckets. Idempotent.
 
     ``table`` = globally available SFX (everyone) — seeded with the give-in
-    reward and the contest-complication menu SFX; ``gm`` = GM-context SFX (not
-    entity-derived; P3.3 buy-hitch); ``players`` = player-facing SFX bucket
-    (reserved, currently empty).
+    reward, the contest-complication menu SFX, and the player opportunity SFX;
+    ``gm`` = GM-context SFX (not entity-derived; P3.3 buy-hitch). Role is a
+    condition (``entity_type``), not a bucket, so there is no ``players`` bucket.
     """
     defaults = {
         "table": [
@@ -37,9 +37,9 @@ def ensure_sfx_owners(repo) -> None:
             "prevent-taken-out",
             "sfx-offer-negative-trait",
             "sfx-starter-location",
+            "opportunity-step-down-complication",
         ],
         "gm": ["hitch-gain-complication"],
-        "players": ["opportunity-step-down-complication"],
     }
     for owner_id, sfx_ids in defaults.items():
         owner = repo.get_sfx_owner(owner_id)
@@ -50,6 +50,16 @@ def ensure_sfx_owners(repo) -> None:
             if merged != (owner.sfx_ids or []):
                 owner.sfx_ids = merged
                 repo.update_sfx_owner(owner)
+
+    # Migrate the legacy ``players`` bucket into ``table`` (role moved to the
+    # ``entity_type`` condition), then drop it.
+    legacy = repo.get_sfx_owner("players")
+    if legacy is not None:
+        table = repo.get_sfx_owner("table")
+        if table is not None and legacy.sfx_ids:
+            table.sfx_ids = list(dict.fromkeys((table.sfx_ids or []) + legacy.sfx_ids))
+            repo.update_sfx_owner(table)
+        repo.delete_sfx_owner("players")
 
 
 def ensure_starter_location_sfx(repo) -> None:
@@ -289,15 +299,26 @@ def ensure_opportunity_sfx(repo) -> None:
     ``{buying_entity}`` is the player doing the buying; ``{hitch_entity}`` is
     the roller whose 1 was bought.
     """
-    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
-    if repo.get_sfx("opportunity-step-down-complication") is not None:
+    existing = repo.get_sfx("opportunity-step-down-complication")
+    if existing is not None:
+        # Migration: role moved from the ``players`` bucket to an entity_type gate.
+        if not any(c.type == ConditionType.ENTITY_TYPE for c in (existing.conditions or [])):
+            existing.conditions = [
+                *(existing.conditions or []),
+                Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character"),
+            ]
+            repo.update_sfx(existing)
         return
     repo.create_sfx(SFX(
         id="opportunity-step-down-complication",
         name="Step down a complication",
         description="Spend 1 razmerit to step down one of your complications",
         trigger="hitch",
+        conditions=[
+            Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character"),
+        ],
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE,
@@ -389,11 +410,10 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
             if proj is not None:
                 ids.update(proj.sfx_ids or [])
 
-    # Table-wide + player-facing ownership (available to every entity).
-    for bucket_id in ("table", "players"):
-        bucket = repo.get_sfx_owner(bucket_id)
-        if bucket is not None:
-            ids.update(bucket.sfx_ids or [])
+    # Table-wide ownership (available to every entity).
+    bucket = repo.get_sfx_owner("table")
+    if bucket is not None:
+        ids.update(bucket.sfx_ids or [])
 
     # Trait-level grants, universe-gated via effective trait settings.
     for ts in repo.get_effective_traitsettings(entity_id, [universe]):
@@ -406,6 +426,18 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
     for tss in repo.get_effective_traitsetsettings(entity_id, [universe]):
         ids.update(tss.sfx_ids or [])
 
+    # Filter by context-free conditions so listing matches fireability
+    # (e.g. entity_type, in_universe). Variable-gated conditions stay fire-time.
+    if entity is not None:
+        from transversal.services.conditions import evaluate_conditions, static_conditions
+        for sfx_id in list(ids):
+            sfx = repo.get_sfx(sfx_id)
+            if sfx is None:
+                continue
+            static = static_conditions(sfx.conditions or [])
+            if static and not evaluate_conditions(entity, static, repo):
+                ids.discard(sfx_id)
+
     return sorted(ids)
 
 
@@ -417,8 +449,8 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
 # a dispatcher so the frontend doesn't need to know which collection each
 # owner type lives in.
 
-_BUCKET_TYPES = ("table", "gm", "players")
-_BUCKET_LABELS = {"table": "Table", "gm": "GM", "players": "Players"}
+_BUCKET_TYPES = ("table", "gm")
+_BUCKET_LABELS = {"table": "Table", "gm": "GM"}
 
 
 def _entity_name(repo, entity_id: str) -> str:
