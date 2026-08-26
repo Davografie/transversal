@@ -68,6 +68,25 @@ def test_has_trait():
     assert not evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT, target="medicine"), repo)
 
 
+def test_has_effective_trait():
+    enabled_ts = TraitSetting(
+        id="char-1:iron-will", entity_id="char-1", trait_id="iron-will",
+        traitset_id="ts-x", dice=[DieType.D6], enabled=True,
+    )
+    disabled_ts = TraitSetting(
+        id="char-1:scar", entity_id="char-1", trait_id="scar",
+        traitset_id="ts-x", dice=[DieType.D6], enabled=False,
+    )
+    repo = FakeRepo(traitsettings=[enabled_ts, disabled_ts])
+
+    # Possession is true regardless of enabled.
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT, target="scar"), repo)
+    # Effective requires enabled.
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.HAS_EFFECTIVE_TRAIT, target="iron-will"), repo)
+    assert not evaluate_condition(_entity(), Condition(type=ConditionType.HAS_EFFECTIVE_TRAIT, target="scar"), repo)
+    assert not evaluate_condition(_entity(), Condition(type=ConditionType.HAS_EFFECTIVE_TRAIT, target="medicine"), repo)
+
+
 def test_has_trait_in_traitset():
     repo = FakeRepo(traitsettings=[_ts("iron-will")])  # _ts uses traitset_id "ts-x"
     assert evaluate_condition(_entity(), Condition(type=ConditionType.HAS_TRAIT_IN_TRAITSET, target="ts-x"), repo)

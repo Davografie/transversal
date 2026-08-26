@@ -72,6 +72,14 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
                 return True
         return False
 
+    if condition.type == ConditionType.HAS_EFFECTIVE_TRAIT:
+        # Possession AND not disabled. A disabled trait still counts as
+        # HAS_TRAIT (owned), but is not effective (contributes no dice).
+        for ts in repo.get_traitsettings_for_entity(subject.id):
+            if ts.trait_id == target:
+                return ts.enabled
+        return False
+
     if condition.type == ConditionType.HAS_TRAIT_IN_TRAITSET:
         for ts in repo.get_traitsettings_for_entity(subject.id):
             if ts.traitset_id == target:
@@ -162,6 +170,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.ALWAYS.name, "Always"),
     ConditionTypeDef(ConditionType.AT_LOCATION.name, "At location", needs_target=True, target_placeholder="location id", target_kind="location"),
     ConditionTypeDef(ConditionType.HAS_TRAIT.name, "Has trait", needs_target=True, target_placeholder="trait id", target_kind="trait"),
+    ConditionTypeDef(ConditionType.HAS_EFFECTIVE_TRAIT.name, "Has effective trait", needs_target=True, target_placeholder="trait id", target_kind="trait"),
     ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id", target_kind="traitset"),
     ConditionTypeDef(ConditionType.HAS_RELATIONSHIP.name, "Has relationship", needs_target=True, target_placeholder="entity id", target_kind="entity"),
     ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die"),

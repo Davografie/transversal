@@ -812,6 +812,7 @@ class ConditionType(str, Enum):
     ALWAYS = "always"
     AT_LOCATION = "at_location"          # target = location entity id
     HAS_TRAIT = "has_trait"              # target = trait id
+    HAS_EFFECTIVE_TRAIT = "has_effective_trait"  # target = trait id; possession AND enabled
     HAS_TRAIT_IN_TRAITSET = "has_trait_in_traitset"  # target = traitset id
     HAS_RELATIONSHIP = "has_relationship"  # target = related entity id
     TRAIT_RATING = "trait_rating"        # target = trait id; value = rating threshold (e.g. d8)
