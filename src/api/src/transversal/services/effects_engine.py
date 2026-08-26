@@ -45,18 +45,6 @@ class GameEvent:
 
 # ── Scheduled Effect ─────────────────────────────────
 
-@dataclass
-class ScheduledEffect:
-    """An effect queued for later execution."""
-    sfx_name: str
-    entity_id: str
-    universe: str
-    timing: EffectTiming
-    beats_remaining: int = 0
-    condition: Optional[str] = None
-    effects: list[Effect] = field(default_factory=list)
-    context: dict = field(default_factory=dict)
-
 
 @dataclass
 class PendingSfxEffect:
@@ -94,7 +82,6 @@ class EffectsEngine:
 
     def __init__(self):
         self._sfx_registry: dict[str, SFX] = {}
-        self._schedule: list[ScheduledEffect] = []
 
     # ── Registry ─────────────────────────────────────
 
@@ -191,26 +178,10 @@ class EffectsEngine:
                         sfx_applied = True
                         log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, effect.target)
                 else:
-                    # Fold deferred effects into persisted scheduled events when a
-                    # repo is available (survives restart); fall back to the
-                    # in-memory schedule otherwise.
+                    # Persist deferred effects in the central timer store.
                     if repo is not None:
                         from transversal.services.scheduled_events import schedule_deferred
-                        entity = repo.get_entity(event.entity_id)
-                        if entity is not None and schedule_deferred(entity, effect, repo, source_sfx_id=sfx.id):
-                            continue
-                    self._schedule.append(
-                        ScheduledEffect(
-                            sfx_name=sfx.name,
-                            entity_id=event.entity_id,
-                            universe=event.universe,
-                            timing=effect.timing,
-                            beats_remaining=_beats_for_timing(effect.timing),
-                            condition=event.context.get("condition"),
-                            effects=[effect],
-                            context=event.context,
-                        )
-                    )
+                        schedule_deferred(repo, "entity", event.entity_id, effect, source_sfx_id=sfx.id)
 
             if sfx_applied:
                 _emit_sfx_triggered(event.entity_id, sfx)
@@ -298,85 +269,7 @@ class EffectsEngine:
 
         return False
 
-    # ── Scheduling ───────────────────────────────────
-
-    def schedule_effect(
-        self,
-        entity_id: str,
-        universe: str,
-        effect: Effect,
-        sfx_name: str = "",
-        context: Optional[dict] = None,
-    ) -> None:
-        """Queue a single deferred effect to fire at its configured timing.
-
-        Used by the life path executor to defer non-immediate consequences into
-        the same schedule that SFX effects use.
-        """
-        self._schedule.append(ScheduledEffect(
-            sfx_name=sfx_name,
-            entity_id=entity_id,
-            universe=universe,
-            timing=effect.timing,
-            beats_remaining=_beats_for_timing(effect.timing),
-            condition=None,
-            effects=[effect],
-            context=context or {},
-        ))
-
-    def tick_beat(self) -> list[ScheduledEffect]:
-        """Advance the schedule by one beat. Returns effects that fire now."""
-        fired = []
-        remaining = []
-
-        for se in self._schedule:
-            if se.timing == EffectTiming.END_OF_BEAT:
-                for e in se.effects:
-                    _effects_applier.effect_registry.apply(e, se.entity_id, se.universe, se.context)
-                fired.append(se)
-            elif se.timing == EffectTiming.AFTER_BEATS:
-                se.beats_remaining -= 1
-                if se.beats_remaining <= 0:
-                    for e in se.effects:
-                        _effects_applier.effect_registry.apply(e, se.entity_id, se.universe, se.context)
-                    fired.append(se)
-                else:
-                    remaining.append(se)
-            else:
-                remaining.append(se)
-
-        self._schedule = remaining
-        return fired
-
-    def tick_scene(self) -> list[ScheduledEffect]:
-        """End the scene — fire scene-level effects."""
-        fired = []
-        remaining = []
-
-        for se in self._schedule:
-            if se.timing == EffectTiming.END_OF_SCENE:
-                for e in se.effects:
-                    _effects_applier.effect_registry.apply(e, se.entity_id, se.universe, se.context)
-                fired.append(se)
-            else:
-                remaining.append(se)
-
-        self._schedule = remaining
-        return fired
-
-    def tick_session(self) -> list[ScheduledEffect]:
-        """End the session — fire session-level effects."""
-        fired = []
-        for se in self._schedule:
-            for e in se.effects:
-                _effects_applier.effect_registry.apply(e, se.entity_id, se.universe, se.context)
-            fired.append(se)
-        self._schedule = []
-        return fired
-
-    @property
-    def scheduled_count(self) -> int:
-        return len(self._schedule)
+    # ── Scheduling is centralized in `services/scheduled_events.py` ──
 
 
 def _emit_sfx_triggered(entity_id: str, sfx) -> None:
@@ -441,11 +334,6 @@ def _substitute_effect_context(effect: Effect, context: dict) -> Effect:
     if not updates:
         return effect
     return effect.model_copy(update=updates)
-
-
-def _beats_for_timing(timing: EffectTiming) -> int:
-    """Default beat count for AFTER_BEATS timing."""
-    return 3  # default; overridden by explicit value in ScheduledEffect
 
 
 def _noop_applier(action: Effect, entity_id: str, universe: str, context: dict) -> None:

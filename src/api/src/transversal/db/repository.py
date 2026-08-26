@@ -24,6 +24,7 @@ from transversal.db.arango import (
     PROJECTIONS,
     RELATIONSHIPS,
     ROLL_TABLES,
+    SCHEDULED_EVENTS,
     SFX_OWNERS,
     SFXS,
     TRAITS,
@@ -45,6 +46,7 @@ from transversal.domain import (
     Message,
     Projection,
     RollTable,
+    ScheduledEvent,
     SfxOwner,
     Trait,
     TraitSet,
@@ -73,6 +75,7 @@ class EntityRepository:
         self._traitsetsettings = self.db.collection(TRAITSETSETTINGS)
         self._sfxs = self.db.collection(SFXS)
         self._sfx_owners = self.db.collection(SFX_OWNERS)
+        self._scheduled_events = self.db.collection(SCHEDULED_EVENTS)
         self._life_paths = self.db.collection(LIFE_PATHS)
         self._roll_tables = self.db.collection(ROLL_TABLES)
         self._relationships = self.db.collection(RELATIONSHIPS)
@@ -929,6 +932,38 @@ class EntityRepository:
             return True
         except Exception:
             return False
+
+    # ── Scheduled Events ──────────────────────────────
+
+    def create_scheduled_event(self, event: ScheduledEvent) -> ScheduledEvent:
+        doc = event.model_dump()
+        doc["_key"] = event.id
+        self._scheduled_events.insert(doc)
+        return event
+
+    def get_scheduled_event(self, event_id: str) -> Optional[ScheduledEvent]:
+        doc = self._scheduled_events.get(event_id)
+        return ScheduledEvent.model_validate({**doc, "id": doc["_key"]}) if doc else None
+
+    def update_scheduled_event(self, event: ScheduledEvent) -> ScheduledEvent:
+        doc = event.model_dump()
+        doc["_key"] = event.id
+        self._scheduled_events.replace(doc)
+        return event
+
+    def delete_scheduled_event(self, event_id: str) -> bool:
+        try:
+            self._scheduled_events.delete(event_id)
+            return True
+        except Exception:
+            return False
+
+    def list_all_scheduled_events(self) -> list[ScheduledEvent]:
+        query = f"FOR e IN {SCHEDULED_EVENTS} RETURN e"
+        return [
+            ScheduledEvent.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query)
+        ]
 
     def list_sfx_owners(self) -> list[SfxOwner]:
         """Return every SFX owner bucket (``table``, ``gm``)."""

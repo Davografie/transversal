@@ -10,7 +10,6 @@ from transversal.services.effects_applier import EffectRegistry
 from transversal.services.effects_engine import (
     EffectsEngine,
     GameEvent,
-    ScheduledEffect,
 )
 
 
@@ -184,124 +183,100 @@ class TestProcessEvent:
         assert len(result) == 0
 
 
+class _Repo:
+    """Minimal central scheduled-events double."""
+
+    def __init__(self):
+        self.events = []
+
+    def get_entity(self, eid):
+        from types import SimpleNamespace
+        return SimpleNamespace(id=eid, current_universe="earth", current_location=None, current_projection=None)
+
+    def get_traitsetting(self, tsid):
+        return None
+
+    def create_scheduled_event(self, e):
+        self.events.append(e)
+        return e
+
+    def list_all_scheduled_events(self):
+        return list(self.events)
+
+    def update_scheduled_event(self, e):
+        return e
+
+    def delete_scheduled_event(self, eid):
+        self.events = [x for x in self.events if x.id != eid]
+        return True
+
+
 class TestScheduling:
+    def _run(self, engine, effects):
+        repo = _Repo()
+        engine.register(_make_sfx("sfx-x", "X", "manual", effects=effects))
+        event = GameEvent(type="manual", entity_id="e1", universe="earth")
+        result = engine.process_event_outcome(event, available_sfx_ids=["sfx-x"], razmerit_balance=10, repo=repo)
+        return repo, result
+
     def test_deferred_effect_queued(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(_make_sfx(
-            "sfx-buff", "Buff", "manual",
-            effects=[_make_effect("negative", "end_of_scene", "modify_trait", "step_down", "qi_reserves")],
-        ))
+        repo, result = self._run(engine, [_make_effect("negative", "end_of_scene", "modify_trait", "step_down", "qi_reserves")])
+        assert len(result.applied) == 0  # not immediate
+        assert len(repo.events) == 1
 
-        event = GameEvent(type="manual", entity_id="e1", universe="earth")
-        result = engine.process_event(event, available_sfx_ids=["sfx-buff"], razmerit_balance=10)
-
-        assert len(result) == 0  # not immediate
-        assert engine.scheduled_count == 1
-
-    def test_tick_beat_fires_end_of_beat(self):
+    def test_beat_fires_end_of_beat(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(_make_sfx(
-            "sfx-beat", "BeatEffect", "manual",
-            effects=[_make_effect("negative", "end_of_beat", "modify_trait", "step_down", "target")],
-        ))
-
-        event = GameEvent(type="manual", entity_id="e1", universe="earth")
-        engine.process_event(event, available_sfx_ids=["sfx-beat"], razmerit_balance=10)
-        assert engine.scheduled_count == 1
-
-        before = len([a for a in _test_applied if a.type != "transfer_razmerit"])
-        fired_scheduled = engine.tick_beat()
-        assert len(fired_scheduled) == 1
-        after = len([a for a in _test_applied if a.type != "transfer_razmerit"])
-        assert after > before
-        assert engine.scheduled_count == 0
+        repo, _ = self._run(engine, [_make_effect("negative", "end_of_beat", "modify_trait", "step_down", "target")])
+        from transversal.services.scheduled_events import advance_scheduled_events
+        before = len(_test_applied)
+        assert advance_scheduled_events(repo, "beat") == 1
+        assert len(_test_applied) > before
+        assert repo.events == []
 
     def test_after_beats_counts_down(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(_make_sfx(
-            "sfx-delayed", "Delayed", "manual",
-            effects=[_make_effect("negative", "after_beats", "modify_trait", "step_down", "target")],
-        ))
+        repo, _ = self._run(engine, [_make_effect("negative", "after_beats", "modify_trait", "step_down", "target")])
+        from transversal.services.scheduled_events import advance_scheduled_events
+        advance_scheduled_events(repo, "beat")
+        advance_scheduled_events(repo, "beat")
+        assert len(repo.events) == 1
+        advance_scheduled_events(repo, "beat")
+        assert repo.events == []
 
-        event = GameEvent(type="manual", entity_id="e1", universe="earth")
-        engine.process_event(event, available_sfx_ids=["sfx-delayed"], razmerit_balance=10)
-
-        # Tick 2 beats — shouldn't fire yet (default 3)
-        engine.tick_beat()
-        engine.tick_beat()
-        assert engine.scheduled_count == 1
-
-        # Third tick — fires
-        engine.tick_beat()
-        assert engine.scheduled_count == 0
-
-    def test_tick_scene(self):
+    def test_scene(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(_make_sfx(
-            "sfx-scene", "SceneEffect", "manual",
-            effects=[_make_effect("negative", "end_of_scene", "modify_trait", "step_down", "target")],
-        ))
+        repo, _ = self._run(engine, [_make_effect("negative", "end_of_scene", "modify_trait", "step_down", "target")])
+        from transversal.services.scheduled_events import advance_scheduled_events
+        advance_scheduled_events(repo, "beat")  # should NOT fire scene effects
+        assert len(repo.events) == 1
+        advance_scheduled_events(repo, "scene")
+        assert repo.events == []
 
-        event = GameEvent(type="manual", entity_id="e1", universe="earth")
-        engine.process_event(event, available_sfx_ids=["sfx-scene"], razmerit_balance=10)
-        engine.tick_beat()  # should NOT fire scene effects
-
-        engine.tick_scene()
-        assert engine.scheduled_count == 0
-
-    def test_tick_session(self):
+    def test_session(self):
         _reset()
         engine = EffectsEngine()
-        engine.register(_make_sfx(
-            "sfx-session", "SessionEffect", "manual",
-            effects=[_make_effect("negative", "end_of_session", "modify_trait", "step_down", "target")],
-        ))
-
-        event = GameEvent(type="manual", entity_id="e1", universe="earth")
-        engine.process_event(event, available_sfx_ids=["sfx-session"], razmerit_balance=10)
-
-        engine.tick_session()
-        assert engine.scheduled_count == 0
+        repo, _ = self._run(engine, [_make_effect("negative", "end_of_session", "modify_trait", "step_down", "target")])
+        from transversal.services.scheduled_events import advance_scheduled_events
+        advance_scheduled_events(repo, "session")
+        assert repo.events == []
 
     def test_mixed_timing_effects(self):
         """An SFX can have both immediate and deferred effects."""
         _reset()
         engine = EffectsEngine()
-        engine.register(_make_sfx(
-            "sfx-mixed", "Mixed", "manual",
-            effects=[
-                _make_effect("negative", "immediate", "transfer_razmerit", "spend", "self", "1"),
-                _make_effect("positive", "immediate", "modify_roll", "step_up_die", "highest_trait_die"),
-                _make_effect("negative", "end_of_beat", "modify_trait", "step_down", "primary", "after_resolution"),
-            ],
-        ))
-
-        event = GameEvent(type="manual", entity_id="e1", universe="earth")
-        result = engine.process_event(event, available_sfx_ids=["sfx-mixed"], razmerit_balance=5)
-
-        # Two effects fire immediately (spend + step_up_die)
-        assert len(result) == 2
-        # One effect is deferred
-        assert engine.scheduled_count == 1
-
-    def test_schedule_effect_fires_on_tick(self):
-        """Life-path deferred effects queue and fire through schedule_effect."""
-        _reset()
-        engine = EffectsEngine()
-        effect = _make_effect("negative", "end_of_beat", "modify_trait", "step_down", "target")
-
-        engine.schedule_effect("e1", "earth", effect)
-        assert engine.scheduled_count == 1
-
-        before = len(_test_applied)
-        fired = engine.tick_beat()
-        assert len(fired) == 1
-        assert engine.scheduled_count == 0
-        assert len(_test_applied) > before
+        repo, result = self._run(engine, [
+            _make_effect("negative", "immediate", "transfer_razmerit", "spend", "self", "1"),
+            _make_effect("positive", "immediate", "modify_roll", "step_up_die", "highest_trait_die"),
+            _make_effect("negative", "end_of_beat", "modify_trait", "step_down", "primary", "after_resolution"),
+        ])
+        # Two effects fire immediately (spend + step_up_die), one is deferred.
+        assert len(result.applied) == 2
+        assert len(repo.events) == 1
 
 
 # ── Fog-of-war learning trigger + context substitution ──

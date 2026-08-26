@@ -137,11 +137,10 @@ def _mark_taken_out(repo, loser_id: str, opponent_id: str) -> None:
     from transversal.services.scheduled_events import schedule_effect
 
     schedule_effect(
-        loser,
+        repo, "entity", loser.id,
         Effect(timing=EffectTiming.IMMEDIATE, type="entity", action="clear_taken_out", target="self"),
         [Timer(event="scene", remaining=1)],
         TimerCombine.FIRST_TO_FIRE,
-        repo,
     )
 
     fire_state_sfx(loser_id, loser.current_universe, "on_taken_out", {

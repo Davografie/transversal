@@ -717,8 +717,15 @@ class EffectDuration(BaseModel):
 
 
 class ScheduledEvent(BaseModel):
-    """A persisted, owner-scoped revert scheduled to fire when its timers expire."""
+    """A persisted, centrally-scheduled revert fired when its timers expire.
+
+    ``target_type`` + ``target_id`` identify the owner (entity or trait setting)
+    the effect applies against; resolved at fire time so a deleted target is a
+    no-op.
+    """
     id: str
+    target_type: str = "entity"           # "entity" | "trait_setting"
+    target_id: str = ""                   # entity id or trait-setting id
     effect: "Effect"                     # the revert effect to apply
     timers: list["Timer"] = Field(default_factory=list)
     combine: TimerCombine = TimerCombine.FIRST_TO_FIRE

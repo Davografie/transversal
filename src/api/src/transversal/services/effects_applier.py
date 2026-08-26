@@ -99,7 +99,7 @@ def _register_core_handlers(em, raz):
             razmerit=ctx.get("razmerit", 0),
         )
         from transversal.services.scheduled_events import schedule_revert
-        schedule_revert(created, a, em.repo, target=created.id, source_sfx_id=ctx.get("sfx_id"))
+        schedule_revert(em.repo, "entity", created.id, a, target=created.id, source_sfx_id=ctx.get("sfx_id"))
         return created
 
     def _delete_entity(a, eid, u, ctx):
@@ -125,7 +125,7 @@ def _register_core_handlers(em, raz):
                     source_sfx_id=ctx.get("sfx_id"),
                 ))
             from transversal.services.scheduled_events import schedule_revert
-            schedule_revert(entity, a, em.repo, source_sfx_id=ctx.get("sfx_id"))
+            schedule_revert(em.repo, "entity", entity.id, a, source_sfx_id=ctx.get("sfx_id"))
         else:  # disable
             entity.attunements = [
                 x for x in entity.attunements
@@ -148,7 +148,7 @@ def _register_core_handlers(em, raz):
             return
         apply_targeting_ban(entity, target)
         from transversal.services.scheduled_events import schedule_revert
-        schedule_revert(entity, a, em.repo, target=target, source_sfx_id=ctx.get("sfx_id"))
+        schedule_revert(em.repo, "entity", entity.id, a, target=target, source_sfx_id=ctx.get("sfx_id"))
         em.repo.update_entity(entity)
 
     def _remove_targeting_ban(a, eid, u, ctx):
@@ -315,7 +315,7 @@ def _has_steps(effect: Effect) -> bool:
     return "steps" in (effect.context or {})
 
 
-def _step_up_trait(entity: Entity, ts: TraitSetting, target: str, effect: Effect, result, steps: int = 1) -> bool:
+def _step_up_trait(entity: Entity, ts: TraitSetting, target: str, effect: Effect, result, repo, steps: int = 1) -> bool:
     """Step up a trait setting up to ``steps`` times.
 
     Returns True when the rating changed (caller persists + reverts). A negative
@@ -334,9 +334,9 @@ def _step_up_trait(entity: Entity, ts: TraitSetting, target: str, effect: Effect
             entity.taken_out = True
             result.applied.append(AppliedEffect(effect, f"{target} stepped beyond d12 — taken out"))
             from transversal.domain import Effect as _Effect, EffectTiming as _ET, Timer as _Timer, TimerCombine as _TC
-            from transversal.services.scheduled_events import queue_event
-            queue_event(
-                entity,
+            from transversal.services.scheduled_events import schedule_event
+            schedule_event(
+                repo, "entity", entity.id,
                 _Effect(timing=_ET.IMMEDIATE, type="entity", action="clear_taken_out", target="self"),
                 [_Timer(event="scene", remaining=1)],
                 _TC.FIRST_TO_FIRE,
@@ -638,7 +638,7 @@ def _apply_gain(entity, effect, repo, result):
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
-    _queue_entity_revert(subject, effect, target=target)
+    _queue_entity_revert(repo, subject, effect, target=target)
 
 
 def _apply_gain_or_step_up(entity, effect, repo, result):
@@ -659,19 +659,19 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     existing = _find_traitsetting(owner, repo, target)
     steps = _steps(effect)
     if existing:
-        if _step_up_trait(subject, existing, target, effect, result, steps=steps):
+        if _step_up_trait(subject, existing, target, effect, result, repo, steps=steps):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
-            _queue_explicit(existing, effect, "step_down", target)
+            _queue_explicit(repo, existing, effect, "step_down", target)
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative))
     if _has_steps(effect):
-        _step_up_trait(subject, ts, target, effect, result, steps=steps)
+        _step_up_trait(subject, ts, target, effect, result, repo, steps=steps)
     result.new_trait_settings.append(ts)
     final_die = ts.dice[0] if ts.dice else die
     result.applied.append(AppliedEffect(effect, f"gained {target} at {final_die.value}", ts.id))
-    _queue_explicit(subject, effect, "remove", target)
+    _queue_explicit(repo, subject, effect, "remove", target)
 
 
 def _apply_cortex_gain(entity, effect, repo, result):
@@ -706,7 +706,7 @@ def _apply_cortex_gain(entity, effect, repo, result):
             existing.dice = [die]
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"{target} jumped to {die.value}", existing.id))
-        elif _step_up_trait(subject, existing, target, effect, result):
+        elif _step_up_trait(subject, existing, target, effect, result, repo):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         return
@@ -728,10 +728,10 @@ def _apply_step_up(entity, effect, repo, result):
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step up"))
         return
-    if _step_up_trait(subject, existing, target, effect, result, steps=_steps(effect)):
+    if _step_up_trait(subject, existing, target, effect, result, repo, steps=_steps(effect)):
         result.updated_trait_settings.append(existing)
         result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
-        _queue_trait_revert(existing, effect)
+        _queue_trait_revert(repo, existing, effect)
 
 
 def _apply_step_down(entity, effect, repo, result):
@@ -759,7 +759,7 @@ def _apply_step_down(entity, effect, repo, result):
         return
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"stepped down {target}", existing.id))
-    _queue_trait_revert(existing, effect)
+    _queue_trait_revert(repo, existing, effect)
 
 
 def _apply_set(entity, effect, repo, result):
@@ -780,7 +780,7 @@ def _apply_set(entity, effect, repo, result):
     existing.dice = [die]
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"set {target} to {die.value}", existing.id))
-    _queue_trait_revert(existing, effect, prior_result=prior)
+    _queue_trait_revert(repo, existing, effect, prior_result=prior)
 
 
 def _apply_earn(entity, effect, repo, result):
@@ -905,33 +905,30 @@ def _apply_reveal(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"{learner} already knows {target}"))
 
 
-def _queue_trait_revert(ts, effect, prior_result=None):
-    """Queue the inverse of ``effect`` on a trait setting (in-memory).
+def _queue_trait_revert(repo, ts, effect, prior_result=None):
+    """Schedule the inverse of ``effect`` on a trait setting in the central store."""
+    from transversal.services.scheduled_events import schedule_revert
 
-    The caller (``commit_effects``) persists ``ts`` via its updated-trait-settings
-    delta, so this only appends the scheduled event without persisting.
-    """
-    from transversal.services.scheduled_events import queue_revert
-
-    queue_revert(ts, effect, prior_result=prior_result)
+    schedule_revert(repo, "trait_setting", ts.id, effect, prior_result=prior_result)
 
 
-def _queue_entity_revert(entity, effect, target=None):
-    """Queue the inverse of ``effect`` on an entity (in-memory, caller persists)."""
-    from transversal.services.scheduled_events import queue_revert
+def _queue_entity_revert(repo, entity, effect, target=None):
+    """Schedule the inverse of ``effect`` on an entity in the central store."""
+    from transversal.services.scheduled_events import schedule_revert
 
-    queue_revert(entity, effect, target=target)
+    schedule_revert(repo, "entity", entity.id, effect, target=target)
 
 
-def _queue_explicit(owner, effect, action, target):
-    """Queue an explicit inverse action (for compound actions like gain_or_step_up)."""
+def _queue_explicit(repo, owner, effect, action, target):
+    """Schedule an explicit inverse action (for compound actions like gain_or_step_up)."""
     if not effect.duration or not effect.duration.timers:
         return
     from transversal.domain import Effect as _Effect, EffectTiming as _ET
-    from transversal.services.scheduled_events import queue_event
+    from transversal.services.scheduled_events import schedule_event
 
-    queue_event(
-        owner,
+    target_type = "trait_setting" if hasattr(owner, "trait_id") else "entity"
+    schedule_event(
+        repo, target_type, owner.id,
         _Effect(timing=_ET.IMMEDIATE, type="modify_trait", action=action, target=target),
         effect.duration.timers,
         effect.duration.combine,

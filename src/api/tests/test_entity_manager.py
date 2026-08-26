@@ -11,6 +11,7 @@ from transversal.domain import (
     Entity,
     EntityType,
     Projection,
+    ScheduledEvent,
 
     SfxOwner,
     Trait,
@@ -40,6 +41,7 @@ class InMemoryRepository(EntityRepository):
         self._traitsettings: dict[str, dict] = {}
         self._traitsetsettings: dict[str, dict] = {}
         self._sfx_owners: dict[str, dict] = {}
+        self._scheduled_events: dict[str, dict] = {}
         self.db = None
 
     def _store(self, coll: dict, key: str, doc: dict) -> dict:
@@ -54,6 +56,16 @@ class InMemoryRepository(EntityRepository):
     def get_entity(self, eid: str):
         d = self._entities.get(eid)
         return Entity.model_validate(d) if d else None
+    def create_scheduled_event(self, event):
+        self._store(self._scheduled_events, event.id, event.model_dump())
+        return event
+    def list_all_scheduled_events(self):
+        return [ScheduledEvent.model_validate(d) for d in self._scheduled_events.values()]
+    def update_scheduled_event(self, event):
+        self._store(self._scheduled_events, event.id, event.model_dump())
+        return event
+    def delete_scheduled_event(self, event_id):
+        return self._scheduled_events.pop(event_id, None) is not None
     def update_entity(self, entity: Entity) -> Entity:
         self._entities[entity.id] = entity.model_dump()
         return entity

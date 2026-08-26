@@ -1,10 +1,10 @@
-"""Persisted, owner-scoped timed reverts (scheduled events).
+"""Central persisted scheduled-events repository.
 
-An effect with a ``duration`` is applied immediately; its inverse effect is then
-scheduled to fire when the duration's timers expire.  This replaces the ad-hoc
-expiry mechanisms (``attunements.until``, ``targeting_bans.scenes_remaining``,
-``taken_out``, and the engine's in-memory ``_schedule``) with one persisted
-list on the owner (entity or traitsetting).
+Every timed revert/deferred effect becomes a ``ScheduledEvent`` row in the
+``scheduled_events`` collection, carrying a ``target_type`` + ``target_id`` that
+resolve to the entity/trait-setting the effect applies against at fire time.
+This replaces the owner-scoped ``scheduled_events`` lists and the engine's
+in-memory ``_schedule`` with one persisted, queryable timer store.
 """
 
 from __future__ import annotations
@@ -47,9 +47,11 @@ def build_revert(effect: Effect, *, prior_result: Optional[str] = None) -> Optio
     )
 
 
-def _new_event(effect: Effect, timers, combine, source_sfx_id) -> ScheduledEvent:
+def _new_event(target_type, target_id, effect, timers, combine, source_sfx_id) -> ScheduledEvent:
     return ScheduledEvent(
         id=f"se-{uuid.uuid4().hex[:12]}",
+        target_type=target_type,
+        target_id=target_id,
         effect=effect,
         timers=list(timers),
         combine=combine,
@@ -57,31 +59,32 @@ def _new_event(effect: Effect, timers, combine, source_sfx_id) -> ScheduledEvent
     )
 
 
-def _append(owner, event: ScheduledEvent) -> None:
-    owner.scheduled_events = list(owner.scheduled_events or []) + [event]
-
-
-def queue_event(owner, effect: Effect, timers, combine, source_sfx_id: Optional[str] = None) -> ScheduledEvent:
-    """Append an explicit (already-built) effect to ``owner`` without persisting."""
-    event = _new_event(effect, timers, combine, source_sfx_id)
-    _append(owner, event)
+def schedule_event(
+    repo,
+    target_type: str,
+    target_id: str,
+    effect: Effect,
+    timers,
+    combine,
+    source_sfx_id: Optional[str] = None,
+) -> ScheduledEvent:
+    """Create + persist a scheduled event in the central store."""
+    event = _new_event(target_type, target_id, effect, timers, combine, source_sfx_id)
+    repo.create_scheduled_event(event)
     return event
 
 
-def queue_revert(
-    owner,
+def schedule_revert(
+    repo,
+    target_type: str,
+    target_id: str,
     effect: Effect,
     *,
     target: Optional[str] = None,
     prior_result: Optional[str] = None,
     source_sfx_id: Optional[str] = None,
 ) -> Optional[ScheduledEvent]:
-    """Build + append the inverse of ``effect`` to ``owner`` (no persistence).
-
-    Used by the collect-mutations path (``apply_effects``), where the caller
-    persists the mutated owner.  Returns the scheduled event, or None if the
-    effect has no duration or no inverse.
-    """
+    """Build + persist the inverse of ``effect`` (no-op without a duration/inverse)."""
     if not effect.duration or not effect.duration.timers:
         return None
     revert = build_revert(effect, prior_result=prior_result)
@@ -89,59 +92,21 @@ def queue_revert(
         return None
     if target is not None:
         revert.target = target
-    return queue_event(owner, revert, effect.duration.timers, effect.duration.combine, source_sfx_id)
-
-
-def schedule_revert(
-    entity,
-    effect: Effect,
-    repo,
-    *,
-    target: Optional[str] = None,
-    prior_result: Optional[str] = None,
-    source_sfx_id: Optional[str] = None,
-) -> bool:
-    """Schedule the inverse of ``effect`` on an *entity* (persists it)."""
-    event = queue_revert(entity, effect, target=target, prior_result=prior_result, source_sfx_id=source_sfx_id)
-    if event is None:
-        return False
-    repo.update_entity(entity)
-    return True
+    return schedule_event(repo, target_type, target_id, revert, effect.duration.timers, effect.duration.combine, source_sfx_id)
 
 
 def schedule_effect(
-    entity,
+    repo,
+    target_type: str,
+    target_id: str,
     effect: Effect,
     timers,
     combine,
-    repo,
     *,
     source_sfx_id: Optional[str] = None,
-) -> bool:
-    """Schedule an explicit (already-resolved) effect on an *entity*.
-
-    Used for statuses whose forward mutation isn't an effect with a registry
-    inverse (e.g. ``taken_out`` schedules a ``clear_taken_out`` revert directly).
-    """
-    _append(entity, _new_event(effect, timers, combine, source_sfx_id))
-    repo.update_entity(entity)
-    return True
-
-
-def schedule_traitsetting_revert(
-    ts,
-    effect: Effect,
-    repo,
-    *,
-    prior_result: Optional[str] = None,
-    source_sfx_id: Optional[str] = None,
-) -> bool:
-    """Schedule the inverse of ``effect`` on a *trait setting* (persists it)."""
-    event = queue_revert(ts, effect, prior_result=prior_result, source_sfx_id=source_sfx_id)
-    if event is None:
-        return False
-    repo.update_traitsetting(ts)
-    return True
+) -> ScheduledEvent:
+    """Persist an explicit (already-resolved) effect on the central store."""
+    return schedule_event(repo, target_type, target_id, effect, timers, combine, source_sfx_id)
 
 
 def timing_to_timer(timing) -> Optional[Timer]:
@@ -159,12 +124,20 @@ def timing_to_timer(timing) -> Optional[Timer]:
     return None  # IMMEDIATE / ON_CONDITION
 
 
-def schedule_deferred(entity, effect: Effect, repo, *, source_sfx_id: Optional[str] = None) -> bool:
-    """Persist a deferred (non-IMMEDIATE) effect as a scheduled event on ``entity``."""
+def schedule_deferred(
+    repo,
+    target_type: str,
+    target_id: str,
+    effect: Effect,
+    *,
+    source_sfx_id: Optional[str] = None,
+) -> bool:
+    """Persist a deferred (non-IMMEDIATE) effect as a scheduled event."""
     timer = timing_to_timer(effect.timing)
     if timer is None:
         return False
-    return schedule_effect(entity, effect, [timer], TimerCombine.FIRST_TO_FIRE, repo, source_sfx_id=source_sfx_id)
+    schedule_event(repo, target_type, target_id, effect, [timer], TimerCombine.FIRST_TO_FIRE, source_sfx_id)
+    return True
 
 
 def _transpired(timer) -> bool:
@@ -179,57 +152,57 @@ def _expired(event: ScheduledEvent) -> bool:
     return any(_transpired(t) for t in event.timers)
 
 
-def _advance_owner(owner, event_type: str) -> tuple[list[ScheduledEvent], list[ScheduledEvent]]:
-    """Decrement matching timers; return ``(kept, fired)``."""
-    kept: list[ScheduledEvent] = []
-    fired: list[ScheduledEvent] = []
-    for se in owner.scheduled_events:
-        for t in se.timers:
-            if t.event == event_type and t.remaining > 0:
-                t.remaining -= 1
-        if _expired(se):
-            fired.append(se)
-        else:
-            kept.append(se)
-    return kept, fired
+def _advance_event(event: ScheduledEvent, event_type: str) -> bool:
+    """Decrement matching timers; return True if the event is now expired."""
+    for t in event.timers:
+        if t.event == event_type and t.remaining > 0:
+            t.remaining -= 1
+    return _expired(event)
 
 
-def _apply_fired(repo, fired: list[ScheduledEvent], entity_id: str, universe: str) -> int:
+def _apply_event(repo, event: ScheduledEvent) -> int:
+    """Resolve the target and apply the event's effect; return 1 if applied."""
     from transversal.services.effects_applier import effect_registry
 
-    for se in fired:
-        effect_registry.apply(se.effect, entity_id, universe, {})
-    return len(fired)
+    if event.target_type == "trait_setting":
+        ts = repo.get_traitsetting(event.target_id)
+        if ts is None:
+            return 0  # orphan (target deleted)
+        effect_registry.apply(event.effect, ts.entity_id, "", {})
+        return 1
+
+    entity = repo.get_entity(event.target_id)
+    if entity is None:
+        return 0  # orphan (target deleted)
+    effect_registry.apply(event.effect, entity.id, entity.current_universe, {})
+    return 1
 
 
-def advance_events(repo, event_type: str) -> int:
-    """Advance every entity's scheduled events by one tick of ``event_type``."""
-    fired_count = 0
-    for entity in repo.list_all_entities():
-        if not entity.scheduled_events:
-            continue
-        kept, fired = _advance_owner(entity, event_type)
-        if not fired:
-            continue
-        fired_count += _apply_fired(repo, fired, entity.id, entity.current_universe)
-        entity.scheduled_events = kept
-        repo.update_entity(entity)
-    return fired_count
+def advance_scheduled_events(repo, event_type: str, entity_id: Optional[str] = None) -> int:
+    """Advance the central timer store by one tick; fire + delete due events.
 
-
-def advance_traitsetting_events(repo, event_type: str) -> int:
-    """Advance every trait setting's scheduled events by one tick."""
-    fired_count = 0
-    for ts in repo.list_all_traitsettings():
-        if not ts.scheduled_events:
-            continue
-        kept, fired = _advance_owner(ts, event_type)
-        if not fired:
-            continue
-        fired_count += _apply_fired(repo, fired, ts.entity_id, "")
-        ts.scheduled_events = kept
-        repo.update_traitsetting(ts)
-    return fired_count
+    When ``entity_id`` is given (an entity-scoped state change, e.g.
+    ``location_changed``), only that entity's / its trait-settings' events are
+    ticked; global boundaries (``beat``/``scene``/``session``) tick everything.
+    """
+    fired = 0
+    for event in repo.list_all_scheduled_events():
+        if entity_id is not None:
+            if event.target_type == "entity":
+                if event.target_id != entity_id:
+                    continue
+            elif event.target_type == "trait_setting":
+                ts = repo.get_traitsetting(event.target_id)
+                if ts is None or ts.entity_id != entity_id:
+                    continue
+            else:
+                continue
+        if _advance_event(event, event_type):
+            fired += _apply_event(repo, event)
+            repo.delete_scheduled_event(event.id)
+        else:
+            repo.update_scheduled_event(event)
+    return fired
 
 
 def dispatch_event(
@@ -241,38 +214,15 @@ def dispatch_event(
 ) -> int:
     """Central advancement point for a state/timing event.
 
-    - Global boundary (``entity_id is None``, e.g. ``beat``/``scene``/``session``):
-      advances every entity + trait setting.
-    - Entity-scoped (``entity_id`` given, e.g. ``location_changed``): advances
-      that entity + its trait settings, then fires automatic state SFX.
-
-    ``repo`` may be None; it is resolved lazily from the app singleton.
-    Returns the number of scheduled events fired.
+    Advances the central timer store, then (for entity-scoped events) fires
+    automatic state SFX.
     """
     if repo is None:
         from transversal.main import _get_repo
 
         repo = _get_repo()
-    fired = 0
-    if entity_id is None:
-        fired += advance_events(repo, event_type)
-        fired += advance_traitsetting_events(repo, event_type)
-    else:
-        entity = repo.get_entity(entity_id)
-        if entity is not None and entity.scheduled_events:
-            kept, evts = _advance_owner(entity, event_type)
-            if evts:
-                fired += _apply_fired(repo, evts, entity.id, entity.current_universe)
-                entity.scheduled_events = kept
-                repo.update_entity(entity)
-        for ts in repo.get_traitsettings_for_entity(entity_id):
-            if not ts.scheduled_events:
-                continue
-            kept, evts = _advance_owner(ts, event_type)
-            if evts:
-                fired += _apply_fired(repo, evts, ts.entity_id, "")
-                ts.scheduled_events = kept
-                repo.update_traitsetting(ts)
+    fired = advance_scheduled_events(repo, event_type, entity_id=entity_id)
+    if entity_id is not None:
         from transversal.services.state_events import fire_state_sfx
 
         fire_state_sfx(entity_id, universe, event_type, context or {})

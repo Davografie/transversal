@@ -101,8 +101,10 @@ def resolve_step(
         flow = _process_flow(entity, flow_effects, repo)
         _persist(entity, result, repo, old_razmerit)
 
+        from transversal.services.scheduled_events import schedule_deferred
+
         for e in deferred:
-            engine.schedule_effect(entity.id, entity.current_universe, e, sfx_name="life_path")
+            schedule_deferred(repo, "entity", entity.id, e, source_sfx_id=None)
             scheduled += 1
     else:
         # No scheduler available (e.g. direct unit tests) — apply everything now.

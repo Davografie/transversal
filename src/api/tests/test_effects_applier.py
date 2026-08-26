@@ -26,6 +26,7 @@ class FakeRepo:
         self.traits = {t.id: t for t in (traits or [])}
         self.traitsettings = list(traitsettings or [])
         self.entities = {e.id: e for e in (entities or [])}
+        self.scheduled_events = []
 
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
@@ -38,6 +39,26 @@ class FakeRepo:
 
     def get_entity(self, entity_id):
         return self.entities.get(entity_id)
+
+    def get_traitsetting(self, ts_id):
+        for ts in self.traitsettings:
+            if ts.id == ts_id:
+                return ts
+        return None
+
+    def create_scheduled_event(self, event):
+        self.scheduled_events.append(event)
+        return event
+
+    def list_all_scheduled_events(self):
+        return list(self.scheduled_events)
+
+    def update_scheduled_event(self, event):
+        return event
+
+    def delete_scheduled_event(self, event_id):
+        self.scheduled_events = [e for e in self.scheduled_events if e.id != event_id]
+        return True
 
 
 class RandomRepo:
@@ -725,8 +746,10 @@ def test_set_with_duration_queues_prior_value_revert():
     result = apply_effects(_entity(), [effect], repo)
     ts = result.updated_trait_settings[0]
     assert ts.dice == [DieType.D8]
-    assert len(ts.scheduled_events) == 1
-    se = ts.scheduled_events[0]
+    assert len(repo.scheduled_events) == 1
+    se = repo.scheduled_events[0]
+    assert se.target_type == "trait_setting"
+    assert se.target_id == ts.id
     assert se.effect.type == "modify_trait"
     assert se.effect.action == "set"
     assert se.effect.result == "d6"  # prior value captured
@@ -744,8 +767,8 @@ def test_step_up_with_duration_queues_step_down_revert():
     result = apply_effects(_entity(), [effect], repo)
     ts = result.updated_trait_settings[0]
     assert ts.dice == [DieType.D8]
-    assert len(ts.scheduled_events) == 1
-    assert ts.scheduled_events[0].effect.action == "step_down"
+    assert len(repo.scheduled_events) == 1
+    assert repo.scheduled_events[0].effect.action == "step_down"
 
 
 def test_gain_with_duration_queues_remove_revert():
@@ -760,8 +783,9 @@ def test_gain_with_duration_queues_remove_revert():
     )
     result = apply_effects(entity, [effect], repo)
     assert len(result.new_trait_settings) == 1
-    assert len(entity.scheduled_events) == 1
-    se = entity.scheduled_events[0]
+    assert len(repo.scheduled_events) == 1
+    se = repo.scheduled_events[0]
+    assert se.target_type == "entity"
     assert se.effect.type == "modify_trait"
     assert se.effect.action == "remove"
     assert se.effect.target == "iron-will"
@@ -827,8 +851,9 @@ def test_step_up_d12_complication_takes_out():
     result = apply_effects(entity, [_effect("modify_trait", "step_up", "scar")], repo)
     assert entity.taken_out is True
     assert "taken out" in result.applied[0].summary
-    assert len(entity.scheduled_events) == 1
-    assert entity.scheduled_events[0].effect.action == "clear_taken_out"
+    assert len(repo.scheduled_events) == 1
+    assert repo.scheduled_events[0].target_type == "entity"
+    assert repo.scheduled_events[0].effect.action == "clear_taken_out"
 
 
 def test_step_up_d12_positive_trait_no_takeout():

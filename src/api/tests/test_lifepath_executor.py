@@ -30,6 +30,7 @@ class ExecutorRepo:
         self.created_traitsettings = []
         self.updated_entities = []
         self.historical_records = []
+        self.scheduled_events = []
 
     def get_lifepath(self, path_id):
         return self.lifepaths.get(path_id)
@@ -57,6 +58,20 @@ class ExecutorRepo:
 
     def update_traitsetting(self, ts):
         pass
+
+    def create_scheduled_event(self, event):
+        self.scheduled_events.append(event)
+        return event
+
+    def list_all_scheduled_events(self):
+        return list(self.scheduled_events)
+
+    def update_scheduled_event(self, event):
+        return event
+
+    def delete_scheduled_event(self, event_id):
+        self.scheduled_events = [e for e in self.scheduled_events if e.id != event_id]
+        return True
 
     def create_relationship(self, from_id, to_id, rel_type, description=""):
         pass
@@ -266,9 +281,9 @@ def test_deferred_effect_is_scheduled():
 
     # Not applied immediately — queued for the end of the scene.
     assert len(repo.created_traitsettings) == 0
-    assert len(engine.scheduled) == 1
+    assert len(repo.scheduled_events) == 1
     assert summary["scheduled"] == 1
-    assert engine.scheduled[0][2].timing == EffectTiming.END_OF_SCENE
+    assert repo.scheduled_events[0].effect.timing == EffectTiming.END_OF_SCENE
 
 
 def test_resolve_step_records_historical_outcome():

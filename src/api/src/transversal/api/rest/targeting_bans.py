@@ -20,10 +20,9 @@ async def get_targeting_bans(entity_id: str):
 @router.post("/scenes/advance")
 async def advance_scene():
     """Advance the scene: fire scheduled scene effects and decrement bans."""
-    from transversal.main import _get_engine, _get_repo
+    from transversal.main import _get_repo
     from transversal.services.scheduled_events import dispatch_event
 
-    _get_engine().tick_scene()
     changed = dispatch_event(_get_repo(), "scene")
 
     from transversal.services.scene_state import get_scene_store

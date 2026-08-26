@@ -1,6 +1,4 @@
-"""Tests for the persisted scheduled-events (timed revert) system."""
-
-from types import SimpleNamespace
+"""Tests for the central scheduled-events (timed revert) system."""
 
 from transversal.domain import (
     Effect,
@@ -14,38 +12,54 @@ from transversal.domain import (
     TraitSetting,
 )
 from transversal.services.scheduled_events import (
-    advance_events,
-    advance_traitsetting_events,
+    advance_scheduled_events,
     build_revert,
     dispatch_event,
     schedule_deferred,
+    schedule_event,
     schedule_revert,
     timing_to_timer,
 )
 
 
-def _entity(entity_id="kael", scheduled=None):
+def _entity(entity_id="kael"):
     return Entity(
         id=entity_id,
         type=EntityType.CHARACTER,
         name=entity_id,
         current_universe="earth",
-        scheduled_events=scheduled or [],
     )
 
 
 class FakeRepo:
-    def __init__(self, entities):
-        self.entities = list(entities)
+    def __init__(self, entities=(), traitsettings=()):
+        self.events = []
+        self.entities = {e.id: e for e in entities}
+        self.traitsettings = {ts.id: ts for ts in traitsettings}
 
-    def list_all_entities(self):
-        return list(self.entities)
+    def create_scheduled_event(self, event):
+        self.events.append(event)
+        return event
 
-    def update_entity(self, entity):
-        for i, existing in enumerate(self.entities):
-            if existing.id == entity.id:
-                self.entities[i] = entity
-                return
+    def list_all_scheduled_events(self):
+        return list(self.events)
+
+    def update_scheduled_event(self, event):
+        for i, e in enumerate(self.events):
+            if e.id == event.id:
+                self.events[i] = event
+                return event
+        return event
+
+    def delete_scheduled_event(self, event_id):
+        self.events = [e for e in self.events if e.id != event_id]
+        return True
+
+    def get_entity(self, entity_id):
+        return self.entities.get(entity_id)
+
+    def get_traitsetting(self, ts_id):
+        return self.traitsettings.get(ts_id)
 
 
 def _ban_effect(remaining=1, event="scene", combine=TimerCombine.FIRST_TO_FIRE):
@@ -61,113 +75,94 @@ def _ban_effect(remaining=1, event="scene", combine=TimerCombine.FIRST_TO_FIRE):
     )
 
 
-def test_schedule_revert_appends_event():
-    entity = _entity()
-    repo = FakeRepo([entity])
-    effect = _ban_effect(remaining=1)
+def _apply_monkey(monkeypatch, fired):
+    monkeypatch.setattr(
+        "transversal.services.effects_applier.effect_registry.apply",
+        lambda eff, eid, u, ctx: fired.append((eff.type, eff.action, eff.target, eid)),
+    )
 
-    assert schedule_revert(entity, effect, repo, target="guard") is True
 
-    assert len(entity.scheduled_events) == 1
-    se = entity.scheduled_events[0]
-    assert se.effect.type == "entity"
-    assert se.effect.action == "remove_targeting_ban"
-    assert se.effect.target == "guard"
-    assert se.timers == [Timer(event="scene", remaining=1)]
+def test_schedule_revert_creates_central_event():
+    repo = FakeRepo(entities=[_entity()])
+    event = schedule_revert(repo, "entity", "kael", _ban_effect(remaining=1), target="guard")
+
+    assert event is not None
+    assert repo.events == [event]
+    assert event.target_type == "entity"
+    assert event.target_id == "kael"
+    assert event.effect.type == "entity"
+    assert event.effect.action == "remove_targeting_ban"
+    assert event.effect.target == "guard"
+    assert event.timers == [Timer(event="scene", remaining=1)]
 
 
 def test_schedule_revert_ignores_missing_duration_or_inverse():
-    entity = _entity()
-    repo = FakeRepo([entity])
+    repo = FakeRepo(entities=[_entity()])
 
     # No duration.
     plain = Effect(type="entity", action="targeting_ban", target="")
-    assert schedule_revert(entity, plain, repo) is False
+    assert schedule_revert(repo, "entity", "kael", plain) is None
 
     # Duration but no inverse registered.
     unknown = Effect(
         type="modify_trait", action="gain_or_step_up", target="t",
         duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]),
     )
-    assert schedule_revert(entity, unknown, repo) is False
-    assert entity.scheduled_events == []
+    assert schedule_revert(repo, "entity", "kael", unknown) is None
+    assert repo.events == []
 
 
-def test_advance_events_fires_revert_on_expiry(monkeypatch):
-    entity = _entity()
-    repo = FakeRepo([entity])
-    effect = _ban_effect(remaining=1)
-    schedule_revert(entity, effect, repo, target="guard")
+def test_advance_fires_revert_on_expiry(monkeypatch):
+    repo = FakeRepo(entities=[_entity()])
+    schedule_revert(repo, "entity", "kael", _ban_effect(remaining=1), target="guard")
 
     fired = []
-    monkeypatch.setattr(
-        "transversal.services.effects_applier.effect_registry.apply",
-        lambda eff, eid, u, ctx: fired.append((eff.type, eff.action, eff.target)),
-    )
+    _apply_monkey(monkeypatch, fired)
 
-    # First scene: decrements 1→0 but first_to_fire fires once it hits 0.
-    changed = advance_events(repo, "scene")
-    assert changed == 1
-    assert fired == [("entity", "remove_targeting_ban", "guard")]
-    assert entity.scheduled_events == []
+    assert advance_scheduled_events(repo, "scene") == 1
+    assert fired == [("entity", "remove_targeting_ban", "guard", "kael")]
+    assert repo.events == []
 
 
-def test_advance_events_only_decrements_matching_event(monkeypatch):
-    entity = _entity()
-    repo = FakeRepo([entity])
-    schedule_revert(entity, _ban_effect(remaining=2, event="scene"), repo, target="guard")
+def test_advance_only_decrements_matching_event(monkeypatch):
+    repo = FakeRepo(entities=[_entity()])
+    schedule_revert(repo, "entity", "kael", _ban_effect(remaining=2, event="scene"), target="guard")
 
     fired = []
-    monkeypatch.setattr(
-        "transversal.services.effects_applier.effect_registry.apply",
-        lambda eff, eid, u, ctx: fired.append(eff.action),
-    )
+    _apply_monkey(monkeypatch, fired)
 
-    # A beat doesn't decrement a scene timer.
-    assert advance_events(repo, "beat") == 0
-    assert entity.scheduled_events[0].timers[0].remaining == 2
-    # First scene: 2→1, still active.
-    assert advance_events(repo, "scene") == 0
-    assert entity.scheduled_events[0].timers[0].remaining == 1
-    # Second scene: 1→0, fires.
-    assert advance_events(repo, "scene") == 1
-    assert fired == ["remove_targeting_ban"]
+    assert advance_scheduled_events(repo, "beat") == 0
+    assert repo.events[0].timers[0].remaining == 2
+    assert advance_scheduled_events(repo, "scene") == 0
+    assert repo.events[0].timers[0].remaining == 1
+    assert advance_scheduled_events(repo, "scene") == 1
+    assert fired == [("entity", "remove_targeting_ban", "guard", "kael")]
 
 
 def test_all_transpired_combine(monkeypatch):
-    entity = _entity()
-    repo = FakeRepo([entity])
+    repo = FakeRepo(entities=[_entity()])
     effect = Effect(
         timing=EffectTiming.IMMEDIATE,
         type="entity",
         action="targeting_ban",
         target="",
         duration=EffectDuration(
-            timers=[
-                Timer(event="scene", remaining=1),
-                Timer(event="beat", remaining=3),
-            ],
+            timers=[Timer(event="scene", remaining=1), Timer(event="beat", remaining=3)],
             combine=TimerCombine.ALL_TRANSPIRED,
         ),
     )
-    schedule_revert(entity, effect, repo, target="guard")
+    schedule_revert(repo, "entity", "kael", effect, target="guard")
 
     fired = []
-    monkeypatch.setattr(
-        "transversal.services.effects_applier.effect_registry.apply",
-        lambda eff, eid, u, ctx: fired.append(eff.action),
-    )
+    _apply_monkey(monkeypatch, fired)
 
-    # scene timer hits 0, beat timer still 3 → not all transpired.
-    assert advance_events(repo, "scene") == 0
-    assert entity.scheduled_events[0].timers[0].remaining == 0
-    # beat ×2 → 1 remaining, still not all.
-    assert advance_events(repo, "beat") == 0
-    assert advance_events(repo, "beat") == 0
-    assert entity.scheduled_events[0].timers[1].remaining == 1
-    # final beat → all transpired.
-    assert advance_events(repo, "beat") == 1
-    assert fired == ["remove_targeting_ban"]
+    assert advance_scheduled_events(repo, "scene") == 0
+    assert repo.events[0].timers[0].remaining == 0
+    assert advance_scheduled_events(repo, "beat") == 0
+    assert advance_scheduled_events(repo, "beat") == 0
+    assert repo.events[0].timers[1].remaining == 1
+    assert advance_scheduled_events(repo, "beat") == 1
+    assert fired == [("entity", "remove_targeting_ban", "guard", "kael")]
 
 
 def test_build_revert_set_captures_prior():
@@ -177,55 +172,58 @@ def test_build_revert_set_captures_prior():
     assert revert.type == "modify_trait"
     assert revert.action == "set"
     assert revert.target == "trait-1"
-    assert revert.result == "d6"  # prior value, not d8
+    assert revert.result == "d6"
 
-    # Without prior result it falls back to the forward result.
-    fallback = build_revert(effect)
-    assert fallback.result == "d8"
+    assert build_revert(effect).result == "d8"
 
 
 def test_build_revert_no_inverse_returns_none():
     assert build_revert(Effect(type="modify_trait", action="gain_or_step_up", target="t")) is None
 
 
-class TraitRepo:
-    def __init__(self, traitsettings):
-        self.traitsettings = list(traitsettings)
-        self.updated = []
-
-    def list_all_traitsettings(self):
-        return list(self.traitsettings)
-
-    def update_traitsetting(self, ts):
-        self.updated.append(ts.id)
-        for i, existing in enumerate(self.traitsettings):
-            if existing.id == ts.id:
-                self.traitsettings[i] = ts
-                return
-
-
-def test_advance_traitsetting_events(monkeypatch):
+def test_trait_setting_target_fires_via_entity(monkeypatch):
+    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-1", traitset_id="tset")
+    repo = FakeRepo(entities=[_entity()], traitsettings=[ts])
     revert = Effect(type="modify_trait", action="set", target="trait-1", result="d6")
-    ts = TraitSetting(
-        id="ts-1", entity_id="kael", trait_id="trait-1", traitset_id="tset",
-        scheduled_events=[ScheduledEvent(id="se-1", effect=revert, timers=[Timer(event="beat", remaining=1)])],
-    )
-    repo = TraitRepo([ts])
+    schedule_event(repo, "trait_setting", "ts-1", revert, [Timer(event="beat", remaining=1)], TimerCombine.FIRST_TO_FIRE)
 
     fired = []
-    monkeypatch.setattr(
-        "transversal.services.effects_applier.effect_registry.apply",
-        lambda eff, eid, u, ctx: fired.append((eff.action, eid, eff.target)),
-    )
+    _apply_monkey(monkeypatch, fired)
 
-    assert advance_traitsetting_events(repo, "beat") == 1
-    assert fired == [("set", "kael", "trait-1")]
-    assert ts.scheduled_events == []
+    assert advance_scheduled_events(repo, "beat") == 1
+    assert fired == [("modify_trait", "set", "trait-1", "kael")]
+    assert repo.events == []
+
+
+def test_orphan_target_is_noop(monkeypatch):
+    repo = FakeRepo(entities=[])  # no entity
+    schedule_revert(repo, "entity", "ghost", _ban_effect(remaining=1), target="guard")
+
+    fired = []
+    _apply_monkey(monkeypatch, fired)
+
+    assert advance_scheduled_events(repo, "scene") == 0
+    assert fired == []
+    assert repo.events == []  # fired + deleted
+
+
+def test_entity_scoped_dispatch_only_ticks_matching_target(monkeypatch):
+    repo = FakeRepo(entities=[_entity("kael"), _entity("other")])
+    schedule_revert(repo, "entity", "kael", _ban_effect(remaining=1, event="location_changed"), target="a")
+    schedule_revert(repo, "entity", "other", _ban_effect(remaining=1, event="location_changed"), target="b")
+
+    fired = []
+    _apply_monkey(monkeypatch, fired)
+
+    # kael changes location → only kael's location_changed timer ticks.
+    dispatch_event(repo, "location_changed", entity_id="kael", universe="earth")
+    assert fired == [("entity", "remove_targeting_ban", "a", "kael")]
+    # other's event survives.
+    assert len(repo.events) == 1
+    assert repo.events[0].target_id == "other"
 
 
 def test_timing_to_timer():
-    from transversal.domain import EffectTiming
-
     assert timing_to_timer(EffectTiming.END_OF_BEAT) == Timer(event="beat", remaining=1)
     assert timing_to_timer(EffectTiming.END_OF_SCENE) == Timer(event="scene", remaining=1)
     assert timing_to_timer(EffectTiming.END_OF_SESSION) == Timer(event="session", remaining=1)
@@ -234,14 +232,15 @@ def test_timing_to_timer():
     assert timing_to_timer(EffectTiming.ON_CONDITION) is None
 
 
-def test_schedule_deferred_persists_event():
-    entity = _entity()
-    repo = FakeRepo([entity])
+def test_schedule_deferred_creates_event():
+    repo = FakeRepo(entities=[_entity()])
     effect = Effect(timing=EffectTiming.END_OF_BEAT, type="modify_trait", action="step_up", target="t")
 
-    assert schedule_deferred(entity, effect, repo) is True
-    assert len(entity.scheduled_events) == 1
-    assert entity.scheduled_events[0].timers == [Timer(event="beat", remaining=1)]
+    assert schedule_deferred(repo, "entity", "kael", effect) is True
+    assert len(repo.events) == 1
+    assert repo.events[0].timers == [Timer(event="beat", remaining=1)]
 
-    # ON_CONDITION is unmapable → not persisted.
-    assert schedule_deferred(entity, Effect(timing=EffectTiming.ON_CONDITION, type="modify_trait", action="step_up", target="t"), repo) is False
+    assert schedule_deferred(
+        repo, "entity", "kael",
+        Effect(timing=EffectTiming.ON_CONDITION, type="modify_trait", action="step_up", target="t"),
+    ) is False

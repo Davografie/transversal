@@ -53,6 +53,7 @@ TRAITSETTINGS = "traitsettings"    # edge collection
 TRAITSETSETTINGS = "traitsetsettings"  # edge collection: entity → traitset
 SFX_OWNERS = "sfx_owners"           # document: named SFX owner buckets (table, gm)
 SFXS = "sfxs"
+SCHEDULED_EVENTS = "scheduled_events"  # document: centrally-scheduled timed reverts/effects
 PLAYERS = "players"
 RELATIONSHIPS = "relationships"    # edge collection
 MESSAGES = "messages"              # inter-entity persistent messages
@@ -72,6 +73,7 @@ COLLECTIONS = {
     TRAITSETSETTINGS: True,  # edge
     SFX_OWNERS: False,    # document
     SFXS: False,
+    SCHEDULED_EVENTS: False,  # document
     PLAYERS: False,
     RELATIONSHIPS: True,  # edge
     MESSAGES: False,      # document
