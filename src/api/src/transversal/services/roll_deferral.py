@@ -78,9 +78,16 @@ def fire_armed(
     kept: list[ArmedEffect] = []
     for armed in _armed[entity_id]:
         if armed.effect.timing.value == event_type:
-            resolved = _substitute_effect_context(armed.effect, context or {})
-            effect_registry.apply(resolved, entity_id, universe, context or {})
-            applied.append(resolved)
+            if armed.effect.die_filter:
+                dice = [d for d in (context or {}).get("rolls", []) if _die_matches(d, armed.effect.die_filter)]
+                for die in dice:
+                    resolved = _substitute_die_context(armed.effect, die, context or {})
+                    effect_registry.apply(resolved, entity_id, universe, context or {})
+                    applied.append(resolved)
+            else:
+                resolved = _substitute_effect_context(armed.effect, context or {})
+                effect_registry.apply(resolved, entity_id, universe, context or {})
+                applied.append(resolved)
             armed.rolls -= 1
             if armed.rolls > 0:
                 kept.append(armed)
@@ -88,6 +95,25 @@ def fire_armed(
             kept.append(armed)
     _armed[entity_id] = kept
     return applied
+
+
+def _die_matches(die: dict, die_filter: dict) -> bool:
+    """True when ``die`` satisfies every equality predicate in ``die_filter``."""
+    return all(die.get(key) == value for key, value in (die_filter or {}).items())
+
+
+def _substitute_die_context(effect: Effect, die: dict, context: dict) -> Effect:
+    """Substitute roll-context + ``{triggered_die_*}`` variables for one die."""
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    merged = dict(context or {})
+    merged.update({
+        "triggered_die_tier": die.get("tier"),
+        "triggered_die_effect_die": die.get("effect_die"),
+        "triggered_die_result": die.get("result"),
+        "triggered_die_die": die.get("die"),
+    })
+    return _substitute_effect_context(effect, merged)
 
 
 def clear_armed(entity_id: str) -> None:

@@ -186,6 +186,7 @@ class Effect:
     target_scope: Optional[str] = None
     entity_scope: Optional[str] = None
     target_filter: Optional[strawberry.scalars.JSON] = None
+    die_filter: Optional[strawberry.scalars.JSON] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDuration] = None
@@ -202,6 +203,7 @@ class EffectInput:
     target_scope: Optional[str] = None
     entity_scope: Optional[str] = None
     target_filter: Optional[strawberry.scalars.JSON] = None
+    die_filter: Optional[strawberry.scalars.JSON] = None
     negative: bool = False
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDurationInput] = None
