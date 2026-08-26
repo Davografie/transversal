@@ -437,6 +437,24 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         inverse=("projection", "restore"),
         inverse_captures_prior=True,
     ),
+    EffectActionMeta(
+        action_id="set_traitset_limit",
+        label="Set Trait-set Limit",
+        description="Override how many traits this entity can hold in a trait set (set to a number)",
+        category="either",
+        effect_type="modify_traitset",
+        effect_action="set_limit",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            _ENTITY_FIELD,
+            EffectFieldDef(name="target", label="Trait Set", field_type="text", required=True),
+            EffectFieldDef(name="result", label="Limit", field_type="number", required=True, default="1"),
+        ],
+        supports_duration=True,
+        inverse=("modify_traitset", "set_limit"),
+        inverse_captures_prior=True,
+        target_kind="traitset",
+    ),
 
     # ── Attunement ─────────────────────────────────────
     EffectActionMeta(
@@ -698,7 +716,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "negate_complication": "Outcome", "convert_complication": "Outcome",
     "reroll_highest": "Outcome",
     "step_up_trait": "Trait", "step_down_trait": "Trait", "set_trait": "Trait",
-    "disable_trait": "Trait", "toggle_trait": "Trait",
+    "disable_trait": "Trait", "toggle_trait": "Trait", "set_traitset_limit": "Trait",
     "gain_trait": "Trait", "gain_or_step_up_trait": "Trait",
     "cortex_gain_trait": "Trait", "reveal_trait": "Trait",
     "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",

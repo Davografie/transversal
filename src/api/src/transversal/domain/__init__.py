@@ -495,8 +495,9 @@ class TraitSetSetting(BaseModel):
     _from → entity (or projection), _to → traitset (registry).
 
     This is the set-level sibling of `TraitSetting`. It carries SFX that apply
-    to the trait set *as a unit* (not per-trait) for a specific entity/projection.
-    limit/sort-order/order fields are Phase 4, not modeled yet.
+    to the trait set *as a unit* (not per-trait) for a specific entity/projection,
+    plus an optional ``limit`` override (registry default when None).
+    sort-order/order fields are Phase 4, not modeled yet.
     """
     id: str
     entity_id: str
@@ -504,6 +505,7 @@ class TraitSetSetting(BaseModel):
     from_type: str = "entity"  # "entity" | "projection" — anchor collection for _from
     projection_id: Optional[str] = None  # projection anchor id when from_type == "projection"
     sfx_ids: list[str] = Field(default_factory=list)
+    limit: Optional[int] = None  # per-entity override of the trait set's registry limit (None = registry default)
 
 
 # ── Projections ───────────────────────────────────────

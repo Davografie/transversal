@@ -10,6 +10,7 @@ from transversal.domain import (
     Polarity,
     Projection,
     TraitSetting,
+    TraitSetSetting,
     TransversalType,
 )
 from transversal.services.effects_applier import apply_effects, resolve_choice
@@ -30,6 +31,7 @@ class FakeRepo:
         self.entities = {e.id: e for e in (entities or [])}
         self.scheduled_events = []
         self.projections = []
+        self.traitsetsettings = []
 
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
@@ -39,6 +41,9 @@ class FakeRepo:
 
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
+
+    def get_traitsetsettings_for_entity(self, entity_id):
+        return [tss for tss in getattr(self, "traitsetsettings", []) if tss.entity_id == entity_id]
 
     def get_entity(self, entity_id):
         return self.entities.get(entity_id)
@@ -352,6 +357,44 @@ def test_restore_projection_reactivates_prior_and_removes_disguise():
     assert entity.current_projection == "char-1:earth"
     assert [p.id for p in result.removed_projections] == ["char-1:earth:2"]
     assert prior.current_location == "loc-2"  # prior body imported to current location
+
+
+def test_set_traitset_limit_creates_override_and_schedules_revert():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_traitset", action="set_limit",
+        target="ts-distinctions", result="2",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_traitsetsettings) == 1
+    tss = result.new_traitsetsettings[0]
+    assert tss.limit == 2
+    assert tss.traitset_id == "ts-distinctions"
+    assert len(repo.scheduled_events) == 1
+    assert repo.scheduled_events[0].effect.action == "set_limit"
+    assert repo.scheduled_events[0].effect.result == ""  # no prior → clear
+
+
+def test_set_traitset_limit_updates_and_restores_prior():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    tss = TraitSetSetting(
+        id="char-1:ts-distinctions", entity_id="char-1", traitset_id="ts-distinctions",
+        from_type="entity", limit=1,
+    )
+    repo = FakeRepo()
+    repo.traitsetsettings = [tss]
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_traitset", action="set_limit",
+        target="ts-distinctions", result="3",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.updated_traitsetsettings[0].limit == 3
+    assert repo.scheduled_events[0].effect.result == "1"  # prior limit restored
 
 
 # ── Complications (unified polarity) ─────────────────

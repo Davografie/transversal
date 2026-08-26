@@ -12,7 +12,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from transversal.domain import DieType, Effect, Entity, Polarity, TraitSetting
+from transversal.domain import DieType, Effect, Entity, Polarity, TraitSetting, TraitSetSetting
 from transversal.services.effect_targets import resolve_candidates
 from transversal.services.trait_reveal import reveal_trait_to
 
@@ -90,6 +90,7 @@ def _register_core_handlers(em, raz):
     effect_registry.register("relationship", "create", _commit)
     effect_registry.register("projection", "create", _commit)
     effect_registry.register("projection", "restore", _commit)
+    effect_registry.register("modify_traitset", "set_limit", _commit)
 
     # Entity operations
     def _create_asset(a, eid, u, ctx):
@@ -236,6 +237,8 @@ class EffectsResult:
     new_projections: list = field(default_factory=list)
     updated_projections: list = field(default_factory=list)
     removed_projections: list = field(default_factory=list)
+    new_traitsetsettings: list = field(default_factory=list)
+    updated_traitsetsettings: list = field(default_factory=list)
     entities_to_update: list[Entity] = field(default_factory=list)
     pending_choices: list[PendingChoice] = field(default_factory=list)
     passthrough: list[Effect] = field(default_factory=list)
@@ -924,6 +927,57 @@ def _apply_restore_projection(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"restored body {prior.id}"))
 
 
+def _find_traitsetsetting(entity_id: str, traitset_id: str, repo) -> Optional[TraitSetSetting]:
+    for tss in repo.get_traitsetsettings_for_entity(entity_id):
+        if tss.traitset_id == traitset_id and tss.from_type == "entity":
+            return tss
+    return None
+
+
+def _apply_set_traitset_limit(entity, effect, repo, result):
+    """Override how many traits this entity can hold in a trait set.
+
+    ``result`` is the new limit (integer). Empty result clears the override.
+    Duration-driven reverts restore the prior limit (or clear).
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "traitset", repo)
+    if target is None:
+        return
+    raw = (effect.result or "").strip()
+    existing = _find_traitsetsetting(subject.id, target, repo)
+
+    if raw == "":
+        if existing is not None and existing.limit is not None:
+            existing.limit = None
+            result.updated_traitsetsettings.append(existing)
+            result.applied.append(AppliedEffect(effect, f"cleared {target} limit override", existing.id))
+        return
+
+    try:
+        new_limit = max(int(raw), 0)
+    except (TypeError, ValueError):
+        new_limit = 1
+
+    prior = existing.limit if existing is not None else None
+    if existing is None:
+        tss = TraitSetSetting(
+            id=f"{subject.id}:{target}", entity_id=subject.id, traitset_id=target,
+            from_type="entity", limit=new_limit,
+        )
+        result.new_traitsetsettings.append(tss)
+        result.applied.append(AppliedEffect(effect, f"set {target} limit to {new_limit}", tss.id))
+        _queue_entity_revert(repo, subject, effect, prior_result="")
+    else:
+        existing.limit = new_limit
+        result.updated_traitsetsettings.append(existing)
+        result.applied.append(AppliedEffect(effect, f"set {target} limit to {new_limit}", existing.id))
+        _queue_entity_revert(repo, subject, effect, prior_result=str(prior) if prior is not None else "")
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1293,6 +1347,7 @@ _MUTATION_HANDLERS = {
     ("entity", "cancel_scheduled_event"): _apply_cancel_scheduled_event,
     ("projection", "create"): _apply_create_projection,
     ("projection", "restore"): _apply_restore_projection,
+    ("modify_traitset", "set_limit"): _apply_set_traitset_limit,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

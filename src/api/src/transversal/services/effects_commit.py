@@ -109,6 +109,12 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     for ts in result.removed_trait_settings:
         repo.delete_traitsetting(ts.id)
 
+    # Trait-set settings (limit overrides) produced by the applier.
+    for tss in result.new_traitsetsettings:
+        repo.create_traitsetsetting(tss)
+    for tss in result.updated_traitsetsettings:
+        repo.update_traitsetsetting(tss)
+
     # Fog-of-war reveals: persist known_to changes and tell viewers to refetch.
     if result.revealed:
         revealed_ids = []
