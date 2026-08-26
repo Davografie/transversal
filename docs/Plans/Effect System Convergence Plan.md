@@ -51,14 +51,14 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 ### Batch 3 — New effect actions (backend + registry + editor)
 
 - [x] Create temporary location asset (context: duration) — `create_asset` + `location` context field, revert `delete_entity`
-- [ ] Challenge rating (effect die vs challenge die)
+- [ ] Challenge rating (effect die vs challenge die) — deferred to a dice-pool/resolver pass
 - [x] Step down target-entity's trait — verified: already expressible via `step_down_trait`'s `entity` field
 - [x] Disable a trait (new `TraitSetting.enabled` flag — not location-scoped; + duration revert → `enable`)
 - [x] Toggle trait (same `enabled` flag, self-inverse revert)
-- [ ] Increase/decrease result/effect limit *(decision below)*
-- [ ] Increase/set trait-set limit (needs `TraitSetSetting.limit`)
-- [ ] Create new/temporary projection (disguise / alt-ID)
-- [ ] End entity/projection active effect
+- [ ] Increase/decrease result/effect limit *(decision below)* — deferred to a dice-pool/resolver pass
+- [x] Increase/set trait-set limit — `modify_traitset`/`set_limit` → `TraitSetSetting.limit` override
+- [x] Create new/temporary projection (disguise / alt-ID) — `projection`/`create` + `projection`/`restore`
+- [x] End entity/projection active effect — `end_active_effect` action (scoped `scheduled_event` picker)
 - [ ] Gain-trait inline trait editor (editor-only authoring; supersedes the auto-fill stopgap)
 
 ### Batch 4 — New triggers (fire sites + `menu_contexts` + `_trigger_matches`)
