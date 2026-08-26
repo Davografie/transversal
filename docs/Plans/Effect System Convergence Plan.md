@@ -100,6 +100,8 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 
 ## Owner model → `entity_type` condition + GM owner
 
+> [!note] Status: done (2026-08-26). `ConditionType.ENTITY_TYPE`, static-condition availability filtering, and the `players`→`table` migration are implemented; the "Manage SFX" panel filter is still pending.
+
 Drop the `players` owner bucket and express "player-character-only" as an `entity_type` **condition**; keep `gm` as the GM-context bucket. Supersedes the "ownership stays as-is" note in [[Effect Variables and Primitives]].
 
 - **Rationale:** ownership = *where granted*; conditions = *when it can fire*. A role is an entity property → a condition, not a grant surface. `players` and `table` both mean "every entity", so `players` folds into `table`.
@@ -109,7 +111,7 @@ Drop the `players` owner bucket and express "player-character-only" as an `entit
   2. `get_available_sfx_ids` evaluates entity-state conditions so listing matches fireability.
   3. Migrate `players` seeds → `table` + `ENTITY_TYPE=character`; remove the bucket.
   4. "Manage SFX" panel: **Owners becomes a filter type**, not the panel's sole axis.
-- **Open:** does `entity_type` gate listing, firing, or both? (Recommend both.)
+- **Resolved:** `entity_type` gates both listing and firing — availability filters *static* (context-free) conditions, and the engine evaluates all conditions at fire time.
 
 ## Dynamic drillthrough → target-type field schema
 
