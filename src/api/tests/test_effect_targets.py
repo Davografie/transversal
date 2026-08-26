@@ -2,7 +2,16 @@
 
 from types import SimpleNamespace
 
-from transversal.domain import DieType, Entity, EntityType
+from transversal.domain import (
+    DieType,
+    Effect,
+    Entity,
+    EntityType,
+    ScheduledEvent,
+    Timer,
+    TimerCombine,
+    TraitSetting,
+)
 from transversal.services.effect_targets import (
     TargetCandidate,
     parse_scope,
@@ -47,6 +56,8 @@ class TargetRepo:
         self.descendants = {}         # loc_id -> [desc ids]
         self.by_id = {}               # id -> _e
         self.faction_members = {}     # faction_id -> [_e]
+        self.scheduled_events = []    # [ScheduledEvent]
+        self.traitsettings_by_id = {} # ts_id -> TraitSetting
 
     # ── repo surface ─────────────────────────────────
     def list_entities_by_type(self, entity_type, universe=None):
@@ -103,6 +114,20 @@ class TargetRepo:
 
     def get_entity(self, entity_id):
         return self.by_id.get(entity_id)
+
+    def list_scheduled_events(self, target_type=None, target_id=None, target_ids=None):
+        events = list(self.scheduled_events)
+        if target_type is not None:
+            events = [e for e in events if e.target_type == target_type]
+        if target_id is not None:
+            events = [e for e in events if e.target_id == target_id]
+        if target_ids is not None:
+            ids = set(target_ids)
+            events = [e for e in events if e.target_id in ids]
+        return events
+
+    def get_traitsetting(self, ts_id):
+        return self.traitsettings_by_id.get(ts_id)
 
 
 def _entity(**overrides):
@@ -263,6 +288,43 @@ def test_projection_kind_filters_by_universe_scope():
     ]
     out = resolve_candidates("projection", "universe:three_realms", _entity(), repo)
     assert _ids(out) == ["char-1:three_realms"]
+
+
+def test_scheduled_event_kind_lists_entity_timers():
+    repo = TargetRepo()
+    ev = ScheduledEvent(
+        id="se-1", target_type="entity", target_id="char-1",
+        effect=Effect(type="modify_trait", action="enable", target="iron-will"),
+        timers=[Timer(event="scene", remaining=2)],
+        combine=TimerCombine.FIRST_TO_FIRE,
+    )
+    repo.scheduled_events = [ev]
+    out = resolve_candidates("scheduled_event", None, _entity(), repo)
+    assert _ids(out) == ["se-1"]
+    assert out[0].subtitle == "2 scenes"
+    assert "enable" in out[0].name
+
+
+def test_scheduled_event_kind_includes_owned_trait_setting_timers():
+    repo = TargetRepo()
+    repo.traitsettings_by_id = {
+        "ts-1": TraitSetting(id="ts-1", entity_id="char-1", trait_id="iron-will", traitset_id="ts-x"),
+    }
+    owned = ScheduledEvent(
+        id="se-2", target_type="trait_setting", target_id="ts-1",
+        effect=Effect(type="modify_trait", action="enable", target="iron-will"),
+        timers=[Timer(event="beat", remaining=1)],
+        combine=TimerCombine.FIRST_TO_FIRE,
+    )
+    foreign = ScheduledEvent(
+        id="se-3", target_type="trait_setting", target_id="other-ts",
+        effect=Effect(type="modify_trait", action="enable", target="iron-will"),
+        timers=[Timer(event="scene", remaining=1)],
+        combine=TimerCombine.FIRST_TO_FIRE,
+    )
+    repo.scheduled_events = [owned, foreign]
+    out = resolve_candidates("scheduled_event", None, _entity(), repo)
+    assert _ids(out) == ["se-2"]  # only this entity's trait-setting timer
 
 
 # ── target filter ──────────────────────────────────

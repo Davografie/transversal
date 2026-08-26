@@ -406,6 +406,21 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("entity", "delete_entity"),
     ),
+    EffectActionMeta(
+        action_id="end_active_effect",
+        label="End Active Effect",
+        description="Cancel a running temporary effect (a pending timer) on the target",
+        category="either",
+        effect_type="entity",
+        effect_action="cancel_scheduled_event",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            _ENTITY_FIELD,
+            EffectFieldDef(name="target", label="Active Effect", field_type="text", required=True),
+        ],
+        target_kind="scheduled_event",
+        requires_choice=True,
+    ),
 
     # ── Attunement ─────────────────────────────────────
     EffectActionMeta(
@@ -672,7 +687,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "cortex_gain_trait": "Trait", "reveal_trait": "Trait",
     "earn_razmerit": "Razmerit", "spend_razmerit": "Razmerit",
     "transfer_razmerit": "Razmerit",
-    "create_asset": "Entity", "attune": "Attunement",
+    "create_asset": "Entity", "end_active_effect": "Entity", "attune": "Attunement",
     "travel": "Travel", "set_location": "Travel",
     "discover_life_path": "Life Path", "next_step": "Life Path",
     "draft_life_path": "Life Path", "force_muster": "Life Path",

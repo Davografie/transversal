@@ -57,8 +57,9 @@ class FakeRepo:
         return event
 
     def delete_scheduled_event(self, event_id):
+        before = len(self.scheduled_events)
         self.scheduled_events = [e for e in self.scheduled_events if e.id != event_id]
-        return True
+        return len(self.scheduled_events) < before
 
 
 class RandomRepo:
@@ -263,6 +264,28 @@ def test_disable_with_duration_schedules_enable_revert():
     assert revert.target_type == "trait_setting"
     assert revert.target_id == "char-1:trait"
     assert revert.effect.action == "enable"
+
+
+def test_cancel_scheduled_event_deletes_timer():
+    from transversal.domain import ScheduledEvent, Timer, TimerCombine
+    ev = ScheduledEvent(
+        id="se-1", target_type="entity", target_id="char-1",
+        effect=Effect(type="modify_trait", action="enable", target="iron-will"),
+        timers=[Timer(event="scene", remaining=2)],
+        combine=TimerCombine.FIRST_TO_FIRE,
+    )
+    repo = FakeRepo()
+    repo.scheduled_events = [ev]
+    result = apply_effects(_entity(), [_effect("entity", "cancel_scheduled_event", "se-1")], repo)
+    assert repo.scheduled_events == []
+    assert result.applied
+
+
+def test_cancel_scheduled_event_missing_is_noop():
+    repo = FakeRepo()
+    repo.scheduled_events = []
+    result = apply_effects(_entity(), [_effect("entity", "cancel_scheduled_event", "se-nope")], repo)
+    assert result.applied and "no active effect" in result.applied[0].summary
 
 
 # ── Complications (unified polarity) ─────────────────

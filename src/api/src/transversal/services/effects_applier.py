@@ -395,6 +395,7 @@ _TARGET_KINDS = {
     "roll_table": "roll_table",
     "universe": "universe",
     "projection": "projection",
+    "scheduled_event": "scheduled_event",
 }
 
 _PLACEHOLDER_MODES = {"choose", "random"}
@@ -846,6 +847,21 @@ def _apply_toggle(entity, effect, repo, result):
     _queue_trait_revert(repo, ts, effect)
 
 
+def _apply_cancel_scheduled_event(entity, effect, repo, result):
+    """Cancel a specific pending timer (target = a scheduled-event id)."""
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "scheduled_event", repo)
+    if target is None:
+        return  # pending choice (or no candidate)
+    if repo.delete_scheduled_event(target):
+        result.applied.append(AppliedEffect(effect, f"ended active effect {target}", target))
+    else:
+        result.applied.append(AppliedEffect(effect, f"no active effect {target} to end"))
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1212,6 +1228,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "disable"): _apply_disable,
     ("modify_trait", "enable"): _apply_enable,
     ("modify_trait", "toggle"): _apply_toggle,
+    ("entity", "cancel_scheduled_event"): _apply_cancel_scheduled_event,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

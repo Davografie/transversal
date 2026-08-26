@@ -90,6 +90,27 @@ def _traitset_name(repo, traitset_id: str) -> str:
     return ts.name if ts else traitset_id
 
 
+def _scheduled_event_name(e) -> str:
+    """A human-readable label for a pending timer (effect action + target)."""
+    eff = e.effect
+    target = (eff.target or "").strip()
+    label = eff.action
+    if target and target != "self":
+        label = f"{eff.action} {target}"
+    if e.source_sfx_id:
+        label = f"{label} ({e.source_sfx_id})"
+    return label or e.id
+
+
+def _scheduled_event_subtitle(e) -> str:
+    """Countdown string for a pending timer (e.g. ``2 scenes``)."""
+    parts = []
+    for t in (e.timers or []):
+        unit = t.event if t.remaining == 1 else f"{t.event}s"
+        parts.append(f"{t.remaining} {unit}")
+    return " · ".join(parts)
+
+
 def _die_candidates() -> list[TargetCandidate]:
     return [TargetCandidate(id=d.value, name=d.value) for d in DieType]
 
@@ -180,6 +201,17 @@ def _default_scope(kind: str, value: str, entity: Entity, repo, filter: dict) ->
         return [
             _candidate(p.id, p.name or entity.name, p.universe)
             for p in projs
+        ]
+    if kind == "scheduled_event":
+        # The entity's own pending timers plus its trait-settings' timers.
+        events = list(repo.list_scheduled_events(target_type="entity", target_id=entity.id))
+        for e in repo.list_scheduled_events(target_type="trait_setting"):
+            ts = repo.get_traitsetting(e.target_id)
+            if ts is not None and ts.entity_id == entity.id:
+                events.append(e)
+        return [
+            _candidate(e.id, _scheduled_event_name(e), "", _scheduled_event_subtitle(e))
+            for e in events
         ]
     return []
 
