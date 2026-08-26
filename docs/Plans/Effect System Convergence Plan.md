@@ -30,7 +30,7 @@ Transversal's depth comes from a **small set of primitives composed into a large
 
 ## Current state (verified)
 
-The effect layer is built and the primitives are largely in place. Verified by 591 backend tests + a passing frontend build.
+The effect layer is built and the primitives are largely in place. Verified by 599 backend tests + a passing frontend build.
 
 **Five closed vocabularies, each owned by one backend module:**
 
@@ -158,7 +158,7 @@ Consolidate the two timer mechanisms into a single persisted collection of runni
 
 **Build with contract tests, live-test in play.** No full-coverage manual matrix up front — it's deferred until the scope is built. Instead:
 
-- **Contract test per primitive** — each new action/condition/trigger lands with a backend unit test asserting its contract (the 591-test suite grows this way).
+- **Contract test per primitive** — each new action/condition/trigger lands with a backend unit test asserting its contract (the 599-test suite grows this way).
 - **Drift-proof test** — one automated test (from [[Effect Variables and Primitives]] Phase 1) asserting every trigger's fire-site context matches its declared `{variables}`; catches the "declared vs populated" bug class wholesale.
 - **Live-test the SFX actually used in play** — focused, usage-driven manual verification as each SFX is wanted; this drives which scenarios get the attention.
 
@@ -166,14 +166,15 @@ Build order:
 
 1. ~~**Owner model**~~ — done (condition + availability filtering + migration; panel filter pending).
 2. ~~**Central timers**~~ — done (one persisted timer repository absorbing `EffectsEngine._schedule`; GraphQL `scheduledEvents` query + filters + sheet display). Foundation for duration-based actions + loop-prevention.
-3. **Batch 3 actions** — disable/toggle trait first (already designed; duration reverts ride the new timers), then challenge rating, temporary projection, etc.
-4. **Batch 4 triggers** (on set/beat/scene), then **Batch 5** cross-cutting.
-5. **Drillthrough schema** (field schema + recursive resolver + wizard) — enhancement/polish, not on the critical path.
-6. **Batch 6 SFX seeds** once their primitives exist.
+3. ~~**Batch 3 actions**~~ — done (disable/toggle trait, temporary projection, trait-set limit, end-active-effect, temporary location asset, inline trait editor).
+4. ~~**Batch 4 triggers**~~ — done (`on_set`/`on_beat`/`on_scene`/`on_result`, plus roll state in `on_result` context).
+5. **Crimson Scars primitives** — the four batches sequenced in [[Effect System Capabilities and Gaps#Primitive sequencing]] (temporal spine → effect gating + die references → trait model → authoring UX). This replaces the earlier "Batch 5/6" ordering: Crimson Scars is now the concrete convergence target.
+6. **Drillthrough schema** (field schema + recursive resolver + wizard) — deferred polish, not on the critical path.
 7. **Full-coverage pass** — deferred; revisit only if a class of bugs surfaces that contract tests and live play keep missing.
 
 ## Related
 
+- [[Effect System Capabilities and Gaps]] — capabilities/gaps map + Crimson Scars worked example + primitive sequencing.
 - [[Effect Variables and Primitives]] — parent plan (typed references, drift-proofing).
 - [[Unified Effects Plan]] — the layer that built the effect system.
 - [[SFX and Effects]] — current canonical reference.
