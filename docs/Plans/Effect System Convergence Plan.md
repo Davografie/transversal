@@ -30,13 +30,13 @@ Transversal's depth comes from a **small set of primitives composed into a large
 
 ## Current state (verified)
 
-The effect layer is built and the primitives are largely in place. Verified by 575 backend tests + a passing frontend build.
+The effect layer is built and the primitives are largely in place. Verified by 591 backend tests + a passing frontend build.
 
 **Five closed vocabularies, each owned by one backend module:**
 
-1. **WHEN** — `menu_contexts.py` `TRIGGERS` (19 triggers + 5 menu contexts, typed `{variables}`).
+1. **WHEN** — `menu_contexts.py` `TRIGGERS` (21 triggers + 5 menu contexts, typed `{variables}`).
 2. **WHEN-gating** — `conditions.py` `CONDITION_TYPES` (`target_kind`, `value_kind`, `operators`).
-3. **DO WHAT** — `effects_registry.py` `EFFECT_ACTION_REGISTRY` (35 actions, `group`, fields, timings, duration, polarity, inverse).
+3. **DO WHAT** — `effects_registry.py` `EFFECT_ACTION_REGISTRY` (40 actions, `group`, fields, timings, duration, polarity, inverse).
 4. **TO WHAT** — `effect_targets.py` `resolve_candidates` + scope grammar + `FILTER_FIELDS`.
 5. **LIFECYCLE** — `EffectTiming` + `Timer`.
 
@@ -44,7 +44,7 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 
 **Frontend:** thin and generic — `useSfxMeta` / `useEffectActions` / `useEffectTargets` fetch vocabularies via GraphQL; `EffectEditor`, `ConditionEditor`, `TargetPicker`, `ScopeBuilder`, `EffectTargetWizard` render from backend metadata.
 
-**Landed this session:** `has_razmerit` condition (comparators), `traitset` target kind + traitset picker, `entity_type` (`type`) target filter, `self.*` drillthrough (first cut), `group` on actions + `dicepool` trigger group, deferral-field removal, gain-trait auto-fill (die/polarity), name-resolved SFX summary, notify-client/menu-context reconciliation, wizard-chaining verified.
+**Landed this session:** the full **Batch 3** action set — `enabled` flag + disable/toggle trait, `has_effective_trait` condition, end-active-effect (targeted timer cancel), temporary projection (disguise/restore), set trait-set limit (`TraitSetSetting.limit`), location-scoped temporary asset — plus the gain-trait inline editor (`statement`/`notes` + shared `TraitInstanceEditor`), and two play-surfaced fixes (Dice Pool trigger group restore, `useClipboard`).
 
 ## The full remaining scope
 
@@ -95,6 +95,8 @@ The effect layer is built and the primitives are largely in place. Verified by 5
 - **Owner model** = `entity_type` condition + `gm` owner (see below).
 - **Drillthrough** = dynamic, target-type field schema (see below).
 - **Disable/toggle trait** = a new `TraitSetting.enabled` boolean flag (not `locations_enabled`/`locations_disabled`); a disabled trait must not contribute dice to the pool.
+- **`has_effective_trait`** = possession (`has_trait`) is unaffected by disable; a new `HAS_EFFECTIVE_TRAIT` condition gates on `enabled` (a disabled trait is still owned, just not effective).
+- **Trait-set limit** = a per-entity `TraitSetSetting.limit` override (registry default when None); the sheet still reads the registry limit and has not yet merged the override (frontend follow-up).
 
 ## Owner model → `entity_type` condition + GM owner
 
@@ -155,7 +157,7 @@ Consolidate the two timer mechanisms into a single persisted collection of runni
 
 **Build with contract tests, live-test in play.** No full-coverage manual matrix up front — it's deferred until the scope is built. Instead:
 
-- **Contract test per primitive** — each new action/condition/trigger lands with a backend unit test asserting its contract (the 575-test suite grows this way).
+- **Contract test per primitive** — each new action/condition/trigger lands with a backend unit test asserting its contract (the 591-test suite grows this way).
 - **Drift-proof test** — one automated test (from [[Effect Variables and Primitives]] Phase 1) asserting every trigger's fire-site context matches its declared `{variables}`; catches the "declared vs populated" bug class wholesale.
 - **Live-test the SFX actually used in play** — focused, usage-driven manual verification as each SFX is wanted; this drives which scenarios get the attention.
 
