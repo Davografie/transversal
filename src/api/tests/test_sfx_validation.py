@@ -108,3 +108,21 @@ def test_missing_required_field_warns():
     )
     warnings = validate_sfx(sfx)
     assert any("missing required field 'target'" in w for w in warnings)
+
+
+def test_target_spec_satisfies_required_target():
+    from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec
+
+    sfx = _sfx(
+        trigger="on_session_start",
+        effects=[Effect(
+            timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down",
+            target="",
+            target_spec=TargetSpec(steps=[
+                SelectStep(collection="rolled_dice"),
+                NavigateStep(edge="traitsetting", dedup=True),
+            ]),
+        )],
+    )
+    warnings = validate_sfx(sfx)
+    assert not any("missing required field 'target'" in w for w in warnings)

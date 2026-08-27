@@ -82,6 +82,11 @@ def _missing_required(effect: Effect) -> list[str]:
             if f.name in ("target", "result", "entity")
             else (effect.context or {}).get(f.name)
         )
+        # A structured spec satisfies the target/entity requirement.
+        if f.name == "target" and (effect.target_spec and effect.target_spec.steps):
+            continue
+        if f.name == "entity" and (effect.entity_spec and effect.entity_spec.steps):
+            continue
         if value in (None, ""):
             missing.append(f.name)
     return missing
