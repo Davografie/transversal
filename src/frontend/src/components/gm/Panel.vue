@@ -94,12 +94,23 @@ function normalizeSpec(spec) {
   return { ...spec, component: markRaw(spec.component) }
 }
 
-// Opens a child panel. By default this REPLACES the current children (the old
-// single-child behavior). Pass { sibling: true } to append a sibling instead,
-// which is the multi-child / parallel-workplace mode.
-function openChild(spec, opts = {}) {
-  const entry = { key: `c${++childSeq}`, spec: normalizeSpec(spec) }
-  children.value = opts.sibling ? [...children.value, entry] : [entry]
+// Opens a child panel. Default is parallel: append as a sibling. If a child
+// with the same component + id is already open, replace (refresh) it instead,
+// keeping its key/position so its local state survives.
+function openChild(spec) {
+  const normalized = normalizeSpec(spec)
+  const idx = children.value.findIndex((c) => {
+    if (c.spec.component !== normalized.component) return false
+    if (normalized.id) return c.spec.id === normalized.id
+    return !c.spec.id
+  })
+  if (idx >= 0) {
+    children.value = children.value.map((c, i) =>
+      i === idx ? { ...c, spec: normalized } : c
+    )
+  } else {
+    children.value = [...children.value, { key: `c${++childSeq}`, spec: normalized }]
+  }
 }
 
 // Closes a specific child by key, or the last child when no key is given.
