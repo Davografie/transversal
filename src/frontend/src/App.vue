@@ -1001,10 +1001,12 @@ watch(lastEvent, (evt) => {
       addToast('Session ended', 'session')
       break
     case 'trait_updated':
-      // local patch handles display; SSE sync deferred
       entityCache.invalidateSheet(evt.data?.entity_id)
-      if (evt.data?.entity_id === entityId.value && evt.data?.trait_setting_id) {
-        diceRef.value?.resyncTraitDie(evt.data.trait_setting_id, evt.data.new_dice ?? [evt.data.new_rating])
+      if (evt.data?.entity_id === entityId.value) {
+        if (evt.data?.trait_setting_id) {
+          diceRef.value?.resyncTraitDie(evt.data.trait_setting_id, evt.data.new_dice ?? [evt.data.new_rating])
+        }
+        sheetRef.value?.fetchEntity()
       }
       if (gmMode.value && foreign) {
         const tName = evt.data?.trait_name || evt.data?.name || 'a trait'
