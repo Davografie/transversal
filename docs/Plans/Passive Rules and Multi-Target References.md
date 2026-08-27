@@ -30,10 +30,19 @@ These are the first concrete consumers of the deferred **recursive drillthrough*
 
 - **Trigger**: `on_session_start` — arms the rule once for the session (passive; no per-event trigger).
 - **Effect timing**: `ON_ROLL` — fires at every roll.
-- **Target**: every rolled trait die's owning **traitsetting** (trait instance), deduped — expressed as a structured target (see Work item 1), conceptually `all(rolled_dice[*].traitsetting, dedup=true)`.
+- **Target**: every rolled trait die's owning **traitsetting** (instance), deduped — see the targeting model below.
 - **Effect**: `modify_trait` / `step_down`, `steps: 1`, `duration: beat: 1`, condition `ENTITY_TYPE == character`.
 
 "One Trick" therefore reads: *for the whole session, every time a character rolls, each trait instance they rolled steps down one step until end of beat.*
+
+### Targeting model (the general capability)
+
+- **Unified spec, one concept.** A target is a **pipeline of steps** that resolves to a **typed value**. "Resolves to an entity" and "resolves to an integer" are the *same* kind of thing — the difference is only the result type.
+- **Type = element × cardinality.** `set<traitsetting>`, `single<entity>`, `single<int>`, `set<die>`, …
+- **The effect field declares the type.** Each field that wants a selection (`target`, `entity`, `result`, `steps`, condition operands) states its expected type — element + cardinality. The spec must resolve to a matching type; that's the "what am I selecting for" hint.
+- **Cardinality lives on the field, not the grammar.** `all` (set), `any`/`choose`/`random` (single) are properties of the field's type, not extra spec syntax.
+- **Everything uses specs.** `target` *and* `entity` (subject) are object-typed specs; `result`/`steps`/thresholds are scalar-typed specs (a spec that ends in an `aggregate`); conditions are predicates that *embed* specs (e.g. "has trait [spec]").
+- **Full migration.** `Effect.target` (and the other reference fields) become specs; the legacy string (`self`, literal, `{choose:*}`/`{random:*}`) is dropped and represented as trivial specs.
 
 ## Current state (blockers, grounded)
 
@@ -46,38 +55,49 @@ These are the first concrete consumers of the deferred **recursive drillthrough*
 
 ## Work items
 
-### 1. Targeting model — structured `TargetSpec` (build first)
+### 1. Targeting model — spec pipeline (build first)
 
-Replace the parse-a-string approach with a structured target object, so the wizard builds it directly and the resolver validates it. Conceptually:
+A spec is an ordered list of steps, each transforming a typed collection (or collapsing it to a scalar). Resolution is a recursive fold: `select` seeds, each step transforms, the final value is type-checked against the field.
 
 ```
-TargetSpec:
-  mode        # literal | self | choose | random | any | all
-  kind        # target kind: entity/trait/traitsetting/location/…
-  collection  # context collection, e.g. "rolled_dice"
-  path        # drillthrough hops, e.g. ["traitsetting"]  (die → traitsetting → entity → location)
-  filter      # candidate predicate
-  dedup       # bool — dedupe the resolved set by id
-  scope       # narrowing (absorbs today's target_scope)
+Step:
+    select   <collection>   # seed from a context collection (rolled_dice, entities, occupants, locations, traitsettings, …)
+    filter   <predicate>    # narrow; typed, may traverse (traitsetting.traitset == X, pool_owner.type == "gmc", …)
+    navigate <edge>         # hop a named edge (die.traitsetting, traitsetting.entity, traitsetting.traitset, entity.location, …)
+                            #   with a `dedup` flag — collapsing N→1 needs an aggregation: min | max | mean | avg_floor | avg_ceil
+    aggregate <fn>          # collapse a collection to a scalar: count | min | max | mean | avg_floor | avg_ceil
 ```
 
-- **Resolver**: one function `evaluate(spec, context) → list[ids]`; `all`/`any` return a list (fan out), `choose` stays a pending single choice, `random` picks one.
-- **Migration**: keep `Effect.target: str` as the legacy fast path (`self`, literal, `{choose:*}`/`{random:*}`) so existing SFX don't break; add a nullable `Effect.target_spec` for structured targets. Decide later whether to fold the legacy path in fully.
+- **Type catalog (linchpin)** — element types (die, traitsetting, trait, traitset, entity, location, universe, projection, …), navigation edges (source→target type, 1→1 or 1→N), aggregations (input→output type), and the aggregatable scalar fields (`die.rating`, `die.result`). Single source of truth for the resolver and the wizard, so only valid steps compose.
+- **Field type-hints** — the registry's `EffectActionMeta.fields[].field_type` / `target_kind` become a real type vocabulary (element × cardinality). The wizard only offers steps legal for the field's type; the resolver type-checks the result.
+- **Resolver** — `evaluate(spec, context) → typed value`; a `set<T>` result fans out over the effect, a `single<T>` passes one value.
+
+Example — *GMCs that used traits from set X in the current test/contest*:
+
+```
+select rolled_dice
+  filter source_kind == "trait"
+  filter pool_owner.type == "gmc"
+  navigate traitsetting
+  filter traitset == X
+  navigate entity
+  dedup
+```
 
 ### 2. Traitsetting identity (instance, not registry trait)
 
-- Targets resolve to `ts_id`; add a `traitsetting` target kind / direct-`ts_id` resolution path.
+- Targets resolve to `ts_id`; add a `traitsetting` element type / direct-`ts_id` resolution.
 - `step_up`/`step_down` act on the instance via `repo.get_traitsetting(ts_id)` instead of `_find_traitsetting(owner, trait_id)`.
-- This is a correctness fix independent of the grammar; `die.traitsetting` naturally resolves to `ts_id`.
+- This is a correctness fix independent of the spec grammar; `die.traitsetting` naturally resolves to `ts_id`.
 
 ### 3. Targeting wizard
 
-The drillthrough picker that produces a `TargetSpec` (mode, collection, hops, dedup) rather than emitting a string. Built on top of items 1–2.
+The drillthrough picker that builds a spec step-by-step, driven by the type catalog (only legal edges/aggregations are offered). Produces the spec object directly — no string round-trip.
 
 ### 4. Roll context collection + `on_roll` fix
 
-- `ON_ROLL` firing passes the enriched dice as `rolled_dice` (fix `fire_roll_sfx` → `fire_armed("on_roll", …, {"rolls": …})`, mirroring `set_result`). This is a latent bug independent of targeting.
-- `_substitute_die_context` exposes the die as a navigable unit (minimally `ts_id`) so `collection=rolled_dice, path=[traitsetting]` resolves.
+- `ON_ROLL` firing passes the enriched dice as `rolled_dice` (fix `fire_roll_sfx` → `fire_armed("on_roll", …, {"rolls": …})`, mirroring `set_result`). Latent bug independent of targeting.
+- `_substitute_die_context` exposes the die as a navigable unit (minimally `ts_id`) so `select rolled_dice → navigate traitsetting` resolves.
 
 ### 5. Passive arming
 
@@ -87,23 +107,29 @@ The drillthrough picker that produces a `TargetSpec` (mode, collection, hops, de
 
 ### 6. Endless Variety
 
-Same targeting primitive (`rolled_dice[*].traitsetting`), `step_up` compensation firing *after* the step-down on the same instance. Ordering + the `beat:1` revert interaction are the risk points.
+Same targeting primitive (`rolled_dice → traitsetting`), `step_up` compensation firing *after* the step-down on the same instance. Ordering + the `beat:1` revert interaction are the risk points.
 
 ## Sequencing
 
-1. **Targeting model** — `TargetSpec` + resolver + `all`/`any`/`dedup` (unit test: `all` fans out; `dedup` dedupes by id).
-2. **Traitsetting identity** — target/step by `ts_id`, not `trait_id`.
-3. **Wizard** — build a `TargetSpec` through drillthrough.
-4. **Roll context + `on_roll` fix** — expose `rolled_dice` and pass real rolls to `fire_armed("on_roll")`.
-5. **Passive arming** — `on_session_start` trigger, global armed set, no stamp.
-6. Author One Trick end-to-end; add Endless Variety as the compensation counter.
+1. **Type catalog** — element types, edges, aggregations, aggregatable fields (the foundation for everything else).
+2. **Spec + resolver** — step pipeline, type-checking, field type-hints (unit test: `all` fans out; `dedup`+aggregation collapses).
+3. **Traitsetting identity** — target/step by `ts_id`, not `trait_id`.
+4. **Wizard** — build specs through drillthrough, catalog-driven.
+5. **Roll context + `on_roll` fix** — expose `rolled_dice`; pass real rolls to `fire_armed("on_roll")`.
+6. **Passive arming** — `on_session_start` trigger, global armed set, no stamp.
+7. Author One Trick end-to-end; add Endless Variety as the compensation counter.
 
-## Open decisions
+## Open decisions (may pause here during implementation)
 
-- **`TargetSpec` migration** — coexist with the legacy `target` string (recommended) vs full migration of existing authored SFX.
+- **`choose`/`random` as resolution mode vs cardinality** — how the field type expresses "user picks one" / "random one" alongside `all`/`any`. Likely a small "resolution mode" on single-typed fields.
+- **`dedup` vs `aggregate` step semantics** — is `aggregate` a standalone step, a flag on `navigate`/`dedup`, or both? And does "identity dedup" (keep one instance) compose with "value aggregation" (min/max/mean of the collapsed dice)?
+- **Condition unification boundary** — how conditions embed specs, and which condition types (PHASE, ENTITY_TYPE, razmerit threshold, …) stay first-class vs become spec-predicates.
+- **Context value boundary** — which `context` fields become spec-typed values (`result`, `steps`) vs stay literals (`statement`, `notes`, `rating_type`).
+- **Subject/owner interplay** — how an entity-typed spec (`entity`) interacts with `_trait_owner` / relationship context when an action needs the trait's owner.
+- **Migration mechanics** — how existing authored string targets convert to specs (script vs lazy-on-read).
+- **Roll-deferred die selection mapping** — how today's `die_filter` / `source_sfx_id` matching maps into the spec model, and how passive arming expresses "match by filter, not stamp".
 - **Dedup identity** — by `ts_id` (instance) vs `trait_id` (registry trait); instance is the safe default and matters for relationship traits.
 - **Session-start fire site** — session *created* vs *first join*; and global armed set vs per-entity arming.
-- **`any` semantics** — first-candidate vs deterministic pick (only needed if a future rule wants "any one", not for One Trick).
 
 ## Related
 
