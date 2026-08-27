@@ -1588,3 +1588,21 @@ def test_two_step_scope_then_location():
     assert r2.pending_choices[0].field == "target"
     assert r2.pending_choices[0].kind == "location"
     assert r2.pending_choices[0].scope == "universe:earth"
+
+
+def test_entity_spec_resolves_subject_to_location():
+    from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec
+
+    location = _entity(id="loc-1", type=EntityType.LOCATION, current_location="loc-1")
+    entity = _entity(id="char-1", current_location="loc-1")
+    ts = _ts("martial", [DieType.D8], entity_id="loc-1")
+    repo = FakeRepo(entities=[entity, location], traitsettings=[ts])
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+        target="loc-1:martial",
+        entity_spec=TargetSpec(steps=[SelectStep(collection="self"), NavigateStep(edge="location")]),
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].id == "loc-1:martial"

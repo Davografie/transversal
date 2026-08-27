@@ -613,6 +613,14 @@ def _effect_subject(entity: Entity, effect: Effect, result: EffectsResult, repo)
     ``{random:entity}`` placeholder resolves through the same candidate machinery
     as ``target``; anything else is treated as a literal entity id.
     """
+    if effect.entity_spec is not None:
+        from transversal.services.target_resolver import TargetContext, resolve
+
+        resolution = resolve(effect.entity_spec, TargetContext(subject=entity, repo=repo))
+        if resolution.values:
+            return resolution.values[0]
+        result.applied.append(AppliedEffect(effect, "entity spec resolved to nothing"))
+        return None
     subject = (effect.entity or "").strip()
     if subject in ("", "self") or subject == entity.id:
         return entity

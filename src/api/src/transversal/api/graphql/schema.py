@@ -245,6 +245,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         context=e.context,
         duration=_duration_to_gql(e.duration),
         target_spec=e.target_spec.model_dump() if e.target_spec else None,
+        entity_spec=e.entity_spec.model_dump() if e.entity_spec else None,
     )
 
 
@@ -304,6 +305,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),
         target_spec=_target_spec_from_input(e.target_spec),
+        entity_spec=_target_spec_from_input(e.entity_spec),
     )
 
 

@@ -714,6 +714,9 @@ class Effect(BaseModel):
     # Structured targeting pipeline (the new model). None means the effect still
     # uses the legacy ``target`` string and is lazily migrated on read.
     target_spec: Optional[TargetSpec] = None
+    # Structured subject resolution (who the effect applies to). None means the
+    # effect still uses the legacy ``entity`` string.
+    entity_spec: Optional[TargetSpec] = None
 
 
 class Timer(BaseModel):

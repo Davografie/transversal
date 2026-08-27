@@ -93,9 +93,15 @@
               <option value="literal">Pick specific</option>
               <option value="choose">Choose at runtime</option>
               <option value="random">Random</option>
+              <option value="spec">Targeting path</option>
             </select>
           </div>
           <input v-if="newEffect.entityMode === 'literal'" v-model="newEffect.fields[f.name]" type="text" placeholder="self" />
+          <TargetSpecBuilder
+            v-else-if="newEffect.entityMode === 'spec'"
+            v-model="newEffect.entitySpec"
+            :destination="{ element: 'entity' }"
+          />
           <div v-else class="ee-field">
             <label>Entity scope</label>
             <ScopeBuilder v-model="newEffect.entityScope" :universe="universe" />
@@ -199,7 +205,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
 const { copy } = useClipboard()
@@ -430,6 +436,7 @@ function onActionChange() {
   newEffect.dieFilter = {}
   newEffect.returnExit = ''
   newEffect.entityMode = 'literal'
+  newEffect.entitySpec = { steps: [] }
   newEffect.entityScope = ''
   newEffect.negative = false
   resultMode.value = 'die'
@@ -472,6 +479,7 @@ function buildEffect(meta) {
   let entity = newEffect.fields.entity || ''
   if (entityMode === 'choose') entity = '{choose_entity}'
   if (entityMode === 'random') entity = '{random:entity}'
+  if (entityMode === 'spec') entity = ''
   const context = { ...cleanContext(newEffect.context), ...newEffect.extraContext }
   if ((context.transversal_type || 'inapposite') !== 'consciousness') {
     context.projection = 'active'
@@ -499,6 +507,7 @@ function buildEffect(meta) {
         }
       : null,
     target_spec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
+    entity_spec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
   }
 }
 
@@ -522,6 +531,8 @@ function populate(eff) {
   newEffect.targetFilter = eff.targetFilter || {}
   newEffect.dieFilter = eff.dieFilter || {}
   newEffect.entityMode = detectEntityMode(eff)
+  newEffect.entitySpec = eff.entity_spec || { steps: [] }
+  if ((eff.entity_spec?.steps || []).length) newEffect.entityMode = 'spec'
   newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
   resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'

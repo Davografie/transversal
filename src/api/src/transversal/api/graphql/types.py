@@ -191,6 +191,7 @@ class Effect:
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDuration] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
+    entity_spec: Optional[strawberry.scalars.JSON] = None
 
 
 @strawberry.input
@@ -209,6 +210,7 @@ class EffectInput:
     context: Optional[strawberry.scalars.JSON] = None
     duration: Optional[EffectDurationInput] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
+    entity_spec: Optional[strawberry.scalars.JSON] = None
 
 
 @strawberry.type
