@@ -1,6 +1,9 @@
 <template>
   <div class="panel-wrapper" :class="{ nested }">
-    <button v-if="closable" class="panel-close" @click="$emit('close')">×</button>
+    <div class="panel-actions">
+      <button v-if="closable" class="panel-action-btn" title="Close" @click="$emit('close')">×</button>
+      <button type="button" class="panel-action-btn" :title="collapsed ? 'Expand' : 'Collapse'" @click="collapsed = !collapsed">{{ collapsed ? '▸' : '▾' }}</button>
+    </div>
     <!-- ⚠ v-show is on .panel (this panel's content) NOT on .panel-wrapper.
          If it were on the wrapper, nested child Panels would also be hidden.
          We want shallow panels to hide their content while their deeper
@@ -9,7 +12,6 @@
       <header v-if="title" class="panel-header">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
-          <button type="button" class="panel-collapse-btn" :title="collapsed ? 'Expand' : 'Collapse'" @click="collapsed = !collapsed">{{ collapsed ? '▸' : '▾' }}</button>
           <button v-if="id" type="button" class="panel-id-btn" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</button>
         </slot>
       </header>
@@ -145,9 +147,13 @@ provide(panelKey, {
   overflow: auto;
 }
 
-/* Close button: outside the panel, between this and the previous panel */
-.panel-close {
+/* Panel action rail: vertical column of icon buttons outside the panel's
+   right edge (close, collapse/expand, and later detach/drag). */
+.panel-actions {
   position: absolute; top: 50%; right: -22px; transform: translateY(-50%); z-index: 2;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.panel-action-btn {
   width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 14px; padding: 0;
@@ -155,7 +161,7 @@ provide(panelKey, {
   border: 1px solid rgba(255,255,255,0.15);
   cursor: pointer;
 }
-.panel-close:hover { background: rgba(255,255,255,0.1); }
+.panel-action-btn:hover { background: rgba(255,255,255,0.1); }
 
 /* Nested panel sits beside parent in the flex row */
 .nested {
@@ -188,18 +194,6 @@ provide(panelKey, {
   line-height: 1.4;
   cursor: pointer;
 }
-.panel-collapse-btn {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--text-dim);
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 4px;
-  padding: 1px 7px;
-  line-height: 1.4;
-  cursor: pointer;
-}
-.panel-collapse-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
 .panel-id-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
 
 .panel-body {
