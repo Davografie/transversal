@@ -42,10 +42,15 @@ ELEMENT_TYPES: dict[str, ElementType] = {
 
 @dataclass(frozen=True)
 class ScalarField:
-    """A scalar value on an element, usable in a filter or an aggregation."""
+    """A scalar value on an element, usable in a filter or an aggregation.
+
+    ``options`` lists the accepted values for enum-like string fields so the
+    wizard can render a dropdown instead of a free-text input.
+    """
     element: str
     name: str
     type: str  # "int" | "number" | "die" | "string"
+    options: tuple[str, ...] = ()
 
 
 # A "die" field is comparable (d4 < d6 < … < d12); numeric for mean after
@@ -53,23 +58,23 @@ class ScalarField:
 SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
     "die": {
         "result": ScalarField("die", "result", "int"),
-        "rating": ScalarField("die", "rating", "die"),
-        "effect_die": ScalarField("die", "effect_die", "die"),
-        "tier": ScalarField("die", "tier", "string"),
+        "rating": ScalarField("die", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
+        "effect_die": ScalarField("die", "effect_die", "die", ("d4", "d6", "d8", "d10", "d12")),
+        "tier": ScalarField("die", "tier", "string", ("fail", "marginal", "success", "exceptional", "perfect")),
         "role": ScalarField("die", "role", "string"),
-        "source_kind": ScalarField("die", "source_kind", "string"),
+        "source_kind": ScalarField("die", "source_kind", "string", ("trait", "difficulty", "manual", "entity", "projection", "location", "resource", "challenge")),
         "ts_id": ScalarField("die", "ts_id", "string"),
         # A list of SFX ids stamped on the die; filtered via the `contains` operator.
         "armed_sfx_ids": ScalarField("die", "armed_sfx_ids", "string"),
     },
     "traitsetting": {
-        "rating": ScalarField("traitsetting", "rating", "die"),
-        "rating_type": ScalarField("traitsetting", "rating_type", "string"),
+        "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
+        "rating_type": ScalarField("traitsetting", "rating_type", "string", ("static", "resource", "challenge", "empty")),
         "trait_id": ScalarField("traitsetting", "trait_id", "string"),
         "traitset_id": ScalarField("traitsetting", "traitset_id", "string"),
         "entity_id": ScalarField("traitsetting", "entity_id", "string"),
         "projection_id": ScalarField("traitsetting", "projection_id", "string"),
-        "from_type": ScalarField("traitsetting", "from_type", "string"),
+        "from_type": ScalarField("traitsetting", "from_type", "string", ("entity", "projection")),
     },
     "trait": {
         "id": ScalarField("trait", "id", "string"),
@@ -83,7 +88,7 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
     "entity": {
         "id": ScalarField("entity", "id", "string"),
         "razmerit": ScalarField("entity", "razmerit", "int"),
-        "type": ScalarField("entity", "type", "string"),
+        "type": ScalarField("entity", "type", "string", ("character", "location", "faction", "asset", "gmc", "universe", "subtrait", "relation")),
         "current_location": ScalarField("entity", "current_location", "string"),
         "current_universe": ScalarField("entity", "current_universe", "string"),
     },

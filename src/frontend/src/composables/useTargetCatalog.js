@@ -5,7 +5,7 @@ const CATALOG_QUERY = `{
   targetCatalog {
     elements { name label }
     edges { name source targets cardinality label }
-    fields { element name type }
+    fields { element name type options }
     aggregations { name label output needsField }
     collections { name element label singular }
   }
