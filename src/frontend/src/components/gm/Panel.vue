@@ -59,9 +59,9 @@ const props = defineProps({
 defineEmits(['close'])
 
 // Copy-ID helper — the header shows a # button that copies the panel id.
-// useClipboard handles the secure-context clipboard API + a legacy execCommand
-// fallback for HTTP/non-localhost hosts, and resets `copied` after a delay.
-const { copy, copied } = useClipboard({ copiedDuring: 1200 })
+// legacy:true enables the execCommand fallback so copying works on plain-HTTP
+// (non-secure-context) hosts, not just localhost/HTTPS.
+const { copy, copied } = useClipboard({ copiedDuring: 1200, legacy: true })
 async function copyId() {
   if (!props.id) return
   await copy(props.id)
