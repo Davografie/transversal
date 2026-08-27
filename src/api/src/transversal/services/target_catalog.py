@@ -57,23 +57,48 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "effect_die": ScalarField("die", "effect_die", "die"),
         "tier": ScalarField("die", "tier", "string"),
         "role": ScalarField("die", "role", "string"),
+        "source_kind": ScalarField("die", "source_kind", "string"),
+        "ts_id": ScalarField("die", "ts_id", "string"),
     },
     "traitsetting": {
         "rating": ScalarField("traitsetting", "rating", "die"),
         "rating_type": ScalarField("traitsetting", "rating_type", "string"),
+        "trait_id": ScalarField("traitsetting", "trait_id", "string"),
+        "traitset_id": ScalarField("traitsetting", "traitset_id", "string"),
+        "entity_id": ScalarField("traitsetting", "entity_id", "string"),
+        "projection_id": ScalarField("traitsetting", "projection_id", "string"),
+        "from_type": ScalarField("traitsetting", "from_type", "string"),
     },
     "trait": {
+        "id": ScalarField("trait", "id", "string"),
+        "traitset_id": ScalarField("trait", "traitset_id", "string"),
         "default_die_type": ScalarField("trait", "default_die_type", "die"),
     },
+    "traitset": {
+        "id": ScalarField("traitset", "id", "string"),
+        "name": ScalarField("traitset", "name", "string"),
+    },
     "entity": {
+        "id": ScalarField("entity", "id", "string"),
         "razmerit": ScalarField("entity", "razmerit", "int"),
         "type": ScalarField("entity", "type", "string"),
+        "current_location": ScalarField("entity", "current_location", "string"),
+        "current_universe": ScalarField("entity", "current_universe", "string"),
     },
     "projection": {
         "type": ScalarField("projection", "type", "string"),
+        "entity_id": ScalarField("projection", "entity_id", "string"),
+        "current_location": ScalarField("projection", "current_location", "string"),
     },
     "location": {
+        "id": ScalarField("location", "id", "string"),
+        "name": ScalarField("location", "name", "string"),
         "type": ScalarField("location", "type", "string"),
+        "universe": ScalarField("location", "universe", "string"),
+    },
+    "universe": {
+        "id": ScalarField("universe", "id", "string"),
+        "name": ScalarField("universe", "name", "string"),
     },
 }
 
