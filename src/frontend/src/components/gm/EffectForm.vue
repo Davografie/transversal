@@ -42,9 +42,10 @@
               <option v-if="selectedAction.supportsReturnExit" value="return">Named exit</option>
               <option value="choose">Choose at runtime</option>
               <option value="random">Random</option>
+              <option value="spec">Targeting path</option>
             </select>
           </div>
-          <div v-if="newEffect.targetMode !== 'return' && !isPortalTravel" class="ee-field">
+          <div v-if="newEffect.targetMode !== 'return' && newEffect.targetMode !== 'spec' && !isPortalTravel" class="ee-field">
             <label>Scope</label>
             <ScopeBuilder v-model="newEffect.scope" :universe="universe" />
             <template v-if="relevantFilterFields.length">
@@ -78,6 +79,11 @@
             <label>Exit name</label>
             <input v-model="newEffect.returnExit" type="text" placeholder="e.g. survived" />
           </div>
+          <TargetSpecBuilder
+            v-else-if="newEffect.targetMode === 'spec'"
+            v-model="newEffect.targetSpec"
+            :destination="specDestination"
+          />
           <div v-else-if="previewText" class="ee-preview">{{ previewText }}</div>
         </template>
 
@@ -172,6 +178,7 @@ import { useEffectTargets } from '@/composables/useEffectTargets.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from './TargetPicker.vue'
+import TargetSpecBuilder from './TargetSpecBuilder.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from './TraitInstanceEditor.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
@@ -192,7 +199,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entityScope: '', negative: false })
 const resultMode = ref('die')
 const copiedVar = ref('')
 const { copy } = useClipboard()
@@ -274,6 +281,27 @@ const selectedAction = computed(() => {
   return effectActions.value.find(a => a.actionId === newEffect.actionId) || null
 })
 
+// The spec element type an effect's `target` should resolve to, derived from
+// the legacy target_kind. Cardinality is left loose — the wizard highlights on
+// element match and shows the actual cardinality.
+const TARGET_KIND_ELEMENT = {
+  trait: 'traitsetting',
+  traitsetting: 'traitsetting',
+  entity: 'entity',
+  occupant: 'entity',
+  location: 'location',
+  traitset: 'traitset',
+  universe: 'universe',
+  projection: 'projection',
+  rating_die: 'die',
+}
+
+const specDestination = computed(() => {
+  const kind = selectedAction.value?.targetKind
+  const element = kind ? TARGET_KIND_ELEMENT[kind] : null
+  return element ? { element } : null
+})
+
 const actionGroups = computed(() => {
   const groups = {}
   for (const a of effectActions.value) {
@@ -307,7 +335,7 @@ watch(
     const meta = selectedAction.value
     if (!meta?.targetKind) return
     const mode = newEffect.targetMode
-    if (mode === 'literal' || mode === 'return') return
+    if (mode === 'literal' || mode === 'return' || mode === 'spec') return
     const cands = await fetchPreviewTargets(
       meta.targetKind,
       newEffect.scope || null,
@@ -396,6 +424,7 @@ function onActionChange() {
   newEffect.extraContext = {}
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
+  newEffect.targetSpec = { steps: [] }
   newEffect.scope = defaultScopeFor(selectedAction.value?.targetKind)
   newEffect.targetFilter = {}
   newEffect.dieFilter = {}
@@ -438,6 +467,7 @@ function buildEffect(meta) {
   if (kind && mode === 'choose') target = `{choose_${kind}}`
   if (kind && mode === 'random') target = `{random:${kind}}`
   if (mode === 'return') target = `{return:${newEffect.returnExit || ''}}`
+  if (mode === 'spec') target = ''
   const entityMode = newEffect.entityMode || 'literal'
   let entity = newEffect.fields.entity || ''
   if (entityMode === 'choose') entity = '{choose_entity}'
@@ -468,6 +498,7 @@ function buildEffect(meta) {
           combine: newEffect.duration.combine || 'FIRST_TO_FIRE',
         }
       : null,
+    target_spec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
   }
 }
 
@@ -485,6 +516,8 @@ function populate(eff) {
   newEffect.timing = eff.timing || 'IMMEDIATE'
   newEffect.fields = {}
   newEffect.targetMode = detectTargetMode(eff, meta)
+  newEffect.targetSpec = eff.target_spec || { steps: [] }
+  if ((eff.target_spec?.steps || []).length) newEffect.targetMode = 'spec'
   newEffect.scope = eff.targetScope || ''
   newEffect.targetFilter = eff.targetFilter || {}
   newEffect.dieFilter = eff.dieFilter || {}

@@ -170,9 +170,11 @@ function stepHasError(i) {
 }
 
 function stepIsValid(i) {
-  if (!props.destination) return false
+  if (!props.destination || !props.destination.element) return false
   const t = typeAt(i)
-  return !!(t && t.element === props.destination.element && t.cardinality === props.destination.cardinality && !errorAt(i))
+  if (!t || !t.element || t.element !== props.destination.element) return false
+  if (props.destination.cardinality && t.cardinality !== props.destination.cardinality) return false
+  return !errorAt(i)
 }
 
 function aggNeedsField(fn) {
@@ -231,7 +233,9 @@ function move(i, delta) {
 }
 
 const destinationLabel = computed(() =>
-  props.destination ? `${props.destination.element}/${props.destination.cardinality}` : ''
+  props.destination
+    ? (props.destination.cardinality ? `${props.destination.element}/${props.destination.cardinality}` : props.destination.element)
+    : ''
 )
 
 function scheduleTrace() {
