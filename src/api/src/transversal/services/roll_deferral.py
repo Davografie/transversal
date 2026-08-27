@@ -195,6 +195,9 @@ def _apply_armed(
     for effect in armed.effects:
         if effect.timing.value != event_type:
             continue
+        if effect.target_spec is not None:
+            applied.extend(_apply_spec_target(effect, entity_id, universe, context, rolls))
+            continue
         if armed.source_sfx_id is not None or bool(effect.die_filter):
             dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
             log.info(
@@ -211,6 +214,45 @@ def _apply_armed(
             resolved = _substitute_effect_context(effect, context or {})
             effect_registry.apply(resolved, entity_id, universe, context or {})
             applied.append(resolved)
+    return applied
+
+
+def _resolved_id(value) -> str | None:
+    """Extract the target id from a resolved spec value (object or dict)."""
+    if isinstance(value, dict):
+        return value.get("ts_id") or value.get("id")
+    return getattr(value, "ts_id", None) or getattr(value, "id", None)
+
+
+def _apply_spec_target(
+    effect: Effect,
+    entity_id: str,
+    universe: str,
+    context: dict | None,
+    rolls: list[dict],
+) -> list[Effect]:
+    """Resolve an effect's ``target_spec`` against the roll context and apply it
+    once per resolved target (e.g. One Trick: rolled dice → traitsetting → step
+    down each)."""
+    from transversal.main import _get_repo
+    from transversal.services.effects_applier import effect_registry
+    from transversal.services.target_resolver import TargetContext, resolve
+
+    repo = _get_repo()
+    entity = repo.get_entity(entity_id)
+    resolution = resolve(
+        effect.target_spec,
+        TargetContext(subject=entity, repo=repo, collections={"rolled_dice": rolls}),
+    )
+
+    applied: list[Effect] = []
+    for value in resolution.values:
+        target_id = _resolved_id(value)
+        if target_id is None:
+            continue
+        resolved = effect.model_copy(update={"target": target_id})
+        effect_registry.apply(resolved, entity_id, universe, context or {})
+        applied.append(resolved)
     return applied
 
 

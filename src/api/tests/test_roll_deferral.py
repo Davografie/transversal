@@ -316,3 +316,49 @@ def test_clear_global_armed():
     assert len(roll_deferral.list_global_armed()) == 1
     roll_deferral.clear_global_armed()
     assert roll_deferral.list_global_armed() == []
+
+
+def test_one_trick_resolves_spec_and_fans_out(monkeypatch):
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.services.target_spec import FilterStep, NavigateStep, SelectStep, TargetSpec
+
+    roll_deferral.reset()
+
+    ts_martial = SimpleNamespace(id="char-1:martial", trait_id="martial", entity_id="char-1")
+    ts_qi = SimpleNamespace(id="char-1:qi", trait_id="qi", entity_id="char-1")
+    entity = SimpleNamespace(id="char-1")
+    repo = SimpleNamespace(
+        get_entity=lambda eid: entity,
+        get_traitsetting=lambda tsid: {"char-1:martial": ts_martial, "char-1:qi": ts_qi}.get(tsid),
+    )
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    applied = []
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    spec = TargetSpec(steps=[
+        SelectStep(collection="rolled_dice"),
+        FilterStep(field="source_kind", value="trait"),
+        NavigateStep(edge="traitsetting", dedup=True),
+    ])
+    effect = Effect(
+        timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down",
+        target_spec=spec,
+    )
+    roll_deferral.arm_passive([effect])
+
+    rolls = [
+        {"ts_id": "char-1:martial", "source_kind": "trait", "result": 7},
+        {"ts_id": "char-1:qi", "source_kind": "trait", "result": 3},
+        {"ts_id": "char-1:martial", "source_kind": "trait", "result": 5},  # dup — deduped
+        {"ts_id": "char-1:other", "source_kind": "manual", "result": 6},   # filtered out
+    ]
+    fired = roll_deferral.fire_armed("char-1", "on_roll", "earth", {"rolls": rolls})
+
+    # One apply per *deduped* traitsetting, in roll order.
+    assert [e.target for e in applied] == ["char-1:martial", "char-1:qi"]
+    assert len(applied) == 2
