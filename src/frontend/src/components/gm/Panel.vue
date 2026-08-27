@@ -32,8 +32,8 @@
         :title="c.spec.title"
         :id="c.spec.id"
         :collapsed="collapsedKeys.includes(c.key)"
-        :bridge-top="panelTop"
-        :bridge-bottom="panelBottom"
+        :bridge-top="panelTopPx"
+        :bridge-bottom="panelBottomPx"
         closable
         :on-close="() => closeChild(c.key)"
         :on-replace="(spec) => replaceChild(c.key, spec)"
@@ -50,7 +50,7 @@
 
 <script setup>
 import { shallowRef, ref, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useClipboard, useElementBounding } from '@vueuse/core'
+import { useClipboard } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
 
 const props = defineProps({
@@ -128,16 +128,34 @@ const siblingsEl = ref(null)
 const wrapperEl = ref(null)
 
 // ── Button-drift: prefer own center, clamp within the parent's bounds ──
-const { top: wrapperTop } = useElementBounding(wrapperEl)
-const { top: panelTop, bottom: panelBottom, height: panelHeight } = useElementBounding(panelEl)
+// Direct getBoundingClientRect reads (not useElementBounding) so values stay
+// fresh when the whole stack re-centers via transform — which ResizeObserver
+// alone misses. Refreshed by a ResizeObserver + the layout watcher below.
+const ownCenter = ref(null)
+const wrapperTopPx = ref(null)
+const panelTopPx = ref(null)
+const panelBottomPx = ref(null)
 
-// This panel's natural action-rail center (its own vertical center).
-const ownCenter = computed(() => {
-  const pt = panelTop.value
-  const ph = panelHeight.value
-  if (!pt || !ph) return null
-  return pt + ph / 2
-})
+function measureButtonDrift() {
+  const p = panelEl.value?.getBoundingClientRect()
+  const w = wrapperEl.value?.getBoundingClientRect()
+  if (p) {
+    ownCenter.value = p.top + p.height / 2
+    panelTopPx.value = p.top
+    panelBottomPx.value = p.bottom
+  }
+  if (w) wrapperTopPx.value = w.top
+}
+
+let driftObserver = null
+function setupDriftObserver() {
+  if (typeof ResizeObserver === 'undefined' || !panelEl.value) return
+  driftObserver = new ResizeObserver(() => measureButtonDrift())
+  driftObserver.observe(panelEl.value)
+  measureButtonDrift()
+}
+onMounted(setupDriftObserver)
+onUnmounted(() => { if (driftObserver) driftObserver.disconnect() })
 
 // Viewport Y of this panel's action-rail center. Prefers ownCenter, clamped to
 // the parent's bridgeTop/bridgeBottom when provided.
@@ -151,7 +169,7 @@ const railCenterViewport = computed(() => {
 // Wrapper-relative Y for the rail (null → fall back to CSS top:50%).
 const railCenterLocal = computed(() => {
   const rcv = railCenterViewport.value
-  const wt = wrapperTop.value
+  const wt = wrapperTopPx.value
   if (rcv == null || !wt) return null
   return rcv - wt
 })
@@ -226,7 +244,10 @@ function autoCollapse() {
   }
 }
 
-watch([children, collapsedKeys, viewHeight], () => nextTick(autoCollapse))
+watch([children, collapsedKeys, viewHeight], () => nextTick(() => {
+  autoCollapse()
+  measureButtonDrift()
+}))
 
 // ── Depth tracking for viewport-aware visibility ──
 const registerDepth = inject('registerDepth', null)
