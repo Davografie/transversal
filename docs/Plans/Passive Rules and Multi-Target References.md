@@ -71,6 +71,8 @@ Step:
 ```
 
 - **Type catalog (linchpin)** — element types (die, traitsetting, trait, traitset, entity, **projection**, location, universe, …), navigation edges (source→target type, 1→1 or 1→N), aggregations (input→output type), and the aggregatable scalar fields (`die.rating`, `die.result`). Single source of truth for the resolver and the wizard, so only valid steps compose.
+- **Edges are union-capable.** An edge's `target` is a *tuple* of possible types (usually length 1), so a polymorphic hop can declare `(entity, projection)` without a schema change. Populate single-element tuples for now; the common polymorphic case is split into already-distinct single-typed edges (`traitsetting.entity` via `entity_id`, `traitsetting.projection` via `projection_id`). True union *resolution* + union-aware wizard highlighting are deferred until a real edge forces them.
+- **Each step carries its own config fields** — `select` (collection), `filter` (field + operator + value), `navigate` (edge + dedup flag), `aggregate` (fn + optional field). The spec is an ordered list of these step objects, so the wizard renders them as extensible, reorderable rows.
 - **Field type-hints** — the registry's `EffectActionMeta.fields[].field_type` / `target_kind` become a real type vocabulary (element × cardinality). The wizard only offers steps legal for the field's type; the resolver type-checks the result.
 - **Resolver** — `evaluate(spec, context) → typed value`; a `set<T>` result fans out over the effect, a `single<T>` passes one value.
 
@@ -94,7 +96,12 @@ select rolled_dice
 
 ### 3. Targeting wizard
 
-The drillthrough picker that builds a spec step-by-step, driven by the type catalog (only legal edges/aggregations are offered). Produces the spec object directly — no string round-trip.
+A step-by-step path builder that produces the spec object directly — no string round-trip.
+
+- **Extensible path rows** — each step is a row with its own config inputs (collection / field+operator+value / edge+dedup / fn+field), addable/removable/reorderable.
+- **Live type highlighting** — after each step the wizard resolves the current collection type from the catalog and compares it to the field's declared type; a match highlights as "valid target — stop or keep refining."
+- **Catalog-driven affordances** — at each step, only legal `select` collections, `filter` fields, `navigate` edges, and `aggregate` fns are offered (from `edges_from`/`fields_for`), so the wizard can't compose an invalid path.
+- **Union-aware highlighting is deferred** — until a polymorphic edge is actually resolved, a step that outputs a union (`entity | projection`) highlights as "close, but narrow further."
 
 ### 4. Roll context collection + `on_roll` fix
 
@@ -135,6 +142,8 @@ Same targeting primitive (`rolled_dice → traitsetting`), `step_up` compensatio
 - Value fields accept a literal or a spec.
 - Subject/owner via `traitsetting._from` (entity | projection) or relationship `_from`/`_to`.
 - Dedup identity follows the spec element type (`traitsetting` or `trait`).
+- Edges are union-capable (target = tuple), single-typed for now; true union resolution + union-aware wizard highlighting are deferred.
+- Spec steps carry their own config fields (select/filter/navigate/aggregate); the wizard renders them as extensible, reorderable rows with live type-match highlighting.
 
 ## Related
 
