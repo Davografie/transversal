@@ -2,9 +2,19 @@
   <button v-if="!show" class="gm-toggle" @click="show = true">🛠</button>
 
   <div v-if="show" class="panel-stack">
-    <Panel :title="rootPanel?.title" :min-visible-depth="minVisibleDepth" closable @close="show = false">
-      <template v-if="rootPanel" #default>
-        <component :is="rootPanel.component" v-bind="rootPanel.props || {}" v-on="rootPanel.listeners || {}" />
+    <Panel
+      v-for="w in allWindows"
+      :key="w.id"
+      :min-visible-depth="minVisibleDepth"
+      :title="w.spec?.title"
+      :id="w.spec?.id"
+      closable
+      :on-close="w.id === 'root' ? null : () => closeWindow(w.id)"
+      :on-replace="w.id === 'root' ? null : (spec) => replaceWindow(w.id, spec)"
+      @close="onWindowClose(w)"
+    >
+      <template v-if="w.spec" #default>
+        <component :is="w.spec.component" v-bind="w.spec.props || {}" v-on="w.spec.listeners || {}" />
       </template>
     </Panel>
   </div>
@@ -13,12 +23,31 @@
 <script setup>
 import { ref, computed, provide, reactive, onMounted, onUnmounted } from 'vue'
 import Panel from './Panel.vue'
+import { usePanelWindows } from '@/composables/usePanelWindows.js'
 
-defineProps({
+const props = defineProps({
   rootPanel: { type: Object, default: null },
 })
 
+const { windows, close: closeWindow, replace: replaceWindow } = usePanelWindows()
+
 const show = ref(false)
+
+// ── Top-level windows ────────────────────────────────
+// The root window is derived from the reactive `rootPanel` prop so its props
+// (universe, currentLocationId, …) stay live. Extra windows come from the
+// window registry (spawned/detached). Collapse/dock rendering is added in a
+// later step; for now all windows render expanded and the single-root behavior
+// is preserved.
+const allWindows = computed(() => [
+  { id: 'root', spec: props.rootPanel },
+  ...windows.value,
+])
+
+function onWindowClose(w) {
+  if (w.id === 'root') show.value = false
+  else closeWindow(w.id)
+}
 
 // ── Depth tracking ──────────────────────────────────
 // Panels register/unregister their depth on mount/unmount via provide/inject.
