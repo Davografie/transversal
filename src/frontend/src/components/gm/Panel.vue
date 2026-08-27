@@ -9,10 +9,11 @@
       <header v-if="title" class="panel-header">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
+          <button type="button" class="panel-collapse-btn" :title="collapsed ? 'Expand' : 'Collapse'" @click="collapsed = !collapsed">{{ collapsed ? '▸' : '▾' }}</button>
           <button v-if="id" type="button" class="panel-id-btn" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</button>
         </slot>
       </header>
-      <div class="panel-body">
+      <div class="panel-body" v-show="!collapsed">
         <slot />
       </div>
     </div>
@@ -21,6 +22,7 @@
          in THIS panel's stack. @close handles the nested Panel's own × button. -->
     <Panel
       v-if="child"
+      v-show="!collapsed"
       nested
       :depth="depth + 1"
       :min-visible-depth="minVisibleDepth"
@@ -71,6 +73,10 @@ async function copyId() {
 // reactive objects. If child.props contains computed refs (e.g. filteredTraitsets),
 // ref() would unwrap them to plain values, breaking reactivity for sub-panels.
 const child = shallowRef(null)
+
+// Collapse/expand — hides this panel's body and its nested child without
+// unmounting, so in-progress state survives (hide, not close).
+const collapsed = ref(false)
 
 // ── Depth tracking for viewport-aware visibility ──
 const registerDepth = inject('registerDepth', null)
@@ -182,6 +188,18 @@ provide(panelKey, {
   line-height: 1.4;
   cursor: pointer;
 }
+.panel-collapse-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  padding: 1px 7px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.panel-collapse-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
 .panel-id-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
 
 .panel-body {
