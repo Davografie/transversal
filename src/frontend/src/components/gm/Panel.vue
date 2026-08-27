@@ -1,6 +1,6 @@
 <template>
-  <div class="panel-wrapper" :class="{ nested }">
-    <div ref="actionsEl" class="panel-actions">
+  <div ref="wrapperEl" class="panel-wrapper" :class="{ nested }">
+    <div ref="actionsEl" class="panel-actions" :style="actionsStyle">
       <button v-if="closable" class="panel-action-btn" title="Close" @click="$emit('close')">×</button>
       <button type="button" class="panel-action-btn" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</button>
     </div>
@@ -32,6 +32,7 @@
         :title="c.spec.title"
         :id="c.spec.id"
         :collapsed="collapsedKeys.includes(c.key)"
+        :bridge-y="railCenterViewport"
         closable
         :on-close="() => closeChild(c.key)"
         :on-replace="(spec) => replaceChild(c.key, spec)"
@@ -48,7 +49,7 @@
 
 <script setup>
 import { shallowRef, ref, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useClipboard } from '@vueuse/core'
+import { useClipboard, useElementBounding } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
 
 const props = defineProps({
@@ -61,6 +62,9 @@ const props = defineProps({
   // Controlled collapse. null = uncontrolled (panel owns its own local state,
   // e.g. the root). Any boolean = controlled by the parent.
   collapsed: { type: Boolean, default: null },
+  // Parent's action-rail center (viewport Y). When set, this panel clamps its
+  // action rail to that Y within its own top/bottom bounds (button-drift).
+  bridgeY: { type: Number, default: null },
   // Callbacks supplied by the parent Panel so this Panel can close/replace
   // itself in the parent's children list.
   onClose: { type: Function, default: null },
@@ -119,6 +123,38 @@ function toggleChildCollapse(key) {
 const panelEl = ref(null)
 const actionsEl = ref(null)
 const siblingsEl = ref(null)
+const wrapperEl = ref(null)
+
+// ── Button-drift: align the action rail to the parent's rail center ──
+const { top: wrapperTop } = useElementBounding(wrapperEl)
+const { top: panelTop, bottom: panelBottom, height: panelHeight } = useElementBounding(panelEl)
+
+// Local (wrapper-relative) Y for this panel's action-rail center. When the
+// parent passes bridgeY, clamp it within this panel's own top/bottom bounds.
+const railCenterLocal = computed(() => {
+  if (props.bridgeY == null) return null
+  const t = panelTop.value
+  const b = panelBottom.value
+  const wt = wrapperTop.value
+  if (!t || !b || !wt) return null
+  return Math.min(Math.max(props.bridgeY, t), b) - wt
+})
+
+// Viewport Y of this panel's own action-rail center, passed down to children.
+const railCenterViewport = computed(() => {
+  if (railCenterLocal.value != null) {
+    return wrapperTop.value + railCenterLocal.value
+  }
+  const pt = panelTop.value
+  const ph = panelHeight.value
+  if (!pt) return null
+  return pt + ph / 2
+})
+
+const actionsStyle = computed(() => {
+  const local = railCenterLocal.value
+  return local == null ? {} : { top: local + 'px' }
+})
 
 function isDebug() {
   return typeof window !== 'undefined' && !!window.__PANEL_DEBUG__
