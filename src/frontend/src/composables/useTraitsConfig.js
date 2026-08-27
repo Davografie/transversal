@@ -29,7 +29,7 @@ export function useTraitsConfig() {
         sfxs {
           id name description trigger limit
           conditions { type target value narrative }
-          effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } }
+          effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec }
         }
       }`),
     ])

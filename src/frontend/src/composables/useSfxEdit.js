@@ -22,8 +22,8 @@ const savedAt = ref(null)
 const validationWarnings = ref([])
 const scopeVariables = ref([])
 
-const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } } duration { timers { event remaining } combine } } }`
-const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } } duration { timers { event remaining } combine } } }`
+const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec } duration { timers { event remaining } combine } } }`
+const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
 const SCOPE_VARS_QUERY = `query($trigger: String) { scopeVariables(trigger: $trigger) { name type } }`
 
