@@ -59,6 +59,8 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "role": ScalarField("die", "role", "string"),
         "source_kind": ScalarField("die", "source_kind", "string"),
         "ts_id": ScalarField("die", "ts_id", "string"),
+        # A list of SFX ids stamped on the die; filtered via the `contains` operator.
+        "armed_sfx_ids": ScalarField("die", "armed_sfx_ids", "string"),
     },
     "traitsetting": {
         "rating": ScalarField("traitsetting", "rating", "die"),

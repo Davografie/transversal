@@ -92,23 +92,49 @@ def _to_number(v: Any) -> float | None:
     return getattr(v, "max_value", None)
 
 
-def _match(element: Any, step: FilterStep) -> bool:
+def _coerce(value: Any, field_type: str | None) -> Any:
+    """Coerce a filter value to its field's declared type.
+
+    Decision: values are typed at authoring time (the wizard emits an int for an
+    ``int`` field). This is a defensive normalisation for string-typed specs so
+    ``result == "4"`` and ``result == 4`` behave the same, and so ordering
+    operators compare numbers, not lexicographic strings.
+    """
+    if field_type == "int":
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return value
+    if field_type == "number":
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
+def _match(element: Any, step: FilterStep, field_type: str | None = None) -> bool:
     actual = _get_field(element, step.field)
     op, expected = step.operator, step.value
     if op == "==":
-        return actual == expected
+        return actual == _coerce(expected, field_type)
     if op == "!=":
-        return actual != expected
-    if op == ">":
-        return actual is not None and actual > expected
-    if op == ">=":
-        return actual is not None and actual >= expected
-    if op == "<":
-        return actual is not None and actual < expected
-    if op == "<=":
-        return actual is not None and actual <= expected
+        return actual != _coerce(expected, field_type)
+    if op in (">", ">=", "<", "<="):
+        lhs, rhs = _to_number(actual), _to_number(expected)
+        if lhs is None or rhs is None:
+            return False
+        if op == ">":
+            return lhs > rhs
+        if op == ">=":
+            return lhs >= rhs
+        if op == "<":
+            return lhs < rhs
+        return lhs <= rhs
     if op == "in":
         return actual in expected
+    if op == "contains":
+        return expected in actual
     return False
 
 
@@ -156,12 +182,13 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
                 current_type = ValueType(col.element, "one" if col.singular else "many")
 
         elif isinstance(step, FilterStep):
-            if current_type is None or tc.field(current_type.element, step.field) is None:
+            f = tc.field(current_type.element, step.field) if current_type is not None else None
+            if current_type is None or f is None:
                 src = current_type.element if current_type else "nothing"
                 errors.append(TraceError(i, f"cannot filter on {src}.{step.field}"))
                 values, current_type = [], None
             else:
-                values = [v for v in values if _match(v, step)]
+                values = [v for v in values if _match(v, step, f.type)]
                 # type unchanged
 
         elif isinstance(step, NavigateStep):

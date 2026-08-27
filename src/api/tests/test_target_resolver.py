@@ -191,3 +191,43 @@ def test_custom_edge_registration_overrides_default():
     res = resolve(spec(SelectStep(collection="rolled_dice"), NavigateStep(edge="traitsetting")), ctx)
     assert res.errors == []
     assert [v.id for v in res.values] == ["custom"]
+
+
+def test_contains_filters_dice_by_armed_sfx():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, collections={
+        "rolled_dice": [
+            {"ts_id": "kael:trait-martial", "armed_sfx_ids": ["sfx-a", "sfx-b"]},
+            {"ts_id": "kael:trait-qi", "armed_sfx_ids": ["sfx-c"]},
+        ],
+    })
+    s = spec(
+        SelectStep(collection="rolled_dice"),
+        FilterStep(field="armed_sfx_ids", operator="contains", value="sfx-a"),
+    )
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert [v["ts_id"] for v in res.values] == ["kael:trait-martial"]
+
+
+def test_filter_equality_coerces_int_value():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, collections={
+        "rolled_dice": [{"ts_id": "a", "result": 7}, {"ts_id": "b", "result": 3}],
+    })
+    # string-typed spec value still matches the int field
+    s = spec(SelectStep(collection="rolled_dice"), FilterStep(field="result", value="7"))
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert [v["ts_id"] for v in res.values] == ["a"]
+
+
+def test_filter_ordering_is_numeric_not_lexicographic():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, collections={
+        "rolled_dice": [{"ts_id": "a", "result": 7}, {"ts_id": "b", "result": 12}],
+    })
+    s = spec(SelectStep(collection="rolled_dice"), FilterStep(field="result", operator=">", value="9"))
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert [v["ts_id"] for v in res.values] == ["b"]

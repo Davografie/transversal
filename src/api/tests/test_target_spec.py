@@ -156,3 +156,13 @@ def test_invalid_kind_is_rejected():
         assert False, "expected ValidationError"
     except ValidationError:
         pass
+
+
+def test_contains_operator_type_checks():
+    s = spec(
+        SelectStep(collection="rolled_dice"),
+        FilterStep(field="armed_sfx_ids", operator="contains", value="sfx-a"),
+    )
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("die", "many")

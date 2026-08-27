@@ -47,7 +47,7 @@
           <select v-model="step.operator" class="tsb-op">
             <option v-for="op in OPERATORS" :key="op" :value="op">{{ op }}</option>
           </select>
-          <input v-model="step.value" placeholder="value" />
+          <input :value="step.value" placeholder="value" @input="onFilterValue(i, $event)" />
         </div>
 
         <!-- navigate: hop an edge -->
@@ -122,7 +122,7 @@ const STEP_KINDS = [
   { kind: 'navigate', label: 'Navigate' },
   { kind: 'aggregate', label: 'Aggregate' },
 ]
-const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in']
+const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'contains']
 
 const steps = computed({
   get: () => (props.modelValue && Array.isArray(props.modelValue.steps) ? props.modelValue.steps : []),
@@ -177,6 +177,31 @@ function stepIsValid(i) {
 
 function aggNeedsField(fn) {
   return (aggregations().find((a) => a.name === fn) || {}).needsField
+}
+
+function fieldTypeFor(i) {
+  const field = steps.value[i]?.field
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === field)
+  return f ? f.type : null
+}
+
+// Type the value at authoring time (decision 4): an int/number field stores a
+// number, die/string fields keep their string. Downstream logic then always has
+// typed values and can do typed ops without late coercion.
+function coerceValue(type, raw) {
+  if (type === 'int') {
+    const n = Number(raw)
+    return raw !== '' && Number.isFinite(n) ? Math.trunc(n) : raw
+  }
+  if (type === 'number') {
+    const n = Number(raw)
+    return raw !== '' && Number.isFinite(n) ? n : raw
+  }
+  return raw
+}
+
+function onFilterValue(i, e) {
+  steps.value[i].value = coerceValue(fieldTypeFor(i), e.target.value)
 }
 
 function canAdd(kind) {
