@@ -685,7 +685,7 @@ class Query:
                 for e in tc.EDGES
             ],
             fields=[
-                TargetCatalogField(element=element_name, name=f.name, type=f.type, options=list(f.options))
+                TargetCatalogField(element=element_name, name=f.name, type=f.type, options=list(f.options), operators=list(tc.operators_for(f)))
                 for element_name, fields in tc.SCALAR_FIELDS.items()
                 for f in fields.values()
             ],

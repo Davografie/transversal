@@ -45,12 +45,29 @@ class ScalarField:
     """A scalar value on an element, usable in a filter or an aggregation.
 
     ``options`` lists the accepted values for enum-like string fields so the
-    wizard can render a dropdown instead of a free-text input.
+    wizard can render a dropdown instead of a free-text input. ``operators``
+    overrides the operators valid for this field (default derived from ``type``).
     """
     element: str
     name: str
     type: str  # "int" | "number" | "die" | "string"
     options: tuple[str, ...] = ()
+    operators: tuple[str, ...] = ()
+
+
+# Operators valid per field type. Ordering operators only make sense on
+# comparable (numeric/die) fields; strings only support equality/membership.
+_ORDERED_OPERATORS = ("==", "!=", ">", ">=", "<", "<=", "in")
+_STRING_OPERATORS = ("==", "!=", "in")
+
+
+def operators_for(field: ScalarField) -> tuple[str, ...]:
+    """The operators valid for a field (explicit override, else by type)."""
+    if field.operators:
+        return field.operators
+    if field.type in ("int", "number", "die"):
+        return _ORDERED_OPERATORS
+    return _STRING_OPERATORS
 
 
 # A "die" field is comparable (d4 < d6 < … < d12); numeric for mean after
@@ -65,7 +82,7 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "source_kind": ScalarField("die", "source_kind", "string", ("trait", "difficulty", "manual", "entity", "projection", "location", "resource", "challenge")),
         "ts_id": ScalarField("die", "ts_id", "string"),
         # A list of SFX ids stamped on the die; filtered via the `contains` operator.
-        "armed_sfx_ids": ScalarField("die", "armed_sfx_ids", "string"),
+        "armed_sfx_ids": ScalarField("die", "armed_sfx_ids", "string", operators=("contains", "==", "!=")),
     },
     "traitsetting": {
         "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),

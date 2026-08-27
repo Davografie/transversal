@@ -296,6 +296,7 @@ class TargetCatalogField:
     name: str
     type: str  # "int" | "number" | "die" | "string"
     options: list[str] = strawberry.field(default_factory=list)
+    operators: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.type

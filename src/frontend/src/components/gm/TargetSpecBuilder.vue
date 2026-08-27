@@ -45,7 +45,7 @@
             </option>
           </select>
           <select v-model="step.operator" class="tsb-op">
-            <option v-for="op in OPERATORS" :key="op" :value="op">{{ op }}</option>
+            <option v-for="op in operatorsFor(i)" :key="op" :value="op">{{ op }}</option>
           </select>
           <select v-if="fieldOptionsFor(i)" :value="step.value" @change="onFilterValue(i, $event)">
             <option value="">—</option>
@@ -197,6 +197,14 @@ function fieldOptionsFor(i) {
   const field = steps.value[i]?.field
   const f = fieldsFor(priorElement(i)).find((x) => x.name === field)
   return f && f.options && f.options.length ? f.options : null
+}
+
+// Operators valid for the current field (from the catalog; falls back to the
+// full set while the field/trace is still resolving).
+function operatorsFor(i) {
+  const field = steps.value[i]?.field
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === field)
+  return f && f.operators && f.operators.length ? f.operators : OPERATORS
 }
 
 // Type the value at authoring time (decision 4): an int/number field stores a
