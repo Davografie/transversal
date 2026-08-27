@@ -118,7 +118,7 @@ The targeting model exists to power **passive rules** like One Trick:
 - `state_events.fire_session_start()` scans `on_session_start` SFX and arms their roll-timing effects globally.
 - `roll_deferral._apply_spec_target` resolves an effect's `target_spec` against `rolled_dice` and applies once per resolved target.
 
-**One Trick** (`sfx-one-trick`, seeded in `sfx_owner.py::ensure_one_trick_sfx`) is the reference passive rule: `on_session_start` → `on_roll` `step_down` with `target_spec = select rolled_dice → filter source_kind == trait → navigate traitsetting (dedup)`, effect `duration: beat:1` for the revert. **Endless Variety** is its author-facing compensation counter (same path, `step_up`).
+**One Trick** (`sfx-one-trick`, hand-authored in the effect editor) is the reference passive rule: `on_session_start` → `on_roll` `step_down` with `target_spec = select rolled_dice → filter source_kind == trait → navigate traitsetting (dedup) → filter rating_type == static`, effect `duration: beat:1` for the revert. **Endless Variety** is its author-facing compensation counter (same path, `step_up`).
 
 ## Where things live
 

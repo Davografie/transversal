@@ -17,7 +17,7 @@ status: implemented
 # Passive Rules and Multi-Target References
 
 > [!success] Implemented
-> The targeting model + wizard are now built — see the canonical **[[Targeting Model]]** technical reference. This page retains the design rationale and the settled decisions. One Trick is seeded (`sfx-one-trick`); Endless Variety is author-facing.
+> The targeting model + wizard are now built — see the canonical **[[Targeting Model]]** technical reference. This page retains the design rationale and the settled decisions. One Trick is hand-authored (`sfx-one-trick`); Endless Variety is author-facing.
 
 The plan for two SFX — **One Trick** (a passive, always-on global rule) and **Endless Variety** (its compensation counter) — and the two capabilities they force: **passive arming** and a **structured targeting model** with drillthrough.
 
