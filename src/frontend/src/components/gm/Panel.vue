@@ -22,24 +22,25 @@
     <!-- Self-reference: each child is a sibling Panel owned by THIS panel's
          children list. :on-close / :on-replace let the child remove/replace
          itself in this list; @close handles the child's own × button. -->
-    <Panel
-      v-for="c in children"
-      :key="c.key"
-      v-show="!collapsed"
-      nested
-      :depth="depth + 1"
-      :min-visible-depth="minVisibleDepth"
-      :title="c.spec.title"
-      :id="c.spec.id"
-      closable
-      :on-close="() => closeChild(c.key)"
-      :on-replace="(spec) => replaceChild(c.key, spec)"
-      @close="closeChild(c.key)"
-    >
-      <template #default>
-        <component :is="c.spec.component" v-bind="c.spec.props || {}" v-on="c.spec.listeners || {}" @close="closeChild(c.key)" />
-      </template>
-    </Panel>
+    <div class="panel-siblings" v-show="!collapsed">
+      <Panel
+        v-for="c in children"
+        :key="c.key"
+        nested
+        :depth="depth + 1"
+        :min-visible-depth="minVisibleDepth"
+        :title="c.spec.title"
+        :id="c.spec.id"
+        closable
+        :on-close="() => closeChild(c.key)"
+        :on-replace="(spec) => replaceChild(c.key, spec)"
+        @close="closeChild(c.key)"
+      >
+        <template #default>
+          <component :is="c.spec.component" v-bind="c.spec.props || {}" v-on="c.spec.listeners || {}" @close="closeChild(c.key)" />
+        </template>
+      </Panel>
+    </div>
   </div>
 </template>
 
@@ -153,8 +154,17 @@ provide(panelKey, {
   flex-shrink: 0;
   display: flex;
   flex-direction: row-reverse;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+}
+
+/* Siblings (children of the same panel) stack vertically at their depth,
+   to the left of the parent in the row-reverse layout. */
+.panel-siblings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .panel {
@@ -189,7 +199,6 @@ provide(panelKey, {
 /* Nested panel sits beside parent in the flex row */
 .nested {
   position: relative;
-  margin-left: 8px;
 }
 
 .panel-header {
