@@ -30,6 +30,11 @@ status: canonical
 | Effects engine (trigger matching, scheduling, event → applied/pending effects) | `src/api/src/transversal/services/effects_engine.py` |
 | Effect applier (dispatch + mutation handlers, `{choose_*}` target resolution) | `src/api/src/transversal/services/effects_applier.py` |
 | Target-candidate resolution (scope resolvers, `resolve_candidates`, `FILTER_FIELDS`) | `src/api/src/transversal/services/effect_targets.py` |
+| Structured targeting catalog (elements, edges, fields + options, aggregations, collections) | `src/api/src/transversal/services/target_catalog.py` |
+| Target spec model + step types + type-checker | `src/api/src/transversal/services/target_spec.py` |
+| Target spec runtime resolver + edge resolvers | `src/api/src/transversal/services/target_resolver.py` |
+| Legacy string target → trivial spec migration | `src/api/src/transversal/services/target_legacy.py` |
+| Targeting wizard (frontend) | `src/frontend/src/components/gm/TargetSpecBuilder.vue`, `src/frontend/src/composables/useTargetCatalog.js` |
 | Condition evaluation + condition-type vocabulary (`CONDITION_TYPES`) | `src/api/src/transversal/services/conditions.py` |
 | Authoring validation (`validate_sfx` — unknown variables, filter/target-kind, missing required fields) | `src/api/src/transversal/services/sfx_validation.py` |
 | Scheduled events / duration (timers, combine, central `dispatch_event`, `advance_scheduled_events`) | `src/api/src/transversal/services/scheduled_events.py` |
@@ -71,6 +76,8 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `target_scope` | `Optional[str]` | Narrowing hint for runtime target choice (e.g. `traitset:ts-complications-a190`) |
 | `entity_scope` | `Optional[str]` | Narrowing hint for runtime entity choice |
 | `target_filter` | `dict` | Candidate field predicates for the target (e.g. `{"starter_location": true}`), AND-ed and applied across every scope |
+| `target_spec` | `Optional[TargetSpec]` | Structured targeting pipeline (the new model); wins over `target` when set. See [[Targeting Model]] |
+| `entity_spec` | `Optional[TargetSpec]` | Structured subject pipeline; wins over `entity` when set. See [[Targeting Model]] |
 | `negative` | `bool` | Trait-grant effects only: bake the created trait as `polarity=NEGATIVE` (complication) |
 | `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`, `learner`, `steps`) |
 | `duration` | `Optional[EffectDuration]` | When set, the inverse effect is scheduled to fire on expiry (see below) |
@@ -312,6 +319,9 @@ There is a single persisted timer store — no in-memory schedule. The old in-me
 - `_resolve_target`: `"self"` → the entity's id; `{choose_*}` / empty-when-required → a `PendingChoice`; `{random:*}` → a random in-scope candidate via `effect_targets.resolve_candidates`; anything else → a literal target id.
 - `resolve_choice` re-applies a `PendingChoice` with a concrete target.
 - **Candidate filters**: `Effect.target_filter` (e.g. `{"starter_location": true}`) further narrows `choose`/`random` candidates — `_random_candidate`/`_resolve_target` pass it into `resolve_candidates`, which ANDs the field predicates across every scope resolver. This replaces the retired `starter_location` target kind.
+
+> [!note] Structured targeting
+> The legacy string targets above are being superseded by a structured, type-checked **[[Targeting Model]]** (`target_spec` / `entity_spec`). When a spec is present it takes precedence over the string form.
 
 ### `target_scope` and `target_filter`
 

@@ -40,6 +40,7 @@ status: canonical
 - [[Relational Canvas]] — GM-only interactive node graph for locations, factions, and relationships
 - [[Location Viewer]] — the full-screen location renderer: dots, drag-drop travel, and animations
 - [[Life Path Flow and Shared Roll Tables]] — how `next_step` links tables and how shared/unaffiliated tables return control
+- [[Targeting Model]] — the structured, type-checked target spec + catalog + wizard behind effect targeting
 
 ### 📋 Plans
 
