@@ -128,9 +128,16 @@ function rectOf(el) {
   const r = el.getBoundingClientRect()
   return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) }
 }
+function buttonsOf(el) {
+  if (!el) return []
+  return Array.from(el.querySelectorAll('button')).map((b) => {
+    const r = b.getBoundingClientRect()
+    return { label: (b.textContent || '').trim(), top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) }
+  })
+}
 function panelLog(reason, detail = {}) {
   if (!isDebug()) return
-  console.log('[panel]', reason, {
+  console.log('[panel]', reason, JSON.stringify({
     title: props.title || '(root)',
     depth: props.depth,
     collapsed: isCollapsed.value,
@@ -139,10 +146,11 @@ function panelLog(reason, detail = {}) {
     panel: rectOf(panelEl.value),
     siblings: rectOf(siblingsEl.value),
     actions: rectOf(actionsEl.value),
+    buttons: buttonsOf(actionsEl.value),
     collapsedKeys: [...collapsedKeys.value],
     children: children.value.map((c) => ({ key: c.key, title: c.spec.title, id: c.spec.id })),
     ...detail,
-  })
+  }))
 }
 
 // ── Auto-collapse on vertical overflow ──────────────
