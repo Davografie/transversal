@@ -204,3 +204,22 @@ def test_fire_result_sfx_exposes_roll_state_in_context(monkeypatch):
     assert ev.context["effect_die"] == "d6"
     assert ev.context["total"] == 12
     assert ev.context["rolls"] == rolls
+
+
+def test_fire_roll_sfx_passes_rolls_to_fire_armed(monkeypatch):
+    """on_roll deferred effects receive the real rolled dice, not an empty context."""
+    import transversal.services.roll_deferral as roll_deferral
+
+    repo = Repo({"e1": SimpleNamespace(razmerit=10, sfx_ids=[], current_projection=None)})
+    engine = EffectsEngine()
+
+    captured = {}
+    monkeypatch.setattr(
+        roll_deferral, "fire_armed",
+        lambda entity_id, event, universe, context: captured.update(context),
+    )
+
+    rolls = [{"die": "d8", "result": 7, "role": None, "ts_id": "ts-x"}]
+    fire_roll_sfx(engine, repo, "e1", "earth", SimpleNamespace(rolls=rolls, hitches=[], botch=False))
+
+    assert captured["rolls"] == rolls

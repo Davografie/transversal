@@ -63,6 +63,25 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list) -> None:
         ))
 
 
+def _rolls_as_dicts(roll_result) -> list[dict]:
+    """Normalise a roll result's dice to dicts for ``fire_armed``.
+
+    The active roll path already yields enriched dicts; the legacy monolithic
+    resolver yields ``DieRoll`` models. Both carry the identity/selection fields
+    (``ts_id``/``source_kind``/…) that ``fire_armed`` reads via ``.get``.
+    """
+    rolls = getattr(roll_result, "rolls", None) or []
+    out: list[dict] = []
+    for r in rolls:
+        if isinstance(r, dict):
+            out.append(r)
+        elif hasattr(r, "model_dump"):
+            out.append(r.model_dump())
+        elif hasattr(r, "__dict__"):
+            out.append(vars(r))
+    return out
+
+
 def fire_roll_sfx(
     engine: EffectsEngine,
     repo,
@@ -80,9 +99,10 @@ def fire_roll_sfx(
     )
     outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
     _emit_pending_choices(entity_id, universe, outcome.pending)
-    # Fire roll-scoped deferred effects armed with ``on_roll`` timing.
+    # Fire roll-scoped deferred effects armed with ``on_roll`` timing, passing
+    # the real rolled dice so per-die selection (die_filter / armed_sfx_ids) works.
     from transversal.services.roll_deferral import fire_armed
-    fire_armed(entity_id, "on_roll", universe, {})
+    fire_armed(entity_id, "on_roll", universe, {"rolls": _rolls_as_dicts(roll_result)})
     return outcome.applied
 
 

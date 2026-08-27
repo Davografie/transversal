@@ -255,3 +255,23 @@ def test_source_sfx_id_matches_armed_dice(monkeypatch):
     fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"rolls": rolls})
 
     assert [e.result for e in fired] == ["d6"]
+
+
+def test_die_context_exposes_ts_id(monkeypatch):
+    roll_deferral.reset()
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    roll_deferral.arm_sfx("e1", [
+        _make_effect(timing=EffectTiming.ON_ROLL, result="{triggered_die_ts_id}", die_filter={"role": None}),
+    ], duration=_rolls_duration(1))
+
+    rolls = [{"die": "d8", "result": 7, "role": None, "ts_id": "ts-crimson"}]
+    fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {"rolls": rolls})
+
+    assert [e.result for e in fired] == ["ts-crimson"]

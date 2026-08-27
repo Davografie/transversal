@@ -192,6 +192,9 @@ def _substitute_die_context(effect: Effect, die: dict, context: dict) -> Effect:
         "triggered_die_effect_die": die.get("effect_die"),
         "triggered_die_result": die.get("result"),
         "triggered_die_die": die.get("die"),
+        "triggered_die_ts_id": die.get("ts_id"),
+        "triggered_die_source_kind": die.get("source_kind"),
+        "triggered_die_role": die.get("role"),
     })
     return _substitute_effect_context(effect, merged)
 
