@@ -74,5 +74,25 @@ export function useSessions() {
     currentSession.value = null
   }
 
-  return { sessions, currentSession, loading, error, listSessions, createSession, joinSession, leaveSession, publishEvent }
+  async function startSession(sessionId) {
+    try {
+      const r = await fetch(`${API_BASE}/sessions/${sessionId}/start`, { method: 'POST' })
+      return await r.json()
+    } catch (e) {
+      error.value = e.message
+      return null
+    }
+  }
+
+  async function endSession(sessionId) {
+    try {
+      const r = await fetch(`${API_BASE}/sessions/${sessionId}/end`, { method: 'POST' })
+      return await r.json()
+    } catch (e) {
+      error.value = e.message
+      return null
+    }
+  }
+
+  return { sessions, currentSession, loading, error, listSessions, createSession, joinSession, leaveSession, publishEvent, startSession, endSession }
 }

@@ -59,6 +59,29 @@ async def leave_session(session_id: str, req: JoinRequest) -> dict | None:
     return _session_dict(s) if s else None
 
 
+@router.post("/{session_id}/start")
+async def start_session(session_id: str) -> dict:
+    """Arm passive (``on_session_start``) rules for the session.
+
+    Fired by the GM's [Session] Start toggle; idempotent (re-arms cleanly).
+    """
+    from transversal.services.state_events import fire_session_start
+
+    fire_session_start()
+    logger.info(f"[init] start_session id={session_id}")
+    return {"started": True}
+
+
+@router.post("/{session_id}/end")
+async def end_session(session_id: str) -> dict:
+    """Drop passive (``on_session_start``) rules; fired by the [Session] End toggle."""
+    from transversal.services.roll_deferral import clear_global_armed
+
+    clear_global_armed()
+    logger.info(f"[init] end_session id={session_id}")
+    return {"ended": True}
+
+
 def _session_dict(s: Session) -> dict:
     return {
         "id": s.id,

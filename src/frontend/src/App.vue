@@ -712,7 +712,7 @@ function confirmPlayer() {
 ensurePlayer()
 
 // Session management
-const { sessions, currentSession, listSessions, createSession, joinSession, publishEvent } = useSessions()
+const { sessions, currentSession, listSessions, createSession, joinSession, publishEvent, startSession, endSession } = useSessions()
 const sessionId = ref('session-default')
 
 async function initSession() {
@@ -1421,12 +1421,17 @@ async function onAdvanceScene() {
 }
 
 function onStartSession() {
-  // Placeholder — could call session creation API
+  if (sessionId.value && sessionId.value !== 'session-default') {
+    startSession(sessionId.value)
+  }
 }
 
 function onEndSession() {
   remotePools.value = {}
   remoteResults.value = {}
+  if (sessionId.value && sessionId.value !== 'session-default') {
+    endSession(sessionId.value)
+  }
 }
 
 

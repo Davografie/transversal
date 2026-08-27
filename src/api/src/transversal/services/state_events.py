@@ -98,6 +98,26 @@ def fire_projection_created(entity_id: str, universe: str, projection_id: str) -
     })
 
 
+def fire_session_start() -> None:
+    """Arm every ``on_session_start`` passive rule's roll-timing effects globally.
+
+    Passive rules (e.g. One Trick) arm once for the session in the global set,
+    not per-entity, so characters joining mid-session are still covered. Re-arming
+    clears the previous set first, so [Session] Start is idempotent.
+    """
+    from transversal.main import _get_repo
+    from transversal.services.roll_deferral import ROLL_TIMINGS, arm_passive, clear_global_armed
+
+    repo = _get_repo()
+    clear_global_armed()
+    for sfx in repo.get_all_sfxs():
+        if sfx.trigger != "on_session_start":
+            continue
+        roll_effects = [e for e in sfx.effects if e.timing in ROLL_TIMINGS]
+        if roll_effects:
+            arm_passive(roll_effects, duration=sfx.duration)
+
+
 def fire_contest_outcome_sfx(
     winner_id: str,
     loser_id: str,

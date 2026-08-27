@@ -235,6 +235,9 @@ def dispatch_event(
     else:
         # Global timing boundary: drop armed SFX bound to this event, then fire
         # the matching auto-fire SFX for every entity.
+        from transversal.services.roll_deferral import expire_global
+
+        expire_global(event_type)
         for entity in repo.list_all_entities():
             expire_armed(entity.id, event_type)
         sfx_trigger = _GLOBAL_BOUNDARY_SFX.get(event_type)

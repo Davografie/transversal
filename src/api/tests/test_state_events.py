@@ -82,3 +82,23 @@ def test_fire_global_state_sfx_iterates_entities(monkeypatch):
         ("a", "on_beat", "earth"),
         ("b", "on_beat", "three_realms"),
     ]
+
+
+def test_fire_session_start_arms_passive_rules(monkeypatch):
+    import transversal.main as main
+    import transversal.services.roll_deferral as roll_deferral
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    roll_deferral.reset()
+
+    sfx = SFX(
+        id="sfx-one-trick", name="One Trick", trigger="on_session_start",
+        effects=[Effect(timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down", target="self")],
+    )
+    repo = SimpleNamespace(get_all_sfxs=lambda: [sfx])
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    se.fire_session_start()
+
+    assert len(roll_deferral.list_global_armed()) == 1
+    roll_deferral.reset()

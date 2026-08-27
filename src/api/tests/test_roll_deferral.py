@@ -275,3 +275,44 @@ def test_die_context_exposes_ts_id(monkeypatch):
     fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {"rolls": rolls})
 
     assert [e.result for e in fired] == ["ts-crimson"]
+
+
+def test_passive_rule_applies_to_every_entity(monkeypatch):
+    roll_deferral.reset()
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append((effect, entity_id))
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    roll_deferral.arm_passive([
+        _make_effect(timing=EffectTiming.ON_ROLL, result="{triggered_die_ts_id}", die_filter={"role": None}),
+    ])
+
+    rolls = [{"die": "d8", "result": 7, "role": None, "ts_id": "ts-a"}]
+    fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {"rolls": rolls})
+    assert [e.result for e in fired] == ["ts-a"]
+
+    # The same passive rule fires for a second entity that never armed anything.
+    fired2 = roll_deferral.fire_armed("e2", "on_roll", "earth", {"rolls": rolls})
+    assert [e.result for e in fired2] == ["ts-a"]
+    assert roll_deferral.list_global_armed() != []  # never consumed
+
+
+def test_expire_global_drops_matching_boundary():
+    roll_deferral.reset()
+    beat = EffectDuration(timers=[Timer(event="beat", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE)
+    roll_deferral.arm_passive([_make_effect(timing=EffectTiming.ON_ROLL)], duration=beat)
+    assert len(roll_deferral.list_global_armed()) == 1
+    roll_deferral.expire_global("beat")
+    assert roll_deferral.list_global_armed() == []
+
+
+def test_clear_global_armed():
+    roll_deferral.reset()
+    roll_deferral.arm_passive([_make_effect(timing=EffectTiming.ON_ROLL)])
+    assert len(roll_deferral.list_global_armed()) == 1
+    roll_deferral.clear_global_armed()
+    assert roll_deferral.list_global_armed() == []

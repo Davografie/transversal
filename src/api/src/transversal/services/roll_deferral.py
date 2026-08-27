@@ -46,6 +46,12 @@ class ArmedSfx:
 
 _armed: dict[str, list[ArmedSfx]] = {}
 
+# Passive rules (e.g. One Trick) arm once per session and apply to *every*
+# entity's rolls — not keyed by entity, so late joiners are covered. They carry
+# no ``source_sfx_id`` (that stamp is the player-choice signal); selection is
+# declarative via ``die_filter``/spec.
+_global_armed: list[ArmedSfx] = []
+
 
 def _split_duration(duration) -> tuple[Optional[int], list[str]]:
     """Split an SFX duration into ``(rolls_budget, boundary_events)``."""
@@ -92,6 +98,33 @@ def arm_sfx(
     )
 
 
+def arm_passive(
+    effects: list[Effect],
+    *,
+    duration=None,
+) -> None:
+    """Arm a passive rule's roll-timing effects in the *global* set.
+
+    Unlike :func:`arm_sfx`, this is not entity-keyed and carries no
+    ``source_sfx_id``: a passive rule's scope is declarative, so it selects
+    dice via ``die_filter`` (stamping is a player-choice signal, not used here).
+    """
+    rolls, expiry_events = _split_duration(duration)
+    log.info(
+        "[roll_deferral.arm_passive] effects=%s rolls=%s expiry=%s",
+        [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
+        rolls, expiry_events,
+    )
+    _global_armed.append(
+        ArmedSfx(
+            effects=list(effects),
+            rolls=rolls,
+            expiry_events=expiry_events,
+            source_sfx_id=None,
+        )
+    )
+
+
 def fire_armed(
     entity_id: str,
     event_type: str,
@@ -100,15 +133,19 @@ def fire_armed(
 ) -> list[Effect]:
     """Fire armed-SFX effects whose timing matches ``event_type``; consume a roll.
 
-    Returns the applied effects. Each armed SFX survives ``rolls`` matching
-    events (``None`` = indefinite); a one-roll SFX fires once and is dropped.
+    Returns the applied effects. Each entity-local armed SFX survives ``rolls``
+    matching events (``None`` = indefinite); a one-roll SFX fires once and is
+    dropped. Passive (global) rules are not consumed — they apply to every
+    entity's rolls for the whole session.
     """
-    if entity_id not in _armed:
+    local = _armed.get(entity_id, [])
+    if not local and not _global_armed:
         return []
     log.info(
-        "[roll_deferral.fire_armed] entity=%s event=%s armed=%s",
+        "[roll_deferral.fire_armed] entity=%s event=%s local=%s global=%s",
         entity_id, event_type,
-        [(a.source_sfx_id, [e.timing.value for e in a.effects], a.rolls) for a in _armed[entity_id]],
+        [(a.source_sfx_id, [e.timing.value for e in a.effects], a.rolls) for a in local],
+        [(a.source_sfx_id, [e.timing.value for e in a.effects], a.rolls) for a in _global_armed],
     )
     if not universe:
         from transversal.main import _get_repo
@@ -117,35 +154,14 @@ def fire_armed(
         if entity is not None:
             universe = entity.current_universe or ""
 
-    from transversal.services.effects_applier import effect_registry
-    from transversal.services.effects_engine import _substitute_effect_context
-
-    applied: list[Effect] = []
-    kept: list[ArmedSfx] = []
     rolls = (context or {}).get("rolls", [])
+    applied: list[Effect] = []
 
-    for armed in _armed[entity_id]:
+    # Entity-local armed SFX — consume their roll budget per matching event.
+    kept: list[ArmedSfx] = []
+    for armed in local:
         if any(e.timing.value == event_type for e in armed.effects):
-            for effect in armed.effects:
-                if effect.timing.value != event_type:
-                    continue
-                if armed.source_sfx_id is not None or bool(effect.die_filter):
-                    dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
-                    log.info(
-                        "[roll_deferral.fire_armed] sfx=%s effect=%s/%s candidates=%s matched=%s",
-                        armed.source_sfx_id, effect.type, effect.action,
-                        [(d.get('armed_sfx_ids'), d.get('role'), d.get('ts_id')) for d in rolls],
-                        [(d.get('armed_sfx_ids'), d.get('role'), d.get('ts_id')) for d in dice],
-                    )
-                    for die in dice:
-                        resolved = _substitute_die_context(effect, die, context or {})
-                        effect_registry.apply(resolved, entity_id, universe, context or {})
-                        applied.append(resolved)
-                else:
-                    resolved = _substitute_effect_context(effect, context or {})
-                    effect_registry.apply(resolved, entity_id, universe, context or {})
-                    applied.append(resolved)
-
+            applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls))
             # One roll event consumed (a matching event happened for this SFX).
             if armed.rolls is not None:
                 armed.rolls -= 1
@@ -155,6 +171,46 @@ def fire_armed(
         else:
             kept.append(armed)
     _armed[entity_id] = kept
+
+    # Passive (global) rules — not consumed; apply to this entity's rolls too.
+    for armed in _global_armed:
+        applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls))
+
+    return applied
+
+
+def _apply_armed(
+    armed: ArmedSfx,
+    event_type: str,
+    entity_id: str,
+    universe: str,
+    context: dict | None,
+    rolls: list[dict],
+) -> list[Effect]:
+    """Apply one armed entry's matching effects to ``rolls``; return them."""
+    from transversal.services.effects_applier import effect_registry
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    applied: list[Effect] = []
+    for effect in armed.effects:
+        if effect.timing.value != event_type:
+            continue
+        if armed.source_sfx_id is not None or bool(effect.die_filter):
+            dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
+            log.info(
+                "[roll_deferral._apply_armed] sfx=%s effect=%s/%s candidates=%s matched=%s",
+                armed.source_sfx_id, effect.type, effect.action,
+                [(d.get('armed_sfx_ids'), d.get('role'), d.get('ts_id')) for d in rolls],
+                [(d.get('armed_sfx_ids'), d.get('role'), d.get('ts_id')) for d in dice],
+            )
+            for die in dice:
+                resolved = _substitute_die_context(effect, die, context or {})
+                effect_registry.apply(resolved, entity_id, universe, context or {})
+                applied.append(resolved)
+        else:
+            resolved = _substitute_effect_context(effect, context or {})
+            effect_registry.apply(resolved, entity_id, universe, context or {})
+            applied.append(resolved)
     return applied
 
 
@@ -217,6 +273,27 @@ def list_armed_sfx_ids(entity_id: str) -> list[str]:
     return [a.source_sfx_id for a in _armed.get(entity_id, []) if a.source_sfx_id]
 
 
+def expire_global(event_type: str) -> None:
+    """Drop passive rules whose boundary expiry matches ``event_type``."""
+    global _global_armed
+    _global_armed = [a for a in _global_armed if event_type not in a.expiry_events]
+
+
+def clear_global_armed() -> None:
+    """Drop every passive rule (e.g. at session end)."""
+    global _global_armed
+    _global_armed = []
+
+
+def list_global_armed() -> list[Effect]:
+    """The passive (global) roll-timing effects currently armed (tests/debug)."""
+    out: list[Effect] = []
+    for armed in _global_armed:
+        out.extend(armed.effects)
+    return out
+
+
 def reset() -> None:
     """Clear the whole store (tests)."""
     _armed.clear()
+    _global_armed.clear()

@@ -156,6 +156,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     ), group="dicepool"),
     TriggerDef("on_beat", "On Beat Advance", group="auto"),
     TriggerDef("on_scene", "On Scene Advance", group="auto"),
+    TriggerDef("on_session_start", "On Session Start", group="auto"),
 ) + tuple(
     TriggerDef(value, _MENU_TRIGGER_LABELS[value], tuple(MENU_CONTEXT_VARIABLES[value]), group="menu")
     for value in MENU_CONTEXT_IDS
