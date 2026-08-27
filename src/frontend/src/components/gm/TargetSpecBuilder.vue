@@ -250,7 +250,7 @@ async function runTrace() {
 
 onMounted(load)
 watch(() => props.destination, () => scheduleTrace(), { deep: true })
-watch(steps, scheduleTrace, { deep: true })
+watch(steps, scheduleTrace, { deep: true, immediate: true })
 </script>
 
 <style scoped>
