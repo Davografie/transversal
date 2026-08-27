@@ -110,7 +110,7 @@ A step-by-step path builder that produces the spec object directly — no string
 
 ### 5. Passive arming
 
-- New `on_session_start` trigger + fire site (session lifecycle; see open decisions).
+- New `on_session_start` trigger + fire site (armed on the GM's [Session] Start toggle; see Decided).
 - Global armed set (not entity-keyed) that `fire_armed` consults for every entity.
 - Passive arming skips `source_sfx_id`; matches by `die_filter` only. (The stamp is a *player-choice* signal; a passive rule's scope is declarative, so it selects dice via `filter` — stamping is not needed.)
 
@@ -128,13 +128,12 @@ Same targeting primitive (`rolled_dice → traitsetting`), `step_up` compensatio
 6. **Passive arming** — `on_session_start` trigger, global armed set, no stamp.
 7. Author One Trick end-to-end; add Endless Variety as the compensation counter.
 
-## Open decisions (may pause here during implementation)
-
-- **Migration mechanics** — how existing authored string targets convert to specs (script vs lazy-on-read).
-- **Roll-deferred die-selection mapping** — how today's `die_filter` / `source_sfx_id` matching maps into the spec model, and how "which dice this SFX fires on" becomes a `select → filter` spec (player-armed = filter on `armed_sfx_ids`; passive = predicate filter).
-- **Session-start fire site** — session *created* vs *first join*; and global armed set vs per-entity arming.
-
 ## Decided (was open)
+
+- **Migration: lazy-on-read, author-curated.** Old string targets (`self`, literal ids, `{choose:*}`/`{random:*}`) translate to *trivial* specs on load — the smallest spec that reproduces the string's meaning (a single `select`/`literal`/`filter` step). No migration script. The author reviews the existing ~21 SFX by hand and fixes them where they don't work.
+- **Die selection: spec-predicate + `armed_dice` seed.** "Which dice this SFX fires on" is a `select → filter` spec: player-armed = `filter armed_sfx_ids contains {this_sfx}`; passive = no filter. An `armed_dice` seed is shorthand for the same selection. Requires a `contains`/`in` operator and a "this SFX's id" variable.
+- **Session start: GM [Session] toggle ON → global armed set.** The passive rule arms in a *global* (session-scoped, not entity-keyed) set when the GM's [Session] button toggles to Start; the End toggle drops it. Late joiners are covered automatically. The Start button is currently a placeholder no-op, so this fire site is built as part of item 6.
+- **Values are typed at authoring time.** The wizard emits a typed value from the catalog's `field.type` (`int`/`die`/`string`/`number`), so specs carry typed values from the start and downstream logic can do typed ops (`string + string`, `int + int`) without late coercion.
 
 - Resolution modes: `all` / `choose` / `random` (no `any`).
 - `dedup` is a `navigate` flag; `aggregate` is the terminal collapse (practically a dedup).
