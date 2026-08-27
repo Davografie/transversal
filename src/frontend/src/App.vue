@@ -994,6 +994,12 @@ watch(lastEvent, (evt) => {
       currentDifficulty.value = null
       if (gmMode.value) addToast('Beat ended', 'dice')
       break
+    case 'session_started':
+      addToast('Session started', 'session')
+      break
+    case 'session_ended':
+      addToast('Session ended', 'session')
+      break
     case 'trait_updated':
       // local patch handles display; SSE sync deferred
       entityCache.invalidateSheet(evt.data?.entity_id)

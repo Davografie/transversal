@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from transversal.services.session_manager import Session, session_manager
+from transversal.api.sse.bus import StreamEvent, event_bus
 
 logger = logging.getLogger("transversal.sessions")
 
@@ -68,6 +69,7 @@ async def start_session(session_id: str) -> dict:
     from transversal.services.state_events import fire_session_start
 
     fire_session_start()
+    event_bus.publish(StreamEvent(event="session_started", session_id=session_id, data={"session_id": session_id}))
     logger.info(f"[init] start_session id={session_id}")
     return {"started": True}
 
@@ -78,6 +80,7 @@ async def end_session(session_id: str) -> dict:
     from transversal.services.roll_deferral import clear_global_armed
 
     clear_global_armed()
+    event_bus.publish(StreamEvent(event="session_ended", session_id=session_id, data={"session_id": session_id}))
     logger.info(f"[init] end_session id={session_id}")
     return {"ended": True}
 
