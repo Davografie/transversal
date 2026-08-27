@@ -234,6 +234,26 @@ def test_step_down_removes_at_d4():
     assert result.applied[0].summary == "removed pool (empty rating)"
 
 
+def test_step_down_targets_traitsetting_instance_by_id():
+    # The die→traitsetting drillthrough yields a full instance id, not a registry
+    # trait id. step_down must resolve it directly (ts_id) rather than via the
+    # owner + trait_id lookup (which would never match "char-1:pool").
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D8])])
+    entity = _entity()
+    effect = _effect("modify_trait", "step_down", "char-1:pool")
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D6]
+
+
+def test_step_up_targets_traitsetting_instance_by_id():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
+    entity = _entity()
+    effect = _effect("modify_trait", "step_up", "char-1:pool")
+    result = apply_effects(entity, [effect], repo)
+    assert result.updated_trait_settings[0].dice == [DieType.D8]
+
+
 def test_step_up_multiple_steps():
     repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
     entity = _entity()

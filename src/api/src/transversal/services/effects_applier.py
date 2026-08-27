@@ -281,6 +281,23 @@ def _find_traitsetting(owner: tuple[str, str], repo, trait_id: str) -> Optional[
     return None
 
 
+def _find_traitsetting_by_target(subject: Entity, effect: Effect, repo, target: str) -> Optional[TraitSetting]:
+    """Resolve a trait-mutation target to a TraitSetting.
+
+    Prefers a direct *instance* lookup — the target is a traitsetting id (e.g.
+    ``kael-1:trait-martial``) produced by the ``die→traitsetting`` drillthrough.
+    Falls back to the legacy registry-trait + owner lookup so an authored trait
+    id (``trait-martial``) still resolves to the subject's instance.
+    """
+    if target:
+        getter = getattr(repo, "get_traitsetting", None)
+        if getter is not None:
+            ts = getter(target)
+            if ts is not None:
+                return ts
+    return _find_traitsetting(_trait_owner(subject, effect, repo), repo, target)
+
+
 def _step_up(ts: TraitSetting) -> bool:
     """Step up the smallest die, capped at d12. Returns False if at cap/empty."""
     if not ts.dice:
@@ -412,6 +429,7 @@ _TARGET_KINDS = {
     "location": "location",
     "occupant": "occupant",
     "trait": "trait",
+    "traitsetting": "traitsetting",
     "entity": "entity",
     "rating_die": "rating_die",
     "life_path": "life_path",
@@ -655,7 +673,7 @@ def _apply_gain(entity, effect, repo, result):
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
-    if _find_traitsetting(owner, repo, target):
+    if _find_traitsetting_by_target(subject, effect, repo, target):
         result.applied.append(AppliedEffect(effect, f"trait {target} already present"))
         return
     die = _die(effect.result)
@@ -681,7 +699,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
     if target is None:
         return
     owner = _trait_owner(subject, effect, repo)
-    existing = _find_traitsetting(owner, repo, target)
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
     steps = _steps(effect)
     if existing:
         if _step_up_trait(subject, existing, target, effect, result, repo, steps=steps):
@@ -718,7 +736,7 @@ def _apply_cortex_gain(entity, effect, repo, result):
     owner = _trait_owner(subject, effect, repo)
     die = _die(effect.result)
     negative = bool(effect.negative)
-    existing = _find_traitsetting(owner, repo, target)
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
     if existing:
         if not existing.dice:
             existing.dice = [die]
@@ -750,8 +768,7 @@ def _apply_step_up(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    existing = _find_traitsetting(owner, repo, target)
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step up"))
         return
@@ -769,8 +786,7 @@ def _apply_step_down(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    existing = _find_traitsetting(owner, repo, target)
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to step down"))
         return
@@ -797,8 +813,7 @@ def _apply_set(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    existing = _find_traitsetting(owner, repo, target)
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to set"))
         return
@@ -818,8 +833,7 @@ def _apply_disable(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    ts = _find_traitsetting(owner, repo, target)
+    ts = _find_traitsetting_by_target(subject, effect, repo, target)
     if ts is None:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to disable"))
         return
@@ -840,8 +854,7 @@ def _apply_enable(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    ts = _find_traitsetting(owner, repo, target)
+    ts = _find_traitsetting_by_target(subject, effect, repo, target)
     if ts is None:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to enable"))
         return
@@ -861,8 +874,7 @@ def _apply_toggle(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    ts = _find_traitsetting(owner, repo, target)
+    ts = _find_traitsetting_by_target(subject, effect, repo, target)
     if ts is None:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to toggle"))
         return
@@ -1069,8 +1081,7 @@ def _apply_remove(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    existing = _find_traitsetting(owner, repo, target)
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to remove"))
         return
@@ -1105,8 +1116,7 @@ def _apply_reveal(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
-    owner = _trait_owner(subject, effect, repo)
-    ts = _find_traitsetting(owner, repo, target)
+    ts = _find_traitsetting_by_target(subject, effect, repo, target)
     if ts is None:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to reveal"))
         return
