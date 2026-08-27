@@ -3,6 +3,7 @@
     <GmList
       :items="effects"
       reorderable
+      drag-handle
       empty-text="No effects defined"
       :row-class="rowClassFn"
       @click="(eff, i) => emit('edit', i)"
@@ -12,7 +13,6 @@
         <span class="ee-cat" :class="'cat-' + effectCategory(eff)">{{ categorySign(effectCategory(eff)) }}</span>
         <span class="ee-summary">{{ effectSummary(eff) }}</span>
         <span class="ee-timing">{{ eff.timing }}</span>
-        <span class="ee-handle">⠿</span>
         <button class="ee-del" @click.stop="removeEffect(i)" title="Remove">✕</button>
       </template>
     </GmList>
@@ -70,7 +70,6 @@ function rowClassFn(eff) {
 
 <style scoped>
 .ee-root { display: flex; flex-direction: column; gap: 4px; }
-.ee-handle { cursor: grab; color: var(--text-dim); font-size: 13px; }
 .ee-cat { font-weight: 700; font-size: 11px; width: 18px; text-align: center; }
 .cat-cost { color: #d44040; }
 .cat-benefit { color: #40b860; }
