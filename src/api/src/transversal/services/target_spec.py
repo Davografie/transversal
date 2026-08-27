@@ -49,8 +49,14 @@ class AggregateStep(BaseModel):
     field: str | None = None  # required for min/max/mean/avg_*
 
 
+class LiteralStep(BaseModel):
+    kind: Literal["literal"] = "literal"
+    element: str = ""  # element type name (entity/trait/location/…)
+    value: str = ""    # the concrete id
+
+
 TargetStep = Annotated[
-    Union[SelectStep, FilterStep, NavigateStep, AggregateStep],
+    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep],
     Field(discriminator="kind"),
 ]
 
@@ -146,6 +152,13 @@ def trace(spec: TargetSpec) -> tuple[list[ValueType | None], list[TraceError]]:
                     current = ValueType(f.type, "one")
                 else:
                     current = ValueType(agg.output, "one")
+
+        elif isinstance(step, LiteralStep):
+            if tc.element(step.element) is None:
+                errors.append(TraceError(i, f"unknown literal element {step.element!r}"))
+                current = None
+            else:
+                current = ValueType(step.element, "one")
 
         types.append(current)
 

@@ -19,6 +19,7 @@ from typing import Any, Callable
 from transversal.services.target_spec import (
     AggregateStep,
     FilterStep,
+    LiteralStep,
     NavigateStep,
     SelectStep,
     TargetSpec,
@@ -233,7 +234,33 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
                 element = f.type if agg.output == "same" else agg.output
                 current_type = ValueType(element, "one")
 
+        elif isinstance(step, LiteralStep):
+            if tc.element(step.element) is None:
+                errors.append(TraceError(i, f"unknown literal element {step.element!r}"))
+                values, current_type = [], None
+            else:
+                values = _lookup_literal(step.element, step.value, context)
+                current_type = ValueType(step.element, "one")
+
     return Resolution(values, errors)
+
+
+def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
+    """Resolve a ``literal`` step: fetch the object of ``element`` type by id."""
+    repo = ctx.repo
+    if repo is None or not value:
+        return []
+    if element in ("entity", "location", "universe"):
+        return _maybe(repo.get_entity(value))
+    if element == "trait":
+        return _maybe(repo.get_trait(value))
+    if element == "traitsetting":
+        return _maybe(repo.get_traitsetting(value))
+    if element == "traitset":
+        return _maybe(repo.get_traitset_by_id(value))
+    if element == "projection":
+        return _maybe(repo.get_projection(value))
+    return []
 
 
 # ── Default edge resolvers (repo-backed) ─────────────────────

@@ -104,6 +104,7 @@ from transversal.domain import HistoricalRecord as DomainHistoricalRecord
 from transversal.domain import dice_list_to_rating
 from transversal.services.entity_manager import EntityManager
 from transversal.services.razmerit import RazmeritService
+from transversal.services.target_spec import TargetSpec
 
 
 def _em(info: strawberry.Info) -> EntityManager:
@@ -243,6 +244,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         negative=e.negative,
         context=e.context,
         duration=_duration_to_gql(e.duration),
+        target_spec=e.target_spec.model_dump() if e.target_spec else None,
     )
 
 
@@ -301,7 +303,17 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         negative=e.negative,
         context=e.context or {},
         duration=_duration_input_to_domain(e.duration),
+        target_spec=_target_spec_from_input(e.target_spec),
     )
+
+
+def _target_spec_from_input(raw) -> Optional[TargetSpec]:
+    """Validate a GraphQL JSON target spec into the domain model (None-safe)."""
+    if not raw:
+        return None
+    from transversal.services.target_spec import TargetSpec
+
+    return TargetSpec.model_validate(raw)
 
 
 def _consequence_option_to_gql(o: DomainConsequenceOption) -> ConsequenceOption:

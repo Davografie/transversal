@@ -166,3 +166,25 @@ def test_contains_operator_type_checks():
     types, errors = trace(s)
     assert errors == []
     assert types[-1] == ValueType("die", "many")
+
+
+def test_literal_step_type_checks_to_one():
+    from transversal.services.target_spec import LiteralStep
+    s = spec(LiteralStep(element="trait", value="trait-x"))
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("trait", "one")
+
+
+def test_literal_step_unknown_element_is_error():
+    from transversal.services.target_spec import LiteralStep
+    types, errors = trace(spec(LiteralStep(element="nope", value="x")))
+    assert any("unknown literal element" in e.message for e in errors)
+    assert types[-1] is None
+
+
+def test_literal_step_deserializes_from_dict():
+    s = TargetSpec.model_validate({"steps": [{"kind": "literal", "element": "trait", "value": "trait-x"}]})
+    from transversal.services.target_spec import LiteralStep
+    assert isinstance(s.steps[0], LiteralStep)
+    assert final_type(s) == ValueType("trait", "one")

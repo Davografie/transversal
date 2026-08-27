@@ -231,3 +231,13 @@ def test_filter_ordering_is_numeric_not_lexicographic():
     res = resolve(s, ctx)
     assert res.errors == []
     assert [v["ts_id"] for v in res.values] == ["b"]
+
+
+def test_literal_step_resolves_via_repo():
+    from transversal.services.target_spec import LiteralStep
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo)
+    s = spec(LiteralStep(element="trait", value="trait-martial"))
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["trait-martial"]

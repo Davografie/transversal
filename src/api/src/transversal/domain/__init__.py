@@ -18,6 +18,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from transversal.services.target_spec import TargetSpec
+
 
 # ── Dice ──────────────────────────────────────────────
 
@@ -709,6 +711,9 @@ class Effect(BaseModel):
     negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)
     context: dict = Field(default_factory=dict)  # e.g. relationship description
     duration: Optional["EffectDuration"] = None  # when set, schedules the inverse effect on expiry
+    # Structured targeting pipeline (the new model). None means the effect still
+    # uses the legacy ``target`` string and is lazily migrated on read.
+    target_spec: Optional[TargetSpec] = None
 
 
 class Timer(BaseModel):

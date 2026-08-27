@@ -491,3 +491,36 @@ class TestTargetCatalogGraphQL:
         })
         tr = result["traceTargetSpec"]
         assert tr["valid"] is False
+
+
+class TestEffectTargetSpecGraphQL:
+    def test_target_spec_round_trips_through_graphql(self):
+        from transversal.api.graphql.schema import _effect_to_gql, _effect_input_to_domain
+        from transversal.domain import Effect as DomainEffect
+        from transversal.domain import EffectTiming
+        from transversal.services.target_spec import LiteralStep, TargetSpec
+
+        eff = DomainEffect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain", target="self",
+            target_spec=TargetSpec(steps=[LiteralStep(element="trait", value="trait-x")]),
+        )
+
+        gql = _effect_to_gql(eff)
+        assert gql.target_spec == {"steps": [{"kind": "literal", "element": "trait", "value": "trait-x"}]}
+
+        back = _effect_input_to_domain(_make_effect_input(gql))
+        assert back.target_spec is not None
+        assert back.target_spec.steps[0].element == "trait"
+        assert back.target_spec.steps[0].value == "trait-x"
+
+
+def _make_effect_input(gql_effect):
+    from transversal.api.graphql.types import EffectInput
+    return EffectInput(
+        timing=gql_effect.timing, type=gql_effect.type, action=gql_effect.action,
+        target=gql_effect.target, entity=gql_effect.entity, result=gql_effect.result,
+        target_scope=gql_effect.target_scope, entity_scope=gql_effect.entity_scope,
+        target_filter=gql_effect.target_filter, die_filter=gql_effect.die_filter,
+        negative=gql_effect.negative, context=gql_effect.context,
+        target_spec=gql_effect.target_spec,
+    )
