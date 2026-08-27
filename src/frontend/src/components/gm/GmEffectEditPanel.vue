@@ -1,16 +1,45 @@
 <template>
   <div class="geep-root">
-    <EffectEditor v-model="draft.effects" :variables="scopeVariables" />
+    <EffectForm
+      :value="editingEffect"
+      :variables="scopeVariables"
+      @save="onSave"
+      @cancel="close"
+    />
   </div>
 </template>
 
 <script setup>
-import EffectEditor from './EffectEditor.vue'
+import { computed } from 'vue'
+import EffectForm from './EffectForm.vue'
 import { useSfxEdit } from '@/composables/useSfxEdit.js'
+import { usePanel } from '@/composables/usePanel.js'
 
-// Child panel for the SFX editor: edits the shared draft.effects state owned by
-// useSfxEdit (no prop-drilling — the singleton carries identity + data).
+const props = defineProps({
+  // Identity only (Rule 6): which effect to edit, or null to add. The effect
+  // data itself lives in the shared useSfxEdit draft.
+  index: { type: Number, default: null },
+})
+
+const panel = usePanel()
 const { draft, scopeVariables } = useSfxEdit()
+
+const editingEffect = computed(() => (props.index === null ? null : (draft.effects[props.index] || null)))
+
+function onSave(eff) {
+  if (props.index === null) {
+    draft.effects = [...draft.effects, eff]
+  } else {
+    const next = [...draft.effects]
+    next[props.index] = eff
+    draft.effects = next
+  }
+  panel.close()
+}
+
+function close() {
+  panel.close()
+}
 </script>
 
 <style scoped>

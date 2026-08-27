@@ -22,12 +22,14 @@
       <ConditionEditor v-model="draft.conditions" />
     </div>
 
-    <!-- Effects live in a child panel (shared draft state via useSfxEdit) -->
+    <!-- Effects: list inline; each effect's form opens in a child panel -->
     <h4 class="ps-section-title">Effects</h4>
-    <div class="effects-row">
-      <span class="effects-count">{{ effectCountLabel }}</span>
-      <button class="effects-open" @click="openEffects">{{ (draft.effects || []).length ? 'Edit effects' : '+ Add effect' }}</button>
-    </div>
+    <EffectList
+      :model-value="draft.effects"
+      @update:model-value="draft.effects = $event"
+      @add="openEffectEditor(null)"
+      @edit="openEffectEditor"
+    />
 
     <label>Duration (in effect)</label>
     <DurationBuilder v-model="draft.duration" allow-rolls />
@@ -69,6 +71,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useSfxEdit } from '@/composables/useSfxEdit.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import GmEffectEditPanel from './GmEffectEditPanel.vue'
+import EffectList from './EffectList.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
@@ -168,17 +171,13 @@ const sfxSummary = computed(() => {
   return out
 })
 
-const effectCountLabel = computed(() => {
-  const n = (draft.effects || []).length
-  return n ? `${n} effect${n === 1 ? '' : 's'}` : 'No effects'
-})
-
 // ── Child panel + mutations (delegated to the composable) ──
 
-function openEffects() {
+function openEffectEditor(index) {
   panel.open({
     component: GmEffectEditPanel,
-    title: `Effects — ${draft.name || 'SFX'}`,
+    title: index == null ? 'Add effect' : 'Edit effect',
+    props: { index },
   })
 }
 
@@ -232,9 +231,4 @@ async function onDelete() {
 .save-main { margin-top: 10px; width: 100%; }
 .error-msg { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 .success-msg { font-size: 11px; color: #40b860; background: rgba(64,184,96,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
-
-.effects-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; margin-bottom: 10px; }
-.effects-count { font-size: 11px; color: var(--text-dim); }
-.effects-open { font-size: 11px; padding: 4px 10px; background: rgba(64,136,212,0.16); color: var(--accent); border: 1px solid var(--accent-dim); border-radius: 6px; cursor: pointer; }
-.effects-open:hover { background: rgba(64,136,212,0.28); }
 </style>
