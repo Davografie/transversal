@@ -225,13 +225,14 @@ def test_step_up_steps_smallest_die():
     assert result.updated_trait_settings[0].dice == [DieType.D8, DieType.D8]
 
 
-def test_step_down_removes_at_d4():
+def test_step_down_empties_at_d4():
     repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D4])])
     entity = _entity()
     result = apply_effects(entity, [_effect("modify_trait", "step_down", "pool")], repo)
-    assert len(result.updated_trait_settings) == 0
-    assert len(result.removed_trait_settings) == 1
-    assert result.applied[0].summary == "removed pool (empty rating)"
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == []
+    assert len(result.removed_trait_settings) == 0
+    assert result.applied[0].summary == "stepped down pool"
 
 
 def test_step_down_targets_traitsetting_instance_by_id():
@@ -263,15 +264,23 @@ def test_step_up_multiple_steps():
     assert result.updated_trait_settings[0].dice == [DieType.D10]
 
 
-def test_step_down_multiple_steps_removes():
+def test_step_up_restores_empty_rating():
+    repo = FakeRepo(traitsettings=[_ts("pool", [])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "step_up", "pool")], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D4]
+
+
+def test_step_down_multiple_steps_empties():
     repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
     entity = _entity()
     effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
                     target="pool", context={"steps": 2})
     result = apply_effects(entity, [effect], repo)
-    assert len(result.updated_trait_settings) == 0
-    assert len(result.removed_trait_settings) == 1
-    assert result.applied[0].summary == "removed pool (empty rating)"
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == []
+    assert len(result.removed_trait_settings) == 0
 
 
 def test_set_overrides_dice():

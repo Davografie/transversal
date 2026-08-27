@@ -299,9 +299,10 @@ def _find_traitsetting_by_target(subject: Entity, effect: Effect, repo, target: 
 
 
 def _step_up(ts: TraitSetting) -> bool:
-    """Step up the smallest die, capped at d12. Returns False if at cap/empty."""
+    """Step up the smallest die, capped at d12. Restores an empty rating to d4."""
     if not ts.dice:
-        return False
+        ts.dice = [DieType.D4]
+        return True
     smallest = min(ts.dice, key=lambda d: d.max_value)
     if smallest == DieType.D12:
         return False
@@ -310,16 +311,17 @@ def _step_up(ts: TraitSetting) -> bool:
 
 
 def _step_down_one(ts: TraitSetting) -> str:
-    """Step down the smallest die. Returns ``"stepped" | "removed" | "empty"``.
+    """Step down the smallest die. Returns ``"stepped" | "empty"``.
 
-    A d4 die steps down to an empty rating ("a 4 goes away"), so the trait is
-    removed rather than floored at d4.
+    A d4 die steps down to no die (empty rating) — the trait *persists* with an
+    empty rating rather than being deleted, so a temporary step-down can revert.
     """
     if not ts.dice:
         return "empty"
     smallest = min(ts.dice, key=lambda d: d.max_value)
     if smallest == DieType.D4:
-        return "removed"
+        ts.dice.remove(smallest)
+        return "stepped"
     ts.dice[ts.dice.index(smallest)] = smallest.step_down()
     return "stepped"
 
@@ -802,10 +804,6 @@ def _apply_step_down(entity, effect, repo, result):
         status = _step_down_one(existing)
         if status == "stepped":
             continue
-        if status == "removed":
-            result.removed_trait_settings.append(existing)
-            result.applied.append(AppliedEffect(effect, f"removed {target} (empty rating)", existing.id))
-            return
         result.applied.append(AppliedEffect(effect, f"{target} has no dice to step down"))
         return
     result.updated_trait_settings.append(existing)
