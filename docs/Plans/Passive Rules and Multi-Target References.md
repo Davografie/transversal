@@ -40,8 +40,9 @@ These are the first concrete consumers of the deferred **recursive drillthrough*
 - **Unified spec, one concept.** A target is a **pipeline of steps** that resolves to a **typed value**. "Resolves to an entity" and "resolves to an integer" are the *same* kind of thing — the difference is only the result type.
 - **Type = element × cardinality.** `set<traitsetting>`, `single<entity>`, `single<int>`, `set<die>`, …
 - **The effect field declares the type.** Each field that wants a selection (`target`, `entity`, `result`, `steps`, condition operands) states its expected type — element + cardinality. The spec must resolve to a matching type; that's the "what am I selecting for" hint.
-- **Cardinality lives on the field, not the grammar.** `all` (set), `any`/`choose`/`random` (single) are properties of the field's type, not extra spec syntax.
-- **Everything uses specs.** `target` *and* `entity` (subject) are object-typed specs; `result`/`steps`/thresholds are scalar-typed specs (a spec that ends in an `aggregate`); conditions are predicates that *embed* specs (e.g. "has trait [spec]").
+- **Cardinality lives on the field, not the grammar.** Resolution modes are `all` (set), `choose` (user picks one), `random` (random one). `choose`/`random` are the single-resolution forms; there is no `any`.
+- **Everything uses specs.** `target` *and* `entity` (subject) are object-typed specs; `result`/`steps`/thresholds are scalar-typed specs (a spec ending in `aggregate`) **or a manual literal** (int/string/bool); conditions are spec predicates (uniformly, with or without drillthrough).
+- **Owner drillthrough** — `traitsetting._from` resolves the owner (entity | projection); relationship traitsettings drill `_from`/`_to` (the two endpoints). **`projection` is a first-class spec type.**
 - **Full migration.** `Effect.target` (and the other reference fields) become specs; the legacy string (`self`, literal, `{choose:*}`/`{random:*}`) is dropped and represented as trivial specs.
 
 ## Current state (blockers, grounded)
@@ -63,12 +64,13 @@ A spec is an ordered list of steps, each transforming a typed collection (or col
 Step:
     select   <collection>   # seed from a context collection (rolled_dice, entities, occupants, locations, traitsettings, …)
     filter   <predicate>    # narrow; typed, may traverse (traitsetting.traitset == X, pool_owner.type == "gmc", …)
-    navigate <edge>         # hop a named edge (die.traitsetting, traitsetting.entity, traitsetting.traitset, entity.location, …)
-                            #   with a `dedup` flag — collapsing N→1 needs an aggregation: min | max | mean | avg_floor | avg_ceil
-    aggregate <fn>          # collapse a collection to a scalar: count | min | max | mean | avg_floor | avg_ceil
+    navigate <edge>         # hop a named edge (die.traitsetting, traitsetting._from, traitsetting._to, entity.location, …)
+                            #   dedup is a flag on navigate: collapsing N→1 aggregates min | max | mean | avg_floor | avg_ceil
+    aggregate <fn>          # terminal collapse to a scalar: count | min | max | mean | avg_floor | avg_ceil
+                            #   (a terminal aggregate is practically a dedup)
 ```
 
-- **Type catalog (linchpin)** — element types (die, traitsetting, trait, traitset, entity, location, universe, projection, …), navigation edges (source→target type, 1→1 or 1→N), aggregations (input→output type), and the aggregatable scalar fields (`die.rating`, `die.result`). Single source of truth for the resolver and the wizard, so only valid steps compose.
+- **Type catalog (linchpin)** — element types (die, traitsetting, trait, traitset, entity, **projection**, location, universe, …), navigation edges (source→target type, 1→1 or 1→N), aggregations (input→output type), and the aggregatable scalar fields (`die.rating`, `die.result`). Single source of truth for the resolver and the wizard, so only valid steps compose.
 - **Field type-hints** — the registry's `EffectActionMeta.fields[].field_type` / `target_kind` become a real type vocabulary (element × cardinality). The wizard only offers steps legal for the field's type; the resolver type-checks the result.
 - **Resolver** — `evaluate(spec, context) → typed value`; a `set<T>` result fans out over the effect, a `single<T>` passes one value.
 
@@ -103,7 +105,7 @@ The drillthrough picker that builds a spec step-by-step, driven by the type cata
 
 - New `on_session_start` trigger + fire site (session lifecycle; see open decisions).
 - Global armed set (not entity-keyed) that `fire_armed` consults for every entity.
-- Passive arming skips `source_sfx_id`; matches by `die_filter` only.
+- Passive arming skips `source_sfx_id`; matches by `die_filter` only. (The stamp is a *player-choice* signal; a passive rule's scope is declarative, so it selects dice via `filter` — stamping is not needed.)
 
 ### 6. Endless Variety
 
@@ -121,15 +123,18 @@ Same targeting primitive (`rolled_dice → traitsetting`), `step_up` compensatio
 
 ## Open decisions (may pause here during implementation)
 
-- **`choose`/`random` as resolution mode vs cardinality** — how the field type expresses "user picks one" / "random one" alongside `all`/`any`. Likely a small "resolution mode" on single-typed fields.
-- **`dedup` vs `aggregate` step semantics** — is `aggregate` a standalone step, a flag on `navigate`/`dedup`, or both? And does "identity dedup" (keep one instance) compose with "value aggregation" (min/max/mean of the collapsed dice)?
-- **Condition unification boundary** — how conditions embed specs, and which condition types (PHASE, ENTITY_TYPE, razmerit threshold, …) stay first-class vs become spec-predicates.
-- **Context value boundary** — which `context` fields become spec-typed values (`result`, `steps`) vs stay literals (`statement`, `notes`, `rating_type`).
-- **Subject/owner interplay** — how an entity-typed spec (`entity`) interacts with `_trait_owner` / relationship context when an action needs the trait's owner.
 - **Migration mechanics** — how existing authored string targets convert to specs (script vs lazy-on-read).
-- **Roll-deferred die selection mapping** — how today's `die_filter` / `source_sfx_id` matching maps into the spec model, and how passive arming expresses "match by filter, not stamp".
-- **Dedup identity** — by `ts_id` (instance) vs `trait_id` (registry trait); instance is the safe default and matters for relationship traits.
+- **Roll-deferred die-selection mapping** — how today's `die_filter` / `source_sfx_id` matching maps into the spec model, and how "which dice this SFX fires on" becomes a `select → filter` spec (player-armed = filter on `armed_sfx_ids`; passive = predicate filter).
 - **Session-start fire site** — session *created* vs *first join*; and global armed set vs per-entity arming.
+
+## Decided (was open)
+
+- Resolution modes: `all` / `choose` / `random` (no `any`).
+- `dedup` is a `navigate` flag; `aggregate` is the terminal collapse (practically a dedup).
+- Conditions are spec predicates, uniformly.
+- Value fields accept a literal or a spec.
+- Subject/owner via `traitsetting._from` (entity | projection) or relationship `_from`/`_to`.
+- Dedup identity follows the spec element type (`traitsetting` or `trait`).
 
 ## Related
 
