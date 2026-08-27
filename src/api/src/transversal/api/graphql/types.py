@@ -269,6 +269,100 @@ class ConditionTypeOption:
 
 
 @strawberry.type
+class TargetCatalogElement:
+    """A kind of game object a targeting spec can resolve to."""
+    name: str
+    label: str
+
+
+@strawberry.type
+class TargetCatalogEdge:
+    """A named navigation hop from one element type to another."""
+    name: str
+    source: str
+    targets: list[str]
+    cardinality: str  # "one" | "many"
+    label: str = ""
+
+
+@strawberry.type
+class TargetCatalogField:
+    """A comparable/aggregatable scalar field on an element type."""
+    element: str
+    name: str
+    type: str  # "int" | "number" | "die" | "string"
+
+
+@strawberry.type
+class TargetCatalogAggregation:
+    """A collapse of a collection to a scalar."""
+    name: str
+    label: str
+    output: str  # "int" | "number" | "same"
+    needs_field: bool
+
+
+@strawberry.type
+class TargetCatalogCollection:
+    """A context collection a spec may seed from via ``select``."""
+    name: str
+    element: str
+    label: str
+    singular: bool = False
+
+
+@strawberry.type
+class TargetCatalog:
+    """The full declarative targeting catalog, consumed by the wizard."""
+    elements: list[TargetCatalogElement]
+    edges: list[TargetCatalogEdge]
+    fields: list[TargetCatalogField]
+    aggregations: list[TargetCatalogAggregation]
+    collections: list[TargetCatalogCollection]
+
+
+@strawberry.input
+class TargetSpecStepInput:
+    """One step of a targeting spec (kind discriminates the relevant fields)."""
+    kind: str  # "select" | "filter" | "navigate" | "aggregate"
+    collection: Optional[str] = None
+    field: Optional[str] = None
+    operator: str = "=="
+    value: Optional[strawberry.scalars.JSON] = None
+    edge: Optional[str] = None
+    dedup: bool = False
+    fn: Optional[str] = None
+
+
+@strawberry.input
+class TargetSpecInput:
+    """An ordered pipeline of targeting steps."""
+    steps: list[TargetSpecStepInput] = strawberry.field(default_factory=list)
+
+
+@strawberry.type
+class TargetTraceType:
+    """The resolved value type after one spec step (empty = no valid type)."""
+    element: str = ""
+    cardinality: str = ""  # "one" | "many"
+
+
+@strawberry.type
+class TargetTraceError:
+    """A step-level type error."""
+    step_index: int
+    message: str
+
+
+@strawberry.type
+class TargetTraceResult:
+    """The type trace of a spec: the type after each step plus errors."""
+    types: list[TargetTraceType]
+    errors: list[TargetTraceError]
+    valid: bool = False
+
+
+@strawberry.type
 class ConsequenceOption:
     """A selectable entry in the post-roll consequence menu."""
     id: strawberry.ID

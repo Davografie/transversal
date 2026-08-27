@@ -389,3 +389,105 @@ class TestCharacterView:
         assert c["entity"]["name"] == "Kael Drift"
         assert len(c["traitSettings"]) == 2
         assert len(c["projections"]) == 1
+
+
+class TestTargetCatalogGraphQL:
+    def test_target_catalog(self, client):
+        result = _gql(client, """
+            query {
+                targetCatalog {
+                    elements { name label }
+                    edges { name source targets cardinality label }
+                    fields { element name type }
+                    aggregations { name label output needsField }
+                    collections { name element label singular }
+                }
+            }
+        """)
+        cat = result["targetCatalog"]
+        element_names = {e["name"] for e in cat["elements"]}
+        assert {"die", "traitsetting", "trait", "traitset", "entity", "projection", "location", "universe"} <= element_names
+
+        # die → traitsetting edge, single-typed
+        die_edges = [e for e in cat["edges"] if e["source"] == "die"]
+        ts_edge = next(e for e in die_edges if e["name"] == "traitsetting")
+        assert ts_edge["targets"] == ["traitsetting"]
+        assert ts_edge["cardinality"] == "one"
+
+        # collections seed the wizard's first step
+        cols = {c["name"]: c for c in cat["collections"]}
+        assert cols["self"]["singular"] is True
+        assert cols["rolled_dice"]["element"] == "die"
+
+        # count needs no field; min does
+        aggs = {a["name"]: a for a in cat["aggregations"]}
+        assert aggs["count"]["needsField"] is False
+        assert aggs["min"]["needsField"] is True
+
+    def test_trace_target_spec_one_trick(self, client):
+        result = _gql(client, """
+            query($input: TargetSpecInput!, $e: String, $c: String) {
+                traceTargetSpec(input: $input, destinationElement: $e, destinationCardinality: $c) {
+                    types { element cardinality }
+                    errors { stepIndex message }
+                    valid
+                }
+            }
+        """, {
+            "input": {
+                "steps": [
+                    {"kind": "select", "collection": "rolled_dice"},
+                    {"kind": "filter", "field": "source_kind", "operator": "==", "value": "trait"},
+                    {"kind": "navigate", "edge": "traitsetting", "dedup": True},
+                ],
+            },
+            "e": "traitsetting",
+            "c": "many",
+        })
+        tr = result["traceTargetSpec"]
+        assert tr["errors"] == []
+        assert [t["element"] for t in tr["types"]] == ["die", "die", "traitsetting"]
+        assert [t["cardinality"] for t in tr["types"]] == ["many", "many", "many"]
+        assert tr["valid"] is True
+
+    def test_trace_target_spec_reports_bad_edge(self, client):
+        result = _gql(client, """
+            query($input: TargetSpecInput!) {
+                traceTargetSpec(input: $input) {
+                    types { element cardinality }
+                    errors { stepIndex message }
+                    valid
+                }
+            }
+        """, {
+            "input": {
+                "steps": [
+                    {"kind": "select", "collection": "rolled_dice"},
+                    {"kind": "navigate", "edge": "nope"},
+                ],
+            },
+        })
+        tr = result["traceTargetSpec"]
+        assert any("no edge die.nope" in e["message"] for e in tr["errors"])
+        assert tr["types"][1]["element"] == ""
+        assert tr["valid"] is False
+
+    def test_trace_target_spec_cardinality_mismatch(self, client):
+        result = _gql(client, """
+            query($input: TargetSpecInput!, $e: String, $c: String) {
+                traceTargetSpec(input: $input, destinationElement: $e, destinationCardinality: $c) {
+                    valid errors { stepIndex message }
+                }
+            }
+        """, {
+            "input": {
+                "steps": [
+                    {"kind": "select", "collection": "rolled_dice"},
+                    {"kind": "navigate", "edge": "traitsetting"},
+                ],
+            },
+            "e": "traitsetting",
+            "c": "one",
+        })
+        tr = result["traceTargetSpec"]
+        assert tr["valid"] is False

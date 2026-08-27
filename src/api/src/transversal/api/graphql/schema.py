@@ -60,6 +60,16 @@ from transversal.api.graphql.types import (
     TakeResult,
     TargetCandidate,
     PendingChoiceRef,
+    TargetCatalog,
+    TargetCatalogAggregation,
+    TargetCatalogCollection,
+    TargetCatalogEdge,
+    TargetCatalogElement,
+    TargetCatalogField,
+    TargetSpecInput,
+    TargetTraceError,
+    TargetTraceResult,
+    TargetTraceType,
     TraitDisplayName as GqlTraitDisplayName,
     SfxUpdateInput,
     TraitInput,
@@ -322,6 +332,31 @@ def _effects_result_to_gql(result) -> EffectApplicationResult:
 
 def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
     return DomainCondition(type=c.type, subject=c.subject, target=c.target, value=c.value, operator=c.operator, narrative=c.narrative)
+
+
+def _target_spec_input_to_domain(inp: TargetSpecInput):
+    """Convert a GraphQL target-spec draft into the domain ``TargetSpec``.
+
+    Steps carry a flat shape over GraphQL (a discriminated union of inputs is
+    awkward); ``kind`` selects the right step model. Unknown kinds become an
+    empty ``select`` so the type-checker surfaces them as an error.
+    """
+    from transversal.services import target_spec as ts
+
+    steps = []
+    for s in (inp.steps or []):
+        kind = s.kind
+        if kind == "select":
+            steps.append(ts.SelectStep(collection=s.collection or ""))
+        elif kind == "filter":
+            steps.append(ts.FilterStep(field=s.field or "", operator=s.operator or "==", value=s.value))
+        elif kind == "navigate":
+            steps.append(ts.NavigateStep(edge=s.edge or "", dedup=bool(s.dedup)))
+        elif kind == "aggregate":
+            steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field))
+        else:
+            steps.append(ts.SelectStep(collection=""))
+    return ts.TargetSpec(steps=steps)
 
 
 def _check_input_to_domain(c: RollTableCheckInput) -> DomainRollTableCheck:
@@ -623,6 +658,59 @@ class Query:
             FilterFieldOption(field=f.field, label=f.label, value_type=f.value_type, kinds=list(f.kinds), options=list(f.options))
             for f in FILTER_FIELDS
         ]
+
+    @strawberry.field
+    def target_catalog(self, info: strawberry.Info) -> TargetCatalog:
+        """The declarative targeting catalog (element types, edges, fields,
+        aggregations, collections) the targeting wizard composes specs from."""
+        from transversal.services import target_catalog as tc
+        return TargetCatalog(
+            elements=[TargetCatalogElement(name=e.name, label=e.label) for e in tc.ELEMENT_TYPES.values()],
+            edges=[
+                TargetCatalogEdge(name=e.name, source=e.source, targets=list(e.target), cardinality=e.cardinality, label=e.label)
+                for e in tc.EDGES
+            ],
+            fields=[
+                TargetCatalogField(element=element_name, name=f.name, type=f.type)
+                for element_name, fields in tc.SCALAR_FIELDS.items()
+                for f in fields.values()
+            ],
+            aggregations=[
+                TargetCatalogAggregation(name=a.name, label=a.label, output=a.output, needs_field=a.needs_field)
+                for a in tc.AGGREGATIONS
+            ],
+            collections=[
+                TargetCatalogCollection(name=c.name, element=c.element, label=c.label, singular=c.singular)
+                for c in tc.COLLECTIONS
+            ],
+        )
+
+    @strawberry.field
+    def trace_target_spec(
+        self, info: strawberry.Info,
+        input: TargetSpecInput,
+        destination_element: Optional[str] = None,
+        destination_cardinality: Optional[str] = None,
+    ) -> TargetTraceResult:
+        """Type-check a targeting spec draft: the type after each step, step
+        errors, and whether it reaches the requested destination type."""
+        from transversal.services import target_spec as ts
+
+        spec = _target_spec_input_to_domain(input)
+        types, errors = ts.trace(spec)
+
+        valid = False
+        if destination_element and destination_cardinality:
+            valid, _ = ts.check(spec, ts.ValueType(destination_element, destination_cardinality))
+
+        return TargetTraceResult(
+            types=[
+                TargetTraceType(element=(t.element if t else ""), cardinality=(t.cardinality if t else ""))
+                for t in types
+            ],
+            errors=[TargetTraceError(step_index=e.step_index, message=e.message) for e in errors],
+            valid=valid,
+        )
 
     @strawberry.field
     def consequence_options(
