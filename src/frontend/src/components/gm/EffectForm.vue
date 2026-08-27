@@ -506,8 +506,8 @@ function buildEffect(meta) {
           combine: newEffect.duration.combine || 'FIRST_TO_FIRE',
         }
       : null,
-    target_spec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
-    entity_spec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
+    targetSpec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
+    entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
   }
 }
 
@@ -525,14 +525,14 @@ function populate(eff) {
   newEffect.timing = eff.timing || 'IMMEDIATE'
   newEffect.fields = {}
   newEffect.targetMode = detectTargetMode(eff, meta)
-  newEffect.targetSpec = eff.target_spec || { steps: [] }
-  if ((eff.target_spec?.steps || []).length) newEffect.targetMode = 'spec'
+  newEffect.targetSpec = eff.targetSpec || { steps: [] }
+  if ((eff.targetSpec?.steps || []).length) newEffect.targetMode = 'spec'
   newEffect.scope = eff.targetScope || ''
   newEffect.targetFilter = eff.targetFilter || {}
   newEffect.dieFilter = eff.dieFilter || {}
   newEffect.entityMode = detectEntityMode(eff)
-  newEffect.entitySpec = eff.entity_spec || { steps: [] }
-  if ((eff.entity_spec?.steps || []).length) newEffect.entityMode = 'spec'
+  newEffect.entitySpec = eff.entitySpec || { steps: [] }
+  if ((eff.entitySpec?.steps || []).length) newEffect.entityMode = 'spec'
   newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
   resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'

@@ -94,9 +94,9 @@
       </div>
 
       <div class="tsb-summary">
-        <span class="tsb-summary-type">final: {{ finalLabel }}</span>
+        <span class="tsb-summary-type">final: {{ finalLabel() }}</span>
         <span v-if="destination" class="tsb-summary-dest" :class="{ 'tsb-ok': trace.valid }">
-          target: {{ destination.element }} / {{ destination.cardinality }}
+          target: {{ destinationLabel }}
         </span>
       </div>
     </template>
