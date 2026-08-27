@@ -19,31 +19,32 @@
         <slot />
       </div>
     </div>
-    <!-- Self-reference: nested child panel.
-         :on-close / :on-replace let the nested Panel close/replace itself
-         in THIS panel's stack. @close handles the nested Panel's own × button. -->
+    <!-- Self-reference: each child is a sibling Panel owned by THIS panel's
+         children list. :on-close / :on-replace let the child remove/replace
+         itself in this list; @close handles the child's own × button. -->
     <Panel
-      v-if="child"
+      v-for="c in children"
+      :key="c.key"
       v-show="!collapsed"
       nested
       :depth="depth + 1"
       :min-visible-depth="minVisibleDepth"
-      :title="child.title"
-      :id="child.id"
+      :title="c.spec.title"
+      :id="c.spec.id"
       closable
-      :on-close="() => { child = null }"
-      :on-replace="(spec) => { child = normalizeSpec(spec) }"
-      @close="child = null"
+      :on-close="() => closeChild(c.key)"
+      :on-replace="(spec) => replaceChild(c.key, spec)"
+      @close="closeChild(c.key)"
     >
       <template #default>
-        <component :is="child.component" v-bind="child.props || {}" v-on="child.listeners || {}" @close="child = null" />
+        <component :is="c.spec.component" v-bind="c.spec.props || {}" v-on="c.spec.listeners || {}" @close="closeChild(c.key)" />
       </template>
     </Panel>
   </div>
 </template>
 
 <script setup>
-import { shallowRef, ref, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
+import { shallowRef, ref, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
 
@@ -55,7 +56,7 @@ const props = defineProps({
   depth: { type: Number, default: 0 },
   minVisibleDepth: { type: Number, default: 0 },
   // Callbacks supplied by the parent Panel so this Panel can close/replace
-  // itself in the parent's stack.
+  // itself in the parent's children list.
   onClose: { type: Function, default: null },
   onReplace: { type: Function, default: null },
 })
@@ -72,11 +73,13 @@ async function copyId() {
 }
 
 // ⚠ shallowRef — must NOT be ref() because Vue deeply unwraps nested refs inside
-// reactive objects. If child.props contains computed refs (e.g. filteredTraitsets),
+// reactive objects. If a child spec contains computed refs (e.g. filteredTraitsets),
 // ref() would unwrap them to plain values, breaking reactivity for sub-panels.
-const child = shallowRef(null)
+// Same rule applies to the children list.
+const children = shallowRef([])
+let childSeq = 0
 
-// Collapse/expand — hides this panel's body and its nested child without
+// Collapse/expand — hides this panel's body and its nested children without
 // unmounting, so in-progress state survives (hide, not close).
 const collapsed = ref(false)
 
@@ -91,26 +94,35 @@ function normalizeSpec(spec) {
   return { ...spec, component: markRaw(spec.component) }
 }
 
-// Opens a child Panel. The spec.component is markRaw'd to prevent Vue from
-// making the component definition reactive (triggers "Component made reactive" warning).
-// Setting child=null then reassigning on nextTick ensures the leave transition
-// (if any) plays before the new panel enters.
-function openChild(spec) {
-  child.value = null
-  nextTick(() => { child.value = normalizeSpec(spec) })
+// Opens a child panel. By default this REPLACES the current children (the old
+// single-child behavior). Pass { sibling: true } to append a sibling instead,
+// which is the multi-child / parallel-workplace mode.
+function openChild(spec, opts = {}) {
+  const entry = { key: `c${++childSeq}`, spec: normalizeSpec(spec) }
+  children.value = opts.sibling ? [...children.value, entry] : [entry]
 }
 
-// Closes the current child Panel (pops the stack).
-function closeChild() {
-  child.value = null
+// Closes a specific child by key, or the last child when no key is given.
+function closeChild(key) {
+  if (key == null) {
+    children.value = children.value.slice(0, -1)
+  } else {
+    children.value = children.value.filter((c) => c.key !== key)
+  }
 }
 
-// Closes THIS panel (removes it from the parent's stack).
+function replaceChild(key, spec) {
+  children.value = children.value.map((c) =>
+    c.key === key ? { ...c, spec: normalizeSpec(spec) } : c
+  )
+}
+
+// Closes THIS panel (removes it from the parent's children list).
 function closeSelf() {
   if (props.onClose) props.onClose()
 }
 
-// Replaces THIS panel with another spec in the parent's stack.
+// Replaces THIS panel with another spec in the parent's children list.
 function replaceSelf(spec) {
   if (props.onReplace) props.onReplace(spec)
 }
