@@ -41,7 +41,7 @@
 </template>
 
 <script setup>
-import { shallowRef, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
+import { shallowRef, ref, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
 
