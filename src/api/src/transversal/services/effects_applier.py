@@ -816,6 +816,54 @@ def _apply_step_down(entity, effect, repo, result):
     _queue_trait_revert(repo, existing, effect)
 
 
+def _apply_reduce_by_effect(entity, effect, repo, result):
+    """Reduce a trait by the effect-die-vs-rating comparison.
+
+    ``effect.context.effect_die`` is the winning effect die (``{effect_die}``
+    substituted at fire time). If it is strictly larger than the trait's rating
+    die the trait is removed; otherwise it steps down one step. Shared
+    comparison via ``dice_resolver.compare_effect_die``.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
+    if target is None:
+        return
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    if not existing or not existing.dice:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to reduce"))
+        return
+
+    raw_die = (effect.context or {}).get("effect_die")
+    try:
+        effect_die = DieType(str(raw_die).lower()) if raw_die else None
+    except ValueError:
+        effect_die = None
+    if effect_die is None:
+        result.applied.append(AppliedEffect(effect, "no effect die to compare"))
+        return
+
+    target_die = existing.dice[0]
+    from transversal.services.dice_resolver import compare_effect_die
+    if compare_effect_die(effect_die, target_die) == "remove":
+        result.removed_trait_settings.append(existing)
+        result.applied.append(
+            AppliedEffect(effect, f"removed {target} (effect die {effect_die.value} beats {target_die.value})", existing.id)
+        )
+    else:
+        status = _step_down_one(existing)
+        if status != "stepped":
+            result.applied.append(AppliedEffect(effect, f"{target} has no dice to step down"))
+            return
+        result.updated_trait_settings.append(existing)
+        result.applied.append(
+            AppliedEffect(effect, f"stepped down {target} (effect die {effect_die.value} ≤ {target_die.value})", existing.id)
+        )
+        _queue_trait_revert(repo, existing, effect)
+
+
 def _apply_set(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1506,6 +1554,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "cortex_gain"): _apply_cortex_gain,
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
+    ("modify_trait", "reduce_by_effect"): _apply_reduce_by_effect,
     ("modify_trait", "set"): _apply_set,
     ("modify_trait", "disable"): _apply_disable,
     ("modify_trait", "enable"): _apply_enable,

@@ -119,6 +119,17 @@ def compare_totals(player_total: int, opponent_total: int) -> ContestWinner:
     return ContestWinner.PLAYER
 
 
+def compare_effect_die(effect_die: DieType, target_die: DieType) -> str:
+    """The shared effect-die-vs-target-die rule.
+
+    Returns ``"remove"`` when the effect die is strictly larger, else
+    ``"step_down"``. Used by challenge resolution and the ``reduce_by_effect``
+    effect action so both apply the same comparison.
+    """
+    order = list(DieType)
+    return "remove" if order.index(effect_die) > order.index(target_die) else "step_down"
+
+
 def _resolve_challenge(
     effect_die: Optional[DieType],
     challenge_die: DieType,
@@ -143,14 +154,8 @@ def _resolve_challenge(
             new_challenge_rating=challenge_die.value,
         )
 
-    # Compare effect die to challenge die
-    effect_order = list(DieType)
-    challenge_order = list(DieType)
-
-    effect_idx = effect_order.index(effect_die)
-    challenge_idx = challenge_order.index(challenge_die)
-
-    if effect_idx > challenge_idx:
+    # Compare effect die to challenge die (shared helper).
+    if compare_effect_die(effect_die, challenge_die) == "remove":
         # Effect die is larger → remove challenge die
         return ChallengeResult(
             targeted_die=challenge_die,
@@ -158,15 +163,14 @@ def _resolve_challenge(
             outcome="removed",
             new_challenge_rating=None,
         )
-    else:
-        # Effect die is equal or smaller → step down challenge die
-        new_die = challenge_die.step_down()
-        return ChallengeResult(
-            targeted_die=challenge_die,
-            effect_die=effect_die,
-            outcome="stepped_down" if new_die != challenge_die else "unchanged",
-            new_challenge_rating=new_die.value,
-        )
+    # Effect die is equal or smaller → step down challenge die
+    new_die = challenge_die.step_down()
+    return ChallengeResult(
+        targeted_die=challenge_die,
+        effect_die=effect_die,
+        outcome="stepped_down" if new_die != challenge_die else "unchanged",
+        new_challenge_rating=new_die.value,
+    )
 
 
 def _resolve_simplified(request: DicePoolRequest) -> SimplifiedResult:

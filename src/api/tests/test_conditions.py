@@ -136,6 +136,22 @@ def test_roll_tier_condition():
     assert not evaluate_condition(_entity(), success, repo)
 
 
+def test_test_outcome_condition_is_binary():
+    repo = FakeRepo()
+    success = Condition(type=ConditionType.TEST_OUTCOME, target="success")
+    fail = Condition(type=ConditionType.TEST_OUTCOME, target="fail")
+    # marginal counts as a success (any non-fail tier).
+    assert evaluate_condition(_entity(), success, repo, context={"tier": "marginal"})
+    assert evaluate_condition(_entity(), success, repo, context={"tier": "success"})
+    assert evaluate_condition(_entity(), success, repo, context={"tier": "perfect"})
+    assert not evaluate_condition(_entity(), success, repo, context={"tier": "fail"})
+    assert evaluate_condition(_entity(), fail, repo, context={"tier": "fail"})
+    assert not evaluate_condition(_entity(), fail, repo, context={"tier": "success"})
+    # No tier in context -> not success, not fail.
+    assert not evaluate_condition(_entity(), success, repo)
+    assert not evaluate_condition(_entity(), fail, repo)
+
+
 def test_all_must_pass():
     repo = FakeRepo(traitsettings=[_ts("iron-will")])
     conditions = [

@@ -369,6 +369,24 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         target_kind="trait",
     ),
     EffectActionMeta(
+        action_id="reduce_by_effect_die",
+        label="Reduce by Effect Die",
+        description="Compare the effect die to the trait's rating: remove it if the effect die is larger, else step it down",
+        category="benefit",
+        effect_type="modify_trait",
+        effect_action="reduce_by_effect",
+        valid_timings=["IMMEDIATE", "ON_ROLL", "ON_SET", "ON_RESULT", "ON_SUCCESS", "ON_FAILURE"],
+        fields=[
+            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
+            _ENTITY_FIELD,
+        ],
+        context_fields=[
+            _RELATIONSHIP_CONTEXT_FIELD,
+            EffectFieldDef(name="effect_die", label="Effect Die", field_type="text", required=False, default="{effect_die}"),
+        ],
+        target_kind="trait",
+    ),
+    EffectActionMeta(
         action_id="set_trait",
         label="Set Trait Rating",
         description="Set a trait to a specific die value",
