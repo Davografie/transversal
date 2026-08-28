@@ -114,6 +114,28 @@ def test_phase_condition_reads_trigger_context():
     assert not evaluate_condition(_entity(), cond, repo)
 
 
+def test_contest_outcome_condition():
+    repo = FakeRepo()
+    win = Condition(type=ConditionType.CONTEST_OUTCOME, target="player")
+    loss = Condition(type=ConditionType.CONTEST_OUTCOME, target="opponent")
+    assert evaluate_condition(_entity(), win, repo, context={"contest_winner": "player"})
+    assert not evaluate_condition(_entity(), win, repo, context={"contest_winner": "opponent"})
+    assert evaluate_condition(_entity(), loss, repo, context={"contest_winner": "opponent"})
+    # No outcome in context -> fails.
+    assert not evaluate_condition(_entity(), win, repo)
+
+
+def test_roll_tier_condition():
+    repo = FakeRepo()
+    success = Condition(type=ConditionType.ROLL_TIER, operator=">=", value="success")
+    assert evaluate_condition(_entity(), success, repo, context={"tier": "success"})
+    assert evaluate_condition(_entity(), success, repo, context={"tier": "exceptional"})
+    assert not evaluate_condition(_entity(), success, repo, context={"tier": "marginal"})
+    assert not evaluate_condition(_entity(), success, repo, context={"tier": "fail"})
+    # No tier in context -> fails.
+    assert not evaluate_condition(_entity(), success, repo)
+
+
 def test_all_must_pass():
     repo = FakeRepo(traitsettings=[_ts("iron-will")])
     conditions = [

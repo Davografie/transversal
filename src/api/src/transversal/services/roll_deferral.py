@@ -35,6 +35,19 @@ ROLL_TIMINGS = frozenset({
     EffectTiming.ON_RESULT,
 })
 
+# Outcome-gated timings — deferred like roll timings, but fired when a contest
+# or roll *resolves* (rather than at a roll phase). The event carries the
+# outcome; ``fire_armed`` matches the timing value against the event type.
+OUTCOME_TIMINGS = frozenset({
+    EffectTiming.ON_CONTEST_WIN,
+    EffectTiming.ON_CONTEST_LOSS,
+    EffectTiming.ON_SUCCESS,
+    EffectTiming.ON_FAILURE,
+})
+
+# Everything an SFX arms at trigger time and fires at a later event.
+DEFERRED_TIMINGS = ROLL_TIMINGS | OUTCOME_TIMINGS
+
 
 @dataclass
 class ArmedSfx:

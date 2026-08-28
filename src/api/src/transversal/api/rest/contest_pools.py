@@ -118,10 +118,15 @@ async def set_result(location_id: str, entity_id: str, body: SetRequest):
     roll_context = {
         "effect_die": body.effect_die,
         "total": body.total,
+        "tier": body.tier,
         "rolls": get_scene_store().get_pool(location_id, entity_id),
     }
     fire_armed(entity_id, "on_set", "", roll_context)
     fire_armed(entity_id, "on_result", "", roll_context)
+
+    # Fire outcome-gated roll effects: success (any non-fail tier) vs failure.
+    if body.tier:
+        fire_armed(entity_id, "on_success" if body.tier != "fail" else "on_failure", "", roll_context)
 
     challenger, defendant = ct.get_contestants(location_id, entity_id)
     challenger_id = challenger.entity_id if challenger else None

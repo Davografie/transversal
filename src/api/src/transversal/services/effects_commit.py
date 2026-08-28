@@ -37,7 +37,7 @@ def _publish_trait_changed(ts, universe: str) -> None:
                    context={"trait": ts.trait_id, "traitset": ts.traitset_id})
 
 
-def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult:
+def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None) -> EffectsResult:
     """Apply effects in-memory, then persist and broadcast.
 
     Returns the EffectsResult so callers can report what was applied. The caller
@@ -49,7 +49,7 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     old_universe = entity.current_universe
     old_total_bonus = entity.total_dice_bonus
     old_effect_bonus = entity.effect_dice_bonus
-    result = apply_effects(entity, effects, repo)
+    result = apply_effects(entity, effects, repo, context)
 
     # Other entities mutated (e.g. razmerit transfer recipient).
     for other in result.entities_to_update:

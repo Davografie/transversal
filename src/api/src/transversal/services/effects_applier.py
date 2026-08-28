@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from transversal.domain import DieType, Effect, Entity, Polarity, RatingType, TraitSetting, TraitSetSetting
+from transversal.services.conditions import evaluate_conditions
 from transversal.services.effect_targets import resolve_candidates
 from transversal.services.trait_reveal import reveal_trait_to
 
@@ -82,7 +83,7 @@ def _register_core_handlers(em, raz):
         entity = em.repo.get_entity(eid)
         if entity is None:
             return
-        commit_effects(entity, [a], em.repo)
+        commit_effects(entity, [a], em.repo, ctx)
 
     for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle"):
         effect_registry.register("modify_trait", action, _commit)
@@ -187,7 +188,7 @@ def _register_core_handlers(em, raz):
         if entity is None:
             return
         from transversal.services.effects_commit import commit_effects
-        commit_effects(entity, [a], em.repo)
+        commit_effects(entity, [a], em.repo, ctx)
 
     effect_registry.register("travel", "move", _travel)
     effect_registry.register("location", "set", _commit)
@@ -1528,7 +1529,7 @@ _MUTATION_HANDLERS = {
 }
 
 
-def apply_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult:
+def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None) -> EffectsResult:
     """Apply operational effects to an entity's in-memory state (no persistence).
 
     Mutates ``entity`` in place for entity-level fields (razmerit, rank, discovered
@@ -1538,10 +1539,12 @@ def apply_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult:
 
     Unresolved targets (``{choose_*}` or empty-when-required) become PendingChoice.
     Effects without a mutation handler (resolver-context and flow effects) become
-    passthrough.
+    passthrough. An effect whose ``conditions`` fail against ``context`` is skipped.
     """
     result = EffectsResult()
     for effect in effects:
+        if effect.conditions and not evaluate_conditions(entity, effect.conditions, repo, context):
+            continue
         scope_choice = _scope_choice(effect)
         if scope_choice is not None:
             result.pending_choices.append(scope_choice)

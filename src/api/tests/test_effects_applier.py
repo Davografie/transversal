@@ -1,6 +1,8 @@
 """Tests for the pure repo-first effect applier."""
 
 from transversal.domain import (
+    Condition,
+    ConditionType,
     DieType,
     Effect,
     EffectTiming,
@@ -611,6 +613,22 @@ def test_add_trait_rating_dice_targets_an_entity_pool():
     pool = store.get_pool("loc-1", "char-1")
     assert [d["die"] for d in pool] == ["d8"]
     store.clear_all()
+
+
+def test_effect_conditions_gate_application():
+    repo = FakeRepo(traits=[FakeTrait("scar", "ts-complications")])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+        target="scar", result="d4",
+        conditions=[Condition(type=ConditionType.CONTEST_OUTCOME, target="player")],
+    )
+    # No contest_winner in context -> condition fails -> effect skipped.
+    assert len(apply_effects(entity, [effect], repo, context={}).applied) == 0
+    # Won the contest -> applies.
+    assert len(apply_effects(entity, [effect], repo, context={"contest_winner": "player"}).applied) == 1
+    # Lost -> skipped.
+    assert len(apply_effects(entity, [effect], repo, context={"contest_winner": "opponent"}).applied) == 0
 
 
 # ── Complications (unified polarity) ─────────────────

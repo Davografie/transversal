@@ -59,6 +59,13 @@ class EffectTiming(str, Enum):
     END_OF_SESSION  = "end_of_session"
     AFTER_BEATS     = "after_beats"
     ON_CONDITION    = "on_condition"
+    ON_ROLL         = "on_roll"
+    ON_SET          = "on_set"
+    ON_RESULT       = "on_result"
+    ON_CONTEST_WIN  = "on_contest_win"   # deferred; fires on the next contest the entity wins
+    ON_CONTEST_LOSS = "on_contest_loss"  # deferred; fires on the next contest the entity loses
+    ON_SUCCESS      = "on_success"       # deferred; fires on the next roll result with tier != fail
+    ON_FAILURE      = "on_failure"       # deferred; fires on the next roll result with tier == fail
 ```
 
 ### `Effect` (line 649)
@@ -78,6 +85,8 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `target_filter` | `dict` | Candidate field predicates for the target (e.g. `{"starter_location": true}`), AND-ed and applied across every scope |
 | `target_spec` | `Optional[TargetSpec]` | Structured targeting pipeline (the new model); wins over `target` when set. See [[Targeting Model]] |
 | `entity_spec` | `Optional[TargetSpec]` | Structured subject pipeline; wins over `entity` when set. See [[Targeting Model]] |
+| `refs` | `dict[str, TargetRef]` | Named references (multi-target model); each key is a declared ref name → `{value, spec, scope}` |
+| `conditions` | `list[Condition]` | Per-effect gate; the effect is skipped unless all conditions pass against the fire-time context (reuses the SFX condition model) |
 | `negative` | `bool` | Trait-grant effects only: bake the created trait as `polarity=NEGATIVE` (complication) |
 | `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`, `learner`, `steps`) |
 | `duration` | `Optional[EffectDuration]` | When set, the inverse effect is scheduled to fire on expiry (see below) |
@@ -193,7 +202,7 @@ class Condition(BaseModel):
     narrative: str = ""
 ```
 
-Conditions are authored alongside effects and evaluated against an entity's state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `unplaced`, `in_universe`, `narrative`). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`.
+Conditions are authored alongside effects and evaluated against an entity's state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `has_razmerit`, `entity_type`, `unplaced`, `in_universe`, `phase`, `narrative`) plus two fire-time outcome gates: `contest_outcome` (target `player`/`opponent`, reads `context["contest_winner"]`) and `roll_tier` (operator + value against `OutcomeTier`, reads `context["tier"]`). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`. Conditions live at **both** the SFX level (`SFX.conditions`, gates the whole activation) and the **effect** level (`Effect.conditions`, gates that one effect — skipped at fire time if any condition fails).
 
 `subject` selects **which entity** the condition tests: blank = the current entity (the event's entity for auto-fire, the acting entity for a consequence menu), a literal entity id, or a `{variable}` resolved from the trigger/menu context (e.g. `{buying_entity}`). The hitch menu has no default entity, so its conditions must reference `{hitch_entity}` / `{buying_entity}` explicitly. `target` is also `{variable}`-resolvable. The editor's condition-type list is served from `CONDITION_TYPES` in `src/api/src/transversal/services/conditions.py` (value + label + needs-target + placeholder + **target-kind**); the target kind (`universe` / `location` / `trait` / `entity`) drives a picker in `ConditionEditor.vue` instead of a text field (`IN_UNIVERSE` uses a universe-*key* picker, not a universe entity id).
 
