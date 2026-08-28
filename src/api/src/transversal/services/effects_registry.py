@@ -28,6 +28,19 @@ class EffectFieldDef:
 
 
 @dataclass
+class RefDef:
+    """A named reference an effect action declares (the multi-target model).
+
+    Each ref is a targeting-wizard selection the editor renders as its own
+    picker/spec builder. ``element`` is the catalog element type the ref must
+    resolve to (drives the picker + fire-time type-check).
+    """
+    name: str          # key into Effect.refs, e.g. "trait", "pool", "subject"
+    label: str         # editor label, e.g. "Trait", "Destination pool"
+    element: str       # target_catalog element type, e.g. "traitsetting", "pool"
+
+
+@dataclass
 class EffectActionMeta:
     """Metadata for one effect action the editor can create."""
     action_id: str              # unique key, e.g. "play_as_rating"
@@ -48,6 +61,7 @@ class EffectActionMeta:
     implicit_timing: str | None = None   # if only one valid timing, hide field
     requires_choice: bool = False        # target must be resolved at runtime
     target_kind: str | None = None       # trait | entity | life_path | ...
+    refs: list[RefDef] = field(default_factory=list)  # named references (multi-target model)
     supports_duration: bool = False      # UI shows a duration/timers builder
     supports_polarity: bool = False      # UI shows a negative (complication) toggle
     supports_return_exit: bool = False   # UI offers a "{return:<name>}" target mode (shared tables)

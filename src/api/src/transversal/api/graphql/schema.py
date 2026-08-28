@@ -17,6 +17,7 @@ from transversal.api.graphql.types import (
     DieType as GqlDieType,
     EffectActionMeta as GqlEffectActionMeta,
     EffectFieldDef as GqlEffectFieldDef,
+    RefDef as GqlRefDef,
     EffectApplicationResult,
     EffectInput,
     EffectTargetResolutionInput,
@@ -250,6 +251,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         duration=_duration_to_gql(e.duration),
         target_spec=e.target_spec.model_dump() if e.target_spec else None,
         entity_spec=e.entity_spec.model_dump() if e.entity_spec else None,
+        refs=_refs_to_gql(e.refs),
     )
 
 
@@ -310,7 +312,39 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         duration=_duration_input_to_domain(e.duration),
         target_spec=_target_spec_from_input(e.target_spec),
         entity_spec=_target_spec_from_input(e.entity_spec),
+        refs=_refs_from_input(e.refs),
     )
+
+
+def _refs_to_gql(refs: dict) -> dict | None:
+    """Serialize ``Effect.refs`` to a JSON-friendly {name: {value, spec, scope}}."""
+    if not refs:
+        return None
+    return {
+        name: {
+            "value": r.value,
+            "spec": r.spec.model_dump() if r.spec else None,
+            "scope": r.scope,
+        }
+        for name, r in refs.items()
+    }
+
+
+def _refs_from_input(raw) -> dict:
+    """Validate GraphQL JSON refs into the domain ``TargetRef`` map."""
+    if not raw:
+        return {}
+    from transversal.domain import TargetRef
+
+    out: dict[str, TargetRef] = {}
+    for name, data in (raw or {}).items():
+        if isinstance(data, dict):
+            out[name] = TargetRef(
+                value=data.get("value") or "",
+                spec=_target_spec_from_input(data.get("spec")),
+                scope=data.get("scope"),
+            )
+    return out
 
 
 def _target_spec_from_input(raw) -> Optional[TargetSpec]:
@@ -580,6 +614,7 @@ class Query:
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
                 requires_choice=m.requires_choice, target_kind=m.target_kind, supports_duration=m.supports_duration,
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
+                refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
             ) for m in EFFECT_ACTION_REGISTRY
         ]
 

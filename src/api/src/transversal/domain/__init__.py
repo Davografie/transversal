@@ -697,6 +697,21 @@ class Attunement(BaseModel):
     source_sfx_id: Optional[str] = None
 
 
+class TargetRef(BaseModel):
+    """One named reference an effect resolves against game state.
+
+    ``value`` is the concrete id after resolution — or, before resolution, a
+    literal id / ``self`` / ``{choose_*}`` / ``{random:*}`` token. ``spec`` is
+    the structured targeting pipeline that resolves ``value`` at fire time
+    (None = literal). ``scope`` narrows runtime choice for ``{choose_*}`` /
+    ``{random:*}``. The ref's element type is declared by the action's
+    ``EffectActionMeta.refs`` entry, not stored per effect.
+    """
+    value: str = ""
+    spec: Optional[TargetSpec] = None
+    scope: Optional[str] = None
+
+
 class Effect(BaseModel):
     """A single operational effect — shared by SFX and life-path consequences.
 
@@ -721,6 +736,10 @@ class Effect(BaseModel):
     # Structured subject resolution (who the effect applies to). None means the
     # effect still uses the legacy ``entity`` string.
     entity_spec: Optional[TargetSpec] = None
+    # Named references — the multi-target model. Each key is a declared ref name
+    # (see ``EffectActionMeta.refs``); ``target``/``entity`` remain as the
+    # legacy single-reference fallback until the Step-3 migration removes them.
+    refs: dict[str, TargetRef] = Field(default_factory=dict)
 
 
 class Timer(BaseModel):
