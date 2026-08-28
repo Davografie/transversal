@@ -94,6 +94,7 @@ def _register_core_handlers(em, raz):
     effect_registry.register("modify_dice_limit", "increase", _commit)
     effect_registry.register("modify_dice_limit", "decrease", _commit)
     effect_registry.register("modify_pool", "add_dice", _commit)
+    effect_registry.register("modify_pool", "add_trait_rating", _commit)
 
     # Entity operations
     def _create_asset(a, eid, u, ctx):
@@ -1103,6 +1104,40 @@ def _apply_add_dice(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"added {len(dice)} dice to {owner_id} pool"))
 
 
+def _apply_add_trait_rating(entity, effect, repo, result):
+    """Add a trait instance's rating dice to the GM difficulty pool.
+
+    ``effect.target`` is a resolved ``traitsetting`` id; its ``dice`` are copied
+    into the acting entity's current location's difficulty pool.
+    """
+    from transversal.services.contest_tracker import broadcast_pool_change
+    from transversal.services.scene_state import get_scene_store
+
+    ts = repo.get_traitsetting(effect.target) if effect.target else None
+    if ts is None:
+        result.applied.append(AppliedEffect(effect, f"trait {effect.target} not found"))
+        return
+    dice = [d.value for d in (ts.dice or [])]
+    if not dice:
+        result.applied.append(AppliedEffect(effect, f"trait {effect.target} has no rating"))
+        return
+
+    location_id = entity.current_location
+    if not location_id:
+        result.applied.append(AppliedEffect(effect, "no current location for the difficulty pool"))
+        return
+
+    trait = repo.get_trait(ts.trait_id)
+    label = trait.name if trait else ts.trait_id
+    store = get_scene_store()
+    pool = store.get_pool(location_id, location_id)
+    for die in dice:
+        pool.append({"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id})
+    store.save_pool(location_id, location_id, pool)
+    broadcast_pool_change(location_id, location_id, dice=pool, phase="adding")
+    result.applied.append(AppliedEffect(effect, f"added {label} rating {dice} to difficulty pool"))
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1474,6 +1509,7 @@ _MUTATION_HANDLERS = {
     ("modify_dice_limit", "increase"): _apply_dice_limit,
     ("modify_dice_limit", "decrease"): _apply_dice_limit,
     ("modify_pool", "add_dice"): _apply_add_dice,
+    ("modify_pool", "add_trait_rating"): _apply_add_trait_rating,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

@@ -188,6 +188,19 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         target_kind="pool",
     ),
     EffectActionMeta(
+        action_id="add_trait_rating_dice",
+        label="Add Trait Rating Dice",
+        description="Add a target trait instance's rating dice to the GM difficulty pool",
+        category="either",
+        effect_type="modify_pool",
+        effect_action="add_trait_rating",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+        ],
+        target_kind="traitsetting",
+    ),
+    EffectActionMeta(
         action_id="remove_die",
         label="Remove Die",
         description="Remove a die from the pool",
@@ -766,6 +779,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "play_as_rating": "Dice Pool", "step_up_die": "Dice Pool",
     "step_down_die": "Dice Pool", "double_die": "Dice Pool",
     "reroll_die": "Dice Pool", "add_dice": "Dice Pool",
+    "add_trait_rating_dice": "Dice Pool",
     "remove_die": "Dice Pool", "split_die": "Dice Pool",
     "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
     "increase_dice_limit": "Outcome", "decrease_dice_limit": "Outcome",

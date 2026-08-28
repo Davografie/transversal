@@ -555,6 +555,32 @@ def test_add_dice_no_dice_is_noop():
     assert result.applied[0].summary == "no dice to add"
 
 
+def test_add_trait_rating_dice_to_difficulty_pool():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "loc-1", [])
+
+    ts = _ts("trait-scar", [DieType.D8, DieType.D6])
+    repo = FakeRepo(
+        traits=[FakeTrait("trait-scar", "ts-complications", name="Scar")],
+        traitsettings=[ts],
+    )
+    entity = _entity(current_location="loc-1")
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
+        target="char-1:trait-scar",
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.applied) == 1
+    pool = store.get_pool("loc-1", "loc-1")
+    assert [d["die"] for d in pool] == ["d8", "d6"]
+    assert all(d["source_kind"] == "trait" for d in pool)
+    assert all(d["ts_id"] == "char-1:trait-scar" for d in pool)
+    store.clear_all()
+
+
 # ── Complications (unified polarity) ─────────────────
 
 def test_gain_negative_sets_negative():
