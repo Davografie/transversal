@@ -45,6 +45,7 @@ status: canonical
 ### 📋 Plans
 
 - [[Release Plan]] — scope, decisions, and the 6-phase **build order** (start here for "what to build next")
+- [[SFX Source Model]] — the planned `source_kind` / typed-source-variable design (in the SFX/effects track)
 - [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
 - [[Tickets]] — the ticket-level breakdown (per-ticket dependencies + context to load)
 - [[Performance and Resilience Plan]] — client caching, draft persistence, backend latency, multi-worker

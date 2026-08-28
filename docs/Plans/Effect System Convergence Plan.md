@@ -175,6 +175,7 @@ Build order:
 ## Related
 
 - [[Effect System Capabilities and Gaps]] — capabilities/gaps map + Crimson Scars worked example + primitive sequencing.
+- [[SFX Source Model]] — `source_kind` (declarative owner type) + typed source variable (planned).
 - [[Effect Variables and Primitives]] — parent plan (typed references, drift-proofing).
 - [[Unified Effects Plan]] — the layer that built the effect system.
 - [[SFX and Effects]] — current canonical reference.
