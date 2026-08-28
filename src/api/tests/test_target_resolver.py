@@ -11,6 +11,7 @@ from transversal.services.target_spec import (
     AggregateStep,
     FilterStep,
     NavigateStep,
+    RandomStep,
     SelectStep,
     TargetSpec,
 )
@@ -320,3 +321,41 @@ def test_resolve_source_maps_all_kinds():
     assert resolve_source("bogus", "x", repo) is None
     assert resolve_source("trait_setting", "", repo) is None
     assert resolve_source("trait_setting", "x", None) is None
+
+
+def test_random_picks_single_member_of_set():
+    kael, repo = _one_trick_world()
+    dice = [
+        {"ts_id": "a", "result": 7},
+        {"ts_id": "b", "result": 3},
+        {"ts_id": "c", "result": 5},
+    ]
+    ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
+    s = spec(SelectStep(collection="rolled_dice"), RandomStep())
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert len(res.values) == 1
+    assert res.values[0]["ts_id"] in {"a", "b", "c"}
+
+
+def test_random_picks_subset_without_replacement():
+    kael, repo = _one_trick_world()
+    dice = [{"ts_id": "a"}, {"ts_id": "b"}, {"ts_id": "c"}, {"ts_id": "d"}]
+    ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
+    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=2))
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert len(res.values) == 2
+    ids = {v["ts_id"] for v in res.values}
+    assert len(ids) == 2  # distinct (sampled without replacement)
+    assert ids <= {"a", "b", "c", "d"}
+
+
+def test_random_degrades_gracefully_when_count_exceeds_set():
+    kael, repo = _one_trick_world()
+    dice = [{"ts_id": "a"}, {"ts_id": "b"}]
+    ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
+    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=5))
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert [v["ts_id"] for v in res.values] == ["a", "b"]  # whole set returned

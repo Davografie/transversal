@@ -13,6 +13,7 @@ rather than a collection.
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -21,6 +22,7 @@ from transversal.services.target_spec import (
     FilterStep,
     LiteralStep,
     NavigateStep,
+    RandomStep,
     SelectStep,
     TargetSpec,
     TraceError,
@@ -106,6 +108,19 @@ def _dedup(values: list[Any]) -> list[Any]:
             seen.add(k)
             out.append(v)
     return out
+
+
+def _sample(values: list[Any], count: int) -> list[Any]:
+    """Randomly sample ``count`` elements without replacement.
+
+    Sampling the whole set (or more) returns the set unchanged, so ``random``
+    degrades gracefully when the candidate set is smaller than the count.
+    """
+    if count <= 0:
+        return []
+    if count >= len(values):
+        return list(values)
+    return random.sample(values, count)
 
 
 def _to_number(v: Any) -> float | None:
@@ -278,6 +293,21 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
             else:
                 values = _lookup_literal(step.element, step.value, context)
                 current_type = ValueType(step.element, "one")
+
+        elif isinstance(step, RandomStep):
+            if current_type is None:
+                errors.append(TraceError(i, "random has no collection to pick from"))
+                values, current_type = [], None
+            elif step.count < 1:
+                errors.append(TraceError(i, "random count must be >= 1"))
+                values, current_type = [], None
+            elif current_type.cardinality != "many":
+                errors.append(TraceError(i, "random requires a many-cardinality collection"))
+                values, current_type = [], None
+            else:
+                values = _sample(values, step.count)
+                cardinality = "one" if step.count == 1 else "many"
+                current_type = ValueType(current_type.element, cardinality)
 
     return Resolution(values, errors)
 

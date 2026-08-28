@@ -92,6 +92,15 @@
             </option>
           </select>
         </div>
+
+        <!-- random: sample a subset of the current collection -->
+        <div v-else-if="step.kind === 'random'" class="tsb-config tsb-random">
+          <label class="tsb-check">
+            <span>pick</span>
+            <input type="number" min="1" :value="step.count ?? 1" @input="onRandomCount(i, $event)" />
+            <em>1 = single · N = subset</em>
+          </label>
+        </div>
       </div>
 
       <div class="tsb-add">
@@ -136,6 +145,7 @@ const STEP_KINDS = [
   { kind: 'filter', label: 'Filter' },
   { kind: 'navigate', label: 'Navigate' },
   { kind: 'aggregate', label: 'Aggregate' },
+  { kind: 'random', label: 'Random' },
 ]
 const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'contains']
 
@@ -249,14 +259,23 @@ function onFilterValue(i, e) {
   steps.value[i].value = coerceValue(fieldTypeFor(i), e.target.value)
 }
 
+function onRandomCount(i, e) {
+  const n = Math.trunc(Number(e.target.value))
+  steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
+}
+
 function canAdd(kind) {
   if (kind === 'select') return steps.value.length === 0
   // Subsequent steps need a resolvable type before them.
-  return steps.value.length > 0 && !!priorType(steps.value.length)
+  const prior = priorType(steps.value.length)
+  if (!prior || !prior.element) return false
+  // random collapses a *many* collection; only offer it over a set.
+  if (kind === 'random') return prior.cardinality === 'many'
+  return true
 }
 
 function add(kind) {
-  const blank = { kind, collection: '', field: '', operator: '==', value: '', edge: '', dedup: false, fn: '' }
+  const blank = { kind, collection: '', field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
   steps.value = [...steps.value, blank]
 }
 

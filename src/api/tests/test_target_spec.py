@@ -6,6 +6,7 @@ from transversal.services.target_spec import (
     AggregateStep,
     FilterStep,
     NavigateStep,
+    RandomStep,
     SelectStep,
     TargetSpec,
     ValueType,
@@ -218,3 +219,38 @@ def test_select_source_navigates_from_source_element():
     ])
     ok, errors = check(spec, ValueType("entity", "one"), source_element="traitsetting")
     assert ok, errors
+
+
+def test_random_collapses_many_to_one():
+    s = spec(SelectStep(collection="rolled_dice"), RandomStep())
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("die", "one")
+
+
+def test_random_count_many_keeps_many():
+    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=3))
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("die", "many")
+
+
+def test_random_requires_many_collection():
+    s = spec(SelectStep(collection="self"), RandomStep())
+    types, errors = trace(s)
+    assert any("many-cardinality" in e.message for e in errors)
+
+
+def test_random_count_must_be_positive():
+    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=0))
+    types, errors = trace(s)
+    assert any("count must be >= 1" in e.message for e in errors)
+
+
+def test_random_deserializes_from_dict():
+    s = TargetSpec.model_validate({"steps": [
+        {"kind": "select", "collection": "rolled_dice"},
+        {"kind": "random", "count": 2},
+    ]})
+    assert isinstance(s.steps[1], RandomStep)
+    assert final_type(s) == ValueType("die", "many")

@@ -346,7 +346,7 @@ class TargetCatalog:
 @strawberry.input
 class TargetSpecStepInput:
     """One step of a targeting spec (kind discriminates the relevant fields)."""
-    kind: str  # "select" | "filter" | "navigate" | "aggregate"
+    kind: str  # "select" | "filter" | "navigate" | "aggregate" | "random"
     collection: Optional[str] = None
     field: Optional[str] = None
     operator: str = "=="
@@ -354,6 +354,7 @@ class TargetSpecStepInput:
     edge: Optional[str] = None
     dedup: bool = False
     fn: Optional[str] = None
+    count: Optional[int] = None  # random/choose: elements to sample (default 1)
 
 
 @strawberry.input
