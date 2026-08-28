@@ -297,6 +297,7 @@ class TargetCatalogField:
     type: str  # "int" | "number" | "die" | "string"
     options: list[str] = strawberry.field(default_factory=list)
     operators: list[str] = strawberry.field(default_factory=list)
+    references: str = ""  # element type this id field points at (e.g. traitset)
 
 
 @strawberry.type

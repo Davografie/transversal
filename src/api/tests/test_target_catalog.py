@@ -82,6 +82,16 @@ def test_operators_are_type_aware():
     assert tc.operators_for(tc.field("traitsetting", "rating_type")) == ("==", "!=", "in")
 
 
+def test_id_reference_fields_declare_reference():
+    assert tc.field("traitsetting", "traitset_id").references == "traitset"
+    assert tc.field("traitsetting", "trait_id").references == "trait"
+    assert tc.field("traitsetting", "entity_id").references == "entity"
+    assert tc.field("traitsetting", "projection_id").references == "projection"
+    assert tc.field("trait", "traitset_id").references == "traitset"
+    # enum-like fields are not references
+    assert tc.field("traitsetting", "polarity").references == ""
+
+
 def test_source_kinds_are_declared_and_consistent():
     from transversal.services import target_catalog as tc
 

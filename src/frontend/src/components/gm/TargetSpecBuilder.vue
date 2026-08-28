@@ -52,6 +52,14 @@
             <option value="">—</option>
             <option v-for="o in fieldOptionsFor(i)" :key="o" :value="o">{{ o }}</option>
           </select>
+          <TargetPicker
+            v-else-if="fieldReferences(i)"
+            :kind="fieldReferences(i)"
+            :model-value="step.value"
+            :clearable="false"
+            placeholder="Pick…"
+            @update:model-value="(v) => onFilterPickerValue(i, v)"
+          />
           <input v-else :value="step.value" placeholder="value" @input="onFilterValue(i, $event)" />
         </div>
 
@@ -111,6 +119,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
+import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
@@ -199,6 +208,18 @@ function fieldOptionsFor(i) {
   const field = steps.value[i]?.field
   const f = fieldsFor(priorElement(i)).find((x) => x.name === field)
   return f && f.options && f.options.length ? f.options : null
+}
+
+// Id-reference fields (e.g. traitset_id → traitset) render a picker so the
+// author selects the instance instead of copy/pasting an id.
+function fieldReferences(i) {
+  const field = steps.value[i]?.field
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === field)
+  return f && f.references ? f.references : null
+}
+
+function onFilterPickerValue(i, val) {
+  steps.value[i].value = val
 }
 
 // Operators valid for the current field (from the catalog; falls back to the

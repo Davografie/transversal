@@ -48,12 +48,15 @@ class ScalarField:
     ``options`` lists the accepted values for enum-like string fields so the
     wizard can render a dropdown instead of a free-text input. ``operators``
     overrides the operators valid for this field (default derived from ``type``).
+    ``references`` names the element type the field points at (e.g. ``traitset_id``
+    → ``traitset``), so the wizard can render a picker for id-reference fields.
     """
     element: str
     name: str
     type: str  # "int" | "number" | "die" | "string"
     options: tuple[str, ...] = ()
     operators: tuple[str, ...] = ()
+    references: str = ""
 
 
 # Operators valid per field type. Ordering operators only make sense on
@@ -89,22 +92,22 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
         "rating_type": ScalarField("traitsetting", "rating_type", "string", ("static", "resource", "challenge", "empty")),
         "polarity": ScalarField("traitsetting", "polarity", "string", ("positive", "negative")),
-        "trait_id": ScalarField("traitsetting", "trait_id", "string"),
-        "traitset_id": ScalarField("traitsetting", "traitset_id", "string"),
-        "entity_id": ScalarField("traitsetting", "entity_id", "string"),
-        "projection_id": ScalarField("traitsetting", "projection_id", "string"),
+        "trait_id": ScalarField("traitsetting", "trait_id", "string", references="trait"),
+        "traitset_id": ScalarField("traitsetting", "traitset_id", "string", references="traitset"),
+        "entity_id": ScalarField("traitsetting", "entity_id", "string", references="entity"),
+        "projection_id": ScalarField("traitsetting", "projection_id", "string", references="projection"),
         "from_type": ScalarField("traitsetting", "from_type", "string", ("entity", "projection")),
     },
     "traitsetsetting": {
-        "entity_id": ScalarField("traitsetsetting", "entity_id", "string"),
-        "traitset_id": ScalarField("traitsetsetting", "traitset_id", "string"),
-        "projection_id": ScalarField("traitsetsetting", "projection_id", "string"),
+        "entity_id": ScalarField("traitsetsetting", "entity_id", "string", references="entity"),
+        "traitset_id": ScalarField("traitsetsetting", "traitset_id", "string", references="traitset"),
+        "projection_id": ScalarField("traitsetsetting", "projection_id", "string", references="projection"),
         "from_type": ScalarField("traitsetsetting", "from_type", "string", ("entity", "projection")),
         "limit": ScalarField("traitsetsetting", "limit", "int"),
     },
     "trait": {
         "id": ScalarField("trait", "id", "string"),
-        "traitset_id": ScalarField("trait", "traitset_id", "string"),
+        "traitset_id": ScalarField("trait", "traitset_id", "string", references="traitset"),
         "default_die_type": ScalarField("trait", "default_die_type", "die"),
     },
     "traitset": {
@@ -115,13 +118,13 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "id": ScalarField("entity", "id", "string"),
         "razmerit": ScalarField("entity", "razmerit", "int"),
         "type": ScalarField("entity", "type", "string", ("character", "location", "faction", "asset", "gmc", "universe", "subtrait", "relation")),
-        "current_location": ScalarField("entity", "current_location", "string"),
-        "current_universe": ScalarField("entity", "current_universe", "string"),
+        "current_location": ScalarField("entity", "current_location", "string", references="location"),
+        "current_universe": ScalarField("entity", "current_universe", "string", references="universe"),
     },
     "projection": {
         "type": ScalarField("projection", "type", "string"),
-        "entity_id": ScalarField("projection", "entity_id", "string"),
-        "current_location": ScalarField("projection", "current_location", "string"),
+        "entity_id": ScalarField("projection", "entity_id", "string", references="entity"),
+        "current_location": ScalarField("projection", "current_location", "string", references="location"),
     },
     "location": {
         "id": ScalarField("location", "id", "string"),
