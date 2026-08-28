@@ -66,6 +66,7 @@ from transversal.api.graphql.types import (
     TargetCatalogEdge,
     TargetCatalogElement,
     TargetCatalogField,
+    SourceKindOption,
     TargetSpecInput,
     TargetTraceError,
     TargetTraceResult,
@@ -470,7 +471,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit,
+                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                     duration=_duration_to_gql(s.duration),
@@ -483,7 +484,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit,
+                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                     duration=_duration_to_gql(s.duration),
@@ -696,6 +697,10 @@ class Query:
             collections=[
                 TargetCatalogCollection(name=c.name, element=c.element, label=c.label, singular=c.singular)
                 for c in tc.COLLECTIONS
+            ],
+            source_kinds=[
+                SourceKindOption(value=s.value, label=s.label, element=s.element, variable=s.variable, owner_surface=s.owner_surface)
+                for s in tc.SOURCE_KINDS
             ],
         )
 
@@ -1314,6 +1319,7 @@ class Mutation:
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
             trigger=input.trigger, conditions=conditions,
+            source_kind=input.source_kind,
             effects=[_effect_input_to_domain(e) for e in input.effects],
             duration=_duration_input_to_domain(input.duration),
         )
@@ -1324,7 +1330,7 @@ class Mutation:
             engine.register(created)
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
-            trigger=created.trigger, limit=created.limit,
+            trigger=created.trigger, limit=created.limit, source_kind=created.source_kind,
             conditions=[_condition_to_gql(c) for c in created.conditions],
             effects=[_effect_to_gql(e) for e in created.effects],
             duration=_duration_to_gql(created.duration),
@@ -1358,6 +1364,8 @@ class Mutation:
                 )
         if input.trigger is not None:
             existing.trigger = input.trigger
+        if input.source_kind is not None:
+            existing.source_kind = input.source_kind
         if input.effects is not None:
             existing.effects = [_effect_input_to_domain(e) for e in input.effects]
         if input.duration is not None:
@@ -1369,7 +1377,7 @@ class Mutation:
             engine.register(updated)
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
-            trigger=updated.trigger, limit=updated.limit,
+            trigger=updated.trigger, limit=updated.limit, source_kind=updated.source_kind,
             conditions=[_condition_to_gql(c) for c in updated.conditions],
             effects=[_effect_to_gql(e) for e in updated.effects],
             duration=_duration_to_gql(updated.duration),

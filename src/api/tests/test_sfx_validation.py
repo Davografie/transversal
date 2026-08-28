@@ -126,3 +126,33 @@ def test_target_spec_satisfies_required_target():
     )
     warnings = validate_sfx(sfx)
     assert not any("missing required field 'target'" in w for w in warnings)
+
+
+def _sfx_with_source(source_kind, effect_entity="{trait_setting}"):
+    return SFX(
+        id="sfx-x", name="X", trigger="manual", source_kind=source_kind,
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+            target="{choose_trait}", entity=effect_entity,
+        )],
+    )
+
+
+def test_source_variable_known_when_source_kind_declared():
+    # {trait_setting} is unknown for a plain manual SFX…
+    sfx = _sfx_with_source(None)
+    assert "Effect 1: unknown variable {trait_setting}" in validate_sfx(sfx)
+
+    # …but declared by source_kind=trait_setting, it is in scope.
+    sfx = _sfx_with_source("trait_setting")
+    assert validate_sfx(sfx) == []
+
+
+def test_each_source_kind_exposes_its_variable():
+    from transversal.services.target_catalog import source_variable
+    assert source_variable("trait_setting") == "trait_setting"
+    assert source_variable("traitset_setting") == "traitset_setting"
+    assert source_variable("entity") == "entity"
+    assert source_variable("projection") == "projection"
+    assert source_variable("bogus") is None
+    assert source_variable("") is None

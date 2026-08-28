@@ -29,6 +29,7 @@ class ElementType:
 ELEMENT_TYPES: dict[str, ElementType] = {
     "die": ElementType("die", "Die"),
     "traitsetting": ElementType("traitsetting", "Trait instance"),
+    "traitsetsetting": ElementType("traitsetsetting", "Trait set instance"),
     "trait": ElementType("trait", "Trait"),
     "traitset": ElementType("traitset", "Trait set"),
     "entity": ElementType("entity", "Entity"),
@@ -87,11 +88,19 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
     "traitsetting": {
         "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
         "rating_type": ScalarField("traitsetting", "rating_type", "string", ("static", "resource", "challenge", "empty")),
+        "polarity": ScalarField("traitsetting", "polarity", "string", ("positive", "negative")),
         "trait_id": ScalarField("traitsetting", "trait_id", "string"),
         "traitset_id": ScalarField("traitsetting", "traitset_id", "string"),
         "entity_id": ScalarField("traitsetting", "entity_id", "string"),
         "projection_id": ScalarField("traitsetting", "projection_id", "string"),
         "from_type": ScalarField("traitsetting", "from_type", "string", ("entity", "projection")),
+    },
+    "traitsetsetting": {
+        "entity_id": ScalarField("traitsetsetting", "entity_id", "string"),
+        "traitset_id": ScalarField("traitsetsetting", "traitset_id", "string"),
+        "projection_id": ScalarField("traitsetsetting", "projection_id", "string"),
+        "from_type": ScalarField("traitsetsetting", "from_type", "string", ("entity", "projection")),
+        "limit": ScalarField("traitsetsetting", "limit", "int"),
     },
     "trait": {
         "id": ScalarField("trait", "id", "string"),
@@ -224,6 +233,44 @@ COLLECTIONS: tuple[Collection, ...] = (
 )
 
 
+# ── Source kinds (SFX activation origin) ────────────────────
+#
+# The declarative owner type an SFX can state. Each entry maps an author-facing
+# ``source_kind`` to the catalog element its ``{variable}`` resolves to, the
+# variable token name, and the owner surface it must attach to. This is the
+# single seam for the entity/projection question: if those two ever merge, only
+# the ``entity``/``projection`` rows here (and the runtime resolver) change.
+
+@dataclass(frozen=True)
+class SourceKind:
+    value: str          # source_kind stored on SFX
+    label: str          # editor dropdown label
+    element: str        # catalog element the source variable resolves to
+    variable: str       # the ``{variable}`` token exposed to effect authoring
+    owner_surface: str  # SfxOwnerKind value this SFX must attach to
+
+
+SOURCE_KINDS: tuple[SourceKind, ...] = (
+    SourceKind("trait_setting", "Trait setting", "traitsetting", "trait_setting", "trait_instance"),
+    SourceKind("traitset_setting", "Trait set setting", "traitsetsetting", "traitset_setting", "trait_set"),
+    SourceKind("entity", "Entity", "entity", "entity", "entity"),
+    SourceKind("projection", "Projection", "projection", "projection", "projection"),
+)
+
+_SOURCE_KINDS_BY_VALUE: dict[str, SourceKind] = {s.value: s for s in SOURCE_KINDS}
+
+
+def source_kind(value: str) -> SourceKind | None:
+    """The declared ``SourceKind`` for ``value``, or None when unknown/unset."""
+    return _SOURCE_KINDS_BY_VALUE.get(value)
+
+
+def source_variable(value: str) -> str | None:
+    """The ``{variable}`` token a ``source_kind`` exposes (None when unset)."""
+    sk = _SOURCE_KINDS_BY_VALUE.get(value)
+    return sk.variable if sk else None
+
+
 # ── Query helpers ──────────────────────────────────────────────
 
 def element(name: str) -> ElementType | None:
@@ -296,5 +343,9 @@ def validate() -> list[str]:
     for c in COLLECTIONS:
         if c.element not in ELEMENT_TYPES:
             problems.append(f"collection {c.name}: unknown element {c.element!r}")
+
+    for sk in SOURCE_KINDS:
+        if sk.element not in ELEMENT_TYPES:
+            problems.append(f"source_kind {sk.value}: unknown element {sk.element!r}")
 
     return problems

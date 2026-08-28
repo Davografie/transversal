@@ -783,6 +783,11 @@ class SFX(BaseModel):
     name: str
     description: str = ""
     trigger: str
+    # Declarative owner type — what kind of thing carries this SFX (its
+    # activation source). One of the ``SOURCE_KINDS`` keys in
+    # ``target_catalog`` (``trait_setting``/``traitset_setting``/``entity``/
+    # ``projection``); ``None`` = bucket/passive (no meaningful origin).
+    source_kind: Optional[str] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
     # How long the SFX stays in effect once triggered (the in-memory effective

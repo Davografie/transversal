@@ -631,7 +631,19 @@ def _set_owner_sfx_ids(repo, owner_type: str, owner_id: str, sfx_ids: list[str])
 
 
 def add_sfx_to_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> bool:
-    """Add an SFX id to one owner.  Idempotent."""
+    """Add an SFX id to one owner.  Idempotent.
+
+    Enforces the SFX's declared ``source_kind``: an SFX that states a source
+    kind may only attach to the matching owner surface (the single seam; see
+    ``target_catalog.SOURCE_KINDS``). Buckets (``table``/``gm``) and SFX without
+    a source kind are unrestricted.
+    """
+    sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
+    if sfx is not None and sfx.source_kind:
+        from transversal.services.target_catalog import source_kind
+        sk = source_kind(sfx.source_kind)
+        if sk is not None and owner_type != sk.owner_surface:
+            return False
     ids = _get_owner_sfx_ids(repo, owner_type, owner_id)
     if ids is None:
         return False

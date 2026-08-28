@@ -101,6 +101,12 @@ def validate_sfx(sfx: SFX) -> list[str]:
     """
     warnings: list[str] = []
     known = {v.name for v in trigger_variables(sfx.trigger)}
+    # The declared source kind exposes its typed variable, so the author can
+    # reference it in effects/conditions without a false "unknown variable".
+    from transversal.services.target_catalog import source_variable
+    src_var = source_variable(sfx.source_kind or "")
+    if src_var:
+        known.add(src_var)
 
     for i, effect in enumerate(sfx.effects):
         known_here = known

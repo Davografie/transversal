@@ -507,3 +507,29 @@ def test_add_remove_dispatcher_across_surfaces():
     # Missing owner returns False without error.
     assert add_sfx_to_owner(repo, "entity", "ghost", "sfx-x") is False
     assert remove_sfx_from_owner(repo, "entity", "ghost", "sfx-x") is False
+
+
+def test_add_sfx_to_owner_enforces_source_kind():
+    from transversal.services.sfx_owner import add_sfx_to_owner
+    from transversal.domain import SFX
+
+    repo = DispatchRepo()
+    repo.traitsettings["ts-1"] = SimpleNamespace(id="ts-1", sfx_ids=[])
+    repo.entities["char-1"] = SimpleNamespace(id="char-1", sfx_ids=[])
+
+    # A trait-setting SFX may attach to trait_instance, but not to entity.
+    repo.sfxs = {"sfx-x": SFX(id="sfx-x", name="X", trigger="manual", source_kind="trait_setting")}
+    def get_sfx(sid):
+        return repo.sfxs.get(sid)
+    repo.get_sfx = get_sfx
+
+    assert add_sfx_to_owner(repo, "trait_instance", "ts-1", "sfx-x") is True
+    assert add_sfx_to_owner(repo, "entity", "char-1", "sfx-x") is False
+
+    # Buckets are origin-less: a source-kind SFX can't attach to them either.
+    repo.owners["table"] = SimpleNamespace(id="table", sfx_ids=[])
+    assert add_sfx_to_owner(repo, "table", "table", "sfx-x") is False
+
+    # A source-kind-less SFX is unrestricted.
+    repo.sfxs["sfx-y"] = SFX(id="sfx-y", name="Y", trigger="manual")
+    assert add_sfx_to_owner(repo, "entity", "char-1", "sfx-y") is True

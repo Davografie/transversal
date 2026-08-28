@@ -80,3 +80,23 @@ def test_operators_are_type_aware():
     assert ">" in tc.operators_for(tc.field("die", "result"))
     assert tc.operators_for(tc.field("die", "armed_sfx_ids")) == ("contains", "==", "!=")
     assert tc.operators_for(tc.field("traitsetting", "rating_type")) == ("==", "!=", "in")
+
+
+def test_source_kinds_are_declared_and_consistent():
+    from transversal.services import target_catalog as tc
+
+    assert {s.value for s in tc.SOURCE_KINDS} == {
+        "trait_setting", "traitset_setting", "entity", "projection",
+    }
+    for s in tc.SOURCE_KINDS:
+        assert s.element in tc.ELEMENT_TYPES, s.value
+        assert s.owner_surface in ("trait_instance", "trait_set", "entity", "projection")
+
+
+def test_traitsetsetting_element_and_polarity_field_exist():
+    from transversal.services import target_catalog as tc
+
+    assert tc.element("traitsetsetting") is not None
+    pol = tc.field("traitsetting", "polarity")
+    assert pol is not None
+    assert pol.options == ("positive", "negative")
