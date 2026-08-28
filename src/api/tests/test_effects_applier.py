@@ -507,6 +507,54 @@ def test_dice_limit_without_duration_is_permanent():
     assert repo.scheduled_events == []  # no duration → no revert
 
 
+# ── Dice-pool mutation (add_dice) ────────────────────
+
+def test_resolve_pool_targets():
+    from transversal.services.effects_applier import _resolve_pool
+
+    entity = _entity(current_location="loc-1")
+    repo = FakeRepo(entities=[entity])
+    assert _resolve_pool("difficulty:loc-1", entity, repo) == ("loc-1", "loc-1")
+    assert _resolve_pool("pool:char-1", entity, repo) == ("loc-1", "char-1")
+
+    loc = Entity(id="loc-1", type=EntityType.LOCATION, name="loc", current_universe="earth")
+    repo2 = FakeRepo(entities=[entity, loc])
+    assert _resolve_pool("loc-1", entity, repo2) == ("loc-1", "loc-1")  # bare location → difficulty
+    assert _resolve_pool("nope", entity, repo2) == ("", "")
+
+
+def test_add_dice_to_difficulty_pool():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "loc-1", [])
+
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_dice",
+        target="difficulty:loc-1", context={"dice": ["d8", "d8"]},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.applied) == 1
+    pool = store.get_pool("loc-1", "loc-1")
+    assert [d["die"] for d in pool] == ["d8", "d8"]
+    assert all(d["source_kind"] == "sfx" for d in pool)
+    store.clear_all()
+
+
+def test_add_dice_no_dice_is_noop():
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_dice",
+        target="difficulty:loc-1", context={},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert result.applied[0].summary == "no dice to add"
+
+
 # ── Complications (unified polarity) ─────────────────
 
 def test_gain_negative_sets_negative():

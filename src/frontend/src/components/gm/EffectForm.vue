@@ -140,7 +140,13 @@
       />
       <div v-for="f in visibleContextFields" :key="f.name" class="ee-field">
         <label>{{ f.label }}</label>
-        <select v-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
+        <DiePicker
+          v-if="f.fieldType === 'dice_array'"
+          multiple
+          :model-value="newEffect.context[f.name] || []"
+          @update:model-value="newEffect.context[f.name] = $event"
+        />
+        <select v-else-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
           <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
         </select>
         <ReturnMapEditor
@@ -191,6 +197,7 @@ import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from './TraitInstanceEditor.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
 import ReturnMapEditor from './ReturnMapEditor.vue'
+import DiePicker from '@/components/DiePicker.vue'
 
 const props = defineProps({
   value: { type: Object, default: null },
@@ -303,6 +310,7 @@ const TARGET_KIND_ELEMENT = {
   universe: 'universe',
   projection: 'projection',
   rating_die: 'die',
+  pool: 'pool',
 }
 
 const specDestination = computed(() => {

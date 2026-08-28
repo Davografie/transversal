@@ -297,6 +297,8 @@ def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
         return _maybe(repo.get_traitset_by_id(value))
     if element == "projection":
         return _maybe(repo.get_projection(value))
+    if element == "pool":
+        return _maybe(_pool_from_id(value, repo))
     return []
 
 
@@ -310,6 +312,28 @@ def _die_owner(die: Any, ctx: TargetContext) -> list[Any]:
     eid = die.get("owner_id") if isinstance(die, dict) else None
     ent = ctx.repo.get_entity(eid) if eid else None
     return [ent] if ent else ([ctx.subject] if ctx.subject is not None else [])
+
+
+# A resolved ``pool`` element is a lightweight handle the ``add_dice`` applier
+# can turn into a concrete (location_id, owner_id) pool key.  ``id`` is the
+# composite id the spec resolver hands back to ``_resolved_id``.
+def _pool_handle(owner_id: str, location_id: str, kind: str) -> dict:
+    return {"id": f"{kind}:{owner_id}", "owner_id": owner_id, "location_id": location_id, "kind": kind}
+
+
+def _pool_from_id(value: str, repo) -> Any | None:
+    """Reconstitute a pool handle from its composite id (literal ``pool`` step)."""
+    v = (value or "").strip()
+    if not v:
+        return None
+    if v.startswith("difficulty:"):
+        loc = v[len("difficulty:"):]
+        return _pool_handle(loc, loc, "difficulty")
+    if v.startswith("pool:"):
+        owner_id = v[len("pool:"):]
+        owner = repo.get_entity(owner_id) if repo else None
+        return _pool_handle(owner_id, owner.current_location if owner else "", "pool")
+    return None
 
 
 def register_default_edges() -> None:
@@ -334,6 +358,11 @@ def register_default_edges() -> None:
 
     register_edge("location", "universe", lambda l, ctx: _maybe(ctx.repo.get_entity(l.current_universe)))
     register_edge("location", "occupants", lambda l, ctx: list(ctx.repo.list_entities_by_location(l.id)))
+    register_edge("location", "difficulty_pool",
+                  lambda l, ctx: [_pool_handle(l.id, l.id, "difficulty")])
+
+    register_edge("entity", "pool",
+                  lambda e, ctx: [_pool_handle(e.id, e.current_location or "", "pool")])
 
     register_edge("traitset", "traits", lambda ts, ctx: list(ctx.repo.get_traits_by_traitset(ts.id)))
     register_edge("trait", "traitset", lambda t, ctx: _maybe(ctx.repo.get_traitset_by_id(t.traitset_id)))

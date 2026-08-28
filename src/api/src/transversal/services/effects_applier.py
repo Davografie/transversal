@@ -93,6 +93,7 @@ def _register_core_handlers(em, raz):
     effect_registry.register("modify_traitset", "set_limit", _commit)
     effect_registry.register("modify_dice_limit", "increase", _commit)
     effect_registry.register("modify_dice_limit", "decrease", _commit)
+    effect_registry.register("modify_pool", "add_dice", _commit)
 
     # Entity operations
     def _create_asset(a, eid, u, ctx):
@@ -1048,6 +1049,60 @@ def _apply_dice_limit(entity, effect, repo, result):
     _queue_entity_revert(repo, subject, effect)
 
 
+def _resolve_pool(target: str, entity, repo) -> tuple[str, str]:
+    """Map a resolved pool target id to ``(location_id, owner_id)``.
+
+    Accepts the composite ids the targeting resolver produces
+    (``difficulty:<location>``, ``pool:<entity>``) plus a bare entity/location id
+    as a fallback (a location id implies the GM difficulty pool).
+    """
+    t = (target or "").strip()
+    if not t:
+        return ("", "")
+    if t.startswith("difficulty:"):
+        loc = t[len("difficulty:"):]
+        return (loc, loc)
+    if t.startswith("pool:"):
+        owner_id = t[len("pool:"):]
+        owner = repo.get_entity(owner_id)
+        return (owner.current_location if owner else "", owner_id)
+    owner = repo.get_entity(t)
+    if owner is not None:
+        loc = owner.id if owner.type == "location" else owner.current_location
+        return (loc or "", owner.id)
+    return ("", "")
+
+
+def _apply_add_dice(entity, effect, repo, result):
+    """Add dice to a targeted dice pool (the GM difficulty pool or an entity's).
+
+    ``effect.target`` is a resolved pool id (``difficulty:<loc>`` or
+    ``pool:<entity>``); ``effect.context.dice`` is the list of die sizes to add.
+    """
+    from transversal.services.contest_tracker import broadcast_pool_change
+    from transversal.services.scene_state import get_scene_store
+
+    dice = (effect.context or {}).get("dice") or []
+    if isinstance(dice, str):
+        dice = [d.strip() for d in dice.split(",") if d.strip()]
+    if not dice:
+        result.applied.append(AppliedEffect(effect, "no dice to add"))
+        return
+
+    location_id, owner_id = _resolve_pool(effect.target, entity, repo)
+    if not location_id or not owner_id:
+        result.applied.append(AppliedEffect(effect, f"pool target not found: {effect.target}"))
+        return
+
+    store = get_scene_store()
+    pool = store.get_pool(location_id, owner_id)
+    for die in dice:
+        pool.append({"die": die, "source_kind": "sfx", "source_id": "", "label": die, "ts_id": None})
+    store.save_pool(location_id, owner_id, pool)
+    broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
+    result.applied.append(AppliedEffect(effect, f"added {len(dice)} dice to {owner_id} pool"))
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1418,6 +1473,7 @@ _MUTATION_HANDLERS = {
     ("modify_traitset", "set_limit"): _apply_set_traitset_limit,
     ("modify_dice_limit", "increase"): _apply_dice_limit,
     ("modify_dice_limit", "decrease"): _apply_dice_limit,
+    ("modify_pool", "add_dice"): _apply_add_dice,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

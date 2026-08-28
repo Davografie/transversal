@@ -112,6 +112,17 @@ def test_traitsetsetting_element_and_polarity_field_exist():
     assert pol.options == ("positive", "negative")
 
 
+def test_pool_element_and_edges_exist():
+    from transversal.services import target_catalog as tc
+
+    assert tc.element("pool") is not None
+    pairs = {(e.source, e.name): e for e in tc.EDGES}
+    assert ("entity", "pool") in pairs
+    assert ("location", "difficulty_pool") in pairs
+    assert pairs[("entity", "pool")].target == ("pool",)
+    assert pairs[("location", "difficulty_pool")].target == ("pool",)
+
+
 def test_bind_source_maps_kind_to_variable():
     from transversal.services import target_catalog as tc
 

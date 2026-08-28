@@ -173,6 +173,23 @@ def test_select_self_seeds_subject():
     assert [v.id for v in res.values] == ["kael"]
 
 
+def test_location_to_difficulty_pool_edge():
+    loc = NS(id="loc-1", type="location", current_location=None, current_universe="earth")
+    repo = FakeRepo(entities={"loc-1": loc})
+    ctx = TargetContext(repo=repo, collections={"locations": [loc]})
+    res = resolve(spec(SelectStep(collection="locations"), NavigateStep(edge="difficulty_pool")), ctx)
+    assert res.errors == []
+    assert res.values == [{"id": "difficulty:loc-1", "owner_id": "loc-1", "location_id": "loc-1", "kind": "difficulty"}]
+
+
+def test_entity_to_pool_edge():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, collections={"occupants": [kael]})
+    res = resolve(spec(SelectStep(collection="occupants"), NavigateStep(edge="pool")), ctx)
+    assert res.errors == []
+    assert res.values == [{"id": "pool:kael", "owner_id": "kael", "location_id": "loc-1", "kind": "pool"}]
+
+
 def test_missing_collection_is_an_error():
     res = resolve(spec(SelectStep(collection="rolled_dice")), TargetContext())
     assert res.errors and "not provided" in res.errors[0].message

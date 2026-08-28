@@ -36,6 +36,7 @@ ELEMENT_TYPES: dict[str, ElementType] = {
     "projection": ElementType("projection", "Projection"),
     "location": ElementType("location", "Location"),
     "universe": ElementType("universe", "Universe"),
+    "pool": ElementType("pool", "Dice pool"),
 }
 
 
@@ -182,6 +183,10 @@ EDGES: tuple[Edge, ...] = (
     # location → universe / occupants
     Edge("universe", "location", ("universe",), "one", "Universe"),
     Edge("occupants", "location", ("entity",), "many", "Occupants"),
+
+    # entity / location → their dice pool (pool-assembly target for add_dice)
+    Edge("pool", "entity", ("pool",), "one", "Dice pool"),
+    Edge("difficulty_pool", "location", ("pool",), "one", "GM difficulty pool"),
 
     # traitset ↔ trait, trait → universes
     Edge("traits", "traitset", ("trait",), "many", "Traits"),

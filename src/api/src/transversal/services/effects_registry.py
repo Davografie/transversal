@@ -172,19 +172,20 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         ],
     ),
     EffectActionMeta(
-        action_id="add_die",
-        label="Add Die",
-        description="Add a new die to the pool at the specified size",
+        action_id="add_dice",
+        label="Add Dice",
+        description="Add dice to a target dice pool (the GM difficulty pool or an entity's pool)",
         category="benefit",
-        effect_type="modify_roll",
-        effect_action="add_die",
+        effect_type="modify_pool",
+        effect_action="add_dice",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="result", label="Die Size", field_type="die_select",
-                          required=True, options=["d4", "d6", "d8", "d10", "d12"]),
-            EffectFieldDef(name="target", label="Source", field_type="text",
-                          required=False, default="sfx"),
+            EffectFieldDef(name="target", label="Pool", field_type="text", required=True),
         ],
+        context_fields=[
+            EffectFieldDef(name="dice", label="Dice", field_type="dice_array", required=True),
+        ],
+        target_kind="pool",
     ),
     EffectActionMeta(
         action_id="remove_die",
@@ -764,7 +765,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
 _ACTION_GROUPS: dict[str, str] = {
     "play_as_rating": "Dice Pool", "step_up_die": "Dice Pool",
     "step_down_die": "Dice Pool", "double_die": "Dice Pool",
-    "reroll_die": "Dice Pool", "add_die": "Dice Pool",
+    "reroll_die": "Dice Pool", "add_dice": "Dice Pool",
     "remove_die": "Dice Pool", "split_die": "Dice Pool",
     "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
     "increase_dice_limit": "Outcome", "decrease_dice_limit": "Outcome",
