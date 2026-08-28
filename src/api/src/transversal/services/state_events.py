@@ -166,6 +166,12 @@ def fire_contest_outcome_sfx(
         outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
         _emit_pending_choices(entity_id, universe, outcome.pending)
 
+        # Fire effects deferred to the contest outcome (``on_contest_win`` /
+        # ``on_contest_loss``) armed at trigger time (e.g. sfx-heal's step_down).
+        from transversal.services.roll_deferral import fire_armed
+        outcome_event = "on_contest_win" if contest_winner == "player" else "on_contest_loss"
+        fire_armed(entity_id, outcome_event, universe, event.context)
+
     if taken_out:
         _mark_taken_out(repo, loser_id, winner_id)
 

@@ -25,7 +25,7 @@ from transversal.domain import (
 )
 import transversal.services.effects_applier as _effects_applier
 from transversal.services.conditions import evaluate_conditions
-from transversal.services.roll_deferral import ROLL_TIMINGS as _roll_timings
+from transversal.services.roll_deferral import DEFERRED_TIMINGS as _deferred_timings
 
 log = logging.getLogger("transversal.sfx")
 
@@ -171,9 +171,9 @@ class EffectsEngine:
             if sfx.source_kind and event.context.get("source_id"):
                 from transversal.services.target_catalog import bind_source
                 effect_context = bind_source(sfx.source_kind, event.context.get("source_id"), event.context)
-            roll_effects = [e for e in sfx.effects if e.timing in _roll_timings]
+            roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]
             log.info(
-                "[process_event] sfx=%s trigger=%s roll_effects=%s",
+                "[process_event] sfx=%s trigger=%s deferred_effects=%s",
                 sfx.id, sfx.trigger, [e.timing.value for e in roll_effects],
             )
             if roll_effects:
@@ -189,7 +189,7 @@ class EffectsEngine:
                 sfx_applied = True
 
             for effect in sfx.effects:
-                if effect.timing in _roll_timings:
+                if effect.timing in _deferred_timings:
                     continue  # armed above (raw; substituted at fire time)
 
                 effect = _substitute_effect_context(effect, effect_context)
