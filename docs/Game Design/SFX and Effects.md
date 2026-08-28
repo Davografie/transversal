@@ -202,7 +202,7 @@ class Condition(BaseModel):
     narrative: str = ""
 ```
 
-Conditions are authored alongside effects and evaluated against an entity's state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `has_razmerit`, `entity_type`, `unplaced`, `in_universe`, `phase`, `narrative`) plus two fire-time outcome gates: `contest_outcome` (target `player`/`opponent`, reads `context["contest_winner"]`) and `roll_tier` (operator + value against `OutcomeTier`, reads `context["tier"]`). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`. Conditions live at **both** the SFX level (`SFX.conditions`, gates the whole activation) and the **effect** level (`Effect.conditions`, gates that one effect — skipped at fire time if any condition fails).
+Conditions are authored alongside effects and evaluated against an entity's state (`at_location`, `has_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `has_razmerit`, `entity_type`, `unplaced`, `in_universe`, `phase`, `narrative`) plus three fire-time outcome gates: `contest_outcome` (target `player`/`opponent`, reads `context["contest_winner"]`), `roll_tier` (operator + value against `OutcomeTier`, reads `context["tier"]`), and `test_outcome` (target `success`/`fail` — binary; `success` = any non-fail tier). `NARRATIVE` is human-readable only and never auto-blocks; `UNPLACED` is true when the entity has no current location; `IN_UNIVERSE` compares `current_universe` to the condition's `target`. Conditions live at **both** the SFX level (`SFX.conditions`, gates the whole activation) and the **effect** level (`Effect.conditions`, gates that one effect — skipped at fire time if any condition fails).
 
 `subject` selects **which entity** the condition tests: blank = the current entity (the event's entity for auto-fire, the acting entity for a consequence menu), a literal entity id, or a `{variable}` resolved from the trigger/menu context (e.g. `{buying_entity}`). The hitch menu has no default entity, so its conditions must reference `{hitch_entity}` / `{buying_entity}` explicitly. `target` is also `{variable}`-resolvable. The editor's condition-type list is served from `CONDITION_TYPES` in `src/api/src/transversal/services/conditions.py` (value + label + needs-target + placeholder + **target-kind**); the target kind (`universe` / `location` / `trait` / `entity`) drives a picker in `ConditionEditor.vue` instead of a text field (`IN_UNIVERSE` uses a universe-*key* picker, not a universe entity id).
 
@@ -230,6 +230,7 @@ Conditions are authored alongside effects and evaluated against an entity's stat
 | | `add_trait_rating_dice` → `add_trait_rating` | either |
 | `modify_trait` | `step_up_trait` → `step_up` | benefit |
 | | `step_down_trait` → `step_down` | cost |
+| | `reduce_by_effect_die` → `reduce_by_effect` | benefit (effect die vs rating: remove if larger, else step down) |
 | | `set_trait` → `set` | either |
 | | `gain_trait` → `gain` | either (polarity) |
 | | `gain_or_step_up_trait` → `gain_or_step_up` | either (polarity) |

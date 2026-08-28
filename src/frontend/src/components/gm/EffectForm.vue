@@ -158,6 +158,16 @@
           :model-value="newEffect.context[f.name] || []"
           @update:model-value="newEffect.context[f.name] = $event"
         />
+        <template v-else-if="f.fieldType === 'die_select'">
+          <div class="ee-result-mode">
+            <button type="button" :class="{ active: effectDieMode === 'die' }" @click="effectDieMode = 'die'">Die</button>
+            <button type="button" :class="{ active: effectDieMode === 'variable' }" @click="effectDieMode = 'variable'">Variable</button>
+          </div>
+          <select v-if="effectDieMode === 'die'" v-model="newEffect.context[f.name]">
+            <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+          </select>
+          <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
+        </template>
         <select v-else-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
           <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
         </select>
@@ -230,6 +240,7 @@ const editing = computed(() => !!props.value)
 const { load, actions: effectActions } = useEffectActions()
 const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, conditions: [] })
 const resultMode = ref('die')
+const effectDieMode = ref('variable')  // effect_die context field: Die dropdown vs {variable}
 const copiedVar = ref('')
 const { copy } = useClipboard()
 
@@ -470,6 +481,7 @@ function onActionChange() {
   newEffect.conditions = []
   initRefs(selectedAction.value)
   resultMode.value = 'die'
+  effectDieMode.value = 'variable'
   const meta = selectedAction.value
   if (meta) {
     for (const f of (meta.fields || [])) {
@@ -599,6 +611,7 @@ function populate(eff) {
     }
   }
   resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'
+  effectDieMode.value = (eff.context?.effect_die && String(eff.context.effect_die).startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
   }
