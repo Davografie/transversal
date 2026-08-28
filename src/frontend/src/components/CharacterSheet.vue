@@ -60,6 +60,22 @@
             <button v-if="isForeignSheet && !relationship" class="sheet-settings-btn" @click.stop="createImmediateRelationship()" title="Add relationship">+</button>
           </div>
         </div>
+        <div v-if="entitySfxIds.length || projectionSfxIds.length" class="entity-sfx-cards">
+          <div v-for="sfxId in entitySfxIds" :key="'e-' + sfxId" class="sfx-card"
+               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
+               :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
+               @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, entity.id)">
+            <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
+            <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
+          </div>
+          <div v-for="sfxId in projectionSfxIds" :key="'p-' + sfxId" class="sfx-card"
+               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
+               :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
+               @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, activeProjection.id)">
+            <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
+            <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
+          </div>
+        </div>
         <div v-if="gmMode" class="meta">
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
@@ -187,6 +203,16 @@
                 <span v-for="i in ts.limit" :key="i" class="limit-dot" :class="{ filled: i <= inPoolCount(ts) }">{{ i <= inPoolCount(ts) ? '●' : '○' }}</span>
               </span>
             </h4>
+            <div v-if="traitsetSfxIds(ts).length" class="sfx-cards">
+              <div v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" class="sfx-card"
+                   :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
+                   :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
+                   @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, traitsetSettingSourceId(ts))"
+              >
+                <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
+                <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -353,6 +379,31 @@ const activeProjection = computed(() => {
   return e.projections.find((p) => p.id === e.currentProjection) || null
 })
 const sheetPortrait = computed(() => activeProjection.value?.sheetImage || entity.value?.sheetPortrait || '')
+
+// SFX owned at three surfaces beyond the per-trait cards:
+//   - entity-level (entity.sfxIds)
+//   - active projection (projection.sfxIds)
+//   - trait-set-as-unit (traitSetSettings[].sfxIds)
+const entitySfxIds = computed(() => entity.value?.sfxIds || [])
+const projectionSfxIds = computed(() => activeProjection.value?.sfxIds || [])
+// traitsetId → [{ id, sfxIds }] for the trait-set-as-unit grants.
+const traitSetSettingsByTraitsetId = computed(() => {
+  const m = {}
+  for (const tss of (entity.value?.traitSetSettings || [])) {
+    m[tss.traitsetId] = tss
+  }
+  return m
+})
+
+function traitsetSfxIds(ts) {
+  const tss = traitSetSettingsByTraitsetId.value[ts.traitsetId]
+  return (tss && tss.sfxIds) || []
+}
+
+function traitsetSettingSourceId(ts) {
+  const tss = traitSetSettingsByTraitsetId.value[ts.traitsetId]
+  return (tss && tss.id) || null
+}
 const traitSets = ref([])
 const allTraitSettings = ref([])
 const effectiveSettings = ref([])
@@ -917,8 +968,12 @@ const QUERY = `
       currentProjection
       backgroundImage
       sheetPortrait
+      sfxIds
       projections {
-        id originUniverse universe name sheetImage currentLocation transversalType
+        id originUniverse universe name sheetImage currentLocation transversalType sfxIds
+      }
+      traitSetSettings {
+        id traitsetId sfxIds
       }
       traitSettings {
         id
@@ -2483,6 +2538,13 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 10px;
   color: var(--text-dim);
   line-height: 1.3;
+}
+
+.entity-sfx-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0;
 }
 
 /* ── Relationship widget ──────────────────────── */

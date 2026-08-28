@@ -79,6 +79,7 @@ from transversal.api.graphql.types import (
     TraitSetting,
     TraitSettingInput,
     TraitSettingUpdateInput,
+    TraitSetSetting,
     TraitUpdateInput,
     Attunement,
     TransversalTypeEnum,
@@ -146,6 +147,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         current_universe=e.current_universe, current_location=e.current_location,
         current_projection=e.current_projection,
         hidden=e.hidden, unpublished=e.unpublished, known_to=e.known_to,
+        sfx_ids=e.sfx_ids,
         _background_image=e.background_image, overlay=e.overlay,
         starter_location=e.starter_location,
         zones=[Zone(name=z.name, background_image=z.background_image, location_id=z.location_id, x=z.x, y=z.y) for z in e.zones],
@@ -429,7 +431,8 @@ class Query:
             projections=[
                 Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
                            universe=p.universe, name=p.name, background_image=p.background_image,
-                           current_location=p.current_location, transversal_type=p.transversal_type)
+                           current_location=p.current_location, transversal_type=p.transversal_type,
+                           sfx_ids=p.sfx_ids)
                 for p in cv.projections
             ],
             trait_settings=[_ts_to_gql(s) for s in cv.trait_settings],
@@ -1062,7 +1065,7 @@ class Mutation:
     @strawberry.mutation
     def update_projection(self, info: strawberry.Info, projection_id: strawberry.ID, name: Optional[str] = None, background_image: Optional[str] = None, current_location: Optional[strawberry.ID] = None) -> Projection:
         p = _em(info).update_projection(str(projection_id), name=name, background_image=background_image, current_location=str(current_location) if current_location else None)
-        return Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe, universe=p.universe, name=p.name, background_image=p.background_image, current_location=p.current_location, transversal_type=p.transversal_type)
+        return Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe, universe=p.universe, name=p.name, background_image=p.background_image, current_location=p.current_location, transversal_type=p.transversal_type, sfx_ids=p.sfx_ids)
 
     @strawberry.mutation
     def remove_projection(self, info: strawberry.Info, projection_id: strawberry.ID) -> Entity:

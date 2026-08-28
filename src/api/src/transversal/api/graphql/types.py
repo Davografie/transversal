@@ -796,6 +796,7 @@ class Projection:
     background_image: Optional[str] = None
     current_location: Optional[str] = None
     transversal_type: TransversalTypeEnum
+    sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
 
     @strawberry.field
     def sheet_image(self, info: strawberry.Info) -> Optional[str]:
@@ -856,6 +857,18 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
 
 
 @strawberry.type
+class TraitSetSetting:
+    """Per-entity trait-set settings (SFX + limit override)."""
+    id: strawberry.ID
+    entity_id: strawberry.ID
+    traitset_id: strawberry.ID
+    from_type: str = "entity"
+    projection_id: Optional[strawberry.ID] = None
+    sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+    limit: Optional[int] = None
+
+
+@strawberry.type
 class Entity:
     id: strawberry.ID
     type: EntityType
@@ -867,6 +880,7 @@ class Entity:
     hidden: bool = False
     unpublished: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
+    sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     _background_image: strawberry.Private[Optional[str]] = None
     _sheet_portrait: strawberry.Private[Optional[str]] = None
     zones: list[Zone] = strawberry.field(default_factory=list)
@@ -888,8 +902,23 @@ class Entity:
         return [
             Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
                        universe=p.universe, name=p.name, background_image=p.background_image,
-                       current_location=p.current_location, transversal_type=p.transversal_type)
+                       current_location=p.current_location, transversal_type=p.transversal_type,
+                       sfx_ids=p.sfx_ids)
             for p in projs
+        ]
+
+    @strawberry.field
+    def trait_set_settings(self, info: strawberry.Info) -> list[TraitSetSetting]:
+        """This entity's per-trait-set settings (SFX + limit override)."""
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        return [
+            TraitSetSetting(
+                id=tss.id, entity_id=tss.entity_id, traitset_id=tss.traitset_id,
+                from_type=tss.from_type, projection_id=tss.projection_id,
+                sfx_ids=tss.sfx_ids, limit=tss.limit,
+            )
+            for tss in em.repo.get_traitsetsettings_for_entity(str(self.id))
         ]
 
     @strawberry.field
