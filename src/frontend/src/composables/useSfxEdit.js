@@ -79,7 +79,7 @@ export function useSfxEdit() {
     draft.name = sfx?.name || ''
     draft.description = sfx?.description || ''
     draft.trigger = sfx?.trigger || 'manual'
-    draft.source_kind = sfx?.source_kind || null
+    draft.source_kind = sfx?.sourceKind ?? sfx?.source_kind ?? null
     draft.conditions = initialConditions(sfx)
     draft.duration = initialDuration(sfx)
     draft.effects = (sfx?.effects || []).map(e => ({ ...e }))
