@@ -45,10 +45,14 @@ The targeting path (`TargetSpec`) is a pipeline of steps (`select` / `filter` / 
 
 ### Phase 2 — terminal `choose` (dialog, no staged resolution)
 
-- `ChooseStep` (single + multi).
-- Resolver: resolve the full path to a set, then emit a `PendingChoice` carrying the **typed** candidate set; on the user's answer, apply.
-- Dialog: element-type-aware renderer; reuse the existing `PendingChoice` + `_emit_pending_choices` flow.
-- Covers the common `filter → choose` case without a resumable resolver.
+Status: **backend + authoring done; runtime dialog remaining.**
+
+- `ChooseStep` (single + multi) — ✅ in `target_spec.py` (type-checker mirrors `random`).
+- Resolver emits a `PendingTargetChoice` with the resolved candidate set and stops — ✅ in `target_resolver.py` (`Resolution.pending_choices`).
+- Candidate serialization — ✅ `serialize_candidates()` + `target_catalog.DISPLAY_FIELDS` (data-driven labels per element type).
+- GraphQL `choose` step input + trace — ✅ in `schema.py` / `types.py`.
+- Authoring wizard `choose` step — ✅ in `TargetSpecBuilder.vue`.
+- **Dialog + fire-time surfacing — ⏳ remaining.** The engine's `_apply_immediate_spec` / `resolve_refs` still consume only `resolution.values`; a runtime `choose` currently resolves to nothing (silent no-op). Wiring it means: surface `pending_choices` through `EventOutcome` → GraphQL, add a structured choose dialog (renders the serialized `TargetCandidate`s), and a resolve mutation that re-applies the effect with the picked id.
 
 ### Phase 3 — non-terminal `choose` / `random` (deferred)
 

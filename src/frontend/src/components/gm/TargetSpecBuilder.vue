@@ -97,8 +97,17 @@
         <div v-else-if="step.kind === 'random'" class="tsb-config tsb-random">
           <label class="tsb-check">
             <span>pick</span>
-            <input type="number" min="1" :value="step.count ?? 1" @input="onRandomCount(i, $event)" />
+            <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
             <em>1 = single · N = subset</em>
+          </label>
+        </div>
+
+        <!-- choose: interactive collapse of the current collection -->
+        <div v-else-if="step.kind === 'choose'" class="tsb-config tsb-choose">
+          <label class="tsb-check">
+            <span>pick</span>
+            <input type="number" min="1" :value="step.count ?? 1" @input="onCount(i, $event)" />
+            <em>1 = single pick · N = multi-select</em>
           </label>
         </div>
       </div>
@@ -146,6 +155,7 @@ const STEP_KINDS = [
   { kind: 'navigate', label: 'Navigate' },
   { kind: 'aggregate', label: 'Aggregate' },
   { kind: 'random', label: 'Random' },
+  { kind: 'choose', label: 'Choose' },
 ]
 const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'contains']
 
@@ -259,7 +269,7 @@ function onFilterValue(i, e) {
   steps.value[i].value = coerceValue(fieldTypeFor(i), e.target.value)
 }
 
-function onRandomCount(i, e) {
+function onCount(i, e) {
   const n = Math.trunc(Number(e.target.value))
   steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
 }
@@ -269,8 +279,8 @@ function canAdd(kind) {
   // Subsequent steps need a resolvable type before them.
   const prior = priorType(steps.value.length)
   if (!prior || !prior.element) return false
-  // random collapses a *many* collection; only offer it over a set.
-  if (kind === 'random') return prior.cardinality === 'many'
+  // random/choose collapse a *many* collection; only offer them over a set.
+  if (kind === 'random' || kind === 'choose') return prior.cardinality === 'many'
   return true
 }
 

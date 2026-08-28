@@ -1,7 +1,7 @@
 """Target spec — the structured targeting pipeline and its type-checker.
 
 A ``TargetSpec`` is an ordered list of steps (``select`` / ``filter`` /
-``navigate`` / ``aggregate`` / ``literal`` / ``random``) that resolves a
+``navigate`` / ``aggregate`` / ``literal`` / ``random`` / ``choose``) that resolves a
 reference against the game state.
 This module owns the *shape* of the spec and the *type-checker* that walks a
 spec against the [[target_catalog]] to verify it can reach a destination type.
@@ -67,8 +67,25 @@ class RandomStep(BaseModel):
     count: int = 1
 
 
+class ChooseStep(BaseModel):
+    """Collapse a many-cardinality collection by user selection.
+
+    ``count`` 1 collapses ``many → one`` (pick a single candidate);
+    ``count > 1`` keeps the cardinality ``many`` (a user-selected subset).
+    Element type is unchanged. This is the interactive resolution mode — the
+    resolver emits a pending choice carrying the candidate set rather than
+    picking automatically (the non-interactive counterpart is ``random``).
+
+    Phase 2 implements the *terminal* case only: a ``choose`` step stops
+    resolution at the candidate set. Mid-path ``choose`` (resumable, suffix
+    resolution) is deferred to Phase 3.
+    """
+    kind: Literal["choose"] = "choose"
+    count: int = 1
+
+
 TargetStep = Annotated[
-    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep],
+    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep, ChooseStep],
     Field(discriminator="kind"),
 ]
 
@@ -194,6 +211,20 @@ def trace(spec: TargetSpec, source_element: str | None = None) -> tuple[list[Val
                 current = None
             elif current.cardinality != "many":
                 errors.append(TraceError(i, "random requires a many-cardinality collection"))
+                # type unchanged (element preserved; caller sees the error)
+            else:
+                cardinality = "one" if step.count == 1 else "many"
+                current = ValueType(current.element, cardinality)
+
+        elif isinstance(step, ChooseStep):
+            if current is None:
+                errors.append(TraceError(i, "choose has no collection to pick from"))
+                current = None
+            elif step.count < 1:
+                errors.append(TraceError(i, "choose count must be >= 1"))
+                current = None
+            elif current.cardinality != "many":
+                errors.append(TraceError(i, "choose requires a many-cardinality collection"))
                 # type unchanged (element preserved; caller sees the error)
             else:
                 cardinality = "one" if step.count == 1 else "many"

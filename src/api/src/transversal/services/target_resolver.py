@@ -19,6 +19,7 @@ from typing import Any, Callable
 
 from transversal.services.target_spec import (
     AggregateStep,
+    ChooseStep,
     FilterStep,
     LiteralStep,
     NavigateStep,
@@ -47,6 +48,31 @@ class TargetContext:
 class Resolution:
     values: list[Any] = field(default_factory=list)   # resolved elements (or a scalar)
     errors: list[TraceError] = field(default_factory=list)
+    pending_choices: list["PendingTargetChoice"] = field(default_factory=list)
+
+
+@dataclass
+class PendingTargetChoice:
+    """A ``choose`` step's candidate set, awaiting a user selection.
+
+    ``element`` is the catalog element type of the candidates; ``candidates``
+    holds the resolved candidate objects (before serialization); ``count`` is
+    how many the user should select (1 = single, >1 = subset). ``step_index``
+    is where the ``choose`` was hit in the path.
+    """
+    element: str
+    candidates: list[Any] = field(default_factory=list)
+    count: int = 1
+    step_index: int = 0
+
+
+@dataclass(frozen=True)
+class CandidateDisplay:
+    """A serialized candidate for the choose-picker (id + element + labels)."""
+    id: str
+    element: str
+    name: str = ""
+    subtitle: str = ""
 
 
 EdgeResolver = Callable[[Any, TargetContext], list[Any]]
@@ -121,6 +147,48 @@ def _sample(values: list[Any], count: int) -> list[Any]:
     if count >= len(values):
         return list(values)
     return random.sample(values, count)
+
+
+def _candidate_id(element: str, value: Any) -> str:
+    """A stable string id for a resolved candidate (dict or object)."""
+    if isinstance(value, dict):
+        return value.get("ts_id") or value.get("id") or str(value)
+    return getattr(value, "ts_id", None) or getattr(value, "id", None) or str(value)
+
+
+def _candidate_label(element: str, value: Any, field_name: str) -> str:
+    """Extract a display label field from a resolved candidate."""
+    if not field_name:
+        return ""
+    raw = _get_field(value, field_name)
+    if raw is None:
+        return ""
+    return str(raw)
+
+
+def serialize_candidates(element: str, values: list[Any]) -> list[CandidateDisplay]:
+    """Turn resolved candidates into picker-ready display records.
+
+    Labels are data-driven from ``target_catalog.DISPLAY_FIELDS``: each element
+    type declares which field carries its primary and secondary label. A ``pool``
+    handle renders its kind as a friendly label (difficulty / dice pool).
+    """
+    display = tc.display_fields(element)
+    name_field = display.name_field if display else ""
+    subtitle_field = display.subtitle_field if display else ""
+
+    out: list[CandidateDisplay] = []
+    for value in values:
+        cid = _candidate_id(element, value)
+        if element == "pool":
+            kind = _get_field(value, "kind")
+            name = "Difficulty pool" if kind == "difficulty" else "Dice pool"
+            subtitle = ""
+        else:
+            name = _candidate_label(element, value, name_field)
+            subtitle = _candidate_label(element, value, subtitle_field)
+        out.append(CandidateDisplay(id=cid, element=element, name=name, subtitle=subtitle))
+    return out
 
 
 def _to_number(v: Any) -> float | None:
@@ -208,6 +276,7 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
     """Walk ``spec`` over ``context``, returning resolved values + step errors."""
     errors: list[TraceError] = []
     values: list[Any] = []
+    pending_choices: list[PendingTargetChoice] = []
     current_type: ValueType | None = None
 
     for i, step in enumerate(spec.steps):
@@ -309,7 +378,31 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
                 cardinality = "one" if step.count == 1 else "many"
                 current_type = ValueType(current_type.element, cardinality)
 
-    return Resolution(values, errors)
+        elif isinstance(step, ChooseStep):
+            # Terminal choose (Phase 2): resolve the candidate set, then stop and
+            # hand the set to the caller as a pending choice. Mid-path choose
+            # (resumable suffix resolution) is Phase 3.
+            if current_type is None:
+                errors.append(TraceError(i, "choose has no collection to pick from"))
+                values, current_type = [], None
+            elif step.count < 1:
+                errors.append(TraceError(i, "choose count must be >= 1"))
+                values, current_type = [], None
+            elif current_type.cardinality != "many":
+                errors.append(TraceError(i, "choose requires a many-cardinality collection"))
+                values, current_type = [], None
+            else:
+                pending_choices.append(PendingTargetChoice(
+                    element=current_type.element,
+                    candidates=list(values),
+                    count=step.count,
+                    step_index=i,
+                ))
+                # The user's selection supplies the value; nothing resolved yet.
+                values, current_type = [], None
+                break
+
+    return Resolution(values, errors, pending_choices)
 
 
 def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:

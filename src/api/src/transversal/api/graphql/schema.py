@@ -410,6 +410,8 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
             steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field))
         elif kind == "random":
             steps.append(ts.RandomStep(count=int(s.count or 1)))
+        elif kind == "choose":
+            steps.append(ts.ChooseStep(count=int(s.count or 1)))
         else:
             steps.append(ts.SelectStep(collection=""))
     return ts.TargetSpec(steps=steps)

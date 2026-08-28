@@ -6,9 +6,11 @@ from transversal.services.target_resolver import (
     TargetContext,
     register_edge,
     resolve,
+    serialize_candidates,
 )
 from transversal.services.target_spec import (
     AggregateStep,
+    ChooseStep,
     FilterStep,
     NavigateStep,
     RandomStep,
@@ -359,3 +361,62 @@ def test_random_degrades_gracefully_when_count_exceeds_set():
     res = resolve(s, ctx)
     assert res.errors == []
     assert [v["ts_id"] for v in res.values] == ["a", "b"]  # whole set returned
+
+
+def test_choose_emits_pending_choice_and_stops():
+    kael, repo = _one_trick_world()
+    dice = [{"ts_id": "a", "rating": "d6"}, {"ts_id": "b", "rating": "d8"}]
+    ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
+    s = spec(SelectStep(collection="rolled_dice"), ChooseStep())
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert res.values == []
+    assert len(res.pending_choices) == 1
+    choice = res.pending_choices[0]
+    assert choice.element == "die"
+    assert choice.count == 1
+    assert [c["ts_id"] for c in choice.candidates] == ["a", "b"]
+
+
+def test_choose_count_keeps_candidate_set_and_count():
+    kael, repo = _one_trick_world()
+    dice = [{"ts_id": "a"}, {"ts_id": "b"}, {"ts_id": "c"}]
+    ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
+    s = spec(SelectStep(collection="rolled_dice"), ChooseStep(count=2))
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert len(res.pending_choices) == 1
+    assert res.pending_choices[0].count == 2
+    assert len(res.pending_choices[0].candidates) == 3
+
+
+def test_choose_requires_many_collection():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo)
+    s = spec(SelectStep(collection="self"), ChooseStep())
+    res = resolve(s, ctx)
+    assert any("many-cardinality" in e.message for e in res.errors)
+    assert res.pending_choices == []
+
+
+def test_serialize_candidates_is_data_driven():
+    dice = [
+        {"ts_id": "a", "rating": "d6", "role": "trait"},
+        {"ts_id": "b", "rating": "d8", "role": "difficulty"},
+    ]
+    out = serialize_candidates("die", dice)
+    assert [(c.id, c.name, c.subtitle) for c in out] == [
+        ("a", "d6", "trait"),
+        ("b", "d8", "difficulty"),
+    ]
+
+
+def test_serialize_pool_candidates_render_friendly_labels():
+    out = serialize_candidates("pool", [
+        {"id": "difficulty:loc-1", "kind": "difficulty"},
+        {"id": "pool:kael", "kind": "pool"},
+    ])
+    assert [(c.id, c.name) for c in out] == [
+        ("difficulty:loc-1", "Difficulty pool"),
+        ("pool:kael", "Dice pool"),
+    ]
