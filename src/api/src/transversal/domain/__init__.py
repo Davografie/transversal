@@ -591,6 +591,10 @@ class Entity(BaseModel):
     attunements: list["Attunement"] = Field(default_factory=list)  # active attunements (effect-managed)
     targeting_bans: list["TargetingBan"] = Field(default_factory=list)  # directional contest-target bans
     taken_out: bool = False  # scene-scoped: high-stakes contest removed this entity from the scene
+    # Dice-pool selection-limit modifiers (deltas over the base limits: 2 total dice, 1 effect die).
+    # Adjusted by ``modify_dice_limit`` effects; duration reverts undo the delta.
+    total_dice_bonus: int = 0
+    effect_dice_bonus: int = 0
     sfx_ids: list[str] = Field(default_factory=list)  # SFX owned directly by this entity
     scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
     # Universe — per-entity-type LoRA configuration

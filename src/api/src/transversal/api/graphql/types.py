@@ -874,6 +874,8 @@ class Entity:
     type: EntityType
     name: str
     razmerit: int
+    total_dice_bonus: int = 0
+    effect_dice_bonus: int = 0
     current_universe: str
     current_location: Optional[str] = None
     current_projection: Optional[str] = None

@@ -212,6 +212,44 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=True, default="{source_trait}"),
         ],
     ),
+    EffectActionMeta(
+        action_id="increase_dice_limit",
+        label="Increase Dice Limit",
+        description="Increase how many dice can be kept as the total or effect die (e.g. +1 total die)",
+        category="benefit",
+        effect_type="modify_dice_limit",
+        effect_action="increase",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
+        fields=[
+            EffectFieldDef(name="result", label="Amount", field_type="number",
+                          required=True, default="1"),
+        ],
+        context_fields=[
+            EffectFieldDef(name="limit", label="Limit", field_type="select",
+                          required=True, default="total", options=["total", "effect"]),
+        ],
+        supports_duration=True,
+        inverse=("modify_dice_limit", "decrease"),
+    ),
+    EffectActionMeta(
+        action_id="decrease_dice_limit",
+        label="Decrease Dice Limit",
+        description="Decrease how many dice can be kept as the total or effect die (e.g. -1 total die)",
+        category="cost",
+        effect_type="modify_dice_limit",
+        effect_action="decrease",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
+        fields=[
+            EffectFieldDef(name="result", label="Amount", field_type="number",
+                          required=True, default="1"),
+        ],
+        context_fields=[
+            EffectFieldDef(name="limit", label="Limit", field_type="select",
+                          required=True, default="total", options=["total", "effect"]),
+        ],
+        supports_duration=True,
+        inverse=("modify_dice_limit", "increase"),
+    ),
 
     # ── Outcome (modify_outcome) ───────────────────────
     EffectActionMeta(
@@ -728,6 +766,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "step_down_die": "Dice Pool", "double_die": "Dice Pool",
     "reroll_die": "Dice Pool", "add_die": "Dice Pool",
     "remove_die": "Dice Pool", "split_die": "Dice Pool",
+    "increase_dice_limit": "Dice Pool", "decrease_dice_limit": "Dice Pool",
     "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
     "negate_complication": "Outcome", "convert_complication": "Outcome",
     "reroll_highest": "Outcome",

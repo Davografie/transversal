@@ -47,6 +47,8 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
     old_razmerit = entity.razmerit
     old_location = entity.current_location
     old_universe = entity.current_universe
+    old_total_bonus = entity.total_dice_bonus
+    old_effect_bonus = entity.effect_dice_bonus
     result = apply_effects(entity, effects, repo)
 
     # Other entities mutated (e.g. razmerit transfer recipient).
@@ -77,6 +79,14 @@ def commit_effects(entity: Entity, effects: list[Effect], repo) -> EffectsResult
                 "new_balance": entity.razmerit,
                 "reason": "effect",
             })
+
+    # Dice-pool selection limits changed — tell the roller to re-read its limits.
+    if entity.total_dice_bonus != old_total_bonus or entity.effect_dice_bonus != old_effect_bonus:
+        _publish("dice_limits_changed", {
+            "entity_id": entity.id,
+            "total_dice_bonus": entity.total_dice_bonus,
+            "effect_dice_bonus": entity.effect_dice_bonus,
+        })
 
     # Projections produced/updated by travel effects.
     for proj in result.new_projections:

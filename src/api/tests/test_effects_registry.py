@@ -31,3 +31,22 @@ def test_entity_effects_declare_entity_field():
         fields = {f.name: f for f in meta.fields}
         assert "entity" in fields, f"{action} must declare an 'entity' field"
         assert fields["entity"].field_type == "entity"
+
+
+def test_dice_limit_actions_declare_amount_and_limit():
+    from transversal.services.effects_registry import get_inverse
+    for action in ("increase", "decrease"):
+        meta = _meta(action)
+        assert meta is not None, action
+        assert meta.effect_type == "modify_dice_limit"
+        assert meta.supports_duration is True
+        fields = {f.name: f for f in meta.fields}
+        assert "result" in fields, f"{action} must declare an amount field"
+        assert fields["result"].field_type == "number"
+        ctx = {f.name: f for f in meta.context_fields}
+        assert "limit" in ctx, f"{action} must declare a 'limit' context field"
+        assert ctx["limit"].field_type == "select"
+        assert ctx["limit"].options == ["total", "effect"]
+    # increase/decrease are mutual inverses
+    assert get_inverse("modify_dice_limit", "increase") == (("modify_dice_limit", "decrease"), False)
+    assert get_inverse("modify_dice_limit", "decrease") == (("modify_dice_limit", "increase"), False)

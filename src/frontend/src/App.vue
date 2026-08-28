@@ -286,7 +286,7 @@
 </template>
 
 <script setup>
-import { ref, useTemplateRef, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, useTemplateRef, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
@@ -482,9 +482,22 @@ watch(entityId, () => {
   if (!entityId.value || gmMode.value) return
   localStorage.setItem('entityId', entityId.value)
   locationInitPromise = initLocation()
+  refreshDiceBonuses()
 }, { flush: 'sync' })
-const keepCount = ref(2)
-const effectCount = ref(1)
+const diceBonuses = reactive({ total: 0, effect: 0 })  // persisted deltas from modify_dice_limit effects
+const sprayNprayActive = ref(false)  // local override: +1 effect die while sfx-spray-n-pray is armed
+const keepCount = computed(() => Math.max(1, 2 + diceBonuses.total))
+const effectCount = computed(() => Math.max(0, 1 + diceBonuses.effect + (sprayNprayActive.value ? 1 : 0)))
+
+async function refreshDiceBonuses() {
+  const id = entityId.value
+  if (!id || gmMode.value) return
+  const data = await graphql(`query($id: ID!) { entity(id: $id) { totalDiceBonus effectDiceBonus } }`, { id })
+  if (data?.entity) {
+    diceBonuses.total = data.entity.totalDiceBonus ?? 0
+    diceBonuses.effect = data.entity.effectDiceBonus ?? 0
+  }
+}
 const phase = ref('adding')
 const rollerMode = ref('cortex') // 'cortex' | 'roll_table' (driven by CharacterSheet tab)
 const currentDifficulty = ref(null) // GM-set test difficulty (ephemeral, session-scoped)
@@ -987,6 +1000,12 @@ watch(lastEvent, (evt) => {
         sheetRef.value?.setRazmerit(evt.data.new_balance, evt.data.entity_id)
       }
       break
+    case 'dice_limits_changed':
+      if (evt.data?.entity_id === entityId.value) {
+        diceBonuses.total = evt.data.total_dice_bonus ?? 0
+        diceBonuses.effect = evt.data.effect_dice_bonus ?? 0
+      }
+      break
     case 'beat_end':
       diceRef.value?.clearPool()
       remotePools.value = {}
@@ -1209,8 +1228,8 @@ function onPhaseChange(p) {
   phase.value = p
   if (p !== 'adding') forceSheet.value = false
   if (p === 'adding') {
-    keepCount.value = 2
-    effectCount.value = 1
+    sprayNprayActive.value = false
+    refreshDiceBonuses()
     sheetRef.value?.resetSfxCounts()
   }
   sharePhase()
@@ -1362,6 +1381,7 @@ onMounted(() => {
   document.addEventListener('click', onDocumentClick, true)  // capture: outside-tap closes panel
   if (playerId.value) fetchPlayerEntities()
   if (gmMode.value) prefetchEntities()  // warm scene-overview cache before panel opens
+  refreshDiceBonuses()
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
   offRollTableResolved = bus.on('roll-table:resolved', onRollTableResolved)
   offCanvasOpenFull = bus.on('canvas:open-full', (payload) => { fullCanvas.value = payload })
@@ -1405,7 +1425,7 @@ function onRolled() {
 
 function onSfxToggled(e) {
   if (e.sfxId === 'sfx-spray-n-pray') {
-    effectCount.value = e.active ? 2 : 1
+    sprayNprayActive.value = e.active
   }
 }
 

@@ -455,6 +455,58 @@ def test_set_traitset_limit_updates_and_restores_prior():
     assert repo.scheduled_events[0].effect.result == "1"  # prior limit restored
 
 
+# ── Dice-limit modifiers ────────────────────────────
+
+def test_increase_dice_limit_total_schedules_inverse():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "total"},
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert entity.total_dice_bonus == 1
+    assert entity.effect_dice_bonus == 0
+    assert len(result.applied) == 1
+    assert len(repo.scheduled_events) == 1
+    revert = repo.scheduled_events[0].effect
+    assert revert.action == "decrease"
+    assert revert.result == "1"
+    assert revert.context == {"limit": "total"}
+
+
+def test_decrease_dice_limit_effect_schedules_inverse():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="decrease",
+        result="2", context={"limit": "effect"},
+        duration=EffectDuration(timers=[Timer(event="beat", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    apply_effects(entity, [effect], repo)
+    assert entity.total_dice_bonus == 0
+    assert entity.effect_dice_bonus == -2
+    revert = repo.scheduled_events[0].effect
+    assert revert.action == "increase"
+    assert revert.result == "2"
+    assert revert.context == {"limit": "effect"}
+
+
+def test_dice_limit_without_duration_is_permanent():
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "total"},
+    )
+    apply_effects(entity, [effect], repo)
+    assert entity.total_dice_bonus == 1
+    assert repo.scheduled_events == []  # no duration → no revert
+
+
 # ── Complications (unified polarity) ─────────────────
 
 def test_gain_negative_sets_negative():

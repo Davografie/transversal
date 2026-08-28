@@ -144,6 +144,7 @@ def _resolve_relationship_endpoint(repo, entity_id, elevated: bool = False):
 def _entity_to_gql(e: DomainEntity) -> Entity:
     return Entity(
         id=e.id, type=e.type, name=e.name, razmerit=e.razmerit,
+        total_dice_bonus=e.total_dice_bonus, effect_dice_bonus=e.effect_dice_bonus,
         current_universe=e.current_universe, current_location=e.current_location,
         current_projection=e.current_projection,
         hidden=e.hidden, unpublished=e.unpublished, known_to=e.known_to,

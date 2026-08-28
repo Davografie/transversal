@@ -91,6 +91,8 @@ def _register_core_handlers(em, raz):
     effect_registry.register("projection", "create", _commit)
     effect_registry.register("projection", "restore", _commit)
     effect_registry.register("modify_traitset", "set_limit", _commit)
+    effect_registry.register("modify_dice_limit", "increase", _commit)
+    effect_registry.register("modify_dice_limit", "decrease", _commit)
 
     # Entity operations
     def _create_asset(a, eid, u, ctx):
@@ -1016,6 +1018,36 @@ def _apply_set_traitset_limit(entity, effect, repo, result):
         _queue_entity_revert(repo, subject, effect, prior_result=str(prior) if prior is not None else "")
 
 
+def _apply_dice_limit(entity, effect, repo, result):
+    """Increase/decrease the dice-pool selection limits (total vs effect dice).
+
+    ``effect.result`` is the delta magnitude (default 1); ``effect.context.limit``
+    selects ``total`` (base 2) or ``effect`` (base 1). The delta is applied to
+    ``Entity.total_dice_bonus`` / ``Entity.effect_dice_bonus``; a duration on the
+    effect schedules the inverse (opposite sign, same magnitude) on expiry.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+
+    which = (effect.context or {}).get("limit") or "total"
+    raw = (effect.result or "").strip()
+    try:
+        amount = int(raw)
+    except (TypeError, ValueError):
+        amount = 1
+    delta = amount if effect.action == "increase" else -amount
+
+    if which == "effect":
+        subject.effect_dice_bonus = (subject.effect_dice_bonus or 0) + delta
+    else:
+        subject.total_dice_bonus = (subject.total_dice_bonus or 0) + delta
+
+    result.applied.append(AppliedEffect(effect, f"{effect.action}d {which} dice limit by {amount}"))
+    _queue_entity_revert(repo, subject, effect)
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1384,6 +1416,8 @@ _MUTATION_HANDLERS = {
     ("projection", "create"): _apply_create_projection,
     ("projection", "restore"): _apply_restore_projection,
     ("modify_traitset", "set_limit"): _apply_set_traitset_limit,
+    ("modify_dice_limit", "increase"): _apply_dice_limit,
+    ("modify_dice_limit", "decrease"): _apply_dice_limit,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,
