@@ -37,6 +37,8 @@ class TargetContext:
     subject: Any = None                    # the acting entity (for `select self`)
     repo: Any = None                       # repository (edge lookups)
     collections: dict[str, list[Any]] = field(default_factory=dict)  # seed collections
+    source: Any = None                     # the SFX's activation source (for `select source`)
+    source_element: str | None = None      # its catalog element type (drives the source's type)
 
 
 @dataclass
@@ -168,6 +170,14 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
 
     for i, step in enumerate(spec.steps):
         if isinstance(step, SelectStep):
+            if step.collection == "source":
+                if context.source_element is None:
+                    errors.append(TraceError(i, "select source requires a declared source_kind"))
+                    values, current_type = [], None
+                else:
+                    values = [context.source] if context.source is not None else []
+                    current_type = ValueType(context.source_element, "one")
+                continue
             col = tc.collection(step.collection)
             if col is None:
                 errors.append(TraceError(i, f"unknown collection {step.collection!r}"))

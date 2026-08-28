@@ -85,12 +85,15 @@ class TraceError:
 
 # ── Type-checker ──────────────────────────────────────────────
 
-def trace(spec: TargetSpec) -> tuple[list[ValueType | None], list[TraceError]]:
+def trace(spec: TargetSpec, source_element: str | None = None) -> tuple[list[ValueType | None], list[TraceError]]:
     """Walk a spec, returning the type after each step plus any errors.
 
     ``types[i]`` is the collection type after ``spec.steps[i]``. ``errors`` are
     step-level failures (unknown collection/edge/field/aggregation, or a
     malformed aggregation). ``types[i]`` is None where a step failed.
+
+    ``source_element`` is the catalog element type of the SFX's declared
+    ``source_kind``; ``select source`` uses it (and errors without it).
     """
     types: list[ValueType | None] = []
     errors: list[TraceError] = []
@@ -98,12 +101,22 @@ def trace(spec: TargetSpec) -> tuple[list[ValueType | None], list[TraceError]]:
 
     for i, step in enumerate(spec.steps):
         if isinstance(step, SelectStep):
-            col = tc.collection(step.collection)
-            if col is None:
-                errors.append(TraceError(i, f"unknown collection {step.collection!r}"))
-                current = None
+            if step.collection == "source":
+                if source_element is None:
+                    errors.append(TraceError(i, "select source requires a declared source_kind"))
+                    current = None
+                elif tc.element(source_element) is None:
+                    errors.append(TraceError(i, f"unknown source element {source_element!r}"))
+                    current = None
+                else:
+                    current = ValueType(source_element, "one")
             else:
-                current = ValueType(col.element, "one" if col.singular else "many")
+                col = tc.collection(step.collection)
+                if col is None:
+                    errors.append(TraceError(i, f"unknown collection {step.collection!r}"))
+                    current = None
+                else:
+                    current = ValueType(col.element, "one" if col.singular else "many")
 
         elif isinstance(step, FilterStep):
             if current is None:
@@ -165,17 +178,17 @@ def trace(spec: TargetSpec) -> tuple[list[ValueType | None], list[TraceError]]:
     return types, errors
 
 
-def final_type(spec: TargetSpec) -> ValueType | None:
+def final_type(spec: TargetSpec, source_element: str | None = None) -> ValueType | None:
     """The type a valid spec resolves to, or None if it errors."""
-    types, errors = trace(spec)
+    types, errors = trace(spec, source_element)
     if errors or not types:
         return None
     return types[-1]
 
 
-def check(spec: TargetSpec, destination: ValueType) -> tuple[bool, list[TraceError]]:
+def check(spec: TargetSpec, destination: ValueType, source_element: str | None = None) -> tuple[bool, list[TraceError]]:
     """True when ``spec`` type-checks and its final type matches ``destination``."""
-    types, errors = trace(spec)
+    types, errors = trace(spec, source_element)
     if errors:
         return False, errors
     final = types[-1] if types else None

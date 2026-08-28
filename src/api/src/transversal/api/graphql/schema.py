@@ -719,17 +719,21 @@ class Query:
         input: TargetSpecInput,
         destination_element: Optional[str] = None,
         destination_cardinality: Optional[str] = None,
+        source_element: Optional[str] = None,
     ) -> TargetTraceResult:
         """Type-check a targeting spec draft: the type after each step, step
-        errors, and whether it reaches the requested destination type."""
+        errors, and whether it reaches the requested destination type.
+
+        ``source_element`` is the catalog element type of the SFX's declared
+        ``source_kind``, so ``select source`` type-checks against it."""
         from transversal.services import target_spec as ts
 
         spec = _target_spec_input_to_domain(input)
-        types, errors = ts.trace(spec)
+        types, errors = ts.trace(spec, source_element)
 
         valid = False
         if destination_element and destination_cardinality:
-            valid, _ = ts.check(spec, ts.ValueType(destination_element, destination_cardinality))
+            valid, _ = ts.check(spec, ts.ValueType(destination_element, destination_cardinality), source_element)
 
         return TargetTraceResult(
             types=[

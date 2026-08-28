@@ -241,3 +241,27 @@ def test_literal_step_resolves_via_repo():
     res = resolve(s, ctx)
     assert res.errors == []
     assert [v.id for v in res.values] == ["trait-martial"]
+
+
+def test_select_source_resolves_from_context():
+    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    class Repo:
+        pass
+
+    src = {"id": "char-1:martial", "entity_id": "char-1"}
+    ctx = TargetContext(subject=None, repo=Repo(), source=src, source_element="traitsetting")
+    res = resolve(TargetSpec(steps=[SelectStep(collection="source")]), ctx)
+    assert res.errors == []
+    assert [v["id"] for v in res.values] == ["char-1:martial"]
+
+
+def test_select_source_without_source_is_empty():
+    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    res = resolve(TargetSpec(steps=[SelectStep(collection="source")]),
+                  TargetContext(subject=None, repo=object(), source=None, source_element="traitsetting"))
+    assert res.values == []
+    assert res.errors == []

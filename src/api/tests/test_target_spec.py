@@ -188,3 +188,33 @@ def test_literal_step_deserializes_from_dict():
     from transversal.services.target_spec import LiteralStep
     assert isinstance(s.steps[0], LiteralStep)
     assert final_type(s) == ValueType("trait", "one")
+
+
+def test_select_source_requires_source_kind():
+    from transversal.services.target_spec import SelectStep, TargetSpec, trace
+
+    spec = TargetSpec(steps=[SelectStep(collection="source")])
+    _, errors = trace(spec)
+    assert any("requires a declared source_kind" in e.message for e in errors)
+
+
+def test_select_source_types_by_source_kind():
+    from transversal.services.target_spec import SelectStep, TargetSpec, trace
+
+    spec = TargetSpec(steps=[SelectStep(collection="source")])
+    types, errors = trace(spec, source_element="traitsetting")
+    assert errors == []
+    assert types[-1].element == "traitsetting"
+    assert types[-1].cardinality == "one"
+
+
+def test_select_source_navigates_from_source_element():
+    from transversal.services.target_spec import NavigateStep, SelectStep, TargetSpec, check, ValueType
+
+    # source = traitsetting → navigate to its owning entity.
+    spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        NavigateStep(edge="entity"),
+    ])
+    ok, errors = check(spec, ValueType("entity", "one"), source_element="traitsetting")
+    assert ok, errors

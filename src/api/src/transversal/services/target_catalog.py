@@ -271,6 +271,12 @@ def source_variable(value: str) -> str | None:
     return sk.variable if sk else None
 
 
+def source_element(value: str) -> str | None:
+    """The catalog element type a ``source_kind``'s source resolves to."""
+    sk = _SOURCE_KINDS_BY_VALUE.get(value)
+    return sk.element if sk else None
+
+
 def bind_source(source_kind: str, source_id: str | None, context: dict) -> dict:
     """Inject the declared source variable into a fire-time context.
 
