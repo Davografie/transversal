@@ -492,6 +492,31 @@ class TestTargetCatalogGraphQL:
         tr = result["traceTargetSpec"]
         assert tr["valid"] is False
 
+    def test_trace_target_spec_choose_collapses_many_to_one(self, client):
+        result = _gql(client, """
+            query($input: TargetSpecInput!, $e: String, $c: String) {
+                traceTargetSpec(input: $input, destinationElement: $e, destinationCardinality: $c) {
+                    types { element cardinality }
+                    errors { stepIndex message }
+                    valid
+                }
+            }
+        """, {
+            "input": {
+                "steps": [
+                    {"kind": "select", "collection": "rolled_dice"},
+                    {"kind": "choose", "count": 1},
+                ],
+            },
+            "e": "die",
+            "c": "one",
+        })
+        tr = result["traceTargetSpec"]
+        assert tr["errors"] == []
+        assert [t["element"] for t in tr["types"]] == ["die", "die"]
+        assert [t["cardinality"] for t in tr["types"]] == ["many", "one"]
+        assert tr["valid"] is True
+
 
 class TestEffectTargetSpecGraphQL:
     def test_target_spec_round_trips_through_graphql(self):

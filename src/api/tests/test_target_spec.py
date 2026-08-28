@@ -4,6 +4,7 @@ from pydantic import ValidationError
 
 from transversal.services.target_spec import (
     AggregateStep,
+    ChooseStep,
     FilterStep,
     NavigateStep,
     RandomStep,
@@ -253,4 +254,52 @@ def test_random_deserializes_from_dict():
         {"kind": "random", "count": 2},
     ]})
     assert isinstance(s.steps[1], RandomStep)
+    assert final_type(s) == ValueType("die", "many")
+
+
+def test_choose_collapses_many_to_one():
+    s = spec(SelectStep(collection="rolled_dice"), ChooseStep())
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("die", "one")
+
+
+def test_choose_count_many_keeps_many():
+    s = spec(SelectStep(collection="rolled_dice"), ChooseStep(count=3))
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("die", "many")
+
+
+def test_choose_requires_many_collection():
+    s = spec(SelectStep(collection="self"), ChooseStep())
+    types, errors = trace(s)
+    assert any("many-cardinality" in e.message for e in errors)
+
+
+def test_choose_count_must_be_positive():
+    s = spec(SelectStep(collection="rolled_dice"), ChooseStep(count=0))
+    types, errors = trace(s)
+    assert any("count must be >= 1" in e.message for e in errors)
+
+
+def test_choose_may_be_mid_path():
+    # Terminal choose is the common case, but the grammar allows a suffix;
+    # the type-checker must keep tracing past the collapse.
+    s = spec(
+        SelectStep(collection="rolled_dice"),
+        ChooseStep(),
+        NavigateStep(edge="traitsetting"),
+    )
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("traitsetting", "one")
+
+
+def test_choose_deserializes_from_dict():
+    s = TargetSpec.model_validate({"steps": [
+        {"kind": "select", "collection": "rolled_dice"},
+        {"kind": "choose", "count": 2},
+    ]})
+    assert isinstance(s.steps[1], ChooseStep)
     assert final_type(s) == ValueType("die", "many")

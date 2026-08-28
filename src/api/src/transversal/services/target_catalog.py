@@ -241,6 +241,35 @@ COLLECTIONS: tuple[Collection, ...] = (
 )
 
 
+# ── Display fields (choose-picker labels) ──────────────────
+#
+# Declarative picker labels per element type. The interactive ``choose`` step
+# resolves candidates on the backend; the frontend dialog needs a primary label
+# and a secondary label for each. This table names which element field carries
+# each, so the serializer and the picker renderer stay data-driven and share one
+# source of truth (rather than a bespoke component per type).
+
+@dataclass(frozen=True)
+class DisplayFields:
+    element: str
+    name_field: str = ""        # field for the primary label (empty → element id)
+    subtitle_field: str = ""    # field for the secondary label (empty → none)
+
+
+DISPLAY_FIELDS: dict[str, DisplayFields] = {
+    "die": DisplayFields("die", "rating", "role"),
+    "traitsetting": DisplayFields("traitsetting", "trait_id", "rating"),
+    "traitsetsetting": DisplayFields("traitsetsetting", "traitset_id", ""),
+    "trait": DisplayFields("trait", "name", "traitset_id"),
+    "traitset": DisplayFields("traitset", "name", ""),
+    "entity": DisplayFields("entity", "name", "type"),
+    "projection": DisplayFields("projection", "name", "universe"),
+    "location": DisplayFields("location", "name", "universe"),
+    "universe": DisplayFields("universe", "name", ""),
+    "pool": DisplayFields("pool", "kind", ""),
+}
+
+
 # ── Source kinds (SFX activation origin) ────────────────────
 #
 # The declarative owner type an SFX can state. Each entry maps an author-facing
@@ -339,6 +368,11 @@ def collection(name: str) -> Collection | None:
         if c.name == name:
             return c
     return None
+
+
+def display_fields(element: str) -> DisplayFields | None:
+    """The picker label fields for ``element``, or None when undeclared."""
+    return DISPLAY_FIELDS.get(element)
 
 
 # ── Validation ─────────────────────────────────────────────────
