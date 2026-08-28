@@ -10,6 +10,7 @@ from transversal.domain import (
     Polarity,
     Projection,
     RatingType,
+    TargetRef,
     TraitSetting,
     TraitSetSetting,
     TransversalType,
@@ -570,7 +571,10 @@ def test_add_trait_rating_dice_to_difficulty_pool():
     entity = _entity(current_location="loc-1")
     effect = Effect(
         timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
-        target="char-1:trait-scar",
+        refs={
+            "trait": TargetRef(value="char-1:trait-scar"),
+            "pool": TargetRef(value="difficulty:loc-1"),
+        },
     )
     result = apply_effects(entity, [effect], repo)
     assert len(result.applied) == 1
@@ -578,6 +582,34 @@ def test_add_trait_rating_dice_to_difficulty_pool():
     assert [d["die"] for d in pool] == ["d8", "d6"]
     assert all(d["source_kind"] == "trait" for d in pool)
     assert all(d["ts_id"] == "char-1:trait-scar" for d in pool)
+    store.clear_all()
+
+
+def test_add_trait_rating_dice_targets_an_entity_pool():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "char-1", [])
+
+    ts = _ts("trait-scar", [DieType.D8])
+    repo = FakeRepo(
+        traits=[FakeTrait("trait-scar", "ts-complications", name="Scar")],
+        traitsettings=[ts],
+        entities=[Entity(id="char-1", type=EntityType.CHARACTER, name="hero", current_universe="earth", current_location="loc-1")],
+    )
+    entity = _entity(current_location="loc-1")
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
+        refs={
+            "trait": TargetRef(value="char-1:trait-scar"),
+            "pool": TargetRef(value="pool:char-1"),
+        },
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.applied) == 1
+    pool = store.get_pool("loc-1", "char-1")
+    assert [d["die"] for d in pool] == ["d8"]
     store.clear_all()
 
 

@@ -194,7 +194,13 @@ class EffectsEngine:
 
                 effect = _substitute_effect_context(effect, effect_context)
                 if effect.timing == EffectTiming.IMMEDIATE:
-                    if effect.target_spec is not None:
+                    if effect.refs:
+                        resolved = resolve_refs(effect, _fire_context(event, sfx, repo))
+                        _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
+                        outcome.applied.append(resolved)
+                        sfx_applied = True
+                        log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
+                    elif effect.target_spec is not None:
                         outcome.applied.extend(_apply_immediate_spec(
                             effect, event, sfx, effect_context, repo,
                         ))
@@ -349,6 +355,19 @@ def _substitute_effect_context(effect: Effect, context: dict) -> Effect:
         if new != old:
             updates[field] = new
 
+    if effect.refs:
+        new_refs = {}
+        refs_changed = False
+        for name, ref in effect.refs.items():
+            nv = _sub(ref.value)
+            if nv != ref.value:
+                new_refs[name] = ref.model_copy(update={"value": nv})
+                refs_changed = True
+            else:
+                new_refs[name] = ref
+        if refs_changed:
+            updates["refs"] = new_refs
+
     new_context = {}
     context_changed = False
     for k, v in (effect.context or {}).items():
@@ -374,6 +393,47 @@ def _resolved_id(value) -> str | None:
     if isinstance(value, dict):
         return value.get("ts_id") or value.get("id")
     return getattr(value, "ts_id", None) or getattr(value, "id", None)
+
+
+def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None):
+    """Build the resolver context for a fire-time effect (spec + refs paths share it)."""
+    from transversal.services.target_resolver import TargetContext, resolve_source
+
+    entity = repo.get_entity(event.entity_id) if repo is not None else None
+    source_id = event.context.get("source_id") if event.context else None
+    source, source_element = (
+        resolve_source(sfx.source_kind or "", source_id, repo)
+        if sfx.source_kind and source_id and repo is not None
+        else (None, None)
+    )
+    return TargetContext(
+        subject=entity, repo=repo, collections=collections or {},
+        source=source, source_element=source_element,
+    )
+
+
+def resolve_refs(effect: Effect, context) -> Effect:
+    """Resolve each named ref's spec to a single id (first value) and return it.
+
+    A no-op when the effect has no refs or no ref carries a ``spec``. Literal /
+    token refs (``self``, ``{choose_*}``, raw ids) pass through unchanged; the
+    handler reads ``refs[name].value``. Fan-out (one ref → many targets) is
+    handled separately in the Step-3 migration.
+    """
+    if not effect.refs:
+        return effect
+    from transversal.services.target_resolver import resolve
+
+    refs = dict(effect.refs)
+    for name, ref in refs.items():
+        if ref.spec is None:
+            continue
+        resolution = resolve(ref.spec, context)
+        if resolution.values:
+            rid = _resolved_id(resolution.values[0])
+            if rid is not None:
+                refs[name] = ref.model_copy(update={"value": rid})
+    return effect.model_copy(update={"refs": refs})
 
 
 def _apply_immediate_spec(

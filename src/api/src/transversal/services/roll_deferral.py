@@ -204,6 +204,9 @@ def _apply_armed(
     for effect in armed.effects:
         if effect.timing.value != event_type:
             continue
+        if effect.refs:
+            applied.append(_apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id))
+            continue
         if effect.target_spec is not None:
             applied.extend(_apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id))
             continue
@@ -231,6 +234,35 @@ def _resolved_id(value) -> str | None:
     if isinstance(value, dict):
         return value.get("ts_id") or value.get("id")
     return getattr(value, "ts_id", None) or getattr(value, "id", None)
+
+
+def _apply_refs_roll(
+    effect: Effect,
+    entity_id: str,
+    universe: str,
+    context: dict | None,
+    rolls: list[dict],
+    source_kind: str | None = None,
+    source_id: str | None = None,
+) -> Effect:
+    """Resolve an armed effect's named refs against the roll context and apply."""
+    from transversal.main import _get_repo
+    from transversal.services.effects_applier import effect_registry
+    from transversal.services.effects_engine import _substitute_effect_context, resolve_refs
+    from transversal.services.target_resolver import TargetContext, resolve_source
+
+    repo = _get_repo()
+    entity = repo.get_entity(entity_id)
+    source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
+    resolved = resolve_refs(
+        _substitute_effect_context(effect, context or {}),
+        TargetContext(
+            subject=entity, repo=repo, collections={"rolled_dice": rolls},
+            source=source, source_element=source_element,
+        ),
+    )
+    effect_registry.apply(resolved, entity_id, universe, context or {})
+    return resolved
 
 
 def _apply_spec_target(

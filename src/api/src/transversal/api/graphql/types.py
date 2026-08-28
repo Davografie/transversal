@@ -192,6 +192,7 @@ class Effect:
     duration: Optional[EffectDuration] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
+    refs: Optional[strawberry.scalars.JSON] = None
 
 
 @strawberry.input
@@ -211,6 +212,7 @@ class EffectInput:
     duration: Optional[EffectDurationInput] = None
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
+    refs: Optional[strawberry.scalars.JSON] = None
 
 
 @strawberry.type
@@ -569,6 +571,14 @@ class EffectFieldDef:
 
 
 @strawberry.type
+class RefDef:
+    """A named reference an effect action declares (the multi-target model)."""
+    name: str
+    label: str
+    element: str
+
+
+@strawberry.type
 class EffectActionMeta:
     """Metadata for one effect action the editor can create."""
     action_id: str
@@ -589,6 +599,7 @@ class EffectActionMeta:
     implicit_timing: Optional[str] = None
     requires_choice: bool = False
     target_kind: Optional[str] = None
+    refs: list[RefDef] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
