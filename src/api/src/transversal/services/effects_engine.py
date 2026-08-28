@@ -179,7 +179,13 @@ class EffectsEngine:
             if roll_effects:
                 # Arm the SFX's roll-timing effects as a unit for its duration.
                 from transversal.services.roll_deferral import arm_sfx
-                arm_sfx(event.entity_id, roll_effects, source_sfx_id=sfx.id, duration=sfx.duration)
+                arm_sfx(
+                    event.entity_id, roll_effects,
+                    source_sfx_id=sfx.id,
+                    source_kind=sfx.source_kind,
+                    source_id=event.context.get("source_id") if event.context else None,
+                    duration=sfx.duration,
+                )
                 sfx_applied = True
 
             for effect in sfx.effects:

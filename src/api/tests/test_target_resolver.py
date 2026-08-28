@@ -265,3 +265,29 @@ def test_select_source_without_source_is_empty():
                   TargetContext(subject=None, repo=object(), source=None, source_element="traitsetting"))
     assert res.values == []
     assert res.errors == []
+
+
+def test_resolve_source_maps_unambiguous_kinds():
+    from types import SimpleNamespace
+    from transversal.services.target_resolver import resolve_source
+
+    repo = SimpleNamespace(
+        get_traitsetting=lambda tid: SimpleNamespace(id=tid),
+        get_traitsetsetting=lambda tid: SimpleNamespace(id=tid),
+        get_entity=lambda eid: SimpleNamespace(id=eid),
+        get_projection=lambda pid: SimpleNamespace(id=pid),
+    )
+
+    obj, element = resolve_source("trait_setting", "char-1:martial", repo)
+    assert element == "traitsetting" and obj.id == "char-1:martial"
+
+    obj, element = resolve_source("traitset_setting", "char-1:ts", repo)
+    assert element == "traitsetsetting" and obj.id == "char-1:ts"
+
+    # entity/projection are deferred (entity/projection seam).
+    assert resolve_source("entity", "char-1", repo) is None
+    assert resolve_source("projection", "char-1:earth", repo) is None
+    # Unknown kind / empty id / no repo → None.
+    assert resolve_source("bogus", "x", repo) is None
+    assert resolve_source("trait_setting", "", repo) is None
+    assert resolve_source("trait_setting", "x", None) is None

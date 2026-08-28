@@ -56,6 +56,26 @@ def register_edge(source: str, name: str, resolver: EdgeResolver) -> None:
     _EDGE_RESOLVERS[(source, name)] = resolver
 
 
+def resolve_source(source_kind: str, source_id: str | None, repo) -> tuple[Any, str] | None:
+    """Resolve a declared ``source_kind`` + ``source_id`` to ``(object, element)``.
+
+    Only the unambiguous instance kinds resolve here — ``trait_setting`` →
+    ``traitsetting``, ``traitset_setting`` → ``traitsetsetting``. ``entity``/
+    ``projection`` return ``None`` for now: which object is the source when a
+    character acts via a projection is the still-open entity/projection seam.
+    """
+    if not source_kind or not source_id or repo is None:
+        return None
+    element = tc.source_element(source_kind)
+    if element == "traitsetting":
+        obj = repo.get_traitsetting(source_id)
+        return (obj, element) if obj is not None else None
+    if element == "traitsetsetting":
+        obj = repo.get_traitsetsetting(source_id)
+        return (obj, element) if obj is not None else None
+    return None
+
+
 # ── Element access helpers ───────────────────────────────────
 
 def _get_field(element: Any, name: str) -> Any:

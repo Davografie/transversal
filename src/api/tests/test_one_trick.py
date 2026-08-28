@@ -134,3 +134,43 @@ def test_one_trick_end_to_end(monkeypatch):
     roll_deferral.fire_armed("char-1", "on_roll", "earth", {"rolls": rolls})
 
     assert [e.target for e in applied] == ["char-1:martial", "char-1:qi"]
+
+
+def test_select_source_resolves_at_fire_time(monkeypatch):
+    """A manual trait-SFX with ``target_spec = select source`` steps up the
+    trait instance it was activated from."""
+    from types import SimpleNamespace
+
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    roll_deferral.reset()
+
+    repo = OneTrickRepo()
+    # The source traitsetting has an owner entity, for the navigate edge.
+    repo.traitsettings["char-1:martial"].entity_id = "char-1"
+    sfx = SFX(
+        id="sfx-muscle-memory", name="Muscle Memory", trigger="manual",
+        source_kind="trait_setting",
+        effects=[Effect(
+            timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_up",
+            target="", target_spec=TargetSpec(steps=[SelectStep(collection="source")]),
+        )],
+    )
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    # Arm the SFX with its source, then fire the roll.
+    roll_deferral.arm_sfx(
+        "char-1", sfx.effects, source_sfx_id=sfx.id,
+        source_kind="trait_setting", source_id="char-1:martial",
+    )
+
+    applied = []
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    roll_deferral.fire_armed("char-1", "on_roll", "earth", {"rolls": []})
+
+    assert [e.target for e in applied] == ["char-1:martial"]

@@ -42,6 +42,8 @@ class ArmedSfx:
     rolls: Optional[int] = None  # remaining roll-event budget; None = no roll limit
     expiry_events: list[str] = field(default_factory=list)  # boundary/state events that drop it
     source_sfx_id: str | None = None  # SFX id the client stamps on its dice
+    source_kind: str | None = None  # the SFX's declared source_kind (for `select source`)
+    source_id: str | None = None  # the concrete source id (activation origin)
 
 
 _armed: dict[str, list[ArmedSfx]] = {}
@@ -71,6 +73,8 @@ def arm_sfx(
     effects: list[Effect],
     *,
     source_sfx_id: str | None = None,
+    source_kind: str | None = None,
+    source_id: str | None = None,
     duration=None,
 ) -> None:
     """Arm an SFX's roll-timing ``effects`` so they fire at their roll events.
@@ -80,6 +84,9 @@ def arm_sfx(
     other timer (``beat``/``scene``/``session``/state-change) is a boundary that
     drops the SFX. Effects are stored raw — roll-context ``{variables}``
     substitute at fire time, because the roll state does not exist at arm time.
+
+    ``source_kind``/``source_id`` carry the SFX's activation source so a
+    ``select source`` spec resolves at fire time.
     """
     rolls, expiry_events = _split_duration(duration)
     log.info(
@@ -94,6 +101,8 @@ def arm_sfx(
             rolls=rolls,
             expiry_events=expiry_events,
             source_sfx_id=source_sfx_id,
+            source_kind=source_kind,
+            source_id=source_id,
         )
     )
 
@@ -196,7 +205,7 @@ def _apply_armed(
         if effect.timing.value != event_type:
             continue
         if effect.target_spec is not None:
-            applied.extend(_apply_spec_target(effect, entity_id, universe, context, rolls))
+            applied.extend(_apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id))
             continue
         if armed.source_sfx_id is not None or bool(effect.die_filter):
             dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
@@ -230,19 +239,26 @@ def _apply_spec_target(
     universe: str,
     context: dict | None,
     rolls: list[dict],
+    source_kind: str | None = None,
+    source_id: str | None = None,
 ) -> list[Effect]:
     """Resolve an effect's ``target_spec`` against the roll context and apply it
     once per resolved target (e.g. One Trick: rolled dice → traitsetting → step
-    down each)."""
+    down each). A ``select source`` step seeds from the SFX's activation source
+    when ``source_kind``/``source_id`` are provided."""
     from transversal.main import _get_repo
     from transversal.services.effects_applier import effect_registry
-    from transversal.services.target_resolver import TargetContext, resolve
+    from transversal.services.target_resolver import TargetContext, resolve, resolve_source
 
     repo = _get_repo()
     entity = repo.get_entity(entity_id)
+    source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
     resolution = resolve(
         effect.target_spec,
-        TargetContext(subject=entity, repo=repo, collections={"rolled_dice": rolls}),
+        TargetContext(
+            subject=entity, repo=repo, collections={"rolled_dice": rolls},
+            source=source, source_element=source_element,
+        ),
     )
 
     applied: list[Effect] = []
