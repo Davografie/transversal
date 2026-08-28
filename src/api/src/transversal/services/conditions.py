@@ -58,6 +58,25 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     if condition.type in (ConditionType.ALWAYS, ConditionType.NARRATIVE):
         return True  # narrative limits are not auto-blocking
 
+    # Outcome gates read trigger/roll context rather than entity state, so
+    # evaluate them before resolving a subject (they may not need one).
+    if condition.type == ConditionType.CONTEST_OUTCOME:
+        return (context or {}).get("contest_winner") == (condition.target or "").strip()
+
+    if condition.type == ConditionType.ROLL_TIER:
+        from transversal.domain import OutcomeTier
+
+        tier = (context or {}).get("tier")
+        if not tier or not condition.value:
+            return False
+        try:
+            order = list(OutcomeTier)
+            actual = order.index(OutcomeTier(tier))
+            threshold = order.index(OutcomeTier(condition.value))
+        except (ValueError, KeyError):
+            return False
+        return _compare(actual, condition.operator or ">=", threshold)
+
     subject = _resolve_subject(condition, entity, context or {}, repo)
     if subject is None:
         return False
@@ -184,5 +203,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),
     ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe"),
     ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved")),
+    ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent")),
+    ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<")),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
 )

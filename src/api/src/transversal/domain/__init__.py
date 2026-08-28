@@ -676,6 +676,13 @@ class EffectTiming(str, Enum):
     ON_ROLL = "on_roll"
     ON_SET = "on_set"
     ON_RESULT = "on_result"
+    # Outcome-gated timings — fire at the next contest/roll resolution, gated by
+    # the outcome. Also expressible via an effect condition, but kept as timing
+    # names to mirror the SFX trigger vocabulary.
+    ON_CONTEST_WIN = "on_contest_win"
+    ON_CONTEST_LOSS = "on_contest_loss"
+    ON_SUCCESS = "on_success"
+    ON_FAILURE = "on_failure"
 
 
 class AttunementScope(str, Enum):
@@ -727,6 +734,7 @@ class Effect(BaseModel):
     entity_scope: Optional[str] = None  # narrowing hint for runtime entity choice
     target_filter: dict = Field(default_factory=dict)  # candidate field predicates, e.g. {"starter_location": True}
     die_filter: dict = Field(default_factory=dict)  # roll-die predicates for roll-deferred effects, e.g. {"role": None}
+    conditions: list["Condition"] = Field(default_factory=list)  # per-effect gate (reuses the SFX condition model)
     negative: bool = False  # polarity of trait-grant effects: true = negative trait (opponent uses it)
     context: dict = Field(default_factory=dict)  # e.g. relationship description
     duration: Optional["EffectDuration"] = None  # when set, schedules the inverse effect on expiry
@@ -883,6 +891,8 @@ class ConditionType(str, Enum):
     UNPLACED = "unplaced"                # entity has no current location yet
     IN_UNIVERSE = "in_universe"          # target = universe key; entity is currently there
     PHASE = "phase"                      # target = dice-pool phase (e.g. "adding"); reads trigger context
+    CONTEST_OUTCOME = "contest_outcome"  # target = "player" | "opponent"; reads context["contest_winner"]
+    ROLL_TIER = "roll_tier"              # operator + value against OutcomeTier (e.g. >= success); reads roll_result.tier
 
 
 class Condition(BaseModel):
