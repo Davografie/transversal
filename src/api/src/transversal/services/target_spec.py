@@ -1,7 +1,8 @@
 """Target spec — the structured targeting pipeline and its type-checker.
 
 A ``TargetSpec`` is an ordered list of steps (``select`` / ``filter`` /
-``navigate`` / ``aggregate``) that resolves a reference against the game state.
+``navigate`` / ``aggregate`` / ``literal`` / ``random``) that resolves a
+reference against the game state.
 This module owns the *shape* of the spec and the *type-checker* that walks a
 spec against the [[target_catalog]] to verify it can reach a destination type.
 (The runtime *resolver* — turning a valid spec into actual game objects — is a
@@ -55,8 +56,19 @@ class LiteralStep(BaseModel):
     value: str = ""    # the concrete id
 
 
+class RandomStep(BaseModel):
+    """Sample a subset of the current collection at random.
+
+    ``count`` 1 collapses ``many → one``; ``count > 1`` keeps the collection
+    cardinality ``many`` (a random subset). Element type is unchanged. This is
+    the non-interactive resolution mode (the interactive one is ``choose``).
+    """
+    kind: Literal["random"] = "random"
+    count: int = 1
+
+
 TargetStep = Annotated[
-    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep],
+    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep],
     Field(discriminator="kind"),
 ]
 
@@ -172,6 +184,20 @@ def trace(spec: TargetSpec, source_element: str | None = None) -> tuple[list[Val
                 current = None
             else:
                 current = ValueType(step.element, "one")
+
+        elif isinstance(step, RandomStep):
+            if current is None:
+                errors.append(TraceError(i, "random has no collection to pick from"))
+                current = None
+            elif step.count < 1:
+                errors.append(TraceError(i, "random count must be >= 1"))
+                current = None
+            elif current.cardinality != "many":
+                errors.append(TraceError(i, "random requires a many-cardinality collection"))
+                # type unchanged (element preserved; caller sees the error)
+            else:
+                cardinality = "one" if step.count == 1 else "many"
+                current = ValueType(current.element, cardinality)
 
         types.append(current)
 

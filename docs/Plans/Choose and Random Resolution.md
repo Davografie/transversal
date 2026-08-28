@@ -12,7 +12,7 @@ aliases:
   - Choose Step
   - Random Step
   - Targeting Choose
-status: planned
+status: in-progress
 ---
 
 # Choose and Random Resolution
@@ -36,12 +36,12 @@ The targeting path (`TargetSpec`) is a pipeline of steps (`select` / `filter` / 
 
 ## Scope (phased)
 
-### Phase 1 — `random` (no dialog, no staged resolution)
+### Phase 1 — `random` (no dialog, no staged resolution) — ✅ done
 
-- `RandomStep` (single + count `N`).
-- Type-checker: requires `many`, outputs `one` (or `many` for `N`).
-- Resolver: resolve the set, pick one (or `N`) at random.
-- Reuses nothing new — pure backend, applies immediately.
+- `RandomStep` (single + count `N`) — implemented in `target_spec.py` + `target_resolver.py`.
+- Type-checker: requires `many`, outputs `one` (or `many` for `N`); `count` must be ≥ 1.
+- Resolver: resolve the set, sample `count` without replacement (graceful when the set is smaller than `count`).
+- Reuses nothing new — pure backend, applies immediately. Wired into the GraphQL `TargetSpecStepInput.count` + the wizard's `Random` step.
 
 ### Phase 2 — terminal `choose` (dialog, no staged resolution)
 
