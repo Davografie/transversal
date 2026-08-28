@@ -209,7 +209,7 @@
                       class="sfx-card"
                       :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
                       :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
-                      @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId)"
+                      @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, t.id)"
                     >
                       <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
                       <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
@@ -1058,12 +1058,14 @@ function findTsIdForSfx(sfxId) {
   return null
 }
 
-async function activateSfx(sfxId) {
+async function activateSfx(sfxId, sourceId = null) {
   const active = sfxActive(sfxId)
 
   if (!active) {
-    // Activate
-    await triggerSfx(props.entityId, sfxId, props.universe, { phase: props.phase })
+    // Activate. If the SFX declares a source kind, pass the surface it was
+    // clicked from (the trait instance id) as ``source_id`` so the backend
+    // binds it to the declared ``{variable}``.
+    await triggerSfx(props.entityId, sfxId, props.universe, { phase: props.phase, ...(sourceId ? { source_id: sourceId } : {}) })
     sfxActivations.value[sfxId] = 1
     // Re-stamp dice already in the pool (armed after adding).
     const tsId = findTsIdForSfx(sfxId)

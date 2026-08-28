@@ -271,6 +271,23 @@ def source_variable(value: str) -> str | None:
     return sk.variable if sk else None
 
 
+def bind_source(source_kind: str, source_id: str | None, context: dict) -> dict:
+    """Inject the declared source variable into a fire-time context.
+
+    Maps ``source_kind`` → its ``{variable}`` token and binds ``source_id``
+    under that key, so ``_substitute_effect_context`` replaces ``{trait_setting}``
+    etc. with the concrete id. No-op when ``source_kind`` is unset/unknown or
+    ``source_id`` is empty. This is the runtime half of the seam: the *type* is
+    declared on the SFX, the *id* arrives from the activation (client click).
+    """
+    if not source_id:
+        return context
+    sk = _SOURCE_KINDS_BY_VALUE.get(source_kind)
+    if sk is None:
+        return context
+    return {**context, sk.variable: source_id}
+
+
 # ── Query helpers ──────────────────────────────────────────────
 
 def element(name: str) -> ElementType | None:

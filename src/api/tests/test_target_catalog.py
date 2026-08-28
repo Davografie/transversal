@@ -100,3 +100,16 @@ def test_traitsetsetting_element_and_polarity_field_exist():
     pol = tc.field("traitsetting", "polarity")
     assert pol is not None
     assert pol.options == ("positive", "negative")
+
+
+def test_bind_source_maps_kind_to_variable():
+    from transversal.services import target_catalog as tc
+
+    ctx = tc.bind_source("trait_setting", "char-1:martial", {})
+    assert ctx == {"trait_setting": "char-1:martial"}
+
+    # Preserves existing keys; unknown/unset kind or empty id is a no-op.
+    assert tc.bind_source("trait_setting", "x", {"phase": "roll"}) == {"phase": "roll", "trait_setting": "x"}
+    assert tc.bind_source("bogus", "x", {}) == {}
+    assert tc.bind_source("trait_setting", None, {}) == {}
+    assert tc.bind_source("trait_setting", "", {}) == {}

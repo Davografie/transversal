@@ -219,3 +219,56 @@ class TestPushContest:
             self._die("d10", "int"),
         ])
         assert result is None
+
+
+# ── Source binding ────────────────────────────────────
+
+def test_manual_source_binding_resolves_source_variable(monkeypatch):
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services import effects_applier
+
+    engine = EffectsEngine()
+    sfx = SFX(
+        id="sfx-muscle-memory", name="Muscle Memory", trigger="manual",
+        source_kind="trait_setting",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
+            target="{trait_setting}",
+        )],
+    )
+    engine.register(sfx)
+
+    applied = []
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+    monkeypatch.setattr(effects_applier, "effect_registry", FakeRegistry())
+
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth",
+                      context={"source_id": "char-1:martial"})
+    engine.process_event_outcome(event, ["sfx-muscle-memory"], 0)
+
+    assert [e.target for e in applied] == ["char-1:martial"]
+
+
+def test_manual_source_binding_without_source_id_is_noop(monkeypatch):
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services import effects_applier
+
+    engine = EffectsEngine()
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual", source_kind="trait_setting",
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                        action="step_up", target="{trait_setting}")],
+    )
+    engine.register(sfx)
+
+    applied = []
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+    monkeypatch.setattr(effects_applier, "effect_registry", FakeRegistry())
+
+    # No source_id in context → the {trait_setting} placeholder survives untouched.
+    engine.process_event_outcome(GameEvent(type="manual", entity_id="char-1", universe="earth"), ["sfx-x"], 0)
+    assert [e.target for e in applied] == ["{trait_setting}"]

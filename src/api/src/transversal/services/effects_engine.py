@@ -164,6 +164,13 @@ class EffectsEngine:
 
             # Execute each effect with its own timing
             sfx_applied = False
+            # Bind the declared source variable: if the SFX states a source kind
+            # and the activation carries a ``source_id``, map it to the typed
+            # ``{variable}`` so effect fields resolve to the concrete id.
+            effect_context = event.context
+            if sfx.source_kind and event.context.get("source_id"):
+                from transversal.services.target_catalog import bind_source
+                effect_context = bind_source(sfx.source_kind, event.context.get("source_id"), event.context)
             roll_effects = [e for e in sfx.effects if e.timing in _roll_timings]
             log.info(
                 "[process_event] sfx=%s trigger=%s roll_effects=%s",
@@ -179,7 +186,7 @@ class EffectsEngine:
                 if effect.timing in _roll_timings:
                     continue  # armed above (raw; substituted at fire time)
 
-                effect = _substitute_effect_context(effect, event.context)
+                effect = _substitute_effect_context(effect, effect_context)
                 if effect.timing == EffectTiming.IMMEDIATE:
                     if _effects_applier.find_choose_placeholder(effect):
                         outcome.pending.append(PendingSfxEffect(
@@ -188,7 +195,7 @@ class EffectsEngine:
                             sfx_description=sfx.description,
                         ))
                     else:
-                        _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, event.context)
+                        _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, effect_context)
                         outcome.applied.append(effect)
                         sfx_applied = True
                         log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, effect.target)
