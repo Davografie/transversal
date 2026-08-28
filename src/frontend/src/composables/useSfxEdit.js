@@ -11,6 +11,7 @@ const draft = reactive({
   name: '',
   description: '',
   trigger: 'manual',
+  source_kind: null,
   conditions: [],
   effects: [],
   duration: { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' },
@@ -22,10 +23,10 @@ const savedAt = ref(null)
 const validationWarnings = ref([])
 const scopeVariables = ref([])
 
-const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec } duration { timers { event remaining } combine } } }`
-const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec } duration { timers { event remaining } combine } } }`
+const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec } duration { timers { event remaining } combine } } }`
+const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind limit conditions { type target value narrative } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
-const SCOPE_VARS_QUERY = `query($trigger: String) { scopeVariables(trigger: $trigger) { name type } }`
+const SCOPE_VARS_QUERY = `query($trigger: String, $sourceKind: String) { scopeVariables(trigger: $trigger, sourceKind: $sourceKind) { name type } }`
 
 export function generateSfxId(name) {
   return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -78,6 +79,7 @@ export function useSfxEdit() {
     draft.name = sfx?.name || ''
     draft.description = sfx?.description || ''
     draft.trigger = sfx?.trigger || 'manual'
+    draft.source_kind = sfx?.source_kind || null
     draft.conditions = initialConditions(sfx)
     draft.duration = initialDuration(sfx)
     draft.effects = (sfx?.effects || []).map(e => ({ ...e }))
@@ -86,20 +88,22 @@ export function useSfxEdit() {
     successMsg.value = ''
     validationWarnings.value = []
     _suppressEdits = false
-    fetchScopeVariables(draft.trigger)
+    fetchScopeVariables(draft.trigger, draft.source_kind)
   }
 
   function reset() {
     draft.name = ''
     draft.description = ''
+    draft.trigger = 'manual'
+    draft.source_kind = null
     draft.conditions = []
     draft.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
     draft.effects = []
   }
 
-  async function fetchScopeVariables(trigger = '') {
+  async function fetchScopeVariables(trigger = '', sourceKind = null) {
     try {
-      const data = await graphql(SCOPE_VARS_QUERY, { trigger: trigger || '' })
+      const data = await graphql(SCOPE_VARS_QUERY, { trigger: trigger || '', sourceKind: sourceKind || null })
       scopeVariables.value = data?.scopeVariables || []
     } catch {
       scopeVariables.value = []
@@ -112,6 +116,7 @@ export function useSfxEdit() {
         id: sfxId.value || generateSfxId(draft.name) || 'sfx-draft',
         name: draft.name || 'Draft',
         trigger: draft.trigger,
+        sourceKind: draft.source_kind || null,
         conditions: draft.conditions || [],
         effects: draft.effects || [],
         duration: draft.duration,
@@ -131,12 +136,14 @@ export function useSfxEdit() {
       const result = await graphql(UPDATE_MUTATION, {
         input: {
           id: sfxId.value, name: draft.name, trigger: draft.trigger, description: draft.description,
+          sourceKind: draft.source_kind || null,
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
       })
       if (!result) { errorMsg.value = apiError.value || 'Save failed'; return false }
       patchData('sfxs', sfxId.value, {
         name: draft.name, trigger: draft.trigger, description: draft.description,
+        source_kind: draft.source_kind,
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       savedAt.value = Date.now()
@@ -152,6 +159,7 @@ export function useSfxEdit() {
       const result = await graphql(CREATE_MUTATION, {
         input: {
           id, name: draft.name.trim(), trigger: draft.trigger, description: draft.description,
+          sourceKind: draft.source_kind || null,
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
       })
@@ -168,6 +176,7 @@ export function useSfxEdit() {
       await fetchTraitsConfig()
       patchData('sfxs', id, {
         id, name: draft.name.trim(), trigger: draft.trigger, description: draft.description,
+        source_kind: draft.source_kind,
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       successMsg.value = `Created "${draft.name}"`
@@ -190,17 +199,17 @@ export function useSfxEdit() {
   // lets `open()` suppress the initial assignment via `_suppressEdits`.
   if (!_watchersSetup) {
     _watchersSetup = true
-    watch(() => draft.trigger, (t) => {
+    watch(() => [draft.trigger, draft.source_kind], ([t, sk]) => {
       if (_suppressEdits) return
-      fetchScopeVariables(t || '')
+      fetchScopeVariables(t || '', sk || null)
     }, { flush: 'sync' })
-    watch(() => [draft.trigger, draft.conditions, draft.effects], () => {
+    watch(() => [draft.trigger, draft.source_kind, draft.conditions, draft.effects], () => {
       if (_suppressEdits) return
       clearTimeout(_validationTimer)
       _validationTimer = setTimeout(validate, 400)
     }, { deep: true, flush: 'sync' })
     watch(
-      () => [draft.name, draft.description, draft.trigger, draft.conditions, draft.duration, draft.effects],
+      () => [draft.name, draft.description, draft.trigger, draft.source_kind, draft.conditions, draft.duration, draft.effects],
       () => {
         if (_suppressEdits) return
         if (!sfxId.value) return

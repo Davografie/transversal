@@ -14,6 +14,11 @@
         </optgroup>
         <option v-if="!knownTrigger" :value="draft.trigger">{{ draft.trigger }}</option>
       </select>
+      <label>Source</label>
+      <select v-model="draft.source_kind">
+        <option :value="null">None</option>
+        <option v-for="s in sourceKinds" :key="s.value" :value="s.value">{{ s.label }}</option>
+      </select>
       <div v-if="scopeVariables.length" class="sfx-vars">
         <span class="sfx-vars-label">Available variables:</span>
         <span v-for="v in scopeVariables" :key="v.name" class="sfx-var">{{ '{' + v.name + '}' }}<em class="sfx-var-type">{{ v.type }}</em></span>
@@ -69,6 +74,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useSfxEdit } from '@/composables/useSfxEdit.js'
+import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import DangerButton from '@/components/gm/DangerButton.vue'
 import GmEffectEditPanel from './GmEffectEditPanel.vue'
 import EffectList from './EffectList.vue'
@@ -96,6 +102,9 @@ open(props.sfx)
 
 const { load: loadSfxMeta, triggers } = useSfxMeta()
 loadSfxMeta()
+
+const { load: loadCatalog, sourceKinds } = useTargetCatalog()
+loadCatalog()
 
 const { load: loadActions, summarize: summarizeEffect } = useEffectActions()
 loadActions()
@@ -187,6 +196,7 @@ async function onSave() {
   emit('sfx-updated', {
     id: props.sfx.id, name: draft.name, trigger: draft.trigger,
     description: draft.description, conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
+    source_kind: draft.source_kind,
   })
 }
 
@@ -196,6 +206,7 @@ async function onCreate() {
   emit('sfx-created', {
     id, name: draft.name.trim(), trigger: draft.trigger,
     description: draft.description, conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
+    source_kind: draft.source_kind,
   })
   setTimeout(() => { panel.close() }, 600)
   reset()

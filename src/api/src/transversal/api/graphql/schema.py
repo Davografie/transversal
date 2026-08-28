@@ -583,12 +583,20 @@ class Query:
     def scope_variables(
         self, info: strawberry.Info,
         trigger: str = "",
+        source_kind: Optional[str] = None,
     ) -> list[ScopeVariable]:
         """Typed ``{variable}`` tokens available to authored effects for a trigger
-        (auto-fire, manual, or menu)."""
+        (auto-fire, manual, or menu), plus the declared source variable when
+        ``source_kind`` is set."""
         from transversal.services.menu_contexts import trigger_variables
+        from transversal.services.target_catalog import source_kind as sk
 
-        return [ScopeVariable(name=v.name, type=v.type) for v in trigger_variables(trigger)]
+        out = [ScopeVariable(name=v.name, type=v.type) for v in trigger_variables(trigger)]
+        if source_kind:
+            declared = sk(source_kind)
+            if declared and not any(v.name == declared.variable for v in out):
+                out.append(ScopeVariable(name=declared.variable, type=declared.element))
+        return out
 
     @strawberry.field
     def triggers(self, info: strawberry.Info) -> list[TriggerOption]:
@@ -618,6 +626,7 @@ class Query:
 
         draft = DomainSFX(
             id=input.id, name=input.name, trigger=input.trigger,
+            source_kind=input.source_kind,
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
             duration=_duration_input_to_domain(input.duration),

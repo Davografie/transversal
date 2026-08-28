@@ -8,6 +8,7 @@ const CATALOG_QUERY = `{
     fields { element name type options operators }
     aggregations { name label output needsField }
     collections { name element label singular }
+    sourceKinds { value label element variable ownerSurface }
   }
 }`
 
@@ -75,5 +76,9 @@ export function useTargetCatalog() {
     return catalog.value?.collections || []
   }
 
-  return { catalog, loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections }
+  function sourceKinds() {
+    return catalog.value?.sourceKinds || []
+  }
+
+  return { catalog, loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections, sourceKinds }
 }
