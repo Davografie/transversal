@@ -15,6 +15,10 @@
           <option v-for="t in (selectedAction.validTimings || ['IMMEDIATE'])" :key="t" :value="t">{{ timingLabel(t) }}</option>
         </select>
       </div>
+      <div class="ee-field ee-conditions">
+        <label>Only when</label>
+        <ConditionEditor v-model="newEffect.conditions" />
+      </div>
       <div v-if="isRollTiming" class="ee-field">
         <label>Roll dice</label>
         <select :value="dieRole()" @change="setDieRole($event.target.value)">
@@ -135,10 +139,6 @@
           :destination="{ element: r.element }"
           :source-element="sourceElement"
         />
-      </div>
-      <div class="ee-field ee-conditions">
-        <label>Only when</label>
-        <ConditionEditor v-model="newEffect.conditions" />
       </div>
       <TraitInstanceEditor
         v-if="isGainAction"
