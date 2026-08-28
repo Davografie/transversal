@@ -128,6 +128,14 @@
           <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
         </template>
       </div>
+      <div v-for="r in selectedAction.refs" :key="r.name" class="ee-field ee-ref">
+        <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
+        <TargetSpecBuilder
+          v-model="newEffect.refs[r.name].spec"
+          :destination="{ element: r.element }"
+          :source-element="sourceElement"
+        />
+      </div>
       <TraitInstanceEditor
         v-if="isGainAction"
         v-model:die="newEffect.fields.result"
@@ -215,7 +223,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {} })
 const resultMode = ref('die')
 const copiedVar = ref('')
 const { copy } = useClipboard()
@@ -450,6 +458,7 @@ function onActionChange() {
   newEffect.entitySpec = { steps: [] }
   newEffect.entityScope = ''
   newEffect.negative = false
+  initRefs(selectedAction.value)
   resultMode.value = 'die'
   const meta = selectedAction.value
   if (meta) {
@@ -470,10 +479,31 @@ function strVal(v) {
   return (v === null || v === undefined) ? null : String(v)
 }
 
+function initRefs(meta) {
+  newEffect.refs = {}
+  for (const r of (meta?.refs || [])) {
+    newEffect.refs[r.name] = { value: '', spec: { steps: [] }, scope: '' }
+  }
+}
+
 function cleanContext(obj) {
   const out = {}
   for (const [k, v] of Object.entries(obj || {})) {
     if (v !== '' && v !== null && v !== undefined) out[k] = v
+  }
+  return out
+}
+
+function buildRefs() {
+  const out = {}
+  for (const r of (selectedAction.value?.refs || [])) {
+    const ref = newEffect.refs[r.name]
+    if (!ref) continue
+    out[r.name] = {
+      value: ref.value || '',
+      spec: (ref.spec?.steps || []).length ? ref.spec : null,
+      scope: ref.scope || null,
+    }
   }
   return out
 }
@@ -519,6 +549,7 @@ function buildEffect(meta) {
       : null,
     targetSpec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
+    refs: buildRefs(),
   }
 }
 
@@ -533,6 +564,7 @@ function commit() {
 function populate(eff) {
   const meta = effectActions.value.find(a => a.effectType === eff.type && a.effectAction === eff.action)
   newEffect.actionId = meta?.actionId || ''
+  initRefs(meta)
   newEffect.timing = eff.timing || 'IMMEDIATE'
   newEffect.fields = {}
   newEffect.targetMode = detectTargetMode(eff, meta)
@@ -546,6 +578,14 @@ function populate(eff) {
   if ((eff.entitySpec?.steps || []).length) newEffect.entityMode = 'spec'
   newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
+  if (eff.refs) {
+    for (const [name, ref] of Object.entries(eff.refs)) {
+      if (!newEffect.refs[name]) newEffect.refs[name] = { value: '', spec: { steps: [] }, scope: '' }
+      newEffect.refs[name].value = ref?.value || ''
+      newEffect.refs[name].spec = ref?.spec || { steps: [] }
+      newEffect.refs[name].scope = ref?.scope || ''
+    }
+  }
   resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
     newEffect.fields.target = eff.target
@@ -607,6 +647,7 @@ async function copyVariable(v) {
 .ee-mode-row { display: flex; margin-top: 2px; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
+.ee-ref-element { font-style: normal; font-family: monospace; font-size: 8px; color: var(--text-dim); margin-left: 4px; }
 .ee-fixed-dest { font-size: 10px; color: var(--text-dim); }
 .ee-fixed-dest b { color: var(--text); font-weight: 600; }
 .ee-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
