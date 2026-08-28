@@ -208,7 +208,6 @@ Conditions are authored alongside effects and evaluated against an entity's stat
 | | `step_down_die` → `step_down_die` | cost |
 | | `double_die` → `double_die` | benefit |
 | | `reroll_die` → `reroll_die` | benefit |
-| | `add_die` → `add_die` | benefit |
 | | `remove_die` → `remove_die` | cost |
 | | `split_die` → `split_die` | benefit |
 | `modify_outcome` | `step_up_effect` → `step_up_effect` | benefit |
@@ -216,6 +215,10 @@ Conditions are authored alongside effects and evaluated against an entity's stat
 | | `negate_complication` → `negate_complication` | benefit |
 | | `convert_complication` → `convert_complication` | benefit |
 | | `reroll_highest` → `reroll_highest` | either |
+| `modify_dice_limit` | `increase_dice_limit` → `increase` | benefit |
+| | `decrease_dice_limit` → `decrease` | cost |
+| `modify_pool` | `add_dice` → `add_dice` | benefit |
+| | `add_trait_rating_dice` → `add_trait_rating` | either |
 | `modify_trait` | `step_up_trait` → `step_up` | benefit |
 | | `step_down_trait` → `step_down` | cost |
 | | `set_trait` → `set` | either |

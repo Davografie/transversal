@@ -155,6 +155,8 @@ Core entity metadata. Every significant thing in Transversal is an entity. Trait
 | `nav_positions` | dict | | Navigation dot positions per edge type (e.g. `{"parent": {"x": 90, "y": 15}}`) |
 | `node_ids` | string[] | | Faction conspyramid node entity IDs |
 | `owned_by` | string? | | Owner entity ID (for assets) |
+| `total_dice_bonus` | int | | Delta over the base total-dice keep limit (2); adjusted by `modify_dice_limit` effects (default `0`) |
+| `effect_dice_bonus` | int | | Delta over the base effect-die keep limit (1); adjusted by `modify_dice_limit` effects (default `0`) |
 
 **ID conventions:**
 - Characters: `{name_slug}-{n}` (e.g. `kael-1`, `elena-1`)

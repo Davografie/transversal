@@ -54,9 +54,9 @@ class TargetSpec(BaseModel):
 
 `target_catalog.py` is the single source of truth both the type-checker and the wizard read, so only valid steps compose.
 
-- **Element types** (`ELEMENT_TYPES`): `die`, `traitsetting`, `trait`, `traitset`, `entity`, `projection`, `location`, `universe`.
-- **Edges** (`EDGES`): named hops `(source → target, cardinality)`. Edges are union-capable (`target` is a tuple) but single-typed today — e.g. `die → traitsetting`, `traitsetting → entity`, `entity → location`, `location → occupants`.
-- **Scalar fields** (`SCALAR_FIELDS`): comparable/aggregatable fields per element, each with a type (`int`/`number`/`die`/`string`). Enum-like string fields also carry an **`options` tuple** so the wizard renders a dropdown (`die.source_kind`, `die.tier`, `die.rating`, `traitsetting.rating_type`, `traitsetting.from_type`, `entity.type`, …).
+- **Element types** (`ELEMENT_TYPES`): `die`, `traitsetting`, `traitsetsetting`, `trait`, `traitset`, `entity`, `projection`, `location`, `universe`, `pool`.
+- **Edges** (`EDGES`): named hops `(source → target, cardinality)`. Edges are union-capable (`target` is a tuple) but single-typed today — e.g. `die → traitsetting`, `traitsetting → entity`, `entity → location`, `location → occupants`, plus the pool-assembly hops `entity → pool` and `location → difficulty_pool`.
+- **Scalar fields** (`SCALAR_FIELDS`): comparable/aggregatable fields per element, each with a type (`int`/`number`/`die`/`string`). Enum-like string fields also carry an **`options` tuple** so the wizard renders a dropdown (`die.source_kind`, `die.tier`, `die.rating`, `traitsetting.rating_type`, `traitsetting.from_type`, `entity.type`, …). Id-reference fields carry a **`references`** element hint (`traitset_id → traitset`, `trait_id → trait`, `entity_id → entity`, `projection_id → projection`, …) so the wizard renders a **TargetPicker** instead of a free-text id input.
 - **Aggregations** (`AGGREGATIONS`): `count` (int), `min`/`max` (same-type), `mean`/`avg_floor`/`avg_ceil` (number).
 - **Collections** (`COLLECTIONS`): the `select` seeds — `self` (singleton entity), `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`.
 
@@ -100,7 +100,7 @@ Unmappable forms (variables like `{effect_die}`, kinds without a collection/elem
 - `src/frontend/src/composables/useTargetCatalog.js` — module-singleton that fetches the catalog and calls `traceTargetSpec` (debounced) for highlighting.
 - Wired into `EffectForm.vue` as a **"Targeting path"** mode on both the `target` and `entity` fields (alongside Pick/Choose/Random/Named-exit).
 
-The wizard is catalog-driven: it cannot compose an invalid path, and a field with declared enum options renders a dropdown rather than a free-text value.
+The wizard is catalog-driven: it cannot compose an invalid path, and a field with declared enum options renders a dropdown, an id-reference field renders a picker, and a free-text value is the fallback.
 
 ## GraphQL surface
 

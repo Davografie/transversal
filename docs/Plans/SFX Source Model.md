@@ -12,7 +12,7 @@ aliases:
   - SFX Source
   - Source Kind
   - SFX Ownership Type
-status: planned
+status: implemented
 ---
 
 # SFX Source Model
@@ -20,7 +20,7 @@ status: planned
 An SFX can declare **what kind of thing carries it** (`source_kind`), separate from **when it fires** (`trigger`). When it activates, the carrying thing is exposed as a **typed variable named after its kind** — so a trait-SFX yields `{trait_setting}`, an entity-SFX yields `{entity}` — and the editor/type-checker know exactly which fields that variable has.
 
 > [!note] Status
-> Planned, not yet implemented. Settled in discussion 2026-08-28. Supersedes the dangling `{source_trait}` token (which was reserved in `sfx_validation.py` but never resolved anywhere).
+> Implemented. Settled in discussion 2026-08-28. Supersedes the dangling `{source_trait}` token (which was reserved in `sfx_validation.py` but never resolved anywhere). `source_kind` is stored on `SFX`, exposed as `sourceKind` in GraphQL, and resolved at fire time via `target_resolver.resolve_source`; the `SOURCE_KINDS` seam in `target_catalog.py` is the single touch point for the future entity/projection redesign.
 
 ## Goal
 
