@@ -186,11 +186,20 @@ def test_unknown_edge_is_an_error():
 
 
 def test_custom_edge_registration_overrides_default():
-    register_edge("die", "traitsetting", lambda d, ctx: [NS(id="custom")])
-    ctx = TargetContext(repo=None, collections={"rolled_dice": [{"ts_id": "x"}]})
-    res = resolve(spec(SelectStep(collection="rolled_dice"), NavigateStep(edge="traitsetting")), ctx)
-    assert res.errors == []
-    assert [v.id for v in res.values] == ["custom"]
+    from transversal.services import target_resolver
+    key = ("die", "traitsetting")
+    original = target_resolver._EDGE_RESOLVERS.get(key)
+    try:
+        register_edge("die", "traitsetting", lambda d, ctx: [NS(id="custom")])
+        ctx = TargetContext(repo=None, collections={"rolled_dice": [{"ts_id": "x"}]})
+        res = resolve(spec(SelectStep(collection="rolled_dice"), NavigateStep(edge="traitsetting")), ctx)
+        assert res.errors == []
+        assert [v.id for v in res.values] == ["custom"]
+    finally:
+        if original is not None:
+            target_resolver._EDGE_RESOLVERS[key] = original
+        else:
+            target_resolver._EDGE_RESOLVERS.pop(key, None)
 
 
 def test_contains_filters_dice_by_armed_sfx():
@@ -267,7 +276,7 @@ def test_select_source_without_source_is_empty():
     assert res.errors == []
 
 
-def test_resolve_source_maps_unambiguous_kinds():
+def test_resolve_source_maps_all_kinds():
     from types import SimpleNamespace
     from transversal.services.target_resolver import resolve_source
 
@@ -284,9 +293,12 @@ def test_resolve_source_maps_unambiguous_kinds():
     obj, element = resolve_source("traitset_setting", "char-1:ts", repo)
     assert element == "traitsetsetting" and obj.id == "char-1:ts"
 
-    # entity/projection are deferred (entity/projection seam).
-    assert resolve_source("entity", "char-1", repo) is None
-    assert resolve_source("projection", "char-1:earth", repo) is None
+    obj, element = resolve_source("entity", "char-1", repo)
+    assert element == "entity" and obj.id == "char-1"
+
+    obj, element = resolve_source("projection", "char-1:earth", repo)
+    assert element == "projection" and obj.id == "char-1:earth"
+
     # Unknown kind / empty id / no repo → None.
     assert resolve_source("bogus", "x", repo) is None
     assert resolve_source("trait_setting", "", repo) is None
