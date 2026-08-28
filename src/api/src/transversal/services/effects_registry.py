@@ -204,15 +204,15 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="add_trait_rating_dice",
         label="Add Trait Rating Dice",
-        description="Add a target trait instance's rating dice to the GM difficulty pool",
+        description="Add a target trait instance's rating dice to a target dice pool",
         category="either",
         effect_type="modify_pool",
         effect_action="add_trait_rating",
         valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
+        refs=[
+            RefDef("trait", "Trait", "traitsetting"),
+            RefDef("pool", "Destination pool", "pool"),
         ],
-        target_kind="traitsetting",
     ),
     EffectActionMeta(
         action_id="remove_die",

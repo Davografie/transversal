@@ -41,7 +41,7 @@ Checklist for the **named-references** migration (multi-target refs — see [[Pa
 | pending | double_die | modify_roll/double_die | benefit | target:text | — | TBD | |
 | pending | reroll_die | modify_roll/reroll_die | benefit | target:text | — | TBD | |
 | pending | add_dice | modify_pool/add_dice | benefit | target:text | pool | TBD | |
-| pending | add_trait_rating_dice | modify_pool/add_trait_rating | either | target:text | traitsetting | TBD | |
+| migrated | add_trait_rating_dice | modify_pool/add_trait_rating | either | refs (trait, pool) | — | trait→traitsetting, pool→pool | destination no longer implicit |
 | pending | remove_die | modify_roll/remove_die | cost | target:text | — | TBD | |
 | pending | split_die | modify_roll/split_die | benefit | target:text | — | TBD | |
 

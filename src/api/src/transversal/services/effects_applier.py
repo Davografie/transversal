@@ -1105,37 +1105,44 @@ def _apply_add_dice(entity, effect, repo, result):
 
 
 def _apply_add_trait_rating(entity, effect, repo, result):
-    """Add a trait instance's rating dice to the GM difficulty pool.
+    """Add a trait instance's rating dice to a targeted dice pool.
 
-    ``effect.target`` is a resolved ``traitsetting`` id; its ``dice`` are copied
-    into the acting entity's current location's difficulty pool.
+    ``refs["trait"]`` is a resolved ``traitsetting`` id (the complication to
+    heal); ``refs["pool"]`` is a resolved pool id (``difficulty:<loc>`` or
+    ``pool:<entity>``). Both are authored through the targeting wizard; the
+    destination is no longer implicit.
     """
     from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.services.scene_state import get_scene_store
 
-    ts = repo.get_traitsetting(effect.target) if effect.target else None
+    trait_ref = (effect.refs or {}).get("trait")
+    pool_ref = (effect.refs or {}).get("pool")
+    ts_id = trait_ref.value if trait_ref else ""
+    pool_id = pool_ref.value if pool_ref else ""
+
+    ts = repo.get_traitsetting(ts_id) if ts_id else None
     if ts is None:
-        result.applied.append(AppliedEffect(effect, f"trait {effect.target} not found"))
+        result.applied.append(AppliedEffect(effect, f"trait {ts_id or '(unset)'} not found"))
         return
     dice = [d.value for d in (ts.dice or [])]
     if not dice:
-        result.applied.append(AppliedEffect(effect, f"trait {effect.target} has no rating"))
+        result.applied.append(AppliedEffect(effect, f"trait {ts_id} has no rating"))
         return
 
-    location_id = entity.current_location
-    if not location_id:
-        result.applied.append(AppliedEffect(effect, "no current location for the difficulty pool"))
+    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
+    if not location_id or not owner_id:
+        result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
         return
 
     trait = repo.get_trait(ts.trait_id)
     label = trait.name if trait else ts.trait_id
     store = get_scene_store()
-    pool = store.get_pool(location_id, location_id)
+    pool = store.get_pool(location_id, owner_id)
     for die in dice:
         pool.append({"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id})
-    store.save_pool(location_id, location_id, pool)
-    broadcast_pool_change(location_id, location_id, dice=pool, phase="adding")
-    result.applied.append(AppliedEffect(effect, f"added {label} rating {dice} to difficulty pool"))
+    store.save_pool(location_id, owner_id, pool)
+    broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
+    result.applied.append(AppliedEffect(effect, f"added {label} rating {dice} to pool"))
 
 
 def _apply_earn(entity, effect, repo, result):
