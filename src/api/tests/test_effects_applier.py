@@ -286,6 +286,27 @@ def test_step_down_multiple_steps_empties():
     assert len(result.removed_trait_settings) == 0
 
 
+def test_reduce_by_effect_die_removes_when_larger():
+    repo = FakeRepo(traitsettings=[_ts("scar", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reduce_by_effect",
+                    target="char-1:scar", context={"effect_die": "d8"})
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.removed_trait_settings) == 1
+    assert len(result.updated_trait_settings) == 0
+
+
+def test_reduce_by_effect_die_steps_down_when_smaller():
+    repo = FakeRepo(traitsettings=[_ts("scar", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="reduce_by_effect",
+                    target="char-1:scar", context={"effect_die": "d4"})
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D4]
+    assert len(result.removed_trait_settings) == 0
+
+
 def test_set_overrides_dice():
     repo = FakeRepo(traitsettings=[_ts("trait", [DieType.D6])])
     entity = _entity()

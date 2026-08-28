@@ -893,6 +893,7 @@ class ConditionType(str, Enum):
     PHASE = "phase"                      # target = dice-pool phase (e.g. "adding"); reads trigger context
     CONTEST_OUTCOME = "contest_outcome"  # target = "player" | "opponent"; reads context["contest_winner"]
     ROLL_TIER = "roll_tier"              # operator + value against OutcomeTier (e.g. >= success); reads roll_result.tier
+    TEST_OUTCOME = "test_outcome"        # target = "success" | "fail" (binary); success = tier != fail
 
 
 class Condition(BaseModel):

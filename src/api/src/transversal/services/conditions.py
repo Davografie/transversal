@@ -77,6 +77,16 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
             return False
         return _compare(actual, condition.operator or ">=", threshold)
 
+    if condition.type == ConditionType.TEST_OUTCOME:
+        # Binary test result: success = any non-fail tier (marginal counts).
+        tier = (context or {}).get("tier")
+        wanted = (condition.target or "").strip()
+        if wanted == "success":
+            return tier not in (None, "", "fail")
+        if wanted == "fail":
+            return tier == "fail"
+        return False
+
     subject = _resolve_subject(condition, entity, context or {}, repo)
     if subject is None:
         return False
@@ -205,5 +215,6 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved")),
     ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent")),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<")),
+    ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail")),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
 )

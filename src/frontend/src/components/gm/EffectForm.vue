@@ -16,7 +16,7 @@
         </select>
       </div>
       <div class="ee-field ee-conditions">
-        <label>Only when</label>
+        <label>Condition</label>
         <ConditionEditor v-model="newEffect.conditions" />
       </div>
       <div v-if="isRollTiming" class="ee-field">
