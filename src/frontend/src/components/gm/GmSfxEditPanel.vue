@@ -17,7 +17,7 @@
       <label>Source</label>
       <select v-model="draft.source_kind">
         <option :value="null">None</option>
-        <option v-for="s in sourceKinds" :key="s.value" :value="s.value">{{ s.label }}</option>
+        <option v-for="s in sourceKinds()" :key="s.value" :value="s.value">{{ s.label }}</option>
       </select>
       <div v-if="scopeVariables.length" class="sfx-vars">
         <span class="sfx-vars-label">Available variables:</span>
