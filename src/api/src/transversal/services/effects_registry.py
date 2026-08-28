@@ -382,7 +382,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         ],
         context_fields=[
             _RELATIONSHIP_CONTEXT_FIELD,
-            EffectFieldDef(name="effect_die", label="Effect Die", field_type="text", required=False, default="{effect_die}"),
+            EffectFieldDef(name="effect_die", label="Effect Die", field_type="die_select", required=False, default="{effect_die}", options=["d4", "d6", "d8", "d10", "d12"]),
         ],
         target_kind="trait",
     ),
