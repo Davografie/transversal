@@ -30,6 +30,7 @@
         <div v-if="step.kind === 'select'" class="tsb-config">
           <select v-model="step.collection">
             <option value="">— pick a collection —</option>
+            <option v-if="sourceElement" value="source">SFX source <em>({{ sourceElement }})</em></option>
             <option v-for="c in collections()" :key="c.name" :value="c.name">
               {{ c.label }} <em>({{ c.element }})</em>
             </option>
@@ -114,6 +115,7 @@ import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
   destination: { type: Object, default: null }, // { element, cardinality }
+  sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   title: { type: String, default: 'Targeting path' },
 })
 const emit = defineEmits(['update:modelValue'])
@@ -264,12 +266,12 @@ function scheduleTrace() {
 }
 
 async function runTrace() {
-  const res = await traceSpec(steps.value, props.destination)
+  const res = await traceSpec(steps.value, props.destination, props.sourceElement || null)
   if (res) trace.value = res
 }
 
 onMounted(load)
-watch(() => props.destination, () => scheduleTrace(), { deep: true })
+watch(() => [props.destination, props.sourceElement], () => scheduleTrace(), { deep: true })
 watch(steps, scheduleTrace, { deep: true, immediate: true })
 </script>
 

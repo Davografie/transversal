@@ -3,6 +3,7 @@
     <EffectForm
       :value="editingEffect"
       :variables="scopeVariables"
+      :source-element="sourceElement"
       @save="onSave"
       @cancel="close"
     />
@@ -13,6 +14,7 @@
 import { computed } from 'vue'
 import EffectForm from './EffectForm.vue'
 import { useSfxEdit } from '@/composables/useSfxEdit.js'
+import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import { usePanel } from '@/composables/usePanel.js'
 
 const props = defineProps({
@@ -23,8 +25,19 @@ const props = defineProps({
 
 const panel = usePanel()
 const { draft, scopeVariables } = useSfxEdit()
+const { load: loadCatalog, sourceKinds } = useTargetCatalog()
+loadCatalog()
 
 const editingEffect = computed(() => (props.index === null ? null : (draft.effects[props.index] || null)))
+
+// The SFX's declared source_kind → its catalog element, so the targeting
+// wizard can offer `select source` typed against it.
+const sourceElement = computed(() => {
+  const sk = draft.source_kind
+  if (!sk) return ''
+  const found = sourceKinds().find(s => s.value === sk)
+  return found ? found.element : ''
+})
 
 function onSave(eff) {
   if (props.index === null) {

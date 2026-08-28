@@ -83,6 +83,7 @@
             v-else-if="newEffect.targetMode === 'spec'"
             v-model="newEffect.targetSpec"
             :destination="specDestination"
+            :source-element="sourceElement"
           />
           <div v-else-if="previewText" class="ee-preview">{{ previewText }}</div>
         </template>
@@ -101,6 +102,7 @@
             v-else-if="newEffect.entityMode === 'spec'"
             v-model="newEffect.entitySpec"
             :destination="{ element: 'entity' }"
+            :source-element="sourceElement"
           />
           <div v-else class="ee-field">
             <label>Entity scope</label>
@@ -195,6 +197,7 @@ const props = defineProps({
   universe: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
+  sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   portalDestination: { type: String, default: '' },
   portalTargetType: { type: String, default: '' },
   portalUniverse: { type: String, default: '' },
