@@ -136,6 +136,10 @@
           :source-element="sourceElement"
         />
       </div>
+      <div class="ee-field ee-conditions">
+        <label>Only when</label>
+        <ConditionEditor v-model="newEffect.conditions" />
+      </div>
       <TraitInstanceEditor
         v-if="isGainAction"
         v-model:die="newEffect.fields.result"
@@ -201,6 +205,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from './TargetPicker.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from './TraitInstanceEditor.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
@@ -223,7 +228,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {} })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, conditions: [] })
 const resultMode = ref('die')
 const copiedVar = ref('')
 const { copy } = useClipboard()
@@ -233,6 +238,10 @@ const TIMING_LABELS = {
   'ON_ROLL': 'On roll',
   'ON_SET': 'On set',
   'ON_RESULT': 'On result',
+  'ON_CONTEST_WIN': 'On contest win',
+  'ON_CONTEST_LOSS': 'On contest loss',
+  'ON_SUCCESS': 'On success',
+  'ON_FAILURE': 'On failure',
   'END_OF_BEAT': 'End of beat',
   'END_OF_SCENE': 'End of scene',
   'END_OF_SESSION': 'End of session',
@@ -458,6 +467,7 @@ function onActionChange() {
   newEffect.entitySpec = { steps: [] }
   newEffect.entityScope = ''
   newEffect.negative = false
+  newEffect.conditions = []
   initRefs(selectedAction.value)
   resultMode.value = 'die'
   const meta = selectedAction.value
@@ -550,6 +560,7 @@ function buildEffect(meta) {
     targetSpec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
     refs: buildRefs(),
+    conditions: (newEffect.conditions || []).map(c => ({ ...c })),
   }
 }
 
@@ -578,6 +589,7 @@ function populate(eff) {
   if ((eff.entitySpec?.steps || []).length) newEffect.entityMode = 'spec'
   newEffect.entityScope = eff.entityScope || ''
   newEffect.negative = !!eff.negative
+  newEffect.conditions = (eff.conditions || []).map(c => ({ ...c }))
   if (eff.refs) {
     for (const [name, ref] of Object.entries(eff.refs)) {
       if (!newEffect.refs[name]) newEffect.refs[name] = { value: '', spec: { steps: [] }, scope: '' }

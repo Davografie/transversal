@@ -31,6 +31,18 @@
         </select>
         <input v-model="c.value" type="number" placeholder="amount" class="ce-value" />
       </template>
+      <template v-else-if="valueKind(c.type) === 'tier'">
+        <select v-if="operators(c.type).length" v-model="c.operator" class="ce-operator">
+          <option v-for="op in operators(c.type)" :key="op" :value="op">{{ op }}</option>
+        </select>
+        <select v-model="c.value" class="ce-value">
+          <option value="fail">fail</option>
+          <option value="marginal">marginal</option>
+          <option value="success">success</option>
+          <option value="exceptional">exceptional</option>
+          <option value="perfect">perfect</option>
+        </select>
+      </template>
       <input v-if="c.type === 'NARRATIVE'" v-model="c.narrative" placeholder="narrative text" class="ce-target" />
       <button class="ce-del" @click="remove(i)">✕</button>
     </div>

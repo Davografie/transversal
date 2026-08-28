@@ -53,6 +53,7 @@ class EffectActionMeta:
     valid_timings: list[str] = field(default_factory=lambda: [
         "IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION",
         "ON_ROLL", "ON_SET", "ON_RESULT",
+        "ON_CONTEST_WIN", "ON_CONTEST_LOSS", "ON_SUCCESS", "ON_FAILURE",
     ])
     fields: list[EffectFieldDef] = field(default_factory=list)
     context_fields: list[EffectFieldDef] = field(default_factory=list)
