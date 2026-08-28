@@ -174,3 +174,43 @@ def test_select_source_resolves_at_fire_time(monkeypatch):
     roll_deferral.fire_armed("char-1", "on_roll", "earth", {"rolls": []})
 
     assert [e.target for e in applied] == ["char-1:martial"]
+
+
+def test_select_source_immediate_path(monkeypatch):
+    """An immediate manual trait-SFX with ``target_spec = select source`` steps
+    up the trait instance it was activated from, without a roll."""
+    from types import SimpleNamespace
+
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.effects_engine import EffectsEngine, GameEvent
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    class Repo(OneTrickRepo):
+        pass
+
+    repo = OneTrickRepo()
+    repo.traitsettings["char-1:martial"].entity_id = "char-1"
+    sfx = SFX(
+        id="sfx-muscle-memory", name="Muscle Memory", trigger="manual",
+        source_kind="trait_setting",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
+            target="", target_spec=TargetSpec(steps=[SelectStep(collection="source")]),
+        )],
+    )
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    applied = []
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    engine = EffectsEngine()
+    engine.register(sfx)
+    event = GameEvent(type="manual", entity_id="char-1", universe="earth",
+                      context={"source_id": "char-1:martial"})
+    outcome = engine.process_event_outcome(event, ["sfx-muscle-memory"], 0)
+
+    assert [e.target for e in outcome.applied] == ["char-1:martial"]
+    assert [e.target for e in applied] == ["char-1:martial"]

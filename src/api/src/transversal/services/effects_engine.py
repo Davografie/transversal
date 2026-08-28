@@ -194,7 +194,12 @@ class EffectsEngine:
 
                 effect = _substitute_effect_context(effect, effect_context)
                 if effect.timing == EffectTiming.IMMEDIATE:
-                    if _effects_applier.find_choose_placeholder(effect):
+                    if effect.target_spec is not None:
+                        outcome.applied.extend(_apply_immediate_spec(
+                            effect, event, sfx, effect_context, repo,
+                        ))
+                        sfx_applied = True
+                    elif _effects_applier.find_choose_placeholder(effect):
                         outcome.pending.append(PendingSfxEffect(
                             effect=effect,
                             sfx_name=sfx.name,
@@ -362,6 +367,54 @@ def _substitute_effect_context(effect: Effect, context: dict) -> Effect:
     if not updates:
         return effect
     return effect.model_copy(update=updates)
+
+
+def _resolved_id(value) -> str | None:
+    """Extract a target id from a resolved spec value (object or dict)."""
+    if isinstance(value, dict):
+        return value.get("ts_id") or value.get("id")
+    return getattr(value, "ts_id", None) or getattr(value, "id", None)
+
+
+def _apply_immediate_spec(
+    effect: Effect,
+    event: GameEvent,
+    sfx: SFX,
+    context: dict | None,
+    repo,
+) -> list[Effect]:
+    """Resolve an immediate effect's ``target_spec`` and apply once per target.
+
+    The immediate counterpart of ``roll_deferral._apply_spec_target``: resolve
+    the spec (with the SFX's activation source for ``select source``) and fan
+    out one concrete effect per resolved target. Returns the applied effects.
+    """
+    from transversal.main import _get_repo
+    from transversal.services.target_resolver import TargetContext, resolve, resolve_source
+
+    repo = repo if repo is not None else _get_repo()
+    entity = repo.get_entity(event.entity_id) if repo is not None else None
+
+    source, source_element = (
+        resolve_source(sfx.source_kind or "", event.context.get("source_id"), repo)
+        if sfx.source_kind and event.context.get("source_id") and repo is not None
+        else (None, None)
+    )
+    resolution = resolve(
+        effect.target_spec,
+        TargetContext(subject=entity, repo=repo, source=source, source_element=source_element),
+    )
+
+    applied: list[Effect] = []
+    for value in resolution.values:
+        target_id = _resolved_id(value)
+        if target_id is None:
+            continue
+        resolved = effect.model_copy(update={"target": target_id, "target_spec": None})
+        _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, context or {})
+        applied.append(resolved)
+        log.info("[process_event] applied sfx=%s effect=%s/%s target=%s (spec)", sfx.id, resolved.type, resolved.action, resolved.target)
+    return applied
 
 
 def _noop_applier(action: Effect, entity_id: str, universe: str, context: dict) -> None:
