@@ -4,6 +4,7 @@
       :value="editingEffect"
       :variables="scopeVariables"
       :source-element="sourceElement"
+      :output-variables="outputVariables"
       @save="onSave"
       @cancel="close"
     />
@@ -11,7 +12,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import EffectForm from './EffectForm.vue'
 import { useSfxEdit } from '@/composables/useSfxEdit.js'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
@@ -25,7 +26,7 @@ const props = defineProps({
 
 const panel = usePanel()
 const { draft, scopeVariables, save } = useSfxEdit()
-const { load: loadCatalog, sourceKinds } = useTargetCatalog()
+const { load: loadCatalog, sourceKinds, collectVariables } = useTargetCatalog()
 loadCatalog()
 
 const editingEffect = computed(() => (props.index === null ? null : (draft.effects[props.index] || null)))
@@ -38,6 +39,23 @@ const sourceElement = computed(() => {
   const found = sourceKinds().find(s => s.value === sk)
   return found ? found.element : ''
 })
+
+// Typed output variables emitted by effects *before* the one being edited,
+// available to `select variable` (cross-effect), traced with the SFX source.
+const outputVariables = ref({})
+
+function priorEffects() {
+  const limit = props.index === null ? draft.effects.length : props.index
+  return draft.effects.slice(0, limit)
+}
+
+watch(
+  () => [draft.effects, props.index, sourceElement.value],
+  async () => {
+    outputVariables.value = await collectVariables(priorEffects(), sourceElement.value || null)
+  },
+  { immediate: true, deep: true },
+)
 
 function onSave(eff) {
   if (props.index === null) {
