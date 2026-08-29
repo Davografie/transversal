@@ -75,6 +75,28 @@ def test_deferred_effects_share_output_bindings(monkeypatch):
     assert applied[1].target == "ts-1"
 
 
+def test_bind_activation_writes_into_armed_scope(monkeypatch):
+    roll_deferral.reset()
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    consume = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down", target="{complication}",
+    )
+    roll_deferral.arm_sfx("e1", [consume], source_sfx_id="sfx-heal", duration=_rolls_duration(1))
+
+    roll_deferral.bind_activation("e1", "sfx-heal", "complication", "ts-9")
+
+    fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
+    assert [e.target for e in fired] == ["ts-9"]
+    assert applied[0].target == "ts-9"
+
+
 def test_rolls_budget_fires_n_times(monkeypatch):
     roll_deferral.reset()
     applied = []

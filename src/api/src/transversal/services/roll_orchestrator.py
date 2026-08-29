@@ -66,6 +66,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
             "step_index": c.step_index,
             "source_kind": c.source_kind,
             "source_id": c.source_id,
+            "source_sfx_id": c.source_sfx_id,
             "answers_so_far": c.answers_so_far,
             "sfx_name": c.sfx_name,
             "sfx_description": c.sfx_description,

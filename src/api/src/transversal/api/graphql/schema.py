@@ -389,6 +389,7 @@ def _structured_choice_to_dict(c) -> dict:
         "step_index": c.step_index,
         "source_kind": c.source_kind,
         "source_id": c.source_id,
+        "source_sfx_id": c.source_sfx_id,
         "answers_so_far": c.answers_so_far,
         "sfx_name": c.sfx_name,
         "sfx_description": c.sfx_description,
@@ -1926,6 +1927,7 @@ class Mutation:
             raise ValueError(f"Entity '{entity_id}' not found")
         resolved = []
         structured = []
+        to_bind = []  # (source_sfx_id, resolved_effect) for output bindings
         for r in resolutions:
             eff = _effect_input_to_domain(r.effect)
             field = r.field or "target"
@@ -1934,9 +1936,11 @@ class Mutation:
                 applied, pending = resolve_effect_spec_choices(
                     eff, field, answers, entity, repo,
                     source_kind=r.source_kind or "", source_id=r.source_id or "",
+                    source_sfx_id=r.source_sfx_id or "",
                 )
                 resolved.extend(applied)
                 structured.extend(pending)
+                to_bind.extend((r.source_sfx_id or "", a) for a in applied)
                 continue
             if field in ("target_scope", "entity_scope"):
                 from transversal.services.effects_applier import _resolve_scope_choose
@@ -1960,7 +1964,20 @@ class Mutation:
             else:
                 eff = eff.model_copy(update={field: r.target})
             resolved.append(eff)
+            to_bind.append((r.source_sfx_id or "", eff))
         result = commit_effects(entity, resolved, repo)
+        # Write output bindings into the matching armed activation so later
+        # roll-timed effects can reference {name}.
+        if to_bind:
+            from transversal.services.effects_engine import _apply_outputs
+            from transversal.services.roll_deferral import bind_activation
+            for source_sfx_id, eff in to_bind:
+                if not source_sfx_id or not eff.outputs:
+                    continue
+                scope: dict[str, str] = {}
+                _apply_outputs(eff, scope)
+                for name, value in scope.items():
+                    bind_activation(str(entity_id), source_sfx_id, name, value)
         if structured:
             from transversal.services.roll_orchestrator import _emit_pending_choices
             _emit_pending_choices(str(entity_id), entity.current_universe or "", [], structured)

@@ -440,6 +440,7 @@ class EffectTargetResolutionInput:
     answers: list[TargetChoiceAnswerInput] = strawberry.field(default_factory=list)
     source_kind: str = ""
     source_id: str = ""
+    source_sfx_id: str = ""
 
 
 @strawberry.type

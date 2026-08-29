@@ -148,6 +148,21 @@ def arm_passive(
     )
 
 
+def bind_activation(entity_id: str, source_sfx_id: str, name: str, value: str) -> None:
+    """Write an output binding into the matching armed SFX's activation scope.
+
+    Used when an immediate effect's ``choose`` resolves *after* arming: the
+    resume path binds the resolved value so later roll-timed effects can
+    reference ``{name}`` at fire time.
+    """
+    if not source_sfx_id or not name or not value:
+        return
+    for armed in _armed.get(entity_id, []):
+        if armed.source_sfx_id == source_sfx_id:
+            armed.bindings[name] = value
+            return
+
+
 def fire_armed(
     entity_id: str,
     event_type: str,
@@ -226,17 +241,17 @@ def _apply_armed(
         if effect.timing.value != event_type:
             continue
         if effect.refs:
-            resolved = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings)
+            resolved = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id)
             applied.append(resolved)
             _apply_outputs(resolved, bindings)
             continue
         if effect.target_spec is not None:
-            resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings)
+            resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings, source_sfx_id=armed.source_sfx_id)
             applied.extend(resolved_list)
             for r in resolved_list:
                 _apply_outputs(r, bindings)
             continue
-        if armed.source_sfx_id is not None or bool(effect.die_filter):
+        if bool(effect.die_filter):
             dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
             log.info(
                 "[roll_deferral._apply_armed] sfx=%s effect=%s/%s candidates=%s matched=%s",
@@ -276,6 +291,7 @@ def _apply_refs_roll(
     source_id: str | None = None,
     structured: list | None = None,
     bindings: dict[str, str] | None = None,
+    source_sfx_id: str | None = None,
 ) -> Effect:
     """Resolve an armed effect's named refs against the roll context and apply."""
     from transversal.main import _get_repo
@@ -294,6 +310,7 @@ def _apply_refs_roll(
             source=source, source_element=source_element,
         ),
         structured,
+        source_sfx_id=source_sfx_id or "",
     )
     # Only apply when no choose step left the ref unresolved (mirrors the
     # immediate path's ``len(structured) == before`` gate).
@@ -313,6 +330,7 @@ def _apply_spec_target(
     structured: list | None = None,
     answers: dict[int, list[str]] | None = None,
     bindings: dict[str, str] | None = None,
+    source_sfx_id: str | None = None,
 ) -> list[Effect]:
     """Resolve an effect's ``target_spec`` against the roll context and apply it
     once per resolved target (e.g. One Trick: rolled dice → traitsetting → step
@@ -343,6 +361,7 @@ def _apply_spec_target(
             structured.append(_structured_choice(
                 pc, effect, "target",
                 source_kind=source_kind or "", source_id=source_id or "",
+                source_sfx_id=source_sfx_id or "",
             ))
         return []
 

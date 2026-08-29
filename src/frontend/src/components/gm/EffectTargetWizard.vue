@@ -119,6 +119,7 @@ function apply() {
           answers,
           source_kind: c.source_kind || '',
           source_id: c.source_id || '',
+          source_sfx_id: c.source_sfx_id || '',
           entity_id: c.entity_id,
         }
       }
