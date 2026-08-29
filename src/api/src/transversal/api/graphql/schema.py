@@ -386,6 +386,7 @@ def _structured_choice_to_dict(c) -> dict:
         "step_index": c.step_index,
         "source_kind": c.source_kind,
         "source_id": c.source_id,
+        "answers_so_far": c.answers_so_far,
         "sfx_name": c.sfx_name,
         "sfx_description": c.sfx_description,
         "effect": c.effect.model_dump(),

@@ -850,7 +850,9 @@ async function resolveSfxChoices(resolutions) {
   const targetEntity = resolutions?.[0]?.entity_id || props.entityId
   const clean = (resolutions || []).map(({ entity_id, ...rest }) => rest)
   const result = await resolveEffectTargets(targetEntity, clean)
-  emit('sfx-choice-resolved', result?.pendingChoices || [])
+  const structured = (result?.structured || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
+  const legacy = (result?.pendingChoices || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
+  emit('sfx-choice-resolved', [...structured, ...legacy])
 }
 function clearSfxChoices() {
   emit('sfx-choice-resolved')

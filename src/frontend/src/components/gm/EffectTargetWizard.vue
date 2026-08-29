@@ -108,6 +108,20 @@ function apply() {
     })
     .map((c) => {
       const v = targets.value[c.index]
+      if (c.structured) {
+        // Resumable mid-path choose: send the accumulated answers (echoing the
+        // backend's answers_so_far) plus this step's selection.
+        const ids = Array.isArray(v) ? v : [v]
+        const answers = [...(c.answers_so_far || []), { step_index: c.step_index, ids }]
+        return {
+          effect: c.effect,
+          field: c.field || 'target',
+          answers,
+          source_kind: c.source_kind || '',
+          source_id: c.source_id || '',
+          entity_id: c.entity_id,
+        }
+      }
       // Multi-select fan-out (one effect per chosen candidate) is not wired yet;
       // resolve the first selection for now.
       const target = Array.isArray(v) ? v[0] : v

@@ -74,6 +74,7 @@ class StructuredChoice:
     step_index: int = 0
     source_kind: str = ""
     source_id: str = ""
+    answers_so_far: list = field(default_factory=list)
 
 
 @dataclass
@@ -442,7 +443,8 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
 
 
 def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None,
-                       source_kind: str = "", source_id: str = "") -> StructuredChoice:
+                       source_kind: str = "", source_id: str = "",
+                       answers_so_far: list | None = None) -> StructuredChoice:
     """Serialize a resolver pending ``choose`` (``PendingTargetChoice``) into a
     ``StructuredChoice`` whose candidates are ready for the picker."""
     from transversal.services.target_resolver import serialize_candidates
@@ -462,6 +464,7 @@ def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None
         step_index=pc.step_index,
         source_kind=source_kind,
         source_id=source_id,
+        answers_so_far=list(answers_so_far or []),
     )
 
 
@@ -584,6 +587,7 @@ def resolve_effect_spec_choices(
         else (None, None)
     )
     ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element)
+    answers_so_far = [{"step_index": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
 
     if field.startswith("refs."):
         name = field[len("refs."):]
@@ -593,7 +597,7 @@ def resolve_effect_spec_choices(
             return [], []
         resolution = resolve(ref.spec, ctx, answers=answers)
         if resolution.pending_choices:
-            return [], [_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id) for pc in resolution.pending_choices]
+            return [], [_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id, answers_so_far=answers_so_far) for pc in resolution.pending_choices]
         if resolution.values:
             rid = _resolved_id(resolution.values[0])
             if rid is not None:
@@ -606,7 +610,7 @@ def resolve_effect_spec_choices(
         return [], []
     resolution = resolve(spec, ctx, answers=answers)
     if resolution.pending_choices:
-        return [], [_structured_choice(pc, effect, field, source_kind=source_kind, source_id=source_id) for pc in resolution.pending_choices]
+        return [], [_structured_choice(pc, effect, field, source_kind=source_kind, source_id=source_id, answers_so_far=answers_so_far) for pc in resolution.pending_choices]
 
     out: list[Effect] = []
     for value in resolution.values:
