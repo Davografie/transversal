@@ -63,6 +63,9 @@ machinery rather than adding a parallel system.
 
 ## Open / deferred
 
+- **List output variables** — a step resolving to `many` still binds only its
+  first value; the array form is designed in [[List Output Variables]] (not yet
+  implemented).
 - **`select source`-dependent types** — a step whose element comes from
   `select source` now resolves in the SFX editor (it threads `sourceElement`);
   noted for completeness.
