@@ -62,8 +62,12 @@ const outputVariables = computed(() => {
   const limit = editingIndex.value !== null ? editingIndex.value : props.modelValue.length
   for (let i = 0; i < limit; i++) {
     const eff = props.modelValue[i]
-    for (const o of (eff?.outputs || [])) {
-      if (o?.name && o?.element) map[o.name] = o.element
+    const specs = [eff?.targetSpec, eff?.entitySpec]
+    for (const ref of Object.values(eff?.refs || {})) specs.push(ref?.spec)
+    for (const spec of specs) {
+      for (const step of (spec?.steps || [])) {
+        for (const name of (step?.outputs || [])) if (name) map[name] = ''
+      }
     }
   }
   return map

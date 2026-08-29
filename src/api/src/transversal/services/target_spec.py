@@ -30,6 +30,7 @@ class SelectStep(BaseModel):
     kind: Literal["select"] = "select"
     collection: str
     variable: str = ""  # for collection == "variable": the bound variable name
+    outputs: list[str] = Field(default_factory=list)
 
 
 class FilterStep(BaseModel):
@@ -37,24 +38,28 @@ class FilterStep(BaseModel):
     field: str
     operator: Literal["==", "!=", ">", ">=", "<", "<=", "in", "contains"] = "=="
     value: Any = None
+    outputs: list[str] = Field(default_factory=list)
 
 
 class NavigateStep(BaseModel):
     kind: Literal["navigate"] = "navigate"
     edge: str
     dedup: bool = False  # collapse N→1 by identity (type-neutral)
+    outputs: list[str] = Field(default_factory=list)
 
 
 class AggregateStep(BaseModel):
     kind: Literal["aggregate"] = "aggregate"
     fn: str
     field: str | None = None  # required for min/max/mean/avg_*
+    outputs: list[str] = Field(default_factory=list)
 
 
 class LiteralStep(BaseModel):
     kind: Literal["literal"] = "literal"
     element: str = ""  # element type name (entity/trait/location/…)
     value: str = ""    # the concrete id
+    outputs: list[str] = Field(default_factory=list)
 
 
 class RandomStep(BaseModel):
@@ -66,6 +71,7 @@ class RandomStep(BaseModel):
     """
     kind: Literal["random"] = "random"
     count: int = 1
+    outputs: list[str] = Field(default_factory=list)
 
 
 class ChooseStep(BaseModel):
@@ -83,6 +89,7 @@ class ChooseStep(BaseModel):
     """
     kind: Literal["choose"] = "choose"
     count: int = 1
+    outputs: list[str] = Field(default_factory=list)
 
 
 TargetStep = Annotated[
@@ -131,11 +138,12 @@ def trace(spec: TargetSpec, source_element: str | None = None,
     types: list[ValueType | None] = []
     errors: list[TraceError] = []
     current: ValueType | None = None
+    scope: dict[str, str] = dict(variables or {})  # accumulates step outputs too
 
     for i, step in enumerate(spec.steps):
         if isinstance(step, SelectStep):
             if step.collection == "variable":
-                element = (variables or {}).get(step.variable)
+                element = scope.get(step.variable)
                 if not step.variable or element is None:
                     errors.append(TraceError(i, f"unknown variable {step.variable!r}"))
                     current = None
@@ -243,6 +251,11 @@ def trace(spec: TargetSpec, source_element: str | None = None,
             else:
                 cardinality = "one" if step.count == 1 else "many"
                 current = ValueType(current.element, cardinality)
+
+        if getattr(step, "outputs", None) and current is not None and current.element:
+            for name in step.outputs:
+                if name:
+                    scope[name] = current.element
 
         types.append(current)
 

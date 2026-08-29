@@ -531,7 +531,7 @@ class TestEffectTargetSpecGraphQL:
         )
 
         gql = _effect_to_gql(eff)
-        assert gql.target_spec == {"steps": [{"kind": "literal", "element": "trait", "value": "trait-x"}]}
+        assert gql.target_spec == {"steps": [{"kind": "literal", "element": "trait", "value": "trait-x", "outputs": []}]}
 
         back = _effect_input_to_domain(_make_effect_input(gql))
         assert back.target_spec is not None

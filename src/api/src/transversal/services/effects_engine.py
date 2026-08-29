@@ -224,21 +224,18 @@ class EffectsEngine:
                 if effect.timing == EffectTiming.IMMEDIATE:
                     if effect.refs:
                         before = len(outcome.structured)
-                        resolved = resolve_refs(effect, _fire_context(event, sfx, repo), outcome.structured, source_sfx_id=sfx.id)
+                        resolved = resolve_refs(effect, _fire_context(event, sfx, repo, bindings=bindings), outcome.structured, source_sfx_id=sfx.id)
                         if len(outcome.structured) == before:
                             _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
                             outcome.applied.append(resolved)
-                            _apply_outputs(resolved, bindings)
                             sfx_applied = True
                             log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
                     elif effect.target_spec is not None:
                         before = len(outcome.structured)
                         applied = _apply_immediate_spec(
-                            effect, event, sfx, effect_context, repo, outcome.structured,
+                            effect, event, sfx, effect_context, repo, outcome.structured, bindings=bindings,
                         )
                         outcome.applied.extend(applied)
-                        for a in applied:
-                            _apply_outputs(a, bindings)
                         if applied:
                             sfx_applied = True
                     elif _effects_applier.find_choose_placeholder(effect):
@@ -250,7 +247,6 @@ class EffectsEngine:
                     else:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, effect_context)
                         outcome.applied.append(effect)
-                        _apply_outputs(effect, bindings)
                         sfx_applied = True
                         log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, effect.target)
                 else:
@@ -438,33 +434,7 @@ def _resolved_id(value) -> str | None:
     return getattr(value, "ts_id", None) or getattr(value, "id", None)
 
 
-def _apply_outputs(effect: Effect, bindings: dict) -> None:
-    """Bind an effect's declared ``outputs`` into the activation scope.
-
-    Reads the resolved field named by each ``EffectOutput.field`` (``target`` |
-    ``entity`` | ``refs.<name>``) and stores a typed ``Binding`` under
-    ``output.name`` so later effects can reference ``{name}`` (string) and the
-    targeting system can ``select variable`` with a known element type.
-    """
-    from transversal.services.target_resolver import Binding
-
-    for out in (effect.outputs or []):
-        field = out.field or "target"
-        value = ""
-        if field == "target":
-            value = effect.target or ""
-        elif field == "entity":
-            value = effect.entity or ""
-        elif field.startswith("refs."):
-            ref = (effect.refs or {}).get(field[len("refs."):])
-            value = ref.value if ref else ""
-        else:
-            value = effect.target or ""
-        if out.name and value:
-            bindings[out.name] = Binding(value=value, element=out.element or "")
-
-
-def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None):
+def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None, bindings: dict | None = None):
     """Build the resolver context for a fire-time effect (spec + refs paths share it)."""
     from transversal.services.target_resolver import TargetContext, resolve_source
 
@@ -478,6 +448,7 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
     return TargetContext(
         subject=entity, repo=repo, collections=collections or {},
         source=source, source_element=source_element,
+        bindings=bindings if bindings is not None else {},
     )
 
 
@@ -553,6 +524,7 @@ def _apply_immediate_spec(
     repo,
     structured: Optional[list] = None,
     answers: dict[int, list[str]] | None = None,
+    bindings: dict | None = None,
 ) -> list[Effect]:
     """Resolve an immediate effect's ``target_spec`` and apply once per target.
 
@@ -576,7 +548,7 @@ def _apply_immediate_spec(
     )
     resolution = resolve(
         effect.target_spec,
-        TargetContext(subject=entity, repo=repo, source=source, source_element=source_element),
+        TargetContext(subject=entity, repo=repo, source=source, source_element=source_element, bindings=bindings if bindings is not None else {}),
         answers=answers,
     )
 
@@ -615,6 +587,7 @@ def resolve_effect_spec_choices(
     source_kind: str = "",
     source_id: str = "",
     source_sfx_id: str = "",
+    bindings: dict | None = None,
 ) -> tuple[list[Effect], list[StructuredChoice]]:
     """Re-resolve an effect's spec/ref with partial ``choose`` answers.
 
@@ -631,7 +604,7 @@ def resolve_effect_spec_choices(
         if source_kind and source_id and repo is not None
         else (None, None)
     )
-    ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element)
+    ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element, bindings=bindings if bindings is not None else {})
     answers_so_far = [{"step_index": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
 
     if field.startswith("refs."):

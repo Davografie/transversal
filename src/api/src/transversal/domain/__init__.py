@@ -719,20 +719,6 @@ class TargetRef(BaseModel):
     scope: Optional[str] = None
 
 
-class EffectOutput(BaseModel):
-    """A named value an effect exposes to later effects in the same activation.
-
-    ``name`` is the variable name (referenced as ``{name}`` by later effects);
-    ``field`` names which resolved field to bind (``target`` | ``entity`` |
-    ``refs.<name>``); ``element`` is the catalog element type of the bound value
-    (e.g. ``traitsetting``) so the targeting wizard can offer it as a typed
-    ``select variable``. Empty ``element`` = untyped (string substitution only).
-    """
-    name: str
-    field: str = "target"
-    element: str = ""
-
-
 class Effect(BaseModel):
     """A single operational effect — shared by SFX and life-path consequences.
 
@@ -762,8 +748,6 @@ class Effect(BaseModel):
     # (see ``EffectActionMeta.refs``); ``target``/``entity`` remain as the
     # legacy single-reference fallback until the Step-3 migration removes them.
     refs: dict[str, TargetRef] = Field(default_factory=dict)
-    # Values exposed to later effects in the same activation (see EffectOutput).
-    outputs: list[EffectOutput] = Field(default_factory=list)
 
 
 class Timer(BaseModel):

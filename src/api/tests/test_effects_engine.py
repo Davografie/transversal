@@ -369,27 +369,6 @@ def test_bindings_override_context():
     assert out.target == "binding"
 
 
-def test_apply_outputs_binds_resolved_fields():
-    from transversal.domain import EffectOutput, TargetRef
-    from transversal.services.effects_engine import _apply_outputs
-
-    effect = Effect(
-        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
-        target="ts-1",
-        refs={"complication": TargetRef(value="ts-2")},
-        outputs=[
-            EffectOutput(name="target_out", field="target"),
-            EffectOutput(name="ref_out", field="refs.complication", element="traitsetting"),
-        ],
-    )
-    bindings = {}
-    _apply_outputs(effect, bindings)
-    assert bindings["target_out"].value == "ts-1"
-    assert bindings["target_out"].element == ""
-    assert bindings["ref_out"].value == "ts-2"
-    assert bindings["ref_out"].element == "traitsetting"
-
-
 def test_resolve_effect_spec_choices_resolves_all_refs():
     from types import SimpleNamespace as NS
     from transversal.domain import TargetRef

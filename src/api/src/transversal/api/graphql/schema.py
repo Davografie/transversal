@@ -97,7 +97,6 @@ from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import Condition as DomainCondition
 from transversal.domain import ConditionType as DomainConditionType
 from transversal.domain import Effect as DomainEffect
-from transversal.domain import EffectOutput as DomainEffectOutput
 from transversal.domain import EffectDuration as DomainEffectDuration
 from transversal.domain import Timer as DomainTimer
 from transversal.domain import ScheduledEvent as DomainScheduledEvent
@@ -254,7 +253,6 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         target_spec=e.target_spec.model_dump() if e.target_spec else None,
         entity_spec=e.entity_spec.model_dump() if e.entity_spec else None,
         refs=_refs_to_gql(e.refs),
-        outputs=[o.model_dump() for o in e.outputs] if e.outputs else None,
         conditions=[_condition_to_gql(c) for c in e.conditions],
     )
 
@@ -317,7 +315,6 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         target_spec=_target_spec_from_input(e.target_spec),
         entity_spec=_target_spec_from_input(e.entity_spec),
         refs=_refs_from_input(e.refs),
-        outputs=[DomainEffectOutput(name=o["name"], field=o.get("field", "target"), element=o.get("element", "")) for o in (e.outputs or []) if isinstance(o, dict) and o.get("name")],
         conditions=[_condition_input_to_domain(c) for c in (e.conditions or [])],
     )
 
@@ -425,17 +422,17 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
     for s in (inp.steps or []):
         kind = s.kind
         if kind == "select":
-            steps.append(ts.SelectStep(collection=s.collection or "", variable=s.variable or ""))
+            steps.append(ts.SelectStep(collection=s.collection or "", variable=s.variable or "", outputs=list(s.outputs or [])))
         elif kind == "filter":
-            steps.append(ts.FilterStep(field=s.field or "", operator=s.operator or "==", value=s.value))
+            steps.append(ts.FilterStep(field=s.field or "", operator=s.operator or "==", value=s.value, outputs=list(s.outputs or [])))
         elif kind == "navigate":
-            steps.append(ts.NavigateStep(edge=s.edge or "", dedup=bool(s.dedup)))
+            steps.append(ts.NavigateStep(edge=s.edge or "", dedup=bool(s.dedup), outputs=list(s.outputs or [])))
         elif kind == "aggregate":
-            steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field))
+            steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field, outputs=list(s.outputs or [])))
         elif kind == "random":
-            steps.append(ts.RandomStep(count=int(s.count or 1)))
+            steps.append(ts.RandomStep(count=int(s.count or 1), outputs=list(s.outputs or [])))
         elif kind == "choose":
-            steps.append(ts.ChooseStep(count=int(s.count or 1)))
+            steps.append(ts.ChooseStep(count=int(s.count or 1), outputs=list(s.outputs or [])))
         else:
             steps.append(ts.SelectStep(collection=""))
     return ts.TargetSpec(steps=steps)
@@ -1931,20 +1928,25 @@ class Mutation:
             raise ValueError(f"Entity '{entity_id}' not found")
         resolved = []
         structured = []
-        to_bind = []  # (source_sfx_id, resolved_effect) for output bindings
         for r in resolutions:
             eff = _effect_input_to_domain(r.effect)
             field = r.field or "target"
             if r.answers:
                 answers = {a.step_index: list(a.ids) for a in r.answers}
+                local_scope: dict = {}
                 applied, pending = resolve_effect_spec_choices(
                     eff, field, answers, entity, repo,
                     source_kind=r.source_kind or "", source_id=r.source_id or "",
                     source_sfx_id=r.source_sfx_id or "",
+                    bindings=local_scope,
                 )
                 resolved.extend(applied)
                 structured.extend(pending)
-                to_bind.extend((r.source_sfx_id or "", a) for a in applied)
+                # Write any step-output bindings into the armed activation.
+                if local_scope and r.source_sfx_id:
+                    from transversal.services.roll_deferral import bind_activation
+                    for name, binding in local_scope.items():
+                        bind_activation(str(entity_id), r.source_sfx_id, name, binding.value, binding.element or "")
                 continue
             if field in ("target_scope", "entity_scope"):
                 from transversal.services.effects_applier import _resolve_scope_choose
@@ -1968,20 +1970,7 @@ class Mutation:
             else:
                 eff = eff.model_copy(update={field: r.target})
             resolved.append(eff)
-            to_bind.append((r.source_sfx_id or "", eff))
         result = commit_effects(entity, resolved, repo)
-        # Write output bindings into the matching armed activation so later
-        # roll-timed effects can reference {name}.
-        if to_bind:
-            from transversal.services.effects_engine import _apply_outputs
-            from transversal.services.roll_deferral import bind_activation
-            for source_sfx_id, eff in to_bind:
-                if not source_sfx_id or not eff.outputs:
-                    continue
-                scope: dict = {}
-                _apply_outputs(eff, scope)
-                for name, binding in scope.items():
-                    bind_activation(str(entity_id), source_sfx_id, name, binding.value, binding.element or "")
         if structured:
             from transversal.services.roll_orchestrator import _emit_pending_choices
             _emit_pending_choices(str(entity_id), entity.current_universe or "", [], structured)

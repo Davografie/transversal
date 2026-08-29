@@ -24,6 +24,15 @@
           </div>
         </div>
 
+        <div class="tsb-outputs">
+          <span class="tsb-outputs-label">expose as</span>
+          <input
+            :value="(step.outputs || []).join(', ')"
+            placeholder="var1, var2"
+            @change="onOutputs(i, $event)"
+          />
+        </div>
+
         <div v-if="stepError(i)" class="tsb-err">{{ stepError(i) }}</div>
 
         <!-- select: seed a context collection (first step only) -->
@@ -155,7 +164,18 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
-const variablesMap = computed(() => props.variables || {})
+const variablesMap = computed(() => {
+  const map = { ...(props.variables || {}) }
+  // Intra-spec: outputs declared by earlier steps, typed by the trace result.
+  for (let i = 0; i < steps.value.length; i++) {
+    const step = steps.value[i]
+    const type = trace.value.types?.[i]
+    for (const name of (step.outputs || [])) {
+      if (name && type?.element) map[name] = type.element
+    }
+  }
+  return map
+})
 
 const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections } = useTargetCatalog()
 
@@ -284,6 +304,11 @@ function onCount(i, e) {
   steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
 }
 
+function onOutputs(i, e) {
+  const names = String(e.target.value || '').split(',').map(s => s.trim()).filter(Boolean)
+  steps.value[i].outputs = names
+}
+
 function canAdd(kind) {
   if (kind === 'select') return steps.value.length === 0
   // Subsequent steps need a resolvable type before them.
@@ -295,7 +320,7 @@ function canAdd(kind) {
 }
 
 function add(kind) {
-  const blank = { kind, collection: '', variable: '', field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
+  const blank = { kind, collection: '', variable: '', outputs: [], field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
   steps.value = [...steps.value, blank]
 }
 
@@ -347,6 +372,9 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-step.tsb-valid { border-color: #40b860; background: rgba(64,184,96,0.06); }
 .tsb-step.tsb-error { border-color: #d04a4a; }
 .tsb-step-head { display: flex; align-items: center; gap: 5px; }
+.tsb-outputs { display: flex; align-items: center; gap: 4px; }
+.tsb-outputs-label { font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.tsb-outputs input { flex: 1; min-width: 0; }
 .tsb-step-index { font-size: 9px; color: var(--text-dim); font-family: monospace; min-width: 12px; }
 .tsb-kind { flex: none; width: 88px; }
 .tsb-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }

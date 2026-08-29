@@ -193,7 +193,6 @@ class Effect:
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
-    outputs: Optional[strawberry.scalars.JSON] = None
     conditions: list[Condition] = strawberry.field(default_factory=list)
 
 
@@ -215,7 +214,6 @@ class EffectInput:
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
-    outputs: Optional[strawberry.scalars.JSON] = None
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
 
 
@@ -351,6 +349,7 @@ class TargetSpecStepInput:
     kind: str  # "select" | "filter" | "navigate" | "aggregate" | "random" | "choose"
     collection: Optional[str] = None
     variable: Optional[str] = None  # for kind == "select" + collection == "variable"
+    outputs: Optional[list[str]] = None  # bound variable names this step exposes
     field: Optional[str] = None
     operator: str = "=="
     value: Optional[strawberry.scalars.JSON] = None

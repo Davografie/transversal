@@ -312,6 +312,23 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
 
 # ── The walker ───────────────────────────────────────────────
 
+def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, context: TargetContext) -> None:
+    """Bind a step's declared ``outputs`` into the running scope.
+
+    Each output name is bound to the step's first resolved value, typed by the
+    step's resolved element. No-op when the step produced no value/type.
+    """
+    outs = getattr(step, "outputs", None)
+    if not outs or not values or current_type is None:
+        return
+    rid = _candidate_id(current_type.element, values[0])
+    if not rid:
+        return
+    for name in outs:
+        if name:
+            context.bindings[name] = Binding(value=rid, element=current_type.element)
+
+
 def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[str]] | None = None) -> Resolution:
     """Walk ``spec`` over ``context``, returning resolved values + step errors.
 
@@ -335,33 +352,32 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 else:
                     values = _lookup_literal(binding.element, binding.value, context)
                     current_type = ValueType(binding.element, "one")
-                continue
-            if step.collection == "source":
+            elif step.collection == "source":
                 if context.source_element is None:
                     errors.append(TraceError(i, "select source requires a declared source_kind"))
                     values, current_type = [], None
                 else:
                     values = [context.source] if context.source is not None else []
                     current_type = ValueType(context.source_element, "one")
-                continue
-            col = tc.collection(step.collection)
-            if col is None:
-                errors.append(TraceError(i, f"unknown collection {step.collection!r}"))
-                values, current_type = [], None
-            elif step.collection == "self":
-                values = [context.subject] if context.subject is not None else []
-                current_type = ValueType(col.element, "one")
-            elif step.collection not in context.collections:
-                seeded = _seed_collection(step.collection, context)
-                if seeded is None:
-                    errors.append(TraceError(i, f"collection {step.collection!r} not provided by context"))
-                    values, current_type = [], None
-                else:
-                    values = seeded
-                    current_type = ValueType(col.element, "one" if col.singular else "many")
             else:
-                values = list(context.collections[step.collection])
-                current_type = ValueType(col.element, "one" if col.singular else "many")
+                col = tc.collection(step.collection)
+                if col is None:
+                    errors.append(TraceError(i, f"unknown collection {step.collection!r}"))
+                    values, current_type = [], None
+                elif step.collection == "self":
+                    values = [context.subject] if context.subject is not None else []
+                    current_type = ValueType(col.element, "one")
+                elif step.collection not in context.collections:
+                    seeded = _seed_collection(step.collection, context)
+                    if seeded is None:
+                        errors.append(TraceError(i, f"collection {step.collection!r} not provided by context"))
+                        values, current_type = [], None
+                    else:
+                        values = seeded
+                        current_type = ValueType(col.element, "one" if col.singular else "many")
+                else:
+                    values = list(context.collections[step.collection])
+                    current_type = ValueType(col.element, "one" if col.singular else "many")
 
         elif isinstance(step, FilterStep):
             f = tc.field(current_type.element, step.field) if current_type is not None else None
@@ -377,43 +393,43 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
             if current_type is None:
                 errors.append(TraceError(i, "navigate with no collection"))
                 values, current_type = [], None
-                continue
-            e = tc.edge(current_type.element, step.edge)
-            resolver = _EDGE_RESOLVERS.get((current_type.element, step.edge))
-            if e is None or resolver is None:
-                errors.append(TraceError(i, f"no edge/resolver for {current_type.element}.{step.edge}"))
-                values, current_type = [], None
-            elif len(e.target) != 1:
-                errors.append(TraceError(i, f"union edge {current_type.element}.{step.edge} not yet resolvable"))
-                values, current_type = [], None
             else:
-                out: list[Any] = []
-                for v in values:
-                    out.extend(resolver(v, context))
-                if step.dedup:
-                    out = _dedup(out)
-                cardinality = "many" if (current_type.cardinality == "many" or e.cardinality == "many") else "one"
-                values, current_type = out, ValueType(e.target[0], cardinality)
+                e = tc.edge(current_type.element, step.edge)
+                resolver = _EDGE_RESOLVERS.get((current_type.element, step.edge))
+                if e is None or resolver is None:
+                    errors.append(TraceError(i, f"no edge/resolver for {current_type.element}.{step.edge}"))
+                    values, current_type = [], None
+                elif len(e.target) != 1:
+                    errors.append(TraceError(i, f"union edge {current_type.element}.{step.edge} not yet resolvable"))
+                    values, current_type = [], None
+                else:
+                    out: list[Any] = []
+                    for v in values:
+                        out.extend(resolver(v, context))
+                    if step.dedup:
+                        out = _dedup(out)
+                    cardinality = "many" if (current_type.cardinality == "many" or e.cardinality == "many") else "one"
+                    values, current_type = out, ValueType(e.target[0], cardinality)
 
         elif isinstance(step, AggregateStep):
             if current_type is None:
                 errors.append(TraceError(i, "aggregate with no collection"))
                 values, current_type = [], None
-                continue
-            agg = tc.aggregation(step.fn)
-            if agg is None:
-                errors.append(TraceError(i, f"unknown aggregation {step.fn!r}"))
-                values, current_type = [], None
-            elif not agg.needs_field:
-                values, current_type = [len(values)], ValueType(agg.output, "one")
-            elif step.field is None or tc.field(current_type.element, step.field) is None:
-                errors.append(TraceError(i, f"aggregation {step.fn} needs a valid field"))
-                values, current_type = [], None
             else:
-                f = tc.field(current_type.element, step.field)
-                values = _aggregate(values, step.fn, step.field)
-                element = f.type if agg.output == "same" else agg.output
-                current_type = ValueType(element, "one")
+                agg = tc.aggregation(step.fn)
+                if agg is None:
+                    errors.append(TraceError(i, f"unknown aggregation {step.fn!r}"))
+                    values, current_type = [], None
+                elif not agg.needs_field:
+                    values, current_type = [len(values)], ValueType(agg.output, "one")
+                elif step.field is None or tc.field(current_type.element, step.field) is None:
+                    errors.append(TraceError(i, f"aggregation {step.fn} needs a valid field"))
+                    values, current_type = [], None
+                else:
+                    f = tc.field(current_type.element, step.field)
+                    values = _aggregate(values, step.fn, step.field)
+                    element = f.type if agg.output == "same" else agg.output
+                    current_type = ValueType(element, "one")
 
         elif isinstance(step, LiteralStep):
             if tc.element(step.element) is None:
@@ -470,6 +486,8 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 # The user's selection supplies the value; nothing resolved yet.
                 values, current_type = [], None
                 break
+
+        _bind_step_outputs(step, values, current_type, context)
 
     return Resolution(values, errors, pending_choices)
 

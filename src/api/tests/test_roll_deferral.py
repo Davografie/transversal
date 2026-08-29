@@ -48,31 +48,36 @@ def test_arm_and_fire_one_shot(monkeypatch):
     assert roll_deferral.list_armed("e1") == []
 
 
-def test_deferred_effects_share_output_bindings(monkeypatch):
-    from transversal.domain import EffectOutput
-    roll_deferral.reset()
-    applied = []
+def test_deferred_effects_share_step_output_bindings(monkeypatch):
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.services.target_spec import SelectStep, TargetSpec
 
+    roll_deferral.reset()
+    entity = SimpleNamespace(id="e1")
+    repo = SimpleNamespace(get_entity=lambda eid: entity)
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    applied = []
     class FakeRegistry:
         def apply(self, effect, entity_id, universe, context):
             applied.append(effect)
-
     monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
 
     emit = Effect(
-        timing=EffectTiming.ON_RESULT, type="modify_trait", action="set", target="ts-1",
-        outputs=[EffectOutput(name="complication", field="target")],
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="set",
+        target_spec=TargetSpec(steps=[SelectStep(collection="self", outputs=["complication"])]),
     )
     consume = Effect(
         timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down", target="{complication}",
     )
 
-    roll_deferral.arm_sfx("e1", [emit, consume], duration=_rolls_duration(1))
+    roll_deferral.arm_sfx("e1", [emit, consume], source_sfx_id="sfx-heal", duration=_rolls_duration(1))
     fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
 
-    assert [e.target for e in fired] == ["ts-1", "ts-1"]
+    assert [e.target for e in fired] == ["e1", "e1"]
     assert len(applied) == 2
-    assert applied[1].target == "ts-1"
+    assert applied[1].target == "e1"
 
 
 def test_bind_activation_writes_into_armed_scope(monkeypatch):

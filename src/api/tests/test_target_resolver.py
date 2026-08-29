@@ -231,6 +231,15 @@ def test_select_variable_requires_typed_binding():
     assert res.errors and "not bound or untyped" in res.errors[0].message
 
 
+def test_step_output_is_bound_into_context():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo)
+    res = resolve(spec(SelectStep(collection="self", outputs=["who"])), ctx)
+    assert res.errors == []
+    assert ctx.bindings["who"].value == "kael"
+    assert ctx.bindings["who"].element == "entity"
+
+
 def _heal_like_spec():
     return spec(
         SelectStep(collection="occupants"),

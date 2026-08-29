@@ -44,6 +44,16 @@ def test_select_unknown_variable_is_an_error():
     assert errors and "unknown variable" in errors[0].message
 
 
+def test_step_output_is_visible_to_later_steps():
+    s = spec(
+        SelectStep(collection="self", outputs=["who"]),
+        SelectStep(collection="variable", variable="who"),
+    )
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("entity", "one")
+
+
 def test_filter_does_not_change_type():
     s = spec(SelectStep(collection="rolled_dice"), FilterStep(field="source_kind", value="trait"))
     types, errors = trace(s)

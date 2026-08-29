@@ -234,7 +234,7 @@ def _apply_armed(
 ) -> list[Effect]:
     """Apply one armed entry's matching effects to ``rolls``; return them."""
     from transversal.services.effects_applier import effect_registry
-    from transversal.services.effects_engine import _apply_outputs, _substitute_effect_context
+    from transversal.services.effects_engine import _substitute_effect_context
 
     bindings: dict = dict(armed.bindings)
     applied: list[Effect] = []
@@ -244,13 +244,10 @@ def _apply_armed(
         if effect.refs:
             resolved = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id)
             applied.append(resolved)
-            _apply_outputs(resolved, bindings)
             continue
         if effect.target_spec is not None:
             resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings, source_sfx_id=armed.source_sfx_id)
             applied.extend(resolved_list)
-            for r in resolved_list:
-                _apply_outputs(r, bindings)
             continue
         if bool(effect.die_filter):
             dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
@@ -265,12 +262,10 @@ def _apply_armed(
                 resolved = _substitute_effect_context(resolved, context or {}, bindings)
                 effect_registry.apply(resolved, entity_id, universe, context or {})
                 applied.append(resolved)
-                _apply_outputs(resolved, bindings)
         else:
             resolved = _substitute_effect_context(effect, context or {}, bindings)
             effect_registry.apply(resolved, entity_id, universe, context or {})
             applied.append(resolved)
-            _apply_outputs(resolved, bindings)
     armed.bindings = bindings
     return applied
 
@@ -308,7 +303,7 @@ def _apply_refs_roll(
         _substitute_effect_context(effect, context or {}, bindings),
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
-            source=source, source_element=source_element,
+            source=source, source_element=source_element, bindings=bindings if bindings is not None else {},
         ),
         structured,
         source_sfx_id=source_sfx_id or "",
@@ -352,7 +347,7 @@ def _apply_spec_target(
         effect.target_spec,
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
-            source=source, source_element=source_element,
+            source=source, source_element=source_element, bindings=bindings if bindings is not None else {},
         ),
         answers=answers,
     )
