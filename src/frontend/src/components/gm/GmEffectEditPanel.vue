@@ -24,7 +24,7 @@ const props = defineProps({
 })
 
 const panel = usePanel()
-const { draft, scopeVariables } = useSfxEdit()
+const { draft, scopeVariables, save } = useSfxEdit()
 const { load: loadCatalog, sourceKinds } = useTargetCatalog()
 loadCatalog()
 
@@ -47,6 +47,11 @@ function onSave(eff) {
     next[props.index] = eff
     draft.effects = next
   }
+  // Persist immediately: the effect form's Update/Add is the user's commit
+  // point for this effect, so saving here removes the separate SFX-panel
+  // "Save now" step (and any reliance on the debounced auto-save). A no-op for
+  // a brand-new SFX (no id yet) — the create flow saves the whole draft.
+  save()
   panel.close()
 }
 
