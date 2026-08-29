@@ -385,6 +385,38 @@ def test_apply_outputs_binds_resolved_fields():
     assert bindings == {"target_out": "ts-1", "ref_out": "ts-2"}
 
 
+def test_resolve_effect_spec_choices_resolves_all_refs():
+    from types import SimpleNamespace as NS
+    from transversal.domain import TargetRef
+    from transversal.services.effects_engine import resolve_effect_spec_choices
+    from transversal.services.target_spec import ChooseStep, SelectStep, TargetSpec
+
+    class Repo:
+        def __init__(self):
+            self.entities = {
+                "kael": NS(id="kael", current_location="loc-1", current_universe="earth"),
+                "gmc-1": NS(id="gmc-1", current_location="loc-1", current_universe="earth"),
+            }
+        def get_entity(self, eid):
+            return self.entities.get(eid)
+        def list_entities_by_location(self, lid):
+            return [e for e in self.entities.values() if e.current_location == lid]
+
+    repo = Repo()
+    entity = repo.entities["kael"]
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
+        refs={
+            "trait": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="occupants"), ChooseStep(count=1)])),
+            "pool": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="self")])),
+        },
+    )
+    resolved, pending = resolve_effect_spec_choices(effect, "refs.trait", {1: ["gmc-1"]}, entity, repo)
+    assert pending == []
+    assert resolved[0].refs["trait"].value == "gmc-1"
+    assert resolved[0].refs["pool"].value == "kael"
+
+
 def test_on_trait_offered_trigger_matches_trait_offered():
     engine = EffectsEngine()
     sfx = _make_sfx("sfx-offer", "Offer", "on_trait_offered")

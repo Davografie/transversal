@@ -525,6 +525,7 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
         return effect
     from transversal.services.target_resolver import resolve
 
+    answers_so_far = [{"step_index": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
     refs = dict(effect.refs)
     for name, ref in refs.items():
         if ref.spec is None:
@@ -532,7 +533,7 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
         resolution = resolve(ref.spec, context, answers=answers)
         if resolution.pending_choices and structured is not None:
             for pc in resolution.pending_choices:
-                structured.append(_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id))
+                structured.append(_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id, answers_so_far=answers_so_far))
             continue
         if resolution.values:
             rid = _resolved_id(resolution.values[0])
@@ -631,20 +632,19 @@ def resolve_effect_spec_choices(
     answers_so_far = [{"step_index": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
 
     if field.startswith("refs."):
-        name = field[len("refs."):]
-        refs = dict(effect.refs or {})
-        ref = refs.get(name)
-        if ref is None or ref.spec is None:
-            return [], []
-        resolution = resolve(ref.spec, ctx, answers=answers)
-        if resolution.pending_choices:
-            return [], [_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id, answers_so_far=answers_so_far) for pc in resolution.pending_choices]
-        if resolution.values:
-            rid = _resolved_id(resolution.values[0])
-            if rid is not None:
-                refs[name] = ref.model_copy(update={"value": rid, "spec": None})
-                return [effect.model_copy(update={"refs": refs})], []
-        return [], []
+        structured_choices: list = []
+        resolved = resolve_refs(
+            effect, ctx, structured=structured_choices, answers=answers,
+            source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id,
+        )
+        if structured_choices:
+            return [], structured_choices
+        # Clear the resolved specs so the handler reads the concrete values.
+        refs = {
+            name: (ref.model_copy(update={"spec": None}) if ref.spec is not None else ref)
+            for name, ref in (resolved.refs or {}).items()
+        }
+        return [resolved.model_copy(update={"refs": refs})], []
 
     spec = effect.target_spec if field == "target" else effect.entity_spec
     if spec is None:
