@@ -85,7 +85,7 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(entity, [a], em.repo, ctx)
 
-    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle"):
+    for action in ("step_up", "step_down", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -813,6 +813,61 @@ def _apply_step_down(entity, effect, repo, result):
         return
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"stepped down {target}", existing.id))
+    _queue_trait_revert(repo, existing, effect)
+
+
+def _apply_add_die(entity, effect, repo, result):
+    """Add a die to a trait setting's rating (any rating type).
+
+    Appends ``effect.result`` (a die size, e.g. ``d6``) to the trait setting's
+    ``dice`` list. Static/resource/challenge ratings are all a ``dice`` list, so
+    this is type-agnostic; the duration revert removes the same die.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
+    if target is None:
+        return
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    if not existing:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to add a die to"))
+        return
+    die = _die(effect.result)
+    existing.dice.append(die)
+    result.updated_trait_settings.append(existing)
+    result.applied.append(AppliedEffect(effect, f"added {die.value} to {target}", existing.id))
+    _queue_trait_revert(repo, existing, effect)
+
+
+def _apply_remove_die(entity, effect, repo, result):
+    """Remove a die from a trait setting's rating (any rating type).
+
+    Removes the first die matching ``effect.result`` from the trait setting's
+    ``dice`` list. The duration revert re-adds the same die.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    target = _resolve_target(subject, effect, result, "trait", repo)
+    if target is None:
+        return
+    existing = _find_traitsetting_by_target(subject, effect, repo, target)
+    if not existing or not existing.dice:
+        result.applied.append(AppliedEffect(effect, f"no trait {target} to remove a die from"))
+        return
+    die = _die(effect.result)
+    for i, d in enumerate(existing.dice):
+        if d == die:
+            existing.dice.pop(i)
+            break
+    else:
+        result.applied.append(AppliedEffect(effect, f"{target} has no {die.value} to remove"))
+        return
+    result.updated_trait_settings.append(existing)
+    result.applied.append(AppliedEffect(effect, f"removed {die.value} from {target}", existing.id))
     _queue_trait_revert(repo, existing, effect)
 
 
@@ -1554,6 +1609,8 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "cortex_gain"): _apply_cortex_gain,
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
+    ("modify_trait", "add_die"): _apply_add_die,
+    ("modify_trait", "remove_die"): _apply_remove_die,
     ("modify_trait", "reduce_by_effect"): _apply_reduce_by_effect,
     ("modify_trait", "set"): _apply_set,
     ("modify_trait", "disable"): _apply_disable,

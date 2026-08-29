@@ -228,6 +228,27 @@ def test_step_up_steps_smallest_die():
     assert result.updated_trait_settings[0].dice == [DieType.D8, DieType.D8]
 
 
+def test_add_die_appends_to_rating():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D8])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "add_die", "pool", "d6")], repo)
+    assert result.updated_trait_settings[0].dice == [DieType.D8, DieType.D6]
+
+
+def test_add_die_works_on_challenge_rating():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D8], rating_type=RatingType.CHALLENGE)])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "add_die", "pool", "d6")], repo)
+    assert result.updated_trait_settings[0].dice == [DieType.D8, DieType.D6]
+
+
+def test_remove_die_removes_matching_die():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D8, DieType.D6])])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "remove_die", "pool", "d6")], repo)
+    assert result.updated_trait_settings[0].dice == [DieType.D8]
+
+
 def test_step_down_empties_at_d4():
     repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D4])])
     entity = _entity()
