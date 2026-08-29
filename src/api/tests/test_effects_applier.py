@@ -427,6 +427,39 @@ def test_core_handlers_register_disable_enable_toggle():
         applier.effect_registry = original
 
 
+def test_attune_targets_the_chosen_entity():
+    """Attune resolves ``target`` to the attuned entity (not the wielder)."""
+    from types import SimpleNamespace
+    import transversal.services.effects_applier as applier
+    from transversal.services.effects_applier import EffectRegistry
+
+    class Repo:
+        def __init__(self):
+            self.entities = {
+                "wielder": SimpleNamespace(id="wielder", attunements=[]),
+                "target": SimpleNamespace(id="target", attunements=[]),
+            }
+        def get_entity(self, eid):
+            return self.entities.get(eid)
+        def update_entity(self, e):
+            self.entities[e.id] = e
+
+    repo = Repo()
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        raz = SimpleNamespace(spend=lambda *a, **k: None, earn=lambda *a, **k: None, transfer=lambda *a, **k: None)
+        em = SimpleNamespace(repo=repo, create=lambda *a, **k: None)
+        applier._register_core_handlers(em, raz)
+        eff = Effect(timing=EffectTiming.IMMEDIATE, type="attune", action="enable", target="target", result="three_realms")
+        applier.effect_registry.apply(eff, "wielder", "earth", {})
+    finally:
+        applier.effect_registry = original
+
+    assert [a.universe for a in repo.entities["target"].attunements] == ["three_realms"]
+    assert repo.entities["wielder"].attunements == []
+
+
 def test_create_projection_activates_new_body_and_schedules_restore():
     from transversal.domain import EffectDuration, Timer, TimerCombine
     prior = Projection(id="char-1:earth", entity_id="char-1", universe="earth", current_location="loc-1")

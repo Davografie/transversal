@@ -121,7 +121,9 @@ def _register_core_handlers(em, raz):
     # Attunement (temporary effective-universe additions)
     def _attune(a, eid, u, ctx):
         from transversal.domain import Attunement, AttunementScope
-        entity = em.repo.get_entity(eid)
+        raw = (a.target or "").strip()
+        target_id = eid if raw in ("", "self", "wielder") else raw
+        entity = em.repo.get_entity(target_id)
         if entity is None:
             return
         scope = AttunementScope(ctx.get("scope", "self"))

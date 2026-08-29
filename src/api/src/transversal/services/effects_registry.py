@@ -608,10 +608,11 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="result", label="Target Universe", field_type="select",
                           required=True, options=["three_realms", "earth"]),
             EffectFieldDef(name="target", label="Target Entity", field_type="text",
-                          required=False, default="wielder"),
+                          required=False, default="self"),
         ],
         supports_duration=True,
         inverse=("attune", "disable"),
+        target_kind="entity",
     ),
 
     # ── Travel / Transversal ───────────────────────────
