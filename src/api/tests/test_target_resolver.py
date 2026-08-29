@@ -198,6 +198,22 @@ def test_missing_collection_is_an_error():
     assert res.errors and "not provided" in res.errors[0].message
 
 
+def test_select_occupants_is_seeded_from_subject_location():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo)  # no collections provided
+    res = resolve(spec(SelectStep(collection="occupants")), ctx)
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["kael", "gmc-1"]
+
+
+def test_select_self_traitsettings_is_seeded_from_subject():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo)  # no collections provided
+    res = resolve(spec(SelectStep(collection="self_traitsettings")), ctx)
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["kael:trait-martial", "kael:trait-qi"]
+
+
 def test_unknown_edge_is_an_error():
     kael, repo = _one_trick_world()
     ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": [{"ts_id": "x", "source_kind": "trait"}]})

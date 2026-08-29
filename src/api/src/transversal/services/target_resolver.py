@@ -270,6 +270,34 @@ def _aggregate(values: list[Any], fn: str, field_name: str | None) -> list[Any]:
     return []
 
 
+def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
+    """Lazily seed a catalog collection from the subject/repo.
+
+    Callers provide event-scoped seeds (``rolled_dice``); the subject-derived
+    seeds (``occupants``, ``self_traitsettings``) and the full catalogs
+    (``locations``, ``entities``) are resolved on demand here so every path
+    shares one seeding rule. Returns ``None`` when the collection can't be
+    seeded (unknown or no repo).
+    """
+    if ctx.repo is None:
+        return None
+    if name == "occupants":
+        if ctx.subject is None:
+            return []
+        loc = getattr(ctx.subject, "current_location", None)
+        return list(ctx.repo.list_entities_by_location(loc)) if loc else []
+    if name == "self_traitsettings":
+        if ctx.subject is None:
+            return []
+        return list(ctx.repo.get_traitsettings_for_entity(ctx.subject.id))
+    if name == "locations":
+        from transversal.domain import EntityType
+        return list(ctx.repo.list_entities_by_type(EntityType.LOCATION))
+    if name == "entities":
+        return list(ctx.repo.list_all_entities())
+    return None
+
+
 # ── The walker ───────────────────────────────────────────────
 
 def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
@@ -297,8 +325,13 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
                 values = [context.subject] if context.subject is not None else []
                 current_type = ValueType(col.element, "one")
             elif step.collection not in context.collections:
-                errors.append(TraceError(i, f"collection {step.collection!r} not provided by context"))
-                values, current_type = [], None
+                seeded = _seed_collection(step.collection, context)
+                if seeded is None:
+                    errors.append(TraceError(i, f"collection {step.collection!r} not provided by context"))
+                    values, current_type = [], None
+                else:
+                    values = seeded
+                    current_type = ValueType(col.element, "one" if col.singular else "many")
             else:
                 values = list(context.collections[step.collection])
                 current_type = ValueType(col.element, "one" if col.singular else "many")

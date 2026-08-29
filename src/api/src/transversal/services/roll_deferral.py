@@ -293,11 +293,15 @@ def _apply_spec_target(
     when ``source_kind``/``source_id`` are provided."""
     from transversal.main import _get_repo
     from transversal.services.effects_applier import effect_registry
+    from transversal.services.effects_engine import _substitute_effect_context
     from transversal.services.target_resolver import TargetContext, resolve, resolve_source
 
     repo = _get_repo()
     entity = repo.get_entity(entity_id)
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
+    # Substitute roll-context variables (e.g. ``{effect_die}``) before applying,
+    # mirroring ``_apply_refs_roll``.
+    effect = _substitute_effect_context(effect, context or {})
     resolution = resolve(
         effect.target_spec,
         TargetContext(
