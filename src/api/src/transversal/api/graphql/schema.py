@@ -97,6 +97,7 @@ from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import Condition as DomainCondition
 from transversal.domain import ConditionType as DomainConditionType
 from transversal.domain import Effect as DomainEffect
+from transversal.domain import EffectOutput as DomainEffectOutput
 from transversal.domain import EffectDuration as DomainEffectDuration
 from transversal.domain import Timer as DomainTimer
 from transversal.domain import ScheduledEvent as DomainScheduledEvent
@@ -253,6 +254,7 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
         target_spec=e.target_spec.model_dump() if e.target_spec else None,
         entity_spec=e.entity_spec.model_dump() if e.entity_spec else None,
         refs=_refs_to_gql(e.refs),
+        outputs=[o.model_dump() for o in e.outputs] if e.outputs else None,
         conditions=[_condition_to_gql(c) for c in e.conditions],
     )
 
@@ -315,6 +317,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         target_spec=_target_spec_from_input(e.target_spec),
         entity_spec=_target_spec_from_input(e.entity_spec),
         refs=_refs_from_input(e.refs),
+        outputs=[DomainEffectOutput(name=o["name"], field=o.get("field", "target")) for o in (e.outputs or []) if isinstance(o, dict) and o.get("name")],
         conditions=[_condition_input_to_domain(c) for c in (e.conditions or [])],
     )
 

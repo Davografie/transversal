@@ -57,6 +57,7 @@ class ArmedSfx:
     source_sfx_id: str | None = None  # SFX id the client stamps on its dice
     source_kind: str | None = None  # the SFX's declared source_kind (for `select source`)
     source_id: str | None = None  # the concrete source id (activation origin)
+    bindings: dict[str, str] = field(default_factory=dict)  # per-activation output variables
 
 
 _armed: dict[str, list[ArmedSfx]] = {}
@@ -217,17 +218,23 @@ def _apply_armed(
 ) -> list[Effect]:
     """Apply one armed entry's matching effects to ``rolls``; return them."""
     from transversal.services.effects_applier import effect_registry
-    from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.services.effects_engine import _apply_outputs, _substitute_effect_context
 
+    bindings: dict[str, str] = dict(armed.bindings)
     applied: list[Effect] = []
     for effect in armed.effects:
         if effect.timing.value != event_type:
             continue
         if effect.refs:
-            applied.append(_apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured))
+            resolved = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings)
+            applied.append(resolved)
+            _apply_outputs(resolved, bindings)
             continue
         if effect.target_spec is not None:
-            applied.extend(_apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured))
+            resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings)
+            applied.extend(resolved_list)
+            for r in resolved_list:
+                _apply_outputs(r, bindings)
             continue
         if armed.source_sfx_id is not None or bool(effect.die_filter):
             dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
@@ -239,12 +246,16 @@ def _apply_armed(
             )
             for die in dice:
                 resolved = _substitute_die_context(effect, die, context or {})
+                resolved = _substitute_effect_context(resolved, context or {}, bindings)
                 effect_registry.apply(resolved, entity_id, universe, context or {})
                 applied.append(resolved)
+                _apply_outputs(resolved, bindings)
         else:
-            resolved = _substitute_effect_context(effect, context or {})
+            resolved = _substitute_effect_context(effect, context or {}, bindings)
             effect_registry.apply(resolved, entity_id, universe, context or {})
             applied.append(resolved)
+            _apply_outputs(resolved, bindings)
+    armed.bindings = bindings
     return applied
 
 
@@ -264,6 +275,7 @@ def _apply_refs_roll(
     source_kind: str | None = None,
     source_id: str | None = None,
     structured: list | None = None,
+    bindings: dict[str, str] | None = None,
 ) -> Effect:
     """Resolve an armed effect's named refs against the roll context and apply."""
     from transversal.main import _get_repo
@@ -276,7 +288,7 @@ def _apply_refs_roll(
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
     before = len(structured) if structured is not None else 0
     resolved = resolve_refs(
-        _substitute_effect_context(effect, context or {}),
+        _substitute_effect_context(effect, context or {}, bindings),
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
             source=source, source_element=source_element,
@@ -300,6 +312,7 @@ def _apply_spec_target(
     source_id: str | None = None,
     structured: list | None = None,
     answers: dict[int, list[str]] | None = None,
+    bindings: dict[str, str] | None = None,
 ) -> list[Effect]:
     """Resolve an effect's ``target_spec`` against the roll context and apply it
     once per resolved target (e.g. One Trick: rolled dice → traitsetting → step
@@ -315,7 +328,7 @@ def _apply_spec_target(
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
     # Substitute roll-context variables (e.g. ``{effect_die}``) before applying,
     # mirroring ``_apply_refs_roll``.
-    effect = _substitute_effect_context(effect, context or {})
+    effect = _substitute_effect_context(effect, context or {}, bindings)
     resolution = resolve(
         effect.target_spec,
         TargetContext(

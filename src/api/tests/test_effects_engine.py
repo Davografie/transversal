@@ -351,6 +351,40 @@ def test_substitute_effect_context_leaves_choose_placeholder():
     assert out.result == "d6"
 
 
+def test_substitute_effect_context_uses_bindings():
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down", target="{complication}")
+    out = _substitute_effect_context(effect, {}, {"complication": "gmc-1:injury"})
+    assert out.target == "gmc-1:injury"
+
+
+def test_bindings_override_context():
+    from transversal.services.effects_engine import _substitute_effect_context
+
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="x", action="y", target="{v}")
+    out = _substitute_effect_context(effect, {"v": "context"}, {"v": "binding"})
+    assert out.target == "binding"
+
+
+def test_apply_outputs_binds_resolved_fields():
+    from transversal.domain import EffectOutput, TargetRef
+    from transversal.services.effects_engine import _apply_outputs
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+        target="ts-1",
+        refs={"complication": TargetRef(value="ts-2")},
+        outputs=[
+            EffectOutput(name="target_out", field="target"),
+            EffectOutput(name="ref_out", field="refs.complication"),
+        ],
+    )
+    bindings = {}
+    _apply_outputs(effect, bindings)
+    assert bindings == {"target_out": "ts-1", "ref_out": "ts-2"}
+
+
 def test_on_trait_offered_trigger_matches_trait_offered():
     engine = EffectsEngine()
     sfx = _make_sfx("sfx-offer", "Offer", "on_trait_offered")

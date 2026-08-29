@@ -48,6 +48,33 @@ def test_arm_and_fire_one_shot(monkeypatch):
     assert roll_deferral.list_armed("e1") == []
 
 
+def test_deferred_effects_share_output_bindings(monkeypatch):
+    from transversal.domain import EffectOutput
+    roll_deferral.reset()
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    emit = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="set", target="ts-1",
+        outputs=[EffectOutput(name="complication", field="target")],
+    )
+    consume = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down", target="{complication}",
+    )
+
+    roll_deferral.arm_sfx("e1", [emit, consume], duration=_rolls_duration(1))
+    fired = roll_deferral.fire_armed("e1", "on_result", "earth", {"total": 5})
+
+    assert [e.target for e in fired] == ["ts-1", "ts-1"]
+    assert len(applied) == 2
+    assert applied[1].target == "ts-1"
+
+
 def test_rolls_budget_fires_n_times(monkeypatch):
     roll_deferral.reset()
     applied = []

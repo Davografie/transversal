@@ -189,6 +189,8 @@ class EffectsEngine:
 
             # Execute each effect with its own timing
             sfx_applied = False
+            # Per-activation output bindings (effect outputs -> later effects).
+            bindings: dict[str, str] = {}
             # Bind the declared source variable: if the SFX states a source kind
             # and the activation carries a ``source_id``, map it to the typed
             # ``{variable}`` so effect fields resolve to the concrete id.
@@ -217,7 +219,7 @@ class EffectsEngine:
                 if effect.timing in _deferred_timings:
                     continue  # armed above (raw; substituted at fire time)
 
-                effect = _substitute_effect_context(effect, effect_context)
+                effect = _substitute_effect_context(effect, effect_context, bindings)
                 if effect.timing == EffectTiming.IMMEDIATE:
                     if effect.refs:
                         before = len(outcome.structured)
@@ -225,6 +227,7 @@ class EffectsEngine:
                         if len(outcome.structured) == before:
                             _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
                             outcome.applied.append(resolved)
+                            _apply_outputs(resolved, bindings)
                             sfx_applied = True
                             log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
                     elif effect.target_spec is not None:
@@ -233,6 +236,8 @@ class EffectsEngine:
                             effect, event, sfx, effect_context, repo, outcome.structured,
                         )
                         outcome.applied.extend(applied)
+                        for a in applied:
+                            _apply_outputs(a, bindings)
                         if applied:
                             sfx_applied = True
                     elif _effects_applier.find_choose_placeholder(effect):
@@ -244,6 +249,7 @@ class EffectsEngine:
                     else:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, effect_context)
                         outcome.applied.append(effect)
+                        _apply_outputs(effect, bindings)
                         sfx_applied = True
                         log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, effect.target)
                 else:
@@ -358,21 +364,27 @@ def _emit_sfx_triggered(entity_id: str, sfx) -> None:
         ))
 
 
-def _substitute_effect_context(effect: Effect, context: dict) -> Effect:
+def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | None = None) -> Effect:
     """Replace ``{context_key}`` placeholders across an effect's string fields.
 
     Covers ``result`` (the original behaviour), plus ``target``, ``entity``, and
     string ``context`` values so entity/string trigger variables can drive where
-    an effect points, not just a numeric/string result.
+    an effect points, not just a numeric/string result. ``bindings`` (per-
+    activation output variables) override the event context on name collision.
     """
-    if not context:
+    source: dict = {}
+    if context:
+        source.update(context)
+    if bindings:
+        source.update(bindings)
+    if not source:
         return effect
 
     def _sub(s: Optional[str]) -> Optional[str]:
         if not s:
             return s
         out = s
-        for key, value in context.items():
+        for key, value in source.items():
             placeholder = "{" + key + "}"
             if placeholder in out:
                 out = out.replace(placeholder, str(value) if value is not None else "")
@@ -423,6 +435,29 @@ def _resolved_id(value) -> str | None:
     if isinstance(value, dict):
         return value.get("ts_id") or value.get("id")
     return getattr(value, "ts_id", None) or getattr(value, "id", None)
+
+
+def _apply_outputs(effect: Effect, bindings: dict[str, str]) -> None:
+    """Bind an effect's declared ``outputs`` into the activation scope.
+
+    Reads the resolved field named by each ``EffectOutput.field`` (``target`` |
+    ``entity`` | ``refs.<name>``) and stores its id under ``output.name`` so
+    later effects can reference ``{name}``.
+    """
+    for out in (effect.outputs or []):
+        field = out.field or "target"
+        value = ""
+        if field == "target":
+            value = effect.target or ""
+        elif field == "entity":
+            value = effect.entity or ""
+        elif field.startswith("refs."):
+            ref = (effect.refs or {}).get(field[len("refs."):])
+            value = ref.value if ref else ""
+        else:
+            value = effect.target or ""
+        if out.name and value:
+            bindings[out.name] = value
 
 
 def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None):

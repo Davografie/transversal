@@ -193,6 +193,7 @@ class Effect:
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
+    outputs: Optional[strawberry.scalars.JSON] = None
     conditions: list[Condition] = strawberry.field(default_factory=list)
 
 
@@ -214,6 +215,7 @@ class EffectInput:
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
+    outputs: Optional[strawberry.scalars.JSON] = None
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
 
 
