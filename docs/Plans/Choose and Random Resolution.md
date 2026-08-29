@@ -86,6 +86,44 @@ Concrete steps:
 - `src/api/src/transversal/api/graphql/schema.py` / `types.py` — resume mutation + staged choice payload.
 - `src/frontend/src/components/gm/EffectTargetWizard.vue` — multi-step staged picker.
 
+## Execution plan (concrete, ordered)
+
+Settled additions since Phase 2: **context seeding** is the first blocker (also
+needed by `sfx-heal` effects 2/3 which `select occupants` directly), and a
+**`{effect_die}` substitution gap** in `_apply_spec_target` breaks
+`reduce_by_effect` on the roll-deferred path.
+
+1. **Seed collections.** `select occupants` (and `locations`/`entities`/
+   `self_traitsettings`) resolve empty today because only `rolled_dice` is
+   provided. Seed `occupants` from the subject's `current_location` and
+   `self_traitsettings` from `get_traitsettings_for_entity` in *both* the
+   immediate path (`_fire_context` / `_apply_immediate_spec`) and the
+   roll-deferred path (`_apply_spec_target` / `_apply_refs_roll`).
+
+2. **Substitute `{effect_die}` in the spec paths.** `_apply_spec_target` (and
+   `_apply_immediate_spec`) must call `_substitute_effect_context` before
+   applying, mirroring `_apply_refs_roll`. Unblocks `reduce_by_effect`
+   (`context.effect_die = "{effect_die}"`).
+
+3. **Roll-deferred `choose` surfacing.** `_apply_spec_target` / `_apply_refs_roll`
+   must surface a `choose` as a `StructuredChoice` (through `fire_armed` → the
+   roll orchestrator → `sfx_choice_required`), not silently no-op.
+
+4. **Phase 3 — resumable mid-path `choose`.** Make `resolve()` accept
+   `answers: dict[step_index, list[id]]`. On a `choose` with an answer, inject
+   the chosen values (looked up by id) and continue the suffix; without an
+   answer, emit a pending choice (carrying `step_index`). Extend
+   `StructuredChoice`/`EffectTargetResolutionInput` with `answers`; the resume
+   mutation re-resolves the spec and either emits the next choice or applies the
+   final target.
+
+5. **Shared target across effects.** *Design:* resolve each `choose` once per
+   activation and reuse the answer across effects that reference the same
+   `(spec, field)`. Decide the concrete mechanism before wiring `sfx-heal`.
+
+6. **Multi-`choose` fan-out.** `count > 1` applies once per chosen element
+   (frontend currently resolves only the first selection).
+
 ## Relationship to named refs (Step 3)
 
 Resolution mode is fundamentally a property of the *reference* (each `TargetRef` collapsing its own set), so `choose`/`random` slot naturally onto the named-refs model rather than the legacy `target` string. `TargetRef` gains a resolution mode (or the mode is expressed as a trailing step); keep the two consistent during the Step 3 migration.
