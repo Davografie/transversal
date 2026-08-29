@@ -172,6 +172,8 @@ class DicePoolRequest(BaseModel):
     kind: RollKind = RollKind.TEST
     pipeline: Optional[str] = None  # "simplified" | "pool" | None (auto by size)
     hitches_apply: bool = True  # False for GM difficulty rolls (1s are just dice)
+    total_dice_bonus: int = 0  # extra dice kept in the total (base 2)
+    effect_dice_bonus: int = 0  # extra effect dice kept (base 1)
 
     @field_validator("dice", mode="before")
     @classmethod
@@ -211,6 +213,7 @@ class PoolResult(BaseModel):
     resource_kept: Optional[DieRoll] = None
     effect_die: Optional[DieType]
     effect_die_value: Optional[int]
+    effect_dice: list[DieRoll] = Field(default_factory=list)  # all kept effect dice (effect_die is the primary/highest)
     unused: list[DieRoll]
     hitches: list[DieRoll]
     botch: bool

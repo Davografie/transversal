@@ -110,6 +110,29 @@ def pick_effect_die(
     return max(candidates, key=lambda r: r.die.max_value)
 
 
+def _pick_effect_dice(
+    rolls: list[DieRoll],
+    total_indices: list[int],
+    count: int,
+    hitches_apply: bool = True,
+) -> list[DieRoll]:
+    """Choose up to ``count`` effect dice from dice not used in the total.
+
+    Prefers the largest die type; ties prefer the higher rolled result (matching
+    ``pick_effect_die``). Returns at most ``count`` rolls in preference order.
+    """
+    if count <= 0:
+        return []
+    used = set(total_indices)
+    candidates = [r for i, r in enumerate(rolls) if i not in used]
+    if hitches_apply:
+        candidates = [r for r in candidates if r.result != 1]
+    if not candidates:
+        return []
+    candidates = sorted(candidates, key=lambda r: (r.die.max_value, r.result), reverse=True)
+    return candidates[:count]
+
+
 def compare_totals(player_total: int, opponent_total: int) -> ContestWinner:
     """Higher total wins a contest; a tie favors the challenger (PLAYER)."""
     if player_total > opponent_total:
@@ -268,17 +291,21 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
     botch = is_botch(all_rolls) if request.hitches_apply else False
     hitches_count = len(hitches)
 
-    # Keep the two highest MAIN dice for the total; the rest stay unused.
+    # Keep the highest MAIN dice for the total (base 2 + bonus); the rest unused.
+    keep_count = min(len(main_rolls), 2 + max(0, request.total_dice_bonus))
     order = sorted(range(len(main_rolls)), key=lambda i: main_rolls[i].result, reverse=True)
-    kept_indices = order[:2]
+    kept_indices = order[:keep_count]
     kept = [main_rolls[i] for i in kept_indices]
     total = pick_total(main_rolls, kept_indices) + (resource_kept.result if resource_kept else 0)
-    unused = [main_rolls[i] for i in order[2:]]
+    unused = [main_rolls[i] for i in order[keep_count:]]
 
-    # Effect die: choose from unused MAIN dice (resource dice are ineligible).
-    effect_roll = pick_effect_die(main_rolls, kept_indices, request.hitches_apply)
-    effect_die = effect_roll.die if effect_roll else DieType.D4
-    effect_die_value = effect_roll.result if effect_roll else None
+    # Effect dice: choose from unused MAIN dice (resource dice are ineligible).
+    # Base 1 + bonus; the primary (highest) stays the single ``effect_die``.
+    effect_count = 1 + max(0, request.effect_dice_bonus)
+    effect_rolls = _pick_effect_dice(main_rolls, kept_indices, effect_count, request.hitches_apply)
+    primary_effect = effect_rolls[0] if effect_rolls else None
+    effect_die = primary_effect.die if primary_effect else DieType.D4
+    effect_die_value = primary_effect.result if primary_effect else None
 
     # Opposition
     opposition_rolls: list[DieRoll] = []
@@ -319,6 +346,7 @@ def _resolve_pool(request: DicePoolRequest) -> PoolResult:
         resource_kept=resource_kept,
         effect_die=effect_die,
         effect_die_value=effect_die_value,
+        effect_dice=list(effect_rolls),
         unused=unused,
         hitches=hitches,
         botch=botch,

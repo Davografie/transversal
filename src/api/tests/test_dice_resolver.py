@@ -629,3 +629,45 @@ class TestResourceDice:
         assert result.resource_kept is None
         assert len([r for r in result.resource_rolls if r.result == 1]) == 2
         assert result.hitches_count == 2
+
+
+class TestDiceLimits:
+    """total_dice_bonus / effect_dice_bonus change keep counts."""
+
+    def _patch_rolls(self, monkeypatch, results):
+        from transversal.services import dice_resolver
+        it = iter(results)
+        monkeypatch.setattr(
+            dice_resolver,
+            "_roll_die",
+            lambda spec: DieRoll(**spec.model_dump(), result=next(it)),
+        )
+
+    def _six_main_dice(self, **bonus):
+        return DicePoolRequest(
+            entity_id="e", universe="earth", pipeline="pool",
+            dice=[
+                DieSpec(die=DieType.D10, label="a"),
+                DieSpec(die=DieType.D8, label="b"),
+                DieSpec(die=DieType.D8, label="c"),
+                DieSpec(die=DieType.D6, label="d"),
+                DieSpec(die=DieType.D6, label="e"),
+                DieSpec(die=DieType.D4, label="f"),
+            ],
+            **bonus,
+        )
+
+    def test_total_bonus_keeps_extra_die(self, monkeypatch):
+        self._patch_rolls(monkeypatch, [9, 7, 6, 5, 2, 3])
+        result = resolve(self._six_main_dice(total_dice_bonus=1))
+        assert isinstance(result, PoolResult)
+        assert len(result.kept) == 3
+        assert [r.result for r in result.kept] == [9, 7, 6]
+
+    def test_effect_bonus_yields_extra_effect_die(self, monkeypatch):
+        self._patch_rolls(monkeypatch, [9, 7, 6, 5, 2, 3])
+        result = resolve(self._six_main_dice(effect_dice_bonus=1))
+        assert isinstance(result, PoolResult)
+        assert len(result.effect_dice) == 2
+        assert result.effect_die == DieType.D8
+        assert result.effect_die_value == 6

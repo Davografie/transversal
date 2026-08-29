@@ -224,17 +224,37 @@ class ContestTracker:
         if not challenger_dice or not defendant_dice:
             return None
 
+        # Read the sides' dice-limit bonuses (base 0 when the entity/repo is
+        # unavailable, e.g. in isolated unit tests).
+        challenger_bonus = (0, 0)
+        defendant_bonus = (0, 0)
+        try:
+            from transversal.main import _get_repo
+            repo = _get_repo()
+            ce = repo.get_entity(challenger.entity_id)
+            de = repo.get_entity(defendant.entity_id)
+            if ce is not None:
+                challenger_bonus = (ce.total_dice_bonus or 0, ce.effect_dice_bonus or 0)
+            if de is not None:
+                defendant_bonus = (de.total_dice_bonus or 0, de.effect_dice_bonus or 0)
+        except Exception:  # noqa: BLE001 - bonuses are best-effort at resolution
+            pass
+
         challenger_req = DicePoolRequest(
             entity_id=challenger.entity_id,
             universe=challenger.universe,
             dice=challenger_dice,
             razmerit_spent=challenger.razmerit_spent,
+            total_dice_bonus=challenger_bonus[0],
+            effect_dice_bonus=challenger_bonus[1],
         )
         defendant_req = DicePoolRequest(
             entity_id=defendant.entity_id,
             universe=defendant.universe,
             dice=defendant_dice,
             razmerit_spent=defendant.razmerit_spent,
+            total_dice_bonus=defendant_bonus[0],
+            effect_dice_bonus=defendant_bonus[1],
         )
 
         result = resolve_contest(challenger_req, defendant_req)

@@ -194,8 +194,9 @@ def take_trait(taker_id: str, victim_id: str, trait_setting_id: str, method: str
         for d in s.dice[:3]:
             victim_dice.append((d, s.trait_id))
 
-    # Get entities for universe context
+    # Get entities for universe context + dice-limit bonuses
     taker_entity = repo.get_entity(taker_id)
+    victim_entity = repo.get_entity(victim_id)
     universe = taker_entity.current_universe if taker_entity else "unknown"
 
     # Build DicePoolRequests
@@ -203,11 +204,15 @@ def take_trait(taker_id: str, victim_id: str, trait_setting_id: str, method: str
         entity_id=taker_id,
         universe=universe,
         dice=taker_dice,
+        total_dice_bonus=(taker_entity.total_dice_bonus or 0) if taker_entity else 0,
+        effect_dice_bonus=(taker_entity.effect_dice_bonus or 0) if taker_entity else 0,
     )
     opponent_req = DicePoolRequest(
         entity_id=victim_id,
         universe=universe,
         dice=victim_dice,
+        total_dice_bonus=(victim_entity.total_dice_bonus or 0) if victim_entity else 0,
+        effect_dice_bonus=(victim_entity.effect_dice_bonus or 0) if victim_entity else 0,
     )
 
     # 4. Resolve contest
