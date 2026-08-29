@@ -44,6 +44,7 @@ from transversal.api.graphql.types import (
     RollTableInput,
     RazmeritResult,
     ScopeVariable,
+    EffectVariable,
     SendMessageInput,
     Effect as GqlEffect,
     EffectDuration as GqlEffectDuration,
@@ -813,6 +814,31 @@ class Query:
             errors=[TargetTraceError(step_index=e.step_index, message=e.message) for e in errors],
             valid=valid,
         )
+
+    @strawberry.field
+    def effect_variables(
+        self, info: strawberry.Info,
+        effects: list[EffectInput],
+        source_element: Optional[str] = None,
+    ) -> list[EffectVariable]:
+        """The typed output variables exposed by a list of effects (in order).
+
+        Traces each effect's ``target_spec``/``entity_spec``/``refs.*.spec`` in
+        sequence and accumulates step ``outputs`` typed by their resolved element,
+        so the targeting wizard can offer them as ``select variable`` across
+        effects.
+        """
+        from transversal.services import target_spec as ts
+
+        scope: dict[str, str] = {}
+        for e in (effects or []):
+            d = _effect_input_to_domain(e)
+            specs = [d.target_spec, d.entity_spec]
+            specs += [r.spec for r in (d.refs or {}).values() if r and r.spec]
+            for spec in specs:
+                if spec is not None:
+                    scope = ts.spec_variables(spec, source_element, scope)
+        return [EffectVariable(name=k, element=v) for k, v in scope.items() if v]
 
     @strawberry.field
     def consequence_options(

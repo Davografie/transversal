@@ -20,6 +20,10 @@ const TRACE_QUERY = `query($input: TargetSpecInput!, $element: String, $cardinal
   }
 }`
 
+const VARIABLES_QUERY = `query($effects: [EffectInput!]!, $sourceElement: String) {
+  effectVariables(effects: $effects, sourceElement: $sourceElement) { name element }
+}`
+
 // Module-level singleton: the catalog is shared domain data.
 const catalog = ref(null)
 const loaded = ref(false)
@@ -58,6 +62,16 @@ export function useTargetCatalog() {
     return data?.traceTargetSpec || { types: [], errors: [], valid: false }
   }
 
+  // Compute the typed output variables (name -> element) exposed by a list of
+  // effects, for cross-effect `select variable` type-hinting.
+  async function collectVariables(effects, sourceElement = null) {
+    if (!effects || !effects.length) return {}
+    const data = await graphql(VARIABLES_QUERY, { effects, sourceElement: sourceElement || null })
+    const map = {}
+    for (const v of (data?.effectVariables || [])) if (v?.name && v?.element) map[v.name] = v.element
+    return map
+  }
+
   // ── Catalog selectors (pure lookups, no network) ──────────────
 
   function elementLabel(name) {
@@ -84,5 +98,5 @@ export function useTargetCatalog() {
     return catalog.value?.sourceKinds || []
   }
 
-  return { catalog, loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections, sourceKinds }
+  return { catalog, loaded, load, traceSpec, collectVariables, elementLabel, edgesFrom, fieldsFor, aggregations, collections, sourceKinds }
 }

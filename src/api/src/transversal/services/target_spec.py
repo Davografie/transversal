@@ -286,3 +286,21 @@ def check(spec: TargetSpec, destination: ValueType, source_element: str | None =
             f"spec resolves to {final.element}/{final.cardinality}, not {destination.element}/{destination.cardinality}",
         )]
     return True, []
+
+
+def spec_variables(spec: TargetSpec, source_element: str | None = None,
+                   variables: dict[str, str] | None = None) -> dict[str, str]:
+    """The variable scope after tracing ``spec`` — the seed plus any step
+    outputs typed by their resolved element.
+
+    Used to compute which typed variables an effect's specs expose, so later
+    effects can ``select variable`` across the activation.
+    """
+    types, _errors = trace(spec, source_element, variables)
+    scope = dict(variables or {})
+    for step, t in zip(spec.steps, types):
+        if getattr(step, "outputs", None) and t is not None and t.element:
+            for name in step.outputs:
+                if name:
+                    scope[name] = t.element
+    return scope

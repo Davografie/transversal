@@ -28,9 +28,10 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import EffectList from './EffectList.vue'
 import EffectForm from './EffectForm.vue'
+import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -49,29 +50,30 @@ const effects = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
+const { collectVariables } = useTargetCatalog()
+
 const showEditor = ref(false)
 const editingIndex = ref(null)
 // Bumped on every open so the form remounts and re-populates from `value`
 // (add ↔ edit, or switching the edited index while the form stays open).
 const formKey = ref(0)
 
-// Bound output variables emitted by effects *before* the one being edited,
-// available to `select variable` in the targeting wizard.
-const outputVariables = computed(() => {
-  const map = {}
+// Bound, typed output variables emitted by effects *before* the one being
+// edited, available to `select variable` in the targeting wizard.
+const outputVariables = ref({})
+
+function priorEffects() {
   const limit = editingIndex.value !== null ? editingIndex.value : props.modelValue.length
-  for (let i = 0; i < limit; i++) {
-    const eff = props.modelValue[i]
-    const specs = [eff?.targetSpec, eff?.entitySpec]
-    for (const ref of Object.values(eff?.refs || {})) specs.push(ref?.spec)
-    for (const spec of specs) {
-      for (const step of (spec?.steps || [])) {
-        for (const name of (step?.outputs || [])) if (name) map[name] = ''
-      }
-    }
-  }
-  return map
-})
+  return props.modelValue.slice(0, limit)
+}
+
+watch(
+  () => [props.modelValue, editingIndex.value],
+  async () => {
+    outputVariables.value = await collectVariables(priorEffects())
+  },
+  { immediate: true, deep: true },
+)
 
 function openAdd() {
   editingIndex.value = null

@@ -256,6 +256,13 @@ class ScopeVariable:
 
 
 @strawberry.type
+class EffectVariable:
+    """A typed output variable an effect exposes for later effects/steps."""
+    name: str
+    element: str
+
+
+@strawberry.type
 class TriggerOption:
     """One activation trigger selectable in the SFX editor."""
     value: str

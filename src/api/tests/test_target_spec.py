@@ -54,6 +54,16 @@ def test_step_output_is_visible_to_later_steps():
     assert types[-1] == ValueType("entity", "one")
 
 
+def test_spec_variables_collects_step_outputs():
+    from transversal.services.target_spec import spec_variables
+    s = spec(
+        SelectStep(collection="self", outputs=["who"]),
+        NavigateStep(edge="location", outputs=["where"]),
+    )
+    scope = spec_variables(s)
+    assert scope == {"who": "entity", "where": "location"}
+
+
 def test_filter_does_not_change_type():
     s = spec(SelectStep(collection="rolled_dice"), FilterStep(field="source_kind", value="trait"))
     types, errors = trace(s)
