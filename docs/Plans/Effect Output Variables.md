@@ -54,14 +54,14 @@ machinery rather than adding a parallel system.
 
 ## Open / deferred
 
-- **Typed variables** — the binding currently carries only the id string; element
-  type (for the wizard/type-checker) is future work.
-- **Suspended `choose` + deferred binding** — ✅ done: `roll_deferral.bind_activation`
-  writes the resolved binding into the armed SFX from the resume path
-  (`resolveEffectTargets`); `source_sfx_id` threads through the structured choice
-  so the write targets the right activation. A binding-referencing effect now
-  fires once (die-scoping is keyed on `die_filter`, not `source_sfx_id`).
-- **Authoring UX** — ✅ done: `EffectForm` exposes an output editor (name + field).
+- **Typed variables** — ✅ done: `EffectOutput.element` carries the catalog element
+  type; bindings are `Binding {value, element}`; the targeting wizard offers a
+  typed `select variable` step and type-checks against the variable's element.
+- **Suspended `choose` + deferred binding** — ✅ done (see above).
+- **Authoring UX** — ✅ done: `EffectForm` output editor (name + field + element,
+  auto-filled for `refs.<name>`/`entity`).
+- **Remaining polish** — `field: "target"` outputs don't auto-fill `element` yet
+  (the author types it); fan-out of a `refs` list binding is still first-value only.
 
 ## Related
 
