@@ -140,6 +140,19 @@
           :source-element="sourceElement"
         />
       </div>
+      <div class="ee-field ee-outputs">
+        <label>Outputs <em class="ee-ref-element">expose as {name} for later effects</em></label>
+        <div v-for="(o, i) in newEffect.outputs" :key="i" class="ee-output-row">
+          <input v-model="o.name" type="text" placeholder="name (e.g. complication)" />
+          <select v-model="o.field">
+            <option value="target">target</option>
+            <option value="entity">entity</option>
+            <option v-for="r in selectedAction.refs" :key="'refs.' + r.name" :value="'refs.' + r.name">refs.{{ r.name }}</option>
+          </select>
+          <button type="button" class="ee-output-remove" @click="removeOutput(i)">✕</button>
+        </div>
+        <button type="button" class="ee-output-add" @click="addOutput">+ Add output</button>
+      </div>
       <TraitInstanceEditor
         v-if="isGainAction"
         v-model:die="newEffect.fields.result"
@@ -238,7 +251,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, conditions: [] })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, outputs: [], conditions: [] })
 const resultMode = ref('die')
 const effectDieMode = ref('variable')  // effect_die context field: Die dropdown vs {variable}
 const copiedVar = ref('')
@@ -572,8 +585,16 @@ function buildEffect(meta) {
     targetSpec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
     refs: buildRefs(),
+    outputs: (newEffect.outputs || []).filter(o => o && o.name).map(o => ({ name: o.name, field: o.field || 'target' })),
     conditions: (newEffect.conditions || []).map(c => ({ ...c })),
   }
+}
+
+function addOutput() {
+  newEffect.outputs.push({ name: '', field: 'target' })
+}
+function removeOutput(i) {
+  newEffect.outputs.splice(i, 1)
 }
 
 function commit() {
@@ -610,6 +631,7 @@ function populate(eff) {
       newEffect.refs[name].scope = ref?.scope || ''
     }
   }
+  newEffect.outputs = (eff.outputs || []).map(o => ({ name: o?.name || '', field: o?.field || 'target' }))
   resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'
   effectDieMode.value = (eff.context?.effect_die && String(eff.context.effect_die).startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {
@@ -673,6 +695,11 @@ async function copyVariable(v) {
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
 .ee-ref-element { font-style: normal; font-family: monospace; font-size: 8px; color: var(--text-dim); margin-left: 4px; }
+.ee-output-row { display: flex; align-items: center; gap: 6px; }
+.ee-output-row input { flex: 1; min-width: 0; }
+.ee-output-row select { flex: none; }
+.ee-output-remove { background: rgba(200,60,60,0.15); border: 1px solid rgba(200,60,60,0.4); color: #e08a8a; border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 6px; }
+.ee-output-add { align-self: flex-start; font-size: 10px; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); cursor: pointer; }
 .ee-fixed-dest { font-size: 10px; color: var(--text-dim); }
 .ee-fixed-dest b { color: var(--text); font-weight: 600; }
 .ee-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
