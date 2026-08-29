@@ -15,21 +15,19 @@ status: in-progress
 # Effect Output Variables
 
 An effect can **expose a resolved value as a named variable**, readable by
-*subsequent* effects in the same SFX activation. This is the "shared target
-across effects" mechanism: instead of two effects each re-picking the same
-complication, the first resolves it once and binds it; later effects reference
-`{name}`.
+*subsequent* steps in the same path and *later* effects in the same SFX
+activation. Outputs are declared **on a targeting step** (a list of names); the
+step's resolved value is bound under each name, typed by the step's resolved
+element (no manual element entry).
 
 ## Shape
 
-- `Effect.outputs: list[EffectOutput]` where `EffectOutput = { name, field }`.
-  - `field` is which resolved field to bind: `target` | `entity` | `refs.<name>`.
-- A per-activation **binding scope** (`dict[name -> id]`) is threaded through the
-  effects. After an effect applies, its `outputs` read the resolved field's id
-  and bind it into the scope.
-- Later effects reference `{name}` in `target` / `entity` / `result` /
-  `refs.<name>.value` / `context.<key>`; `_substitute_effect_context` consults
-  the scope (in addition to the event context) and replaces the token.
+- `TargetStep.outputs: list[str]` — names bound at that step.
+- The resolver binds each step's first resolved value into the per-activation
+  scope (`Binding {value, element}`), typed from the step's resolved type.
+- Later steps reference `{name}` via `select variable` (typed); later effects
+  reference `{name}` in the flat `target`/`entity`/`result`/`refs.<name>.value`
+  fields via string substitution.
 
 ## Why this (vs resolve-once-by-identity)
 
