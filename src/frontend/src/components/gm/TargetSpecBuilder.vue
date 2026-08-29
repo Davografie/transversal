@@ -25,13 +25,14 @@
         </div>
 
         <div class="tsb-outputs">
-          <span class="tsb-outputs-label">expose as</span>
-          <span class="tsb-outputs-type">{{ typeLabel(i) }}</span>
-          <div v-for="(name, j) in (step.outputs || [])" :key="j" class="tsb-output-row">
-            <input v-model="step.outputs[j]" type="text" placeholder="name" />
-            <button type="button" class="tsb-btn tsb-remove" title="Remove output" @click="removeOutput(i, j)">✕</button>
-          </div>
-          <button type="button" class="tsb-output-add" @click="addOutput(i)">+ add output</button>
+          <label class="tsb-check">
+            <input type="checkbox" :checked="step.output != null" @change="toggleOutput(i, $event)" />
+            expose as variable
+          </label>
+          <template v-if="step.output != null">
+            <span class="tsb-outputs-type">{{ typeLabel(i) }}</span>
+            <input v-model="step.output" type="text" placeholder="name" />
+          </template>
         </div>
 
         <div v-if="stepError(i)" class="tsb-err">{{ stepError(i) }}</div>
@@ -171,9 +172,7 @@ const variablesMap = computed(() => {
   for (let i = 0; i < steps.value.length; i++) {
     const step = steps.value[i]
     const type = trace.value.types?.[i]
-    for (const name of (step.outputs || [])) {
-      if (name && type?.element) map[name] = type.element
-    }
+    if (step.output && type?.element) map[step.output] = type.element
   }
   return map
 })
@@ -305,16 +304,8 @@ function onCount(i, e) {
   steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
 }
 
-function addOutput(i) {
-  const arr = [...(steps.value[i].outputs || [])]
-  arr.push('')
-  steps.value[i].outputs = arr
-}
-
-function removeOutput(i, j) {
-  const arr = [...(steps.value[i].outputs || [])]
-  arr.splice(j, 1)
-  steps.value[i].outputs = arr
+function toggleOutput(i, e) {
+  steps.value[i].output = e.target.checked ? (steps.value[i].output || '') : null
 }
 
 function canAdd(kind) {
@@ -328,7 +319,7 @@ function canAdd(kind) {
 }
 
 function add(kind) {
-  const blank = { kind, collection: '', variable: '', outputs: [], field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
+  const blank = { kind, collection: '', variable: '', output: null, field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
   steps.value = [...steps.value, blank]
 }
 
@@ -381,12 +372,8 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-step.tsb-error { border-color: #d04a4a; }
 .tsb-step-head { display: flex; align-items: center; gap: 5px; }
 .tsb-outputs { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
-.tsb-outputs-label { font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .tsb-outputs-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
-.tsb-output-row { display: flex; align-items: center; gap: 4px; width: 100%; }
-.tsb-output-row input { flex: 1; min-width: 0; }
-.tsb-output-add { font-size: 9px; padding: 2px 8px; border-radius: 3px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); }
-.tsb-output-add:hover { color: var(--accent); border-color: var(--accent); }
+.tsb-outputs input { width: 100%; }
 .tsb-step-index { font-size: 9px; color: var(--text-dim); font-family: monospace; min-width: 12px; }
 .tsb-kind { flex: none; width: 88px; }
 .tsb-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }

@@ -423,17 +423,17 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
     for s in (inp.steps or []):
         kind = s.kind
         if kind == "select":
-            steps.append(ts.SelectStep(collection=s.collection or "", variable=s.variable or "", outputs=list(s.outputs or [])))
+            steps.append(ts.SelectStep(collection=s.collection or "", variable=s.variable or "", output=s.output))
         elif kind == "filter":
-            steps.append(ts.FilterStep(field=s.field or "", operator=s.operator or "==", value=s.value, outputs=list(s.outputs or [])))
+            steps.append(ts.FilterStep(field=s.field or "", operator=s.operator or "==", value=s.value, output=s.output))
         elif kind == "navigate":
-            steps.append(ts.NavigateStep(edge=s.edge or "", dedup=bool(s.dedup), outputs=list(s.outputs or [])))
+            steps.append(ts.NavigateStep(edge=s.edge or "", dedup=bool(s.dedup), output=s.output))
         elif kind == "aggregate":
-            steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field, outputs=list(s.outputs or [])))
+            steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field, output=s.output))
         elif kind == "random":
-            steps.append(ts.RandomStep(count=int(s.count or 1), outputs=list(s.outputs or [])))
+            steps.append(ts.RandomStep(count=int(s.count or 1), output=s.output))
         elif kind == "choose":
-            steps.append(ts.ChooseStep(count=int(s.count or 1), outputs=list(s.outputs or [])))
+            steps.append(ts.ChooseStep(count=int(s.count or 1), output=s.output))
         else:
             steps.append(ts.SelectStep(collection=""))
     return ts.TargetSpec(steps=steps)

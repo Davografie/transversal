@@ -356,7 +356,7 @@ class TargetSpecStepInput:
     kind: str  # "select" | "filter" | "navigate" | "aggregate" | "random" | "choose"
     collection: Optional[str] = None
     variable: Optional[str] = None  # for kind == "select" + collection == "variable"
-    outputs: Optional[list[str]] = None  # bound variable names this step exposes
+    output: Optional[str] = None  # bound variable name this step exposes
     field: Optional[str] = None
     operator: str = "=="
     value: Optional[strawberry.scalars.JSON] = None

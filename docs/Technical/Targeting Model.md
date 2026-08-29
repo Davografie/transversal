@@ -44,7 +44,7 @@ class TargetSpec(BaseModel):
 | `aggregate` | `fn`, `field` | Collapse a collection to a scalar (`count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`) |
 | `literal` | `element`, `value` | Name one object by id directly |
 
-Every step also carries `outputs: list[str]` — variable names the step exposes
+Every step also carries `output: Optional[str]` — the variable name the step exposes
 once it resolves (see [[Effect Output Variables]]).
 
 **Type = element × cardinality.** Every step produces a `ValueType(element, cardinality)`, where `element` is a catalog element type or a scalar (`int`/`number`/`die`/`string`) and `cardinality` is `one` or `many`.

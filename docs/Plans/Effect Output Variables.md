@@ -22,7 +22,7 @@ element (no manual element entry).
 
 ## Shape
 
-- `TargetStep.outputs: list[str]` — names bound at that step.
+- `TargetStep.output: Optional[str]` — the single variable name bound at that step.
 - The resolver binds each step's first resolved value into the per-activation
   scope (`Binding {value, element}`), typed from the step's resolved type.
 - Later steps reference `{name}` via `select variable` (typed); later effects
@@ -37,7 +37,7 @@ machinery rather than adding a parallel system.
 
 ## What's implemented
 
-1. **Step-level outputs** — `TargetStep.outputs: list[str]`; the resolver binds
+1. **Step-level output** — `TargetStep.output: Optional[str]`; the resolver binds
    each step's first resolved value into `TargetContext.bindings`
    (`Binding {value, element}`), typed by the step's resolved element.
 2. **Typed `select variable`** — both the type-checker (`trace`) and the resolver

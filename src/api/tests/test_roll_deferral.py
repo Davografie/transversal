@@ -66,7 +66,7 @@ def test_deferred_effects_share_step_output_bindings(monkeypatch):
 
     emit = Effect(
         timing=EffectTiming.ON_RESULT, type="modify_trait", action="set",
-        target_spec=TargetSpec(steps=[SelectStep(collection="self", outputs=["complication"])]),
+        target_spec=TargetSpec(steps=[SelectStep(collection="self", output="complication")]),
     )
     consume = Effect(
         timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down", target="{complication}",

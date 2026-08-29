@@ -30,7 +30,7 @@ class SelectStep(BaseModel):
     kind: Literal["select"] = "select"
     collection: str
     variable: str = ""  # for collection == "variable": the bound variable name
-    outputs: list[str] = Field(default_factory=list)
+    output: str | None = None
 
 
 class FilterStep(BaseModel):
@@ -38,28 +38,28 @@ class FilterStep(BaseModel):
     field: str
     operator: Literal["==", "!=", ">", ">=", "<", "<=", "in", "contains"] = "=="
     value: Any = None
-    outputs: list[str] = Field(default_factory=list)
+    output: str | None = None
 
 
 class NavigateStep(BaseModel):
     kind: Literal["navigate"] = "navigate"
     edge: str
     dedup: bool = False  # collapse N→1 by identity (type-neutral)
-    outputs: list[str] = Field(default_factory=list)
+    output: str | None = None
 
 
 class AggregateStep(BaseModel):
     kind: Literal["aggregate"] = "aggregate"
     fn: str
     field: str | None = None  # required for min/max/mean/avg_*
-    outputs: list[str] = Field(default_factory=list)
+    output: str | None = None
 
 
 class LiteralStep(BaseModel):
     kind: Literal["literal"] = "literal"
     element: str = ""  # element type name (entity/trait/location/…)
     value: str = ""    # the concrete id
-    outputs: list[str] = Field(default_factory=list)
+    output: str | None = None
 
 
 class RandomStep(BaseModel):
@@ -71,7 +71,7 @@ class RandomStep(BaseModel):
     """
     kind: Literal["random"] = "random"
     count: int = 1
-    outputs: list[str] = Field(default_factory=list)
+    output: str | None = None
 
 
 class ChooseStep(BaseModel):
@@ -89,7 +89,7 @@ class ChooseStep(BaseModel):
     """
     kind: Literal["choose"] = "choose"
     count: int = 1
-    outputs: list[str] = Field(default_factory=list)
+    output: str | None = None
 
 
 TargetStep = Annotated[
@@ -252,10 +252,8 @@ def trace(spec: TargetSpec, source_element: str | None = None,
                 cardinality = "one" if step.count == 1 else "many"
                 current = ValueType(current.element, cardinality)
 
-        if getattr(step, "outputs", None) and current is not None and current.element:
-            for name in step.outputs:
-                if name:
-                    scope[name] = current.element
+        if getattr(step, "output", None) and current is not None and current.element:
+            scope[step.output] = current.element
 
         types.append(current)
 
@@ -299,8 +297,6 @@ def spec_variables(spec: TargetSpec, source_element: str | None = None,
     types, _errors = trace(spec, source_element, variables)
     scope = dict(variables or {})
     for step, t in zip(spec.steps, types):
-        if getattr(step, "outputs", None) and t is not None and t.element:
-            for name in step.outputs:
-                if name:
-                    scope[name] = t.element
+        if getattr(step, "output", None) and t is not None and t.element:
+            scope[step.output] = t.element
     return scope

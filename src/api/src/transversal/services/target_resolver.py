@@ -313,20 +313,18 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
 # ── The walker ───────────────────────────────────────────────
 
 def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, context: TargetContext) -> None:
-    """Bind a step's declared ``outputs`` into the running scope.
+    """Bind a step's declared ``output`` into the running scope.
 
-    Each output name is bound to the step's first resolved value, typed by the
-    step's resolved element. No-op when the step produced no value/type.
+    The step's first resolved value is bound under the output name, typed by the
+    step's resolved element. No-op when the step has no output or no value/type.
     """
-    outs = getattr(step, "outputs", None)
-    if not outs or not values or current_type is None:
+    name = getattr(step, "output", None)
+    if not name or not values or current_type is None:
         return
     rid = _candidate_id(current_type.element, values[0])
     if not rid:
         return
-    for name in outs:
-        if name:
-            context.bindings[name] = Binding(value=rid, element=current_type.element)
+    context.bindings[name] = Binding(value=rid, element=current_type.element)
 
 
 def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[str]] | None = None) -> Resolution:

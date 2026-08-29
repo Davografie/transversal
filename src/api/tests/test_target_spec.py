@@ -46,7 +46,7 @@ def test_select_unknown_variable_is_an_error():
 
 def test_step_output_is_visible_to_later_steps():
     s = spec(
-        SelectStep(collection="self", outputs=["who"]),
+        SelectStep(collection="self", output="who"),
         SelectStep(collection="variable", variable="who"),
     )
     types, errors = trace(s)
@@ -57,8 +57,8 @@ def test_step_output_is_visible_to_later_steps():
 def test_spec_variables_collects_step_outputs():
     from transversal.services.target_spec import spec_variables
     s = spec(
-        SelectStep(collection="self", outputs=["who"]),
-        NavigateStep(edge="location", outputs=["where"]),
+        SelectStep(collection="self", output="who"),
+        NavigateStep(edge="location", output="where"),
     )
     scope = spec_variables(s)
     assert scope == {"who": "entity", "where": "location"}
