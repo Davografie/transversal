@@ -178,12 +178,13 @@ def fire_armed(
 
     rolls = (context or {}).get("rolls", [])
     applied: list[Effect] = []
+    structured: list = []
 
     # Entity-local armed SFX — consume their roll budget per matching event.
     kept: list[ArmedSfx] = []
     for armed in local:
         if any(e.timing.value == event_type for e in armed.effects):
-            applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls))
+            applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls, structured))
             # One roll event consumed (a matching event happened for this SFX).
             if armed.rolls is not None:
                 armed.rolls -= 1
@@ -196,7 +197,11 @@ def fire_armed(
 
     # Passive (global) rules — not consumed; apply to this entity's rolls too.
     for armed in _global_armed:
-        applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls))
+        applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls, structured))
+
+    if structured:
+        from transversal.services.roll_orchestrator import _emit_pending_choices
+        _emit_pending_choices(entity_id, universe, [], structured)
 
     return applied
 
@@ -208,6 +213,7 @@ def _apply_armed(
     universe: str,
     context: dict | None,
     rolls: list[dict],
+    structured: list | None = None,
 ) -> list[Effect]:
     """Apply one armed entry's matching effects to ``rolls``; return them."""
     from transversal.services.effects_applier import effect_registry
@@ -218,10 +224,10 @@ def _apply_armed(
         if effect.timing.value != event_type:
             continue
         if effect.refs:
-            applied.append(_apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id))
+            applied.append(_apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured))
             continue
         if effect.target_spec is not None:
-            applied.extend(_apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id))
+            applied.extend(_apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured))
             continue
         if armed.source_sfx_id is not None or bool(effect.die_filter):
             dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
@@ -257,6 +263,7 @@ def _apply_refs_roll(
     rolls: list[dict],
     source_kind: str | None = None,
     source_id: str | None = None,
+    structured: list | None = None,
 ) -> Effect:
     """Resolve an armed effect's named refs against the roll context and apply."""
     from transversal.main import _get_repo
@@ -267,14 +274,19 @@ def _apply_refs_roll(
     repo = _get_repo()
     entity = repo.get_entity(entity_id)
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
+    before = len(structured) if structured is not None else 0
     resolved = resolve_refs(
         _substitute_effect_context(effect, context or {}),
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
             source=source, source_element=source_element,
         ),
+        structured,
     )
-    effect_registry.apply(resolved, entity_id, universe, context or {})
+    # Only apply when no choose step left the ref unresolved (mirrors the
+    # immediate path's ``len(structured) == before`` gate).
+    if structured is None or len(structured) == before:
+        effect_registry.apply(resolved, entity_id, universe, context or {})
     return resolved
 
 
@@ -286,6 +298,7 @@ def _apply_spec_target(
     rolls: list[dict],
     source_kind: str | None = None,
     source_id: str | None = None,
+    structured: list | None = None,
 ) -> list[Effect]:
     """Resolve an effect's ``target_spec`` against the roll context and apply it
     once per resolved target (e.g. One Trick: rolled dice → traitsetting → step
@@ -293,7 +306,7 @@ def _apply_spec_target(
     when ``source_kind``/``source_id`` are provided."""
     from transversal.main import _get_repo
     from transversal.services.effects_applier import effect_registry
-    from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.services.effects_engine import _structured_choice, _substitute_effect_context
     from transversal.services.target_resolver import TargetContext, resolve, resolve_source
 
     repo = _get_repo()
@@ -309,6 +322,11 @@ def _apply_spec_target(
             source=source, source_element=source_element,
         ),
     )
+
+    if resolution.pending_choices and structured is not None:
+        for pc in resolution.pending_choices:
+            structured.append(_structured_choice(pc, effect, "target"))
+        return []
 
     applied: list[Effect] = []
     for value in resolution.values:
