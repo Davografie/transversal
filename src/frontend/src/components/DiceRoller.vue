@@ -476,6 +476,9 @@ const tabEntities = computed(() => {
   if (props.actingEntityId) pushEntity(props.actingEntityId)
   if (challenged.value) pushEntity(opponentId.value)
   for (const [eid, rp] of Object.entries(props.remotePools || {})) {
+    // The GM difficulty pool is keyed by the location id; it already has its
+    // own Difficulty tab, so don't surface it again as a peer/location tab.
+    if (props.gmMode && eid === props.locationId) continue
     if (seen.has(eid)) continue
     const rr = props.remoteResults?.[eid]
     const hasPool = rp && Array.isArray(rp.dice) && rp.dice.length > 0
