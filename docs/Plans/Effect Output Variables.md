@@ -56,8 +56,12 @@ machinery rather than adding a parallel system.
 
 - **Typed variables** — the binding currently carries only the id string; element
   type (for the wizard/type-checker) is future work.
-- **Suspended `choose` + deferred binding** — the armed entry must retain the
-  scope across the resume round-trip (same shape as `answers_so_far`).
+- **Suspended `choose` + deferred binding** — ✅ done: `roll_deferral.bind_activation`
+  writes the resolved binding into the armed SFX from the resume path
+  (`resolveEffectTargets`); `source_sfx_id` threads through the structured choice
+  so the write targets the right activation. A binding-referencing effect now
+  fires once (die-scoping is keyed on `die_filter`, not `source_sfx_id`).
+- **Authoring UX** — ✅ done: `EffectForm` exposes an output editor (name + field).
 
 ## Related
 
