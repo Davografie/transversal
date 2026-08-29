@@ -12,8 +12,8 @@ const CATALOG_QUERY = `{
   }
 }`
 
-const TRACE_QUERY = `query($input: TargetSpecInput!, $element: String, $cardinality: String, $sourceElement: String) {
-  traceTargetSpec(input: $input, destinationElement: $element, destinationCardinality: $cardinality, sourceElement: $sourceElement) {
+const TRACE_QUERY = `query($input: TargetSpecInput!, $element: String, $cardinality: String, $sourceElement: String, $variables: JSON) {
+  traceTargetSpec(input: $input, destinationElement: $element, destinationCardinality: $cardinality, sourceElement: $sourceElement, variables: $variables) {
     types { element cardinality }
     errors { stepIndex message }
     valid
@@ -42,8 +42,9 @@ export function useTargetCatalog() {
   }
 
   // Type-check a spec draft against an optional destination (element × cardinality),
-  // with an optional source element (for `select source`).
-  async function traceSpec(steps, destination, sourceElement = null) {
+  // with an optional source element (for `select source`) and bound variables
+  // (name -> element, for `select variable`).
+  async function traceSpec(steps, destination, sourceElement = null, variables = null) {
     if (!steps || !steps.length) {
       return { types: [], errors: [], valid: false }
     }
@@ -52,6 +53,7 @@ export function useTargetCatalog() {
       element: destination?.element || null,
       cardinality: destination?.cardinality || null,
       sourceElement: sourceElement || null,
+      variables: variables || null,
     })
     return data?.traceTargetSpec || { types: [], errors: [], valid: false }
   }

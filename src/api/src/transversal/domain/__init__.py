@@ -724,11 +724,13 @@ class EffectOutput(BaseModel):
 
     ``name`` is the variable name (referenced as ``{name}`` by later effects);
     ``field`` names which resolved field to bind (``target`` | ``entity`` |
-    ``refs.<name>``). The bound value is a resolved id string; element typing is
-    deferred (see [[Effect Output Variables]]).
+    ``refs.<name>``); ``element`` is the catalog element type of the bound value
+    (e.g. ``traitsetting``) so the targeting wizard can offer it as a typed
+    ``select variable``. Empty ``element`` = untyped (string substitution only).
     """
     name: str
     field: str = "target"
+    element: str = ""
 
 
 class Effect(BaseModel):

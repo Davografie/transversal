@@ -57,7 +57,7 @@ class ArmedSfx:
     source_sfx_id: str | None = None  # SFX id the client stamps on its dice
     source_kind: str | None = None  # the SFX's declared source_kind (for `select source`)
     source_id: str | None = None  # the concrete source id (activation origin)
-    bindings: dict[str, str] = field(default_factory=dict)  # per-activation output variables
+    bindings: dict = field(default_factory=dict)  # per-activation typed output variables
 
 
 _armed: dict[str, list[ArmedSfx]] = {}
@@ -148,18 +148,19 @@ def arm_passive(
     )
 
 
-def bind_activation(entity_id: str, source_sfx_id: str, name: str, value: str) -> None:
-    """Write an output binding into the matching armed SFX's activation scope.
+def bind_activation(entity_id: str, source_sfx_id: str, name: str, value: str, element: str = "") -> None:
+    """Write a typed output binding into the matching armed SFX's activation scope.
 
     Used when an immediate effect's ``choose`` resolves *after* arming: the
     resume path binds the resolved value so later roll-timed effects can
-    reference ``{name}`` at fire time.
+    reference ``{name}`` at fire time and the targeting system can type it.
     """
     if not source_sfx_id or not name or not value:
         return
+    from transversal.services.target_resolver import Binding
     for armed in _armed.get(entity_id, []):
         if armed.source_sfx_id == source_sfx_id:
-            armed.bindings[name] = value
+            armed.bindings[name] = Binding(value=value, element=element or "")
             return
 
 
@@ -235,7 +236,7 @@ def _apply_armed(
     from transversal.services.effects_applier import effect_registry
     from transversal.services.effects_engine import _apply_outputs, _substitute_effect_context
 
-    bindings: dict[str, str] = dict(armed.bindings)
+    bindings: dict = dict(armed.bindings)
     applied: list[Effect] = []
     for effect in armed.effects:
         if effect.timing.value != event_type:
@@ -290,7 +291,7 @@ def _apply_refs_roll(
     source_kind: str | None = None,
     source_id: str | None = None,
     structured: list | None = None,
-    bindings: dict[str, str] | None = None,
+    bindings: dict | None = None,
     source_sfx_id: str | None = None,
 ) -> Effect:
     """Resolve an armed effect's named refs against the roll context and apply."""
@@ -329,7 +330,7 @@ def _apply_spec_target(
     source_id: str | None = None,
     structured: list | None = None,
     answers: dict[int, list[str]] | None = None,
-    bindings: dict[str, str] | None = None,
+    bindings: dict | None = None,
     source_sfx_id: str | None = None,
 ) -> list[Effect]:
     """Resolve an effect's ``target_spec`` against the roll context and apply it

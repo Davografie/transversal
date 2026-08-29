@@ -15,6 +15,7 @@
         :universe="universe"
         :life-path="lifePath"
         :variables="variables"
+        :output-variables="outputVariables"
         :portal-destination="portalDestination"
         :portal-target-type="portalTargetType"
         :portal-universe="portalUniverse"
@@ -53,6 +54,20 @@ const editingIndex = ref(null)
 // Bumped on every open so the form remounts and re-populates from `value`
 // (add ↔ edit, or switching the edited index while the form stays open).
 const formKey = ref(0)
+
+// Bound output variables emitted by effects *before* the one being edited,
+// available to `select variable` in the targeting wizard.
+const outputVariables = computed(() => {
+  const map = {}
+  const limit = editingIndex.value !== null ? editingIndex.value : props.modelValue.length
+  for (let i = 0; i < limit; i++) {
+    const eff = props.modelValue[i]
+    for (const o of (eff?.outputs || [])) {
+      if (o?.name && o?.element) map[o.name] = o.element
+    }
+  }
+  return map
+})
 
 function openAdd() {
   editingIndex.value = null

@@ -191,7 +191,7 @@ class EffectsEngine:
             # Execute each effect with its own timing
             sfx_applied = False
             # Per-activation output bindings (effect outputs -> later effects).
-            bindings: dict[str, str] = {}
+            bindings: dict = {}
             # Bind the declared source variable: if the SFX states a source kind
             # and the activation carries a ``source_id``, map it to the typed
             # ``{variable}`` so effect fields resolve to the concrete id.
@@ -377,7 +377,7 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
     if context:
         source.update(context)
     if bindings:
-        source.update(bindings)
+        source.update({name: b.value for name, b in bindings.items()})
     if not source:
         return effect
 
@@ -438,13 +438,16 @@ def _resolved_id(value) -> str | None:
     return getattr(value, "ts_id", None) or getattr(value, "id", None)
 
 
-def _apply_outputs(effect: Effect, bindings: dict[str, str]) -> None:
+def _apply_outputs(effect: Effect, bindings: dict) -> None:
     """Bind an effect's declared ``outputs`` into the activation scope.
 
     Reads the resolved field named by each ``EffectOutput.field`` (``target`` |
-    ``entity`` | ``refs.<name>``) and stores its id under ``output.name`` so
-    later effects can reference ``{name}``.
+    ``entity`` | ``refs.<name>``) and stores a typed ``Binding`` under
+    ``output.name`` so later effects can reference ``{name}`` (string) and the
+    targeting system can ``select variable`` with a known element type.
     """
+    from transversal.services.target_resolver import Binding
+
     for out in (effect.outputs or []):
         field = out.field or "target"
         value = ""
@@ -458,7 +461,7 @@ def _apply_outputs(effect: Effect, bindings: dict[str, str]) -> None:
         else:
             value = effect.target or ""
         if out.name and value:
-            bindings[out.name] = value
+            bindings[out.name] = Binding(value=value, element=out.element or "")
 
 
 def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None):

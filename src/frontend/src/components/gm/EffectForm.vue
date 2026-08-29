@@ -88,6 +88,7 @@
             v-model="newEffect.targetSpec"
             :destination="specDestination"
             :source-element="sourceElement"
+            :variables="outputVariables"
           />
           <div v-else-if="previewText" class="ee-preview">{{ previewText }}</div>
         </template>
@@ -107,6 +108,7 @@
             v-model="newEffect.entitySpec"
             :destination="{ element: 'entity' }"
             :source-element="sourceElement"
+            :variables="outputVariables"
           />
           <div v-else class="ee-field">
             <label>Entity scope</label>
@@ -138,17 +140,19 @@
           v-model="newEffect.refs[r.name].spec"
           :destination="{ element: r.element }"
           :source-element="sourceElement"
+          :variables="outputVariables"
         />
       </div>
       <div class="ee-field ee-outputs">
         <label>Outputs <em class="ee-ref-element">expose as {name} for later effects</em></label>
         <div v-for="(o, i) in newEffect.outputs" :key="i" class="ee-output-row">
           <input v-model="o.name" type="text" placeholder="name (e.g. complication)" />
-          <select v-model="o.field">
+          <select v-model="o.field" @change="onOutputFieldChange(o)">
             <option value="target">target</option>
             <option value="entity">entity</option>
             <option v-for="r in selectedAction.refs" :key="'refs.' + r.name" :value="'refs.' + r.name">refs.{{ r.name }}</option>
           </select>
+          <input v-model="o.element" type="text" placeholder="element (e.g. traitsetting)" />
           <button type="button" class="ee-output-remove" @click="removeOutput(i)">✕</button>
         </div>
         <button type="button" class="ee-output-add" @click="addOutput">+ Add output</button>
@@ -240,6 +244,7 @@ const props = defineProps({
   universe: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
+  outputVariables: { type: Object, default: null }, // { name: element } for `select variable`
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   portalDestination: { type: String, default: '' },
   portalTargetType: { type: String, default: '' },
@@ -585,16 +590,29 @@ function buildEffect(meta) {
     targetSpec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
     refs: buildRefs(),
-    outputs: (newEffect.outputs || []).filter(o => o && o.name).map(o => ({ name: o.name, field: o.field || 'target' })),
+    outputs: (newEffect.outputs || []).filter(o => o && o.name).map(o => ({ name: o.name, field: o.field || 'target', element: o.element || '' })),
     conditions: (newEffect.conditions || []).map(c => ({ ...c })),
   }
 }
 
 function addOutput() {
-  newEffect.outputs.push({ name: '', field: 'target' })
+  newEffect.outputs.push({ name: '', field: 'target', element: '' })
 }
 function removeOutput(i) {
   newEffect.outputs.splice(i, 1)
+}
+function outputElementFor(field) {
+  if (field === 'entity') return 'entity'
+  if (field && field.startsWith('refs.')) {
+    const name = field.slice('refs.'.length)
+    const ref = (selectedAction.value?.refs || []).find((r) => r.name === name)
+    return ref?.element || ''
+  }
+  return ''
+}
+function onOutputFieldChange(o) {
+  const el = outputElementFor(o.field)
+  if (el) o.element = el
 }
 
 function commit() {
@@ -631,7 +649,7 @@ function populate(eff) {
       newEffect.refs[name].scope = ref?.scope || ''
     }
   }
-  newEffect.outputs = (eff.outputs || []).map(o => ({ name: o?.name || '', field: o?.field || 'target' }))
+  newEffect.outputs = (eff.outputs || []).map(o => ({ name: o?.name || '', field: o?.field || 'target', element: o?.element || '' }))
   resultMode.value = (eff.result && eff.result.startsWith('{')) ? 'variable' : 'die'
   effectDieMode.value = (eff.context?.effect_die && String(eff.context.effect_die).startsWith('{')) ? 'variable' : 'die'
   if (newEffect.targetMode === 'literal' && eff.target && eff.target !== (meta?.implicitTarget || '')) {

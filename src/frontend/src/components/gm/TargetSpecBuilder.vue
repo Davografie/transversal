@@ -31,8 +31,15 @@
           <select v-model="step.collection">
             <option value="">— pick a collection —</option>
             <option v-if="sourceElement" value="source">SFX source <em>({{ sourceElement }})</em></option>
+            <option value="variable">Bound variable</option>
             <option v-for="c in collections()" :key="c.name" :value="c.name">
               {{ c.label }} <em>({{ c.element }})</em>
+            </option>
+          </select>
+          <select v-if="step.collection === 'variable'" v-model="step.variable">
+            <option value="">— variable —</option>
+            <option v-for="(element, name) in variablesMap" :key="name" :value="name">
+              {{ name }} <em>({{ element }})</em>
             </option>
           </select>
         </div>
@@ -143,9 +150,12 @@ const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
   destination: { type: Object, default: null }, // { element, cardinality }
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
+  variables: { type: Object, default: null },     // { name: element } bound output variables
   title: { type: String, default: 'Targeting path' },
 })
 const emit = defineEmits(['update:modelValue'])
+
+const variablesMap = computed(() => props.variables || {})
 
 const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections } = useTargetCatalog()
 
@@ -285,7 +295,7 @@ function canAdd(kind) {
 }
 
 function add(kind) {
-  const blank = { kind, collection: '', field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
+  const blank = { kind, collection: '', variable: '', field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
   steps.value = [...steps.value, blank]
 }
 
@@ -316,12 +326,12 @@ function scheduleTrace() {
 }
 
 async function runTrace() {
-  const res = await traceSpec(steps.value, props.destination, props.sourceElement || null)
+  const res = await traceSpec(steps.value, props.destination, props.sourceElement || null, props.variables || null)
   if (res) trace.value = res
 }
 
 onMounted(load)
-watch(() => [props.destination, props.sourceElement], () => scheduleTrace(), { deep: true })
+watch(() => [props.destination, props.sourceElement, props.variables], () => scheduleTrace(), { deep: true })
 watch(steps, scheduleTrace, { deep: true, immediate: true })
 </script>
 

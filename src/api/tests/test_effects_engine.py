@@ -353,17 +353,19 @@ def test_substitute_effect_context_leaves_choose_placeholder():
 
 def test_substitute_effect_context_uses_bindings():
     from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.services.target_resolver import Binding
 
     effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down", target="{complication}")
-    out = _substitute_effect_context(effect, {}, {"complication": "gmc-1:injury"})
+    out = _substitute_effect_context(effect, {}, {"complication": Binding(value="gmc-1:injury", element="traitsetting")})
     assert out.target == "gmc-1:injury"
 
 
 def test_bindings_override_context():
     from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.services.target_resolver import Binding
 
     effect = Effect(timing=EffectTiming.IMMEDIATE, type="x", action="y", target="{v}")
-    out = _substitute_effect_context(effect, {"v": "context"}, {"v": "binding"})
+    out = _substitute_effect_context(effect, {"v": "context"}, {"v": Binding(value="binding", element="string")})
     assert out.target == "binding"
 
 
@@ -377,12 +379,15 @@ def test_apply_outputs_binds_resolved_fields():
         refs={"complication": TargetRef(value="ts-2")},
         outputs=[
             EffectOutput(name="target_out", field="target"),
-            EffectOutput(name="ref_out", field="refs.complication"),
+            EffectOutput(name="ref_out", field="refs.complication", element="traitsetting"),
         ],
     )
     bindings = {}
     _apply_outputs(effect, bindings)
-    assert bindings == {"target_out": "ts-1", "ref_out": "ts-2"}
+    assert bindings["target_out"].value == "ts-1"
+    assert bindings["target_out"].element == ""
+    assert bindings["ref_out"].value == "ts-2"
+    assert bindings["ref_out"].element == "traitsetting"
 
 
 def test_resolve_effect_spec_choices_resolves_all_refs():

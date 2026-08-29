@@ -33,6 +33,17 @@ def test_select_self_is_one_entity():
     assert types[-1] == ValueType("entity", "one")
 
 
+def test_select_variable_uses_declared_element():
+    types, errors = trace(spec(SelectStep(collection="variable", variable="complication")), variables={"complication": "traitsetting"})
+    assert errors == []
+    assert types[-1] == ValueType("traitsetting", "one")
+
+
+def test_select_unknown_variable_is_an_error():
+    types, errors = trace(spec(SelectStep(collection="variable", variable="nope")), variables={"complication": "traitsetting"})
+    assert errors and "unknown variable" in errors[0].message
+
+
 def test_filter_does_not_change_type():
     s = spec(SelectStep(collection="rolled_dice"), FilterStep(field="source_kind", value="trait"))
     types, errors = trace(s)

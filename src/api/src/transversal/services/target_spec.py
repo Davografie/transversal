@@ -29,6 +29,7 @@ from transversal.services import target_catalog as tc
 class SelectStep(BaseModel):
     kind: Literal["select"] = "select"
     collection: str
+    variable: str = ""  # for collection == "variable": the bound variable name
 
 
 class FilterStep(BaseModel):
@@ -114,7 +115,8 @@ class TraceError:
 
 # ── Type-checker ──────────────────────────────────────────────
 
-def trace(spec: TargetSpec, source_element: str | None = None) -> tuple[list[ValueType | None], list[TraceError]]:
+def trace(spec: TargetSpec, source_element: str | None = None,
+          variables: dict[str, str] | None = None) -> tuple[list[ValueType | None], list[TraceError]]:
     """Walk a spec, returning the type after each step plus any errors.
 
     ``types[i]`` is the collection type after ``spec.steps[i]``. ``errors`` are
@@ -123,6 +125,8 @@ def trace(spec: TargetSpec, source_element: str | None = None) -> tuple[list[Val
 
     ``source_element`` is the catalog element type of the SFX's declared
     ``source_kind``; ``select source`` uses it (and errors without it).
+    ``variables`` maps a bound output-variable name to its catalog element type;
+    ``select variable`` uses it.
     """
     types: list[ValueType | None] = []
     errors: list[TraceError] = []
@@ -130,7 +134,17 @@ def trace(spec: TargetSpec, source_element: str | None = None) -> tuple[list[Val
 
     for i, step in enumerate(spec.steps):
         if isinstance(step, SelectStep):
-            if step.collection == "source":
+            if step.collection == "variable":
+                element = (variables or {}).get(step.variable)
+                if not step.variable or element is None:
+                    errors.append(TraceError(i, f"unknown variable {step.variable!r}"))
+                    current = None
+                elif tc.element(element) is None:
+                    errors.append(TraceError(i, f"unknown element {element!r} for variable {step.variable!r}"))
+                    current = None
+                else:
+                    current = ValueType(element, "one")
+            elif step.collection == "source":
                 if source_element is None:
                     errors.append(TraceError(i, "select source requires a declared source_kind"))
                     current = None
@@ -235,17 +249,19 @@ def trace(spec: TargetSpec, source_element: str | None = None) -> tuple[list[Val
     return types, errors
 
 
-def final_type(spec: TargetSpec, source_element: str | None = None) -> ValueType | None:
+def final_type(spec: TargetSpec, source_element: str | None = None,
+                variables: dict[str, str] | None = None) -> ValueType | None:
     """The type a valid spec resolves to, or None if it errors."""
-    types, errors = trace(spec, source_element)
+    types, errors = trace(spec, source_element, variables)
     if errors or not types:
         return None
     return types[-1]
 
 
-def check(spec: TargetSpec, destination: ValueType, source_element: str | None = None) -> tuple[bool, list[TraceError]]:
+def check(spec: TargetSpec, destination: ValueType, source_element: str | None = None,
+          variables: dict[str, str] | None = None) -> tuple[bool, list[TraceError]]:
     """True when ``spec`` type-checks and its final type matches ``destination``."""
-    types, errors = trace(spec, source_element)
+    types, errors = trace(spec, source_element, variables)
     if errors:
         return False, errors
     final = types[-1] if types else None

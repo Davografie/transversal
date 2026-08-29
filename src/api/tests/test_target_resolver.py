@@ -214,6 +214,23 @@ def test_select_self_traitsettings_is_seeded_from_subject():
     assert [v.id for v in res.values] == ["kael:trait-martial", "kael:trait-qi"]
 
 
+def test_select_variable_seeds_typed_binding():
+    from transversal.services.target_resolver import Binding
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, bindings={"complication": Binding(value="gmc-1:trait-martial", element="traitsetting")})
+    res = resolve(spec(SelectStep(collection="variable", variable="complication")), ctx)
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["gmc-1:trait-martial"]
+
+
+def test_select_variable_requires_typed_binding():
+    from transversal.services.target_resolver import Binding
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, bindings={"x": Binding(value="abc", element="")})
+    res = resolve(spec(SelectStep(collection="variable", variable="x")), ctx)
+    assert res.errors and "not bound or untyped" in res.errors[0].message
+
+
 def _heal_like_spec():
     return spec(
         SelectStep(collection="occupants"),

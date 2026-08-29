@@ -317,7 +317,7 @@ def _effect_input_to_domain(e: EffectInput) -> DomainEffect:
         target_spec=_target_spec_from_input(e.target_spec),
         entity_spec=_target_spec_from_input(e.entity_spec),
         refs=_refs_from_input(e.refs),
-        outputs=[DomainEffectOutput(name=o["name"], field=o.get("field", "target")) for o in (e.outputs or []) if isinstance(o, dict) and o.get("name")],
+        outputs=[DomainEffectOutput(name=o["name"], field=o.get("field", "target"), element=o.get("element", "")) for o in (e.outputs or []) if isinstance(o, dict) and o.get("name")],
         conditions=[_condition_input_to_domain(c) for c in (e.conditions or [])],
     )
 
@@ -425,7 +425,7 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
     for s in (inp.steps or []):
         kind = s.kind
         if kind == "select":
-            steps.append(ts.SelectStep(collection=s.collection or ""))
+            steps.append(ts.SelectStep(collection=s.collection or "", variable=s.variable or ""))
         elif kind == "filter":
             steps.append(ts.FilterStep(field=s.field or "", operator=s.operator or "==", value=s.value))
         elif kind == "navigate":
@@ -789,20 +789,24 @@ class Query:
         destination_element: Optional[str] = None,
         destination_cardinality: Optional[str] = None,
         source_element: Optional[str] = None,
+        variables: Optional[strawberry.scalars.JSON] = None,
     ) -> TargetTraceResult:
         """Type-check a targeting spec draft: the type after each step, step
         errors, and whether it reaches the requested destination type.
 
         ``source_element`` is the catalog element type of the SFX's declared
-        ``source_kind``, so ``select source`` type-checks against it."""
+        ``source_kind``, so ``select source`` type-checks against it.
+        ``variables`` maps a bound output-variable name to its catalog element
+        type so ``select variable`` type-checks."""
         from transversal.services import target_spec as ts
 
         spec = _target_spec_input_to_domain(input)
-        types, errors = ts.trace(spec, source_element)
+        variables_map = {str(k): str(v) for k, v in (variables or {}).items()} if isinstance(variables, dict) else {}
+        types, errors = ts.trace(spec, source_element, variables_map)
 
         valid = False
         if destination_element and destination_cardinality:
-            valid, _ = ts.check(spec, ts.ValueType(destination_element, destination_cardinality), source_element)
+            valid, _ = ts.check(spec, ts.ValueType(destination_element, destination_cardinality), source_element, variables_map)
 
         return TargetTraceResult(
             types=[
@@ -1974,10 +1978,10 @@ class Mutation:
             for source_sfx_id, eff in to_bind:
                 if not source_sfx_id or not eff.outputs:
                     continue
-                scope: dict[str, str] = {}
+                scope: dict = {}
                 _apply_outputs(eff, scope)
-                for name, value in scope.items():
-                    bind_activation(str(entity_id), source_sfx_id, name, value)
+                for name, binding in scope.items():
+                    bind_activation(str(entity_id), source_sfx_id, name, binding.value, binding.element or "")
         if structured:
             from transversal.services.roll_orchestrator import _emit_pending_choices
             _emit_pending_choices(str(entity_id), entity.current_universe or "", [], structured)

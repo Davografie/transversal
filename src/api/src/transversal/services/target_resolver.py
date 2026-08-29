@@ -42,6 +42,18 @@ class TargetContext:
     collections: dict[str, list[Any]] = field(default_factory=dict)  # seed collections
     source: Any = None                     # the SFX's activation source (for `select source`)
     source_element: str | None = None      # its catalog element type (drives the source's type)
+    bindings: dict[str, "Binding"] = field(default_factory=dict)  # typed output variables (for `select variable`)
+
+
+@dataclass
+class Binding:
+    """A typed output variable bound in a per-activation scope.
+
+    ``value`` is the resolved id string; ``element`` is the catalog element type
+    (e.g. ``traitsetting``) so ``select variable`` can type-check and navigate.
+    """
+    value: str
+    element: str = ""
 
 
 @dataclass
@@ -315,6 +327,15 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
 
     for i, step in enumerate(spec.steps):
         if isinstance(step, SelectStep):
+            if step.collection == "variable":
+                binding = context.bindings.get(step.variable) if context.bindings else None
+                if binding is None or not binding.element:
+                    errors.append(TraceError(i, f"variable {step.variable!r} not bound or untyped"))
+                    values, current_type = [], None
+                else:
+                    values = _lookup_literal(binding.element, binding.value, context)
+                    current_type = ValueType(binding.element, "one")
+                continue
             if step.collection == "source":
                 if context.source_element is None:
                     errors.append(TraceError(i, "select source requires a declared source_kind"))
