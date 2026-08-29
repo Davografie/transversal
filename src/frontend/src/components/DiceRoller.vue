@@ -638,7 +638,9 @@ watch(() => props.actingEntityId, async (id) => {
     await loadTargetingBans()
   } else {
     activeId.value = DIFFICULTY_TAB
-    resetEditor()
+    // The GM difficulty pool is keyed by the location id (unified pool
+    // concept); load it so dice added by SFX (e.g. sfx-heal) show up here.
+    await loadPoolIntoEditor(props.locationId)
   }
 })
 
@@ -1842,7 +1844,11 @@ async function toggleStakes() {
 }
 
 async function restorePool() {
-  if (props.gmMode && !props.actingEntityId) return  // GM difficulty mode: transient
+  if (props.gmMode && !props.actingEntityId) {
+    // GM difficulty mode: load the location-keyed difficulty pool.
+    await loadPoolIntoEditor(props.locationId)
+    return
+  }
   await loadPoolIntoEditor(editingEntityId.value)
   await syncContestState()
   await loadTargetingBans()
