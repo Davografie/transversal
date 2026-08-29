@@ -53,10 +53,13 @@ once it resolves (see [[Effect Output Variables]]).
 
 **Resolution modes are `all` / `choose` / `random`.** `choose` and `random` are the single-resolution forms; there is no `any`. Cardinality lives on the *field*, not on the spec grammar. `choose` is **resumable** mid-path: the resolver emits a `PendingTargetChoice` (candidates + `step_index`) and later re-resolves the same spec with `answers` (a `step_index → ids` map), so a path can pause for user input and continue.
 
-**Variables.** A step's `outputs` bind its resolved value into the per-activation
-scope (typed by the step's resolved element). A later step references it with
-`select variable {name}`; a later effect references `{name}` in the flat
-`target`/`entity`/`result`/`refs.<name>.value` fields. See [[Effect Output Variables]].
+**Variables.** A step's `output` binds its resolved value into the per-activation
+scope, typed by the step's resolved element *and* cardinality. A `many` step
+binds the full ordered list (`Binding {value, values, element, cardinality}`); a
+`one` step binds a single id. A later step references it with `select variable
+{name}` (a `many` binding re-seeds a `many` collection and fans out); a later
+effect references `{name}` in the flat `target`/`entity`/`result`/
+`refs.<name>.value` fields (scalar `one` bindings only). See [[Effect Output Variables]].
 
 ## The catalog
 
@@ -75,7 +78,7 @@ Adding a new element, edge, field, aggregation, or collection is a declaration h
 Two layers, one source of truth:
 
 - **`target_spec.py::trace` / `check` / `final_type` / `spec_variables`** — a *pure*, catalog-driven walk. `trace` returns the `ValueType` after each step plus step-level errors (and accumulates step `outputs` into the variable scope); `check`/`final_type` match the destination; `spec_variables` returns the typed scope a spec exposes (for cross-effect `select variable`).
-- **`target_resolver.py::resolve`** — the *runtime* walk over actual game values. `navigate` consults a registry of edge resolvers (one per `(source, edge)`), each backed by the repository (e.g. `die → traitsetting` reads `repo.get_traitsetting(die["ts_id"])`). `resolve(spec, context, answers=…)` is resumable across mid-path `choose`, and binds step `outputs` into `context.bindings` (typed `Binding {value, element}`).
+- **`target_resolver.py::resolve`** — the *runtime* walk over actual game values. `navigate` consults a registry of edge resolvers (one per `(source, edge)`), each backed by the repository (e.g. `die → traitsetting` reads `repo.get_traitsetting(die["ts_id"])`). `resolve(spec, context, answers=…)` is resumable across mid-path `choose`, and binds step `outputs` into `context.bindings` (typed `Binding {value, values, element, cardinality}`).
 
 A spec that type-checks is guaranteed to have resolvable steps; the resolver produces the concrete objects (or scalar).
 

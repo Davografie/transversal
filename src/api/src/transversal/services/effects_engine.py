@@ -374,7 +374,13 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
     if context:
         source.update(context)
     if bindings:
-        source.update({name: b.value for name, b in bindings.items()})
+        # Only scalar ("one") bindings substitute into string fields; a "many"
+        # binding must be re-used via `select variable` (never stringified).
+        source.update({
+            name: b.value
+            for name, b in bindings.items()
+            if getattr(b, "cardinality", "one") != "many"
+        })
     if not source:
         return effect
 

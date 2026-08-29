@@ -260,6 +260,7 @@ class EffectVariable:
     """A typed output variable an effect exposes for later effects/steps."""
     name: str
     element: str
+    cardinality: str = "one"  # "one" | "many"
 
 
 @strawberry.type

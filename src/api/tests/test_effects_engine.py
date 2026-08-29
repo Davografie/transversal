@@ -369,6 +369,17 @@ def test_bindings_override_context():
     assert out.target == "binding"
 
 
+def test_substitute_effect_context_skips_many_bindings():
+    from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.services.target_resolver import Binding
+
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="x", action="y", target="{friends}")
+    out = _substitute_effect_context(effect, {}, {
+        "friends": Binding(value="a", values=["a", "b"], element="entity", cardinality="many"),
+    })
+    assert out.target == "{friends}"  # many binding is not stringified into a string field
+
+
 def test_resolve_effect_spec_choices_resolves_all_refs():
     from types import SimpleNamespace as NS
     from transversal.domain import TargetRef

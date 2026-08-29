@@ -49,8 +49,8 @@
           </select>
           <select v-if="step.collection === 'variable'" v-model="step.variable">
             <option value="">— variable —</option>
-            <option v-for="(element, name) in variablesMap" :key="name" :value="name">
-              {{ name }} <em>({{ element }})</em>
+            <option v-for="(entry, name) in variablesMap" :key="name" :value="name">
+              {{ name }} <em>({{ elementLabel(entry.element) }}<span v-if="entry.cardinality === 'many'"> ·many</span>)</em>
             </option>
           </select>
         </div>
@@ -161,18 +161,25 @@ const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
   destination: { type: Object, default: null }, // { element, cardinality }
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
-  variables: { type: Object, default: null },     // { name: element } bound output variables
+  variables: { type: Object, default: null },     // { name: {element, cardinality} } bound output variables
   title: { type: String, default: 'Targeting path' },
 })
 const emit = defineEmits(['update:modelValue'])
 
+function normalizeVar(entry) {
+  if (!entry) return { element: '', cardinality: 'one' }
+  if (typeof entry === 'string') return { element: entry, cardinality: 'one' }
+  return { element: entry.element || '', cardinality: entry.cardinality || 'one' }
+}
+
 const variablesMap = computed(() => {
-  const map = { ...(props.variables || {}) }
+  const map = {}
+  for (const [name, entry] of Object.entries(props.variables || {})) map[name] = normalizeVar(entry)
   // Intra-spec: outputs declared by earlier steps, typed by the trace result.
   for (let i = 0; i < steps.value.length; i++) {
     const step = steps.value[i]
     const type = trace.value.types?.[i]
-    if (step.output && type?.element) map[step.output] = type.element
+    if (step.output && type?.element) map[step.output] = { element: type.element, cardinality: type.cardinality || 'one' }
   }
   return map
 })

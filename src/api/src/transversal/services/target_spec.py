@@ -120,10 +120,33 @@ class TraceError:
     message: str
 
 
+def _coerce_variables(variables) -> dict[str, ValueType]:
+    """Normalize a bound-variable scope to ``name → ValueType``.
+
+    Accepts ``None``, a ``name → element`` string map (cardinality defaults to
+    ``"one"``), a ``name → ValueType`` map, or a ``name → {element,
+    cardinality}`` dict map. This keeps callers that only know the element type
+    working while letting the typed scope carry cardinality.
+    """
+    if not variables:
+        return {}
+    out: dict[str, ValueType] = {}
+    for name, v in variables.items():
+        if isinstance(v, ValueType):
+            out[name] = v
+        elif isinstance(v, dict):
+            out[name] = ValueType(v.get("element", ""), v.get("cardinality", "one"))
+        elif isinstance(v, str):
+            out[name] = ValueType(v, "one")
+        else:
+            out[name] = ValueType("", "one")
+    return out
+
+
 # ── Type-checker ──────────────────────────────────────────────
 
 def trace(spec: TargetSpec, source_element: str | None = None,
-          variables: dict[str, str] | None = None) -> tuple[list[ValueType | None], list[TraceError]]:
+          variables=None) -> tuple[list[ValueType | None], list[TraceError]]:
     """Walk a spec, returning the type after each step plus any errors.
 
     ``types[i]`` is the collection type after ``spec.steps[i]``. ``errors`` are
@@ -132,26 +155,26 @@ def trace(spec: TargetSpec, source_element: str | None = None,
 
     ``source_element`` is the catalog element type of the SFX's declared
     ``source_kind``; ``select source`` uses it (and errors without it).
-    ``variables`` maps a bound output-variable name to its catalog element type;
-    ``select variable`` uses it.
+    ``variables`` maps a bound output-variable name to its type (element string
+    or ``ValueType``); ``select variable`` uses it. See :func:`_coerce_variables`.
     """
     types: list[ValueType | None] = []
     errors: list[TraceError] = []
     current: ValueType | None = None
-    scope: dict[str, str] = dict(variables or {})  # accumulates step outputs too
+    scope: dict[str, ValueType] = _coerce_variables(variables)  # accumulates step outputs too
 
     for i, step in enumerate(spec.steps):
         if isinstance(step, SelectStep):
             if step.collection == "variable":
-                element = scope.get(step.variable)
-                if not step.variable or element is None:
+                vt = scope.get(step.variable)
+                if not step.variable or vt is None:
                     errors.append(TraceError(i, f"unknown variable {step.variable!r}"))
                     current = None
-                elif tc.element(element) is None:
-                    errors.append(TraceError(i, f"unknown element {element!r} for variable {step.variable!r}"))
+                elif tc.element(vt.element) is None:
+                    errors.append(TraceError(i, f"unknown element {vt.element!r} for variable {step.variable!r}"))
                     current = None
                 else:
-                    current = ValueType(element, "one")
+                    current = ValueType(vt.element, vt.cardinality)
             elif step.collection == "source":
                 if source_element is None:
                     errors.append(TraceError(i, "select source requires a declared source_kind"))
@@ -253,7 +276,7 @@ def trace(spec: TargetSpec, source_element: str | None = None,
                 current = ValueType(current.element, cardinality)
 
         if getattr(step, "output", None) and current is not None and current.element:
-            scope[step.output] = current.element
+            scope[step.output] = current
 
         types.append(current)
 
@@ -261,7 +284,7 @@ def trace(spec: TargetSpec, source_element: str | None = None,
 
 
 def final_type(spec: TargetSpec, source_element: str | None = None,
-                variables: dict[str, str] | None = None) -> ValueType | None:
+                variables=None) -> ValueType | None:
     """The type a valid spec resolves to, or None if it errors."""
     types, errors = trace(spec, source_element, variables)
     if errors or not types:
@@ -270,7 +293,7 @@ def final_type(spec: TargetSpec, source_element: str | None = None,
 
 
 def check(spec: TargetSpec, destination: ValueType, source_element: str | None = None,
-          variables: dict[str, str] | None = None) -> tuple[bool, list[TraceError]]:
+          variables=None) -> tuple[bool, list[TraceError]]:
     """True when ``spec`` type-checks and its final type matches ``destination``."""
     types, errors = trace(spec, source_element, variables)
     if errors:
@@ -287,16 +310,16 @@ def check(spec: TargetSpec, destination: ValueType, source_element: str | None =
 
 
 def spec_variables(spec: TargetSpec, source_element: str | None = None,
-                   variables: dict[str, str] | None = None) -> dict[str, str]:
+                   variables=None) -> dict[str, ValueType]:
     """The variable scope after tracing ``spec`` — the seed plus any step
-    outputs typed by their resolved element.
+    outputs typed by their resolved element and cardinality.
 
     Used to compute which typed variables an effect's specs expose, so later
     effects can ``select variable`` across the activation.
     """
     types, _errors = trace(spec, source_element, variables)
-    scope = dict(variables or {})
+    scope = _coerce_variables(variables)
     for step, t in zip(spec.steps, types):
         if getattr(step, "output", None) and t is not None and t.element:
-            scope[step.output] = t.element
+            scope[step.output] = t
     return scope

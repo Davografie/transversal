@@ -21,7 +21,7 @@ const TRACE_QUERY = `query($input: TargetSpecInput!, $element: String, $cardinal
 }`
 
 const VARIABLES_QUERY = `query($effects: [EffectInput!]!, $sourceElement: String) {
-  effectVariables(effects: $effects, sourceElement: $sourceElement) { name element }
+  effectVariables(effects: $effects, sourceElement: $sourceElement) { name element cardinality }
 }`
 
 // Module-level singleton: the catalog is shared domain data.
@@ -62,13 +62,15 @@ export function useTargetCatalog() {
     return data?.traceTargetSpec || { types: [], errors: [], valid: false }
   }
 
-  // Compute the typed output variables (name -> element) exposed by a list of
-  // effects, for cross-effect `select variable` type-hinting.
+  // Compute the typed output variables (name -> {element, cardinality}) exposed
+  // by a list of effects, for cross-effect `select variable` type-hinting.
   async function collectVariables(effects, sourceElement = null) {
     if (!effects || !effects.length) return {}
     const data = await graphql(VARIABLES_QUERY, { effects, sourceElement: sourceElement || null })
     const map = {}
-    for (const v of (data?.effectVariables || [])) if (v?.name && v?.element) map[v.name] = v.element
+    for (const v of (data?.effectVariables || [])) {
+      if (v?.name && v?.element) map[v.name] = { element: v.element, cardinality: v.cardinality || 'one' }
+    }
     return map
   }
 

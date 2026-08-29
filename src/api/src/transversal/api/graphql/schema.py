@@ -799,7 +799,7 @@ class Query:
         from transversal.services import target_spec as ts
 
         spec = _target_spec_input_to_domain(input)
-        variables_map = {str(k): str(v) for k, v in (variables or {}).items()} if isinstance(variables, dict) else {}
+        variables_map = variables if isinstance(variables, dict) else None
         types, errors = ts.trace(spec, source_element, variables_map)
 
         valid = False
@@ -830,7 +830,7 @@ class Query:
         """
         from transversal.services import target_spec as ts
 
-        scope: dict[str, str] = {}
+        scope = {}
         for e in (effects or []):
             d = _effect_input_to_domain(e)
             specs = [d.target_spec, d.entity_spec]
@@ -838,7 +838,10 @@ class Query:
             for spec in specs:
                 if spec is not None:
                     scope = ts.spec_variables(spec, source_element, scope)
-        return [EffectVariable(name=k, element=v) for k, v in scope.items() if v]
+        return [
+            EffectVariable(name=k, element=v.element, cardinality=v.cardinality)
+            for k, v in scope.items() if v.element
+        ]
 
     @strawberry.field
     def consequence_options(
@@ -1972,7 +1975,10 @@ class Mutation:
                 if local_scope and r.source_sfx_id:
                     from transversal.services.roll_deferral import bind_activation
                     for name, binding in local_scope.items():
-                        bind_activation(str(entity_id), r.source_sfx_id, name, binding.value, binding.element or "")
+                        bind_activation(
+                            str(entity_id), r.source_sfx_id, name, binding.value,
+                            binding.element or "", values=binding.values, cardinality=binding.cardinality,
+                        )
                 continue
             if field in ("target_scope", "entity_scope"):
                 from transversal.services.effects_applier import _resolve_scope_choose

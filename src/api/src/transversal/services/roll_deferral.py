@@ -148,19 +148,25 @@ def arm_passive(
     )
 
 
-def bind_activation(entity_id: str, source_sfx_id: str, name: str, value: str, element: str = "") -> None:
+def bind_activation(entity_id: str, source_sfx_id: str, name: str, value: str, element: str = "",
+                    values: list[str] | None = None, cardinality: str = "one") -> None:
     """Write a typed output binding into the matching armed SFX's activation scope.
 
     Used when an immediate effect's ``choose`` resolves *after* arming: the
-    resume path binds the resolved value so later roll-timed effects can
-    reference ``{name}`` at fire time and the targeting system can type it.
+    resume path binds the resolved value(s) so later roll-timed effects can
+    reference ``{name}`` at fire time and the targeting system can type it. For
+    a ``many`` binding, ``values`` carries the full list and ``value`` its first
+    id.
     """
     if not source_sfx_id or not name or not value:
         return
     from transversal.services.target_resolver import Binding
+    ids = list(values) if values else ([value] if value else [])
     for armed in _armed.get(entity_id, []):
         if armed.source_sfx_id == source_sfx_id:
-            armed.bindings[name] = Binding(value=value, element=element or "")
+            armed.bindings[name] = Binding(
+                value=value, values=ids, element=element or "", cardinality=cardinality,
+            )
             return
 
 

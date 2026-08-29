@@ -61,7 +61,25 @@ def test_spec_variables_collects_step_outputs():
         NavigateStep(edge="location", output="where"),
     )
     scope = spec_variables(s)
-    assert scope == {"who": "entity", "where": "location"}
+    assert {k: v.element for k, v in scope.items()} == {"who": "entity", "where": "location"}
+    assert all(v.cardinality == "one" for v in scope.values())
+
+
+def test_spec_variables_preserves_cardinality():
+    from transversal.services.target_spec import spec_variables
+    s = spec(SelectStep(collection="rolled_dice", output="friends"))
+    scope = spec_variables(s)
+    assert scope["friends"] == ValueType("die", "many")
+
+
+def test_select_variable_type_checks_as_many():
+    # A later effect re-uses a many-valued output as a many collection.
+    types, errors = trace(
+        spec(SelectStep(collection="variable", variable="friends")),
+        variables={"friends": ValueType("entity", "many")},
+    )
+    assert errors == []
+    assert types[-1] == ValueType("entity", "many")
 
 
 def test_filter_does_not_change_type():

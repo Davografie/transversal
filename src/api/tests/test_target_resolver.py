@@ -240,6 +240,46 @@ def test_step_output_is_bound_into_context():
     assert ctx.bindings["who"].element == "entity"
 
 
+def test_step_output_binds_full_list_when_many():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": [
+        {"ts_id": "die-a", "rating": "d6"}, {"ts_id": "die-b", "rating": "d8"},
+    ]})
+    res = resolve(spec(SelectStep(collection="rolled_dice", output="friends")), ctx)
+    assert res.errors == []
+    b = ctx.bindings["friends"]
+    assert b.cardinality == "many"
+    assert b.values == ["die-a", "die-b"]
+    assert b.value == "die-a"
+    assert b.element == "die"
+
+
+def test_select_variable_seeds_many_binding():
+    from transversal.services.target_resolver import Binding
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, bindings={
+        "friends": Binding(
+            value="kael:trait-martial",
+            values=["kael:trait-martial", "kael:trait-qi"],
+            element="traitsetting", cardinality="many",
+        ),
+    })
+    res = resolve(spec(SelectStep(collection="variable", variable="friends")), ctx)
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["kael:trait-martial", "kael:trait-qi"]
+
+
+def test_select_variable_one_binding_stays_single():
+    from transversal.services.target_resolver import Binding
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, bindings={
+        "complication": Binding(value="gmc-1:trait-martial", values=["gmc-1:trait-martial"], element="traitsetting", cardinality="one"),
+    })
+    res = resolve(spec(SelectStep(collection="variable", variable="complication")), ctx)
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["gmc-1:trait-martial"]
+
+
 def _heal_like_spec():
     return spec(
         SelectStep(collection="occupants"),

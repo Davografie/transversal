@@ -10,7 +10,7 @@ tags:
 aliases:
   - Array Variables
   - Many-valued Bindings
-status: proposed
+status: implemented
 ---
 
 # List Output Variables
@@ -18,6 +18,11 @@ status: proposed
 Make an output variable that resolves to **many** survive as a *list*, so a
 later effect can re-use it as an array and fan out once per element — instead of
 the current behaviour of silently keeping only the first value.
+
+> [!note] Status: implemented.
+> `Binding` now carries `values` + `cardinality`; `_bind_step_outputs` binds the
+> full list on a `many` step; `select variable` re-seeds a `many` collection;
+> cardinality threads through the typed scope, GraphQL, and wizard.
 
 > [!note] Relationship to [[Effect Output Variables]]
 > Output variables live on targeting steps (`TargetStep.output`). Today a step

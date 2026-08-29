@@ -49,11 +49,15 @@ class TargetContext:
 class Binding:
     """A typed output variable bound in a per-activation scope.
 
-    ``value`` is the resolved id string; ``element`` is the catalog element type
-    (e.g. ``traitsetting``) so ``select variable`` can type-check and navigate.
+    ``value`` is the resolved id string (the first value); ``values`` is the
+    full ordered list of ids when ``cardinality`` is ``"many"``. ``element`` is
+    the catalog element type (e.g. ``traitsetting``) so ``select variable`` can
+    type-check and navigate.
     """
-    value: str
+    value: str = ""
+    values: list[str] = field(default_factory=list)
     element: str = ""
+    cardinality: str = "one"  # "one" | "many"
 
 
 @dataclass
@@ -315,16 +319,32 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
 def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, context: TargetContext) -> None:
     """Bind a step's declared ``output`` into the running scope.
 
-    The step's first resolved value is bound under the output name, typed by the
-    step's resolved element. No-op when the step has no output or no value/type.
+    When the step resolves to ``many``, the full ordered list of ids is bound
+    (``cardinality="many"``); otherwise the first resolved value is bound as a
+    scalar (``cardinality="one"``). No-op when the step has no output or no
+    value/type.
     """
     name = getattr(step, "output", None)
-    if not name or not values or current_type is None:
+    if not name or not values or current_type is None or not current_type.element:
+        return
+    if current_type.cardinality == "many":
+        ids = []
+        for v in values:
+            rid = _candidate_id(current_type.element, v)
+            if rid:
+                ids.append(rid)
+        if not ids:
+            return
+        context.bindings[name] = Binding(
+            value=ids[0], values=ids, element=current_type.element, cardinality="many",
+        )
         return
     rid = _candidate_id(current_type.element, values[0])
     if not rid:
         return
-    context.bindings[name] = Binding(value=rid, element=current_type.element)
+    context.bindings[name] = Binding(
+        value=rid, values=[rid], element=current_type.element, cardinality="one",
+    )
 
 
 def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[str]] | None = None) -> Resolution:
@@ -347,6 +367,12 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 if binding is None or not binding.element:
                     errors.append(TraceError(i, f"variable {step.variable!r} not bound or untyped"))
                     values, current_type = [], None
+                elif binding.cardinality == "many":
+                    many_values: list[Any] = []
+                    for rid in binding.values:
+                        many_values.extend(_lookup_literal(binding.element, rid, context))
+                    values = many_values
+                    current_type = ValueType(binding.element, "many")
                 else:
                     values = _lookup_literal(binding.element, binding.value, context)
                     current_type = ValueType(binding.element, "one")

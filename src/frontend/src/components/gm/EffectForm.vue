@@ -230,7 +230,7 @@ const props = defineProps({
   universe: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
-  outputVariables: { type: Object, default: null }, // { name: element } for `select variable`
+  outputVariables: { type: Object, default: null }, // { name: {element, cardinality} } for `select variable`
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   portalDestination: { type: String, default: '' },
   portalTargetType: { type: String, default: '' },
