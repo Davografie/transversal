@@ -52,31 +52,40 @@ The targeting path (`TargetSpec`) is a pipeline of steps (`select` / `filter` / 
 - **Runtime dialog**: `effects_engine.StructuredChoice` + `EventOutcome.structured`; `resolve_refs` and `_apply_immediate_spec` surface a terminal `choose` as a structured choice carrying the pre-resolved candidates; `_emit_pending_choices` serializes them into `sfx_choice_required`; `/effects/trigger` emits them; `resolveEffectTargets` accepts `field=target|entity|refs.<name>` and clears the resolved spec.
 - Frontend: `EffectTargetWizard` renders structured candidates; `App.vue` captures the acting `entity_id` + shows the choice to the GM; `DiceRoller` resolves against the acting entity.
 
-### Phase 3 — non-terminal / staged `choose` — ⏳ remaining (the expensive half)
+### Phase 3 — non-terminal / staged `choose` — ✅ done (resumable)
 
-Mid-path `choose` requires a **resumable resolver**: resolve the prefix → present candidates → carry a "rest of path" → resume the suffix with the answer. This is what `sfx-heal`'s target needs: `select occupants → choose(entity) → navigate traitsettings → filter → choose(complication)`.
-
-Concrete steps:
-
-1. **Resumable resolver** (`target_resolver.resolve`): on a `choose`, emit a staged pending choice that also carries the *suffix steps* + the partial state (so resolution can continue after the user answers), instead of stopping.
-2. **Staged pending shape**: a structured choice with `suffix` (remaining steps) + `element`/`candidates`/`count`; extend `StructuredChoice` to carry the rest-of-path.
-3. **Multi-step surfacing**: the backend emits a sequence of choices; the frontend `EffectTargetWizard` already steps through a choice list, so this is mostly backend + a richer choice payload.
-4. **Resume mutation**: on the user's answer, resume the suffix and either apply or emit the next choice.
+Mid-path `choose` now works: the resolver accepts `answers` (a `step_index →
+candidate ids` map), injects the chosen candidates, and continues the suffix;
+without an answer it emits a `PendingTargetChoice` carrying its `step_index`.
+`StructuredChoice` carries `step_index` + `source_kind`/`source_id` +
+`answers_so_far`, so the frontend echoes accumulated answers across steps and the
+`resolveEffectTargets` mutation re-resolves the path and either applies or
+surfaces the next `choose`. Roll-deferred `choose` surfaces through
+`fire_armed` → `sfx_choice_required`.
 
 ## Remaining (dependency order)
 
-1. **Fire-time collection seeding** — `select occupants` / `select rolled_dice` are not populated in the fire-time `TargetContext` (only `rolled_dice` is seeded in the roll-deferred path; `occupants` never is). Seed `occupants` from the subject's `current_location` (cleanest in the resolver as a special case like `select self`). Unblocks `select occupants`.
-2. **Roll-deferred `choose` surfacing** — the same structured-choice pattern through `fire_armed` → `_apply_spec_target` / `_apply_refs_roll` (today a roll-deferred `choose` still no-ops).
-3. **Phase 3 staged resolution** (above).
-4. **Shared target across effects** — *design decision first*: `sfx-heal` has two effects (add_trait_rating + step_down) that must use the *same* chosen complication. Today each effect resolves independently. Decide: resolve the `choose` once per activation and share, vs. restructure the SFX, vs. accept independent picks.
-5. **Multi-`choose` fan-out** — `count > 1` should apply once per chosen element (frontend currently resolves only the first selection).
+1. ✅ **Fire-time collection seeding** — `select occupants` / `self_traitsettings`
+   (and `locations`/`entities`) are now seeded lazily in the resolver from the
+   subject + repo.
+2. ✅ **Roll-deferred `choose` surfacing** — `_apply_spec_target` / `_apply_refs_roll`
+   surface a `choose` as a `StructuredChoice` via `fire_armed`.
+3. ✅ **Phase 3 staged resolution** — resumable `resolve(answers=…)` + resume mutation.
+4. **Shared target across effects** — *design decision first*: `sfx-heal` has two
+   `on_result` effects (`step_down` + `reduce_by_effect`) that must pick the *same*
+   complication; today each resolves independently (two dialogs). Decide: resolve
+   once per activation and share, restructure the SFX, or accept independent picks.
+5. **Multi-`choose` fan-out** — `count > 1` now fans out for `target_spec` (the
+   resolver injects N chosen values and the applier emits one effect each). Refs
+   still resolve only `values[0]` (ref fan-out is deferred to the named-refs
+   Step-3 migration).
 
 ## Implications / risks
 
-- **Staged resolution is the real cost.** Mid-path `choose` forces the resolver to be resumable (prefix → candidates → suffix). This is Phase 3 and the dominant remaining work.
+- **Staged resolution is done.** Mid-path `choose` resumes via `answers`; the resolver is stateless (re-resolves from the spec + answers each step).
 - **Candidate serialization.** Done in Phase 2 (`DISPLAY_FIELDS` + `serialize_candidates`).
-- **Re-entrancy.** A `choose` leaves an effect half-applied waiting on user input — same class as `PendingChoice`, plus a "rest of path" to store and resume (Phase 3).
-- **Multi-choice fan-out.** Decided: once per element (not yet wired).
+- **Re-entrancy.** A mid-path `choose` re-resolves the same spec with accumulated answers rather than storing a half-applied effect; the frontend echoes `answers_so_far`.
+- **Multi-choice fan-out.** Once per element — wired for `target_spec`; refs still resolve the first value.
 
 ## Files expected to touch (remaining)
 
