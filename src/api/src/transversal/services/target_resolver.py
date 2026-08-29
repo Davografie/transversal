@@ -300,8 +300,14 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
 
 # ── The walker ───────────────────────────────────────────────
 
-def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
-    """Walk ``spec`` over ``context``, returning resolved values + step errors."""
+def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[str]] | None = None) -> Resolution:
+    """Walk ``spec`` over ``context``, returning resolved values + step errors.
+
+    ``answers`` maps a ``choose`` step's index to the candidate ids the user
+    selected; when present the step injects those candidates (in pick order) and
+    continues instead of emitting a pending choice. This makes the resolver
+    resumable across mid-path ``choose`` steps without backend-side state.
+    """
     errors: list[TraceError] = []
     values: list[Any] = []
     pending_choices: list[PendingTargetChoice] = []
@@ -412,9 +418,6 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
                 current_type = ValueType(current_type.element, cardinality)
 
         elif isinstance(step, ChooseStep):
-            # Terminal choose (Phase 2): resolve the candidate set, then stop and
-            # hand the set to the caller as a pending choice. Mid-path choose
-            # (resumable suffix resolution) is Phase 3.
             if current_type is None:
                 errors.append(TraceError(i, "choose has no collection to pick from"))
                 values, current_type = [], None
@@ -424,6 +427,18 @@ def resolve(spec: TargetSpec, context: TargetContext) -> Resolution:
             elif current_type.cardinality != "many":
                 errors.append(TraceError(i, "choose requires a many-cardinality collection"))
                 values, current_type = [], None
+            elif (answers or {}).get(i):
+                # Resumable mid-path choose: the user already answered this step.
+                # Inject the chosen candidates (in pick order) and keep walking.
+                chosen: list[Any] = []
+                for cid in answers[i]:
+                    for v in values:
+                        if _candidate_id(current_type.element, v) == cid:
+                            chosen.append(v)
+                            break
+                values = chosen
+                cardinality = "one" if step.count == 1 else "many"
+                current_type = ValueType(current_type.element, cardinality)
             else:
                 pending_choices.append(PendingTargetChoice(
                     element=current_type.element,

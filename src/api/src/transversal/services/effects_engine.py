@@ -71,6 +71,9 @@ class StructuredChoice:
     effect: Effect
     sfx_name: str = ""
     sfx_description: str = ""
+    step_index: int = 0
+    source_kind: str = ""
+    source_id: str = ""
 
 
 @dataclass
@@ -438,7 +441,8 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
     )
 
 
-def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None) -> StructuredChoice:
+def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None,
+                       source_kind: str = "", source_id: str = "") -> StructuredChoice:
     """Serialize a resolver pending ``choose`` (``PendingTargetChoice``) into a
     ``StructuredChoice`` whose candidates are ready for the picker."""
     from transversal.services.target_resolver import serialize_candidates
@@ -455,10 +459,15 @@ def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None
         effect=effect,
         sfx_name=sfx.name if sfx else "",
         sfx_description=sfx.description if sfx else "",
+        step_index=pc.step_index,
+        source_kind=source_kind,
+        source_id=source_id,
     )
 
 
-def resolve_refs(effect: Effect, context, structured: Optional[list] = None) -> Effect:
+def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
+                 answers: dict[int, list[str]] | None = None,
+                 source_kind: str = "", source_id: str = "") -> Effect:
     """Resolve each named ref's spec to a single id (first value) and return it.
 
     A no-op when the effect has no refs or no ref carries a ``spec``. Literal /
@@ -467,7 +476,8 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None) -> 
     handled separately in the Step-3 migration.
 
     When a ref's spec hits a ``choose`` step, the ref is left unresolved and a
-    ``StructuredChoice`` is appended to ``structured`` (if provided).
+    ``StructuredChoice`` is appended to ``structured`` (if provided). ``answers``
+    resumes mid-path ``choose`` steps already answered by the user.
     """
     if not effect.refs:
         return effect
@@ -477,10 +487,10 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None) -> 
     for name, ref in refs.items():
         if ref.spec is None:
             continue
-        resolution = resolve(ref.spec, context)
+        resolution = resolve(ref.spec, context, answers=answers)
         if resolution.pending_choices and structured is not None:
             for pc in resolution.pending_choices:
-                structured.append(_structured_choice(pc, effect, f"refs.{name}"))
+                structured.append(_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id))
             continue
         if resolution.values:
             rid = _resolved_id(resolution.values[0])
@@ -496,6 +506,7 @@ def _apply_immediate_spec(
     context: dict | None,
     repo,
     structured: Optional[list] = None,
+    answers: dict[int, list[str]] | None = None,
 ) -> list[Effect]:
     """Resolve an immediate effect's ``target_spec`` and apply once per target.
 
@@ -520,11 +531,15 @@ def _apply_immediate_spec(
     resolution = resolve(
         effect.target_spec,
         TargetContext(subject=entity, repo=repo, source=source, source_element=source_element),
+        answers=answers,
     )
 
     if resolution.pending_choices and structured is not None:
         for pc in resolution.pending_choices:
-            structured.append(_structured_choice(pc, effect, "target", sfx))
+            structured.append(_structured_choice(
+                pc, effect, "target", sfx,
+                source_kind=sfx.source_kind or "", source_id=event.context.get("source_id") or "",
+            ))
         return []
 
     applied: list[Effect] = []
@@ -542,4 +557,65 @@ def _apply_immediate_spec(
 def _noop_applier(action: Effect, entity_id: str, universe: str, context: dict) -> None:
     """Default no-op applier for testing."""
     pass
+
+
+def resolve_effect_spec_choices(
+    effect: Effect,
+    field: str,
+    answers: dict[int, list[str]],
+    entity,
+    repo,
+    source_kind: str = "",
+    source_id: str = "",
+) -> tuple[list[Effect], list[StructuredChoice]]:
+    """Re-resolve an effect's spec/ref with partial ``choose`` answers.
+
+    Returns ``(resolved_effects, pending)``. ``resolved_effects`` are concrete
+    effects with the spec/ref resolved (ready to commit); ``pending`` carries the
+    next ``choose`` step(s) as structured choices when the path is not yet fully
+    answered. Used by the resume mutation after the user answers a mid-path
+    ``choose``.
+    """
+    from transversal.services.target_resolver import TargetContext, resolve, resolve_source
+
+    source, source_element = (
+        resolve_source(source_kind, source_id, repo)
+        if source_kind and source_id and repo is not None
+        else (None, None)
+    )
+    ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element)
+
+    if field.startswith("refs."):
+        name = field[len("refs."):]
+        refs = dict(effect.refs or {})
+        ref = refs.get(name)
+        if ref is None or ref.spec is None:
+            return [], []
+        resolution = resolve(ref.spec, ctx, answers=answers)
+        if resolution.pending_choices:
+            return [], [_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id) for pc in resolution.pending_choices]
+        if resolution.values:
+            rid = _resolved_id(resolution.values[0])
+            if rid is not None:
+                refs[name] = ref.model_copy(update={"value": rid, "spec": None})
+                return [effect.model_copy(update={"refs": refs})], []
+        return [], []
+
+    spec = effect.target_spec if field == "target" else effect.entity_spec
+    if spec is None:
+        return [], []
+    resolution = resolve(spec, ctx, answers=answers)
+    if resolution.pending_choices:
+        return [], [_structured_choice(pc, effect, field, source_kind=source_kind, source_id=source_id) for pc in resolution.pending_choices]
+
+    out: list[Effect] = []
+    for value in resolution.values:
+        rid = _resolved_id(value)
+        if rid is None:
+            continue
+        if field == "target":
+            out.append(effect.model_copy(update={"target": rid, "target_spec": None}))
+        else:
+            out.append(effect.model_copy(update={"entity": rid, "entity_spec": None}))
+    return out, []
 

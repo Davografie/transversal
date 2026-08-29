@@ -60,6 +60,7 @@ from transversal.api.graphql.types import (
     GiftResult,
     TakeResult,
     TargetCandidate,
+    TargetChoiceAnswerInput,
     PendingChoiceRef,
     TargetCatalog,
     TargetCatalogAggregation,
@@ -374,13 +375,31 @@ def _consequence_option_input_to_domain(o: ConsequenceOptionInput) -> DomainCons
     )
 
 
-def _effects_result_to_gql(result) -> EffectApplicationResult:
+def _structured_choice_to_dict(c) -> dict:
+    """Serialize a ``StructuredChoice`` to the wire shape the picker consumes."""
+    return {
+        "structured": True,
+        "element": c.element,
+        "candidates": c.candidates,
+        "count": c.count,
+        "field": c.field,
+        "step_index": c.step_index,
+        "source_kind": c.source_kind,
+        "source_id": c.source_id,
+        "sfx_name": c.sfx_name,
+        "sfx_description": c.sfx_description,
+        "effect": c.effect.model_dump(),
+    }
+
+
+def _effects_result_to_gql(result, structured=None) -> EffectApplicationResult:
     return EffectApplicationResult(
         applied=[a.summary for a in result.applied],
         pending_choices=[
             PendingChoiceRef(index=i, kind=c.kind, scope=c.scope, field=c.field, filter=c.effect.target_filter or None, effect=_effect_to_gql(c.effect))
             for i, c in enumerate(result.pending_choices)
         ],
+        structured=[_structured_choice_to_dict(c) for c in (structured or [])],
     )
 
 
@@ -1887,17 +1906,34 @@ class Mutation:
     @strawberry.mutation
     def resolve_effect_targets(self, info: strawberry.Info, entity_id: strawberry.ID,
                                resolutions: list[EffectTargetResolutionInput]) -> EffectApplicationResult:
-        """Re-apply previously-pending effects with their resolved targets."""
+        """Re-apply previously-pending effects with their resolved targets.
+
+        Supports both legacy single-target resolutions (``target`` + ``field``)
+        and resumable mid-path ``choose`` resolutions (``answers``): the latter
+        re-resolves the spec/ref and either applies the final target(s) or
+        surfaces the next ``choose`` step.
+        """
         from transversal.services.effects_commit import commit_effects
+        from transversal.services.effects_engine import resolve_effect_spec_choices
 
         repo = _em(info).repo
         entity = repo.get_entity(str(entity_id))
         if entity is None:
             raise ValueError(f"Entity '{entity_id}' not found")
         resolved = []
+        structured = []
         for r in resolutions:
             eff = _effect_input_to_domain(r.effect)
             field = r.field or "target"
+            if r.answers:
+                answers = {a.step_index: list(a.ids) for a in r.answers}
+                applied, pending = resolve_effect_spec_choices(
+                    eff, field, answers, entity, repo,
+                    source_kind=r.source_kind or "", source_id=r.source_id or "",
+                )
+                resolved.extend(applied)
+                structured.extend(pending)
+                continue
             if field in ("target_scope", "entity_scope"):
                 from transversal.services.effects_applier import _resolve_scope_choose
                 eff = eff.model_copy(update={field: _resolve_scope_choose(getattr(eff, field), r.target)})
@@ -1921,7 +1957,10 @@ class Mutation:
                 eff = eff.model_copy(update={field: r.target})
             resolved.append(eff)
         result = commit_effects(entity, resolved, repo)
-        return _effects_result_to_gql(result)
+        if structured:
+            from transversal.services.roll_orchestrator import _emit_pending_choices
+            _emit_pending_choices(str(entity_id), entity.current_universe or "", [], structured)
+        return _effects_result_to_gql(result, structured)
 
     @strawberry.mutation
     def set_consequence_options(self, info: strawberry.Info, entity_id: strawberry.ID,

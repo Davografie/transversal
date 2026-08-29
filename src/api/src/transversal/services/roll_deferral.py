@@ -299,6 +299,7 @@ def _apply_spec_target(
     source_kind: str | None = None,
     source_id: str | None = None,
     structured: list | None = None,
+    answers: dict[int, list[str]] | None = None,
 ) -> list[Effect]:
     """Resolve an effect's ``target_spec`` against the roll context and apply it
     once per resolved target (e.g. One Trick: rolled dice → traitsetting → step
@@ -321,11 +322,15 @@ def _apply_spec_target(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
             source=source, source_element=source_element,
         ),
+        answers=answers,
     )
 
     if resolution.pending_choices and structured is not None:
         for pc in resolution.pending_choices:
-            structured.append(_structured_choice(pc, effect, "target"))
+            structured.append(_structured_choice(
+                pc, effect, "target",
+                source_kind=source_kind or "", source_id=source_id or "",
+            ))
         return []
 
     applied: list[Effect] = []

@@ -419,14 +419,25 @@ class EffectApplicationResult:
     """Outcome of applying a set of effects, plus any unresolved targets."""
     applied: list[str]
     pending_choices: list[PendingChoiceRef] = strawberry.field(default_factory=list)
+    structured: list[strawberry.scalars.JSON] = strawberry.field(default_factory=list)
+
+
+@strawberry.input
+class TargetChoiceAnswerInput:
+    """A user's answer to one mid-path ``choose`` step (by step index)."""
+    step_index: int
+    ids: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
 class EffectTargetResolutionInput:
     """A single resolved target for a previously-pending effect."""
     effect: EffectInput
-    target: str
-    field: str = "target"  # "target" | "entity"
+    target: str = ""
+    field: str = "target"  # "target" | "entity" | "refs.<name>"
+    answers: list[TargetChoiceAnswerInput] = strawberry.field(default_factory=list)
+    source_kind: str = ""
+    source_id: str = ""
 
 
 @strawberry.type

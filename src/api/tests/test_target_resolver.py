@@ -214,6 +214,43 @@ def test_select_self_traitsettings_is_seeded_from_subject():
     assert [v.id for v in res.values] == ["kael:trait-martial", "kael:trait-qi"]
 
 
+def _heal_like_spec():
+    return spec(
+        SelectStep(collection="occupants"),
+        ChooseStep(count=1),
+        NavigateStep(edge="traitsettings"),
+        FilterStep(field="traitset_id", operator="==", value="ts-combat"),
+        ChooseStep(count=1),
+    )
+
+
+def test_midpath_choose_emits_pending_then_resumes():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo)
+
+    # No answers yet → the first choose (index 1) surfaces a pending choice.
+    first = resolve(_heal_like_spec(), ctx)
+    assert first.errors == []
+    assert first.values == []
+    assert len(first.pending_choices) == 1
+    assert first.pending_choices[0].step_index == 1
+    assert [c.id for c in first.pending_choices[0].candidates] == ["kael", "gmc-1"]
+
+    # Answer the first choose → the second choose (index 4) surfaces next.
+    second = resolve(_heal_like_spec(), ctx, answers={1: ["kael"]})
+    assert second.errors == []
+    assert second.values == []
+    assert len(second.pending_choices) == 1
+    assert second.pending_choices[0].step_index == 4
+    assert [c.id for c in second.pending_choices[0].candidates] == ["kael:trait-martial"]
+
+    # Answer both → fully resolved to the chosen complication.
+    third = resolve(_heal_like_spec(), ctx, answers={1: ["kael"], 4: ["kael:trait-martial"]})
+    assert third.errors == []
+    assert third.pending_choices == []
+    assert [v.id for v in third.values] == ["kael:trait-martial"]
+
+
 def test_unknown_edge_is_an_error():
     kael, repo = _one_trick_world()
     ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": [{"ts_id": "x", "source_kind": "trait"}]})
