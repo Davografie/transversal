@@ -9,7 +9,7 @@ tags:
 aliases:
   - Effect Bindings
   - Output Variables
-status: in-progress
+status: implemented
 ---
 
 # Effect Output Variables
@@ -35,31 +35,32 @@ Explicit authoring, general (any resolved value, not just identical chooses),
 predictable. It composes with the existing `refs` + `{token}` substitution
 machinery rather than adding a parallel system.
 
-## Execution plan (ordered)
+## What's implemented
 
-1. **Domain** — `EffectOutput` + `Effect.outputs`.
-2. **Substitution** — `_substitute_effect_context(effect, context, bindings=None)`
-   merges the binding scope into the substitution source.
-3. **Binding helper** — `_apply_outputs(effect, bindings)` reads `outputs` and
-   binds each resolved field's id.
-4. **Immediate path** — thread a `bindings` scope through `process_event_outcome`;
-   bind after each applied effect.
-5. **Deferred path** — `ArmedSfx.bindings` + thread through `_apply_armed`; bind
-   after each applied effect (and, for a suspended `choose`, write the binding
-   back into the armed entry on resume — the re-entrancy half).
-6. **GraphQL** — expose `outputs` on `Effect` / `EffectInput`.
-7. **Tests** — immediate binding, deferred binding, `{name}` substitution.
+1. **Step-level outputs** — `TargetStep.outputs: list[str]`; the resolver binds
+   each step's first resolved value into `TargetContext.bindings`
+   (`Binding {value, element}`), typed by the step's resolved element.
+2. **Typed `select variable`** — both the type-checker (`trace`) and the resolver
+   support `select variable {name}`; `trace` accumulates intra-spec step outputs
+   so later steps in the same path type-check.
+3. **Cross-effect typing** — `target_spec.spec_variables` + the GraphQL
+   `effectVariables` field trace prior effects' specs and return the typed
+   `name → element` scope; the wizard uses it so a later effect's
+   `select variable` type-hints against earlier effects.
+4. **String substitution** — `_substitute_effect_context` merges the binding
+   scope, so `{name}` resolves in `target` / `entity` / `result` /
+   `refs.<name>.value` / `context.<key>`.
+5. **Deferred + resume** — bindings thread through the immediate path, the
+   deferred path (`ArmedSfx.bindings`), and the resume path (`bind_activation`),
+   so a value picked once survives to later roll-timed effects.
 
 ## Open / deferred
 
-- **Typed variables** — ✅ done: `EffectOutput.element` carries the catalog element
-  type; bindings are `Binding {value, element}`; the targeting wizard offers a
-  typed `select variable` step and type-checks against the variable's element.
-- **Suspended `choose` + deferred binding** — ✅ done (see above).
-- **Authoring UX** — ✅ done: `EffectForm` output editor (name + field + element,
-  auto-filled for `refs.<name>`/`entity`).
-- **Remaining polish** — `field: "target"` outputs don't auto-fill `element` yet
-  (the author types it); fan-out of a `refs` list binding is still first-value only.
+- **Ref fan-out** — a `refs.<name>` that resolves to many still binds only the
+  first value (`values[0]`); list bindings are future work.
+- **`select source`-dependent types** — a step whose element comes from
+  `select source` now resolves in the SFX editor (it threads `sourceElement`);
+  noted for completeness.
 
 ## Related
 

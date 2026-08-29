@@ -71,10 +71,9 @@ surfaces the next `choose`. Roll-deferred `choose` surfaces through
 2. ✅ **Roll-deferred `choose` surfacing** — `_apply_spec_target` / `_apply_refs_roll`
    surface a `choose` as a `StructuredChoice` via `fire_armed`.
 3. ✅ **Phase 3 staged resolution** — resumable `resolve(answers=…)` + resume mutation.
-4. **Shared target across effects** — *design decision first*: `sfx-heal` has two
-   `on_result` effects (`step_down` + `reduce_by_effect`) that must pick the *same*
-   complication; today each resolves independently (two dialogs). Decide: resolve
-   once per activation and share, restructure the SFX, or accept independent picks.
+4. ✅ **Shared target across effects** — resolved via [[Effect Output Variables]]:
+   an effect binds a chosen value to `{name}` and later effects reference it
+   (no second dialog).
 5. **Multi-`choose` fan-out** — `count > 1` now fans out for `target_spec` (the
    resolver injects N chosen values and the applier emits one effect each). Refs
    still resolve only `values[0]` (ref fan-out is deferred to the named-refs

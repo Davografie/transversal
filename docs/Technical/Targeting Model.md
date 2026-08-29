@@ -38,17 +38,25 @@ class TargetSpec(BaseModel):
 
 | Step | Fields | Meaning |
 |------|--------|---------|
-| `select` | `collection` | Seed from a context collection (`self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`) |
+| `select` | `collection`, `variable` | Seed from a context collection (`self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`), the SFX `source`, or a bound `variable` |
 | `filter` | `field`, `operator`, `value` | Narrow by a comparable scalar field |
 | `navigate` | `edge`, `dedup` | Hop an edge to a related element; `dedup` collapses by identity |
 | `aggregate` | `fn`, `field` | Collapse a collection to a scalar (`count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`) |
 | `literal` | `element`, `value` | Name one object by id directly |
 
+Every step also carries `outputs: list[str]` — variable names the step exposes
+once it resolves (see [[Effect Output Variables]]).
+
 **Type = element × cardinality.** Every step produces a `ValueType(element, cardinality)`, where `element` is a catalog element type or a scalar (`int`/`number`/`die`/`string`) and `cardinality` is `one` or `many`.
 
 **The effect field declares the type.** A field that wants a target (`target`, `entity`, `result`, `steps`, condition operands) states the element + cardinality it expects; the spec must resolve to a matching type. That declared type is the "what am I selecting for" hint the wizard highlights against.
 
-**Resolution modes are `all` / `choose` / `random`.** `choose` and `random` are the single-resolution forms; there is no `any`. Cardinality lives on the *field*, not on the spec grammar.
+**Resolution modes are `all` / `choose` / `random`.** `choose` and `random` are the single-resolution forms; there is no `any`. Cardinality lives on the *field*, not on the spec grammar. `choose` is **resumable** mid-path: the resolver emits a `PendingTargetChoice` (candidates + `step_index`) and later re-resolves the same spec with `answers` (a `step_index → ids` map), so a path can pause for user input and continue.
+
+**Variables.** A step's `outputs` bind its resolved value into the per-activation
+scope (typed by the step's resolved element). A later step references it with
+`select variable {name}`; a later effect references `{name}` in the flat
+`target`/`entity`/`result`/`refs.<name>.value` fields. See [[Effect Output Variables]].
 
 ## The catalog
 
@@ -58,7 +66,7 @@ class TargetSpec(BaseModel):
 - **Edges** (`EDGES`): named hops `(source → target, cardinality)`. Edges are union-capable (`target` is a tuple) but single-typed today — e.g. `die → traitsetting`, `traitsetting → entity`, `entity → location`, `location → occupants`, plus the pool-assembly hops `entity → pool` and `location → difficulty_pool`.
 - **Scalar fields** (`SCALAR_FIELDS`): comparable/aggregatable fields per element, each with a type (`int`/`number`/`die`/`string`). Enum-like string fields also carry an **`options` tuple** so the wizard renders a dropdown (`die.source_kind`, `die.tier`, `die.rating`, `traitsetting.rating_type`, `traitsetting.from_type`, `entity.type`, …). Id-reference fields carry a **`references`** element hint (`traitset_id → traitset`, `trait_id → trait`, `entity_id → entity`, `projection_id → projection`, …) so the wizard renders a **TargetPicker** instead of a free-text id input.
 - **Aggregations** (`AGGREGATIONS`): `count` (int), `min`/`max` (same-type), `mean`/`avg_floor`/`avg_ceil` (number).
-- **Collections** (`COLLECTIONS`): the `select` seeds — `self` (singleton entity), `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`.
+- **Collections** (`COLLECTIONS`): the `select` seeds — `self` (singleton entity), `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`. Two special seeds live outside `COLLECTIONS` because their type varies: `select source` (typed by the SFX's `source_kind`) and `select variable` (typed by a bound output variable).
 
 Adding a new element, edge, field, aggregation, or collection is a declaration here plus a repo read in the resolver.
 
@@ -66,8 +74,8 @@ Adding a new element, edge, field, aggregation, or collection is a declaration h
 
 Two layers, one source of truth:
 
-- **`target_spec.py::trace` / `check` / `final_type`** — a *pure*, catalog-driven walk that returns the `ValueType` after each step plus step-level errors, and whether the final type matches a destination. Used by the wizard for live highlighting.
-- **`target_resolver.py::resolve`** — the *runtime* walk over actual game values. `navigate` consults a registry of edge resolvers (one per `(source, edge)`), each backed by the repository (e.g. `die → traitsetting` reads `repo.get_traitsetting(die["ts_id"])`).
+- **`target_spec.py::trace` / `check` / `final_type` / `spec_variables`** — a *pure*, catalog-driven walk. `trace` returns the `ValueType` after each step plus step-level errors (and accumulates step `outputs` into the variable scope); `check`/`final_type` match the destination; `spec_variables` returns the typed scope a spec exposes (for cross-effect `select variable`).
+- **`target_resolver.py::resolve`** — the *runtime* walk over actual game values. `navigate` consults a registry of edge resolvers (one per `(source, edge)`), each backed by the repository (e.g. `die → traitsetting` reads `repo.get_traitsetting(die["ts_id"])`). `resolve(spec, context, answers=…)` is resumable across mid-path `choose`, and binds step `outputs` into `context.bindings` (typed `Binding {value, element}`).
 
 A spec that type-checks is guaranteed to have resolvable steps; the resolver produces the concrete objects (or scalar).
 
@@ -105,7 +113,8 @@ The wizard is catalog-driven: it cannot compose an invalid path, and a field wit
 ## GraphQL surface
 
 - `targetCatalog` — the full catalog (elements, edges, fields + options, aggregations, collections).
-- `traceTargetSpec(input, destinationElement, destinationCardinality)` — walks a draft spec through the shared type-checker; returns the type after each step, step errors, and `valid` (does the final type match the destination).
+- `traceTargetSpec(input, destinationElement, destinationCardinality, sourceElement, variables)` — walks a draft spec through the shared type-checker; returns the type after each step, step errors, and `valid` (does the final type match the destination). `variables` seeds the bound-variable scope (name → element).
+- `effectVariables(effects, sourceElement)` — traces a list of effects' specs and returns the typed output variables they expose (for cross-effect `select variable`).
 
 `Effect` / `EffectInput` expose `targetSpec` and `entitySpec` as JSON (camelCase on the wire; `target_spec`/`entity_spec` in Python).
 
@@ -126,17 +135,19 @@ The targeting model exists to power **passive rules** like One Trick:
 |---------|--------|
 | Catalog (elements, edges, fields + options, aggregations, collections) | `services/target_catalog.py` |
 | Spec model + step types + type-checker | `services/target_spec.py` |
-| Runtime resolver + edge resolvers | `services/target_resolver.py` |
+| Runtime resolver + edge resolvers | `services/target_resolver.py` (`resolve`, `Binding`, `TargetContext.bindings`) |
+| Step outputs → typed variables | `services/target_spec.py::spec_variables`, `services/effects_engine.py` |
 | Legacy string → trivial spec | `services/target_legacy.py` |
 | `Effect.target_spec` / `entity_spec` fields | `domain/__init__.py` |
 | `entity_spec` subject resolution | `services/effects_applier.py` (`_effect_subject`) |
 | `target_spec` roll-deferred fan-out | `services/roll_deferral.py` (`_apply_spec_target`) |
 | Passive arming + `on_session_start` | `services/state_events.py`, `services/roll_deferral.py`, `services/menu_contexts.py` |
 | Wizard component / composable | `frontend/src/components/gm/TargetSpecBuilder.vue`, `frontend/src/composables/useTargetCatalog.js` |
-| GraphQL (`targetCatalog`, `traceTargetSpec`) | `api/graphql/schema.py`, `api/graphql/types.py` |
+| GraphQL (`targetCatalog`, `traceTargetSpec`, `effectVariables`) | `api/graphql/schema.py`, `api/graphql/types.py` |
 
 ## Related
 
 - [[SFX and Effects]] — the effect model + registry this targets.
+- [[Effect Output Variables]] — step-level typed outputs + `select variable`.
 - [[Passive Rules and Multi-Target References]] — the design/plan this implements.
 - [[Effect System Capabilities and Gaps]] — the deferred drillthrough + selective-stamping tracks this resolves.
