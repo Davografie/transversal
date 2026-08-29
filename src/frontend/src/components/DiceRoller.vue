@@ -5,7 +5,7 @@
         v-for="e in tabEntities"
         :key="e.id"
         class="pool-tab"
-        :class="{ active: activeId === e.id, self: e.id === selfTabId, blink: e.id === selfTabId && youTabBlink }"
+        :class="{ active: activeId === e.id, self: e.id === selfTabId, blink: (e.id === selfTabId && youTabBlink) || (e.id === DIFFICULTY_TAB && difficultyTabBlink) }"
         @click="switchTab(e.id)"
       >
         {{ e.name }}
@@ -458,6 +458,7 @@ const giveInAllowed = ref(false)
 const opponentCommitted = ref(null) // { total, effect_die } once the opponent has set
 const bannedTargetIds = ref([])     // entity ids the acting entity cannot currently challenge
 const youTabBlink = ref(false)      // nudge: it's your turn to roll
+const difficultyTabBlink = ref(false)  // nudge: difficulty pool changed while not looking
 const highStakes = ref(false)       // contest stakes (low by default)
 const difficultyFlash = ref('')
 
@@ -609,6 +610,7 @@ async function switchTab(id) {
     // Clicking Difficulty while acting as an entity relieves the GM of it,
     // so they can roll the difficulty dice.
     if (id === DIFFICULTY_TAB) {
+      difficultyTabBlink.value = false
       if (props.actingEntityId) emit('actingEntityChange', null)
       return
     }
@@ -653,6 +655,19 @@ watch(() => props.difficulty, (v) => {
   setTimeout(() => {
     if (difficultyFlash.value === `Difficulty set: ${v}`) difficultyFlash.value = ''
   }, 3000)
+})
+
+// Blink the Difficulty tab when its pool changes while the GM is on a
+// different tab (e.g. an SFX added dice to the GM difficulty pool).
+const difficultyPoolSignature = computed(() => {
+  const rp = props.remotePools?.[props.locationId]
+  if (!rp || !Array.isArray(rp.dice)) return ''
+  return rp.dice.map((d) => `${d.die}|${d.ts_id || d.source_id || ''}`).join(',')
+})
+watch(difficultyPoolSignature, (sig, old) => {
+  if (!sig || sig === old) return
+  if (activeId.value === DIFFICULTY_TAB) return
+  difficultyTabBlink.value = true
 })
 
 async function doChallenge() {
