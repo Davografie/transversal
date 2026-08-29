@@ -1901,6 +1901,17 @@ class Mutation:
             if field in ("target_scope", "entity_scope"):
                 from transversal.services.effects_applier import _resolve_scope_choose
                 eff = eff.model_copy(update={field: _resolve_scope_choose(getattr(eff, field), r.target)})
+            elif field.startswith("refs."):
+                name = field[len("refs."):]
+                refs = dict(eff.refs or {})
+                ref = refs.get(name)
+                if ref is not None:
+                    refs[name] = ref.model_copy(update={"value": r.target, "spec": None})
+                    eff = eff.model_copy(update={"refs": refs})
+            elif field == "target":
+                eff = eff.model_copy(update={"target": r.target, "target_spec": None})
+            elif field == "entity":
+                eff = eff.model_copy(update={"entity": r.target, "entity_spec": None})
             elif "." in field:
                 top, _, sub = field.partition(".")
                 ctx = dict(eff.context or {})
