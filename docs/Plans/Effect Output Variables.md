@@ -53,11 +53,16 @@ machinery rather than adding a parallel system.
 5. **Deferred + resume** — bindings thread through the immediate path, the
    deferred path (`ArmedSfx.bindings`), and the resume path (`bind_activation`),
    so a value picked once survives to later roll-timed effects.
+6. **Ref fan-out** — `resolve_refs` returns a *list* of concrete effects: a ref
+   whose `spec` resolves to `N` values fans the effect out `N` ways (the
+   cartesian product across refs); a literal/token ref stays fixed, and a ref
+   resolving to zero values produces no effects. Wired through the immediate
+   path (`process_event_outcome`), the resume path
+   (`resolve_effect_spec_choices`), and the roll-deferred path
+   (`_apply_refs_roll`).
 
 ## Open / deferred
 
-- **Ref fan-out** — a `refs.<name>` that resolves to many still binds only the
-  first value (`values[0]`); list bindings are future work.
 - **`select source`-dependent types** — a step whose element comes from
   `select source` now resolves in the SFX editor (it threads `sourceElement`);
   noted for completeness.

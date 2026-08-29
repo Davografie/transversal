@@ -74,17 +74,19 @@ surfaces the next `choose`. Roll-deferred `choose` surfaces through
 4. ✅ **Shared target across effects** — resolved via [[Effect Output Variables]]:
    an effect binds a chosen value to `{name}` and later effects reference it
    (no second dialog).
-5. **Multi-`choose` fan-out** — `count > 1` now fans out for `target_spec` (the
-   resolver injects N chosen values and the applier emits one effect each). Refs
-   still resolve only `values[0]` (ref fan-out is deferred to the named-refs
-   Step-3 migration).
+5. ✅ **Multi-`choose` fan-out** — `count > 1` fans out for `target_spec` (the
+   resolver injects N chosen values and the applier emits one effect each).
+   `refs.<name>` fan-out is also done: `resolve_refs` returns one effect per
+   value combination (a ref resolving to many fans out, literal/token refs stay
+   fixed).
 
 ## Implications / risks
 
 - **Staged resolution is done.** Mid-path `choose` resumes via `answers`; the resolver is stateless (re-resolves from the spec + answers each step).
 - **Candidate serialization.** Done in Phase 2 (`DISPLAY_FIELDS` + `serialize_candidates`).
 - **Re-entrancy.** A mid-path `choose` re-resolves the same spec with accumulated answers rather than storing a half-applied effect; the frontend echoes `answers_so_far`.
-- **Multi-choice fan-out.** Once per element — wired for `target_spec`; refs still resolve the first value.
+- **Multi-choice fan-out.** Once per element — wired for both `target_spec` and
+  `refs.<name>`.
 
 ## Files expected to touch (remaining)
 

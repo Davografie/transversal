@@ -293,8 +293,71 @@ def test_resolve_refs_surfaces_structured_choice():
         ]},
     ), structured)
 
-    assert resolved.refs["pool"].value == ""
+    assert resolved == []
     assert len(structured) == 1
     assert structured[0].field == "refs.pool"
     assert structured[0].element == "die"
     assert [x["id"] for x in structured[0].candidates] == ["a", "b"]
+
+
+def test_resolve_refs_fans_out_over_many():
+    """A ref resolving to many yields one effect per value (fan-out)."""
+    from transversal.domain import TargetRef
+    from transversal.services.target_resolver import TargetContext
+    from transversal.services.target_spec import SelectStep, TargetSpec
+    from transversal.services.effects_engine import resolve_refs
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
+        refs={"trait": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="rolled_dice")]))},
+    )
+    resolved = resolve_refs(effect, TargetContext(
+        subject=None, repo=None,
+        collections={"rolled_dice": [
+            {"ts_id": "a", "rating": "d6"}, {"ts_id": "b", "rating": "d8"},
+        ]},
+    ))
+
+    assert [r.refs["trait"].value for r in resolved] == ["a", "b"]
+    assert all(r.refs["trait"].spec is None for r in resolved)
+
+
+def test_resolve_refs_fan_out_is_cartesian():
+    """Two multi refs fan out as the cartesian product; a literal ref is fixed."""
+    from transversal.domain import TargetRef
+    from transversal.services.target_resolver import TargetContext
+    from transversal.services.target_spec import SelectStep, TargetSpec
+    from transversal.services.effects_engine import resolve_refs
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
+        refs={
+            "trait": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="rolled_dice")])),
+            "pool": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="rolled_dice")])),
+        },
+    )
+    resolved = resolve_refs(effect, TargetContext(
+        subject=None, repo=None,
+        collections={"rolled_dice": [{"ts_id": "a", "rating": "d6"}, {"ts_id": "b", "rating": "d8"}]},
+    ))
+
+    pairs = [(r.refs["trait"].value, r.refs["pool"].value) for r in resolved]
+    assert sorted(pairs) == [("a", "a"), ("a", "b"), ("b", "a"), ("b", "b")]
+
+
+def test_resolve_refs_empty_resolution_returns_nothing():
+    """A ref resolving to zero values fans out to no effects."""
+    from transversal.domain import TargetRef
+    from transversal.services.target_resolver import TargetContext
+    from transversal.services.target_spec import SelectStep, TargetSpec
+    from transversal.services.effects_engine import resolve_refs
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
+        refs={"trait": TargetRef(spec=TargetSpec(steps=[SelectStep(collection="rolled_dice")]))},
+    )
+    resolved = resolve_refs(effect, TargetContext(
+        subject=None, repo=None, collections={"rolled_dice": []},
+    ))
+
+    assert resolved == []

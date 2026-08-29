@@ -242,8 +242,8 @@ def _apply_armed(
         if effect.timing.value != event_type:
             continue
         if effect.refs:
-            resolved = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id)
-            applied.append(resolved)
+            resolved_list = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id)
+            applied.extend(resolved_list)
             continue
         if effect.target_spec is not None:
             resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings, source_sfx_id=armed.source_sfx_id)
@@ -288,8 +288,9 @@ def _apply_refs_roll(
     structured: list | None = None,
     bindings: dict | None = None,
     source_sfx_id: str | None = None,
-) -> Effect:
-    """Resolve an armed effect's named refs against the roll context and apply."""
+) -> list[Effect]:
+    """Resolve an armed effect's named refs against the roll context and apply
+    once per resolved value (fan-out). Returns the applied effects."""
     from transversal.main import _get_repo
     from transversal.services.effects_applier import effect_registry
     from transversal.services.effects_engine import _substitute_effect_context, resolve_refs
@@ -299,7 +300,7 @@ def _apply_refs_roll(
     entity = repo.get_entity(entity_id)
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
     before = len(structured) if structured is not None else 0
-    resolved = resolve_refs(
+    resolved_list = resolve_refs(
         _substitute_effect_context(effect, context or {}, bindings),
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
@@ -311,8 +312,9 @@ def _apply_refs_roll(
     # Only apply when no choose step left the ref unresolved (mirrors the
     # immediate path's ``len(structured) == before`` gate).
     if structured is None or len(structured) == before:
-        effect_registry.apply(resolved, entity_id, universe, context or {})
-    return resolved
+        for resolved in resolved_list:
+            effect_registry.apply(resolved, entity_id, universe, context or {})
+    return resolved_list
 
 
 def _apply_spec_target(

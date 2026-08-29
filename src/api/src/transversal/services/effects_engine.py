@@ -224,12 +224,13 @@ class EffectsEngine:
                 if effect.timing == EffectTiming.IMMEDIATE:
                     if effect.refs:
                         before = len(outcome.structured)
-                        resolved = resolve_refs(effect, _fire_context(event, sfx, repo, bindings=bindings), outcome.structured, source_sfx_id=sfx.id)
+                        resolved_list = resolve_refs(effect, _fire_context(event, sfx, repo, bindings=bindings), outcome.structured, source_sfx_id=sfx.id)
                         if len(outcome.structured) == before:
-                            _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
-                            outcome.applied.append(resolved)
-                            sfx_applied = True
-                            log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
+                            for resolved in resolved_list:
+                                _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
+                                outcome.applied.append(resolved)
+                                sfx_applied = True
+                                log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
                     elif effect.target_spec is not None:
                         before = len(outcome.structured)
                         applied = _apply_immediate_spec(
@@ -483,37 +484,62 @@ def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None
 def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
                  answers: dict[int, list[str]] | None = None,
                  source_kind: str = "", source_id: str = "",
-                 source_sfx_id: str = "") -> Effect:
-    """Resolve each named ref's spec to a single id (first value) and return it.
+                 source_sfx_id: str = "") -> list[Effect]:
+    """Resolve each named ref and fan the effect out over multi-value refs.
 
-    A no-op when the effect has no refs or no ref carries a ``spec``. Literal /
-    token refs (``self``, ``{choose_*}``, raw ids) pass through unchanged; the
-    handler reads ``refs[name].value``. Fan-out (one ref → many targets) is
-    handled separately in the Step-3 migration.
+    Returns the concrete effects to apply — one per combination of resolved ref
+    values (the cartesian product across refs). A ref whose ``spec`` resolves to
+    ``N`` values fans the effect out ``N`` ways; literal / token refs (``self``,
+    ``{choose_*}``, raw ids) contribute one fixed value and do not fan out. If
+    any ref resolves to zero values, nothing matches and an empty list is
+    returned. An effect with no refs returns ``[effect]`` unchanged.
 
-    When a ref's spec hits a ``choose`` step, the ref is left unresolved and a
-    ``StructuredChoice`` is appended to ``structured`` (if provided). ``answers``
-    resumes mid-path ``choose`` steps already answered by the user.
+    When a ref's spec hits a ``choose`` step, the ref is left unresolved, a
+    ``StructuredChoice`` is appended to ``structured`` (if provided), and an
+    empty list is returned. ``answers`` resumes mid-path ``choose`` steps already
+    answered by the user.
     """
     if not effect.refs:
-        return effect
+        return [effect]
+    from itertools import product
     from transversal.services.target_resolver import resolve
 
     answers_so_far = [{"step_index": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
-    refs = dict(effect.refs)
-    for name, ref in refs.items():
+
+    resolved_values: dict[str, list[str]] = {}
+    for name, ref in effect.refs.items():
         if ref.spec is None:
+            resolved_values[name] = [ref.value]
             continue
         resolution = resolve(ref.spec, context, answers=answers)
-        if resolution.pending_choices and structured is not None:
-            for pc in resolution.pending_choices:
-                structured.append(_structured_choice(pc, effect, f"refs.{name}", source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id, answers_so_far=answers_so_far))
-            continue
-        if resolution.values:
-            rid = _resolved_id(resolution.values[0])
+        if resolution.pending_choices:
+            if structured is not None:
+                for pc in resolution.pending_choices:
+                    structured.append(_structured_choice(
+                        pc, effect, f"refs.{name}",
+                        source_kind=source_kind, source_id=source_id,
+                        source_sfx_id=source_sfx_id, answers_so_far=answers_so_far,
+                    ))
+            return []
+        ids = []
+        for value in resolution.values:
+            rid = _resolved_id(value)
             if rid is not None:
-                refs[name] = ref.model_copy(update={"value": rid})
-    return effect.model_copy(update={"refs": refs})
+                ids.append(rid)
+        resolved_values[name] = ids
+
+    names = list(effect.refs.keys())
+    out: list[Effect] = []
+    for combo in product(*(resolved_values[n] for n in names)):
+        refs = {}
+        for name, value in zip(names, combo):
+            ref = effect.refs[name]
+            refs[name] = (
+                ref if ref.spec is None
+                else ref.model_copy(update={"value": value, "spec": None})
+            )
+        out.append(effect.model_copy(update={"refs": refs}))
+    return out
 
 
 def _apply_immediate_spec(
@@ -609,18 +635,15 @@ def resolve_effect_spec_choices(
 
     if field.startswith("refs."):
         structured_choices: list = []
-        resolved = resolve_refs(
+        resolved_list = resolve_refs(
             effect, ctx, structured=structured_choices, answers=answers,
             source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id,
         )
         if structured_choices:
             return [], structured_choices
-        # Clear the resolved specs so the handler reads the concrete values.
-        refs = {
-            name: (ref.model_copy(update={"spec": None}) if ref.spec is not None else ref)
-            for name, ref in (resolved.refs or {}).items()
-        }
-        return [resolved.model_copy(update={"refs": refs})], []
+        # ``resolve_refs`` already cleared the resolved specs and set the
+        # concrete values, fanning out one effect per value combination.
+        return resolved_list, []
 
     spec = effect.target_spec if field == "target" else effect.entity_spec
     if spec is None:
