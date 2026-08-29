@@ -26,11 +26,12 @@
 
         <div class="tsb-outputs">
           <span class="tsb-outputs-label">expose as</span>
-          <input
-            :value="(step.outputs || []).join(', ')"
-            placeholder="var1, var2"
-            @change="onOutputs(i, $event)"
-          />
+          <span class="tsb-outputs-type">{{ typeLabel(i) }}</span>
+          <div v-for="(name, j) in (step.outputs || [])" :key="j" class="tsb-output-row">
+            <input v-model="step.outputs[j]" type="text" placeholder="name" />
+            <button type="button" class="tsb-btn tsb-remove" title="Remove output" @click="removeOutput(i, j)">✕</button>
+          </div>
+          <button type="button" class="tsb-output-add" @click="addOutput(i)">+ add output</button>
         </div>
 
         <div v-if="stepError(i)" class="tsb-err">{{ stepError(i) }}</div>
@@ -304,9 +305,16 @@ function onCount(i, e) {
   steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
 }
 
-function onOutputs(i, e) {
-  const names = String(e.target.value || '').split(',').map(s => s.trim()).filter(Boolean)
-  steps.value[i].outputs = names
+function addOutput(i) {
+  const arr = [...(steps.value[i].outputs || [])]
+  arr.push('')
+  steps.value[i].outputs = arr
+}
+
+function removeOutput(i, j) {
+  const arr = [...(steps.value[i].outputs || [])]
+  arr.splice(j, 1)
+  steps.value[i].outputs = arr
 }
 
 function canAdd(kind) {
@@ -372,9 +380,13 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-step.tsb-valid { border-color: #40b860; background: rgba(64,184,96,0.06); }
 .tsb-step.tsb-error { border-color: #d04a4a; }
 .tsb-step-head { display: flex; align-items: center; gap: 5px; }
-.tsb-outputs { display: flex; align-items: center; gap: 4px; }
+.tsb-outputs { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 .tsb-outputs-label { font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.tsb-outputs input { flex: 1; min-width: 0; }
+.tsb-outputs-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
+.tsb-output-row { display: flex; align-items: center; gap: 4px; width: 100%; }
+.tsb-output-row input { flex: 1; min-width: 0; }
+.tsb-output-add { font-size: 9px; padding: 2px 8px; border-radius: 3px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); }
+.tsb-output-add:hover { color: var(--accent); border-color: var(--accent); }
 .tsb-step-index { font-size: 9px; color: var(--text-dim); font-family: monospace; min-width: 12px; }
 .tsb-kind { flex: none; width: 88px; }
 .tsb-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
