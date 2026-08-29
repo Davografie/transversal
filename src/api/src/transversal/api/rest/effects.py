@@ -69,11 +69,16 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
     )
 
     # Process
-    applied = engine.process_event(
+    from transversal.main import _get_repo
+    outcome = engine.process_event_outcome(
         event=event,
         available_sfx_ids=available_sfx_ids,
         razmerit_balance=entity.razmerit,
+        repo=_get_repo(),
     )
+    from transversal.services.roll_orchestrator import _emit_pending_choices
+    _emit_pending_choices(req.entity_id, req.universe, outcome.pending, outcome.structured)
+    applied = outcome.applied
 
     # Effects are already applied by process_event internally.
     # We just report what happened.
@@ -82,4 +87,5 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
         "applied": len(applied) > 0,
         "effects_applied": len(applied),
         "effects": [{"type": a.type, "action": a.action, "target": a.target} for a in applied],
+        "pending": len(outcome.pending) + len(outcome.structured),
     }

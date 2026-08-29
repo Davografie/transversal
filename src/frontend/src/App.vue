@@ -1210,8 +1210,10 @@ watch(lastEvent, (evt) => {
       }
       break
     case 'sfx_choice_required':
-      if (evt.data?.entity_id === entityId.value) {
-        sfxChoiceRequest.value = (evt.data.choices || []).map((c, i) => ({ ...c, index: i }))
+      if (evt.data?.entity_id === entityId.value || gmMode.value) {
+        sfxChoiceRequest.value = (evt.data.choices || []).map((c, i) => ({
+          ...c, index: i, entity_id: evt.data.entity_id,
+        }))
       }
       break
   }

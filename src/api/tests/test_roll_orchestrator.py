@@ -110,7 +110,7 @@ def test_fire_roll_sfx_emits_choose_target_instead_of_applying(monkeypatch):
     emitted = []
     monkeypatch.setattr(
         roll_orchestrator, "_emit_pending_choices",
-        lambda entity_id, universe, effects: emitted.extend(effects),
+        lambda entity_id, universe, effects, structured=None: emitted.extend(effects),
     )
 
     applied = fire_roll_sfx(engine, repo, "e1", "earth", _simplified())
@@ -223,3 +223,78 @@ def test_fire_roll_sfx_passes_rolls_to_fire_armed(monkeypatch):
     fire_roll_sfx(engine, repo, "e1", "earth", SimpleNamespace(rolls=rolls, hitches=[], botch=False))
 
     assert captured["rolls"] == rolls
+
+
+def test_process_event_outcome_surfaces_structured_choose():
+    """A terminal `choose` in an immediate target_spec becomes a StructuredChoice."""
+    from transversal.services.target_spec import ChooseStep, NavigateStep, SelectStep, TargetSpec
+
+    class Repo2:
+        def __init__(self):
+            self.entity = SimpleNamespace(
+                id="e1", razmerit=10, current_location="loc1",
+                current_universe="earth", current_projection=None, sfx_ids=["sfx-pick"],
+            )
+            self.traitsettings = [
+                SimpleNamespace(id="e1:ts-a", entity_id="e1", trait_id="trait-a", rating="d6"),
+                SimpleNamespace(id="e1:ts-b", entity_id="e1", trait_id="trait-b", rating="d8"),
+            ]
+
+        def get_entity(self, eid):
+            return self.entity if eid == "e1" else None
+
+        def get_traitsettings_for_entity(self, eid):
+            return self.traitsettings if eid == "e1" else []
+
+    repo = Repo2()
+    engine = EffectsEngine()
+    engine.register(SFX(
+        id="sfx-pick", name="Pick", trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
+            target_spec=TargetSpec(steps=[
+                SelectStep(collection="self"),
+                NavigateStep(edge="traitsettings"),
+                ChooseStep(),
+            ]),
+        )],
+    ))
+    event = GameEvent(type="manual", entity_id="e1", universe="earth")
+
+    outcome = engine.process_event_outcome(event, ["sfx-pick"], 10, repo=repo)
+
+    assert outcome.applied == []
+    assert len(outcome.structured) == 1
+    c = outcome.structured[0]
+    assert c.field == "target"
+    assert c.element == "traitsetting"
+    assert [x["id"] for x in c.candidates] == ["e1:ts-a", "e1:ts-b"]
+
+
+def test_resolve_refs_surfaces_structured_choice():
+    """A terminal `choose` in a named ref becomes a StructuredChoice with refs field."""
+    from transversal.domain import TargetRef
+    from transversal.services.target_resolver import TargetContext
+    from transversal.services.target_spec import ChooseStep, SelectStep, TargetSpec
+    from transversal.services.effects_engine import resolve_refs
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_dice",
+        refs={"pool": TargetRef(value="", spec=TargetSpec(steps=[
+            SelectStep(collection="rolled_dice"),
+            ChooseStep(),
+        ]))},
+    )
+    structured = []
+    resolved = resolve_refs(effect, TargetContext(
+        subject=None, repo=None,
+        collections={"rolled_dice": [
+            {"ts_id": "a", "rating": "d6"}, {"ts_id": "b", "rating": "d8"},
+        ]},
+    ), structured)
+
+    assert resolved.refs["pool"].value == ""
+    assert len(structured) == 1
+    assert structured[0].field == "refs.pool"
+    assert structured[0].element == "die"
+    assert [x["id"] for x in structured[0].candidates] == ["a", "b"]

@@ -56,15 +56,36 @@ class PendingSfxEffect:
 
 
 @dataclass
+class StructuredChoice:
+    """A structured ``choose`` step awaiting user resolution.
+
+    ``element`` is the catalog element type; ``candidates`` are serialized
+    display records (``id``/``name``/``subtitle``/``element``); ``count`` is how
+    many to pick; ``field`` names where the result lands on the effect
+    (``target`` | ``entity`` | ``refs.<name>``).
+    """
+    element: str
+    candidates: list
+    count: int
+    field: str
+    effect: Effect
+    sfx_name: str = ""
+    sfx_description: str = ""
+
+
+@dataclass
 class EventOutcome:
     """Result of processing an event through the effects engine.
 
     ``applied`` are immediately-applied effects. ``pending`` are immediate
     effects with a ``{choose_*}`` target that were skipped and need user
-    resolution before they can be applied.
+    resolution before they can be applied. ``structured`` are effects whose
+    ``target_spec``/``refs`` hit a ``choose`` step and carry the pre-resolved
+    candidate set for the picker.
     """
     applied: list[Effect] = field(default_factory=list)
     pending: list[PendingSfxEffect] = field(default_factory=list)
+    structured: list[StructuredChoice] = field(default_factory=list)
 
 
 # ── Effect Application ───────────────────────────────
@@ -195,16 +216,21 @@ class EffectsEngine:
                 effect = _substitute_effect_context(effect, effect_context)
                 if effect.timing == EffectTiming.IMMEDIATE:
                     if effect.refs:
-                        resolved = resolve_refs(effect, _fire_context(event, sfx, repo))
-                        _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
-                        outcome.applied.append(resolved)
-                        sfx_applied = True
-                        log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
+                        before = len(outcome.structured)
+                        resolved = resolve_refs(effect, _fire_context(event, sfx, repo), outcome.structured)
+                        if len(outcome.structured) == before:
+                            _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
+                            outcome.applied.append(resolved)
+                            sfx_applied = True
+                            log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
                     elif effect.target_spec is not None:
-                        outcome.applied.extend(_apply_immediate_spec(
-                            effect, event, sfx, effect_context, repo,
-                        ))
-                        sfx_applied = True
+                        before = len(outcome.structured)
+                        applied = _apply_immediate_spec(
+                            effect, event, sfx, effect_context, repo, outcome.structured,
+                        )
+                        outcome.applied.extend(applied)
+                        if applied:
+                            sfx_applied = True
                     elif _effects_applier.find_choose_placeholder(effect):
                         outcome.pending.append(PendingSfxEffect(
                             effect=effect,
@@ -412,13 +438,36 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
     )
 
 
-def resolve_refs(effect: Effect, context) -> Effect:
+def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None) -> StructuredChoice:
+    """Serialize a resolver pending ``choose`` (``PendingTargetChoice``) into a
+    ``StructuredChoice`` whose candidates are ready for the picker."""
+    from transversal.services.target_resolver import serialize_candidates
+
+    candidates = [
+        {"id": c.id, "name": c.name, "subtitle": c.subtitle, "element": c.element}
+        for c in serialize_candidates(pc.element, pc.candidates)
+    ]
+    return StructuredChoice(
+        element=pc.element,
+        candidates=candidates,
+        count=pc.count,
+        field=field,
+        effect=effect,
+        sfx_name=sfx.name if sfx else "",
+        sfx_description=sfx.description if sfx else "",
+    )
+
+
+def resolve_refs(effect: Effect, context, structured: Optional[list] = None) -> Effect:
     """Resolve each named ref's spec to a single id (first value) and return it.
 
     A no-op when the effect has no refs or no ref carries a ``spec``. Literal /
     token refs (``self``, ``{choose_*}``, raw ids) pass through unchanged; the
     handler reads ``refs[name].value``. Fan-out (one ref → many targets) is
     handled separately in the Step-3 migration.
+
+    When a ref's spec hits a ``choose`` step, the ref is left unresolved and a
+    ``StructuredChoice`` is appended to ``structured`` (if provided).
     """
     if not effect.refs:
         return effect
@@ -429,6 +478,10 @@ def resolve_refs(effect: Effect, context) -> Effect:
         if ref.spec is None:
             continue
         resolution = resolve(ref.spec, context)
+        if resolution.pending_choices and structured is not None:
+            for pc in resolution.pending_choices:
+                structured.append(_structured_choice(pc, effect, f"refs.{name}"))
+            continue
         if resolution.values:
             rid = _resolved_id(resolution.values[0])
             if rid is not None:
@@ -442,12 +495,16 @@ def _apply_immediate_spec(
     sfx: SFX,
     context: dict | None,
     repo,
+    structured: Optional[list] = None,
 ) -> list[Effect]:
     """Resolve an immediate effect's ``target_spec`` and apply once per target.
 
     The immediate counterpart of ``roll_deferral._apply_spec_target``: resolve
     the spec (with the SFX's activation source for ``select source``) and fan
     out one concrete effect per resolved target. Returns the applied effects.
+
+    When the spec hits a ``choose`` step, nothing is applied and a
+    ``StructuredChoice`` is appended to ``structured`` (if provided).
     """
     from transversal.main import _get_repo
     from transversal.services.target_resolver import TargetContext, resolve, resolve_source
@@ -464,6 +521,11 @@ def _apply_immediate_spec(
         effect.target_spec,
         TargetContext(subject=entity, repo=repo, source=source, source_element=source_element),
     )
+
+    if resolution.pending_choices and structured is not None:
+        for pc in resolution.pending_choices:
+            structured.append(_structured_choice(pc, effect, "target", sfx))
+        return []
 
     applied: list[Effect] = []
     for value in resolution.values:

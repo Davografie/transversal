@@ -28,9 +28,14 @@ def _entity_sfx_context(repo, entity_id: str, universe: str) -> tuple[list[str],
     return get_available_sfx_ids(entity_id, universe, repo), entity.razmerit
 
 
-def _emit_pending_choices(entity_id: str, universe: str, effects: list) -> None:
-    """Broadcast a ``sfx_choice_required`` SSE event for unresolved effects."""
-    if not effects:
+def _emit_pending_choices(entity_id: str, universe: str, effects: list, structured: list | None = None) -> None:
+    """Broadcast a ``sfx_choice_required`` SSE event for unresolved effects.
+
+    ``effects`` are legacy ``{choose_*}`` pending effects; ``structured`` are
+    ``StructuredChoice``s from a ``choose`` step in a spec/ref (pre-resolved
+    candidates).
+    """
+    if not effects and not structured:
         return
 
     from transversal.api.sse.bus import StreamEvent, event_bus
@@ -50,6 +55,17 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list) -> None:
             "sfx_name": p.sfx_name,
             "sfx_description": p.sfx_description,
             "effect": p.effect.model_dump(),
+        })
+    for c in (structured or []):
+        choices.append({
+            "structured": True,
+            "element": c.element,
+            "candidates": c.candidates,
+            "count": c.count,
+            "field": c.field,
+            "sfx_name": c.sfx_name,
+            "sfx_description": c.sfx_description,
+            "effect": c.effect.model_dump(),
         })
     for session in session_manager.list_active():
         event_bus.publish(StreamEvent(
@@ -98,7 +114,7 @@ def fire_roll_sfx(
         roll_result=roll_result,
     )
     outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
-    _emit_pending_choices(entity_id, universe, outcome.pending)
+    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured)
     # Fire roll-scoped deferred effects armed with ``on_roll`` timing, passing
     # the real rolled dice so per-die selection (die_filter / armed_sfx_ids) works.
     from transversal.services.roll_deferral import fire_armed
@@ -137,5 +153,5 @@ def fire_result_sfx(
         },
     )
     outcome = _get_engine().process_event_outcome(event, sfx_ids, razmerit, repo=repo)
-    _emit_pending_choices(entity_id, universe, outcome.pending)
+    _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured)
     return outcome.applied

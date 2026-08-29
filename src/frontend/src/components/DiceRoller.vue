@@ -68,7 +68,7 @@
         </span>
       </div>
     </div>
-    <div v-if="!gmMode && sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
+    <div v-if="sfxChoiceRequest && sfxChoiceRequest.length" class="sfx-choice-panel">
       <EffectTargetWizard
         :entity-id="entityId"
         :pending-choices="sfxChoiceRequest"
@@ -847,7 +847,9 @@ async function doPush() {
 }
 
 async function resolveSfxChoices(resolutions) {
-  const result = await resolveEffectTargets(props.entityId, resolutions)
+  const targetEntity = resolutions?.[0]?.entity_id || props.entityId
+  const clean = (resolutions || []).map(({ entity_id, ...rest }) => rest)
+  const result = await resolveEffectTargets(targetEntity, clean)
   emit('sfx-choice-resolved', result?.pendingChoices || [])
 }
 function clearSfxChoices() {
