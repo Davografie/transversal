@@ -111,6 +111,13 @@ def fire_roll_sfx(
     roll_result: RollResult,
 ) -> list:
     """Fire automatic SFX for a single test roll. Returns applied effects."""
+    # Tick the central ``rolls`` timer first: a ``rolls:N`` duration on an
+    # immediate effect (e.g. modify_dice_limit) reverts N rolls later. Ticking
+    # before firing ``on_roll`` reverts the previous roll's bonus, then this
+    # roll's bonus applies — so the delta is active for exactly one roll.
+    from transversal.services.scheduled_events import dispatch_event
+    dispatch_event(repo, "rolls", entity_id=entity_id, universe=universe)
+
     sfx_ids, razmerit = _entity_sfx_context(repo, entity_id, universe)
     event = GameEvent(
         type="on_roll",
