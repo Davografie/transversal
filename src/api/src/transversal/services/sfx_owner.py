@@ -453,6 +453,39 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
     return sorted(ids)
 
 
+def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_kind: str):
+    """Resolve an SFX's activation source from ownership when the event carries
+    no explicit ``source_id`` (automatic triggers like ``on_roll``).
+
+    Returns ``(source_object, catalog_element)`` or None. For trait/trait-set
+    sources the object is the instance that grants this SFX; for entity/projection
+    sources it is the entity/active projection itself.
+    """
+    from transversal.services import target_catalog as tc
+
+    element = tc.source_element(source_kind) if source_kind else None
+    if element is None or repo is None:
+        return None
+    if element == "entity":
+        entity = repo.get_entity(entity_id)
+        return (entity, "entity") if entity is not None else None
+    if element == "projection":
+        entity = repo.get_entity(entity_id)
+        proj = repo.get_projection(entity.current_projection) if (entity is not None and entity.current_projection) else None
+        return (proj, "projection") if proj is not None else None
+    if element == "traitsetting":
+        for ts in repo.get_effective_traitsettings(entity_id, [universe]):
+            if sfx_id in (ts.sfx_ids or []):
+                return (ts, "traitsetting")
+        return None
+    if element == "traitsetsetting":
+        for tss in repo.get_effective_traitsetsettings(entity_id, [universe]):
+            if sfx_id in (tss.sfx_ids or []):
+                return (tss, "traitsetsetting")
+        return None
+    return None
+
+
 # ── Owner index + batch management ────────────────────
 #
 # The GM ownership panel reads a flattened view of every owner surface (the

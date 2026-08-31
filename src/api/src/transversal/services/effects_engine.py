@@ -99,6 +99,31 @@ EffectApplier = Callable[[Effect, str, str, dict], None]
 """Signature: (action, entity_id, universe, context) -> None"""
 
 
+def _resolve_activation_source(sfx: SFX, event: GameEvent, repo):
+    """Resolve the SFX's activation source as ``(object, element, source_id)``.
+
+    An explicit ``source_id`` in the event context wins (manual activation — the
+    client says which instance was clicked); the raw id is always preserved so
+    ``{variable}`` binding works even without a repo. For automatic triggers
+    (``on_roll`` etc.) with no explicit id, fall back to ownership resolution:
+    the source is the trait/trait-set setting that grants this SFX to the entity.
+    """
+    raw_source_id = (event.context or {}).get("source_id") if event.context else None
+    source_id = raw_source_id
+    if sfx.source_kind and raw_source_id and repo is not None:
+        from transversal.services.target_resolver import resolve_source
+        resolved = resolve_source(sfx.source_kind, raw_source_id, repo)
+        if resolved:
+            return resolved[0], resolved[1], raw_source_id
+    if sfx.source_kind and repo is not None:
+        from transversal.services.sfx_owner import resolve_sfx_source
+        resolved = resolve_sfx_source(repo, event.entity_id, event.universe, sfx.id, sfx.source_kind)
+        if resolved:
+            source, element = resolved
+            return source, element, getattr(source, "id", None)
+    return None, None, source_id
+
+
 class EffectsEngine:
     """Manages SFX triggers, execution, and scheduling.
 
@@ -174,16 +199,13 @@ class EffectsEngine:
                 [(c.type.value, c.target) for c in (sfx.conditions or [])],
             )
 
+            # Resolve the activation source once: explicit source_id wins (manual
+            # activation); else ownership resolution (automatic triggers).
+            source, source_element, source_id = _resolve_activation_source(sfx, event, repo)
+
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:
                 entity = repo.get_entity(event.entity_id)
-                source = None
-                source_element = None
-                if sfx.source_kind and (event.context or {}).get("source_id"):
-                    from transversal.services.target_resolver import resolve_source
-                    resolved = resolve_source(sfx.source_kind, event.context.get("source_id"), repo)
-                    if resolved:
-                        source, source_element = resolved
                 if entity is None or not evaluate_conditions(entity, sfx.conditions, repo, event.context, source=source, source_element=source_element):
                     continue
 
@@ -200,12 +222,12 @@ class EffectsEngine:
             # Per-activation output bindings (effect outputs -> later effects).
             bindings: dict = {}
             # Bind the declared source variable: if the SFX states a source kind
-            # and the activation carries a ``source_id``, map it to the typed
+            # and the activation resolved a source, map it to the typed
             # ``{variable}`` so effect fields resolve to the concrete id.
             effect_context = event.context
-            if sfx.source_kind and event.context.get("source_id"):
+            if sfx.source_kind and source_id:
                 from transversal.services.target_catalog import bind_source
-                effect_context = bind_source(sfx.source_kind, event.context.get("source_id"), event.context)
+                effect_context = bind_source(sfx.source_kind, source_id, event.context)
             roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]
             log.info(
                 "[process_event] sfx=%s trigger=%s deferred_effects=%s",
@@ -218,7 +240,7 @@ class EffectsEngine:
                     event.entity_id, roll_effects,
                     source_sfx_id=sfx.id,
                     source_kind=sfx.source_kind,
-                    source_id=event.context.get("source_id") if event.context else None,
+                    source_id=source_id,
                     duration=sfx.duration,
                 )
                 sfx_applied = True

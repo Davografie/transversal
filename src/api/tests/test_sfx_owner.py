@@ -14,6 +14,7 @@ from transversal.services.sfx_owner import (
     ensure_targeting_ban_sfx,
     get_available_sfx_ids,
     propagate_trait_default_sfx,
+    resolve_sfx_source,
 )
 
 
@@ -641,3 +642,35 @@ def test_create_traitsetting_provisions_defaults():
     # No-op when the trait has no defaults.
     repo._trait = SimpleNamespace(default_sfx_ids=[])
     assert repo._provision_trait_default_sfx(ts).sfx_ids == ["sfx-c"]
+
+
+# ── Automatic-trigger source resolution ──────────────────────
+
+def test_resolve_sfx_source_traitsetting():
+    repo = Repo()
+    repo.trait_settings = [
+        SimpleNamespace(id="e1:cultivation", sfx_ids=["sfx-qi"], trait_id="cultivation", entity_id="e1"),
+    ]
+    out = resolve_sfx_source(repo, "e1", "earth", "sfx-qi", "trait_setting")
+    assert out is not None
+    obj, element = out
+    assert element == "traitsetting"
+    assert obj.id == "e1:cultivation"
+
+
+def test_resolve_sfx_source_none_when_not_granting():
+    repo = Repo()
+    repo.trait_settings = [
+        SimpleNamespace(id="e1:other", sfx_ids=["sfx-other"], trait_id="other", entity_id="e1"),
+    ]
+    assert resolve_sfx_source(repo, "e1", "earth", "sfx-qi", "trait_setting") is None
+
+
+def test_resolve_sfx_source_entity():
+    repo = Repo()
+    repo.entity = _entity(sfx_ids=["sfx-entity"])
+    out = resolve_sfx_source(repo, "e1", "earth", "sfx-entity", "entity")
+    assert out is not None
+    obj, element = out
+    assert element == "entity"
+    assert obj is repo.entity
