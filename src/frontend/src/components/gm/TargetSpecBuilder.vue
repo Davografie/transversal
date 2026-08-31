@@ -144,8 +144,8 @@
 
       <div class="tsb-summary">
         <span class="tsb-summary-type">final: {{ finalLabel() }}</span>
-        <span v-if="destination" class="tsb-summary-dest" :class="{ 'tsb-ok': trace.valid }">
-          target: {{ destinationLabel }}
+        <span v-if="destination || booleanTerminal" class="tsb-summary-dest" :class="{ 'tsb-ok': booleanTerminal ? terminalOk : trace.valid }">
+          {{ booleanTerminal ? 'passes when:' : 'target:' }} {{ destinationLabel }}
         </span>
       </div>
     </template>
@@ -163,6 +163,7 @@ const props = defineProps({
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   variables: { type: Object, default: null },     // { name: {element, cardinality} } bound output variables
   title: { type: String, default: 'Targeting path' },
+  booleanTerminal: { type: Boolean, default: false }, // condition mode: the path's result is "non-empty → boolean"
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -345,11 +346,20 @@ function move(i, delta) {
   steps.value = next
 }
 
-const destinationLabel = computed(() =>
-  props.destination
+const destinationLabel = computed(() => {
+  if (props.booleanTerminal) return 'boolean (non-empty)'
+  return props.destination
     ? (props.destination.cardinality ? `${props.destination.element}/${props.destination.cardinality}` : props.destination.element)
     : ''
-)
+})
+
+// A condition path is "terminal" (evaluable to true/false) once it resolves to
+// some type with no step errors — the boolean is "did anything resolve?".
+const terminalOk = computed(() => {
+  const types = trace.value.types || []
+  const final = types[types.length - 1]
+  return !(trace.value.errors && trace.value.errors.length) && !!(final && final.element)
+})
 
 function scheduleTrace() {
   if (traceTimer) clearTimeout(traceTimer)

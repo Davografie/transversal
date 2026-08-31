@@ -5,7 +5,7 @@
         <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
       </select>
       <template v-if="usesSpec(c.type)">
-        <TargetSpecBuilder v-model="c.spec" :source-element="sourceElement" title="Condition path" class="ce-spec" />
+        <TargetSpecBuilder v-model="c.spec" :source-element="sourceElement" title="Condition path" boolean-terminal class="ce-spec" />
       </template>
       <template v-else>
         <input v-if="needsSubject(c.type)" v-model="c.subject" placeholder="entity (blank = current)" class="ce-subject" />
