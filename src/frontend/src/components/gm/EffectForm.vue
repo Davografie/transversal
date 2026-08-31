@@ -193,7 +193,7 @@
       </div>
       <div v-if="selectedAction.supportsDuration" class="ee-field">
         <label>Duration</label>
-        <DurationBuilder v-model="newEffect.duration" />
+        <DurationBuilder v-model="newEffect.duration" allow-rolls />
       </div>
       <div v-if="selectedAction.supportsPolarity && !isGainAction" class="ee-field ee-polarity">
         <label class="ee-check">
