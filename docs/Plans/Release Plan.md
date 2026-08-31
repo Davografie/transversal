@@ -1,5 +1,6 @@
 ---
 title: Release Plan
+date: 2026-08-16
 tags:
   - transversal
   - plan

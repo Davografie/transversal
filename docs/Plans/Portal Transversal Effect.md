@@ -1,5 +1,6 @@
 ---
 title: Portal Transversal Effect
+date: 2026-08-22
 tags:
   - transversal
   - technical

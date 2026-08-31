@@ -1,5 +1,6 @@
 ---
 title: Choose and Random Resolution
+date: 2026-08-29
 tags:
   - transversal
   - technical

@@ -1,5 +1,6 @@
 ---
 title: Source-Aware Conditions
+date: 2026-08-31
 tags:
   - transversal
   - technical

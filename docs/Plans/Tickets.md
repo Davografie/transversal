@@ -1,5 +1,6 @@
 ---
 title: Tickets
+date: 2026-08-17
 tags:
   - transversal
   - plan

@@ -1,5 +1,6 @@
 ---
 title: Pressure-Test Log
+date: 2026-08-16
 tags:
   - transversal
   - plan

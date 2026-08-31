@@ -1,5 +1,6 @@
 ---
 title: Passive Rules and Multi-Target References
+date: 2026-08-27
 tags:
   - transversal
   - technical

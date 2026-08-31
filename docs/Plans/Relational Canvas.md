@@ -1,5 +1,6 @@
 ---
 title: Relational Canvas
+date: 2026-08-14
 tags:
   - transversal
   - technical

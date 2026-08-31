@@ -1,5 +1,6 @@
 ---
 title: Effect Variables and Primitives
+date: 2026-08-24
 tags:
   - transversal
   - technical

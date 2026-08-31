@@ -1,5 +1,6 @@
 ---
 title: Performance and Resilience Plan
+date: 2026-08-24
 tags:
   - transversal
   - plan

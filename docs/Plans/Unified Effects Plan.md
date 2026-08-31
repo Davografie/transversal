@@ -1,5 +1,6 @@
 ---
 title: Unified Effects Plan
+date: 2026-08-13
 tags:
   - transversal
   - technical

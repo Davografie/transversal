@@ -1,5 +1,6 @@
 ---
 title: Life Path Editor and Wizard Plan
+date: 2026-08-13
 tags:
   - transversal
   - technical

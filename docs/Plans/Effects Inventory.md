@@ -1,5 +1,6 @@
 ---
 title: Effects Inventory
+date: 2026-08-28
 tags:
   - transversal
   - technical
