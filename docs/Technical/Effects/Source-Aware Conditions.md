@@ -62,13 +62,10 @@ evaluator just doesn't receive them.
 ## Remaining / next
 
 - **"Pickable conditions limited by source"** — the editor filtering of condition
-  types by the SFX's `source_kind`. Deferred: it is subsumed by the next item
-  rather than built as a bespoke filter.
-- **Targeting wizard into conditions** — the planned rework: a condition's
-  target becomes a targeting path (seeded by `select source`), so the flat
-  `TRAIT_RATING` / `SOURCE_RATING` predicates collapse into one path-based
-  mechanism. This replaces `SOURCE_RATING` and most `needs_target` conditions
-  with a single, source-aware condition shape.
+  types by the SFX's `source_kind`. Deferred; subsumed by the path-based condition.
+- **Targeting wizard into conditions** — ✅ done. A condition's target is a
+  targeting path seeded by `select source` (`Condition.spec` + `TARGET_PATH`),
+  with a terminal `evaluate` step for scalar predicates. See [[Targeting Wizard in Conditions]].
 
 ## Related
 

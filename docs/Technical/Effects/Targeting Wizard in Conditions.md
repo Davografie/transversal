@@ -12,7 +12,7 @@ aliases:
   - Path Conditions
   - TARGET_PATH
   - Conditions Use the Wizard
-status: in-progress
+status: implemented
 ---
 
 # Targeting Wizard in Conditions
@@ -41,9 +41,10 @@ reuses).
 2. **`Condition.spec: Optional[TargetSpec]`** — the path. `subject` / `target` /
    `value` / `operator` stay for the legacy flat conditions.
 3. **Semantics**: resolve `spec` against a `TargetContext` seeded with
-   `subject=entity`, `source=source`, `source_element=source_element`. The
-   condition passes **iff the resolution is non-empty and error-free**. All
-   comparison is expressed via `filter` steps (e.g. `filter rating >= d8`).
+   `subject=entity`, `source=source`, `source_element=source_element`. A path
+   ending in an **`evaluate`** step returns that step's explicit boolean;
+   otherwise the condition passes **iff the resolution is non-empty and
+   error-free** (backward-compatible "existence" check).
 4. **`source_element` threading** — `evaluate_condition` / `evaluate_conditions`
    gain a `source_element` param; fire-time (`effects_engine`) and availability
    (`sfx_owner`) pass both the resolved source object and its catalog element.
@@ -53,19 +54,35 @@ reuses).
 6. **Static classification** — `TARGET_PATH` is static unless its spec seeds
    `rolled_dice` or `select variable` (context/binding-gated), so availability
    (grey-out) can evaluate source/entity-state paths.
+7. **`evaluate` terminal step** — `exists` (non-empty) plus `==`/`!=`/`>`/`>=`/
+   `<`/`<=` against a `many` collection's count or a scalar (`int`/`number`/`die`),
+   producing `boolean/one`. This makes scalar predicates (`count >= 2`,
+   `max rating >= d8`) expressible — the plain "non-empty" check couldn't.
+8. **Automatic-trigger source** — `sfx_owner.resolve_sfx_source` resolves the
+   SFX's source from ownership (the trait/trait-set setting granting it, or the
+   entity/projection itself) when an automatic trigger (`on_roll`) carries no
+   explicit `source_id`; `effects_engine` falls back to it at fire time.
 
 Non-goals (deferred): migrating existing flat conditions off `TRAIT_RATING` /
-`SOURCE_RATING` (backward-compat: they keep working); scalar-predicate-on-resolved-
-value (aggregate-then-compare); `select source` on effect-level conditions (the
-applier path doesn't thread source yet).
+`SOURCE_RATING` (backward-compat: they keep working); `select source` on
+effect-level conditions (the applier path doesn't thread source yet).
 
 ## Concrete example (cultivation stage)
+
+Two equivalent authorings — "non-empty" (filter) and "evaluate" (terminal):
 
 ```
 TARGET_PATH
   spec:
     - select source                # the trait-setting this SFX lives on
-    - filter rating >= d8          # its current rating reached d8
+    - filter rating >= d8          # narrow to matching rating…
+    - evaluate exists              # …did it survive? (or omit evaluate → non-empty)
+
+TARGET_PATH                        # scalar form
+  spec:
+    - select source
+    - aggregate max rating         # collapse to a die scalar
+    - evaluate >= d8               # terminal boolean comparison
 ```
 
 ## Touch points
@@ -78,6 +95,9 @@ TARGET_PATH
 | GraphQL `Condition.spec` / `ConditionInput.spec` + conversions | `api/graphql/types.py`, `api/graphql/schema.py` |
 | Editor path mode (reuse `TargetSpecBuilder`) | `frontend/src/components/gm/ConditionEditor.vue` |
 | `sourceElement` wiring + `spec` selection | `GmSfxEditPanel.vue`, `EffectForm.vue`, `useSfxEdit.js` |
+| `EvaluateStep` (model + trace → `boolean/one`) | `services/target_spec.py` |
+| `evaluate` resolution (`_evaluate_step`) | `services/target_resolver.py` |
+| Automatic-trigger source resolution (`resolve_sfx_source`) | `services/sfx_owner.py`, `services/effects_engine.py` |
 
 ## Related
 

@@ -43,6 +43,13 @@ They stay separate. `manual` is **not** split into four triggers — the only th
 
 `source_kind` is **instances only** — registry entries (`Trait`, `TraitSet`) are never a source, because an SFX fires on a concrete thing with concrete state (a trait *instance* has `rating`/`polarity`; a trait *definition* has neither). `Trait.default_sfx_ids` stays a **provisioning template** (seeded onto instances at grant time), never a source.
 
+> [!note] Provisioning is materialized
+> `EntityRepository.create_traitsetting` seeds a new `TraitSetting.sfx_ids` from the
+> trait's `default_sfx_ids`; availability reads the instance list directly (no
+> read-time union). `propagate_trait_default_sfx` re-provisions existing instances
+> when defaults change, and `backfill_trait_default_sfx` (startup) materializes
+> defaults onto instances created before this landed.
+
 | `source_kind` | variable | it is (behind the scenes) | example fields |
 |---|---|---|---|
 | `trait_setting` | `{trait_setting}` | a `TraitSetting` (instance) | `rating`, `rating_type`, `polarity`, `entity_id`, `traitset_id` |

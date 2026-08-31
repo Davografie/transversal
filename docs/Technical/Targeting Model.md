@@ -43,11 +43,12 @@ class TargetSpec(BaseModel):
 | `navigate` | `edge`, `dedup` | Hop an edge to a related element; `dedup` collapses by identity |
 | `aggregate` | `fn`, `field` | Collapse a collection to a scalar (`count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`) |
 | `literal` | `element`, `value` | Name one object by id directly |
+| `evaluate` | `operator`, `value` | Terminal boolean test: `exists` (non-empty) or `==`/`!=`/`>`/`>=`/`<`/`<=` against a `many` collection's count or a scalar; produces `boolean/one` |
 
 Every step also carries `output: Optional[str]` — the variable name the step exposes
 once it resolves (see [[Effect Output Variables]]).
 
-**Type = element × cardinality.** Every step produces a `ValueType(element, cardinality)`, where `element` is a catalog element type or a scalar (`int`/`number`/`die`/`string`) and `cardinality` is `one` or `many`.
+**Type = element × cardinality.** Every step produces a `ValueType(element, cardinality)`, where `element` is a catalog element type or a scalar (`int`/`number`/`die`/`string`/`boolean`) and `cardinality` is `one` or `many`. `boolean` is produced only by the terminal `evaluate` step (used by `TARGET_PATH` conditions).
 
 **The effect field declares the type.** A field that wants a target (`target`, `entity`, `result`, `steps`, condition operands) states the element + cardinality it expects; the spec must resolve to a matching type. That declared type is the "what am I selecting for" hint the wizard highlights against.
 
