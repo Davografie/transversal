@@ -62,16 +62,16 @@
         </div>
         <div v-if="entitySfxIds.length || projectionSfxIds.length" class="entity-sfx-cards">
           <div v-for="sfxId in entitySfxIds" :key="'e-' + sfxId" class="sfx-card"
-               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
-               :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
-               @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, entity.id)">
+               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
+               :title="sfxTitle(sfxId)"
+               @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, entity.id)">
             <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
             <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
           </div>
           <div v-for="sfxId in projectionSfxIds" :key="'p-' + sfxId" class="sfx-card"
-               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
-               :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
-               @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, activeProjection.id)">
+               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
+               :title="sfxTitle(sfxId)"
+               @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, activeProjection.id)">
             <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
             <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
           </div>
@@ -205,9 +205,9 @@
             </h4>
             <div v-if="traitsetSfxIds(ts).length" class="sfx-cards">
               <div v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" class="sfx-card"
-                   :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
-                   :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
-                   @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, traitsetSettingSourceId(ts))"
+                   :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
+                   :title="sfxTitle(sfxId)"
+                   @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, traitsetSettingSourceId(ts))"
               >
                 <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
                 <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
@@ -233,9 +233,9 @@
                       v-for="sfxId in t.sfxIds"
                       :key="sfxId"
                       class="sfx-card"
-                      :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId) }"
-                      :title="sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`"
-                      @click.stop.prevent="sfxAllowedInPhase(sfxId) && activateSfx(sfxId, t.id)"
+                      :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
+                      :title="sfxTitle(sfxId)"
+                      @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, t.id)"
                     >
                       <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
                       <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
@@ -556,6 +556,7 @@ function goToNextSet() {
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})
 const sfxCatalog = ref({})  // sfxId → { name, description }
+const availableSfxIds = ref(null)  // null = not loaded; else the conditions-filtered id list
 const SFX_PHASES = {
   'sfx-hinder': ['adding'],
   'sfx-spray-n-pray': ['adding'],
@@ -936,6 +937,34 @@ function sfxDescription(sfxId) {
   return sfxCatalog.value[sfxId]?.description || ''
 }
 
+// A condition-blocked SFX is owned (it appears on the sheet) but its static
+// conditions (e.g. source_rating, entity_type) fail at this moment, so it can't
+// fire. ``null`` means availability hasn't loaded yet (don't block optimistically).
+function sfxConditionBlocked(sfxId) {
+  if (availableSfxIds.value == null) return false
+  return !availableSfxIds.value.includes(sfxId)
+}
+
+function sfxTitle(sfxId) {
+  if (sfxConditionBlocked(sfxId)) return `${sfxName(sfxId)} (conditions not met)`
+  return sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`
+}
+
+async function fetchAvailableSfxIds() {
+  const id = props.overrideEntityId || props.entityId
+  if (!id) { availableSfxIds.value = null; return }
+  try {
+    const data = await graphql(
+      `query($id: ID!, $u: String!) { availableSfxIds(entityId: $id, universe: $u) }`,
+      { id, u: props.universe },
+    )
+    availableSfxIds.value = (data?.availableSfxIds || []).map(String)
+  } catch (e) {
+    console.error('fetchAvailableSfxIds', e)
+    availableSfxIds.value = null
+  }
+}
+
 async function fetchSfxCatalog() {
   try {
     const r = await fetch('/api/v1/graphql', {
@@ -1069,6 +1098,7 @@ function applyEntity(e) {
   effectiveSettings.value = e.effectiveTraitSettings || []
   recomputeTraitSets()
   fetchTimers()
+  fetchAvailableSfxIds()
 }
 
 async function resolveNames(e) {
@@ -2528,6 +2558,11 @@ watch(() => props.externalPoolSources, (sources) => {
 .sfx-card.sfx-used {
   opacity: 0.35;
   pointer-events: none;
+}
+.sfx-card.sfx-blocked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
 }
 .sfx-card-name {
   font-size: 11px;

@@ -244,7 +244,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.HAS_EFFECTIVE_TRAIT.name, "Has effective trait", needs_target=True, target_placeholder="trait id", target_kind="trait"),
     ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id", target_kind="traitset"),
     ConditionTypeDef(ConditionType.HAS_RELATIONSHIP.name, "Has relationship", needs_target=True, target_placeholder="entity id", target_kind="entity"),
-    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die"),
+    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">")),
     ConditionTypeDef(ConditionType.HAS_RAZMERIT.name, "Has razmerit", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">")),
     ConditionTypeDef(ConditionType.ENTITY_TYPE.name, "Entity type", needs_target=True, target_placeholder="entity type", target_options=("character", "gmc", "asset")),
     ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),

@@ -18,13 +18,18 @@
         </select>
         <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
       </template>
-      <select v-if="valueKind(c.type) === 'die'" v-model="c.value" class="ce-value">
-        <option value="d4">d4</option>
-        <option value="d6">d6</option>
-        <option value="d8">d8</option>
-        <option value="d10">d10</option>
-        <option value="d12">d12</option>
-      </select>
+      <template v-if="valueKind(c.type) === 'die'">
+        <select v-if="operators(c.type).length" v-model="c.operator" class="ce-operator">
+          <option v-for="op in operators(c.type)" :key="op" :value="op">{{ op }}</option>
+        </select>
+        <select v-model="c.value" class="ce-value">
+          <option value="d4">d4</option>
+          <option value="d6">d6</option>
+          <option value="d8">d8</option>
+          <option value="d10">d10</option>
+          <option value="d12">d12</option>
+        </select>
+      </template>
       <template v-else-if="valueKind(c.type) === 'number'">
         <select v-if="operators(c.type).length" v-model="c.operator" class="ce-operator">
           <option v-for="op in operators(c.type)" :key="op" :value="op">{{ op }}</option>
