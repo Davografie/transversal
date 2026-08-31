@@ -36,6 +36,7 @@ export function useSSE(sessionId, entityId) {
       'roll_result', 'pool_updated', 'sfx_triggered', 'beat_end', 'scene_change',
       'entity_updated', 'entity_moved', 'difficulty_set', 'sfx_choice_required',
       'contest_challenged', 'contest_set', 'contest_resolved', 'contest_give_in', 'contest_compare', 'contest_push', 'contest_stakes', 'traits_revealed',
+      'dice_limits_changed',
       'session_started', 'session_ended'
     ]
 
