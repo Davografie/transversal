@@ -1,0 +1,25 @@
+filters:
+  and:
+    - 'file.folder != "Archive"'
+
+views:
+  - type: table
+    name: "All Documents"
+    order:
+      - file.name
+      - file.folder
+      - status
+      - date
+    groupBy:
+      property: file.folder
+      direction: ASC
+
+  - type: table
+    name: "By Status"
+    order:
+      - file.name
+      - file.folder
+      - date
+    groupBy:
+      property: status
+      direction: ASC

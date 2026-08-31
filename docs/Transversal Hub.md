@@ -27,34 +27,44 @@ status: canonical
 
 - [[Setting and Narrative]] — The story: Earth, the Three Realms, the jian, Antonov, and the multiverse
 - [[Core Mechanics]] — Cortex Prime foundation, trait rating types, dice pools, and the resolution engine
-- [[Entities and Traits]] — The entity system: trait registry, ego/morph traits, entity types
-- [[Projections and Transversal]] — Projections, consciousness/inapposite travel, attunement, and the Earth-bond
 - [[Dice Mechanics]] — Dual-pipeline resolution: simplified (1–2 dice) and dice pool (3+), hitches, botches, challenge pools
+- [[Entities and Traits]] — The entity system: trait registry, ego/morph traits, entity types
+- [[Character Growth]] — life paths, trait transfer, and relationship ratings
+- [[Projections and Transversal]] — Projections, consciousness/inapposite travel, attunement, and the Earth-bond
 - [[SFX and Effects]] — SFX as rule exceptions, the automated effects system
 - [[Inspired Mechanics]] — Conspyramid, Entanglements, zones, troupe play, career paths, random generation
+- [[Razmerit Resonance]] — the signal model behind projection switching and its visualization *(draft)*
+
+### 📘 Manual
+
+- [[User Manual]] — how to play and run the game (start here if you're new)
+- [[Getting Started]] — log in, claim a character, roll your first pool
 
 ### ⚙️ Technical
 
 - [[System Architecture]] — Tech stack, core services, UI design, and Docker Compose setup
+- [[Data Model]] — ArangoDB collections, schemas, edges, and ID conventions
 - [[API Contract]] — GraphQL schema, REST endpoints, SSE stream, and MCP tools
-- [[Relational Canvas]] — GM-only interactive node graph for locations, factions, and relationships
-- [[Location Viewer]] — the full-screen location renderer: dots, drag-drop travel, and animations
-- [[Life Path Flow and Shared Roll Tables]] — how `next_step` links tables and how shared/unaffiliated tables return control
 - [[Targeting Model]] — the structured, type-checked target spec + catalog + wizard behind effect targeting
+- [[Location Viewer]] — the full-screen location renderer: dots, drag-drop travel, and animations
+- [[Relational Canvas]] — GM-only interactive node graph for locations, factions, and relationships
+- [[GM Panel Development]] — the Architect's entity/trait editor: panels, composables, conventions
+- [[Life Path Flow and Shared Roll Tables]] — how `next_step` links tables and how shared/unaffiliated tables return control
+- [[UI-UX Design]] — interaction conventions, touch gestures, and tunable feel constants
+- **Effect system** (in `Technical/Effects/`): [[SFX Source Model]], [[Effect Output Variables]], [[Effect Holders and Owners]], [[Passive Rules and Multi-Target References]], [[Portal Transversal Effect]], and the other SFX/effects design specs
 
-### 📋 Plans
+### 🗂️ Process
 
 - [[Release Plan]] — scope, decisions, and the 6-phase **build order** (start here for "what to build next")
-- [[SFX Source Model]] — the planned `source_kind` / typed-source-variable design (in the SFX/effects track)
-- [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
 - [[Tickets]] — the ticket-level breakdown (per-ticket dependencies + context to load)
+- [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
+- [[Effect System Convergence Plan]] — the SFX/effects build sequence
 - [[Performance and Resilience Plan]] — client caching, draft persistence, backend latency, multi-worker
-
-### 🎨 Design
-
-- [[UI-UX Design]] — interaction conventions, touch gestures, and tunable feel constants
-
+- [[Life Path Editor and Wizard Plan]], [[Unified Effects Plan]] — feature plans
+- [[Content Completeness Checklist]], [[MCP Tool Experience]] — authoring guidelines and worklog
 ## Getting Started
+
+> [!tip] New here? Start with the [[User Manual]].
 
 1. Read [[Setting and Narrative]] for the world and story
 2. Read [[Core Mechanics]] for the foundational rules
