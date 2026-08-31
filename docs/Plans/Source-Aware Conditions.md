@@ -51,11 +51,23 @@ evaluator just doesn't receive them.
    matches `SOURCE_RATING`.
 5. ✅ **Expose `availableSfxIds(entityId, universe)`** GraphQL field so the sheet
    can consume availability.
+6. ✅ **Frontend grey-out** — the sheet consumes `availableSfxIds`, dims +
+   disables any owned SFX whose static conditions fail ("conditions not met"
+   tooltip), across entity/projection/trait-set/trait-level SFX cards.
+7. ✅ **Die-condition operators in the editor** — `ConditionEditor` shows an
+   operator selector for die-valued conditions, so `SOURCE_RATING` /
+   `TRAIT_RATING` support `<` / `<=` / `==` / `!=` / `>=` / `>`.
 
-## Remaining (not this pass)
+## Remaining / next
 
-- Frontend grey-out consumption (the "live SFX conditional assessment" UI half).
-- "Pickable conditions limited by source" (editor filtering by `source_kind`).
+- **"Pickable conditions limited by source"** — the editor filtering of condition
+  types by the SFX's `source_kind`. Deferred: it is subsumed by the next item
+  rather than built as a bespoke filter.
+- **Targeting wizard into conditions** — the planned rework: a condition's
+  target becomes a targeting path (seeded by `select source`), so the flat
+  `TRAIT_RATING` / `SOURCE_RATING` predicates collapse into one path-based
+  mechanism. This replaces `SOURCE_RATING` and most `needs_target` conditions
+  with a single, source-aware condition shape.
 
 ## Related
 
