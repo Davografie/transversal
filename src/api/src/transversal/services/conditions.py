@@ -53,8 +53,13 @@ def _compare(a: int, op: str, b: int) -> bool:
     return a >= b
 
 
-def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "EntityRepository", context: dict | None = None) -> bool:
-    """Evaluate a single condition against the resolved subject's current state."""
+def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "EntityRepository", context: dict | None = None, source=None) -> bool:
+    """Evaluate a single condition against the resolved subject's current state.
+
+    ``source`` is the SFX's resolved activation/owner source (e.g. a
+    ``TraitSetting``), so source-aware conditions (``SOURCE_RATING``) can gate on
+    "the trait that owns/triggered this SFX".
+    """
     if condition.type in (ConditionType.ALWAYS, ConditionType.NARRATIVE):
         return True  # narrative limits are not auto-blocking
 
@@ -86,6 +91,18 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         if wanted == "fail":
             return tier == "fail"
         return False
+
+    if condition.type == ConditionType.SOURCE_RATING:
+        # The source trait-setting's rating (its dice) vs a die threshold.
+        if source is None:
+            return False
+        threshold = DieType(condition.value) if condition.value else None
+        if threshold is None:
+            return False
+        dice = getattr(source, "dice", None) or []
+        if not dice:
+            return False
+        return any(_compare(d.max_value, condition.operator or ">=", threshold.max_value) for d in dice)
 
     subject = _resolve_subject(condition, entity, context or {}, repo)
     if subject is None:
@@ -121,7 +138,7 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
             return False
         for ts in repo.get_traitsettings_for_entity(subject.id):
             if ts.trait_id == target and ts.dice:
-                if any(d.max_value >= threshold.max_value for d in ts.dice):
+                if any(_compare(d.max_value, condition.operator or ">=", threshold.max_value) for d in ts.dice):
                     return True
         return False
 
@@ -155,26 +172,46 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     return False
 
 
-def evaluate_conditions(entity: "Entity | None", conditions: list[Condition], repo: "EntityRepository", context: dict | None = None) -> bool:
-    """All conditions must pass (empty list is always true)."""
-    return all(evaluate_condition(entity, c, repo, context) for c in conditions)
+def evaluate_conditions(entity: "Entity | None", conditions: list[Condition], repo: "EntityRepository", context: dict | None = None, source=None) -> bool:
+    """All conditions must pass (empty list is always true).
+
+    ``source`` is threaded to each condition so source-aware conditions resolve
+    against the SFX's activation/owner source.
+    """
+    return all(evaluate_condition(entity, c, repo, context, source) for c in conditions)
 
 
 def _has_variable(value) -> bool:
     return bool(value) and "{" in value and "}" in value
 
 
-def static_conditions(conditions: list[Condition]) -> list[Condition]:
-    """Conditions evaluable without trigger/menu context (no ``{variable}`` refs).
+# Condition types that read trigger/roll context rather than entity state, and
+# therefore can never be evaluated for availability (listing) without a context.
+_CONTEXT_TYPES = frozenset({
+    ConditionType.PHASE,
+    ConditionType.CONTEST_OUTCOME,
+    ConditionType.ROLL_TIER,
+    ConditionType.TEST_OUTCOME,
+})
 
-    Used by availability resolution to gate *listing* on entity state
-    (``entity_type``, ``in_universe``, …) while leaving variable-gated
-    conditions to fire/menu time.
+
+def static_conditions(conditions: list[Condition]) -> list[Condition]:
+    """Conditions evaluable without trigger/menu context.
+
+    Excludes context-dependent types (``phase`` / ``contest_outcome`` /
+    ``roll_tier`` / ``test_outcome``) by type, and variable-gated conditions by
+    token presence. Used by availability resolution to gate *listing* on entity
+    state (``entity_type``, ``in_universe``, ``source_rating``, …) while leaving
+    context/variable-gated conditions to fire/menu time.
     """
-    return [
-        c for c in (conditions or [])
-        if not (_has_variable(c.subject) or _has_variable(c.target) or _has_variable(c.value))
-    ]
+    out: list[Condition] = []
+    for c in (conditions or []):
+        if c.type in _CONTEXT_TYPES:
+            continue
+        if _has_variable(c.subject) or _has_variable(c.target) or _has_variable(c.value):
+            continue
+        out.append(c)
+    return out
 
 
 # ── Authoring metadata ───────────────────────────────
@@ -216,5 +253,6 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent")),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<")),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail")),
+    ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">")),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
 )

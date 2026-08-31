@@ -897,6 +897,7 @@ class ConditionType(str, Enum):
     CONTEST_OUTCOME = "contest_outcome"  # target = "player" | "opponent"; reads context["contest_winner"]
     ROLL_TIER = "roll_tier"              # operator + value against OutcomeTier (e.g. >= success); reads roll_result.tier
     TEST_OUTCOME = "test_outcome"        # target = "success" | "fail" (binary); success = tier != fail
+    SOURCE_RATING = "source_rating"      # the source trait-setting's rating (dice) vs a die threshold
 
 
 class Condition(BaseModel):

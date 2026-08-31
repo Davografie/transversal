@@ -6,7 +6,7 @@ without a live ArangoDB.
 
 from types import SimpleNamespace
 
-from transversal.domain import Timer
+from transversal.domain import Condition, ConditionType, Timer
 from transversal.services.sfx_owner import (
     ensure_give_in_sfx,
     ensure_sfx_owners,
@@ -99,6 +99,28 @@ def test_trait_level_grants():
     repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-flashback"], trait_id="origin")]
     repo.traits = {"origin": SimpleNamespace(default_sfx_ids=["sfx-default"])}
     assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-default", "sfx-flashback"]
+
+
+def test_source_rating_filters_trait_grant():
+    class R(Repo):
+        def get_sfx(self, sfx_id):
+            return SimpleNamespace(conditions=[Condition(type=ConditionType.SOURCE_RATING, value="d6")])
+
+    repo = R()
+    repo.entity = _entity()
+    repo.trait_settings = [SimpleNamespace(
+        sfx_ids=["sfx-breakthrough"], trait_id="cultivation-stage",
+        dice=[SimpleNamespace(max_value=6)],
+    )]
+    repo.traits = {"cultivation-stage": SimpleNamespace(default_sfx_ids=[])}
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-breakthrough"]
+
+    # Below the threshold -> filtered out.
+    repo.trait_settings = [SimpleNamespace(
+        sfx_ids=["sfx-breakthrough"], trait_id="cultivation-stage",
+        dice=[SimpleNamespace(max_value=4)],
+    )]
+    assert get_available_sfx_ids("e1", "earth", repo) == []
 
 
 def test_traitset_as_unit_grants():

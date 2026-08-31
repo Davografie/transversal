@@ -602,6 +602,21 @@ class Query:
         return [strawberry.ID(i) for i in list_armed_sfx_ids(str(entity_id))]
 
     @strawberry.field
+    def available_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str = "") -> list[strawberry.ID]:
+        """SFX ids currently available to an entity (ownership + static conditions).
+
+        ``universe`` gates trait-level grants via effective trait settings; when
+        blank it falls back to the entity's current universe.
+        """
+        from transversal.services.sfx_owner import get_available_sfx_ids
+
+        repo = _em(info).repo
+        if not universe:
+            entity = repo.get_entity(str(entity_id))
+            universe = entity.current_universe if entity else ""
+        return [strawberry.ID(i) for i in get_available_sfx_ids(str(entity_id), universe, repo)]
+
+    @strawberry.field
     def traits_by_universe(self, info: strawberry.Info, universe: str) -> list[TraitRef]:
         traits = _em(info).repo.get_traits_by_universe(universe)
         return [_trait_to_gql(t) for t in traits]

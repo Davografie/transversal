@@ -99,6 +99,23 @@ def test_trait_rating_reached():
     assert not evaluate_condition(_entity(), Condition(type=ConditionType.TRAIT_RATING, target="iron-will", value="d8"), repo)
 
 
+def test_trait_rating_honors_operator():
+    repo = FakeRepo(traitsettings=[_ts("iron-will")])  # d6
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.TRAIT_RATING, target="iron-will", value="d8", operator="<"), repo)
+    assert not evaluate_condition(_entity(), Condition(type=ConditionType.TRAIT_RATING, target="iron-will", value="d6", operator="<"), repo)
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.TRAIT_RATING, target="iron-will", value="d6", operator="=="), repo)
+
+
+def test_source_rating_condition():
+    repo = FakeRepo()
+    entity = _entity()
+    source = _ts("cultivation-stage")  # d6
+    assert evaluate_condition(entity, Condition(type=ConditionType.SOURCE_RATING, value="d6"), repo, source=source)
+    assert not evaluate_condition(entity, Condition(type=ConditionType.SOURCE_RATING, value="d8"), repo, source=source)
+    # No source -> fails (safe default).
+    assert not evaluate_condition(entity, Condition(type=ConditionType.SOURCE_RATING, value="d6"), repo)
+
+
 def test_has_relationship():
     repo = FakeRepo(related=[{"id": "char-2"}])
     assert evaluate_condition(_entity(), Condition(type=ConditionType.HAS_RELATIONSHIP, target="char-2"), repo)
@@ -215,6 +232,20 @@ def test_static_conditions_excludes_variable_refs():
     ]
     static = static_conditions(conds)
     assert [c.type for c in static] == [ConditionType.ENTITY_TYPE, ConditionType.IN_UNIVERSE]
+
+
+def test_static_conditions_excludes_context_types():
+    # Context-dependent types are non-static even without {variable} tokens.
+    conds = [
+        Condition(type=ConditionType.PHASE, target="adding"),
+        Condition(type=ConditionType.CONTEST_OUTCOME, target="player"),
+        Condition(type=ConditionType.ROLL_TIER, value="success"),
+        Condition(type=ConditionType.TEST_OUTCOME, target="success"),
+        Condition(type=ConditionType.SOURCE_RATING, value="d6"),
+        Condition(type=ConditionType.ENTITY_TYPE, target="character"),
+    ]
+    static = static_conditions(conds)
+    assert [c.type for c in static] == [ConditionType.SOURCE_RATING, ConditionType.ENTITY_TYPE]
 
 
 def test_subject_variable_resolves_to_other_entity():

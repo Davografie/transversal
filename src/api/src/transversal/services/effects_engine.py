@@ -177,7 +177,12 @@ class EffectsEngine:
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:
                 entity = repo.get_entity(event.entity_id)
-                if entity is None or not evaluate_conditions(entity, sfx.conditions, repo, event.context):
+                source = None
+                if sfx.source_kind and (event.context or {}).get("source_id"):
+                    from transversal.services.target_resolver import resolve_source
+                    resolved = resolve_source(sfx.source_kind, event.context.get("source_id"), repo)
+                    source = resolved[0] if resolved else None
+                if entity is None or not evaluate_conditions(entity, sfx.conditions, repo, event.context, source=source):
                     continue
 
             # Cost check: sum razmerit costs from spend effects

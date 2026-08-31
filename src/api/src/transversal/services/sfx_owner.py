@@ -16,6 +16,8 @@ context (e.g. buy-hitch, P3.3), not derived from an entity.
 
 from __future__ import annotations
 
+from typing import Any
+
 from transversal.domain import SfxOwner
 
 
@@ -399,6 +401,9 @@ def remove_legacy_contest_complication_sfx(repo) -> None:
 def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
     """Return the sorted SFX ids available to ``entity_id`` in ``universe``."""
     ids: set[str] = set()
+    # Map each trait-granted SFX id to its source trait-setting, so source-aware
+    # conditions (SOURCE_RATING) can resolve "the trait this SFX is on".
+    sfx_sources: dict[str, Any] = {}
 
     # Direct entity + active projection ownership.
     entity = repo.get_entity(entity_id)
@@ -416,17 +421,21 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
 
     # Trait-level grants, universe-gated via effective trait settings.
     for ts in repo.get_effective_traitsettings(entity_id, [universe]):
-        ids.update(ts.sfx_ids or [])
+        granted = set(ts.sfx_ids or [])
         trait = repo.get_trait(ts.trait_id)
         if trait is not None:
-            ids.update(trait.default_sfx_ids or [])
+            granted.update(trait.default_sfx_ids or [])
+        for sid in granted:
+            ids.add(sid)
+            sfx_sources.setdefault(sid, ts)
 
     # Trait-set-as-unit grants, universe-gated via effective set settings.
     for tss in repo.get_effective_traitsetsettings(entity_id, [universe]):
         ids.update(tss.sfx_ids or [])
 
     # Filter by context-free conditions so listing matches fireability
-    # (e.g. entity_type, in_universe). Variable-gated conditions stay fire-time.
+    # (e.g. entity_type, in_universe, source_rating). Variable/context-gated
+    # conditions stay fire-time.
     if entity is not None:
         from transversal.services.conditions import evaluate_conditions, static_conditions
         for sfx_id in list(ids):
@@ -434,7 +443,7 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
             if sfx is None:
                 continue
             static = static_conditions(sfx.conditions or [])
-            if static and not evaluate_conditions(entity, static, repo):
+            if static and not evaluate_conditions(entity, static, repo, source=sfx_sources.get(sfx_id)):
                 ids.discard(sfx_id)
 
     return sorted(ids)
