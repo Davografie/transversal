@@ -718,6 +718,7 @@ class EntityRepository:
     # ── TraitSettings (edge) ──────────────────────────
 
     def create_traitsetting(self, ts: TraitSetting) -> TraitSetting:
+        ts = self._provision_trait_default_sfx(ts)
         doc = ts.model_dump()
         doc["_key"] = ts.id
         if ts.from_type == "relationship":
@@ -729,6 +730,23 @@ class EntityRepository:
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
         self._traitsettings.insert(doc)
         return ts
+
+    def _provision_trait_default_sfx(self, ts: TraitSetting) -> TraitSetting:
+        """Provision a trait's default SFX onto a newly-created instance.
+
+        ``Trait.default_sfx_ids`` is a provisioning template (seeded at grant
+        time, never a read-time authority). Merge it into the instance's
+        ``sfx_ids`` so a freshly-granted trait carries its default SFX
+        immediately — the #218 carry-over.
+        """
+        trait = self.get_trait(ts.trait_id)
+        defaults = list(trait.default_sfx_ids or []) if trait is not None else []
+        if not defaults:
+            return ts
+        merged = list(dict.fromkeys(defaults + list(ts.sfx_ids or [])))
+        if merged == list(ts.sfx_ids or []):
+            return ts
+        return ts.model_copy(update={"sfx_ids": merged})
 
     def get_traitsetting(self, ts_id: str) -> Optional[TraitSetting]:
         doc = self._traitsettings.get(ts_id)

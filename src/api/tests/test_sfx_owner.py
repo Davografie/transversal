@@ -8,10 +8,12 @@ from types import SimpleNamespace
 
 from transversal.domain import Condition, ConditionType, Timer
 from transversal.services.sfx_owner import (
+    backfill_trait_default_sfx,
     ensure_give_in_sfx,
     ensure_sfx_owners,
     ensure_targeting_ban_sfx,
     get_available_sfx_ids,
+    propagate_trait_default_sfx,
 )
 
 
@@ -94,11 +96,13 @@ def test_gm_owner_is_excluded():
 
 
 def test_trait_level_grants():
+    # Defaults are provisioned onto the instance at grant time, so availability
+    # reads the instance's materialized sfx_ids (no read-time default union).
     repo = Repo()
     repo.entity = _entity()
     repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-flashback"], trait_id="origin")]
     repo.traits = {"origin": SimpleNamespace(default_sfx_ids=["sfx-default"])}
-    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-default", "sfx-flashback"]
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-flashback"]
 
 
 def test_source_rating_filters_trait_grant():
@@ -488,6 +492,8 @@ class DispatchRepo:
     def update_trait(self, t): self.traits[t.id] = t
     def get_traitsetting(self, sid): return self.traitsettings.get(sid)
     def update_traitsetting(self, s): self.traitsettings[s.id] = s
+    def get_traitsettings_by_trait(self, tid):
+        return [s for s in self.traitsettings.values() if getattr(s, "trait_id", None) == tid]
     def get_traitsetsetting(self, sid): return self.traitsetsettings.get(sid)
     def update_traitsetsetting(self, s): self.traitsetsettings[s.id] = s
 
@@ -555,3 +561,83 @@ def test_add_sfx_to_owner_enforces_source_kind():
     # A source-kind-less SFX is unrestricted.
     repo.sfxs["sfx-y"] = SFX(id="sfx-y", name="Y", trigger="manual")
     assert add_sfx_to_owner(repo, "entity", "char-1", "sfx-y") is True
+
+
+# ── Default-SFX provisioning (#218) and propagation (#49) ──────
+
+class _PropRepo:
+    """Minimal double for default-SFX propagation/backfill."""
+
+    def __init__(self):
+        self.traits = {}          # trait_id -> SimpleNamespace(id=..., default_sfx_ids=[...])
+        self.settings = {}        # ts_id -> SimpleNamespace(id=..., trait_id=..., sfx_ids=[...])
+
+    def get_trait(self, trait_id):
+        return self.traits.get(trait_id)
+
+    def get_traitsettings_by_trait(self, trait_id):
+        return [ts for ts in self.settings.values() if ts.trait_id == trait_id]
+
+    def update_traitsetting(self, ts):
+        self.settings[ts.id] = ts
+
+    def get_all_traits(self):
+        return list(self.traits.values())
+
+
+def test_propagate_trait_default_sfx_adds_missing():
+    repo = _PropRepo()
+    repo.traits["t1"] = SimpleNamespace(id="t1", default_sfx_ids=["sfx-a", "sfx-b"])
+    repo.settings["e1:t1"] = SimpleNamespace(id="e1:t1", trait_id="t1", sfx_ids=["sfx-a"])
+    assert propagate_trait_default_sfx(repo, "t1") == 1
+    assert repo.settings["e1:t1"].sfx_ids == ["sfx-a", "sfx-b"]
+
+
+def test_propagate_trait_default_sfx_noop_when_present():
+    repo = _PropRepo()
+    repo.traits["t1"] = SimpleNamespace(id="t1", default_sfx_ids=["sfx-a", "sfx-b"])
+    repo.settings["e1:t1"] = SimpleNamespace(id="e1:t1", trait_id="t1", sfx_ids=["sfx-a", "sfx-b"])
+    assert propagate_trait_default_sfx(repo, "t1") == 0
+    assert repo.settings["e1:t1"].sfx_ids == ["sfx-a", "sfx-b"]
+
+
+def test_propagate_trait_default_sfx_no_defaults():
+    repo = _PropRepo()
+    repo.traits["t1"] = SimpleNamespace(id="t1", default_sfx_ids=[])
+    repo.settings["e1:t1"] = SimpleNamespace(id="e1:t1", trait_id="t1", sfx_ids=[])
+    assert propagate_trait_default_sfx(repo, "t1") == 0
+
+
+def test_backfill_trait_default_sfx_across_traits():
+    repo = _PropRepo()
+    repo.traits["t1"] = SimpleNamespace(id="t1", default_sfx_ids=["sfx-a"])
+    repo.traits["t2"] = SimpleNamespace(id="t2", default_sfx_ids=["sfx-b"])
+    repo.settings["e1:t1"] = SimpleNamespace(id="e1:t1", trait_id="t1", sfx_ids=[])
+    repo.settings["e2:t2"] = SimpleNamespace(id="e2:t2", trait_id="t2", sfx_ids=["sfx-b"])
+    assert backfill_trait_default_sfx(repo) == 1  # only t1's instance was updated
+    assert repo.settings["e1:t1"].sfx_ids == ["sfx-a"]
+    assert repo.settings["e2:t2"].sfx_ids == ["sfx-b"]
+
+
+def test_create_traitsetting_provisions_defaults():
+    from transversal.db.repository import EntityRepository
+    from transversal.domain import DieType, TraitSetting
+
+    class R(EntityRepository):
+        def __init__(self, trait):
+            self._trait = trait
+
+        def get_trait(self, trait_id):
+            return self._trait
+
+    trait = SimpleNamespace(default_sfx_ids=["sfx-a", "sfx-b"])
+    repo = R(trait)
+    ts = TraitSetting(
+        id="e1:t1", entity_id="e1", trait_id="t1", traitset_id="ts-x",
+        dice=[DieType.D6], sfx_ids=["sfx-c"],
+    )
+    out = repo._provision_trait_default_sfx(ts)
+    assert out.sfx_ids == ["sfx-a", "sfx-b", "sfx-c"]
+    # No-op when the trait has no defaults.
+    repo._trait = SimpleNamespace(default_sfx_ids=[])
+    assert repo._provision_trait_default_sfx(ts).sfx_ids == ["sfx-c"]

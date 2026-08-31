@@ -1391,7 +1391,8 @@ class Mutation:
             existing.default_rating_type = input.default_rating_type
         if input.possible_sfx_ids is not None:
             existing.possible_sfx_ids = [str(s) for s in input.possible_sfx_ids]
-        if input.default_sfx_ids is not None:
+        default_sfx_changed = input.default_sfx_ids is not None
+        if default_sfx_changed:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.location_restricted is not None:
             existing.location_restricted = input.location_restricted
@@ -1414,6 +1415,10 @@ class Mutation:
             _em(info).repo, str(id), old_polarity, updated.polarity,
             traitset.polarity if traitset else None,
         )
+        if default_sfx_changed:
+            # Re-provision existing instances with the new defaults (#49).
+            from transversal.services.sfx_owner import propagate_trait_default_sfx
+            propagate_trait_default_sfx(_em(info).repo, str(id))
         return TraitRef(
             id=updated.id, name=updated.name, universes=updated.universes,
             traitset_id=updated.traitset_id,

@@ -419,13 +419,12 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
     if bucket is not None:
         ids.update(bucket.sfx_ids or [])
 
-    # Trait-level grants, universe-gated via effective trait settings.
+    # Trait-level grants, universe-gated via effective trait settings. Defaults
+    # are already materialized onto the instance's ``sfx_ids`` at grant time
+    # (see ``EntityRepository.create_traitsetting``), so this reads the instance
+    # list directly rather than re-unioning ``Trait.default_sfx_ids``.
     for ts in repo.get_effective_traitsettings(entity_id, [universe]):
-        granted = set(ts.sfx_ids or [])
-        trait = repo.get_trait(ts.trait_id)
-        if trait is not None:
-            granted.update(trait.default_sfx_ids or [])
-        for sid in granted:
+        for sid in (ts.sfx_ids or []):
             ids.add(sid)
             sfx_sources.setdefault(sid, ts)
 
@@ -626,6 +625,7 @@ def _set_owner_sfx_ids(repo, owner_type: str, owner_id: str, sfx_ids: list[str])
             return False
         trait.default_sfx_ids = list(sfx_ids)
         repo.update_trait(trait)
+        propagate_trait_default_sfx(repo, owner_id)
         return True
     if owner_type == "trait_instance":
         ts = repo.get_traitsetting(owner_id)
@@ -676,3 +676,36 @@ def remove_sfx_from_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> 
         ids.remove(sfx_id)
         return _set_owner_sfx_ids(repo, owner_type, owner_id, ids)
     return True
+
+
+def propagate_trait_default_sfx(repo, trait_id: str) -> int:
+    """Add a trait's current default SFX to every existing instance of it.
+
+    Additive: instances gain any missing default; nothing is removed. This is
+    the #49 half — when ``Trait.default_sfx_ids`` changes, existing instances
+    are re-provisioned. Also drives the startup backfill. Returns the number of
+    instances updated.
+    """
+    trait = repo.get_trait(trait_id)
+    defaults = list(trait.default_sfx_ids or []) if trait is not None else []
+    if not defaults:
+        return 0
+    updated = 0
+    for ts in repo.get_traitsettings_by_trait(trait_id):
+        existing = list(ts.sfx_ids or [])
+        missing = [d for d in defaults if d not in existing]
+        if not missing:
+            continue
+        ts.sfx_ids = existing + missing
+        repo.update_traitsetting(ts)
+        updated += 1
+    return updated
+
+
+def backfill_trait_default_sfx(repo) -> int:
+    """Idempotent startup backfill: materialize every trait's default SFX onto
+    its existing instances (for instances created before provisioning landed)."""
+    total = 0
+    for trait in repo.get_all_traits():
+        total += propagate_trait_default_sfx(repo, trait.id)
+    return total

@@ -127,6 +127,7 @@ async def on_startup():
         ensure_starter_location_sfx,
         remove_legacy_contest_complication_sfx,
         remove_legacy_buy_hitch_sfx,
+        backfill_trait_default_sfx,
     )
 
     _register_core_handlers(_get_em(), _get_raz())
@@ -145,6 +146,7 @@ async def on_startup():
     ensure_starter_location_sfx(repo)
     remove_legacy_contest_complication_sfx(repo)
     remove_legacy_buy_hitch_sfx(repo)
+    backfill_trait_default_sfx(repo)
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:
         engine.register(s)
