@@ -128,6 +128,15 @@
             <em>1 = single pick · N = multi-select</em>
           </label>
         </div>
+
+        <!-- evaluate: terminal boolean test (exists / comparison) -->
+        <div v-else-if="step.kind === 'evaluate'" class="tsb-config tsb-evaluate">
+          <select v-model="step.operator" class="tsb-op">
+            <option v-for="op in EVALUATE_OPERATORS" :key="op" :value="op">{{ op }}</option>
+          </select>
+          <em v-if="step.operator === 'exists'" class="tsb-eval-hint">non-empty</em>
+          <input v-else :value="step.value" placeholder="value (count / d8 / …)" @input="onEvaluateValue(i, $event)" />
+        </div>
       </div>
 
       <div class="tsb-add">
@@ -194,8 +203,10 @@ const STEP_KINDS = [
   { kind: 'aggregate', label: 'Aggregate' },
   { kind: 'random', label: 'Random' },
   { kind: 'choose', label: 'Choose' },
+  { kind: 'evaluate', label: 'Evaluate' },
 ]
 const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'contains']
+const EVALUATE_OPERATORS = ['exists', '==', '!=', '>', '>=', '<', '<=']
 
 const steps = computed({
   get: () => (props.modelValue && Array.isArray(props.modelValue.steps) ? props.modelValue.steps : []),
@@ -243,8 +254,12 @@ function stepHasError(i) {
 }
 
 function stepIsValid(i) {
-  if (!props.destination || !props.destination.element) return false
   const t = typeAt(i)
+  if (props.booleanTerminal) {
+    // The terminal `evaluate` step is the condition's boolean result.
+    return steps.value[i]?.kind === 'evaluate' && !!t && t.element === 'boolean' && !errorAt(i)
+  }
+  if (!props.destination || !props.destination.element) return false
   if (!t || !t.element || t.element !== props.destination.element) return false
   if (props.destination.cardinality && t.cardinality !== props.destination.cardinality) return false
   return !errorAt(i)
@@ -307,6 +322,12 @@ function onFilterValue(i, e) {
   steps.value[i].value = coerceValue(fieldTypeFor(i), e.target.value)
 }
 
+function onEvaluateValue(i, e) {
+  const prior = priorType(i)
+  const type = prior && (prior.cardinality === 'many' || ['int', 'number'].includes(prior.element)) ? 'number' : prior?.element || 'string'
+  steps.value[i].value = coerceValue(type, e.target.value)
+}
+
 function onCount(i, e) {
   const n = Math.trunc(Number(e.target.value))
   steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
@@ -321,6 +342,8 @@ function canAdd(kind) {
   // Subsequent steps need a resolvable type before them.
   const prior = priorType(steps.value.length)
   if (!prior || !prior.element) return false
+  // evaluate is terminal: a boolean result can't be followed or stacked.
+  if (prior.element === 'boolean') return false
   // random/choose collapse a *many* collection; only offer them over a set.
   if (kind === 'random' || kind === 'choose') return prior.cardinality === 'many'
   return true
@@ -347,7 +370,10 @@ function move(i, delta) {
 }
 
 const destinationLabel = computed(() => {
-  if (props.booleanTerminal) return 'boolean (non-empty)'
+  if (props.booleanTerminal) {
+    const last = steps.value[steps.value.length - 1]
+    return last && last.kind === 'evaluate' ? 'boolean' : 'boolean (non-empty)'
+  }
   return props.destination
     ? (props.destination.cardinality ? `${props.destination.element}/${props.destination.cardinality}` : props.destination.element)
     : ''

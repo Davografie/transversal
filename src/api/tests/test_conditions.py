@@ -14,7 +14,7 @@ from transversal.services.conditions import (
     evaluate_conditions,
     static_conditions,
 )
-from transversal.services.target_spec import FilterStep, SelectStep, TargetSpec
+from transversal.services.target_spec import AggregateStep, EvaluateStep, FilterStep, SelectStep, TargetSpec
 
 
 class FakeRepo:
@@ -369,3 +369,57 @@ def test_static_conditions_target_path():
     static = static_conditions(conds)
     # source-seeded path is static; rolled_dice-seeded path is fire-time only.
     assert [c.type for c in static] == [ConditionType.TARGET_PATH, ConditionType.ENTITY_TYPE]
+
+
+def test_target_path_evaluate_exists():
+    spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        FilterStep(field="rating", operator="==", value="d8"),
+        EvaluateStep(operator="exists"),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    source = TraitSetting(
+        id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
+        traitset_id="ts-x", dice=[DieType.D8],
+    )
+    assert evaluate_condition(_entity(), cond, FakeRepo(), source=source, source_element="traitsetting")
+    lower = TraitSetting(
+        id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
+        traitset_id="ts-x", dice=[DieType.D6],
+    )
+    assert not evaluate_condition(_entity(), cond, FakeRepo(), source=lower, source_element="traitsetting")
+
+
+def test_target_path_evaluate_count():
+    spec = TargetSpec(steps=[
+        SelectStep(collection="self_traitsettings"),
+        EvaluateStep(operator=">=", value=2),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    assert evaluate_condition(_entity(), cond, FakeRepo(traitsettings=[_ts("a"), _ts("b")]))
+    assert not evaluate_condition(_entity(), cond, FakeRepo(traitsettings=[_ts("a")]))
+    # count == 0 is expressible now (the aggregate-count "always passes" wart is gone)
+    zero = TargetSpec(steps=[
+        SelectStep(collection="self_traitsettings"),
+        EvaluateStep(operator="==", value=0),
+    ])
+    assert evaluate_condition(_entity(), Condition(type=ConditionType.TARGET_PATH, spec=zero), FakeRepo())
+
+
+def test_target_path_evaluate_scalar_die():
+    spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        AggregateStep(fn="max", field="rating"),
+        EvaluateStep(operator=">=", value="d8"),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    source = TraitSetting(
+        id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
+        traitset_id="ts-x", dice=[DieType.D8],
+    )
+    assert evaluate_condition(_entity(), cond, FakeRepo(), source=source, source_element="traitsetting")
+    lower = TraitSetting(
+        id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
+        traitset_id="ts-x", dice=[DieType.D6],
+    )
+    assert not evaluate_condition(_entity(), cond, FakeRepo(), source=lower, source_element="traitsetting")

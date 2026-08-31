@@ -47,6 +47,9 @@ class Repo:
     def get_sfx(self, sfx_id):
         return None
 
+    def list_all_scheduled_events(self):
+        return []
+
 
 def _simplified(tier=OutcomeTier.SUCCESS, hitches=None, botch=False):
     return SimplifiedResult(

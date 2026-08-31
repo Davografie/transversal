@@ -119,6 +119,10 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         )
         if resolution.errors:
             return False
+        # An `evaluate` step yields an explicit boolean; otherwise the condition
+        # is the classic "non-empty" check.
+        if resolution.values and isinstance(resolution.values[0], bool):
+            return resolution.values[0]
         return bool(resolution.values)
 
     subject = _resolve_subject(condition, entity, context or {}, repo)

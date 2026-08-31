@@ -115,8 +115,8 @@ def fire_roll_sfx(
     # immediate effect (e.g. modify_dice_limit) reverts N rolls later. Ticking
     # before firing ``on_roll`` reverts the previous roll's bonus, then this
     # roll's bonus applies — so the delta is active for exactly one roll.
-    from transversal.services.scheduled_events import dispatch_event
-    dispatch_event(repo, "rolls", entity_id=entity_id, universe=universe)
+    from transversal.services.scheduled_events import advance_scheduled_events
+    advance_scheduled_events(repo, "rolls", entity_id=entity_id)
 
     sfx_ids, razmerit = _entity_sfx_context(repo, entity_id, universe)
     event = GameEvent(

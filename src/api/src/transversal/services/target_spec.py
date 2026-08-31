@@ -92,8 +92,20 @@ class ChooseStep(BaseModel):
     output: str | None = None
 
 
+class EvaluateStep(BaseModel):
+    """Terminal boolean test over the current collection/scalar.
+
+    ``operator="exists"`` passes when the collection is non-empty. Comparison
+    operators test the collection's count (``many``) or a scalar's value
+    (``int``/``number``/``die``) against ``value``. Produces ``boolean/one``.
+    """
+    kind: Literal["evaluate"] = "evaluate"
+    operator: Literal["exists", "==", "!=", ">", ">=", "<", "<="] = "exists"
+    value: Any = None
+
+
 TargetStep = Annotated[
-    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep, ChooseStep],
+    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep, ChooseStep, EvaluateStep],
     Field(discriminator="kind"),
 ]
 
@@ -274,6 +286,13 @@ def trace(spec: TargetSpec, source_element: str | None = None,
             else:
                 cardinality = "one" if step.count == 1 else "many"
                 current = ValueType(current.element, cardinality)
+
+        elif isinstance(step, EvaluateStep):
+            if current is None:
+                errors.append(TraceError(i, "evaluate has nothing to test"))
+                current = None
+            else:
+                current = ValueType("boolean", "one")
 
         if getattr(step, "output", None) and current is not None and current.element:
             scope[step.output] = current

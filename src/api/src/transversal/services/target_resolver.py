@@ -20,6 +20,7 @@ from typing import Any, Callable
 from transversal.services.target_spec import (
     AggregateStep,
     ChooseStep,
+    EvaluateStep,
     FilterStep,
     LiteralStep,
     NavigateStep,
@@ -347,6 +348,50 @@ def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, 
     )
 
 
+def _evaluate_step(values: list[Any], current_type: ValueType | None, step: EvaluateStep) -> bool:
+    """Terminal boolean test for an ``evaluate`` step.
+
+    ``exists`` = non-empty. Comparisons test a ``many`` collection's count, or a
+    scalar (``int``/``number``/``die``) value, against ``step.value``. A single
+    object only supports identity ``==``/``!=``.
+    """
+    if step.operator == "exists":
+        return bool(values)
+    if current_type is None:
+        return False
+
+    if current_type.cardinality == "many":
+        lhs = len(values)
+        rhs = _to_number(step.value)
+    elif current_type.element in ("int", "number", "die"):
+        lhs = _to_number(values[0]) if values else None
+        rhs = _to_number(step.value)
+    else:
+        rid = _candidate_id(current_type.element, values[0]) if values else ""
+        target = str(step.value or "")
+        if step.operator == "==":
+            return bool(values) and rid == target
+        if step.operator == "!=":
+            return bool(values) and rid != target
+        return False
+
+    if lhs is None or rhs is None:
+        return False
+    if step.operator == "==":
+        return lhs == rhs
+    if step.operator == "!=":
+        return lhs != rhs
+    if step.operator == ">":
+        return lhs > rhs
+    if step.operator == ">=":
+        return lhs >= rhs
+    if step.operator == "<":
+        return lhs < rhs
+    if step.operator == "<=":
+        return lhs <= rhs
+    return False
+
+
 def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[str]] | None = None) -> Resolution:
     """Walk ``spec`` over ``context``, returning resolved values + step errors.
 
@@ -510,6 +555,10 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 # The user's selection supplies the value; nothing resolved yet.
                 values, current_type = [], None
                 break
+
+        elif isinstance(step, EvaluateStep):
+            values = [_evaluate_step(values, current_type, step)]
+            current_type = ValueType("boolean", "one")
 
         _bind_step_outputs(step, values, current_type, context)
 
