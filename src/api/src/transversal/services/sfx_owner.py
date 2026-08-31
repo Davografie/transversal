@@ -443,7 +443,12 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
             if sfx is None:
                 continue
             static = static_conditions(sfx.conditions or [])
-            if static and not evaluate_conditions(entity, static, repo, source=sfx_sources.get(sfx_id)):
+            source = sfx_sources.get(sfx_id)
+            source_element = None
+            if source is not None and getattr(sfx, "source_kind", None):
+                from transversal.services import target_catalog as tc
+                source_element = tc.source_element(sfx.source_kind)
+            if static and not evaluate_conditions(entity, static, repo, source=source, source_element=source_element):
                 ids.discard(sfx_id)
 
     return sorted(ids)

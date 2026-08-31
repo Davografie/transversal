@@ -24,7 +24,7 @@
         <span v-for="v in scopeVariables" :key="v.name" class="sfx-var">{{ '{' + v.name + '}' }}<em class="sfx-var-type">{{ v.type }}</em></span>
       </div>
       <label>Conditions</label>
-      <ConditionEditor v-model="draft.conditions" />
+      <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" />
     </div>
 
     <!-- Effects: list inline; each effect's form opens in a child panel -->
@@ -105,6 +105,15 @@ loadSfxMeta()
 
 const { load: loadCatalog, sourceKinds } = useTargetCatalog()
 loadCatalog()
+
+// The SFX's declared source_kind → its catalog element, so a targeting-path
+// condition can offer `select source` typed against it.
+const sourceElement = computed(() => {
+  const sk = draft.source_kind
+  if (!sk) return ''
+  const found = sourceKinds().find(s => s.value === sk)
+  return found ? found.element : ''
+})
 
 const { load: loadActions, summarize: summarizeEffect } = useEffectActions()
 loadActions()

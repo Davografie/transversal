@@ -49,6 +49,7 @@ class Condition:
     value: Optional[str] = None
     operator: str = ">="
     narrative: str = ""
+    spec: Optional[strawberry.scalars.JSON] = None
 
 
 @strawberry.input
@@ -59,6 +60,7 @@ class ConditionInput:
     value: Optional[str] = None
     operator: str = ">="
     narrative: str = ""
+    spec: Optional[strawberry.scalars.JSON] = None
 
 
 # ── SFX ownership ─────────────────────────────────────
@@ -282,6 +284,7 @@ class ConditionTypeOption:
     value_kind: str = ""
     operators: list[str] = strawberry.field(default_factory=list)
     target_options: list[str] = strawberry.field(default_factory=list)
+    uses_spec: bool = False
 
 
 @strawberry.type

@@ -17,7 +17,7 @@
       </div>
       <div class="ee-field ee-conditions">
         <label>Condition</label>
-        <ConditionEditor v-model="newEffect.conditions" />
+        <ConditionEditor v-model="newEffect.conditions" :source-element="sourceElement" />
       </div>
       <div v-if="isRollTiming" class="ee-field">
         <label>Roll dice</label>

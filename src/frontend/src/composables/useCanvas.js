@@ -210,7 +210,7 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type target value narrative } effects { timing type action target result targetScope negative context } } } lifePaths { id name factionIds } }`,
+          query: `query { rollTables { id name universe lifePath scheme rollSource traitDiceCount die canvasX canvasY entries { label description minValue maxValue weight tier conditions { type subject target value operator narrative spec } effects { timing type action target result targetScope negative context } } } lifePaths { id name factionIds } }`,
         }),
       })
       const data = await r.json()
@@ -1180,7 +1180,7 @@ export function useCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { label description minValue maxValue weight tier conditions { type target value narrative } effects { timing type action target result targetScope negative context } } } }`,
+          query: `query($id:ID!){ rollTable(id:$id){ id name universe lifePath scheme rollSource traitDiceCount die check { traitIds difficulty freeChoice } entries { label description minValue maxValue weight tier conditions { type subject target value operator narrative spec } effects { timing type action target result targetScope negative context } } } }`,
           variables: { id: sourceTableId },
         }),
       })

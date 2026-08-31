@@ -14,6 +14,7 @@ from transversal.services.conditions import (
     evaluate_conditions,
     static_conditions,
 )
+from transversal.services.target_spec import FilterStep, SelectStep, TargetSpec
 
 
 class FakeRepo:
@@ -304,3 +305,67 @@ def test_condition_types_declare_value_kind_and_operators():
     assert by_value["HAS_RAZMERIT"].needs_target is False
     assert by_value["ENTITY_TYPE"].target_options == ("character", "gmc", "asset")
     assert by_value["ENTITY_TYPE"].needs_target is True
+
+
+def test_condition_types_declare_uses_spec():
+    by_value = {c.value: c for c in CONDITION_TYPES}
+    assert by_value["TARGET_PATH"].uses_spec is True
+    assert by_value["AT_LOCATION"].uses_spec is False
+
+
+def test_target_path_source_rating():
+    # The cultivation-stage shape: the source trait's rating reached d8.
+    spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        FilterStep(field="rating", operator=">=", value="d8"),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    source = TraitSetting(
+        id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
+        traitset_id="ts-x", dice=[DieType.D8],
+    )
+    assert evaluate_condition(_entity(), cond, FakeRepo(), source=source, source_element="traitsetting")
+
+    lower = TraitSetting(
+        id="char-1:cultivation", entity_id="char-1", trait_id="cultivation",
+        traitset_id="ts-x", dice=[DieType.D6],
+    )
+    assert not evaluate_condition(_entity(), cond, FakeRepo(), source=lower, source_element="traitsetting")
+
+
+def test_target_path_requires_source():
+    spec = TargetSpec(steps=[SelectStep(collection="source")])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    # No source declared → select source errors → not met (safe default).
+    assert not evaluate_condition(_entity(), cond, FakeRepo())
+
+
+def test_target_path_self_filter():
+    spec = TargetSpec(steps=[
+        SelectStep(collection="self"),
+        FilterStep(field="type", operator="==", value="character"),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    assert evaluate_condition(_entity(), cond, FakeRepo())
+    assert not evaluate_condition(_entity(type=EntityType.GMC), cond, FakeRepo())
+
+
+def test_target_path_empty_spec_fails():
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[]))
+    assert not evaluate_condition(_entity(), cond, FakeRepo())
+
+
+def test_static_conditions_target_path():
+    static_spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        FilterStep(field="rating", operator=">=", value="d8"),
+    ])
+    rolled_spec = TargetSpec(steps=[SelectStep(collection="rolled_dice")])
+    conds = [
+        Condition(type=ConditionType.TARGET_PATH, spec=static_spec),
+        Condition(type=ConditionType.TARGET_PATH, spec=rolled_spec),
+        Condition(type=ConditionType.ENTITY_TYPE, target="character"),
+    ]
+    static = static_conditions(conds)
+    # source-seeded path is static; rolled_dice-seeded path is fire-time only.
+    assert [c.type for c in static] == [ConditionType.TARGET_PATH, ConditionType.ENTITY_TYPE]

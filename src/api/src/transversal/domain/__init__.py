@@ -477,6 +477,17 @@ class TraitSetting(BaseModel):
     stolen: bool = False  # trait was taken — may have narrative consequences
     scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
 
+    @property
+    def rating(self) -> Optional[DieType]:
+        """The trait's current rating = its highest die (None when empty).
+
+        This is the runtime backing for the catalog's ``traitsetting.rating``
+        filter field, so a targeting path can predicate on ``rating >= d8``.
+        """
+        if not self.dice:
+            return None
+        return max(self.dice, key=lambda d: d.max_value)
+
     @model_validator(mode="before")
     @classmethod
     def _fold_legacy_negative(cls, data):
@@ -898,6 +909,7 @@ class ConditionType(str, Enum):
     ROLL_TIER = "roll_tier"              # operator + value against OutcomeTier (e.g. >= success); reads roll_result.tier
     TEST_OUTCOME = "test_outcome"        # target = "success" | "fail" (binary); success = tier != fail
     SOURCE_RATING = "source_rating"      # the source trait-setting's rating (dice) vs a die threshold
+    TARGET_PATH = "target_path"          # a targeting path (spec) resolves non-empty; source-aware predicate
 
 
 class Condition(BaseModel):
@@ -911,6 +923,7 @@ class Condition(BaseModel):
     value: Optional[str] = None       # threshold, e.g. rank number
     operator: str = ">="              # numeric comparator for HAS_RAZMERIT ("<", "<=", "==", "!=", ">=", ">")
     narrative: str = ""               # human-readable fallback text
+    spec: Optional[TargetSpec] = None  # TARGET_PATH: a targeting path (seeded by `select source`) resolved non-empty
 
 
 # ── Roll Tables ──────────────────────────────────────

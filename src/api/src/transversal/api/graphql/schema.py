@@ -259,7 +259,11 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
 
 
 def _condition_to_gql(c: DomainCondition) -> Condition:
-    return Condition(type=c.type, subject=c.subject, target=c.target, value=c.value, operator=c.operator, narrative=c.narrative)
+    return Condition(
+        type=c.type, subject=c.subject, target=c.target, value=c.value,
+        operator=c.operator, narrative=c.narrative,
+        spec=c.spec.model_dump() if c.spec else None,
+    )
 
 
 def _scheduled_event_to_gql(e: DomainScheduledEvent) -> GqlScheduledEvent:
@@ -407,7 +411,11 @@ def _effects_result_to_gql(result, structured=None) -> EffectApplicationResult:
 
 
 def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
-    return DomainCondition(type=c.type, subject=c.subject, target=c.target, value=c.value, operator=c.operator, narrative=c.narrative)
+    return DomainCondition(
+        type=c.type, subject=c.subject, target=c.target, value=c.value,
+        operator=c.operator, narrative=c.narrative,
+        spec=_target_spec_from_input(c.spec),
+    )
 
 
 def _target_spec_input_to_domain(inp: TargetSpecInput):
@@ -696,6 +704,7 @@ class Query:
                 needs_target=c.needs_target, target_placeholder=c.target_placeholder,
                 target_kind=c.target_kind, value_kind=c.value_kind,
                 operators=list(c.operators), target_options=list(c.target_options),
+                uses_spec=c.uses_spec,
             )
             for c in CONDITION_TYPES
         ]
