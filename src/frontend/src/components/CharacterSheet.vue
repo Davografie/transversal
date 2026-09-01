@@ -186,6 +186,22 @@
             </div>
           </div>
 
+          <div class="edit-field">
+            <span class="edit-label">Sub-traits</span>
+            <div v-if="(editingTrait.subTraitSettings || []).length" class="edit-subtraits">
+              <div v-for="st in editingTrait.subTraitSettings" :key="st.id" class="edit-subtrait-row">
+                <span class="edit-subtrait-name">{{ displayName(st.name) }}</span>
+                <span v-if="st.statement" class="edit-subtrait-statement">{{ st.statement }}</span>
+                <button class="edit-subtrait-remove" @click="removeSubTrait(st.id)" title="Remove sub-trait">✕</button>
+              </div>
+            </div>
+            <div v-if="availableSubtraits.length" class="edit-subtraits-add">
+              <span class="edit-subtrait-add-label">Add:</span>
+              <button v-for="opt in availableSubtraits" :key="opt.id" class="edit-subtrait-chip" @click="addSubTrait(opt.id)">{{ opt.name }}</button>
+            </div>
+            <span v-else-if="!(editingTrait.possibleSubtraitIds || []).length" class="edit-subtrait-empty">No sub-traits configured for this trait.</span>
+          </div>
+
           <div class="edit-actions">
             <button class="edit-done-btn" @click="cancelEdit">Done</button>
             <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === editingTrait.id }" @click="onDeleteClick(editingTrait)">
@@ -603,6 +619,18 @@ const spentResources = ref({})
 // Trait editing (full-panel view)
 const editingTraitId = usePersistedRef('sheet.editTraitId', null)
 
+// trait id → display name, for resolving possible sub-trait candidates.
+const traitNameMap = ref({})
+async function ensureTraitNames() {
+  if (Object.keys(traitNameMap.value).length) return
+  try {
+    const data = await graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name } }`, { u: props.universe })
+    const m = {}
+    for (const t of (data?.traitsByUniverse || [])) m[t.id] = t.name
+    traitNameMap.value = m
+  } catch { /* leave map empty; candidates fall back to slug names */ }
+}
+
 const editingTrait = computed(() => {
   if (!editingTraitId.value) return null
   for (const ts of traitSets.value) {
@@ -610,6 +638,17 @@ const editingTrait = computed(() => {
     if (t) return t
   }
   return profileTraits.value.find(t => t.id === editingTraitId.value) || null
+})
+
+function slugTraitId(id) {
+  return String(id).replace(/^trait-/, '').replace(/-[a-z0-9]{4}$/i, '').replace(/-/g, ' ')
+}
+
+const availableSubtraits = computed(() => {
+  const assigned = new Set((editingTrait.value?.subTraitSettings || []).map(st => st.traitId))
+  return (editingTrait.value?.possibleSubtraitIds || [])
+    .filter(id => !assigned.has(id))
+    .map(id => ({ id, name: traitNameMap.value[id] || slugTraitId(id) }))
 })
 
 const editDice = usePersistedRef('sheet.editDice', [])
@@ -1062,6 +1101,7 @@ const QUERY = `
         relationshipContactName
         relationshipContactType
         relationshipType
+        possibleSubtraitIds
         subTraitSettings {
           id
           traitId
@@ -1107,6 +1147,7 @@ const QUERY = `
         relationshipContactName
         relationshipContactType
         relationshipType
+        possibleSubtraitIds
         subTraitSettings {
           id
           traitId
@@ -1256,6 +1297,7 @@ function startEdit(t) {
     deleteTrait({ id: targetId })
   }
   editingTraitId.value = t.id
+  ensureTraitNames()
   editDice.value = (t.dice || []).map(d => d.toLowerCase())
   editRatingType.value = t.ratingType || 'STATIC'
   editPolarity.value = t.polarity || null
@@ -1481,6 +1523,18 @@ async function setRatingType(rt) {
   await doSave()
   // Re-split so the trait moves between the rated list and the profile tab.
   recomputeTraitSets()
+}
+
+async function addSubTrait(traitId) {
+  const parentId = editingTrait.value?.id
+  if (!parentId) return
+  await graphql(`mutation($parent: ID!, $trait: ID!) { addSubTrait(parentTraitsettingId: $parent, traitId: $trait) { id } }`, { parent: parentId, trait: traitId })
+  await fetchEntity()
+}
+
+async function removeSubTrait(subId) {
+  await graphql(`mutation($id: ID!) { removeSubTrait(subTraitSettingId: $id) }`, { id: subId })
+  await fetchEntity()
 }
 
 let statementDebounce = null
@@ -2038,6 +2092,58 @@ watch(() => props.externalPoolSources, (sources) => {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+.edit-subtraits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.edit-subtrait-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+}
+.edit-subtrait-name { font-weight: 500; }
+.edit-subtrait-statement { font-size: 11px; opacity: 0.7; flex: 1; }
+.edit-subtrait-remove {
+  margin-left: auto;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+}
+.edit-subtrait-remove:hover { color: var(--danger); }
+.edit-subtraits-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+}
+.edit-subtrait-add-label { font-size: 11px; color: var(--text-dim); }
+.edit-subtrait-chip {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.edit-subtrait-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.edit-subtrait-empty { font-size: 11px; color: var(--text-dim); }
 
 .edit-statement,
 .edit-notes {

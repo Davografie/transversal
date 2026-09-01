@@ -1762,7 +1762,7 @@ class Mutation:
 
     @strawberry.mutation
     def add_sub_trait(self, info: strawberry.Info, parent_traitsetting_id: strawberry.ID,
-                      trait_id: strawberry.ID, die: GqlDieType = GqlDieType.D6,
+                      trait_id: strawberry.ID, die: Optional[GqlDieType] = None,
                       statement: str = "") -> TraitSetting:
         """Nest a sub-trait under a parent trait setting.
 
@@ -1779,6 +1779,8 @@ class Mutation:
         if trait is None:
             raise ValueError(f"Trait '{trait_id}' not found")
         traitset_id = trait.traitset_id
+        if die is None:
+            die = trait.default_die_type
 
         from transversal.services.polarity import default_polarity
         traitset = repo.get_traitset_by_id(traitset_id)
@@ -1792,6 +1794,7 @@ class Mutation:
             from_type="traitsetting",
             parent_traitsetting_id=parent.id,
             dice=[die],
+            rating_type=trait.default_rating_type,
             polarity=polarity,
             statement=statement,
         )
