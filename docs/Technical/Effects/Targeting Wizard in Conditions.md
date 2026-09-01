@@ -55,9 +55,10 @@ reuses).
    `rolled_dice` or `select variable` (context/binding-gated), so availability
    (grey-out) can evaluate source/entity-state paths.
 7. **`evaluate` terminal step** — `exists` (non-empty) plus `==`/`!=`/`>`/`>=`/
-   `<`/`<=` against a `many` collection's count or a scalar (`int`/`number`/`die`),
-   producing `boolean/one`. This makes scalar predicates (`count >= 2`,
-   `max rating >= d8`) expressible — the plain "non-empty" check couldn't.
+   `<`/`<=` whose left-hand side is explicit: `field="count"` (element count) or
+   a scalar field name (e.g. `rating`) on a single object, producing
+   `boolean/one`. This makes `count >= 2` and `rating >= d4` expressible — the
+   plain "non-empty" check couldn't.
 8. **Automatic-trigger source** — `sfx_owner.resolve_sfx_source` resolves the
    SFX's source from ownership (the trait/trait-set setting granting it, or the
    entity/projection itself) when an automatic trigger (`on_roll`) carries no
@@ -78,11 +79,16 @@ TARGET_PATH
     - filter rating >= d8          # narrow to matching rating…
     - evaluate exists              # …did it survive? (or omit evaluate → non-empty)
 
-TARGET_PATH                        # scalar form
+TARGET_PATH                        # scalar form (explicit field LHS)
   spec:
     - select source
-    - aggregate max rating         # collapse to a die scalar
-    - evaluate >= d8               # terminal boolean comparison
+    - evaluate rating >= d8        # field="rating", operator=">=", value="d8"
+
+TARGET_PATH                        # count form (over a many collection)
+  spec:
+    - select rolled_dice
+    - filter source_kind == trait
+    - evaluate count >= 2          # field="count" — at least two trait dice
 ```
 
 ## Touch points

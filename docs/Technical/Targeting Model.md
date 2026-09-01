@@ -43,7 +43,7 @@ class TargetSpec(BaseModel):
 | `navigate` | `edge`, `dedup` | Hop an edge to a related element; `dedup` collapses by identity |
 | `aggregate` | `fn`, `field` | Collapse a collection to a scalar (`count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`) |
 | `literal` | `element`, `value` | Name one object by id directly |
-| `evaluate` | `operator`, `value` | Terminal boolean test: `exists` (non-empty) or `==`/`!=`/`>`/`>=`/`<`/`<=` against a `many` collection's count or a scalar; produces `boolean/one` |
+| `evaluate` | `field`, `operator`, `value` | Terminal boolean test: `exists` (non-empty) or a comparison whose LHS is `field` — `"count"` (element count) or a scalar field name (e.g. `rating`) on a single object; produces `boolean/one` |
 
 Every step also carries `output: Optional[str]` — the variable name the step exposes
 once it resolves (see [[Effect Output Variables]]).
