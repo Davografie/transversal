@@ -382,6 +382,8 @@ def _consequence_option_input_to_domain(o: ConsequenceOptionInput) -> DomainCons
 
 def _structured_choice_to_dict(c) -> dict:
     """Serialize a ``StructuredChoice`` to the wire shape the picker consumes."""
+    from transversal.services.effects_engine import effect_to_wire_dict
+
     return {
         "structured": True,
         "element": c.element,
@@ -395,7 +397,7 @@ def _structured_choice_to_dict(c) -> dict:
         "answers_so_far": c.answers_so_far,
         "sfx_name": c.sfx_name,
         "sfx_description": c.sfx_description,
-        "effect": c.effect.model_dump(),
+        "effect": effect_to_wire_dict(c.effect),
     }
 
 

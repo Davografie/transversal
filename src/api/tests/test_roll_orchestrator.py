@@ -146,7 +146,7 @@ def test_emit_pending_choices_includes_target_filter(monkeypatch):
     assert len(published) == 1
     choice = published[0].data["choices"][0]
     assert choice["filter"] == {"starter_location": True}
-    assert choice["effect"]["target_filter"] == {"starter_location": True}
+    assert choice["effect"]["targetFilter"] == {"starter_location": True}
 
 
 def test_is_choose_target_and_choose_kind():

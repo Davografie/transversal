@@ -39,6 +39,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
         return
 
     from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.effects_engine import effect_to_wire_dict
     from transversal.services.session_manager import session_manager
 
     choices = []
@@ -54,7 +55,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
             "filter": p.effect.target_filter or None,
             "sfx_name": p.sfx_name,
             "sfx_description": p.sfx_description,
-            "effect": p.effect.model_dump(),
+            "effect": effect_to_wire_dict(p.effect),
         })
     for c in (structured or []):
         choices.append({
@@ -70,7 +71,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
             "answers_so_far": c.answers_so_far,
             "sfx_name": c.sfx_name,
             "sfx_description": c.sfx_description,
-            "effect": c.effect.model_dump(),
+            "effect": effect_to_wire_dict(c.effect),
         })
     for session in session_manager.list_active():
         event_bus.publish(StreamEvent(

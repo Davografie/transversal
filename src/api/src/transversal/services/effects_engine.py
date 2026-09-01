@@ -93,6 +93,36 @@ class EventOutcome:
     structured: list[StructuredChoice] = field(default_factory=list)
 
 
+# ── Wire serialization ───────────────────────────────
+
+_EFFECT_CAMEL_FIELDS = {
+    "target_scope": "targetScope",
+    "entity_scope": "entityScope",
+    "target_filter": "targetFilter",
+    "die_filter": "dieFilter",
+    "target_spec": "targetSpec",
+    "entity_spec": "entitySpec",
+}
+
+
+def effect_to_wire_dict(e: Effect) -> dict:
+    """Serialize an ``Effect`` to the camelCase JSON dict the GraphQL
+    ``EffectInput`` expects on the wire.
+
+    Strawberry auto-camel-cases field names (``target_spec`` → ``targetSpec``),
+    but ``model_dump()`` yields snake_case. Round-tripping a ``model_dump()``
+    dict back through ``EffectInput`` drops every multi-word field (or, worse,
+    fails validation on ``target_spec``/``entity_spec``), silently losing a
+    spec/ref that a staged ``choose`` needs to resume. Remap those keys here so
+    a structured choice's effect survives the round-trip.
+    """
+    d = e.model_dump()
+    for snake, camel in _EFFECT_CAMEL_FIELDS.items():
+        if snake in d:
+            d[camel] = d.pop(snake)
+    return d
+
+
 # ── Effect Application ───────────────────────────────
 
 EffectApplier = Callable[[Effect, str, str, dict], None]
@@ -539,7 +569,7 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
     from itertools import product
     from transversal.services.target_resolver import resolve
 
-    answers_so_far = [{"step_index": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
+    answers_so_far = [{"stepIndex": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
 
     resolved_values: dict[str, list[str]] = {}
     for name, ref in effect.refs.items():
@@ -666,7 +696,7 @@ def resolve_effect_spec_choices(
         else (None, None)
     )
     ctx = TargetContext(subject=entity, repo=repo, source=source, source_element=source_element, bindings=bindings if bindings is not None else {})
-    answers_so_far = [{"step_index": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
+    answers_so_far = [{"stepIndex": k, "ids": list(v)} for k, v in sorted((answers or {}).items())]
 
     if field.startswith("refs."):
         structured_choices: list = []

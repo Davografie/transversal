@@ -112,7 +112,7 @@ function apply() {
         // Resumable mid-path choose: send the accumulated answers (echoing the
         // backend's answers_so_far) plus this step's selection.
         const ids = Array.isArray(v) ? v : [v]
-        const answers = [...(c.answers_so_far || []), { step_index: c.step_index, ids }]
+        const answers = [...(c.answers_so_far || []), { stepIndex: c.step_index, ids }]
         return {
           effect: c.effect,
           field: c.field || 'target',
