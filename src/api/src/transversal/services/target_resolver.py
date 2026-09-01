@@ -90,6 +90,7 @@ class CandidateDisplay:
     element: str
     name: str = ""
     subtitle: str = ""
+    rating: str = ""  # die size ("d6") for traitsetting candidates; "" elsewhere
 
 
 EdgeResolver = Callable[[Any, TargetContext], list[Any]]
@@ -183,12 +184,15 @@ def _candidate_label(element: str, value: Any, field_name: str) -> str:
     return str(raw)
 
 
-def serialize_candidates(element: str, values: list[Any]) -> list[CandidateDisplay]:
+def serialize_candidates(element: str, values: list[Any], repo=None) -> list[CandidateDisplay]:
     """Turn resolved candidates into picker-ready display records.
 
     Labels are data-driven from ``target_catalog.DISPLAY_FIELDS``: each element
     type declares which field carries its primary and secondary label. A ``pool``
     handle renders its kind as a friendly label (difficulty / dice pool).
+    ``traitsetting`` is special-cased: its label is ``statement`` falling back to
+    the registry ``trait.name`` (via ``repo``), and its rating is exposed as a
+    die size string for the picker to render as an icon.
     """
     display = tc.display_fields(element)
     name_field = display.name_field if display else ""
@@ -201,10 +205,24 @@ def serialize_candidates(element: str, values: list[Any]) -> list[CandidateDispl
             kind = _get_field(value, "kind")
             name = "Difficulty pool" if kind == "difficulty" else "Dice pool"
             subtitle = ""
+            rating = ""
+        elif element == "traitsetting":
+            statement = _get_field(value, "statement") or ""
+            trait_id = _get_field(value, "trait_id") or ""
+            trait_name = ""
+            if repo is not None and trait_id:
+                get_trait = getattr(repo, "get_trait", None)
+                trait = get_trait(trait_id) if get_trait else None
+                trait_name = (getattr(trait, "name", "") or "") if trait is not None else ""
+            name = statement or trait_name or trait_id
+            rating_die = _get_field(value, "rating")
+            rating = getattr(rating_die, "value", rating_die) if rating_die is not None else ""
+            subtitle = ""
         else:
             name = _candidate_label(element, value, name_field)
             subtitle = _candidate_label(element, value, subtitle_field)
-        out.append(CandidateDisplay(id=cid, element=element, name=name, subtitle=subtitle))
+            rating = ""
+        out.append(CandidateDisplay(id=cid, element=element, name=name, subtitle=subtitle, rating=rating))
     return out
 
 

@@ -20,7 +20,8 @@
           @click="pick(c)"
         >
           <span class="etw-cand-name">{{ c.name || c.id }}</span>
-          <span v-if="c.subtitle" class="etw-cand-sub">{{ c.subtitle }}</span>
+          <span v-if="c.rating" class="etw-cand-sub etw-cand-rating"><DieIcon :die="c.rating" /></span>
+          <span v-else-if="c.subtitle" class="etw-cand-sub">{{ c.subtitle }}</span>
         </button>
         <div v-if="current.count > 1" class="etw-multi-hint">Select up to {{ current.count }}.</div>
       </div>
@@ -50,6 +51,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import TargetPicker from './TargetPicker.vue'
+import DieIcon from '../DieIcon.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -150,6 +152,7 @@ function apply() {
 .etw-candidate.selected { border-color: var(--accent); background: rgba(64,136,212,0.15); }
 .etw-cand-name { font-size: 11px; }
 .etw-cand-sub { font-size: 9px; color: var(--text-dim); }
+.etw-cand-rating :deep(.die-icon) { width: 18px; height: 20px; }
 .etw-multi-hint { font-size: 9px; color: var(--text-dim); }
 .etw-actions { display: flex; gap: 6px; }
 .etw-btn { font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); }

@@ -530,14 +530,15 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
 def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None,
                        source_kind: str = "", source_id: str = "",
                        source_sfx_id: str = "",
-                       answers_so_far: list | None = None) -> StructuredChoice:
+                       answers_so_far: list | None = None,
+                       repo=None) -> StructuredChoice:
     """Serialize a resolver pending ``choose`` (``PendingTargetChoice``) into a
     ``StructuredChoice`` whose candidates are ready for the picker."""
     from transversal.services.target_resolver import serialize_candidates
 
     candidates = [
-        {"id": c.id, "name": c.name, "subtitle": c.subtitle, "element": c.element}
-        for c in serialize_candidates(pc.element, pc.candidates)
+        {"id": c.id, "name": c.name, "subtitle": c.subtitle, "rating": c.rating, "element": c.element}
+        for c in serialize_candidates(pc.element, pc.candidates, repo=repo)
     ]
     return StructuredChoice(
         element=pc.element,
@@ -593,6 +594,7 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
                         pc, effect, f"refs.{name}",
                         source_kind=source_kind, source_id=source_id,
                         source_sfx_id=source_sfx_id, answers_so_far=answers_so_far,
+                        repo=getattr(context, "repo", None),
                     ))
             return []
         ids = []
@@ -658,6 +660,7 @@ def _apply_immediate_spec(
                 pc, effect, "target", sfx,
                 source_kind=sfx.source_kind or "", source_id=event.context.get("source_id") or "",
                 source_sfx_id=sfx.id,
+                repo=repo,
             ))
         return []
 
@@ -724,7 +727,7 @@ def resolve_effect_spec_choices(
         return [], []
     resolution = resolve(spec, ctx, answers=answers)
     if resolution.pending_choices:
-        return [], [_structured_choice(pc, effect, field, source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id, answers_so_far=answers_so_far) for pc in resolution.pending_choices]
+        return [], [_structured_choice(pc, effect, field, source_kind=source_kind, source_id=source_id, source_sfx_id=source_sfx_id, answers_so_far=answers_so_far, repo=repo) for pc in resolution.pending_choices]
 
     out: list[Effect] = []
     for value in resolution.values:

@@ -366,6 +366,7 @@ def _apply_spec_target(
                 pc, effect, "target",
                 source_kind=source_kind or "", source_id=source_id or "",
                 source_sfx_id=source_sfx_id or "",
+                repo=repo,
             ))
         return []
 
