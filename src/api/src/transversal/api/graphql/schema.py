@@ -120,6 +120,21 @@ def _raz(info: strawberry.Info) -> RazmeritService:
     return info.context["razmerit_service"]
 
 
+def _maybe_rearm_passives(*triggers: str) -> None:
+    """Re-arm the global passive rule set when an ``on_session_start`` SFX changes.
+
+    Passive rules are armed once at [Session] Start into an in-memory snapshot
+    (``roll_deferral.arm_passive``). Creating/editing/deleting such an SFX leaves
+    that snapshot stale until the next [Session] Start, so a timing or
+    targeting-path edit silently does nothing. Re-arm here so the change takes
+    effect immediately.
+    """
+    if "on_session_start" not in triggers:
+        return
+    from transversal.services.state_events import fire_session_start
+    fire_session_start()
+
+
 # Relationship types that model a *personal* relationship between two beings
 # (and therefore resolve to entity/projection handles). Structural edges
 # (super/transversal/membership/commands/gifted/suspects/hostile_to) stay
@@ -1489,6 +1504,7 @@ class Mutation:
         engine = info.context.get("effects_engine")
         if engine:
             engine.register(created)
+        _maybe_rearm_passives(created.trigger)
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
             trigger=created.trigger, limit=created.limit, source_kind=created.source_kind,
@@ -1508,6 +1524,7 @@ class Mutation:
         existing = _em(info).repo.get_sfx(str(input.id))
         if not existing:
             raise ValueError(f"SFX '{input.id}' not found")
+        old_trigger = existing.trigger
         if input.name is not None:
             existing.name = input.name
         if input.description is not None:
@@ -1536,6 +1553,7 @@ class Mutation:
         engine = info.context.get("effects_engine")
         if engine:
             engine.register(updated)
+        _maybe_rearm_passives(old_trigger, updated.trigger)
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
             trigger=updated.trigger, limit=updated.limit, source_kind=updated.source_kind,
@@ -1546,7 +1564,12 @@ class Mutation:
 
     @strawberry.mutation
     def delete_sfx(self, info: strawberry.Info, id: strawberry.ID) -> bool:
-        return _em(info).repo.delete_sfx(str(id))
+        repo = _em(info).repo
+        existing = repo.get_sfx(str(id))
+        ok = repo.delete_sfx(str(id))
+        if ok and existing is not None:
+            _maybe_rearm_passives(existing.trigger)
+        return ok
 
     @strawberry.mutation
     def add_owner_sfx(
