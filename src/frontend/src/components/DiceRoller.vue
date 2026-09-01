@@ -849,9 +849,12 @@ async function doPush() {
 async function resolveSfxChoices(resolutions) {
   const targetEntity = resolutions?.[0]?.entity_id || props.entityId
   const clean = (resolutions || []).map(({ entity_id, ...rest }) => rest)
+  console.log('[SFX-choose] resolveSfxChoices entity=%s input=', targetEntity, JSON.stringify(clean))
   const result = await resolveEffectTargets(targetEntity, clean)
+  console.log('[SFX-choose] resolveSfxChoices result=', JSON.stringify(result))
   const structured = (result?.structured || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
   const legacy = (result?.pendingChoices || []).map((c, i) => ({ ...c, index: i, entity_id: targetEntity }))
+  console.log('[SFX-choose] resolveSfxChoices -> structured=%d legacy=%d', structured.length, legacy.length)
   emit('sfx-choice-resolved', [...structured, ...legacy])
 }
 function clearSfxChoices() {

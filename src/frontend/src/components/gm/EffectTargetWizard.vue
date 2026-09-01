@@ -128,6 +128,7 @@ function apply() {
       const target = Array.isArray(v) ? v[0] : v
       return { effect: c.effect, target, field: c.field || 'target', entity_id: c.entity_id }
     })
+  console.log('[SFX-choose] wizard apply -> resolutions', JSON.stringify(resolutions))
   emit('resolve', resolutions)
 }
 </script>
