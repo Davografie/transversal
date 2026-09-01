@@ -669,7 +669,6 @@ function occupantStyle(index, occupant) {
 function canDragOccupant(occupant) {
   if (props.editZones) return true                // GM can drag anyone
   if (occupant.id === props.entityId) return true  // player can drag self
-  if (occupant.type === 'gmc' || occupant.type === 'asset') return true  // always draggable
   return false
 }
 
