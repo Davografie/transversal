@@ -6,7 +6,18 @@
 
     <template v-else>
       <div v-if="!steps.length" class="tsb-empty">
-        No steps yet — build a path from a context collection to the target type.
+        <span>No steps yet — build a path from a context collection to the target type.</span>
+        <button type="button" class="tsb-plus" title="Add first step" @click="toggleInsert(-1)">＋</button>
+        <div v-if="insertingAt === -1" class="tsb-insert-picker">
+          <button
+            v-for="k in STEP_KINDS"
+            :key="k.kind"
+            type="button"
+            class="tsb-add-btn"
+            :disabled="!canInsertAfter(-1, k.kind)"
+            @click="insert(-1, k.kind)"
+          >{{ k.label }}</button>
+        </div>
       </div>
 
       <div v-for="(step, i) in steps" :key="i" class="tsb-step" :class="{ 'tsb-valid': stepIsValid(i), 'tsb-error': stepHasError(i) }">
@@ -25,10 +36,13 @@
         </div>
 
         <div class="tsb-outputs">
-          <label class="tsb-check">
-            <input type="checkbox" :checked="step.output != null" @change="toggleOutput(i, $event)" />
-            expose as variable
-          </label>
+          <button
+            type="button"
+            class="tsb-lightbulb"
+            :class="{ 'tsb-lightbulb-on': step.output != null }"
+            :title="step.output != null ? 'Exposed as variable' : 'Expose as variable'"
+            @click="toggleOutput(i)"
+          >💡</button>
           <template v-if="step.output != null">
             <span class="tsb-outputs-type">{{ typeLabel(i) }}</span>
             <input v-model="step.output" type="text" placeholder="name" />
@@ -137,18 +151,21 @@
           <em v-if="step.operator === 'exists'" class="tsb-eval-hint">non-empty</em>
           <input v-else :value="step.value" placeholder="value (count / d8 / …)" @input="onEvaluateValue(i, $event)" />
         </div>
-      </div>
 
-      <div class="tsb-add">
-        <span class="tsb-add-label">Add step:</span>
-        <button
-          v-for="k in STEP_KINDS"
-          :key="k.kind"
-          type="button"
-          class="tsb-add-btn"
-          :disabled="!canAdd(k.kind)"
-          @click="add(k.kind)"
-        >{{ k.label }}</button>
+        <div class="tsb-step-add">
+          <button type="button" class="tsb-plus" title="Add step after" @click="toggleInsert(i)">＋</button>
+          <div v-if="insertingAt === i" class="tsb-insert-picker">
+            <span class="tsb-add-label">Add after:</span>
+            <button
+              v-for="k in STEP_KINDS"
+              :key="k.kind"
+              type="button"
+              class="tsb-add-btn"
+              :disabled="!canInsertAfter(i, k.kind)"
+              @click="insert(i, k.kind)"
+            >{{ k.label }}</button>
+          </div>
+        </div>
       </div>
 
       <div class="tsb-summary">
@@ -214,6 +231,7 @@ const steps = computed({
 })
 
 const trace = ref({ types: [], errors: [], valid: false })
+const insertingAt = ref(null)  // index of the step whose "+" was clicked (-1 = before the first)
 let traceTimer = null
 
 function errorAt(i) {
@@ -333,25 +351,33 @@ function onCount(i, e) {
   steps.value[i].count = Number.isFinite(n) && n >= 1 ? n : 1
 }
 
-function toggleOutput(i, e) {
-  steps.value[i].output = e.target.checked ? (steps.value[i].output || '') : null
+function toggleOutput(i) {
+  const cur = steps.value[i]?.output
+  steps.value[i].output = (cur == null) ? '' : null
 }
 
-function canAdd(kind) {
-  if (kind === 'select') return steps.value.length === 0
-  // Subsequent steps need a resolvable type before them.
-  const prior = priorType(steps.value.length)
+function canInsertAfter(i, kind) {
+  if (i === -1) return kind === 'select'  // first step is always a seed
+  if (kind === 'select') return false
+  const prior = typeAt(i)
   if (!prior || !prior.element) return false
-  // evaluate is terminal: a boolean result can't be followed or stacked.
+  // evaluate is terminal: a boolean result can't be followed.
   if (prior.element === 'boolean') return false
   // random/choose collapse a *many* collection; only offer them over a set.
   if (kind === 'random' || kind === 'choose') return prior.cardinality === 'many'
   return true
 }
 
-function add(kind) {
+function toggleInsert(i) {
+  insertingAt.value = insertingAt.value === i ? null : i
+}
+
+function insert(i, kind) {
   const blank = { kind, collection: '', variable: '', output: null, field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
-  steps.value = [...steps.value, blank]
+  const next = [...steps.value]
+  next.splice(i + 1, 0, blank)
+  steps.value = next
+  insertingAt.value = null
 }
 
 function remove(i) {
@@ -450,6 +476,18 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 }
 .tsb-add-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .tsb-add-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.tsb-plus {
+  width: 22px; height: 22px; line-height: 1; font-size: 13px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px; color: var(--text-dim);
+}
+.tsb-plus:hover { color: var(--accent); border-color: var(--accent); }
+.tsb-step-add { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; }
+.tsb-insert-picker { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.tsb-lightbulb { background: none; border: none; cursor: pointer; font-size: 12px; padding: 0; opacity: 0.45; line-height: 1; }
+.tsb-lightbulb-on { opacity: 1; }
+.tsb-lightbulb:hover { opacity: 0.8; }
+.tsb-empty { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .tsb-summary { display: flex; gap: 10px; align-items: center; }
 .tsb-summary-type, .tsb-summary-dest { font-size: 9px; color: var(--text-dim); font-family: monospace; }
 .tsb-summary-dest.tsb-ok { color: #40b860; }
