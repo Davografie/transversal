@@ -20,7 +20,9 @@
         </div>
       </div>
 
-      <div v-for="(step, i) in steps" :key="i" class="tsb-step" :class="{ 'tsb-valid': stepIsValid(i), 'tsb-error': stepHasError(i) }">
+      <GmList v-if="steps.length" :items="steps" item-key="" reorderable drag-handle @reorder="onReorder">
+        <template #item="{ item: step, index: i }">
+        <div class="tsb-step" :class="{ 'tsb-valid': stepIsValid(i), 'tsb-error': stepHasError(i) }">
         <div class="tsb-step-head">
           <span class="tsb-step-index">{{ i + 1 }}</span>
           <select v-model="step.kind" class="tsb-kind">
@@ -29,8 +31,6 @@
           <span class="tsb-type">{{ typeLabel(i) }}</span>
           <span v-if="stepIsValid(i)" class="tsb-match">✓ {{ destinationLabel }}</span>
           <div class="tsb-step-actions">
-            <button type="button" class="tsb-btn" :disabled="i === 0" title="Move up" @click="move(i, -1)">↑</button>
-            <button type="button" class="tsb-btn" :disabled="i === steps.length - 1" title="Move down" @click="move(i, 1)">↓</button>
             <button type="button" class="tsb-btn tsb-remove" title="Remove" @click="remove(i)">✕</button>
           </div>
         </div>
@@ -166,7 +166,9 @@
             >{{ k.label }}</button>
           </div>
         </div>
-      </div>
+        </div>
+        </template>
+      </GmList>
 
       <div class="tsb-summary">
         <span class="tsb-summary-type">final: {{ finalLabel() }}</span>
@@ -182,6 +184,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import TargetPicker from './TargetPicker.vue'
+import GmList from './GmList.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
@@ -386,12 +389,11 @@ function remove(i) {
   steps.value = next
 }
 
-function move(i, delta) {
-  const j = i + delta
-  if (j < 0 || j >= steps.value.length) return
+function onReorder(from, to) {
+  if (from === to || from < 0 || to < 0 || from >= steps.value.length || to >= steps.value.length) return
   const next = [...steps.value]
-  const [row] = next.splice(i, 1)
-  next.splice(j, 0, row)
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
   steps.value = next
 }
 
@@ -432,23 +434,20 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-root { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
 .tsb-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .tsb-loading, .tsb-empty { font-size: 10px; color: var(--text-dim); font-style: italic; }
-.tsb-step {
-  display: flex; flex-direction: column; gap: 3px;
-  padding: 6px; background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
-}
-.tsb-step.tsb-valid { border-color: #40b860; background: rgba(64,184,96,0.06); }
-.tsb-step.tsb-error { border-color: #d04a4a; }
+.tsb-step { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; border-radius: 4px; }
+.tsb-step.tsb-valid { box-shadow: 0 0 0 1px #40b860 inset; }
+.tsb-step.tsb-error { box-shadow: 0 0 0 1px #d04a4a inset; }
 .tsb-step-head { display: flex; align-items: center; gap: 5px; }
-.tsb-outputs { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.tsb-outputs { display: flex; flex-direction: row; align-items: center; gap: 4px; }
 .tsb-outputs-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
-.tsb-outputs input { width: 100%; }
+.tsb-outputs input { flex: 1; min-width: 0; }
 .tsb-step-index { font-size: 9px; color: var(--text-dim); font-family: monospace; min-width: 12px; }
 .tsb-kind { flex: none; width: 88px; }
 .tsb-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
 .tsb-match { font-size: 9px; color: #40b860; }
 .tsb-step-actions { margin-left: auto; display: flex; gap: 2px; }
 .tsb-btn {
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
   width: 20px; height: 20px; line-height: 1; cursor: pointer; font-size: 10px;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
   border-radius: 3px; color: var(--text-dim);
@@ -477,6 +476,7 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-add-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .tsb-add-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .tsb-plus {
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
   width: 22px; height: 22px; line-height: 1; font-size: 13px; cursor: pointer;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
   border-radius: 3px; color: var(--text-dim);
@@ -484,11 +484,17 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-plus:hover { color: var(--accent); border-color: var(--accent); }
 .tsb-step-add { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; }
 .tsb-insert-picker { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-.tsb-lightbulb { background: none; border: none; cursor: pointer; font-size: 12px; padding: 0; opacity: 0.45; line-height: 1; }
-.tsb-lightbulb-on { opacity: 1; }
-.tsb-lightbulb:hover { opacity: 0.8; }
+.tsb-lightbulb {
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  width: 22px; height: 22px; font-size: 12px; cursor: pointer; line-height: 1;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px; opacity: 0.55;
+}
+.tsb-lightbulb:hover { opacity: 0.85; }
+.tsb-lightbulb-on { opacity: 1; background: rgba(255,214,102,0.15); border-color: rgba(255,214,102,0.4); }
 .tsb-empty { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .tsb-summary { display: flex; gap: 10px; align-items: center; }
+.tsb-root :deep(.gml-item) { cursor: default; }
 .tsb-summary-type, .tsb-summary-dest { font-size: 9px; color: var(--text-dim); font-family: monospace; }
 .tsb-summary-dest.tsb-ok { color: #40b860; }
 </style>
