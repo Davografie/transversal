@@ -1351,6 +1351,7 @@ class Mutation:
             default_die_type=input.default_die_type,
             default_rating_type=input.default_rating_type,
             possible_sfx_ids=[str(s) for s in input.possible_sfx_ids],
+            possible_subtrait_ids=[str(s) for s in input.possible_subtrait_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             location_restricted=input.location_restricted,
             default_ego=input.default_ego,
@@ -1398,6 +1399,8 @@ class Mutation:
             existing.default_rating_type = input.default_rating_type
         if input.possible_sfx_ids is not None:
             existing.possible_sfx_ids = [str(s) for s in input.possible_sfx_ids]
+        if input.possible_subtrait_ids is not None:
+            existing.possible_subtrait_ids = [str(s) for s in input.possible_subtrait_ids]
         default_sfx_changed = input.default_sfx_ids is not None
         if default_sfx_changed:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]

@@ -84,6 +84,30 @@
       </GmList>
       <button class="ps-add-btn" @click="openSfxPicker">+ Add SFX</button>
 
+      <!-- Sub-trait assignment -->
+      <h4 class="ps-section-title">Possible Sub-traits</h4>
+      <p class="section-hint">Traits from sub-trait sets that can nest under this trait (e.g. elements).</p>
+      <GmList
+        :items="possibleSubtraitItems"
+        item-key="id"
+        empty-text="No sub-traits assigned"
+      >
+        <template #item="{ item: st }">
+          <span class="sfx-name">{{ st.name }}</span>
+          <span class="sfx-trigger">{{ st.traitsetName || '' }}</span>
+          <button class="row-del-btn" @click.stop="removePossibleSubtrait(st.id)" title="Remove sub-trait">✕</button>
+        </template>
+      </GmList>
+      <div class="subtrait-add">
+        <select v-model="newSubtraitId">
+          <option value="" disabled>Add sub-trait…</option>
+          <optgroup v-for="ts in subtraitTraitsets" :key="ts.id" :label="ts.name">
+            <option v-for="st in unassignedSubtraitOptions(ts)" :key="st.id" :value="st.id">{{ st.name }}</option>
+          </optgroup>
+        </select>
+        <button class="save-btn" @click="addSubtrait" :disabled="!newSubtraitId">Add</button>
+      </div>
+
       <div class="danger-zone">
         <DangerButton
           label="Delete Trait"
@@ -182,6 +206,7 @@ const form = reactive({
   polarity: '',
   possibleSfxIds: [],
   defaultSfxIds: [],
+  possibleSubtraitIds: [],
 })
 
 // Display names — derived from props.trait, kept as local array for display/auto-save
@@ -243,6 +268,7 @@ watch(trait, (t) => {
     form.polarity = t.polarity || ''
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
+    form.possibleSubtraitIds = [...(t.possibleSubtraitIds || [])]
     syncDisplayNamesFromTrait(t)
   }
 }, { immediate: true })
@@ -252,7 +278,7 @@ watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
   () => form.defaultRatingType, () => form.locationRestricted, () => form.defaultEgo,
   () => form.polarity,
-  () => [...form.possibleSfxIds], () => [...form.defaultSfxIds],
+  () => [...form.possibleSfxIds], () => [...form.defaultSfxIds], () => [...form.possibleSubtraitIds],
 ], () => {
   if (!trait.value) return
   clearTimeout(saveTimer)
@@ -273,7 +299,7 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
@@ -281,6 +307,7 @@ async function save() {
     polarity: form.polarity || null,
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
+    possibleSubtraitIds: [...form.possibleSubtraitIds],
   })
 }
 
@@ -345,6 +372,43 @@ const possibleSfxs = computed(() =>
 function removePossibleSfx(id) {
   form.possibleSfxIds = form.possibleSfxIds.filter(sid => sid !== id)
   form.defaultSfxIds = form.defaultSfxIds.filter(sid => sid !== id)
+}
+
+// ── Possible Sub-traits (from sub-trait sets) ──
+const newSubtraitId = ref('')
+
+const subtraitTraitsets = computed(() =>
+  (traitsets.value || []).filter(ts => (ts.entityTypes || []).includes('SUBTRAIT'))
+)
+
+const subtraitTraitMap = computed(() => {
+  const m = {}
+  for (const ts of subtraitTraitsets.value) {
+    for (const t of (ts.traits || [])) {
+      m[t.id] = { id: t.id, name: t.name, traitsetName: ts.name }
+    }
+  }
+  return m
+})
+
+const possibleSubtraitItems = computed(() =>
+  (form.possibleSubtraitIds || []).map(id => subtraitTraitMap.value[id] || { id, name: id, traitsetName: '' })
+)
+
+function unassignedSubtraitOptions(ts) {
+  return (ts.traits || []).filter(t => !form.possibleSubtraitIds.includes(t.id))
+}
+
+function addSubtrait() {
+  if (!newSubtraitId.value) return
+  if (!form.possibleSubtraitIds.includes(newSubtraitId.value)) {
+    form.possibleSubtraitIds.push(newSubtraitId.value)
+  }
+  newSubtraitId.value = ''
+}
+
+function removePossibleSubtrait(id) {
+  form.possibleSubtraitIds = form.possibleSubtraitIds.filter(sid => sid !== id)
 }
 
 function onDisplayNameClick(dn) { openDisplayNameEditor(dn._originalIndex) }
@@ -460,6 +524,8 @@ async function onDelete() {
   background: rgba(64, 184, 96, 0.12);
 }
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }
+.subtrait-add { display: flex; gap: 6px; margin-top: 4px; }
+.subtrait-add select { flex: 1; font-size: 12px; padding: 6px 8px; }
 
 .create-actions { display: flex; gap: 6px; margin-top: 4px; }
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
