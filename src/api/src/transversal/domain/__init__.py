@@ -348,6 +348,7 @@ class Trait(BaseModel):
     default_rating_type: RatingType = RatingType.STATIC
     required_trait_ids: list[str] = Field(default_factory=list)
     possible_subtrait_ids: list[str] = Field(default_factory=list)
+    possible_subtraitset_ids: list[str] = Field(default_factory=list)
     possible_sfx_ids: list[str] = Field(default_factory=list)
     default_sfx_ids: list[str] = Field(default_factory=list)
     location_restricted: bool = False

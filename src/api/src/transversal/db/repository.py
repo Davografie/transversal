@@ -454,6 +454,21 @@ class EntityRepository:
             for doc in self.db.aql.execute(query, bind_vars={"tsid": traitset_id})
         ]
 
+    def resolve_possible_subtrait_ids(self, trait: Trait) -> list[str]:
+        """Resolve a trait's possible sub-traits.
+
+        A trait can nominate sub-traits two ways: individual trait ids
+        (``possible_subtrait_ids``) and whole trait sets (``possible_subtraitset_ids``
+        — every trait in the set is eligible). This returns the flattened,
+        de-duplicated trait id list for read/Effects consumption.
+        """
+        ids: list[str] = list(trait.possible_subtrait_ids)
+        for set_id in trait.possible_subtraitset_ids:
+            for st in self.get_traits_by_traitset(set_id):
+                if st.id not in ids:
+                    ids.append(st.id)
+        return ids
+
     def get_all_traits(self) -> list[Trait]:
         query = f"""
             FOR t IN {TRAITS}

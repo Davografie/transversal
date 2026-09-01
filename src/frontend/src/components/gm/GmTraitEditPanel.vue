@@ -86,26 +86,30 @@
 
       <!-- Sub-trait assignment -->
       <h4 class="ps-section-title">Possible Sub-traits</h4>
-      <p class="section-hint">Traits from sub-trait sets that can nest under this trait (e.g. elements).</p>
+      <p class="section-hint">Add a whole sub-trait set (e.g. "elements") to make every trait in it nestable, or add individual traits.</p>
       <GmList
-        :items="possibleSubtraitItems"
-        item-key="id"
+        :items="possibleSubtargetItems"
+        item-key="key"
         empty-text="No sub-traits assigned"
       >
         <template #item="{ item: st }">
+          <span class="subtarget-kind" :class="st.kind">{{ st.kind === 'set' ? 'set' : 'trait' }}</span>
           <span class="sfx-name">{{ st.name }}</span>
           <span class="sfx-trigger">{{ st.traitsetName || '' }}</span>
-          <button class="row-del-btn" @click.stop="removePossibleSubtrait(st.id)" title="Remove sub-trait">✕</button>
+          <button class="row-del-btn" @click.stop="removePossibleSubtarget(st.key)" title="Remove">✕</button>
         </template>
       </GmList>
       <div class="subtrait-add">
-        <select v-model="newSubtraitId">
+        <select v-model="newSubtarget">
           <option value="" disabled>Add sub-trait…</option>
+          <optgroup label="Trait sets">
+            <option v-for="ts in unassignedSubtraitsets()" :key="'set-' + ts.id" :value="'set:' + ts.id">{{ ts.name }} (all traits)</option>
+          </optgroup>
           <optgroup v-for="ts in subtraitTraitsets" :key="ts.id" :label="ts.name">
-            <option v-for="st in unassignedSubtraitOptions(ts)" :key="st.id" :value="st.id">{{ st.name }}</option>
+            <option v-for="st in unassignedSubtraitOptions(ts)" :key="st.id" :value="'trait:' + st.id">{{ st.name }}</option>
           </optgroup>
         </select>
-        <button class="save-btn" @click="addSubtrait" :disabled="!newSubtraitId">Add</button>
+        <button class="save-btn" @click="addSubtarget" :disabled="!newSubtarget">Add</button>
       </div>
 
       <div class="danger-zone">
@@ -207,6 +211,7 @@ const form = reactive({
   possibleSfxIds: [],
   defaultSfxIds: [],
   possibleSubtraitIds: [],
+  possibleSubtraitsetIds: [],
 })
 
 // Display names — derived from props.trait, kept as local array for display/auto-save
@@ -269,6 +274,7 @@ watch(trait, (t) => {
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
     form.possibleSubtraitIds = [...(t.possibleSubtraitIds || [])]
+    form.possibleSubtraitsetIds = [...(t.possibleSubtraitsetIds || [])]
     syncDisplayNamesFromTrait(t)
   }
 }, { immediate: true })
@@ -278,7 +284,7 @@ watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
   () => form.defaultRatingType, () => form.locationRestricted, () => form.defaultEgo,
   () => form.polarity,
-  () => [...form.possibleSfxIds], () => [...form.defaultSfxIds], () => [...form.possibleSubtraitIds],
+  () => [...form.possibleSfxIds], () => [...form.defaultSfxIds], () => [...form.possibleSubtraitIds], () => [...form.possibleSubtraitsetIds],
 ], () => {
   if (!trait.value) return
   clearTimeout(saveTimer)
@@ -299,7 +305,7 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds, possibleSubtraitsetIds: form.possibleSubtraitsetIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
@@ -308,6 +314,7 @@ async function save() {
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
     possibleSubtraitIds: [...form.possibleSubtraitIds],
+    possibleSubtraitsetIds: [...form.possibleSubtraitsetIds],
   })
 }
 
@@ -374,12 +381,18 @@ function removePossibleSfx(id) {
   form.defaultSfxIds = form.defaultSfxIds.filter(sid => sid !== id)
 }
 
-// ── Possible Sub-traits (from sub-trait sets) ──
-const newSubtraitId = ref('')
+// ── Possible Sub-traits (set refs + individual traits) ──
+const newSubtarget = ref('')
 
 const subtraitTraitsets = computed(() =>
   (traitsets.value || []).filter(ts => (ts.entityTypes || []).includes('SUBTRAIT'))
 )
+
+const subtraitsetMap = computed(() => {
+  const m = {}
+  for (const ts of subtraitTraitsets.value) m[ts.id] = { id: ts.id, name: ts.name }
+  return m
+})
 
 const subtraitTraitMap = computed(() => {
   const m = {}
@@ -391,24 +404,38 @@ const subtraitTraitMap = computed(() => {
   return m
 })
 
-const possibleSubtraitItems = computed(() =>
-  (form.possibleSubtraitIds || []).map(id => subtraitTraitMap.value[id] || { id, name: id, traitsetName: '' })
-)
+// Assigned entries, unified for display (sets collapsed, traits individual).
+const possibleSubtargetItems = computed(() => [
+  ...(form.possibleSubtraitsetIds || []).map(id => ({ key: 'set:' + id, kind: 'set', name: subtraitsetMap.value[id]?.name || id, traitsetName: '' })),
+  ...(form.possibleSubtraitIds || []).map(id => ({ key: 'trait:' + id, kind: 'trait', name: subtraitTraitMap.value[id]?.name || id, traitsetName: subtraitTraitMap.value[id]?.traitsetName || '' })),
+])
+
+function unassignedSubtraitsets() {
+  return subtraitTraitsets.value.filter(ts => !form.possibleSubtraitsetIds.includes(ts.id))
+}
 
 function unassignedSubtraitOptions(ts) {
   return (ts.traits || []).filter(t => !form.possibleSubtraitIds.includes(t.id))
 }
 
-function addSubtrait() {
-  if (!newSubtraitId.value) return
-  if (!form.possibleSubtraitIds.includes(newSubtraitId.value)) {
-    form.possibleSubtraitIds.push(newSubtraitId.value)
+function addSubtarget() {
+  if (!newSubtarget.value) return
+  if (newSubtarget.value.startsWith('set:')) {
+    const id = newSubtarget.value.slice(4)
+    if (!form.possibleSubtraitsetIds.includes(id)) form.possibleSubtraitsetIds.push(id)
+  } else {
+    const id = newSubtarget.value.slice(6)
+    if (!form.possibleSubtraitIds.includes(id)) form.possibleSubtraitIds.push(id)
   }
-  newSubtraitId.value = ''
+  newSubtarget.value = ''
 }
 
-function removePossibleSubtrait(id) {
-  form.possibleSubtraitIds = form.possibleSubtraitIds.filter(sid => sid !== id)
+function removePossibleSubtarget(key) {
+  if (key.startsWith('set:')) {
+    form.possibleSubtraitsetIds = form.possibleSubtraitsetIds.filter(id => id !== key.slice(4))
+  } else {
+    form.possibleSubtraitIds = form.possibleSubtraitIds.filter(id => id !== key.slice(6))
+  }
 }
 
 function onDisplayNameClick(dn) { openDisplayNameEditor(dn._originalIndex) }
@@ -526,6 +553,17 @@ async function onDelete() {
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }
 .subtrait-add { display: flex; gap: 6px; margin-top: 4px; }
 .subtrait-add select { flex: 1; font-size: 12px; padding: 6px 8px; }
+.subtarget-kind {
+  flex-shrink: 0;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--text-dim);
+  color: var(--text-dim);
+}
+.subtarget-kind.set { border-color: var(--accent); color: var(--accent); }
 
 .create-actions { display: flex; gap: 6px; margin-top: 4px; }
 .save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }

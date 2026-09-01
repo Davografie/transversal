@@ -110,6 +110,7 @@ class TraitRef:
     possible_sfx_ids: list[strawberry.ID]
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     possible_subtrait_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+    possible_subtraitset_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
     default_ego: bool = False
     polarity: Optional[Polarity] = None
@@ -139,6 +140,7 @@ class TraitSetRef:
                 possible_sfx_ids=t.possible_sfx_ids,
                 default_sfx_ids=t.default_sfx_ids,
                 possible_subtrait_ids=t.possible_subtrait_ids,
+                possible_subtraitset_ids=t.possible_subtraitset_ids,
                 location_restricted=t.location_restricted,
                 default_ego=t.default_ego,
                 polarity=t.polarity,
@@ -642,6 +644,7 @@ class TraitInput:
     default_rating_type: RatingType = RatingType.STATIC
     possible_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     possible_subtrait_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+    possible_subtraitset_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool = False
     default_ego: bool = False
@@ -658,6 +661,7 @@ class TraitUpdateInput:
     default_rating_type: Optional[RatingType] = None
     possible_sfx_ids: Optional[list[strawberry.ID]] = None
     possible_subtrait_ids: Optional[list[strawberry.ID]] = None
+    possible_subtraitset_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     location_restricted: Optional[bool] = None
     default_ego: Optional[bool] = None
@@ -802,11 +806,11 @@ class TraitSetting:
 
     @strawberry.field
     def possible_subtrait_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
-        """Registry sub-traits that may be nested under this trait."""
+        """Resolved sub-traits that may be nested under this trait (ids + set refs)."""
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
         trait = em.repo.get_trait(self.trait_id)
-        return trait.possible_subtrait_ids if trait else []
+        return em.repo.resolve_possible_subtrait_ids(trait) if trait else []
 
     @strawberry.field
     def sub_trait_settings(self, info: strawberry.Info) -> list["TraitSetting"]:
