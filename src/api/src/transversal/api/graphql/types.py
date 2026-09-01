@@ -109,6 +109,7 @@ class TraitRef:
     default_rating_type: RatingType
     possible_sfx_ids: list[strawberry.ID]
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+    possible_subtrait_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     location_restricted: bool
     default_ego: bool = False
     polarity: Optional[Polarity] = None
@@ -137,6 +138,7 @@ class TraitSetRef:
                 default_rating_type=t.default_rating_type,
                 possible_sfx_ids=t.possible_sfx_ids,
                 default_sfx_ids=t.default_sfx_ids,
+                possible_subtrait_ids=t.possible_subtrait_ids,
                 location_restricted=t.location_restricted,
                 default_ego=t.default_ego,
                 polarity=t.polarity,
@@ -676,8 +678,9 @@ class TraitSetting:
     polarity: Polarity
     statement: str
     notes: str = ""
-    from_type: str = "entity"  # "entity" | "projection" | "relationship"
+    from_type: str = "entity"  # "entity" | "projection" | "relationship" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
+    parent_traitsetting_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID]
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     enabled: bool = True
@@ -794,6 +797,24 @@ class TraitSetting:
         trait = em.repo.get_trait(self.trait_id)
         return trait.possible_sfx_ids if trait else []
 
+    @strawberry.field
+    def possible_subtrait_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
+        """Registry sub-traits that may be nested under this trait."""
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        trait = em.repo.get_trait(self.trait_id)
+        return trait.possible_subtrait_ids if trait else []
+
+    @strawberry.field
+    def sub_trait_settings(self, info: strawberry.Info) -> list["TraitSetting"]:
+        """Sub-trait settings nested directly under this trait setting."""
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        return [
+            _gql_trait_setting(s)
+            for s in em.repo.get_sub_traitsettings(str(self.id))
+        ]
+
 
 @strawberry.input
 class TraitSettingInput:
@@ -804,8 +825,9 @@ class TraitSettingInput:
     polarity: Optional[Polarity] = None
     statement: str = ""
     notes: str = ""
-    from_type: Optional[str] = None  # "entity" | "projection"
+    from_type: Optional[str] = None  # "entity" | "projection" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
+    parent_traitsetting_id: Optional[strawberry.ID] = None
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     enabled: bool = True
 
@@ -817,8 +839,9 @@ class TraitSettingUpdateInput:
     polarity: Optional[Polarity] = None
     statement: Optional[str] = None
     notes: Optional[str] = None
-    from_type: Optional[str] = None  # "entity" | "projection"
+    from_type: Optional[str] = None  # "entity" | "projection" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
+    parent_traitsetting_id: Optional[strawberry.ID] = None
     sfx_ids: Optional[list[strawberry.ID]] = None
     known_to: Optional[list[strawberry.ID]] = None
     enabled: Optional[bool] = None
@@ -887,6 +910,7 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
         statement=s.statement,
         notes=s.notes,
         from_type=s.from_type, projection_id=s.projection_id,
+        parent_traitsetting_id=s.parent_traitsetting_id,
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
         relationship_contact_id=contact.get("contact_id"),

@@ -301,6 +301,35 @@
                   <span class="trait-die unknown-die">?</span>
                 </div>
               </div>
+              <div v-if="isKnown(t) && (t.subTraitSettings || []).length" class="sub-trait-list">
+                <div
+                  v-for="st in t.subTraitSettings"
+                  :key="st.id"
+                  class="sub-trait-row"
+                  :class="{ 'in-pool': isInPool(st), negative: st.polarity === 'NEGATIVE', 'trait-disabled': st.enabled === false }"
+                  @click="onTraitClick(st)"
+                  @contextmenu.prevent
+                >
+                  <div class="sub-trait-left">
+                    <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || st.enabled === false }">{{ displayName(st.name) }}</span>
+                    <span v-if="st.statement" class="sub-trait-statement">{{ st.statement }}</span>
+                  </div>
+                  <div class="sub-trait-right">
+                    <div v-if="traitDiceGroups(st).length" class="trait-die-groups">
+                      <div v-for="(group, gi) in traitDiceGroups(st)" :key="gi" class="trait-die-group">
+                        <DieIcon
+                          v-for="(die, i) in group"
+                          :key="i"
+                          :die="die"
+                          class="trait-die-icon sub-trait-die"
+                          :style="i ? { marginLeft: '-12px' } : null"
+                        />
+                      </div>
+                    </div>
+                    <span v-else-if="st.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${resolvedDieType(st)}`">{{ resourceDisplay(st) }}</span>
+                  </div>
+                </div>
+              </div>
             </template>
           <button
             v-if="activeSheetView === 'traits' && nextSet"
@@ -1033,6 +1062,21 @@ const QUERY = `
         relationshipContactName
         relationshipContactType
         relationshipType
+        subTraitSettings {
+          id
+          traitId
+          name
+          dieType
+          ratingType
+          rating
+          fromType
+          statement
+          sfxIds
+          dice
+          spentDice
+          polarity
+          enabled
+        }
       }
       effectiveTraitSettings {
         id
@@ -1063,6 +1107,21 @@ const QUERY = `
         relationshipContactName
         relationshipContactType
         relationshipType
+        subTraitSettings {
+          id
+          traitId
+          name
+          dieType
+          ratingType
+          rating
+          fromType
+          statement
+          sfxIds
+          dice
+          spentDice
+          polarity
+          enabled
+        }
       }
     }
   }
@@ -2399,6 +2458,62 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-row.morph {
   background: rgba(64, 136, 212, 0.08);
   border-left: 2px solid var(--accent);
+}
+
+.sub-trait-list {
+  margin: 0 0 4px 20px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255,255,255,0.10);
+}
+.sub-trait-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.sub-trait-row:hover {
+  background: rgba(255,255,255,0.04);
+}
+.sub-trait-row.in-pool {
+  background: rgba(64, 136, 212, 0.12);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.sub-trait-row.negative {
+  border-left: 2px solid var(--offered, #f2908a);
+}
+.sub-trait-row.trait-disabled {
+  opacity: 0.45;
+}
+.sub-trait-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.sub-trait-name {
+  font-weight: 500;
+}
+.sub-trait-name.disabled {
+  opacity: 0.5;
+}
+.sub-trait-statement {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.sub-trait-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.sub-trait-die {
+  font-size: 12px;
 }
 
 .trait-left {

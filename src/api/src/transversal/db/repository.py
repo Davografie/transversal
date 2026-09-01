@@ -230,16 +230,33 @@ class EntityRepository:
             bind_vars={"eref": eref, "proj_refs": proj_refs},
         ))
 
-        # Relationship trait settings anchored to those edges.
+        # Collect trait-setting roots anchored to this entity — relationship edges
+        # plus entity/projection settings — then remove them and all nested
+        # sub-traits in one subtree walk.
+        trait_setting_keys = set()
         if edge_keys:
+            trait_setting_keys.update(
+                self.db.aql.execute(
+                    f"""
+                    FOR ts IN {TRAITSETTINGS}
+                    FILTER ts.from_type == 'relationship' AND ts.entity_id IN @edge_keys
+                    RETURN ts._key
+                    """,
+                    bind_vars={"edge_keys": edge_keys},
+                )
+            )
+        trait_setting_keys.update(
             self.db.aql.execute(
                 f"""
                 FOR ts IN {TRAITSETTINGS}
-                FILTER ts.from_type == 'relationship' AND ts.entity_id IN @edge_keys
-                REMOVE ts IN {TRAITSETTINGS}
+                FILTER ts.entity_id == @eid AND ts.from_type != 'traitsetting'
+                RETURN ts._key
                 """,
-                bind_vars={"edge_keys": edge_keys},
+                bind_vars={"eid": entity_id},
             )
+        )
+        if trait_setting_keys:
+            self._delete_traitsettings_subtree(list(trait_setting_keys))
 
         # The relationship edges themselves.
         self.db.aql.execute(
@@ -249,12 +266,6 @@ class EntityRepository:
             REMOVE r IN {RELATIONSHIPS}
             """,
             bind_vars={"eref": eref, "proj_refs": proj_refs},
-        )
-
-        # Entity/projection-anchored trait settings (non-relationship).
-        self.db.aql.execute(
-            f"FOR ts IN {TRAITSETTINGS} FILTER ts.entity_id == @eid REMOVE ts IN {TRAITSETTINGS}",
-            bind_vars={"eid": entity_id},
         )
 
         for key in proj_keys:
@@ -462,10 +473,11 @@ class EntityRepository:
 
     def delete_trait(self, trait_id: str) -> bool:
         """Delete a trait and cascade-remove any trait settings referencing it."""
-        ts_removed = len(list(self.db.aql.execute(
-            f"FOR ts IN {TRAITSETTINGS} FILTER ts.trait_id == @tid REMOVE ts IN {TRAITSETTINGS} RETURN OLD._key",
+        keys = list(self.db.aql.execute(
+            f"FOR ts IN {TRAITSETTINGS} FILTER ts.trait_id == @tid RETURN ts._key",
             bind_vars={"tid": trait_id}
-        )))
+        ))
+        self._delete_traitsettings_subtree(keys)
         self._cleanup_lifepath_trait_refs(trait_id)
         try:
             self._traits.delete(trait_id)
@@ -692,10 +704,11 @@ class EntityRepository:
         ]
         ts_removed = 0
         if trait_keys:
-            ts_removed = len(list(self.db.aql.execute(
-                f"FOR ts IN {TRAITSETTINGS} FILTER ts.trait_id IN @tids REMOVE ts IN {TRAITSETTINGS} RETURN OLD._key",
+            setting_keys = list(self.db.aql.execute(
+                f"FOR ts IN {TRAITSETTINGS} FILTER ts.trait_id IN @tids RETURN ts._key",
                 bind_vars={"tids": trait_keys}
-            )))
+            ))
+            ts_removed = self._delete_traitsettings_subtree(setting_keys)
         for tkey in trait_keys:
             self._cleanup_lifepath_trait_refs(tkey)
             try: self._traits.delete(tkey)
@@ -725,6 +738,8 @@ class EntityRepository:
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
         elif ts.from_type == "projection":
             doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
+        elif ts.from_type == "traitsetting":
+            doc["_from"] = f"{TRAITSETTINGS}/{ts.parent_traitsetting_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
@@ -755,7 +770,7 @@ class EntityRepository:
     def get_traitsettings_for_entity(self, entity_id: str) -> list[TraitSetting]:
         query = f"""
             FOR ts IN {TRAITSETTINGS}
-            FILTER ts.entity_id == @eid
+            FILTER ts.entity_id == @eid AND ts.from_type != 'traitsetting'
             RETURN ts
         """
         return [
@@ -786,6 +801,27 @@ class EntityRepository:
             TraitSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(
                 query, bind_vars={"eid": entity_id, "tsid": traitset_id}
+            )
+        ]
+
+    def get_sub_traitsettings(self, parent_traitsetting_id: str) -> list[TraitSetting]:
+        """Return sub-trait settings nested under a parent trait setting.
+
+        Sub-traits are stored in the same `traitsettings` edge collection, with
+        ``from_type == 'traitsetting'`` and ``_from`` anchored to the parent's
+        document (mirroring the relationship edge-anchoring pattern).
+        """
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.from_type == 'traitsetting'
+                AND ts.parent_traitsetting_id == @pid
+            SORT ts.traitset_id, ts.trait_id
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(
+                query, bind_vars={"pid": parent_traitsetting_id}
             )
         ]
 
@@ -820,15 +856,43 @@ class EntityRepository:
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
         elif ts.from_type == "projection":
             doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
+        elif ts.from_type == "traitsetting":
+            doc["_from"] = f"{TRAITSETTINGS}/{ts.parent_traitsetting_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
         self._traitsettings.replace(doc)
         return ts
 
+    def _delete_traitsettings_subtree(self, keys: list[str]) -> int:
+        """Delete trait settings and their nested sub-trait descendants.
+
+        ``keys`` are trait setting ``_key``s. Sub-traits are anchored via
+        ``parent_traitsetting_id``, so we walk descendants iteratively rather
+        than rely on a graph traversal (an edge document cannot be a graph
+        vertex in Arango). Returns the number of documents removed.
+        """
+        pending = set(keys)
+        removed = 0
+        while pending:
+            batch = list(pending)
+            # Collect children before removing the current batch.
+            children = set(self.db.aql.execute(
+                f"FOR ts IN {TRAITSETTINGS} FILTER ts.parent_traitsetting_id IN @keys RETURN ts._key",
+                bind_vars={"keys": batch},
+            ))
+            result = self.db.aql.execute(
+                f"FOR ts IN {TRAITSETTINGS} FILTER ts._key IN @keys REMOVE ts IN {TRAITSETTINGS} RETURN OLD._key",
+                bind_vars={"keys": batch},
+            )
+            removed += len(list(result))
+            pending = children
+        return removed
+
     def delete_traitsetting(self, ts_id: str) -> bool:
         try:
-            self._traitsettings.delete(ts_id)
+            # Cascade: remove this setting and all nested sub-traits.
+            self._delete_traitsettings_subtree([ts_id])
             return True
         except Exception:
             return False
