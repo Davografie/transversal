@@ -76,6 +76,19 @@ class TestSceneStateStore:
         assert store.get_pool("loc-1", "kael-1") == []
         assert store.get_difficulty("loc-1") is None
 
+    def test_phase_defaults_to_adding(self, store):
+        assert store.get_phase("loc-1", "kael-1") == "adding"
+
+    def test_phase_set_get_roundtrip(self, store):
+        store.set_phase("loc-1", "kael-1", "resolved")
+        assert store.get_phase("loc-1", "kael-1") == "resolved"
+
+    def test_clear_pool_clears_phase(self, store):
+        store.save_pool("loc-1", "kael-1", [_die()])
+        store.set_phase("loc-1", "kael-1", "rolled")
+        store.clear_pool("loc-1", "kael-1")
+        assert store.get_phase("loc-1", "kael-1") == "adding"
+
 
 class TestTraitResync:
     def test_resync_trait_die_updates_matching_die(self, store):
@@ -132,6 +145,13 @@ class TestSceneStateEndpoints:
         r = client.get("/api/v1/locations/loc-1/pools/kael-1")
         assert r.status_code == 200, r.text
         assert r.json()["dice"] == dice
+
+    def test_get_pool_returns_phase(self, client):
+        dice = [_die()]
+        client.put("/api/v1/locations/loc-1/pools/kael-1", json={"dice": dice})
+        r = client.get("/api/v1/locations/loc-1/pools/kael-1")
+        assert r.status_code == 200, r.text
+        assert r.json()["phase"] == "adding"
 
     def test_pool_save_preserves_armed_sfx_ids(self, client):
         # Regression: armed_sfx_ids must survive the save_pool REST boundary so

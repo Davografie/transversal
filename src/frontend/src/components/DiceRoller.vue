@@ -395,7 +395,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change'])
 
-const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
+const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
 const { applyOption: applyHitchEffect } = useHitchMenu()
 const pool = reactive([])
@@ -1695,6 +1695,7 @@ async function onPickCommit() {
   if (challenged.value) {
     doSetResult()
   } else {
+    await apiResolvePool(props.locationId, poolEntityKey())
     commitPicks()
   }
 }
@@ -1775,23 +1776,25 @@ function resyncTraitDie(traitSettingId, newDice) {
   if (changed) notifyPool()
 }
 
-function restoreRolledResult(dice) {
+function restoreRolledResult(dice, phase = '') {
   // Reconstruct the rolled result + selection from the stateful pool dice.
   const hitches = dice.filter(d => d.hitch)
   const botch = dice.length > 0 && dice.every(d => d.hitch)
   const hasResource = dice.some(d => d.resource)
   if (dice.length <= 2 && !hasResource) {
+    // Simplified rolls resolve immediately (no picking phase).
     const highest = Math.max(...dice.map(d => d.result))
     const tier = highest <= 2 ? 'FAIL' : highest <= 5 ? 'MARGINAL' : highest <= 8 ? 'SUCCESS' : highest <= 11 ? 'EXCEPTIONAL' : 'PERFECT'
     const effect = { FAIL: null, MARGINAL: 'd4', SUCCESS: 'd6', EXCEPTIONAL: 'd8', PERFECT: 'd10' }[tier]
     result.value = { pipeline: 'simplified', rolls: dice, hitches, botch, highest, tier, effect_die: effect }
+    setPhase(Phase.RESOLVED)
   } else {
     result.value = { pipeline: 'pool', rolls: dice, hitches, botch }
+    selection.total = dice.map((d, i) => d.role === 'total' ? i : null).filter(i => i !== null)
+    selection.effect = dice.map((d, i) => d.role === 'effect' ? i : null).filter(i => i !== null)
+    ensureSlots()
+    setPhase(phase === 'resolved' ? Phase.RESOLVED : Phase.PICKING)
   }
-  selection.total = dice.map((d, i) => d.role === 'total' ? i : null).filter(i => i !== null)
-  selection.effect = dice.map((d, i) => d.role === 'effect' ? i : null).filter(i => i !== null)
-  ensureSlots()
-  setPhase(Phase.PICKING)
   panelOpen.value = true
 }
 
@@ -1799,10 +1802,11 @@ async function loadPoolIntoEditor(id) {
   if (!props.locationId || !id) return
   const res = await apiGetPool(props.locationId, id)
   const dice = res?.dice || []
+  const phase = res?.phase || 'adding'
   pool.splice(0, pool.length)
   if (dice.some(d => d.result != null)) {
     // Already rolled — restore the rolled result instead of treating it as unrolled.
-    restoreRolledResult(dice)
+    restoreRolledResult(dice, phase)
     return
   }
   for (const d of dice) {

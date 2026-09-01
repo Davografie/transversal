@@ -519,6 +519,10 @@ def broadcast_pool_change(
     if dice is None:
         dice = get_scene_store().get_pool(location_id, entity_id)
 
+    # Persist the lifecycle phase so a client re-fetch (tab switch / refresh)
+    # can restore the committed result rather than the picking screen.
+    get_scene_store().set_phase(location_id, entity_id, phase)
+
     actor = actor_id or entity_id
     wire_dice = [d if isinstance(d, dict) else {"die": str(d)} for d in dice]
 

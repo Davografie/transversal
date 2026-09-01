@@ -27,6 +27,10 @@ class SceneStateStore:
 
     _pools: dict[str, dict[str, list[dict]]] = field(default_factory=dict)
     _difficulty: dict[str, int] = field(default_factory=dict)
+    # Pool lifecycle phase per (location, entity): adding → rolled → selected
+    # → resolved. Persisted so a client re-fetch (tab switch / refresh) can
+    # restore the committed result instead of the picking screen.
+    _phases: dict[str, dict[str, str]] = field(default_factory=dict)
 
     # ── Pools ─────────────────────────────────────────
 
@@ -36,17 +40,26 @@ class SceneStateStore:
     def get_pool(self, location_id: str, entity_id: str) -> list[dict]:
         return list(self._pools.get(location_id, {}).get(entity_id, []))
 
+    def set_phase(self, location_id: str, entity_id: str, phase: str) -> None:
+        self._phases.setdefault(location_id, {})[entity_id] = phase
+
+    def get_phase(self, location_id: str, entity_id: str) -> str:
+        return self._phases.get(location_id, {}).get(entity_id, "adding")
+
     def clear_pool(self, location_id: str, entity_id: str) -> None:
         self._pools.get(location_id, {}).pop(entity_id, None)
+        self._phases.get(location_id, {}).pop(entity_id, None)
 
     def clear_pools(self, location_id: str) -> None:
         """Clear every pool at a location (end of beat), keep difficulty."""
         self._pools.pop(location_id, None)
+        self._phases.pop(location_id, None)
 
     def clear_all(self) -> None:
         """Clear every location's pools and difficulty (scene end)."""
         self._pools.clear()
         self._difficulty.clear()
+        self._phases.clear()
 
     def resync_trait_die(self, entity_id: str, trait_setting_id: str, new_dice: list[str]) -> list[tuple[str, str]]:
         """Update assembled pool dice referencing ``trait_setting_id``.

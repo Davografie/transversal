@@ -68,6 +68,10 @@ export function useApi() {
     })
   }
 
+  async function resolvePool(locationId, entityId) {
+    return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/resolve`, {})
+  }
+
   async function markHitchesBought(locationId, entityId, indices) {
     return _rollEndpoint(`/locations/${locationId}/pools/${entityId}/hitches/mark-bought`, { indices })
   }
@@ -349,5 +353,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

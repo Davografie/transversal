@@ -58,9 +58,11 @@ async def get_pools(location_id: str):
 @router.get("/{location_id}/pools/{entity_id}")
 async def get_pool(location_id: str, entity_id: str):
     """Return one entity's saved dice pool (empty if none)."""
-    dice = get_scene_store().get_pool(location_id, entity_id)
+    store = get_scene_store()
+    dice = store.get_pool(location_id, entity_id)
+    phase = store.get_phase(location_id, entity_id)
     logger.info(f"[init] get_pool loc={location_id} entity={entity_id} dice={len(dice)}")
-    return {"dice": dice}
+    return {"dice": dice, "phase": phase}
 
 
 @router.put("/{location_id}/pools/{entity_id}")

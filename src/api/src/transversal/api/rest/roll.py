@@ -180,6 +180,20 @@ async def select_dice(location_id: str, entity_id: str, req: SelectRequest):
     return {"dice": dice}
 
 
+@router.post("/locations/{location_id}/pools/{entity_id}/resolve")
+async def resolve_pool(location_id: str, entity_id: str):
+    """Mark a rolled+selected pool as resolved (committed).
+
+    Sets the persisted phase to ``resolved`` so a client re-fetch (tab switch
+    or refresh) restores the committed result screen rather than the picking
+    screen.
+    """
+    store = get_scene_store()
+    dice = store.get_pool(location_id, entity_id)
+    broadcast_pool_change(location_id, entity_id, dice=dice, phase="resolved")
+    return {"phase": "resolved"}
+
+
 @router.get("/pools")
 async def list_all_pools():
     """Return every saved dice pool across all locations (tabs are global)."""
