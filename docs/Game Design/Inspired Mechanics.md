@@ -88,6 +88,12 @@ appearance: "Tall, silver hair, jade-green eyes"
 
 ## Rolling Against Challenge Pools
 
+> [!warning] Superseded
+> The progress-clock resolution described below has changed: positive challenge
+> pools are now **count-up-to-a-target** (a spend-from pool), not
+> roll-against-to-shrink. See [[Challenge Rating Type]] for the current design.
+> The negative (doom pool) behavior is unchanged.
+
 ### Simplified Pipeline (1–2 Dice)
 
 1. Player selects one die from the challenge pool to target (e.g., a d8)
