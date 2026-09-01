@@ -442,6 +442,12 @@ class TraitSetting(BaseModel):
 
     ``rating_type`` determines behaviour (STATIC / RESOURCE / CHALLENGE /
     EMPTY) and is never inferred from the dice.
+
+    ``capacity`` is the challenge pool's target/cap: for a positive
+    (progress) challenge it is the completion target (e.g. ``[D6, D6, D6]``)
+    the ``dice`` ledger fills toward; for a negative (doom) challenge it is an
+    optional growth ceiling (currently unused). Resources may optionally store
+    their explicit original capacity here too.
     """
     id: str
     entity_id: str
@@ -453,6 +459,7 @@ class TraitSetting(BaseModel):
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)
     spent_dice: list[DieType] = Field(default_factory=list)  # spent-but-recoverable (resource pools)
+    capacity: Optional[list[DieType]] = None  # challenge target (positive) / ceiling (negative)
     polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
     notes: str = ""            # longer freeform notes

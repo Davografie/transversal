@@ -677,6 +677,7 @@ class TraitSetting:
     rating_type: RatingType
     dice: list[DieType]
     spent_dice: list[DieType] = strawberry.field(default_factory=list)
+    capacity: Optional[list[DieType]] = None
     polarity: Polarity
     statement: str
     notes: str = ""
@@ -824,6 +825,7 @@ class TraitSettingInput:
     traitset_id: strawberry.ID
     dice: list[DieType] = strawberry.field(default_factory=list)
     rating_type: RatingType = RatingType.STATIC
+    capacity: Optional[list[DieType]] = None
     polarity: Optional[Polarity] = None
     statement: str = ""
     notes: str = ""
@@ -838,6 +840,7 @@ class TraitSettingInput:
 class TraitSettingUpdateInput:
     dice: Optional[list[DieType]] = None
     rating_type: Optional[RatingType] = None
+    capacity: Optional[list[DieType]] = None
     polarity: Optional[Polarity] = None
     statement: Optional[str] = None
     notes: Optional[str] = None
@@ -908,6 +911,7 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
         traitset_id=s.traitset_id,
         rating_type=s.rating_type, dice=s.dice,
         spent_dice=s.spent_dice,
+        capacity=s.capacity,
         polarity=s.polarity,
         statement=s.statement,
         notes=s.notes,

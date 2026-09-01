@@ -793,6 +793,7 @@ def _apply_step_up(entity, effect, repo, result):
         result.updated_trait_settings.append(existing)
         result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
         _queue_trait_revert(repo, existing, effect)
+        _maybe_complete_challenge(existing, subject)
 
 
 def _apply_step_down(entity, effect, repo, result):
@@ -818,12 +819,20 @@ def _apply_step_down(entity, effect, repo, result):
     _queue_trait_revert(repo, existing, effect)
 
 
+def _maybe_complete_challenge(ts: TraitSetting, subject: Entity) -> None:
+    """Fire the completion event when a positive challenge reaches capacity."""
+    from transversal.services.challenge_pools import fire_challenge_completed
+    universe = subject.current_universe if subject else ""
+    fire_challenge_completed(ts, universe)
+
+
 def _apply_add_die(entity, effect, repo, result):
     """Add a die to a trait setting's rating (any rating type).
 
     Appends ``effect.result`` (a die size, e.g. ``d6``) to the trait setting's
     ``dice`` list. Static/resource/challenge ratings are all a ``dice`` list, so
-    this is type-agnostic; the duration revert removes the same die.
+    this is type-agnostic; the duration revert removes the same die. A positive
+    challenge pool is bounded by its ``capacity`` (the completion target).
     """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -836,11 +845,20 @@ def _apply_add_die(entity, effect, repo, result):
     if not existing:
         result.applied.append(AppliedEffect(effect, f"no trait {target} to add a die to"))
         return
+    if (
+        existing.rating_type == RatingType.CHALLENGE
+        and existing.polarity == Polarity.POSITIVE
+        and existing.capacity
+        and len(existing.dice) >= len(existing.capacity)
+    ):
+        result.applied.append(AppliedEffect(effect, f"{target} is already at capacity"))
+        return
     die = _die(effect.result)
     existing.dice.append(die)
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"added {die.value} to {target}", existing.id))
     _queue_trait_revert(repo, existing, effect)
+    _maybe_complete_challenge(existing, subject)
 
 
 def _apply_remove_die(entity, effect, repo, result):

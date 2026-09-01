@@ -18,6 +18,7 @@ from transversal.api.rest.locations import router as locations_router
 from transversal.api.rest.media import router as media_router
 from transversal.api.rest.plans import router as plans_router
 from transversal.api.rest.resource_pool import router as resource_pool_router
+from transversal.api.rest.challenge_pool import router as challenge_pool_router
 from transversal.api.rest.contest_pools import router as contest_pools_router
 from transversal.api.rest.targeting_bans import router as targeting_bans_router
 from transversal.api.rest.scene_state import router as scene_state_router
@@ -169,6 +170,7 @@ app.include_router(locations_router)
 app.include_router(media_router)
 app.include_router(plans_router)
 app.include_router(resource_pool_router)
+app.include_router(challenge_pool_router)
 app.include_router(contest_pools_router)
 app.include_router(targeting_bans_router)
 app.include_router(scene_state_router)

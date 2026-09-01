@@ -1129,6 +1129,7 @@ class Mutation:
             traitset_id=str(input.traitset_id),
             dice=input.dice,
             rating_type=input.rating_type,
+            capacity=input.capacity,
             polarity=polarity,
             statement=input.statement,
             notes=input.notes,
@@ -1259,6 +1260,8 @@ class Mutation:
             ts.dice = input.dice
         if input.rating_type is not None:
             ts.rating_type = input.rating_type
+        if input.capacity is not None:
+            ts.capacity = input.capacity
         if input.polarity is not None:
             ts.polarity = input.polarity
         if input.statement is not None:
