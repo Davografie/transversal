@@ -23,6 +23,8 @@
       <GmList v-if="steps.length" :items="steps" item-key="" reorderable drag-handle @reorder="onReorder">
         <template #item="{ item: step, index: i }">
         <div class="tsb-step" :class="{ 'tsb-valid': stepIsValid(i), 'tsb-error': stepHasError(i) }">
+        <div class="tsb-step-row">
+        <div class="tsb-step-main">
         <div class="tsb-step-head">
           <span class="tsb-step-index">{{ i + 1 }}</span>
           <select v-model="step.kind" class="tsb-kind">
@@ -30,23 +32,6 @@
           </select>
           <span class="tsb-type">{{ typeLabel(i) }}</span>
           <span v-if="stepIsValid(i)" class="tsb-match">✓ {{ destinationLabel }}</span>
-          <div class="tsb-step-actions">
-            <button type="button" class="tsb-btn tsb-remove" title="Remove" @click="remove(i)">✕</button>
-          </div>
-        </div>
-
-        <div class="tsb-outputs">
-          <button
-            type="button"
-            class="tsb-lightbulb"
-            :class="{ 'tsb-lightbulb-on': step.output != null }"
-            :title="step.output != null ? 'Exposed as variable' : 'Expose as variable'"
-            @click="toggleOutput(i)"
-          >💡</button>
-          <template v-if="step.output != null">
-            <span class="tsb-outputs-type">{{ typeLabel(i) }}</span>
-            <input v-model="step.output" type="text" placeholder="name" />
-          </template>
         </div>
 
         <div v-if="stepError(i)" class="tsb-err">{{ stepError(i) }}</div>
@@ -152,19 +137,33 @@
           <input v-else :value="step.value" placeholder="value (count / d8 / …)" @input="onEvaluateValue(i, $event)" />
         </div>
 
-        <div class="tsb-step-add">
+        <div v-if="step.output != null" class="tsb-output-row">
+          <span class="tsb-outputs-type">{{ typeLabel(i) }}</span>
+          <input v-model="step.output" type="text" placeholder="variable name" />
+        </div>
+        </div>
+        <div class="tsb-step-rail">
+          <button type="button" class="tsb-btn tsb-remove" title="Remove" @click="remove(i)">✕</button>
+          <button
+            type="button"
+            class="tsb-lightbulb"
+            :class="{ 'tsb-lightbulb-on': step.output != null }"
+            :title="step.output != null ? 'Exposed as variable' : 'Expose as variable'"
+            @click="toggleOutput(i)"
+          >💡</button>
           <button type="button" class="tsb-plus" title="Add step after" @click="toggleInsert(i)">＋</button>
-          <div v-if="insertingAt === i" class="tsb-insert-picker">
-            <span class="tsb-add-label">Add after:</span>
-            <button
-              v-for="k in STEP_KINDS"
-              :key="k.kind"
-              type="button"
-              class="tsb-add-btn"
-              :disabled="!canInsertAfter(i, k.kind)"
-              @click="insert(i, k.kind)"
-            >{{ k.label }}</button>
-          </div>
+        </div>
+        </div>
+        <div v-if="insertingAt === i" class="tsb-insert-picker">
+          <span class="tsb-add-label">Add after:</span>
+          <button
+            v-for="k in STEP_KINDS"
+            :key="k.kind"
+            type="button"
+            class="tsb-add-btn"
+            :disabled="!canInsertAfter(i, k.kind)"
+            @click="insert(i, k.kind)"
+          >{{ k.label }}</button>
         </div>
         </div>
         </template>
@@ -438,17 +437,19 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-step.tsb-valid { box-shadow: 0 0 0 1px #40b860 inset; }
 .tsb-step.tsb-error { box-shadow: 0 0 0 1px #d04a4a inset; }
 .tsb-step-head { display: flex; align-items: center; gap: 5px; }
-.tsb-outputs { display: flex; flex-direction: row; align-items: center; gap: 4px; }
 .tsb-outputs-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
-.tsb-outputs input { flex: 1; min-width: 0; }
+.tsb-output-row { display: flex; align-items: center; gap: 4px; }
+.tsb-output-row input { flex: 1; min-width: 0; }
 .tsb-step-index { font-size: 9px; color: var(--text-dim); font-family: monospace; min-width: 12px; }
 .tsb-kind { flex: none; width: 88px; }
 .tsb-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
 .tsb-match { font-size: 9px; color: #40b860; }
-.tsb-step-actions { margin-left: auto; display: flex; gap: 2px; }
+.tsb-step-row { display: flex; gap: 6px; }
+.tsb-step-main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.tsb-step-rail { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .tsb-btn {
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
-  width: 20px; height: 20px; line-height: 1; cursor: pointer; font-size: 10px;
+  width: 22px; height: 22px; line-height: 1; cursor: pointer; font-size: 10px;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
   border-radius: 3px; color: var(--text-dim);
 }
@@ -482,8 +483,7 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
   border-radius: 3px; color: var(--text-dim);
 }
 .tsb-plus:hover { color: var(--accent); border-color: var(--accent); }
-.tsb-step-add { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; }
-.tsb-insert-picker { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.tsb-insert-picker { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-start; margin-top: 4px; }
 .tsb-lightbulb {
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
   width: 22px; height: 22px; font-size: 12px; cursor: pointer; line-height: 1;
