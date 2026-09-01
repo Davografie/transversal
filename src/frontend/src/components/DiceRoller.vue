@@ -87,9 +87,11 @@
         :key="p.die"
         class="difficulty-btn"
         :class="`die-btn-${p.die}`"
+        :title="`${p.label} (2${p.die})`"
         @click="setDifficulty(p.die)"
       >
-        {{ p.label }} (2{{ p.die }})
+        <DieIcon :die="p.die" class="difficulty-die-icon" />
+        <span class="difficulty-preset-label">{{ p.label }}</span>
       </button>
     </div>
 
@@ -2178,7 +2180,9 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .sel-value strong { color: var(--accent); font-size: 28px; }
 
 .difficulty-presets { display: flex; flex-wrap: wrap; gap: 6px; }
-.difficulty-btn { flex: 1; min-width: 56px; padding: 6px 4px; font-size: 11px; font-weight: 700; border-radius: 6px; cursor: pointer; border: 2px solid transparent; background: rgba(255,255,255,0.06); color: var(--text); }
+.difficulty-btn { flex: 1; min-width: 56px; padding: 6px 4px; font-size: 11px; font-weight: 700; border-radius: 6px; cursor: pointer; border: 2px solid transparent; background: rgba(255,255,255,0.06); color: var(--text); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.difficulty-die-icon { width: 32px; height: 36px; }
+.difficulty-preset-label { font-size: 10px; line-height: 1; }
 .difficulty-btn:hover { background: rgba(255,255,255,0.12); border-color: var(--accent-dim); }
 .opposition-result { font-size: 14px; color: var(--text-dim); margin-top: 4px; }
 .opposition-result strong { color: var(--text); }
