@@ -186,10 +186,37 @@ async def resolve_pool(location_id: str, entity_id: str):
 
     Sets the persisted phase to ``resolved`` so a client re-fetch (tab switch
     or refresh) restores the committed result screen rather than the picking
-    screen.
+    screen. Also fires the roll-resolution events (``on_set``/``on_result``)
+    that the contest ``/set`` endpoint fires, so a non-contest test reaches the
+    same auto-fire + armed SFX.
     """
     store = get_scene_store()
     dice = store.get_pool(location_id, entity_id)
+
+    total = sum(d.get("result") or 0 for d in dice if d.get("role") == "total")
+    effect = next((d for d in dice if d.get("role") == "effect"), None)
+    effect_die = effect.get("die") if effect else None
+    difficulty = store.get_difficulty(location_id)
+    tier = None
+    if difficulty is not None:
+        tier = "success" if total > difficulty else "fail"
+
+    from transversal.main import _get_repo
+    entity = _get_repo().get_entity(entity_id)
+    universe = entity.current_universe if entity else ""
+
+    roll_context = {"effect_die": effect_die, "total": total, "tier": tier, "rolls": dice}
+
+    from transversal.services.roll_deferral import fire_armed
+    fire_armed(entity_id, "on_set", universe, roll_context)
+    fire_armed(entity_id, "on_result", universe, roll_context)
+
+    from transversal.services.state_events import fire_state_sfx
+    fire_state_sfx(entity_id, universe, "on_set", {"effect_die": effect_die, "total": total})
+
+    from transversal.services.roll_orchestrator import fire_result_sfx
+    fire_result_sfx(entity_id, universe, dice, effect_die=effect_die, total=total)
+
     broadcast_pool_change(location_id, entity_id, dice=dice, phase="resolved")
     return {"phase": "resolved"}
 
