@@ -1074,7 +1074,10 @@ function addFromSheet(payload) {
     removeByTsId(tsId)
     return
   }
-  markPurpose('gmc')
+  // A die added from a sheet in GM free-roam joins the location-keyed
+  // difficulty pool (so it rolls as a difficulty, no hitches); otherwise it
+  // joins the acting entity's pool.
+  markPurpose(props.gmMode && !props.actingEntityId ? 'difficulty' : 'gmc')
   for (const die of dice) {
     pool.push({ die, source, label: label || source, tsId: tsId ?? null, sourceKind: 'trait', resource: !!resource, armedSfxIds: armedSfxIds || [] })
   }
