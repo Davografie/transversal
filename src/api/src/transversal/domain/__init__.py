@@ -303,12 +303,6 @@ class ContestCompare(BaseModel):
 
 # ── Registry: Traits ──────────────────────────────────
 
-class SubTraitRef(BaseModel):
-    """Reference to a sub-trait in the registry."""
-    trait_id: str
-    name: str
-    die_type: DieType
-
 class TraitDisplayName(BaseModel):
     """Dynamic display name for a trait, keyed by universe and rating.
 
@@ -452,8 +446,9 @@ class TraitSetting(BaseModel):
     id: str
     entity_id: str
     trait_id: str
-    from_type: str = "entity"  # "entity" | "projection" | "relationship" — anchor collection for _from
+    from_type: str = "entity"  # "entity" | "projection" | "relationship" | "traitsetting" — anchor collection for _from
     projection_id: Optional[str] = None  # projection anchor id when from_type == "projection"
+    parent_traitsetting_id: Optional[str] = None  # parent TraitSetting id when from_type == "traitsetting" (sub-trait)
     traitset_id: str
     rating_type: RatingType = RatingType.STATIC
     dice: list[DieType] = Field(default_factory=list)
@@ -461,7 +456,6 @@ class TraitSetting(BaseModel):
     polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
     notes: str = ""            # longer freeform notes
-    sub_trait_settings: list["TraitSetting"] = Field(default_factory=list)
     sfx_ids: list[str] = Field(default_factory=list)
     locations_enabled: list[str] = Field(default_factory=list)
     locations_disabled: list[str] = Field(default_factory=list)

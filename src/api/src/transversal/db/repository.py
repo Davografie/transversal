@@ -725,6 +725,8 @@ class EntityRepository:
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
         elif ts.from_type == "projection":
             doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
+        elif ts.from_type == "traitsetting":
+            doc["_from"] = f"{TRAITSETTINGS}/{ts.parent_traitsetting_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
@@ -755,7 +757,7 @@ class EntityRepository:
     def get_traitsettings_for_entity(self, entity_id: str) -> list[TraitSetting]:
         query = f"""
             FOR ts IN {TRAITSETTINGS}
-            FILTER ts.entity_id == @eid
+            FILTER ts.entity_id == @eid AND ts.from_type != 'traitsetting'
             RETURN ts
         """
         return [
@@ -786,6 +788,27 @@ class EntityRepository:
             TraitSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(
                 query, bind_vars={"eid": entity_id, "tsid": traitset_id}
+            )
+        ]
+
+    def get_sub_traitsettings(self, parent_traitsetting_id: str) -> list[TraitSetting]:
+        """Return sub-trait settings nested under a parent trait setting.
+
+        Sub-traits are stored in the same `traitsettings` edge collection, with
+        ``from_type == 'traitsetting'`` and ``_from`` anchored to the parent's
+        document (mirroring the relationship edge-anchoring pattern).
+        """
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.from_type == 'traitsetting'
+                AND ts.parent_traitsetting_id == @pid
+            SORT ts.traitset_id, ts.trait_id
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(
+                query, bind_vars={"pid": parent_traitsetting_id}
             )
         ]
 
@@ -820,6 +843,8 @@ class EntityRepository:
             doc["_from"] = f"{RELATIONSHIPS}/{ts.entity_id}"
         elif ts.from_type == "projection":
             doc["_from"] = f"{PROJECTIONS}/{ts.projection_id or ts.entity_id}"
+        elif ts.from_type == "traitsetting":
+            doc["_from"] = f"{TRAITSETTINGS}/{ts.parent_traitsetting_id}"
         else:
             doc["_from"] = f"{ENTITIES}/{ts.entity_id}"
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
@@ -828,6 +853,9 @@ class EntityRepository:
 
     def delete_traitsetting(self, ts_id: str) -> bool:
         try:
+            # Cascade: remove sub-trait settings nested under this setting first.
+            for sub in self.get_sub_traitsettings(ts_id):
+                self.delete_traitsetting(sub.id)
             self._traitsettings.delete(ts_id)
             return True
         except Exception:

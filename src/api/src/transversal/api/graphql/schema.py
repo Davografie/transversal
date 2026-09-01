@@ -177,6 +177,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         statement=s.statement,
         notes=s.notes,
         from_type=s.from_type, projection_id=s.projection_id,
+        parent_traitsetting_id=s.parent_traitsetting_id,
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
         enabled=s.enabled,
@@ -191,6 +192,7 @@ def _trait_to_gql(t) -> TraitRef:
         default_rating_type=t.default_rating_type,
         possible_sfx_ids=t.possible_sfx_ids,
         default_sfx_ids=t.default_sfx_ids,
+        possible_subtrait_ids=t.possible_subtrait_ids,
         location_restricted=t.location_restricted,
         default_ego=t.default_ego,
         polarity=t.polarity,
@@ -1261,7 +1263,7 @@ class Mutation:
             ts.statement = input.statement
         if input.notes is not None:
             ts.notes = input.notes
-        if input.from_type is not None and ts.from_type != "relationship":
+        if input.from_type is not None and ts.from_type not in ("relationship", "traitsetting"):
             if input.from_type == "projection":
                 if input.projection_id is None:
                     raise ValueError("projectionId is required when fromType is 'projection'")
@@ -1365,6 +1367,7 @@ class Mutation:
             default_rating_type=created.default_rating_type,
             possible_sfx_ids=created.possible_sfx_ids,
             default_sfx_ids=created.default_sfx_ids,
+            possible_subtrait_ids=created.possible_subtrait_ids,
             location_restricted=created.location_restricted,
             default_ego=created.default_ego,
             polarity=created.polarity,
@@ -1428,6 +1431,7 @@ class Mutation:
             default_rating_type=updated.default_rating_type,
             possible_sfx_ids=updated.possible_sfx_ids,
             default_sfx_ids=updated.default_sfx_ids,
+            possible_subtrait_ids=updated.possible_subtrait_ids,
             location_restricted=updated.location_restricted,
             default_ego=updated.default_ego,
             polarity=updated.polarity,
@@ -1741,6 +1745,49 @@ class Mutation:
         )
         created = repo.create_traitsetting(ts)
         return _ts_to_gql(created)
+
+    @strawberry.mutation
+    def add_sub_trait(self, info: strawberry.Info, parent_traitsetting_id: strawberry.ID,
+                      trait_id: strawberry.ID, die: GqlDieType = GqlDieType.D6,
+                      statement: str = "") -> TraitSetting:
+        """Nest a sub-trait under a parent trait setting.
+
+        Sub-traits reuse the ``traitsettings`` edge collection, anchored to the
+        parent setting (``from_type='traitsetting'``, ``_from → TRAITSETTINGS/{parent}``).
+        The trait set is derived from the sub-trait's registry entry; ``entity_id``
+        is inherited from the parent so cascade cleanup and ownership stay intact.
+        """
+        repo = _em(info).repo
+        parent = repo.get_traitsetting(str(parent_traitsetting_id))
+        if parent is None:
+            raise ValueError(f"Parent TraitSetting '{parent_traitsetting_id}' not found")
+        trait = repo.get_trait(str(trait_id))
+        if trait is None:
+            raise ValueError(f"Trait '{trait_id}' not found")
+        traitset_id = trait.traitset_id
+
+        from transversal.services.polarity import default_polarity
+        traitset = repo.get_traitset_by_id(traitset_id)
+        polarity = default_polarity(trait, traitset)
+
+        ts = DomainTraitSetting(
+            id=f"{parent.id}:{trait_id}",
+            entity_id=parent.entity_id,
+            trait_id=str(trait_id),
+            traitset_id=traitset_id,
+            from_type="traitsetting",
+            parent_traitsetting_id=parent.id,
+            dice=[die],
+            polarity=polarity,
+            statement=statement,
+        )
+        created = repo.create_traitsetting(ts)
+        return _ts_to_gql(created)
+
+    @strawberry.mutation
+    def remove_sub_trait(self, info: strawberry.Info, sub_trait_setting_id: strawberry.ID) -> bool:
+        """Remove a sub-trait setting (and its nested sub-traits) from its parent."""
+        return _em(info).repo.delete_traitsetting(str(sub_trait_setting_id))
 
     @strawberry.mutation
     def update_message(self, info: strawberry.Info, input: UpdateMessageInput) -> bool:
