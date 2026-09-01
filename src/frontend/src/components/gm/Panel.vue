@@ -1,49 +1,55 @@
 <template>
-  <div class="panel-wrapper" :class="{ nested }">
-    <div class="panel-actions">
+  <div ref="wrapperEl" class="panel-wrapper" :class="{ nested }">
+    <div ref="actionsEl" class="panel-actions" :style="actionsStyle">
       <button v-if="closable" class="panel-action-btn" title="Close" @click="$emit('close')">×</button>
-      <button type="button" class="panel-action-btn" :title="collapsed ? 'Expand' : 'Collapse'" @click="collapsed = !collapsed">{{ collapsed ? '▸' : '▾' }}</button>
+      <button type="button" class="panel-action-btn" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</button>
     </div>
     <!-- ⚠ v-show is on .panel (this panel's content) NOT on .panel-wrapper.
          If it were on the wrapper, nested child Panels would also be hidden.
          We want shallow panels to hide their content while their deeper
          children remain visible beside them. -->
-    <div class="panel" v-show="!minVisibleDepth || depth >= minVisibleDepth">
+    <div ref="panelEl" class="panel" v-show="!minVisibleDepth || depth >= minVisibleDepth">
       <header v-if="title" class="panel-header">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
           <button v-if="id" type="button" class="panel-id-btn" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</button>
         </slot>
       </header>
-      <div class="panel-body" v-show="!collapsed">
+      <div class="panel-body" v-show="!isCollapsed">
         <slot />
       </div>
     </div>
-    <!-- Self-reference: nested child panel.
-         :on-close / :on-replace let the nested Panel close/replace itself
-         in THIS panel's stack. @close handles the nested Panel's own × button. -->
-    <Panel
-      v-if="child"
-      v-show="!collapsed"
-      nested
-      :depth="depth + 1"
-      :min-visible-depth="minVisibleDepth"
-      :title="child.title"
-      :id="child.id"
-      closable
-      :on-close="() => { child = null }"
-      :on-replace="(spec) => { child = normalizeSpec(spec) }"
-      @close="child = null"
-    >
-      <template #default>
-        <component :is="child.component" v-bind="child.props || {}" v-on="child.listeners || {}" @close="child = null" />
-      </template>
-    </Panel>
+    <!-- Self-reference: each child is a sibling Panel owned by THIS panel's
+         children list. :on-close / :on-replace let the child remove/replace
+         itself in this list; @close handles the child's own × button. -->
+    <div ref="siblingsEl" class="panel-siblings" v-show="!isCollapsed">
+      <Panel
+        v-for="c in children"
+        :key="c.key"
+        nested
+        :depth="depth + 1"
+        :min-visible-depth="minVisibleDepth"
+        :title="c.spec.title"
+        :id="c.spec.id"
+        :collapsed="collapsedKeys.includes(c.key)"
+        :bridge-top="panelTopPx"
+        :bridge-bottom="panelBottomPx"
+        closable
+        :on-close="() => closeChild(c.key)"
+        :on-replace="(spec) => replaceChild(c.key, spec)"
+        @close="closeChild(c.key)"
+        @toggle-collapse="toggleChildCollapse(c.key)"
+      >
+        <template #default>
+          <component :is="c.spec.component" v-bind="c.spec.props || {}" v-on="c.spec.listeners || {}" @close="closeChild(c.key)" />
+        </template>
+      </Panel>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { shallowRef, ref, nextTick, markRaw, inject, provide, onMounted, onUnmounted } from 'vue'
+import { shallowRef, ref, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
 
@@ -54,13 +60,20 @@ const props = defineProps({
   nested: { type: Boolean, default: false },
   depth: { type: Number, default: 0 },
   minVisibleDepth: { type: Number, default: 0 },
+  // Controlled collapse. null = uncontrolled (panel owns its own local state,
+  // e.g. the root). Any boolean = controlled by the parent.
+  collapsed: { type: Boolean, default: null },
+  // Parent panel's viewport bounds. When set, this panel's action rail prefers
+  // its own vertical center but is clamped within these bounds (button-drift).
+  bridgeTop: { type: Number, default: null },
+  bridgeBottom: { type: Number, default: null },
   // Callbacks supplied by the parent Panel so this Panel can close/replace
-  // itself in the parent's stack.
+  // itself in the parent's children list.
   onClose: { type: Function, default: null },
   onReplace: { type: Function, default: null },
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close', 'toggle-collapse'])
 
 // Copy-ID helper — the header shows a # button that copies the panel id.
 // legacy:true enables the execCommand fallback so copying works on plain-HTTP
@@ -72,13 +85,169 @@ async function copyId() {
 }
 
 // ⚠ shallowRef — must NOT be ref() because Vue deeply unwraps nested refs inside
-// reactive objects. If child.props contains computed refs (e.g. filteredTraitsets),
+// reactive objects. If a child spec contains computed refs (e.g. filteredTraitsets),
 // ref() would unwrap them to plain values, breaking reactivity for sub-panels.
-const child = shallowRef(null)
+// Same rule applies to the children list.
+const children = shallowRef([])
+let childSeq = 0
 
-// Collapse/expand — hides this panel's body and its nested child without
-// unmounting, so in-progress state survives (hide, not close).
-const collapsed = ref(false)
+// Collapse/expand. Controlled by the parent when `collapsed` is passed;
+// otherwise this panel owns a local toggle (root case).
+const localCollapsed = ref(false)
+const isCollapsed = computed(() => props.collapsed ?? localCollapsed.value)
+function toggleCollapse() {
+  if (props.collapsed !== null) emit('toggle-collapse')
+  else localCollapsed.value = !localCollapsed.value
+  panelLog('toggle-self')
+}
+
+// Keys of THIS panel's children that are collapsed. Owned here so the parent
+// can auto-collapse the oldest siblings when the vertical stack overflows.
+const collapsedKeys = ref([])
+// The child that should stay expanded: the last one opened or manually expanded.
+const activeKey = ref(null)
+
+function toggleChildCollapse(key) {
+  const wasCollapsed = collapsedKeys.value.includes(key)
+  if (wasCollapsed) {
+    collapsedKeys.value = collapsedKeys.value.filter((k) => k !== key)
+    activeKey.value = key // user expanded it → it becomes the active (protected) one
+  } else {
+    collapsedKeys.value = [...collapsedKeys.value, key]
+  }
+  panelLog('toggle-child', { key, action: wasCollapsed ? 'expand' : 'collapse' })
+}
+
+// ── Diagnostic logging (opt-in) ─────────────────────
+// Enable in the browser console with `window.__PANEL_DEBUG__ = true`, then
+// interact. Each panel logs its own viewport rects so layout issues can be
+// deduced from the numbers instead of described.
+const panelEl = ref(null)
+const actionsEl = ref(null)
+const siblingsEl = ref(null)
+const wrapperEl = ref(null)
+
+// ── Button-drift: prefer own center, clamp within the parent's bounds ──
+// Direct getBoundingClientRect reads (not useElementBounding) so values stay
+// fresh when the whole stack re-centers via transform — which ResizeObserver
+// alone misses. Refreshed by a ResizeObserver + the layout watcher below.
+const ownCenter = ref(null)
+const wrapperTopPx = ref(null)
+const panelTopPx = ref(null)
+const panelBottomPx = ref(null)
+
+function measureButtonDrift() {
+  const p = panelEl.value?.getBoundingClientRect()
+  const w = wrapperEl.value?.getBoundingClientRect()
+  if (p) {
+    ownCenter.value = p.top + p.height / 2
+    panelTopPx.value = p.top
+    panelBottomPx.value = p.bottom
+  }
+  if (w) wrapperTopPx.value = w.top
+}
+
+let driftObserver = null
+function setupDriftObserver() {
+  if (typeof ResizeObserver === 'undefined' || !panelEl.value) return
+  driftObserver = new ResizeObserver(() => measureButtonDrift())
+  driftObserver.observe(panelEl.value)
+  measureButtonDrift()
+}
+onMounted(setupDriftObserver)
+onUnmounted(() => { if (driftObserver) driftObserver.disconnect() })
+
+// Viewport Y of this panel's action-rail center. Prefers ownCenter, clamped to
+// the parent's bridgeTop/bridgeBottom when provided.
+const railCenterViewport = computed(() => {
+  const c = ownCenter.value
+  if (c == null) return null
+  if (props.bridgeTop == null || props.bridgeBottom == null) return c
+  return Math.min(Math.max(c, props.bridgeTop), props.bridgeBottom)
+})
+
+// Wrapper-relative Y for the rail (null → fall back to CSS top:50%).
+const railCenterLocal = computed(() => {
+  const rcv = railCenterViewport.value
+  const wt = wrapperTopPx.value
+  if (rcv == null || !wt) return null
+  return rcv - wt
+})
+
+const actionsStyle = computed(() => {
+  const local = railCenterLocal.value
+  return local == null ? {} : { top: local + 'px' }
+})
+
+function isDebug() {
+  return typeof window !== 'undefined' && !!window.__PANEL_DEBUG__
+}
+function rectOf(el) {
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) }
+}
+function buttonsOf(el) {
+  if (!el) return []
+  return Array.from(el.querySelectorAll('button')).map((b) => {
+    const r = b.getBoundingClientRect()
+    return { label: (b.textContent || '').trim(), top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) }
+  })
+}
+function panelLog(reason, detail = {}) {
+  if (!isDebug()) return
+  console.log('[panel]', reason, JSON.stringify({
+    title: props.title || '(root)',
+    depth: props.depth,
+    collapsed: isCollapsed.value,
+    activeKey: activeKey.value,
+    viewHeight: viewHeight.value,
+    bridgeTop: props.bridgeTop,
+    bridgeBottom: props.bridgeBottom,
+    ownCenter: ownCenter.value,
+    railCenterViewport: railCenterViewport.value,
+    panel: rectOf(panelEl.value),
+    siblings: rectOf(siblingsEl.value),
+    actions: rectOf(actionsEl.value),
+    buttons: buttonsOf(actionsEl.value),
+    collapsedKeys: [...collapsedKeys.value],
+    children: children.value.map((c) => ({ key: c.key, title: c.spec.title, id: c.spec.id })),
+    ...detail,
+  }))
+}
+
+// ── Auto-collapse on vertical overflow ──────────────
+// Collapses the oldest expanded child that is NOT the active one, until the
+// sibling column fits within the viewport height. This gives round-robin
+// behavior: expanding an older panel makes it active and collapses the then-
+// oldest expanded sibling instead.
+const viewHeight = ref(window.innerHeight)
+const AUTO_COLLAPSE_MARGIN = 40
+
+function onResize() { viewHeight.value = window.innerHeight }
+onMounted(() => { window.addEventListener('resize', onResize) })
+onUnmounted(() => { window.removeEventListener('resize', onResize) })
+
+function autoCollapse() {
+  const el = siblingsEl.value
+  if (!el) return
+  if (el.offsetHeight <= viewHeight.value - AUTO_COLLAPSE_MARGIN) return
+  const list = children.value
+  for (let i = 0; i < list.length; i++) {
+    const key = list[i].key
+    if (key === activeKey.value) continue
+    if (!collapsedKeys.value.includes(key)) {
+      collapsedKeys.value = [...collapsedKeys.value, key]
+      panelLog('auto-collapse', { collapsedKey: key })
+      return // one at a time; the reactive height change re-triggers this watcher
+    }
+  }
+}
+
+watch([children, collapsedKeys, viewHeight], () => nextTick(() => {
+  autoCollapse()
+  measureButtonDrift()
+}))
 
 // ── Depth tracking for viewport-aware visibility ──
 const registerDepth = inject('registerDepth', null)
@@ -91,26 +260,55 @@ function normalizeSpec(spec) {
   return { ...spec, component: markRaw(spec.component) }
 }
 
-// Opens a child Panel. The spec.component is markRaw'd to prevent Vue from
-// making the component definition reactive (triggers "Component made reactive" warning).
-// Setting child=null then reassigning on nextTick ensures the leave transition
-// (if any) plays before the new panel enters.
+// Opens a child panel. Default is parallel: append as a sibling. If a child
+// with the same component + id is already open, replace (refresh) it instead,
+// keeping its key/position so its local state survives.
 function openChild(spec) {
-  child.value = null
-  nextTick(() => { child.value = normalizeSpec(spec) })
+  const normalized = normalizeSpec(spec)
+  const idx = children.value.findIndex((c) => {
+    if (c.spec.component !== normalized.component) return false
+    if (normalized.id) return c.spec.id === normalized.id
+    return !c.spec.id
+  })
+  if (idx >= 0) {
+    children.value = children.value.map((c, i) =>
+      i === idx ? { ...c, spec: normalized } : c
+    )
+    activeKey.value = children.value[idx].key
+  } else {
+    const key = `c${++childSeq}`
+    children.value = [...children.value, { key, spec: normalized }]
+    activeKey.value = key
+  }
+  panelLog('open', { childId: normalized.id, activeKey: activeKey.value })
 }
 
-// Closes the current child Panel (pops the stack).
-function closeChild() {
-  child.value = null
+// Closes a specific child by key, or the last child when no key is given.
+function closeChild(key) {
+  const removing = key == null
+    ? (children.value[children.value.length - 1]?.key ?? null)
+    : key
+  children.value = key == null
+    ? children.value.slice(0, -1)
+    : children.value.filter((c) => c.key !== key)
+  if (activeKey.value === removing) {
+    activeKey.value = children.value[children.value.length - 1]?.key ?? null
+  }
+  panelLog('close-child', { key: removing })
 }
 
-// Closes THIS panel (removes it from the parent's stack).
+function replaceChild(key, spec) {
+  children.value = children.value.map((c) =>
+    c.key === key ? { ...c, spec: normalizeSpec(spec) } : c
+  )
+}
+
+// Closes THIS panel (removes it from the parent's children list).
 function closeSelf() {
   if (props.onClose) props.onClose()
 }
 
-// Replaces THIS panel with another spec in the parent's stack.
+// Replaces THIS panel with another spec in the parent's children list.
 function replaceSelf(spec) {
   if (props.onReplace) props.onReplace(spec)
 }
@@ -130,8 +328,17 @@ provide(panelKey, {
   flex-shrink: 0;
   display: flex;
   flex-direction: row-reverse;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+}
+
+/* Siblings (children of the same panel) stack vertically at their depth,
+   to the left of the parent in the row-reverse layout. */
+.panel-siblings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .panel {
@@ -166,7 +373,6 @@ provide(panelKey, {
 /* Nested panel sits beside parent in the flex row */
 .nested {
   position: relative;
-  margin-left: 8px;
 }
 
 .panel-header {

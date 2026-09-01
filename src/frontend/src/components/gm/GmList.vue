@@ -7,6 +7,7 @@
         v-for="(item, i) in items"
         :key="itemKey && item[itemKey] != null ? item[itemKey] : i"
         :class="rowClass(item)"
+        :state="rowState(item)"
         :selected="isSelected(item)"
         :draggable="reorderable"
         :drag-handle="dragHandle"
@@ -54,6 +55,9 @@ const props = defineProps({
   maxHeight: { type: String, default: '' },
   // Optional per-row class function, e.g. to flash a row after an update.
   rowClass: { type: Function, default: () => '' },
+  // Optional per-row semantic state function, e.g. (item) => 'active'.
+  // Values map to `.gml-item.is-<state>` (active/disabled/warning/danger/success/muted).
+  rowState: { type: Function, default: () => '' },
 })
 
 const emit = defineEmits(['click', 'reorder', 'toggle'])
