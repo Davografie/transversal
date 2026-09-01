@@ -95,12 +95,18 @@ class ChooseStep(BaseModel):
 class EvaluateStep(BaseModel):
     """Terminal boolean test over the current collection/scalar.
 
-    ``operator="exists"`` passes when the collection is non-empty. Comparison
-    operators test the collection's count (``many``) or a scalar's value
-    (``int``/``number``/``die``) against ``value``. Produces ``boolean/one``.
+    ``operator="exists"`` passes when the collection is non-empty (no LHS/value).
+    For a comparison, ``field`` names the left-hand side:
+      - ``"count"`` — the number of elements in the collection (the default);
+      - a scalar field name (e.g. ``"rating"``) — a single object's field, or a
+        scalar element's value;
+      - ``""`` — legacy implicit: ``count`` for a ``many`` collection, the scalar
+        value for ``int``/``number``/``die``, or identity for a single object.
+    ``value`` is the right-hand side. Produces ``boolean/one``.
     """
     kind: Literal["evaluate"] = "evaluate"
     operator: Literal["exists", "==", "!=", ">", ">=", "<", "<="] = "exists"
+    field: str = ""  # LHS: "count" | a scalar field name | "" (legacy implicit)
     value: Any = None
 
 
@@ -291,8 +297,25 @@ def trace(spec: TargetSpec, source_element: str | None = None,
             if current is None:
                 errors.append(TraceError(i, "evaluate has nothing to test"))
                 current = None
-            else:
+            elif step.operator == "exists":
                 current = ValueType("boolean", "one")
+            else:
+                field_name = (step.field or "").strip()
+                if field_name and field_name != "count":
+                    if current.element in ("int", "number", "die"):
+                        current = ValueType("boolean", "one")
+                    elif current.cardinality == "many":
+                        errors.append(TraceError(i, f"evaluate on {field_name!r} needs a single value — add an aggregate step first"))
+                        current = ValueType("boolean", "one")
+                    else:
+                        f = tc.field(current.element, field_name)
+                        if f is None:
+                            errors.append(TraceError(i, f"unknown field {current.element}.{field_name}"))
+                        elif f.type not in ("int", "number", "die", "string"):
+                            errors.append(TraceError(i, f"{current.element}.{field_name} is not a comparable scalar"))
+                        current = ValueType("boolean", "one")
+                else:
+                    current = ValueType("boolean", "one")
 
         if getattr(step, "output", None) and current is not None and current.element:
             scope[step.output] = current

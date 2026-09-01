@@ -369,22 +369,50 @@ def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, 
 def _evaluate_step(values: list[Any], current_type: ValueType | None, step: EvaluateStep) -> bool:
     """Terminal boolean test for an ``evaluate`` step.
 
-    ``exists`` = non-empty. Comparisons test a ``many`` collection's count, or a
-    scalar (``int``/``number``/``die``) value, against ``step.value``. A single
-    object only supports identity ``==``/``!=``.
+    ``exists`` = non-empty. A comparison tests a named left-hand side
+    (``step.field``) against ``step.value``:
+      - ``"count"`` — number of elements in the collection;
+      - a scalar field name — a single object's field, or a scalar element's value;
+      - ``""`` — legacy implicit (count for ``many``, scalar for a scalar element,
+        identity for a single object).
     """
     if step.operator == "exists":
         return bool(values)
     if current_type is None:
         return False
 
-    if current_type.cardinality == "many":
-        lhs = len(values)
-        rhs = _to_number(step.value)
+    field = (step.field or "").strip()
+
+    if field == "count":
+        lhs, rhs = len(values), _to_number(step.value)
+    elif field:
+        # Named field: scalar element → the scalar itself; single object → its field.
+        if current_type.element in ("int", "number", "die"):
+            lhs, rhs = (_to_number(values[0]) if values else None), _to_number(step.value)
+        elif current_type.cardinality == "one" and values:
+            f = tc.field(current_type.element, field)
+            raw = _get_field(values[0], field)
+            if step.operator in ("==", "!="):
+                expected = _coerce(step.value, f.type if f else None)
+                return (raw == expected) if step.operator == "==" else (raw != expected)
+            lhs, rhs = _to_number(raw), _to_number(step.value)
+            if lhs is None or rhs is None:
+                return False
+            if step.operator == ">":
+                return lhs > rhs
+            if step.operator == ">=":
+                return lhs >= rhs
+            if step.operator == "<":
+                return lhs < rhs
+            return lhs <= rhs
+        else:
+            return False
+    elif current_type.cardinality == "many":
+        lhs, rhs = len(values), _to_number(step.value)
     elif current_type.element in ("int", "number", "die"):
-        lhs = _to_number(values[0]) if values else None
-        rhs = _to_number(step.value)
+        lhs, rhs = (_to_number(values[0]) if values else None), _to_number(step.value)
     else:
+        # Legacy identity comparison for a single object.
         rid = _candidate_id(current_type.element, values[0]) if values else ""
         target = str(step.value or "")
         if step.operator == "==":
@@ -405,9 +433,7 @@ def _evaluate_step(values: list[Any], current_type: ValueType | None, step: Eval
         return lhs >= rhs
     if step.operator == "<":
         return lhs < rhs
-    if step.operator == "<=":
-        return lhs <= rhs
-    return False
+    return lhs <= rhs
 
 
 def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[str]] | None = None) -> Resolution:

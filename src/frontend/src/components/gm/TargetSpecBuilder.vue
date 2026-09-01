@@ -133,8 +133,17 @@
           <select v-model="step.operator" class="tsb-op">
             <option v-for="op in EVALUATE_OPERATORS" :key="op" :value="op">{{ op }}</option>
           </select>
-          <em v-if="step.operator === 'exists'" class="tsb-eval-hint">non-empty</em>
-          <input v-else :value="step.value" placeholder="value (count / d8 / …)" @input="onEvaluateValue(i, $event)" />
+          <template v-if="step.operator !== 'exists'">
+            <select v-if="evalFieldOptions(i).length" v-model="step.field" class="tsb-field">
+              <option value="count">count</option>
+              <option v-for="f in evalFieldOptions(i)" :key="f.name" :value="f.name">
+                {{ f.name }} <em>({{ f.type }})</em>
+              </option>
+            </select>
+            <span v-else class="tsb-eval-lhs">{{ evalLhsLabel(i) }}</span>
+            <input :value="step.value" placeholder="value" @input="onEvaluateValue(i, $event)" />
+          </template>
+          <em v-else class="tsb-eval-hint">non-empty</em>
         </div>
 
         <div v-if="step.output != null" class="tsb-output-row">
@@ -343,9 +352,33 @@ function onFilterValue(i, e) {
 }
 
 function onEvaluateValue(i, e) {
+  steps.value[i].value = coerceValue(evalValueType(i), e.target.value)
+}
+
+// Left-hand side of an evaluate comparison. For a *many* collection the only
+// sensible LHS is its count; for a single object we offer count + its scalar
+// fields (e.g. rating); for a scalar element the scalar is the LHS.
+function evalFieldOptions(i) {
   const prior = priorType(i)
-  const type = prior && (prior.cardinality === 'many' || ['int', 'number'].includes(prior.element)) ? 'number' : prior?.element || 'string'
-  steps.value[i].value = coerceValue(type, e.target.value)
+  if (!prior || !prior.element) return []
+  if (prior.cardinality !== 'one') return []
+  if (['int', 'number', 'die'].includes(prior.element)) return []
+  return fieldsFor(prior.element).filter((f) => ['int', 'number', 'die', 'string'].includes(f.type))
+}
+
+function evalLhsLabel(i) {
+  const prior = priorType(i)
+  if (!prior || !prior.element) return 'value'
+  if (prior.cardinality === 'many') return 'count'
+  if (['int', 'number', 'die'].includes(prior.element)) return prior.element
+  return 'value'
+}
+
+function evalValueType(i) {
+  const step = steps.value[i]
+  if (step.field === 'count') return 'number'
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === step.field)
+  return f ? f.type : 'string'
 }
 
 function onCount(i, e) {
@@ -375,7 +408,7 @@ function toggleInsert(i) {
 }
 
 function insert(i, kind) {
-  const blank = { kind, collection: '', variable: '', output: null, field: '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
+  const blank = { kind, collection: '', variable: '', output: null, field: kind === 'evaluate' ? 'count' : '', operator: '==', value: '', edge: '', dedup: false, fn: '', count: 1 }
   const next = [...steps.value]
   next.splice(i + 1, 0, blank)
   steps.value = next
@@ -466,6 +499,9 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-config em { font-style: normal; font-size: 8px; color: var(--text-dim); }
 .tsb-filter select, .tsb-filter input { flex: 1; min-width: 60px; }
 .tsb-op { flex: none; width: 52px; }
+.tsb-field { flex: none; width: 88px; }
+.tsb-eval-lhs { flex: none; font-family: monospace; font-size: 9px; color: var(--text-dim); }
+.tsb-eval-hint { flex: none; }
 .tsb-check { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text); }
 .tsb-check input { width: auto; }
 .tsb-add { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }

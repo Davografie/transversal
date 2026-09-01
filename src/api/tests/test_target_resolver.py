@@ -11,6 +11,7 @@ from transversal.services.target_resolver import (
 from transversal.services.target_spec import (
     AggregateStep,
     ChooseStep,
+    EvaluateStep,
     FilterStep,
     NavigateStep,
     RandomStep,
@@ -539,3 +540,36 @@ def test_serialize_pool_candidates_render_friendly_labels():
         ("difficulty:loc-1", "Difficulty pool"),
         ("pool:kael", "Dice pool"),
     ]
+
+
+def test_evaluate_count_lhs_counts_many_collection():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(subject=kael, repo=repo, collections={
+        "rolled_dice": [
+            {"ts_id": "kael:trait-martial", "source_kind": "trait", "result": 7},
+            {"ts_id": "kael:trait-qi", "source_kind": "trait", "result": 3},
+        ],
+    })
+    s = spec(
+        SelectStep(collection="rolled_dice"),
+        EvaluateStep(operator="==", field="count", value=2),
+    )
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert res.values == [True]
+
+
+def test_evaluate_named_field_lhs_compares_single_object():
+    kael, repo = _one_trick_world()
+    ctx = TargetContext(
+        subject=kael, repo=repo,
+        source=repo.traitsettings["kael:trait-martial"], source_element="traitsetting",
+    )
+    # kael:trait-martial rating is d8 → d8 >= d6
+    s = spec(
+        SelectStep(collection="source"),
+        EvaluateStep(operator=">=", field="rating", value="d6"),
+    )
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert res.values == [True]
