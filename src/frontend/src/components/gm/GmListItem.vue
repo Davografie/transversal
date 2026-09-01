@@ -1,7 +1,7 @@
 <template>
   <div
     class="entity-row gml-item"
-    :class="{ selected, dragging, 'drag-over': dragOver }"
+    :class="[stateClass, { selected, dragging, 'drag-over': dragOver }]"
     :draggable="draggable && !dragHandle"
     @click="$emit('click', $event)"
     @dragstart="$emit('dragstart', $event)"
@@ -16,16 +16,23 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 // Shared list-row primitive. Renders the global `.entity-row` shell plus the
-// selection/drag modifiers that every GM list row needs. Content is slotted;
-// selection, drag, and reorder are owned by GmList (or a custom parent).
-defineProps({
+// selection/drag/state modifiers that every GM list row needs. Content is
+// slotted; selection, drag, and reorder are owned by GmList (or a custom parent).
+const props = defineProps({
   selected: { type: Boolean, default: false },
   draggable: { type: Boolean, default: false },
   dragHandle: { type: Boolean, default: false },
   dragging: { type: Boolean, default: false },
   dragOver: { type: Boolean, default: false },
+  // Semantic row state for styling: '', 'active', 'disabled', 'warning',
+  // 'danger', 'success', 'muted'. Maps to `.gml-item.is-<state>`.
+  state: { type: String, default: '' },
 })
+
+const stateClass = computed(() => props.state ? `is-${props.state}` : '')
 
 defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend'])
 </script>
@@ -39,5 +46,31 @@ defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend'])
   transform: scale(1.02);
 }
 .gml-item.editing { background: rgba(64, 136, 212, 0.12); border: 1px solid var(--accent-dim); }
+
+/* Semantic row states */
+.gml-item.is-active {
+  background: rgba(64, 136, 212, 0.12);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.gml-item.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.gml-item.is-warning {
+  background: rgba(232, 136, 48, 0.12);
+  box-shadow: 0 0 0 1px var(--warn) inset;
+}
+.gml-item.is-danger {
+  background: rgba(212, 64, 64, 0.12);
+  box-shadow: 0 0 0 1px var(--danger) inset;
+}
+.gml-item.is-success {
+  background: rgba(64, 184, 96, 0.12);
+  box-shadow: 0 0 0 1px var(--success) inset;
+}
+.gml-item.is-muted {
+  opacity: 0.6;
+}
+
 .gml-drag-handle { cursor: grab; color: var(--text-dim); font-size: 13px; flex-shrink: 0; user-select: none; margin-left: auto; }
 </style>
