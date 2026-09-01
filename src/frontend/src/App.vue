@@ -770,7 +770,11 @@ function shareRoll(result) {
 }
 
 function onDifficultyCommitted(difficulty) {
-  if (sessionId.value === 'session-default') return
+  // The difficulty is location-scoped server state, not session state — persist
+  // it even in solo play (session-default) so the same-device GM can switch to a
+  // character and roll against it. Set the local ref too, so the target shows
+  // without waiting for the SSE round-trip.
+  currentDifficulty.value = difficulty
   apiSetDifficulty(currentLocationId.value, difficulty)
 }
 

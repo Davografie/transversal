@@ -77,7 +77,7 @@
         @cancel="clearSfxChoices"
       />
     </div>
-    <div v-if="!gmMode && difficulty != null" class="difficulty-target">
+    <div v-if="showDifficultyTarget" class="difficulty-target">
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
     <div v-if="!gmMode && difficultyFlash" class="difficulty-flash">{{ difficultyFlash }}</div>
@@ -591,6 +591,12 @@ const rollKind = computed(() => {
   return pipeline === 'pool' ? 'cortex-test' : 'simple-test'
 })
 const rollKindLabel = computed(() => ROLL_KIND_LABELS[rollKind.value] || '')
+
+// The set test difficulty is the target for any entity roll (player or GM
+// acting as an entity); it is not shown while the GM is setting it.
+const showDifficultyTarget = computed(() =>
+  props.difficulty != null && !(props.gmMode && !props.actingEntityId)
+)
 
 // Contest UI is relevant for players (or a GM acting as an entity) at a
 // location with at least one peer, during assembly/picking or once challenged.
