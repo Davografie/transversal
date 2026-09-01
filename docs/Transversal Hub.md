@@ -55,6 +55,7 @@ status: canonical
 
 ### 🗂️ Process
 
+- [[Sessions]] — the session roster and cross-session coordination layer
 - [[Release Plan]] — scope, decisions, and the 6-phase **build order** (start here for "what to build next")
 - [[Tickets]] — the ticket-level breakdown (per-ticket dependencies + context to load)
 - [[Pressure-Test Log]] — scenario-by-scenario gap analysis: what's built vs missing, per-feature findings
