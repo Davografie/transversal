@@ -133,6 +133,25 @@ export function useApi() {
     }
   }
 
+  async function spendChallengeDie(tsId, die, destination = 'opposition') {
+    error.value = null
+    try {
+      const r = await fetch(`${API_BASE}/challenge-pool/${tsId}/spend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ die, destination })
+      })
+      if (!r.ok) {
+        const msg = await r.text()
+        throw new Error(msg)
+      }
+      return await r.json()
+    } catch (e) {
+      error.value = e.message
+      return null
+    }
+  }
+
   async function imagenEntity(entityId, projectionId = '') {
     loading.value = true
     error.value = null
@@ -353,5 +372,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

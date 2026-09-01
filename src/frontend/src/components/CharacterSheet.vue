@@ -141,7 +141,18 @@
             </div>
           </div>
 
+          <div v-if="editRatingType === 'CHALLENGE'" class="edit-field">
+            <span class="edit-label">Capacity</span>
+            <div class="edit-dice">
+              <button v-for="(d, i) in editCapacity" :key="'cap' + i" class="die-chip die-chip-icon" :title="`Change ${d}`" @click="capacityPickIdx = i; showCapacityPicker = true">
+                <DieIcon :die="d" />
+              </button>
+              <button class="die-chip add-chip" @click="capacityPickIdx = editCapacity.length; showCapacityPicker = true">+</button>
+            </div>
+          </div>
+
           <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
+          <DiePicker v-if="showCapacityPicker" v-model="pickedCapacityDie" @update:model-value="onCapacityPicked" />
 
           <div v-if="editingTrait.possibleSfxIds?.length" class="edit-field">
             <span class="edit-label">SFX</span>
@@ -297,6 +308,25 @@
                     </div>
                     <span v-if="!(t.dice || []).length && !(t.spentDice || []).length" class="trait-die depleted">depleted</span>
                   </div>
+                  <div v-else-if="t.ratingType === 'CHALLENGE'" class="trait-die-groups challenge">
+                    <div
+                      v-for="(group, gi) in resourceDiceGroups(t)"
+                      :key="'c' + gi"
+                      class="trait-die-group clickable"
+                      :title="`Spend ${group[0]} from challenge pool`"
+                      @click.stop="spendChallengeGroup(t, group[0])"
+                    >
+                      <DieIcon
+                        v-for="(die, i) in group"
+                        :key="i"
+                        :die="die"
+                        class="trait-die-icon"
+                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
+                      />
+                    </div>
+                    <span v-if="challengeProgressLabel(t)" class="challenge-progress">{{ challengeProgressLabel(t) }}</span>
+                    <span v-if="!(t.dice || []).length" class="trait-die depleted">empty</span>
+                  </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
                   <button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.teachable"
                     class="transfer-btn teach-btn" @click.stop="showTeachPicker(t)"
@@ -414,7 +444,7 @@ function displayName(name) {
     .join(' ')
 }
 
-const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie } = useApi()
+const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie, spendChallengeDie } = useApi()
 const entityCache = useEntityCache()
 const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
@@ -654,11 +684,15 @@ const availableSubtraits = computed(() => {
 const editDice = usePersistedRef('sheet.editDice', [])
 const editRatingType = usePersistedRef('sheet.editRatingType', 'STATIC')
 const editPolarity = usePersistedRef('sheet.editPolarity', null)
+const editCapacity = usePersistedRef('sheet.editCapacity', [])
 const editStatement = usePersistedRef('sheet.editStatement', '')
 const editNotes = usePersistedRef('sheet.editNotes', '')
 const showDiePicker = ref(false)
 const pickIdx = ref(0)
 const pickedDie = ref('')
+const showCapacityPicker = ref(false)
+const capacityPickIdx = ref(0)
+const pickedCapacityDie = ref('')
 const editSfxIds = usePersistedRef('sheet.editSfxIds', [])
 const editIsEgo = usePersistedRef('sheet.editIsEgo', true)
 const editProjectionId = usePersistedRef('sheet.editProjectionId', null)
@@ -816,6 +850,14 @@ async function onTraitClick(t) {
     return
   }
 
+  // Challenge traits: same single-vs-mixed-type split as resources. The row
+  // click spends one die; mixed-type pools are spent per die group.
+  if (t.ratingType === 'CHALLENGE') {
+    const types = [...new Set((t.dice || []).map(d => (typeof d === 'string' ? d.toLowerCase() : d)))]
+    if (types.length === 1) await spendChallengeGroup(t, types[0])
+    return
+  }
+
   const negative = t.polarity === 'NEGATIVE'
   const dieType = (t.dice && t.dice.length ? t.dice[0] : '').toLowerCase()
 
@@ -840,6 +882,28 @@ async function spendResourceGroup(t, dieType) {
   await fetchEntity()
 }
 
+async function spendChallengeGroup(t, dieType) {
+  // Spend one die from a challenge pool and route it per polarity:
+  // negative (doom) → destination "opposition" (plain die, routes to opposition);
+  // positive (progress) → destination "pool" (flagged resource, joins own pool).
+  if (props.phase !== 'adding') return
+  if (t.enabled === false) return
+  const destination = t.polarity === 'NEGATIVE' ? 'opposition' : 'pool'
+  const res = await spendChallengeDie(t.id, dieType, destination)
+  if (!res) return
+  t.dice = (res.dice || []).map(d => d.toUpperCase())
+  emit('addToPool', {
+    die: res.die.toLowerCase(),
+    source: t.name,
+    label: displayName(t.name),
+    tsId: t.id,
+    negative: t.polarity === 'NEGATIVE',
+    resource: res.resource,
+    armedSfxIds: armedSfxIdsForTrait(t),
+  })
+  await fetchEntity()
+}
+
 function resolvedDieType(t) {
   // Return the die type for CSS class (determines color)
   if (t.dice && t.dice.length > 0) return t.dice[0].toLowerCase()
@@ -854,6 +918,15 @@ function resourceDisplay(t) {
     return t.rating || 'empty'
   }
   return t.rating || (t.dice ? t.dice.join(', ') : '')
+}
+
+function challengeProgressLabel(t) {
+  // Progress/ceiling indicator for challenge pools when a capacity is set:
+  // positive → "n/m" progress toward target; negative → "n/m" against ceiling.
+  if (t.ratingType !== 'CHALLENGE') return ''
+  const cap = (t.capacity || []).length
+  if (!cap) return ''
+  return `${(t.dice || []).length}/${cap}`
 }
 
 function groupByDieType(dice) {
@@ -876,9 +949,10 @@ function groupByDieType(dice) {
 }
 
 function traitDiceGroups(t) {
-  // Static traits render grouped dice.  Resources/empty have their own
-  // rendering (resources use resourceDiceGroups/resourceSpentGroups).
-  if (t.ratingType === 'RESOURCE' || t.ratingType === 'EMPTY') return []
+  // Static traits render grouped dice.  Resources/challenge/empty have their
+  // own rendering (resources use resourceDiceGroups/resourceSpentGroups,
+  // challenge uses its own die-stack branch).
+  if (t.ratingType === 'RESOURCE' || t.ratingType === 'EMPTY' || t.ratingType === 'CHALLENGE') return []
   return groupByDieType(t.dice)
 }
 
@@ -891,7 +965,9 @@ function resourceSpentGroups(t) {
 }
 
 function isResourceDepleted(t) {
-  if (t.ratingType !== 'RESOURCE') return false
+  // Resources and challenge pools show a dimmed "depleted/empty" state when
+  // their spendable dice ledger is empty.
+  if (t.ratingType !== 'RESOURCE' && t.ratingType !== 'CHALLENGE') return false
   return (!t.dice || t.dice.length === 0)
 }
 
@@ -1090,6 +1166,7 @@ const QUERY = `
         universe
         dice
         spentDice
+        capacity
         polarity
         enabled
         traitsetOrder
@@ -1114,6 +1191,7 @@ const QUERY = `
           sfxIds
           dice
           spentDice
+          capacity
           polarity
           enabled
         }
@@ -1136,6 +1214,7 @@ const QUERY = `
         universe
         dice
         spentDice
+        capacity
         polarity
         enabled
         traitsetOrder
@@ -1160,6 +1239,7 @@ const QUERY = `
           sfxIds
           dice
           spentDice
+          capacity
           polarity
           enabled
         }
@@ -1299,6 +1379,7 @@ function startEdit(t) {
   editingTraitId.value = t.id
   ensureTraitNames()
   editDice.value = (t.dice || []).map(d => d.toLowerCase())
+  editCapacity.value = (t.capacity || []).map(d => d.toLowerCase())
   editRatingType.value = t.ratingType || 'STATIC'
   editPolarity.value = t.polarity || null
   editStatement.value = t.statement || ''
@@ -1312,6 +1393,7 @@ function startEdit(t) {
     null
   showProjectionPicker.value = false
   showDiePicker.value = false
+  showCapacityPicker.value = false
 }
 
 function cancelEdit() {
@@ -1439,12 +1521,14 @@ async function doSave() {
   ensureEditProjection()
   const isRel = editingTrait.value?.fromType === 'relationship'
   const newDice = editDice.value.map(d => d.toUpperCase())
-  const query = `mutation($id: ID!, $dice: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $notes: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID) {
-    updateTraitSetting(id: $id, input: { dice: $dice, ratingType: $ratingType, polarity: $polarity, statement: $statement, notes: $notes, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId }) { id }
+  const newCapacity = editCapacity.value.map(d => d.toUpperCase())
+  const query = `mutation($id: ID!, $dice: [DieType!], $capacity: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $notes: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID) {
+    updateTraitSetting(id: $id, input: { dice: $dice, capacity: $capacity, ratingType: $ratingType, polarity: $polarity, statement: $statement, notes: $notes, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId }) { id }
   }`
   const variables = {
     id: editingTraitId.value,
     dice: newDice,
+    capacity: newCapacity,
     ratingType: editRatingType.value,
     polarity: editPolarity.value,
     statement: editStatement.value ?? null,
@@ -1462,6 +1546,7 @@ async function doSave() {
   // Patch local data — no full re-render
   const patchTrait = (t) => {
     t.dice = newDice
+    t.capacity = newCapacity
     t.ratingType = editRatingType.value
     t.polarity = editPolarity.value
     t.rating = null  // force fallback to dice display
@@ -1561,6 +1646,18 @@ function onDiePicked(die) {
     editDice.value.splice(pickIdx.value, 1, die)
   }
   showDiePicker.value = false
+  doSave()
+}
+
+function onCapacityPicked(die) {
+  if (!die) {
+    editCapacity.value.splice(capacityPickIdx.value, 1)
+  } else if (capacityPickIdx.value >= editCapacity.value.length) {
+    editCapacity.value.push(die)
+  } else {
+    editCapacity.value.splice(capacityPickIdx.value, 1, die)
+  }
+  showCapacityPicker.value = false
   doSave()
 }
 
@@ -2727,6 +2824,12 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-die.depleted {
   color: var(--text-dim);
   font-style: italic;
+}
+.challenge-progress {
+  align-self: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .trait-row.negative {

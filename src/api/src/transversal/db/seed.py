@@ -7,8 +7,11 @@ from transversal.domain import (
     EffectTiming,
     Entity,
     EntityType,
+    Polarity,
     RatingType,
     SFX,
+    Trait,
+    TraitSetting,
     Zone,
 )
 
@@ -266,28 +269,34 @@ def seed_locations(em) -> None:
             loc.zones = list(zones)
             repo.update_entity(loc)
     # ── Seed challenge traits on locations ────────────
-
-    from transversal.domain import Polarity
-
+    # A location's doom pool (negative challenge trait) lives in the location
+    # trait set. Each entry: (location_id, trait_id, trait_name, dice, polarity).
     _challenge_traits = [
-        ("loc-krasnoyarsk", "regime_alert", "ts-earth-distinctions",
+        ("loc-krasnoyarsk", "trait-regime-alert", "regime alert",
          [DieType.D6, DieType.D6, DieType.D8], Polarity.NEGATIVE),
-        ("loc-sect", "sect_suspicion", "ts-earth-distinctions",
+        ("loc-sect", "trait-sect-suspicion", "sect suspicion",
          [DieType.D6], Polarity.NEGATIVE),
     ]
-    for loc_id, name, tsid, dice, polarity in _challenge_traits:
-        ts_key = f"{loc_id}:challenge:{name}"
-        if not repo.get_traitsetting(ts_key):
-            ts = TraitSetting(
-                id=ts_key, entity_id=loc_id,
-                trait_id="trait-earth-hacking",  # placeholder — will need proper challenge trait registry
-                traitset_id=tsid,
-                rating_type=RatingType.CHALLENGE,
-                dice=list(dice),
+    for loc_id, trait_id, name, dice, polarity in _challenge_traits:
+        if not repo.get_trait(trait_id):
+            repo.create_trait(Trait(
+                id=trait_id, name=name,
+                traitset_id="ts-location-afd2",
+                default_die_type=dice[0],
+                default_rating_type=RatingType.CHALLENGE,
                 polarity=polarity,
-            )
+            ))
+        ts_key = f"{loc_id}:challenge:{trait_id.removeprefix('trait-')}"
+        if not repo.get_traitsetting(ts_key):
             try:
-                repo.create_traitsetting(ts)
+                repo.create_traitsetting(TraitSetting(
+                    id=ts_key, entity_id=loc_id,
+                    trait_id=trait_id,
+                    traitset_id="ts-location-afd2",
+                    rating_type=RatingType.CHALLENGE,
+                    dice=list(dice),
+                    polarity=polarity,
+                ))
             except Exception:
                 pass
 
