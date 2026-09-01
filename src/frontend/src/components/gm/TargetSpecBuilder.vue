@@ -130,18 +130,25 @@
 
         <!-- evaluate: terminal boolean test (exists / comparison) -->
         <div v-else-if="step.kind === 'evaluate'" class="tsb-config tsb-evaluate">
+          <select v-if="evalFieldOptions(i).length" v-model="step.field" class="tsb-field">
+            <option value="count">count</option>
+            <option v-for="f in evalFieldOptions(i)" :key="f.name" :value="f.name">
+              {{ f.name }} <em>({{ f.type }})</em>
+            </option>
+          </select>
+          <span v-else class="tsb-eval-lhs">{{ evalLhsLabel(i) }}</span>
           <select v-model="step.operator" class="tsb-op">
             <option v-for="op in EVALUATE_OPERATORS" :key="op" :value="op">{{ op }}</option>
           </select>
           <template v-if="step.operator !== 'exists'">
-            <select v-if="evalFieldOptions(i).length" v-model="step.field" class="tsb-field">
-              <option value="count">count</option>
-              <option v-for="f in evalFieldOptions(i)" :key="f.name" :value="f.name">
-                {{ f.name }} <em>({{ f.type }})</em>
-              </option>
+            <DiePicker v-if="evalValueIsDie(i)" :model-value="step.value" @update:model-value="(v) => onEvaluateValue(i, v)" />
+            <select v-else-if="fieldOptionsFor(i)" :value="step.value" @change="onEvaluateValue(i, $event)">
+              <option value="">—</option>
+              <option v-for="o in fieldOptionsFor(i)" :key="o" :value="o">{{ o }}</option>
             </select>
-            <span v-else class="tsb-eval-lhs">{{ evalLhsLabel(i) }}</span>
-            <input :value="step.value" placeholder="value" @input="onEvaluateValue(i, $event)" />
+            <TargetPicker v-else-if="fieldReferences(i)" :kind="fieldReferences(i)" :model-value="step.value" :clearable="false" placeholder="Pick…" @update:model-value="(v) => onEvaluateValue(i, v)" />
+            <input v-else-if="evalValueIsNumber(i)" type="number" min="0" step="1" :value="step.value" placeholder="n" @input="onEvaluateValue(i, $event)" />
+            <input v-else :value="step.value" placeholder="value" @input="onEvaluateValue(i, $event)" />
           </template>
           <em v-else class="tsb-eval-hint">non-empty</em>
         </div>
@@ -192,6 +199,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import TargetPicker from './TargetPicker.vue'
+import DiePicker from '../DiePicker.vue'
 import GmList from './GmList.vue'
 
 const props = defineProps({
@@ -351,8 +359,9 @@ function onFilterValue(i, e) {
   steps.value[i].value = coerceValue(fieldTypeFor(i), e.target.value)
 }
 
-function onEvaluateValue(i, e) {
-  steps.value[i].value = coerceValue(evalValueType(i), e.target.value)
+function onEvaluateValue(i, raw) {
+  const val = (raw && typeof raw === 'object' && 'target' in raw) ? raw.target.value : raw
+  steps.value[i].value = coerceValue(evalValueType(i), val)
 }
 
 // Left-hand side of an evaluate comparison. For a *many* collection the only
@@ -379,6 +388,20 @@ function evalValueType(i) {
   if (step.field === 'count') return 'number'
   const f = fieldsFor(priorElement(i)).find((x) => x.name === step.field)
   return f ? f.type : 'string'
+}
+
+function evalValueIsDie(i) {
+  const step = steps.value[i]
+  if (step.field === 'count') return false
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === step.field)
+  return !!f && f.type === 'die'
+}
+
+function evalValueIsNumber(i) {
+  const step = steps.value[i]
+  if (step.field === 'count') return true
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === step.field)
+  return !!f && ['int', 'number'].includes(f.type)
 }
 
 function onCount(i, e) {
@@ -502,6 +525,7 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-field { flex: none; width: 88px; }
 .tsb-eval-lhs { flex: none; font-family: monospace; font-size: 9px; color: var(--text-dim); }
 .tsb-eval-hint { flex: none; }
+.tsb-evaluate :deep(.die-picker .die-btn) { width: 24px; height: 28px; padding: 1px; }
 .tsb-check { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text); }
 .tsb-check input { width: auto; }
 .tsb-add { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
