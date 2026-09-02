@@ -504,7 +504,7 @@ provide(panelKey, {
   border-radius: 8px;
   /* Variable width: content-driven, floored and capped. */
   min-width: 260px;
-  max-width: var(--gm-panel-max-w, 560px);
+  max-width: var(--gm-panel-max-w, 440px);
   max-height: calc(100vh - 40px);
   overflow: auto;
 }
