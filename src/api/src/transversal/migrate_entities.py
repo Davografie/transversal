@@ -22,100 +22,30 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 import sys
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import Entity, EntityType, RatingType, TraitSetting
-
-DATA_DIR = "/app/data"
-MULTIVERSE = "2"  # Entities/2 = Multiverse root
+from transversal.migrate_common import (
+    DATA_DIR,
+    MULTIVERSE,
+    TYPE_PREFIX,
+    build_parent_map,
+    build_universe_map,
+    load_json,
+    resolve_universe_key,
+)
 
 # The registry trait that carries an entity's freeform description as `notes`.
 DESCRIPTION_TRAIT = "trait-description"
 DESCRIPTION_TRAITSET = "ts-secrets-1b55"
-
-# Type → new-key prefix. Locations use the short `loc-` prefix (established by
-# the already-migrated 153 locations); everything else uses its type name.
-TYPE_PREFIX = {
-    "character": "character",
-    "location": "loc",
-    "faction": "faction",
-    "asset": "asset",
-    "npc": "gmc",
-    "gm": "gmc",
-}
-
-# Universe name → slug. Matches the existing universe entity keys where present;
-# new universes get a fresh slug. (Dry-run prints these for review.)
-UNIVERSE_SLUGS = {
-    "Earth": "earth",
-    "Three Realms": "three_realms",
-    "Intergalactic Planetary": "intergalactic-planetary",
-    "the Dreamlands": "the-dreamlands",
-    "Chromotopia": "chromotopia",
-    "Living World": "living-world",
-    "Valhalla": "valhalla",
-    "Albinora": "albinora",
-    "Ælor Cıtar": "aelor-citar",
-    "Superhero World": "superhero-world",
-    "The Floating Vagabond": "the-floating-vagabond",
-    "One Piece": "one-piece",
-    "Magic: the Gathering": "magic-the-gathering",
-    "Discworld": "discworld",
-    "Varenya": "varenya",
-}
-
-
-def _slugify(name: str) -> str:
-    s = name.lower().strip()
-    s = re.sub(r"[:'\"]", "", s)
-    s = re.sub(r"\s+", "-", s)
-    s = re.sub(r"[^a-z0-9_-]", "-", s)
-    s = re.sub(r"-+", "-", s).strip("-")
-    return s
-
-
-def load_json(name: str) -> list[dict]:
-    with open(f"{DATA_DIR}/{name}") as f:
-        return json.load(f)
-
-
-def build_universe_map(entities: list[dict], relations: list[dict]) -> dict[str, str]:
-    """Map old universe numeric key → slug, from the 15 children of Multiverse."""
-    # child → parent from super edges
-    parent = {r["_from"]: r["_to"] for r in relations if r["type"] == "super"}
-    unis = {}
-    for e in entities:
-        if e["_id"] in parent and parent[e["_id"]] == f"Entities/{MULTIVERSE}":
-            slug = UNIVERSE_SLUGS.get(e["name"], _slugify(e["name"]))
-            unis[e["_key"]] = slug
-    return unis
-
-
-def resolve_universe_key(
-    entity_key: str, parent_map: dict[str, str], universe_keys: set[str]
-) -> str | None:
-    """Walk super chain from an entity up to the first universe key."""
-    cur = entity_key
-    seen = set()
-    while cur and cur not in seen:
-        if cur in universe_keys:
-            return cur
-        seen.add(cur)
-        cur = parent_map.get(cur, "")
-    return None
 
 
 def migrate(apply: bool = False) -> int:
     entities = load_json("entities.json")
     relations = load_json("relations.json")
 
-    parent_map = {
-        r["_from"].split("/")[1]: r["_to"].split("/")[1]
-        for r in relations
-        if r["type"] == "super"
-    }
+    parent_map = build_parent_map(relations)
     universe_map = build_universe_map(entities, relations)
     universe_keys = set(universe_map.keys())
 
