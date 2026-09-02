@@ -723,6 +723,7 @@ def _apply_gain_or_step_up(entity, effect, repo, result):
             result.updated_trait_settings.append(existing)
             result.applied.append(AppliedEffect(effect, f"stepped up {target}", existing.id))
             _queue_explicit(repo, existing, effect, "step_down", target)
+            _maybe_complete_challenge(existing, subject)
         return
     die = _die(effect.result)
     ts = _new_traitsetting(owner, target, die, repo, negative=bool(effect.negative),

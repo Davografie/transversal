@@ -2043,18 +2043,34 @@ class Mutation:
                       effects: list[EffectInput]) -> EffectApplicationResult:
         """Apply a set of effects to an entity in-memory and persist them.
 
-        Returns the applied summaries plus any unresolved ``{choose_*}`` targets
-        the caller must resolve (via :meth:`resolve_effect_targets`).
+        Returns the applied summaries plus any unresolved targets the caller
+        must resolve (via :meth:`resolve_effect_targets`). Structured
+        ``target_spec`` effects are resolved first: a spec that reaches a
+        ``choose`` step surfaces as a structured choice; a fully-resolved spec
+        is fanned out and applied. Legacy ``{choose_*}`` / literal targets
+        commit unchanged.
         """
         from transversal.services.effects_commit import commit_effects
+        from transversal.services.effects_engine import resolve_effect_spec_choices
 
         repo = _em(info).repo
         entity = repo.get_entity(str(entity_id))
         if entity is None:
             raise ValueError(f"Entity '{entity_id}' not found")
         domain_effects = [_effect_input_to_domain(e) for e in effects]
-        result = commit_effects(entity, domain_effects, repo)
-        return _effects_result_to_gql(result)
+
+        structured = []
+        to_commit = []
+        for eff in domain_effects:
+            if eff.target_spec is not None:
+                applied, pending = resolve_effect_spec_choices(eff, "target", {}, entity, repo)
+                to_commit.extend(applied)
+                structured.extend(pending)
+            else:
+                to_commit.append(eff)
+
+        result = commit_effects(entity, to_commit, repo)
+        return _effects_result_to_gql(result, structured)
 
     @strawberry.mutation
     def resolve_effect_targets(self, info: strawberry.Info, entity_id: strawberry.ID,

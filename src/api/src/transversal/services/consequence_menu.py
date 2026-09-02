@@ -22,15 +22,39 @@ from transversal.domain import (
     Entity,
 )
 
+from transversal.services.target_spec import (
+    ChooseStep,
+    FilterStep,
+    NavigateStep,
+    SelectStep,
+    TargetSpec,
+)
+
 
 from transversal.services.sfx_owner import get_available_sfx_ids
 from transversal.services.conditions import evaluate_conditions
 
 
-# Base moves. The doom-pool step-up/down targets are intentionally generic
-# ({choose_trait}); precise doom-pool scoping lands with Phase 3's challenge-pool
-# work. ``result="{effect_die}"`` is a placeholder the frontend substitutes with
-# the roll's actual effect die before applying.
+def _challenge_pool_spec(polarity: str) -> TargetSpec:
+    """A targeting path selecting challenge-rated traits of ``polarity``.
+
+    ``polarity`` is ``"negative"`` for doom pools and ``"positive"`` for
+    progress clocks. The trailing ``choose`` step surfaces the matching pools as
+    an interactive pick at fire time; nothing is hardcoded to a level.
+    """
+    return TargetSpec(steps=[
+        SelectStep(collection="entities"),
+        NavigateStep(edge="traitsettings"),
+        FilterStep(field="rating_type", operator="==", value="challenge"),
+        FilterStep(field="polarity", operator="==", value=polarity),
+        ChooseStep(count=1),
+    ])
+
+
+# Base moves. The doom-pool moves target challenge-rated pools by rating type +
+# polarity (path-based, no level progression). ``result="{effect_die}"`` is a
+# placeholder the frontend substitutes with the roll's actual effect die before
+# applying.
 _BASE_PLAYER = [
     ConsequenceOption(
         id="proceed", label="Proceed the narrative", side="player",
@@ -51,8 +75,18 @@ _BASE_PLAYER = [
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="step_down", target="{choose_trait}",
-                target_scope="traitset:ts-complications",
+                action="step_down", target_spec=_challenge_pool_spec("negative"),
+            ),
+        ],
+        source="base",
+    ),
+    ConsequenceOption(
+        id="work_on_project", label="Work on a project", side="player",
+        effects=[
+            Effect(
+                timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                action="gain_or_step_up", result="{effect_die}",
+                target_spec=_challenge_pool_spec("positive"),
             ),
         ],
         source="base",
@@ -65,8 +99,7 @@ _BASE_GM = [
         effects=[
             Effect(
                 timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="step_up", target="{choose_trait}",
-                target_scope="traitset:ts-complications",
+                action="step_up", target_spec=_challenge_pool_spec("negative"),
             ),
         ],
         source="base",

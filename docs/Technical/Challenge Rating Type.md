@@ -208,8 +208,29 @@ The interface surface each consumer needs is in the next two sections.
 - [ ] Exact wording/scope of the "Work on a project" base move.
 - [ ] Whether `capacity` is one shared field for resource + challenge
       (recommended) or challenge-only.
-- [ ] Doom-pool ceiling semantics: what fires when a *capped* negative pool
-      reaches `capacity` ("the regime cracks down" event?).
-- [ ] `on_challenge_completed` trigger registration + context shape.
+- [x] `on_challenge_completed` trigger registration + context shape — registered
+      (positive completion only; context = `entity_id`/`trait_setting_id`/`trait_id`/
+      `capacity`). The runtime fire site is `fire_challenge_completed`.
 - [ ] Confirm partial-use die lands in the dice pool as a **resource** die
       (current lean) vs a plain pool die.
+
+### Deferred: challenge level progression (needs further design)
+
+*Deferred 2026-09-02 — not part of the current trigger/effect pass.*
+
+Negative-pool ceiling semantics are unresolved and open up a level-progression
+model that is bigger than the base challenge mechanic. Two sketches to design
+before building:
+
+- **Conspyramid level-up (factions)**: a capped pool (e.g. L2 `3d6`) would
+  become the next level's pool (e.g. L3 `3d8` capacity), with factions able to
+  trigger different abilities per activated level. Today a faction's conspyramid
+  is only `Entity.node_ids` (a flat node list) — there is no `level` concept, so
+  this needs a data-model design first (where the level lives, and the
+  level→capacity mapping).
+- **Location cascade**: a negative `4d4` pool filled to capacity becomes a `3d6`
+  pool on the *parent* location. Needs a rule for the overflow value (authored on
+  the child pool vs derived) and whether it repeats up the tree.
+
+Both must **not** couple to the `on_challenge_completed` trigger as it stands;
+they are a separate completion/rule path layered on top.

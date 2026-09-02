@@ -197,3 +197,32 @@ def test_fire_projection_created_populates_context(monkeypatch):
         "projection_created": "e1:three_realms",
         "universe": "three_realms",
     }
+
+
+def test_fire_challenge_completed_populates_context(monkeypatch):
+    """The challenge-completed fire site populates its declared trigger variables."""
+    from types import SimpleNamespace
+
+    from transversal.domain import DieType, Polarity, RatingType, TraitSetting
+    from transversal.services.challenge_pools import fire_challenge_completed
+
+    captured = _fake_fire(
+        monkeypatch,
+        lambda eid: SimpleNamespace(razmerit=0, current_universe="three_realms"),
+    )
+    ts = TraitSetting(
+        id="e1:trait-gate", entity_id="e1", trait_id="trait-gate",
+        traitset_id="ts-location", rating_type=RatingType.CHALLENGE,
+        dice=[DieType.D6, DieType.D6, DieType.D6],
+        capacity=[DieType.D6, DieType.D6, DieType.D6],
+        polarity=Polarity.POSITIVE,
+    )
+    assert fire_challenge_completed(ts, "three_realms") is True
+    assert len(captured) == 1
+    assert captured[0].type == "challenge_completed"
+    assert captured[0].context == {
+        "entity_id": "e1",
+        "trait_setting_id": "e1:trait-gate",
+        "trait_id": "trait-gate",
+        "capacity": ["d6", "d6", "d6"],
+    }
