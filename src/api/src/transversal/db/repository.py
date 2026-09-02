@@ -136,6 +136,25 @@ class EntityRepository:
         except Exception:
             return False
 
+    def _delete_occupants(self, location_id: str) -> None:
+        """Delete every occupant of a location with full cascade cleanup.
+
+        Occupants are non-location entities whose ``current_location`` is this
+        location. Each is removed through ``_delete_simple`` so its projections,
+        trait settings, relationships, and scheduled-event timers are cleaned
+        rather than orphaned (the B49 class of bug).
+        """
+        occupant_ids = list(self.db.aql.execute(
+            f"""
+            FOR e IN {ENTITIES}
+            FILTER e.current_location == @lid AND e._key != @lid
+            RETURN e._key
+            """,
+            bind_vars={"lid": location_id},
+        ))
+        for oid in occupant_ids:
+            self._delete_simple(oid)
+
     def _delete_location(self, location_id: str, rmtree: bool) -> bool:
         """Delete a location, reparenting or pruning its subtree."""
         eref = f"{ENTITIES}/{location_id}"
@@ -162,22 +181,14 @@ class EntityRepository:
                     descendant_query, bind_vars={"eref": eref, "lid": location_id}
                 )
             ]
-            # Delete bottom-up to avoid dangling references
+            # Delete bottom-up to avoid dangling references. Occupants go through
+            # the cascade path (not a raw REMOVE) so their dependent records are
+            # cleaned rather than orphaned (B49).
             for desc_id in reversed(descendants):
-                desc_eref = f"{ENTITIES}/{desc_id}"
-                # Delete occupants of this sub-location
-                self.db.aql.execute(
-                    f"FOR e IN {ENTITIES} FILTER e.current_location == @lid AND e._key != @lid REMOVE e IN {ENTITIES}",
-                    bind_vars={"lid": desc_id},
-                )
-                # Cascade-cleanup the sub-location entity itself
+                self._delete_occupants(desc_id)
                 self._cascade_cleanup(desc_id)
                 self._entities.delete(desc_id)
-            # Now delete occupants of the target location itself
-            self.db.aql.execute(
-                f"FOR e IN {ENTITIES} FILTER e.current_location == @lid AND e._key != @lid REMOVE e IN {ENTITIES}",
-                bind_vars={"lid": location_id},
-            )
+            self._delete_occupants(location_id)
         else:
             # ── Reparent: move occupants and sub-locations to parent ──
             new_parent_id = parent_ref.split("/", 1)[1] if parent_ref else None
@@ -223,11 +234,13 @@ class EntityRepository:
         proj_keys = [p["_key"] for p in proj_docs]
         proj_refs = [f"{PROJECTIONS}/{k}" for k in proj_keys]
 
-        # Relationship edges touching the entity directly, or one of its projections.
+        # Relationship edges touching the entity directly, or one of its
+        # projections (incoming morph edges and any outgoing body edges).
         edge_keys = list(self.db.aql.execute(
             f"""
             FOR r IN {RELATIONSHIPS}
-            FILTER r._from == @eref OR r._to == @eref OR r._to IN @proj_refs
+            FILTER r._from == @eref OR r._to == @eref
+                OR r._from IN @proj_refs OR r._to IN @proj_refs
             RETURN r._key
             """,
             bind_vars={"eref": eref, "proj_refs": proj_refs},
@@ -265,7 +278,8 @@ class EntityRepository:
         self.db.aql.execute(
             f"""
             FOR r IN {RELATIONSHIPS}
-            FILTER r._from == @eref OR r._to == @eref OR r._to IN @proj_refs
+            FILTER r._from == @eref OR r._to == @eref
+                OR r._from IN @proj_refs OR r._to IN @proj_refs
             REMOVE r IN {RELATIONSHIPS}
             """,
             bind_vars={"eref": eref, "proj_refs": proj_refs},
@@ -273,6 +287,16 @@ class EntityRepository:
 
         for key in proj_keys:
             self._projections.delete(key)
+
+        # Trait-set settings anchored to this entity or one of its projections.
+        self.db.aql.execute(
+            f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            FILTER tss.entity_id == @eid OR tss._from IN @proj_refs
+            REMOVE tss IN {TRAITSETSETTINGS}
+            """,
+            bind_vars={"eid": entity_id, "proj_refs": proj_refs},
+        )
 
         # Delete entity image records from DB
         self.db.aql.execute(
@@ -406,6 +430,75 @@ class EntityRepository:
         return projection
 
     def delete_projection(self, projection_id: str) -> bool:
+        """Delete a projection and cascade-remove its dependents.
+
+        Removes relationship edges touching the projection (and any trait
+        settings anchored to those edges), projection-anchored trait settings
+        and trait-set settings (including nested sub-traits), and
+        projection-scoped images — otherwise they orphan when the body goes.
+        """
+        pref = f"{PROJECTIONS}/{projection_id}"
+
+        # Relationship edges touching the projection, plus trait settings
+        # anchored to those edges (relationship ratings).
+        edge_keys = list(self.db.aql.execute(
+            f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @pref OR r._to == @pref
+            RETURN r._key
+            """,
+            bind_vars={"pref": pref},
+        ))
+        if edge_keys:
+            rel_ts_keys = list(self.db.aql.execute(
+                f"""
+                FOR ts IN {TRAITSETTINGS}
+                FILTER ts.from_type == 'relationship' AND ts.entity_id IN @keys
+                RETURN ts._key
+                """,
+                bind_vars={"keys": edge_keys},
+            ))
+            if rel_ts_keys:
+                self._delete_traitsettings_subtree(rel_ts_keys)
+            self.db.aql.execute(
+                f"""
+                FOR r IN {RELATIONSHIPS}
+                FILTER r._from == @pref OR r._to == @pref
+                REMOVE r IN {RELATIONSHIPS}
+                """,
+                bind_vars={"pref": pref},
+            )
+
+        # Projection-anchored trait settings (roots) and their sub-trait subtrees.
+        proj_ts_keys = list(self.db.aql.execute(
+            f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.from_type == 'projection'
+                AND (ts.projection_id == @pid OR ts._from == @pref)
+            RETURN ts._key
+            """,
+            bind_vars={"pid": projection_id, "pref": pref},
+        ))
+        if proj_ts_keys:
+            self._delete_traitsettings_subtree(proj_ts_keys)
+
+        # Projection-anchored trait-set settings.
+        self.db.aql.execute(
+            f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            FILTER tss.from_type == 'projection'
+                AND (tss.projection_id == @pid OR tss._from == @pref)
+            REMOVE tss IN {TRAITSETSETTINGS}
+            """,
+            bind_vars={"pid": projection_id, "pref": pref},
+        )
+
+        # Projection-scoped images (entity-level images have no projection_id).
+        self.db.aql.execute(
+            f"FOR img IN {ENTITY_IMAGES} FILTER img.projection_id == @pid REMOVE img IN {ENTITY_IMAGES}",
+            bind_vars={"pid": projection_id},
+        )
+
         try:
             self._projections.delete(projection_id)
             return True
@@ -573,6 +666,11 @@ class EntityRepository:
         return lp
 
     def delete_lifepath(self, lp_id: str) -> bool:
+        """Delete a life path and the roll tables it owns."""
+        self.db.aql.execute(
+            f"FOR t IN {ROLL_TABLES} FILTER t.life_path == @lp REMOVE t IN {ROLL_TABLES}",
+            bind_vars={"lp": lp_id},
+        )
         try:
             self._life_paths.delete(lp_id)
             return True
@@ -731,6 +829,11 @@ class EntityRepository:
             self._cleanup_lifepath_trait_refs(tkey)
             try: self._traits.delete(tkey)
             except Exception: pass
+        # Trait-set settings (entity↔traitset edges) reference the set by id.
+        self.db.aql.execute(
+            f"FOR tss IN {TRAITSETSETTINGS} FILTER tss.traitset_id == @tsid REMOVE tss IN {TRAITSETSETTINGS}",
+            bind_vars={"tsid": traitset_id},
+        )
         try: self._traitsets.delete(traitset_id)
         except Exception: pass
         return {"deleted": True, "traits_removed": len(trait_keys), "settings_removed": ts_removed}
@@ -1482,21 +1585,43 @@ class EntityRepository:
         self, from_id: str, to_id: str, rel_type: str,
         from_projection: bool = False, to_projection: bool = False,
     ) -> bool:
-        """Delete a directional relationship edge between two entities."""
+        """Delete a directional relationship edge and its trait settings.
+
+        Relationship-anchored trait settings (``from_type == 'relationship'``)
+        reference the edge by ``_key``; they must be removed with the edge or
+        they orphan (including nested sub-traits and their scheduled timers).
+        """
         from_ref = f"{PROJECTIONS}/{from_id}" if from_projection else f"{ENTITIES}/{from_id}"
         to_ref = f"{PROJECTIONS}/{to_id}" if to_projection else f"{ENTITIES}/{to_id}"
-        query = f"""
+        match = {"from_ref": from_ref, "to_ref": to_ref, "rel_type": rel_type}
+        edge_keys = list(self.db.aql.execute(
+            f"""
             FOR r IN {RELATIONSHIPS}
             FILTER r._from == @from_ref AND r._to == @to_ref AND r.type == @rel_type
-            REMOVE r IN {RELATIONSHIPS}
-            RETURN OLD
-        """
-        result = self.db.aql.execute(query, bind_vars={
-            "from_ref": from_ref,
-            "to_ref": to_ref,
-            "rel_type": rel_type,
-        })
-        return bool(list(result))
+            RETURN r._key
+            """,
+            bind_vars=match,
+        ))
+        if edge_keys:
+            rel_ts_keys = list(self.db.aql.execute(
+                f"""
+                FOR ts IN {TRAITSETTINGS}
+                FILTER ts.from_type == 'relationship' AND ts.entity_id IN @keys
+                RETURN ts._key
+                """,
+                bind_vars={"keys": edge_keys},
+            ))
+            if rel_ts_keys:
+                self._delete_traitsettings_subtree(rel_ts_keys)
+            self.db.aql.execute(
+                f"""
+                FOR r IN {RELATIONSHIPS}
+                FILTER r._from == @from_ref AND r._to == @to_ref AND r.type == @rel_type
+                REMOVE r IN {RELATIONSHIPS}
+                """,
+                bind_vars=match,
+            )
+        return bool(edge_keys)
 
     # ── Plan (staging) CRUD ──────────────────────────
 
