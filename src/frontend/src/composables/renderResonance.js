@@ -19,7 +19,7 @@ let dieColorCache = null
 const groupsCache = new WeakMap()
 const radialLockCache = new WeakMap()
 
-function getDieColor(die, negative) {
+export function getDieColor(die, negative) {
   if (!dieColorCache) {
     dieColorCache = {}
     const styles = typeof getComputedStyle !== 'undefined' && typeof document !== 'undefined'
