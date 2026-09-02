@@ -75,7 +75,7 @@
         <div v-if="loading" class="bb-empty">Loading…</div>
         <div v-else-if="!displayEntries.length" class="bb-empty">No entries yet.</div>
         <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
-          <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx, 'bb-continuation': entryContinuations.has(m.id) }" draggable="true" @dragstart="onDragStart($event, idx)" @dragover="onDragOver($event, idx)" @drop="onDrop(idx)" @dragend="onDragEnd" @touchstart="onTouchStart($event, idx)" @touchmove="onDocTouchMove" @touchend="e => endTouchDrag(true)" @touchcancel="() => cancelTouchDrag()">
+          <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx, 'bb-continuation': entryContinuations.has(m.id) }" draggable="true" @dragstart="dragStart($event, idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="touchStart($event, idx)">
           <div v-if="!entryContinuations.has(m.id)" class="bb-entry-header">
             <div v-if="m.recordType" class="bb-record-badge">🎲 {{ recordLabel(m) }}</div>
             <div v-else-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
@@ -103,9 +103,10 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import MediaImage from './MediaImage.vue'
+import { useDragDrop } from '../composables/useDragDrop.js'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -150,10 +151,6 @@ const replyTarget = ref(null)
 const replyName = ref('')
 
 const selectedThread = ref(null)
-
-const dragIndex = ref(-1)
-const dragOverIndex = ref(-1)
-const touchDrag = ref(null)
 
 const QUERY_TIMELINE = `
   query($eid: ID!) {
@@ -352,81 +349,7 @@ async function fetchThreads() {
   } catch {}
 }
 
-function onDragStart(e, idx) {
-  dragIndex.value = idx
-  e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData('text/plain', idx)
-}
-
-function onDragOver(e, idx) {
-  e.preventDefault()
-  e.dataTransfer.dropEffect = 'move'
-  dragOverIndex.value = idx
-}
-
-function onDragEnd() {
-  dragIndex.value = -1
-  dragOverIndex.value = -1
-}
-
-// ── Touch drag (long-press) ─────────────────────────
-
-function onTouchStart(e, idx) {
-  const entry = e.currentTarget
-  touchDrag.value = { idx, el: entry, engaged: false, ghost: null }
-  touchDrag.value._timer = setTimeout(() => {
-    if (!touchDrag.value) return
-    touchDrag.value.engaged = true
-    const ghost = entry.cloneNode(true)
-    ghost.style.cssText = `position:fixed;left:${e.touches[0].clientX - 20}px;top:${e.touches[0].clientY - 10}px;z-index:100;pointer-events:none;opacity:0.8;width:${entry.offsetWidth}px`
-    document.body.appendChild(ghost)
-    touchDrag.value.ghost = ghost
-    dragIndex.value = idx
-  }, 400)
-}
-
-function cancelTouchDrag() {
-  if (!touchDrag.value) return
-  clearTimeout(touchDrag.value._timer)
-  if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
-  dragIndex.value = -1
-  dragOverIndex.value = -1
-  touchDrag.value = null
-}
-
-function onDocTouchMove(e) {
-  const td = touchDrag.value
-  if (!td) return
-  if (!td.engaged) {
-    if (Math.abs(e.touches[0].clientY - td.el.getBoundingClientRect().top) > 10) cancelTouchDrag()
-    return
-  }
-  e.preventDefault()
-  const t = e.touches[0]
-  if (td.ghost) { td.ghost.style.left = (t.clientX - 20) + 'px'; td.ghost.style.top = (t.clientY - 10) + 'px' }
-  // Find entry under touch point
-  const target = document.elementFromPoint(t.clientX, t.clientY)
-  const row = target?.closest('.bb-entry')
-  const idx = row ? parseInt(row.dataset.bbIdx) : -1
-  dragOverIndex.value = idx >= 0 ? idx : -1
-}
-
-function endTouchDrag(fromTouchEnd) {
-  if (!touchDrag.value) return
-  clearTimeout(touchDrag.value._timer)
-  if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
-  if (touchDrag.value.engaged && fromTouchEnd) {
-    const srcIdx = dragIndex.value
-    const dropIdx = dragOverIndex.value
-    if (srcIdx >= 0 && dropIdx >= 0 && srcIdx !== dropIdx) onDrop(dropIdx)
-  }
-  dragIndex.value = -1
-  dragOverIndex.value = -1
-  touchDrag.value = null
-}
-
-async function onDrop(dropIdx) {
-  const srcIdx = dragIndex.value
+async function reorder(srcIdx, dropIdx) {
   if (srcIdx < 0 || srcIdx === dropIdx) return
 
   const visible = [...displayEntries.value]
@@ -451,6 +374,14 @@ async function onDrop(dropIdx) {
   if (updates.length) await Promise.all(updates)
   await fetch()
 }
+
+const { source: dragIndex, over: dragOverIndex, touchStart, dragStart, dragOver, drop, dragEnd } = useDragDrop({
+  resolveTarget: (el) => {
+    const row = el && el.closest ? el.closest('.bb-entry') : null
+    return row ? parseInt(row.dataset.bbIdx) : null
+  },
+  onCommit: ({ from, to }) => reorder(from, to),
+})
 
 function senderName(eid) { return senderNames.value[eid] || eid }
 function senderPortrait(eid) { return senderPortraits.value[eid] || null }
@@ -593,20 +524,6 @@ function formatTime(iso) {
 }
 
 watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
-
-const onDocTouchEnd = () => endTouchDrag(true)
-const onDocTouchCancel = () => cancelTouchDrag()
-
-onMounted(() => {
-  document.addEventListener('touchmove', onDocTouchMove, { passive: false })
-  document.addEventListener('touchend', onDocTouchEnd)
-  document.addEventListener('touchcancel', onDocTouchCancel)
-})
-onUnmounted(() => {
-  document.removeEventListener('touchmove', onDocTouchMove)
-  document.removeEventListener('touchend', onDocTouchEnd)
-  document.removeEventListener('touchcancel', onDocTouchCancel)
-})
 </script>
 
 <style scoped>

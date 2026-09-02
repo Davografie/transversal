@@ -9,9 +9,16 @@
     @dragleave="$emit('dragleave', $event)"
     @drop.prevent="$emit('drop', $event)"
     @dragend="$emit('dragend', $event)"
+    @touchstart="onTouchStart"
   >
     <slot />
-    <span v-if="draggable && dragHandle" class="gml-drag-handle" draggable="true" title="Drag to reorder">⠿</span>
+    <span
+      v-if="draggable && dragHandle"
+      class="gml-drag-handle"
+      draggable="true"
+      title="Drag to reorder"
+      @touchstart.stop="onHandleTouchStart"
+    >⠿</span>
   </div>
 </template>
 
@@ -20,7 +27,9 @@ import { computed } from 'vue'
 
 // Shared list-row primitive. Renders the global `.entity-row` shell plus the
 // selection/drag/state modifiers that every GM list row needs. Content is
-// slotted; selection, drag, and reorder are owned by GmList (or a custom parent).
+// slotted; selection, drag, and reorder are owned by GmList (or a custom
+// parent) via the forwarded events — including `touchstart`, so a row (or, in
+// `dragHandle` mode, only the ⠿ handle) can long-press-and-drag on touch.
 const props = defineProps({
   selected: { type: Boolean, default: false },
   draggable: { type: Boolean, default: false },
@@ -32,9 +41,19 @@ const props = defineProps({
   state: { type: String, default: '' },
 })
 
+const emit = defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend', 'touchstart'])
+
 const stateClass = computed(() => props.state ? `is-${props.state}` : '')
 
-defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend'])
+// Whole-row touch drag only when the row itself is the drag source
+// (i.e. not in `dragHandle` mode, where the handle owns the gesture).
+function onTouchStart(e) {
+  if (props.draggable && !props.dragHandle) emit('touchstart', e)
+}
+
+function onHandleTouchStart(e) {
+  if (props.draggable) emit('touchstart', e)
+}
 </script>
 
 <style scoped>

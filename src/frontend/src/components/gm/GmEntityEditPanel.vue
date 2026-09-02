@@ -42,16 +42,16 @@
         </div>
       </div>
       <div v-if="!entityImages.length" class="gallery-empty">No entity images yet — upload or generate one.</div>
-      <div v-else class="gallery-grid entity-gallery-drop" :class="{ 'drag-over': dropTarget === '__entity__' }" @dragover.prevent="onEntityDragOver" @dragleave="onEntityDragLeave" @drop.prevent="onEntityDrop">
+      <div v-else class="gallery-grid entity-gallery-drop" :class="{ 'drag-over': dropTarget === '__entity__' }" @dragover.prevent="dragOver" @dragleave="dragLeave" @drop.prevent="drop">
         <div
           v-for="img in entityImages"
           :key="img.id"
           class="gallery-item"
+          :data-img-path="img.path_animated || img.path_large"
           draggable="true"
-          @dragstart="onImageDragStart($event, img)"
-          @touchstart="onImageTouchStart($event, img)"
-          @touchmove="onImageTouchMove"
-          @touchend="onImageTouchEnd"
+          @dragstart="dragStart($event, img.id)"
+          @dragend="dragEnd"
+          @touchstart="touchStart($event, img.id)"
           @click="openImage(img)"
         >
           <MediaImage :src="img.image_type === 'animated' ? img.path_animated : img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
@@ -74,9 +74,9 @@
             class="projection-row"
             :class="{ 'drag-over': dropTarget === p.id }"
             :data-projection-id="p.id"
-            @dragover.prevent="onProjDragOver(p)"
-            @dragleave="onProjDragLeave(p)"
-            @drop.prevent="onProjDrop(p, $event)"
+            @dragover.prevent="dragOver"
+            @dragleave="dragLeave"
+            @drop.prevent="drop"
             @click="openProjectionEditor(p)"
           >
             <MediaImage v-if="projectionThumb(p)" :src="projectionThumb(p).image_type === 'animated' ? projectionThumb(p).path_animated : projectionThumb(p).path_large" class="proj-thumb" :alt="p.originUniverse" />
@@ -92,11 +92,11 @@
               v-for="img in projectionImages(p)"
               :key="img.id"
               class="gallery-item"
+              :data-img-path="img.path_animated || img.path_large"
               draggable="true"
-              @dragstart="onImageDragStart($event, img)"
-              @touchstart="onImageTouchStart($event, img)"
-              @touchmove="onImageTouchMove"
-              @touchend="onImageTouchEnd"
+              @dragstart="dragStart($event, img.id)"
+              @dragend="dragEnd"
+              @touchstart="touchStart($event, img.id)"
               @click="openImage(img)"
             >
               <MediaImage :src="img.image_type === 'animated' ? img.path_animated : img.path_large" class="gallery-thumb" :alt="img.image_type" lazy />
@@ -187,6 +187,7 @@ import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
+import { useDragDrop } from '@/composables/useDragDrop.js'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
@@ -226,8 +227,6 @@ async function addProjectionLocal() {
 }
 
 // ── Image → projection drag-and-drop (HTML5 + touch longpress) ──
-const dropTarget = ref(null)  // projection id, or '__entity__' for the entity gallery
-const touchImageDrag = ref(null)
 
 // Entity-level vs projection-scoped images (ownership is ``projection_id``).
 const entityImages = computed(() => images.value.filter(i => !i.projection_id))
@@ -259,91 +258,35 @@ async function onUpload(e) {
   e.target.value = ''
 }
 
-function onImageDragStart(e, img) {
-  e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData('text/plain', JSON.stringify({ id: img.id, path: img.path_animated || img.path_large }))
-}
-
-function onProjDragOver(p) { dropTarget.value = p.id }
-function onProjDragLeave(p) { if (dropTarget.value === p.id) dropTarget.value = null }
-function onProjDrop(p, e) {
-  dropTarget.value = null
-  const raw = e.dataTransfer.getData('text/plain')
-  if (!raw) return
-  let payload
-  try { payload = JSON.parse(raw) } catch { payload = { id: raw } }
-  if (payload.id) assignImage(payload.id, p.id)
-}
-
-function onEntityDragOver() { dropTarget.value = '__entity__' }
-function onEntityDragLeave() { if (dropTarget.value === '__entity__') dropTarget.value = null }
-function onEntityDrop(e) {
-  dropTarget.value = null
-  const raw = e.dataTransfer.getData('text/plain')
-  if (!raw) return
-  let payload
-  try { payload = JSON.parse(raw) } catch { payload = { id: raw } }
-  if (payload.id) assignImage(payload.id, null)
-}
-
-function onImageTouchStart(e, img) {
-  const touch = e.touches[0]
-  const path = img.path_animated || img.path_large
-  touchImageDrag.value = { id: img.id, path, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
-  touchImageDrag.value._timer = setTimeout(() => {
-    if (!touchImageDrag.value) return
-    touchImageDrag.value.engaged = true
+const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useDragDrop({
+  resolveTarget: (el) => {
+    if (!el || !el.closest) return null
+    if (el.closest('.entity-gallery-drop')) return { kind: 'entity' }
+    const row = el.closest('.projection-row')
+    return row ? { kind: 'projection', id: row.dataset.projectionId || null } : null
+  },
+  onCommit: ({ from, to }) => {
+    if (!from || !to) return
+    if (to.kind === 'entity') assignImage(from, null)
+    else if (to.kind === 'projection' && to.id) assignImage(from, to.id)
+  },
+  makeGhost: (el, t) => {
+    const path = el && el.dataset ? el.dataset.imgPath : null
+    if (!path) return null
     const ghost = document.createElement('img')
-    ghost.src = touchImageDrag.value.path
+    ghost.src = path
     ghost.style.cssText = 'position:fixed;z-index:100;pointer-events:none;opacity:0.8;width:44px;height:44px;object-fit:cover;border-radius:4px'
-    ghost.style.left = (touch.clientX - 22) + 'px'
-    ghost.style.top = (touch.clientY - 22) + 'px'
-    document.body.appendChild(ghost)
-    touchImageDrag.value.ghost = ghost
-  }, 400)
-}
+    ghost.style.left = (t.clientX - 22) + 'px'
+    ghost.style.top = (t.clientY - 22) + 'px'
+    return ghost
+  },
+})
 
-function onImageTouchMove(e) {
-  if (!touchImageDrag.value) return
-  if (!touchImageDrag.value.engaged) {
-    const t = e.touches[0]
-    if (Math.abs(t.clientX - touchImageDrag.value.sx) > 5 || Math.abs(t.clientY - touchImageDrag.value.sy) > 5) {
-      clearTimeout(touchImageDrag.value._timer)
-      touchImageDrag.value.ghost?.remove()
-      touchImageDrag.value = null
-    }
-    return
-  }
-  const t = e.touches[0]
-  const g = touchImageDrag.value.ghost
-  if (g) { g.style.left = (t.clientX - 22) + 'px'; g.style.top = (t.clientY - 22) + 'px' }
-  const target = document.elementFromPoint(t.clientX, t.clientY)
-  if (target?.closest('.entity-gallery-drop')) dropTarget.value = '__entity__'
-  else {
-    const row = target?.closest('.projection-row')
-    dropTarget.value = row ? (row.dataset.projectionId || null) : null
-  }
-}
-
-function onImageTouchEnd(e) {
-  if (!touchImageDrag.value) return
-  clearTimeout(touchImageDrag.value._timer)
-  if (touchImageDrag.value.engaged) {
-    const t = e.changedTouches[0]
-    const target = document.elementFromPoint(t.clientX, t.clientY)
-    const id = touchImageDrag.value.id
-    if (target?.closest('.entity-gallery-drop')) {
-      if (id) assignImage(id, null)
-    } else {
-      const row = target?.closest('.projection-row')
-      const projectionId = row?.dataset.projectionId
-      if (projectionId && id) assignImage(id, projectionId)
-    }
-    touchImageDrag.value.ghost?.remove()
-  }
-  dropTarget.value = null
-  touchImageDrag.value = null
-}
+// Visual drop state, derived from the composable's `over` payload.
+const dropTarget = computed(() => {
+  if (!over.value) return null
+  return over.value.kind === 'entity' ? '__entity__' : over.value.id
+})
 
 const props = defineProps({
   entityId: { type: String, default: null },

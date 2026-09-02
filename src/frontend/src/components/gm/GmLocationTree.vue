@@ -4,19 +4,16 @@
       v-for="node in flatTree"
       :key="node.kind + '-' + node.id"
       class="entity-row tree-row"
-      :class="{ selected: node.id === selectedId, occupant: node.kind === 'occupant', location: node.kind === 'location', 'drag-over': dragOverId === node.id, 'pulse-reject': node.id === rejectedId }"
+      :class="{ selected: node.id === selectedId, occupant: node.kind === 'occupant', location: node.kind === 'location', 'drag-over': over && over.id === node.id, 'pulse-reject': node.id === rejectedId }"
       :style="{ paddingLeft: (12 + node.depth * 20) + 'px' }"
       :data-node-id="node.id"
       :data-node-kind="node.kind"
       :data-node-universe="node.universe || ''"
-      @dragover.prevent="onDragOver($event, node)"
-      @dragleave="onDragLeave(node)"
-      @drop.prevent="onDrop($event, node)"
+      @dragover.prevent="dragOver"
+      @dragleave="dragLeave"
+      @drop.prevent="drop"
       @click="onClick(node)"
-      @touchstart="onTouchStart($event, node)"
-      @touchmove="onTouchMove"
-      @touchend="onTouchEnd"
-      @touchcancel="cancelTouchDrag"
+      @touchstart="onRowTouchStart($event, node)"
     >
       <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id)">
         {{ node.expanded ? '▾' : '▸' }}
@@ -33,15 +30,16 @@
         :draggable="isDraggable(node)"
         title="Drag to move"
         @click.stop
-        @touchstart.stop
-        @dragstart="onDragStart($event, node)"
+        @touchstart.stop="onHandleTouchStart($event, node)"
+        @dragstart="onHandleDragStart($event, node)"
+        @dragend="dragEnd"
       >⠿</span>
     </div>
   </TransitionGroup>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { useDragDrop } from '@/composables/useDragDrop.js'
 
 const props = defineProps({
   flatTree: { type: Array, default: () => [] },
@@ -52,9 +50,7 @@ const props = defineProps({
 
 const emit = defineEmits(['select-universe', 'select-location', 'select-occupant', 'toggle-expand', 'move-entity'])
 
-const dragOverId = ref(null)
-const touchDrag = ref(null)
-const preventNextClick = ref(false)
+let preventNextClick = false
 
 // Only occupants and locations can be moved (onto locations/universes).
 function isDraggable(node) {
@@ -63,87 +59,50 @@ function isDraggable(node) {
 
 function shortType(t) { return t === 'CHARACTER' ? 'PC' : t === 'GMC' ? 'GMC' : t }
 
+function srcPayload(node) {
+  return { entityId: node.id, entityKind: node.kind }
+}
+
 function onClick(node) {
-  if (preventNextClick.value) { preventNextClick.value = false; return }
+  if (preventNextClick) { preventNextClick = false; return }
   if (node.kind === 'universe') emit('select-universe', node.id)
   else if (node.kind === 'location') emit('select-location', node.id)
   else emit('select-occupant', node.entity || { id: node.id })
 }
 
-// ── HTML5 Drag (mouse) — drag starts from the 6-dots handle ──
-function onDragStart(e, node) {
-  if (!isDraggable(node)) return
-  e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData('text/plain', JSON.stringify({ id: node.id, kind: node.kind }))
-}
-function onDragOver(e, node) {
-  if (node.kind === 'location' || node.kind === 'universe') dragOverId.value = node.id
-}
-function onDragLeave(node) { if (dragOverId.value === node.id) dragOverId.value = null }
-function onDrop(e, node) {
-  dragOverId.value = null
-  if (node.kind !== 'location' && node.kind !== 'universe') return
-  const raw = e.dataTransfer.getData('text/plain')
-  if (!raw) return
-  let payload
-  try { payload = JSON.parse(raw) } catch { payload = { id: raw, kind: 'occupant' } }
-  emit('move-entity', { entityId: payload.id, entityKind: payload.kind, targetId: node.id, targetKind: node.kind, targetUniverse: node.universe || '' })
+function onRowTouchStart(e, node) {
+  if (isDraggable(node)) touchStart(e, srcPayload(node))
 }
 
-// ── Touch Drag — long-press anywhere on the row, then drag ──
-function onTouchStart(e, node) {
-  if (!isDraggable(node)) return
-  const touch = e.touches[0]
-  const rowEl = e.currentTarget // the row element
-  touchDrag.value = { entityId: node.id, entityKind: node.kind, el: rowEl, sx: touch.clientX, sy: touch.clientY, engaged: false, ghost: null }
-  touchDrag.value._timer = setTimeout(() => engageTouchDrag(touch), 400)
+function onHandleTouchStart(e, node) {
+  if (isDraggable(node)) touchStart(e, srcPayload(node))
 }
-function engageTouchDrag(touch) {
-  if (!touchDrag.value) return
-  touchDrag.value.engaged = true
-  const el = touchDrag.value.el
-  const ghost = el.cloneNode(true)
-  ghost.style.cssText = `position:fixed;left:${touch.clientX - 20}px;top:${touch.clientY - 14}px;z-index:100;pointer-events:none;opacity:0.8;width:${el.offsetWidth}px`
-  document.body.appendChild(ghost)
-  touchDrag.value.ghost = ghost
+
+function onHandleDragStart(e, node) {
+  if (isDraggable(node)) dragStart(e, srcPayload(node))
 }
-function onTouchMove(e) {
-  if (!touchDrag.value || !touchDrag.value.engaged) {
-    if (touchDrag.value && !touchDrag.value.engaged) {
-      const t = e.touches[0]
-      if (Math.abs(t.clientX - touchDrag.value.sx) > 5 || Math.abs(t.clientY - touchDrag.value.sy) > 5) cancelTouchDrag()
-    }
-    return
-  }
-  // Engaged: keep the browser from scrolling while we drag.
-  e.preventDefault()
-  const t = e.touches[0]; const ghost = touchDrag.value.ghost
-  if (ghost) { ghost.style.left = (t.clientX - 20) + 'px'; ghost.style.top = (t.clientY - 14) + 'px' }
-  const target = document.elementFromPoint(t.clientX, t.clientY)
-  const row = target?.closest('.tree-row')
-  const kind = row?.dataset.nodeKind
-  dragOverId.value = (kind === 'location' || kind === 'universe') ? row.dataset.nodeId : null
-}
-function onTouchEnd(e) {
-  if (!touchDrag.value) return
-  clearTimeout(touchDrag.value._timer)
-  if (touchDrag.value.engaged) {
-    preventNextClick.value = true; setTimeout(() => { preventNextClick.value = false }, 100)
-    const t = e.changedTouches[0]; const target = document.elementFromPoint(t.clientX, t.clientY)
-    const row = target?.closest('.tree-row')
-    const kind = row?.dataset.nodeKind
-    const nodeId = (kind === 'location' || kind === 'universe') ? row.dataset.nodeId : null
-    if (nodeId) emit('move-entity', { entityId: touchDrag.value.entityId, entityKind: touchDrag.value.entityKind, targetId: nodeId, targetKind: kind, targetUniverse: row?.dataset.nodeUniverse || '' })
-    if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
-  }
-  dragOverId.value = null; touchDrag.value = null
-}
-function cancelTouchDrag() {
-  if (!touchDrag.value) return
-  clearTimeout(touchDrag.value._timer)
-  if (touchDrag.value.ghost) touchDrag.value.ghost.remove()
-  dragOverId.value = null; touchDrag.value = null
-}
+
+const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useDragDrop({
+  resolveTarget: (el) => {
+    const row = el && el.closest ? el.closest('.tree-row') : null
+    if (!row) return null
+    const kind = row.dataset.nodeKind
+    if (kind !== 'location' && kind !== 'universe') return null
+    return { id: row.dataset.nodeId, kind, universe: row.dataset.nodeUniverse || '' }
+  },
+  onCommit: ({ from, to }) => {
+    preventNextClick = true
+    setTimeout(() => { preventNextClick = false }, 100)
+    emit('move-entity', {
+      entityId: from.entityId,
+      entityKind: from.entityKind,
+      targetId: to.id,
+      targetKind: to.kind,
+      targetUniverse: to.universe,
+    })
+  },
+  ghostSource: (el) => (el && el.closest ? el.closest('.tree-row') : el),
+})
 </script>
 
 <style scoped>

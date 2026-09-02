@@ -6,19 +6,21 @@
       <GmListItem
         v-for="(item, i) in items"
         :key="itemKey && item[itemKey] != null ? item[itemKey] : i"
+        :data-gml-idx="i"
         :class="rowClass(item)"
         :state="rowState(item)"
         :selected="isSelected(item)"
         :draggable="reorderable"
         :drag-handle="dragHandle"
-        :dragging="dragIndex === i"
-        :drag-over="dragOverIndex === i"
+        :dragging="source === i"
+        :drag-over="over === i"
         @click="onRowClick(item, i)"
-        @dragstart="onDragStart(i, $event)"
-        @dragover="onDragOver(i)"
-        @dragleave="onDragLeave"
-        @drop="onDrop(i)"
-        @dragend="onDragEnd"
+        @touchstart="touchStart($event, i)"
+        @dragstart="dragStart($event, i)"
+        @dragover="dragOver"
+        @dragleave="dragLeave"
+        @drop="drop"
+        @dragend="dragEnd"
       >
         <span v-if="selectable" class="gml-pick" :class="{ selected: isSelected(item) }">
           {{ isSelected(item) ? '✓' : '+' }}
@@ -30,14 +32,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
 import GmListItem from './GmListItem.vue'
+import { useDragDrop } from '@/composables/useDragDrop.js'
 
 // Generic controlled list for the GM panels. Owns the row loop, selection
-// highlight, optional drag-reorder, and the empty/loading states. The parent
-// supplies already-filtered `items` and renders row content via the #item slot;
-// it reacts to `click` (open/toggle) and `reorder` (apply + persist the new
-// order). Search/filtering stays in the parent for now.
+// highlight, optional drag-reorder (mouse + touch long-press, via useDragDrop),
+// and the empty/loading states. The parent supplies already-filtered `items`
+// and renders row content via the #item slot; it reacts to `click`
+// (open/toggle) and `reorder` (apply + persist the new order). Search/filtering
+// stays in the parent for now.
 const props = defineProps({
   items: { type: Array, default: () => [] },
   itemKey: { type: String, default: 'id' },
@@ -62,8 +65,6 @@ const props = defineProps({
 
 const emit = defineEmits(['click', 'reorder', 'toggle'])
 
-const dragIndex = ref(-1)
-const dragOverIndex = ref(-1)
 let suppressNextClick = false
 
 function isSelected(item) {
@@ -81,37 +82,20 @@ function emitToggle(item, i) {
   emit('toggle', item, i)
 }
 
-function onDragStart(i, e) {
-  if (!props.reorderable) return
-  dragIndex.value = i
-  e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData('text/plain', '')
-}
-
-function onDragOver(i) {
-  if (props.reorderable) dragOverIndex.value = i
-}
-
-function onDragLeave() {
-  dragOverIndex.value = -1
-}
-
-function onDrop(i) {
-  const from = dragIndex.value
-  dragIndex.value = -1
-  dragOverIndex.value = -1
-  if (!props.reorderable || from < 0) return
-  // A drop is a drag gesture, not a click — swallow the click that follows.
-  suppressNextClick = true
-  if (from !== i) emit('reorder', from, i)
-}
-
-function onDragEnd() {
-  dragIndex.value = -1
-  dragOverIndex.value = -1
-  // Safety: clear the suppression if the browser never fires the follow-up click.
-  setTimeout(() => { suppressNextClick = false }, 120)
-}
+const { source, over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useDragDrop({
+  resolveTarget: (el) => {
+    const row = el && el.closest ? el.closest('.gml-item') : null
+    return row ? Number(row.dataset.gmlIdx) : null
+  },
+  onCommit: ({ from, to }) => {
+    if (from === to) return
+    // A drop is a drag gesture, not a click — swallow the click that follows.
+    suppressNextClick = true
+    setTimeout(() => { suppressNextClick = false }, 120)
+    emit('reorder', from, to)
+  },
+  ghostSource: (el) => (el && el.closest ? el.closest('.gml-item') : el),
+})
 </script>
 
 <style scoped>
