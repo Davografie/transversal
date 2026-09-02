@@ -49,19 +49,27 @@ export function useDragDrop(options = {}) {
     document.removeEventListener('touchcancel', onDocTouchCancel)
   }
 
-  // ── Touch (long-press → drag) ─────────────────────────────
-  function touchStart(e, from) {
+  // ── Touch (long-press or instant → drag) ─────────────────
+  // `instant` (for dedicated drag handles) engages on touchstart; the default
+  // (for rows, where tap/scroll must still work) waits `engageDelay` ms.
+  function touchStart(e, from, opts = {}) {
+    const { instant = false } = opts
     const t = e.touches[0]
     touch = {
       el: e.currentTarget,
       sx: t.clientX,
       sy: t.clientY,
       engaged: false,
+      moved: false,
       ghost: null,
       timer: null,
     }
     source.value = from
-    touch.timer = setTimeout(() => engageTouch(t), engageDelay)
+    if (instant) {
+      engageTouch(t)
+    } else {
+      touch.timer = setTimeout(() => engageTouch(t), engageDelay)
+    }
     document.addEventListener('touchmove', onDocTouchMove, { passive: false })
     document.addEventListener('touchend', onDocTouchEnd)
     document.addEventListener('touchcancel', onDocTouchCancel)
@@ -94,6 +102,9 @@ export function useDragDrop(options = {}) {
       }
       return
     }
+    if (!touch.moved && (Math.abs(t.clientX - touch.sx) > slop || Math.abs(t.clientY - touch.sy) > slop)) {
+      touch.moved = true
+    }
     e.preventDefault()
     if (touch.ghost) {
       touch.ghost.style.left = (t.clientX + ghostOffset.x) + 'px'
@@ -105,7 +116,9 @@ export function useDragDrop(options = {}) {
   function onDocTouchEnd(e) {
     if (!touch) return
     const t = e.changedTouches[0]
-    if (touch.engaged) {
+    // A drag (not a tap) must have moved past `slop` before it can commit —
+    // this keeps an instant handle tap from dropping onto itself.
+    if (touch.engaged && touch.moved) {
       const to = resolveTarget(document.elementFromPoint(t.clientX, t.clientY))
       if (to != null && source.value != null) onCommit({ from: source.value, to })
     }

@@ -75,7 +75,8 @@ function onRowTouchStart(e, node) {
 }
 
 function onHandleTouchStart(e, node) {
-  if (isDraggable(node)) touchStart(e, srcPayload(node))
+  // The ⠿ handle is a dedicated drag affordance: instant drag, no long-press.
+  if (isDraggable(node)) touchStart(e, srcPayload(node), { instant: true })
 }
 
 function onHandleDragStart(e, node) {

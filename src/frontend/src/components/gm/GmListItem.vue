@@ -41,7 +41,7 @@ const props = defineProps({
   state: { type: String, default: '' },
 })
 
-const emit = defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend', 'touchstart'])
+const emit = defineEmits(['click', 'dragstart', 'dragover', 'dragleave', 'drop', 'dragend', 'touchstart', 'handle-touchstart'])
 
 const stateClass = computed(() => props.state ? `is-${props.state}` : '')
 
@@ -52,7 +52,8 @@ function onTouchStart(e) {
 }
 
 function onHandleTouchStart(e) {
-  if (props.draggable) emit('touchstart', e)
+  // The ⠿ handle is a dedicated drag affordance: instant drag, no long-press.
+  if (props.draggable) emit('handle-touchstart', e)
 }
 </script>
 

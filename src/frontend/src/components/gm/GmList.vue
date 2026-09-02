@@ -16,6 +16,7 @@
         :drag-over="over === i"
         @click="onRowClick(item, i)"
         @touchstart="touchStart($event, i)"
+        @handle-touchstart="touchStart($event, i, { instant: true })"
         @dragstart="dragStart($event, i)"
         @dragover="dragOver"
         @dragleave="dragLeave"
