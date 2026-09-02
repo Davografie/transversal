@@ -212,8 +212,11 @@ class EntityRepository:
             return False
 
     def _cascade_cleanup(self, entity_id: str) -> None:
-        """Remove projections, trait settings, relationships, images, and media."""
+        """Remove projections, trait settings, relationships, images, media, and timers."""
         eref = f"{ENTITIES}/{entity_id}"
+
+        # Delete centrally-scheduled timers targeting this entity.
+        self.delete_scheduled_events(target_type="entity", target_id=entity_id)
 
         # Projection targets of incoming relationship edges (morph relationships).
         proj_docs = list(self._projections.find({"entity_id": entity_id}))
@@ -889,6 +892,7 @@ class EntityRepository:
         """
         pending = set(keys)
         removed = 0
+        removed_keys: list[str] = []
         while pending:
             batch = list(pending)
             # Collect children before removing the current batch.
@@ -900,8 +904,13 @@ class EntityRepository:
                 f"FOR ts IN {TRAITSETTINGS} FILTER ts._key IN @keys REMOVE ts IN {TRAITSETTINGS} RETURN OLD._key",
                 bind_vars={"keys": batch},
             )
-            removed += len(list(result))
+            batch_removed = list(result)
+            removed += len(batch_removed)
+            removed_keys.extend(batch_removed)
             pending = children
+        if removed_keys:
+            # Clean up any scheduled-event timers anchored to the removed settings.
+            self.delete_scheduled_events(target_type="trait_setting", target_ids=removed_keys)
         return removed
 
     def delete_traitsetting(self, ts_id: str) -> bool:
@@ -1054,6 +1063,38 @@ class EntityRepository:
             return True
         except Exception:
             return False
+
+    def delete_scheduled_events(
+        self,
+        *,
+        target_type: Optional[str] = None,
+        target_id: Optional[str] = None,
+        target_ids: Optional[list[str]] = None,
+    ) -> int:
+        """Delete scheduled events scoped to target owners; return count removed.
+
+        At least one scope must be given (a bare call would wipe the store).
+        ``target_id`` scopes to a single owner; ``target_ids`` to a set of owners.
+        """
+        if target_type is None and target_id is None and target_ids is None:
+            raise ValueError("delete_scheduled_events requires a scope")
+        filters = []
+        bind_vars = {}
+        if target_type is not None:
+            filters.append("e.target_type == @target_type")
+            bind_vars["target_type"] = target_type
+        if target_id is not None:
+            filters.append("e.target_id == @target_id")
+            bind_vars["target_id"] = target_id
+        if target_ids is not None:
+            filters.append("e.target_id IN @target_ids")
+            bind_vars["target_ids"] = target_ids
+        query = (
+            f"FOR e IN {SCHEDULED_EVENTS} "
+            f"FILTER {' AND '.join(filters)} "
+            f"REMOVE e IN {SCHEDULED_EVENTS} RETURN OLD._key"
+        )
+        return len(list(self.db.aql.execute(query, bind_vars=bind_vars)))
 
     def list_all_scheduled_events(self) -> list[ScheduledEvent]:
         query = f"FOR e IN {SCHEDULED_EVENTS} RETURN e"

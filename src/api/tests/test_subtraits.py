@@ -10,8 +10,11 @@ import pytest
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
     DieType,
+    Effect,
     Entity,
     EntityType,
+    ScheduledEvent,
+    Timer,
     Trait,
     TraitSet,
     TraitSetting,
@@ -252,3 +255,40 @@ def test_entity_delete_cascades_relationship_subtraits(repo):
     finally:
         repo.delete_entity(A)
         repo.delete_entity(B)
+
+
+def test_traitsetting_delete_removes_scheduled_events(repo):
+    parent = _parent_setting(repo)
+    repo.create_scheduled_event(ScheduledEvent(
+        id="se-ts-cascade",
+        target_type="trait_setting",
+        target_id=parent.id,
+        effect=Effect(type="modify_pool", action="add_trait_rating", result="d4"),
+        timers=[Timer(event="beat", remaining=1)],
+    ))
+
+    repo.delete_traitsetting(parent.id)
+
+    assert repo.get_traitsetting(parent.id) is None
+    assert repo.list_scheduled_events(target_type="trait_setting", target_id=parent.id) == []
+
+
+def test_entity_delete_removes_entity_scheduled_events():
+    repo = _repo
+    E = "test-sched-entity-cascade"
+    repo.delete_entity(E)
+    repo.create_entity(Entity(id=E, type=EntityType.CHARACTER, name="E", current_universe="earth"))
+    try:
+        repo.create_scheduled_event(ScheduledEvent(
+            id="se-entity-cascade",
+            target_type="entity",
+            target_id=E,
+            effect=Effect(type="modify_pool", action="add_trait_rating", result="d4"),
+            timers=[Timer(event="beat", remaining=1)],
+        ))
+
+        repo.delete_entity(E)
+
+        assert repo.list_scheduled_events(target_type="entity", target_id=E) == []
+    finally:
+        repo.delete_entity(E)
