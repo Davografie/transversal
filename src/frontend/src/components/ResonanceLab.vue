@@ -38,6 +38,9 @@ const canvasEl = ref(null)
 let rafId = null
 let lastNow = 0
 let playElapsed = 0
+const perfMs = ref(0)
+const perfFps = ref(0)
+let lastPerf = 0
 
 const output = computed(() => JSON.stringify({
   mode: mode.value,
@@ -79,6 +82,7 @@ async function load() {
 }
 
 function render(now = performance.now()) {
+  if (layout.value === 'divider') return
   const canvas = canvasEl.value
   if (!canvas) return
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
@@ -123,6 +127,13 @@ function onScrub() {
 }
 
 function loop(now) {
+  if (lastPerf) {
+    const dt = now - lastPerf
+    perfMs.value = perfMs.value * 0.9 + dt * 0.1
+    perfFps.value = perfMs.value > 0 ? 1000 / perfMs.value : 0
+  }
+  lastPerf = now
+
   if (playing.value) {
     if (!lastNow) lastNow = now
     playElapsed += now - lastNow
@@ -162,11 +173,20 @@ onUnmounted(() => {
       <div v-if="loading" class="reslab-loading">Loading signatures…</div>
 
       <template v-else>
-        <canvas ref="canvasEl" class="reslab-canvas" :style="{ height: height + 'px' }" />
+        <canvas v-if="layout !== 'divider'" ref="canvasEl" class="reslab-canvas" :style="{ height: height + 'px' }" />
 
-        <div class="reslab-divider">
+        <div v-if="layout === 'divider'" class="reslab-divider">
           <div class="reslab-divider-label">Waveform divider preview (drifting tangle @ 0.7)</div>
-          <WaveformDivider :osc="to" :height="96" />
+          <WaveformDivider
+            :osc="to"
+            :height="Math.max(120, height)"
+            :progress="0.7"
+            :render-divisor="renderDivisor"
+            :drift="drift"
+            :collapse-fraction="collapseFraction"
+            :transform-fraction="transformFraction"
+            :expand-fraction="expandFraction"
+          />
         </div>
 
         <div class="reslab-scrub-row">
@@ -181,6 +201,7 @@ onUnmounted(() => {
             @input="onScrub"
           />
           <span class="reslab-progress">{{ (progress * 100).toFixed(1) }}%</span>
+          <span class="reslab-perf">{{ perfFps.toFixed(0) }} fps · {{ perfMs.toFixed(1) }} ms</span>
         </div>
 
         <div class="reslab-knobs">
@@ -198,6 +219,7 @@ onUnmounted(() => {
             <select v-model="layout">
               <option value="linear">linear</option>
               <option value="radial">radial</option>
+              <option value="divider">divider</option>
             </select>
           </label>
 
@@ -357,6 +379,13 @@ onUnmounted(() => {
 }
 .reslab-progress {
   width: 52px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.reslab-perf {
+  min-width: 96px;
   text-align: right;
   font-size: 12px;
   color: var(--text-dim);
