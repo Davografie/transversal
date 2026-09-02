@@ -22,6 +22,8 @@ from transversal.domain import (
     Projection,
     RatingType,
     RollTable,
+    SFX,
+    SfxOwner,
     ScheduledEvent,
     Trait,
     TraitSet,
@@ -83,18 +85,30 @@ TSS5 = "test-cascade-tss5"
 LP6 = "test-cascade-lp6"
 RT6 = "test-cascade-rt6"
 
-_ENTITY_IDS = [PARENT, CHILD, OCCUPANT, OTHER, E2, E3, E3B, E4A, E4B, E5]
-_TRAIT_IDS = [TRAIT1, TRAIT3, TRAIT4, TRAIT5]
-_TRAITSET_IDS = [TRAITSET1, TRAITSET2, TRAITSET3, TRAITSET4, TRAITSET5]
+# SFX reference integrity
+SFX7 = "test-cascade-sfx"
+E7 = "test-cascade-sfx-entity"
+PROJ7 = "test-cascade-sfx-proj"
+TRAIT7 = "test-cascade-sfx-trait"
+TRAITSET7 = "test-cascade-sfx-traitset"
+TS7 = "test-cascade-sfx-tsetting"
+TSS7 = "test-cascade-sfx-tss"
+OWNER7 = "test-cascade-sfx-owner"
+
+_ENTITY_IDS = [PARENT, CHILD, OCCUPANT, OTHER, E2, E3, E3B, E4A, E4B, E5, E7]
+_TRAIT_IDS = [TRAIT1, TRAIT3, TRAIT4, TRAIT5, TRAIT7]
+_TRAITSET_IDS = [TRAITSET1, TRAITSET2, TRAITSET3, TRAITSET4, TRAITSET5, TRAITSET7]
 _LP_IDS = [LP6]
 _RT_IDS = [RT6]
+_SFX_IDS = [SFX7]
+_OWNER_IDS = [OWNER7]
 
 
 def _cleanup(repo):
     """Remove all fixture data (idempotent — safe on a partial/absent run)."""
     for eid in _ENTITY_IDS:
         repo.delete_entity(eid, rmtree=True)
-    for pid in (PROJ1, PROJ3):
+    for pid in (PROJ1, PROJ3, PROJ7):
         repo.delete_projection(pid)
     for tid in _TRAIT_IDS:
         repo.delete_trait(tid)
@@ -104,6 +118,10 @@ def _cleanup(repo):
         repo.delete_lifepath(lpid)
     for rtid in _RT_IDS:
         repo.delete_roll_table(rtid)
+    for sid in _SFX_IDS:
+        repo.delete_sfx(sid)
+    for oid in _OWNER_IDS:
+        repo.delete_sfx_owner(oid)
 
 
 def _char(eid: str, location: str | None = None) -> Entity:
@@ -285,5 +303,47 @@ def test_delete_lifepath_cascades_roll_tables():
 
     assert repo.get_lifepath(LP6) is None
     assert repo.get_roll_table(RT6) is None
+
+    _cleanup(repo)
+
+
+def test_delete_sfx_strips_owner_references():
+    """Deleting an SFX removes its id from every owner surface."""
+    repo = _repo
+    _cleanup(repo)
+
+    repo.create_sfx(SFX(id=SFX7, name="sfx7", trigger="manual"))
+    repo.create_traitset(TraitSet(id=TRAITSET7, name="ts7", universes=["earth"]))
+    repo.create_trait(Trait(
+        id=TRAIT7, name="trait7", universes=["earth"], traitset_id=TRAITSET7,
+        default_sfx_ids=[SFX7], possible_sfx_ids=[SFX7],
+    ))
+    repo.create_entity(Entity(
+        id=E7, type=EntityType.CHARACTER, name=E7, current_universe="earth",
+        sfx_ids=[SFX7],
+    ))
+    repo.create_projection(Projection(
+        id=PROJ7, entity_id=E7, origin_universe="earth", universe="earth",
+        transversal_type=TransversalType.NATIVE, sfx_ids=[SFX7],
+    ))
+    repo.create_traitsetting(TraitSetting(
+        id=TS7, entity_id=E7, trait_id=TRAIT7, traitset_id=TRAITSET7,
+        rating_type=RatingType.STATIC, dice=[DieType.D8], sfx_ids=[SFX7],
+    ))
+    repo.create_traitsetsetting(TraitSetSetting(
+        id=TSS7, entity_id=E7, traitset_id=TRAITSET7, from_type="entity", sfx_ids=[SFX7],
+    ))
+    repo.create_sfx_owner(SfxOwner(id=OWNER7, sfx_ids=[SFX7]))
+
+    repo.delete_sfx(SFX7)
+
+    assert repo.get_sfx(SFX7) is None
+    assert SFX7 not in repo.get_entity(E7).sfx_ids
+    assert SFX7 not in repo.get_projection(PROJ7).sfx_ids
+    assert SFX7 not in repo.get_trait(TRAIT7).default_sfx_ids
+    assert SFX7 not in repo.get_trait(TRAIT7).possible_sfx_ids
+    assert SFX7 not in repo.get_traitsetting(TS7).sfx_ids
+    assert SFX7 not in repo.get_traitsetsetting(TSS7).sfx_ids
+    assert SFX7 not in repo.get_sfx_owner(OWNER7).sfx_ids
 
     _cleanup(repo)
