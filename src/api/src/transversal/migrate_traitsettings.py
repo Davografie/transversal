@@ -216,6 +216,7 @@ def materialize_inheritance(
             synthetic.append({
                 "_from": entity_ref,
                 "_to": s["_to"],
+                "_orig_key": s["_key"],  # ancestor setting key → sub-trait re-anchor
                 "rating_type": s.get("rating_type"),
                 "rating": s.get("rating"),
                 "statement": s.get("statement") or "",
@@ -391,8 +392,9 @@ def migrate(apply: bool = False) -> int:
             key = f"{entity_id}:{trait_id}"
             insert(key, f"{ENTITIES}/{entity_id}", entity_id, trait_id, tset_id,
                    "entity", rt, dice, capacity, polarity, statement, notes)
-            if "_key" in s:
-                parent_new[s["_key"]] = [(key, entity_id)]
+            pk = s.get("_orig_key", s.get("_key"))
+            if pk is not None:
+                parent_new.setdefault(pk, []).append((key, entity_id))
             report["ego"] += 1
             continue
 
@@ -411,8 +413,9 @@ def migrate(apply: bool = False) -> int:
             report["morph"] += 1
             if len(slugs) > 1:
                 report["morph_multi_universe"] += 1
-        if "_key" in s:
-            parent_new[s["_key"]] = entries
+        pk = s.get("_orig_key", s.get("_key"))
+        if pk is not None:
+            parent_new.setdefault(pk, []).extend(entries)
 
     # ── Pass 1b: relation-traits ─────────────────────────
     for s in tsettings:
