@@ -189,3 +189,61 @@ def resolve_universes_from_default(
 def build_universe_lookup(entities: list[dict], relations: list[dict]) -> dict[str, str]:
     """Map old universe numeric key → slug (children of Multiverse)."""
     return build_universe_map(entities, relations)
+
+
+# ── Trait/traitset registry key maps ─────────────────────
+#
+# Single source of truth for the old→new trait/traitset key formula, shared by
+# migrate_registry (Phase 1) and migrate_traitsettings (Phase 4) so the two
+# can never drift. Keys are deterministic ``trait-{old_numeric}`` /
+# ``ts-{old_numeric}`` except for the few new-app-only traitsets that already
+# carry hand-authored content and are preserved by name.
+
+PRESERVED_TRAITSETS = {
+    "relations": "ts-relations-b114",
+    "secrets": "ts-secrets-1b55",
+    "location": "ts-location-afd2",
+}
+
+SKIP_TRAITSETS = {"custom", "tutorial"}
+
+
+def traitset_key(old_key: str) -> str:
+    return f"ts-{old_key}"
+
+
+def trait_key(old_key: str) -> str:
+    return f"trait-{old_key}"
+
+
+def build_registry_key_maps(
+    traitsets: list[dict], traits: list[dict]
+) -> tuple[dict[str, str], dict[str, str], dict[str, str | None]]:
+    """Return ``(tset_map, trait_map, trait_tset_map)``.
+
+    - ``tset_map``: old traitset numeric key → new traitset key (skips
+      ``custom``/``tutorial``; maps the three preserved-by-name sets).
+    - ``trait_map``: ``"Traits/{old}"`` → new trait key.
+    - ``trait_tset_map``: old trait numeric key → new traitset key (the
+      ``traitset_id`` a migrated setting should denormalize), or ``None`` when
+      the trait's traitset was skipped.
+    """
+    tset_map: dict[str, str] = {}
+    for ts in traitsets:
+        name = ts.get("name") or ""
+        key = ts["_key"]
+        if not name or name in SKIP_TRAITSETS:
+            continue
+        tset_map[key] = PRESERVED_TRAITSETS.get(name, traitset_key(key))
+
+    trait_map: dict[str, str] = {
+        f"Traits/{t['_key']}": trait_key(t["_key"]) for t in traits
+    }
+
+    trait_tset_map: dict[str, str | None] = {}
+    for t in traits:
+        ref = t.get("traitset") or ""
+        ts_key = ref.split("/")[1] if "/" in ref else ""
+        trait_tset_map[t["_key"]] = tset_map.get(ts_key)
+
+    return tset_map, trait_map, trait_tset_map

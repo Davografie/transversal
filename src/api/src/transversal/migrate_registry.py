@@ -23,26 +23,24 @@ import sys
 
 from transversal.db.arango import TRAITS, TRAITSETS, get_db
 from transversal.migrate_common import (
+    PRESERVED_TRAITSETS,
     RATING_TO_DIE,
     RATING_TYPE_MAP,
+    SKIP_TRAITSETS,
     build_parent_map,
     build_universe_lookup,
     load_json,
     resolve_universes_from_default,
+    trait_key,
+    traitset_key,
 )
 
-SKIP_TRAITSETS = {"custom", "tutorial"}
 EMBERLINE_TS = "ts-emberline"
 
 # New-app-only traitsets that have no old-app source but hold hand-authored
 # traits we must preserve (Option A). Old-app traits of the SAME name are
 # merged into these preserved traitsets rather than creating a fresh key.
-#   old traitset name → preserved new traitset key
-PRESERVED_TRAITSETS = {
-    "relations": "ts-relations-b114",
-    "secrets": "ts-secrets-1b55",
-    "location": "ts-location-afd2",
-}
+#   old traitset name → preserved new traitset key  (formula lives in migrate_common)
 
 # New-app-only trait keys (inside the preserved traitsets) that the wipe must
 # leave untouched. Old-app traits of the same name/area don't exist, so there
@@ -53,14 +51,6 @@ PRESERVED_TRAITS = {
     "trait-rel-tenure",
     "trait-regime-alert",
 }
-
-
-def _traitset_key(old_key: str) -> str:
-    return f"ts-{old_key}"
-
-
-def _trait_key(old_key: str) -> str:
-    return f"trait-{old_key}"
 
 
 def migrate(apply: bool = False) -> int:
@@ -102,14 +92,14 @@ def migrate(apply: bool = False) -> int:
         )
         # Preserved traitsets keep their existing new key; the old-app traits
         # are merged into them instead of a fresh ts-{numeric} key.
-        old_tset_map[key] = PRESERVED_TRAITSETS.get(name, _traitset_key(key))
+        old_tset_map[key] = PRESERVED_TRAITSETS.get(name, traitset_key(key))
         old_tset_unis[key] = unis
 
     # ── Build trait key map (for sub/required reference resolution) ──
     old_trait_map: dict[str, str] = {}
     for t in old_traits:
         key = t["_key"]
-        old_trait_map[f"Traits/{key}"] = _trait_key(key)
+        old_trait_map[f"Traits/{key}"] = trait_key(key)
 
     # ── Resolve universe for a trait (trait default → traitset default) ──
     def trait_universes(t: dict) -> set[str]:
@@ -209,7 +199,7 @@ def migrate(apply: bool = False) -> int:
         new_die = RATING_TO_DIE.get(abs(rating[0]), "d4") if rating else "d4"
 
         doc = {
-            "_key": _traitset_key(key),
+            "_key": traitset_key(key),
             "name": name,
             "universes": sorted(unis),
             "description": (ts.get("explainer") or "").strip(),
@@ -246,7 +236,7 @@ def migrate(apply: bool = False) -> int:
         new_die = RATING_TO_DIE.get(abs(rating[0])) if rating else None
 
         doc = {
-            "_key": _trait_key(key),
+            "_key": trait_key(key),
             "name": name,
             "universes": sorted(unis),
             "traitset_id": old_tset_map[ts_key],
