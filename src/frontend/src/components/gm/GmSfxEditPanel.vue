@@ -123,10 +123,10 @@ onMounted(() => {
   loadEntityNames()
 })
 
-// Backend trigger vocabulary grouped into Manual / Auto-fire / Menus. A legacy
-// value not in the vocabulary is still offered so saving never drops it.
+// Backend trigger vocabulary grouped into Dice Pool / Manual / Auto-fire. A
+// legacy value not in the vocabulary is still offered so saving never drops it.
 const triggerGroups = computed(() => {
-  const byGroup = { dicepool: [], manual: [], auto: [], menu: [] }
+  const byGroup = { dicepool: [], manual: [], auto: [] }
   for (const t of triggers.value) {
     ;(byGroup[t.group] || (byGroup[t.group] = [])).push(t)
   }
@@ -134,7 +134,6 @@ const triggerGroups = computed(() => {
     { label: 'Dice Pool', options: byGroup.dicepool },
     { label: 'Manual', options: byGroup.manual },
     { label: 'Auto-fire', options: byGroup.auto },
-    { label: 'Menus', options: byGroup.menu },
   ]
 })
 const knownTrigger = computed(() => !draft.trigger || triggers.value.some(t => t.value === draft.trigger))

@@ -52,17 +52,9 @@ MENU_CONTEXT_VARIABLES: dict[str, list[Variable]] = {
     ],
 }
 
-# The subset of trigger values that are consequence-menu placements (used by
-# menu assembly and by the editor to group the dropdown).
-MENU_TRIGGERS: frozenset[str] = frozenset(MENU_CONTEXT_IDS)
-
-_MENU_TRIGGER_LABELS: dict[str, str] = {
-    "test_success": "Menu — Test Success",
-    "simplified_roll": "Menu — Simplified Roll",
-    "contest_win": "Menu — Contest Win",
-    "contest_give_in": "Menu — Contest Give In",
-    "hitch": "Menu — Hitch / Opportunity",
-}
+# The set of consequence-menu outcome signals (the ``menu_context`` argument to
+# consequence-menu assembly), mapped to outcome conditions by
+# ``consequence_menu._outcome_context``. Not SFX trigger values anymore.
 
 # ── The trigger vocabulary ──────────────────────────
 #
@@ -77,7 +69,7 @@ class TriggerDef:
     value: str
     label: str
     variables: tuple[Variable, ...] = ()
-    group: str = "auto"  # "auto" | "manual" | "menu"
+    group: str = "auto"  # "manual" | "dicepool" | "auto"
 
 
 TRIGGERS: tuple[TriggerDef, ...] = (
@@ -163,25 +155,17 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("trait_id", "trait"),
         Variable("capacity", "string"),
     ), group="auto"),
-) + tuple(
-    TriggerDef(value, _MENU_TRIGGER_LABELS[value], tuple(MENU_CONTEXT_VARIABLES[value]), group="menu")
-    for value in MENU_CONTEXT_IDS
 )
 
 
 def menu_context_variables(menu_context: str) -> list[Variable]:
-    """Deprecated alias — menu contexts are triggers now."""
-    return trigger_variables(menu_context)
+    """The typed ``{variables}`` in scope for a consequence-menu outcome signal."""
+    return list(MENU_CONTEXT_VARIABLES.get(menu_context, []))
 
 
 def trigger_variables(trigger: str) -> list[Variable]:
-    """Return the typed variables exposed by a trigger or menu context (empty when unknown)."""
+    """Return the typed variables exposed by an activation trigger (empty when unknown)."""
     for t in TRIGGERS:
         if t.value == trigger:
             return list(t.variables)
     return []
-
-
-def is_menu_trigger(trigger: str) -> bool:
-    """True if ``trigger`` names a post-roll consequence menu."""
-    return trigger in MENU_TRIGGERS

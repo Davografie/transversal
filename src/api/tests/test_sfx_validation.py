@@ -10,9 +10,9 @@ from transversal.domain import (
 from transversal.services.sfx_validation import validate_sfx
 
 
-def _sfx(trigger="hitch", effects=None, conditions=None):
+def _sfx(trigger="manual", placement=None, effects=None, conditions=None):
     return SFX(
-        id="sfx-x", name="X", trigger=trigger,
+        id="sfx-x", name="X", trigger=trigger, placement=placement,
         effects=effects or [],
         conditions=conditions or [],
     )
@@ -20,7 +20,7 @@ def _sfx(trigger="hitch", effects=None, conditions=None):
 
 def test_known_variables_pass():
     sfx = _sfx(
-        trigger="hitch",
+        placement="menu",
         effects=[Effect(
             timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
             target="{choose_trait}", entity="{hitch_entity}", result="d4",

@@ -467,6 +467,7 @@ class SfxRef:
     trigger: str = ""
     limit: str = ""
     source_kind: Optional[str] = None
+    placement: Optional[str] = None
     conditions: list[Condition] = strawberry.field(default_factory=list)
     effects: list[Effect] = strawberry.field(default_factory=list)
     duration: Optional[EffectDuration] = None
@@ -481,6 +482,7 @@ class SfxInput:
     trigger: str = ""
     limit: str = ""
     source_kind: Optional[str] = None
+    placement: Optional[str] = None
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
     duration: Optional[EffectDurationInput] = None
@@ -495,6 +497,7 @@ class SfxUpdateInput:
     trigger: Optional[str] = None
     limit: Optional[str] = None
     source_kind: Optional[str] = None
+    placement: Optional[str] = None
     conditions: Optional[list[ConditionInput]] = None
     effects: Optional[list[EffectInput]] = None
     duration: Optional[EffectDurationInput] = None

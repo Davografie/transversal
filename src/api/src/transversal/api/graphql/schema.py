@@ -567,7 +567,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind,
+                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind, placement=s.placement,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                     duration=_duration_to_gql(s.duration),
@@ -580,7 +580,7 @@ class Query:
             return [
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind,
+                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind, placement=s.placement,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                     duration=_duration_to_gql(s.duration),
@@ -739,7 +739,7 @@ class Query:
 
         draft = DomainSFX(
             id=input.id, name=input.name, trigger=input.trigger,
-            source_kind=input.source_kind,
+            source_kind=input.source_kind, placement=input.placement,
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
             duration=_duration_input_to_domain(input.duration),
@@ -1495,7 +1495,7 @@ class Mutation:
         s = DomainSFX(
             id=input.id, name=input.name, description=input.description,
             trigger=input.trigger, conditions=conditions,
-            source_kind=input.source_kind,
+            source_kind=input.source_kind, placement=input.placement,
             effects=[_effect_input_to_domain(e) for e in input.effects],
             duration=_duration_input_to_domain(input.duration),
         )
@@ -1507,7 +1507,7 @@ class Mutation:
         _maybe_rearm_passives(created.trigger)
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
-            trigger=created.trigger, limit=created.limit, source_kind=created.source_kind,
+            trigger=created.trigger, limit=created.limit, source_kind=created.source_kind, placement=created.placement,
             conditions=[_condition_to_gql(c) for c in created.conditions],
             effects=[_effect_to_gql(e) for e in created.effects],
             duration=_duration_to_gql(created.duration),
@@ -1544,6 +1544,8 @@ class Mutation:
             existing.trigger = input.trigger
         if input.source_kind is not None:
             existing.source_kind = input.source_kind
+        if input.placement is not None:
+            existing.placement = input.placement
         if input.effects is not None:
             existing.effects = [_effect_input_to_domain(e) for e in input.effects]
         if input.duration is not None:
@@ -1556,7 +1558,7 @@ class Mutation:
         _maybe_rearm_passives(old_trigger, updated.trigger)
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
-            trigger=updated.trigger, limit=updated.limit, source_kind=updated.source_kind,
+            trigger=updated.trigger, limit=updated.limit, source_kind=updated.source_kind, placement=updated.placement,
             conditions=[_condition_to_gql(c) for c in updated.conditions],
             effects=[_effect_to_gql(e) for e in updated.effects],
             duration=_duration_to_gql(updated.duration),

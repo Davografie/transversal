@@ -101,6 +101,11 @@ def validate_sfx(sfx: SFX) -> list[str]:
     """
     warnings: list[str] = []
     known = {v.name for v in trigger_variables(sfx.trigger)}
+    # Menu SFX (placement="menu") can reference any consequence-menu variable
+    # (effect_die, hitch/buying/opponent …), regardless of which menu they gate.
+    if sfx.placement == "menu":
+        from transversal.services.menu_contexts import MENU_CONTEXT_VARIABLES
+        known |= {v.name for vs in MENU_CONTEXT_VARIABLES.values() for v in vs}
     # The declared source kind exposes its typed variable, so the author can
     # reference it in effects/conditions without a false "unknown variable".
     from transversal.services.target_catalog import source_variable

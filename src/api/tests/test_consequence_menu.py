@@ -154,20 +154,6 @@ def test_base_moves_carry_effect_die_placeholder():
     assert gm["sfx:give_asset"].effects[0].result == "{effect_die}"
 
 
-def test_menu_context_sfx_appears_only_in_matching_context():
-    repo = MenuRepo()
-    repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-apply"], trait_id="origin")]
-    repo.traits = {"origin": SimpleNamespace(default_sfx_ids=[])}
-    repo.sfxs = {"sfx-apply": SFX(id="sfx-apply", name="Apply", trigger="",
-                                  menu_context="contest_win", effects=[])}
-
-    contest = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "player", "contest_win")}
-    assert "sfx:sfx-apply" in contest
-
-    test = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "player", "test_success")}
-    assert "sfx:sfx-apply" not in test
-
-
 def test_contest_sfx_appears_only_in_matching_outcome():
     from transversal.services.sfx_owner import ensure_contest_complication_sfx
 

@@ -6,7 +6,7 @@ dynamically from two sources:
   - entity moves (``Entity.consequence_options`` on the acting entity's
     current location and its ancestors — lair moves)
   - SFX moves (``placement="menu"`` SFX gated by role/outcome conditions, plus
-    the legacy ``trigger == menu_context`` SFX pending migration)
+    the legacy ``trigger="on_consequence"`` SFX)
 
 Choosing an option applies its effects through the shared effect applier
 (``applyEffects``), which resolves any ``{choose_*}`` targets via the wizard.
@@ -55,10 +55,10 @@ def assemble_consequence_menu(
 ) -> list[ConsequenceOption]:
     """Return the consequence options offered to ``side`` in ``menu_context``.
 
-    ``menu_context`` is a menu trigger value (e.g. ``test_success``). SFX with
-    an explicit ``placement="menu"`` are gated by their conditions (role/outcome);
-    the legacy ``trigger == menu_context`` / ``on_consequence`` SFX still match
-    for backward compatibility pending migration.
+    ``menu_context`` is an outcome signal (e.g. ``contest_win``). SFX with an
+    explicit ``placement="menu"`` are gated by their conditions (role/outcome);
+    the legacy ``trigger="on_consequence"`` SFX still match every menu for
+    backward compatibility.
     """
     options: list[ConsequenceOption] = []
     role = "architect" if side == "gm" else "player"
@@ -89,8 +89,8 @@ def assemble_consequence_menu(
                 effects=sfx.effects, source="sfx",
             ))
             continue
-        # Legacy: trigger == menu_context (or on_consequence), pending migration.
-        if sfx.trigger != menu_context and sfx.trigger != "on_consequence":
+        # Legacy: trigger="on_consequence" SFX still appear in every menu.
+        if sfx.trigger != "on_consequence":
             continue
         if sfx.conditions and not evaluate_conditions(entity, sfx.conditions, repo):
             continue
