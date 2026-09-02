@@ -34,7 +34,7 @@ function draw(now) {
   if (!canvas) return
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   const w = canvas.clientWidth || 320
-  const h = props.height
+  const h = canvas.clientHeight || props.height
   if (w <= 0 || h <= 0) return
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
     canvas.width = Math.round(w * dpr)

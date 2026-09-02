@@ -347,12 +347,14 @@ onUnmounted(() => {
 .reslab-canvas {
   display: block;
   width: 100%;
+  flex-shrink: 0;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
 }
 .reslab-divider {
   border-radius: 8px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .reslab-divider-label {
   font-size: 11px;
