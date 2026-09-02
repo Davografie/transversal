@@ -178,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, inject } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -202,7 +202,7 @@ const bus = usePanelBus()
 const { graphql } = useApi()
 
 // ── Composables: shared state with GmPanel ──────────
-const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection } = useEntityCrud()
+const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { fetchLifePaths } = useLifePaths()
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
@@ -351,6 +351,14 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['switch-to-sheet', 'image-open', 'go-to-location'])
+
+// The entity form is a module-level singleton (useEntityCrud) shared by every
+// open entity panel. Re-select this panel's entity when it becomes the active
+// tab again, so it doesn't keep showing whichever entity was selected last.
+const panelActive = inject('panelActive', computed(() => true))
+watch(panelActive, (active) => {
+  if (active && props.entityId) selectEntity({ id: props.entityId })
+})
 
 // ── Sub-panel openers ───────────────────────────────
 function openLoraConfig() {
