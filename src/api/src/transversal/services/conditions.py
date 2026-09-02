@@ -72,6 +72,10 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
             return bool((context or {}).get("gave_in"))
         return (context or {}).get("contest_winner") == wanted
 
+    if condition.type == ConditionType.HITCH:
+        # The hitch-buying menu is active (assembled with context["hitch"]).
+        return bool((context or {}).get("hitch"))
+
     if condition.type == ConditionType.ROLL_TIER:
         from transversal.domain import OutcomeTier
 
@@ -241,6 +245,7 @@ _CONTEXT_TYPES = frozenset({
     ConditionType.ROLL_TIER,
     ConditionType.TEST_OUTCOME,
     ConditionType.USER_ROLE,
+    ConditionType.HITCH,
 })
 
 
@@ -306,6 +311,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe"),
     ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved")),
     ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in")),
+    ConditionTypeDef(ConditionType.HITCH.name, "Hitch"),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<")),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail")),
     ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">")),

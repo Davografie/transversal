@@ -333,37 +333,52 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
     menu. The roller (``{hitch_entity}``) gains (or steps up) a complication at
     d4 + ``{number_of_hitches}`` steps, then earns 1 razmerit.
     """
-    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
-    if repo.get_sfx("hitch-gain-complication") is not None:
+    hitch_cond = Condition(type=ConditionType.HITCH)
+    effects = [
+        Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="modify_trait",
+            action="gain_or_step_up",
+            target="{choose_trait}",
+            entity="{hitch_entity}",
+            target_scope="traitset:ts-complications-a190",
+            result="d4",
+            negative=True,
+            context={"steps": "{number_of_hitches}"},
+        ),
+        Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="transfer_razmerit",
+            action="earn",
+            target="self",
+            entity="{hitch_entity}",
+            result="1",
+        ),
+    ]
+
+    existing = repo.get_sfx("hitch-gain-complication")
+    if existing is None:
+        repo.create_sfx(SFX(
+            id="hitch-gain-complication",
+            name="Gain a complication",
+            description="Roller takes a complication stepped up by the bought hitches, then earns 1 razmerit",
+            trigger="manual", placement="menu",
+            conditions=[hitch_cond],
+            effects=effects,
+        ))
         return
-    repo.create_sfx(SFX(
-        id="hitch-gain-complication",
-        name="Gain a complication",
-        description="Roller takes a complication stepped up by the bought hitches, then earns 1 razmerit",
-        trigger="hitch",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="modify_trait",
-                action="gain_or_step_up",
-                target="{choose_trait}",
-                entity="{hitch_entity}",
-                target_scope="traitset:ts-complications-a190",
-                result="d4",
-                negative=True,
-                context={"steps": "{number_of_hitches}"},
-            ),
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="transfer_razmerit",
-                action="earn",
-                target="self",
-                entity="{hitch_entity}",
-                result="1",
-            ),
-        ],
-    ))
+    changed = False
+    if existing.trigger != "manual" or existing.placement != "menu":
+        existing.trigger = "manual"
+        existing.placement = "menu"
+        changed = True
+    if not any(c.type == ConditionType.HITCH for c in (existing.conditions or [])):
+        existing.conditions = [*(existing.conditions or []), hitch_cond]
+        changed = True
+    if changed:
+        repo.update_sfx(existing)
 
 
 def ensure_opportunity_sfx(repo) -> None:
@@ -375,42 +390,52 @@ def ensure_opportunity_sfx(repo) -> None:
     """
     from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
+    hitch_cond = Condition(type=ConditionType.HITCH)
+    entity_cond = Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character")
+    effects = [
+        Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="transfer_razmerit",
+            action="spend",
+            target="self",
+            entity="{buying_entity}",
+            result="1",
+        ),
+        Effect(
+            timing=EffectTiming.IMMEDIATE,
+            type="modify_trait",
+            action="step_down",
+            target="{choose_trait}",
+            entity="{buying_entity}",
+            target_scope="traitset:ts-complications-a190",
+        ),
+    ]
+
     existing = repo.get_sfx("opportunity-step-down-complication")
     if existing is not None:
-        # Migration: role moved from the ``players`` bucket to an entity_type gate.
-        if not any(c.type == ConditionType.ENTITY_TYPE for c in (existing.conditions or [])):
-            existing.conditions = [
-                *(existing.conditions or []),
-                Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character"),
-            ]
+        changed = False
+        if existing.trigger != "manual" or existing.placement != "menu":
+            existing.trigger = "manual"
+            existing.placement = "menu"
+            changed = True
+        conditions = list(existing.conditions or [])
+        if not any(c.type == ConditionType.HITCH for c in conditions):
+            conditions.append(hitch_cond)
+            changed = True
+        if not any(c.type == ConditionType.ENTITY_TYPE for c in conditions):
+            conditions.append(entity_cond)
+            changed = True
+        if changed:
+            existing.conditions = conditions
             repo.update_sfx(existing)
         return
     repo.create_sfx(SFX(
         id="opportunity-step-down-complication",
         name="Step down a complication",
         description="Spend 1 razmerit to step down one of your complications",
-        trigger="hitch",
-        conditions=[
-            Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character"),
-        ],
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="transfer_razmerit",
-                action="spend",
-                target="self",
-                entity="{buying_entity}",
-                result="1",
-            ),
-            Effect(
-                timing=EffectTiming.IMMEDIATE,
-                type="modify_trait",
-                action="step_down",
-                target="{choose_trait}",
-                entity="{buying_entity}",
-                target_scope="traitset:ts-complications-a190",
-            ),
-        ],
+        trigger="manual", placement="menu",
+        conditions=[hitch_cond, entity_cond],
+        effects=effects,
     ))
 
 

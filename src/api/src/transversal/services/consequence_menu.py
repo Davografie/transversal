@@ -113,13 +113,15 @@ def _hitch_side(owner_id: str, sfx) -> str:
 
 
 def assemble_hitch_menu(repo, roller_id: str = "", buyer_id: str = "") -> list[ConsequenceOption]:
-    """Return the hitch/opportunity menu — SFX from the ``gm``/``table``
-    owner buckets whose trigger is ``hitch`` (no base or entity moves).
+    """Return the hitch/opportunity menu — ``placement="menu"`` SFX carrying a
+    ``HITCH`` condition from the ``gm``/``table`` owner buckets (no base/entity
+    moves).
 
     ``roller_id`` and ``buyer_id`` populate ``{hitch_entity}`` / ``{buying_entity}``
-    so conditions can reference them. Side is derived from the bucket + the SFX's
+    so conditions can reference them; ``context["hitch"]`` marks the hitch menu
+    for the ``HITCH`` condition. Side is derived from the bucket + the SFX's
     ``entity_type`` condition (character-gated = player)."""
-    context = {"hitch_entity": roller_id, "buying_entity": buyer_id}
+    context = {"hitch": True, "hitch_entity": roller_id, "buying_entity": buyer_id}
 
     options: list[ConsequenceOption] = []
     seen: set[str] = set()
@@ -132,7 +134,9 @@ def assemble_hitch_menu(repo, roller_id: str = "", buyer_id: str = "") -> list[C
                 continue
             seen.add(sfx_id)
             sfx = repo.get_sfx(sfx_id)
-            if sfx is None or sfx.trigger != "hitch":
+            if sfx is None or sfx.placement != "menu":
+                continue
+            if not any(c.type == ConditionType.HITCH for c in (sfx.conditions or [])):
                 continue
             # No default entity here — hitch conditions must reference
             # {hitch_entity} or {buying_entity} explicitly (blank subject skips).

@@ -204,6 +204,9 @@ def test_assemble_hitch_menu_filters_owners_and_context():
     from transversal.domain import Condition, ConditionType
     from transversal.services.consequence_menu import assemble_hitch_menu
 
+    def _hitch():
+        return Condition(type=ConditionType.HITCH)
+
     repo = MenuRepo()
     repo.sfx_owners = {
         "gm": SimpleNamespace(sfx_ids=["hitch-gain-complication", "other-gm"]),
@@ -211,20 +214,21 @@ def test_assemble_hitch_menu_filters_owners_and_context():
     }
     repo.sfxs = {
         "hitch-gain-complication": SFX(id="hitch-gain-complication", name="Gain a complication",
-                                       trigger="manual", menu_context="hitch", effects=[]),
-        "other-gm": SFX(id="other-gm", name="Other", trigger="manual", menu_context=None, effects=[]),
+                                       trigger="manual", placement="menu", conditions=[_hitch()], effects=[]),
+        "other-gm": SFX(id="other-gm", name="Other", trigger="manual", effects=[]),
         "hitch-table": SFX(id="hitch-table", name="Table hitch", trigger="manual",
-                           menu_context="hitch", effects=[]),
+                           placement="menu", conditions=[_hitch()], effects=[]),
         "contest-only": SFX(id="contest-only", name="Contest", trigger="manual",
-                            menu_context="contest_win", effects=[]),
+                            placement="menu",
+                            conditions=[Condition(type=ConditionType.CONTEST_OUTCOME, target="player")],
+                            effects=[]),
         "opportunity-step-down-complication": SFX(
             id="opportunity-step-down-complication", name="Step down a complication",
-            trigger="manual", menu_context="hitch",
-            conditions=[Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character")],
+            trigger="manual", placement="menu",
+            conditions=[_hitch(), Condition(type=ConditionType.ENTITY_TYPE, subject="{buying_entity}", target="character")],
             effects=[],
         ),
-        "non-hitch-player": SFX(id="non-hitch-player", name="Not hitch", trigger="manual",
-                                menu_context=None, effects=[]),
+        "non-hitch-player": SFX(id="non-hitch-player", name="Not hitch", trigger="manual", effects=[]),
     }
 
     repo.locations["buyer-1"] = Entity(id="buyer-1", type=EntityType.CHARACTER, name="Buyer", current_universe="earth")
@@ -243,11 +247,14 @@ def test_hitch_menu_filters_by_buyer_condition():
     repo.sfx_owners = {"table": SimpleNamespace(sfx_ids=["opportunity-step-down-complication"])}
     repo.sfxs = {
         "opportunity-step-down-complication": SFX(
-            id="opportunity-step-down-complication", name="Step down", trigger="hitch",
-            conditions=[Condition(
-                type=ConditionType.HAS_TRAIT_IN_TRAITSET,
-                subject="{buying_entity}", target="ts-complications",
-            )],
+            id="opportunity-step-down-complication", name="Step down", trigger="manual", placement="menu",
+            conditions=[
+                Condition(type=ConditionType.HITCH),
+                Condition(
+                    type=ConditionType.HAS_TRAIT_IN_TRAITSET,
+                    subject="{buying_entity}", target="ts-complications",
+                ),
+            ],
             effects=[],
         ),
     }

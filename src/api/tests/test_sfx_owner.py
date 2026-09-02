@@ -412,7 +412,9 @@ def test_ensure_hitch_gain_complication_sfx_creates_once():
     repo = SetupRepo()
     ensure_hitch_gain_complication_sfx(repo)
     sfx = repo.sfxs["hitch-gain-complication"]
-    assert sfx.trigger == "hitch"
+    assert sfx.trigger == "manual"
+    assert sfx.placement == "menu"
+    assert [c.type.value for c in sfx.conditions] == ["hitch"]
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "modify_trait"
     assert sfx.effects[0].action == "gain_or_step_up"
@@ -435,7 +437,9 @@ def test_ensure_opportunity_sfx_creates_once():
     repo = SetupRepo()
     ensure_opportunity_sfx(repo)
     sfx = repo.sfxs["opportunity-step-down-complication"]
-    assert sfx.trigger == "hitch"
+    assert sfx.trigger == "manual"
+    assert sfx.placement == "menu"
+    assert {c.type.value for c in sfx.conditions} == {"hitch", "entity_type"}
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "transfer_razmerit"
     assert sfx.effects[0].action == "spend"

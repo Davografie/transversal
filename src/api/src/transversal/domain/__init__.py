@@ -929,7 +929,8 @@ class ConditionType(str, Enum):
     UNPLACED = "unplaced"                # entity has no current location yet
     IN_UNIVERSE = "in_universe"          # target = universe key; entity is currently there
     PHASE = "phase"                      # target = dice-pool phase (e.g. "adding"); reads trigger context
-    CONTEST_OUTCOME = "contest_outcome"  # target = "player" | "opponent"; reads context["contest_winner"]
+    CONTEST_OUTCOME = "contest_outcome"  # target = "player" | "opponent" | "give_in"; reads context
+    HITCH = "hitch"                      # marker: the hitch-buying menu is active (reads context["hitch"])
     ROLL_TIER = "roll_tier"              # operator + value against OutcomeTier (e.g. >= success); reads roll_result.tier
     TEST_OUTCOME = "test_outcome"        # target = "success" | "fail" (binary); success = tier != fail
     SOURCE_RATING = "source_rating"      # the source trait-setting's rating (dice) vs a die threshold
