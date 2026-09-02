@@ -26,10 +26,14 @@ import re
 import sys
 
 from transversal.db.repository import EntityRepository
-from transversal.domain import Entity, EntityType
+from transversal.domain import Entity, EntityType, RatingType, TraitSetting
 
 DATA_DIR = "/app/data"
 MULTIVERSE = "2"  # Entities/2 = Multiverse root
+
+# The registry trait that carries an entity's freeform description as `notes`.
+DESCRIPTION_TRAIT = "trait-description"
+DESCRIPTION_TRAITSET = "ts-secrets-1b55"
 
 # Type → new-key prefix. Locations use the short `loc-` prefix (established by
 # the already-migrated 153 locations); everything else uses its type name.
@@ -129,9 +133,10 @@ def migrate(apply: bool = False) -> int:
         "created_entity": 0,
         "created_universe": 0,
         "type_map": {},
-        "dropped_fields": ["description", "pp", "active", "favorite",
+        "dropped_fields": ["active", "favorite",
                            "imagened", "imagening", "archetype_id",
                            "subtitle", "entity_type", "is_archetype"],
+        "mapped_fields": ["pp -> razmerit", "description -> traitsetting.notes (trait-description)"],
         "universe_slugs": universe_map,
     }
 
@@ -192,23 +197,41 @@ def migrate(apply: bool = False) -> int:
 
         if new_id in existing:
             report["skipped_existing"] += 1
-            continue
-
-        doc = Entity(
-            id=new_id,
-            type=new_type,
-            name=name,
-            current_universe=current_universe,
-            current_location=parent_new,
-        )
-
-        if new_type == EntityType.UNIVERSE:
-            report["created_universe"] += 1
         else:
-            report["created_entity"] += 1
+            doc = Entity(
+                id=new_id,
+                type=new_type,
+                name=name,
+                razmerit=e.get("pp") or 0,
+                current_universe=current_universe,
+                current_location=parent_new,
+            )
+            if new_type == EntityType.UNIVERSE:
+                report["created_universe"] += 1
+            else:
+                report["created_entity"] += 1
+            if apply:
+                repo.create_entity(doc)
 
-        if apply:
-            repo.create_entity(doc)
+        # Description → traitsetting.notes on the registry trait `trait-description`.
+        # Runs for every migrated entity (new or pre-existing), so descriptions
+        # land even on the 136 already-migrated locations.
+        desc = (e.get("description") or "").strip()
+        if desc:
+            ts_id = f"{new_id}:{DESCRIPTION_TRAIT}"
+            if repo.get_traitsetting(ts_id) is None:
+                report["description_notes"] = report.get("description_notes", 0) + 1
+                if apply:
+                    repo.create_traitsetting(TraitSetting(
+                        id=ts_id,
+                        entity_id=new_id,
+                        trait_id=DESCRIPTION_TRAIT,
+                        from_type="entity",
+                        traitset_id=DESCRIPTION_TRAITSET,
+                        rating_type=RatingType.EMPTY,
+                        dice=[],
+                        notes=desc,
+                    ))
 
     # Persist the key map (always, even dry-run, so later phases can inspect it)
     if apply:
