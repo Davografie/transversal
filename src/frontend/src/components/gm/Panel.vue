@@ -1,11 +1,11 @@
 <template>
-  <div ref="wrapperEl" class="panel-wrapper" :class="{ nested }">
+  <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle">
     <div ref="actionsEl" class="panel-actions" :style="actionsStyle">
       <button v-if="closable" class="panel-action-btn" title="Close" @click="$emit('close')">×</button>
       <button type="button" class="panel-action-btn" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</button>
     </div>
-    <!-- ⚠ v-show is on .panel (this panel's content) NOT on .panel-wrapper.
-         If it were on the wrapper, nested child Panels would also be hidden.
+    <!-- ⚠ v-show is on .panel (this panel's content) NOT on .panel-node.
+         If it were on the node, nested child Panels would also be hidden.
          We want shallow panels to hide their content while their deeper
          children remain visible beside them. -->
     <div ref="panelEl" class="panel" v-show="!minVisibleDepth || depth >= minVisibleDepth">
@@ -20,9 +20,12 @@
       </div>
     </div>
     <!-- Self-reference: each child is a sibling Panel owned by THIS panel's
-         children list. :on-close / :on-replace let the child remove/replace
-         itself in this list; @close handles the child's own × button. -->
-    <div ref="siblingsEl" class="panel-siblings" v-show="!isCollapsed">
+         children list. Children are positioned absolutely (out of flow) so the
+         parent's own position is never influenced by them; only the children's
+         offsets and their action-rail positions depend on the parent.
+         :on-close / :on-replace let the child remove/replace itself in this
+         list; @close handles the child's own × button. -->
+    <div class="panel-children" v-show="!isCollapsed">
       <Panel
         v-for="c in children"
         :key="c.key"
@@ -32,8 +35,13 @@
         :title="c.spec.title"
         :id="c.spec.id"
         :collapsed="collapsedKeys.includes(c.key)"
+        :direction="direction"
+        :gap="gap"
+        :top="childPositions[c.key]?.top ?? null"
+        :left="childPositions[c.key]?.left ?? null"
         :bridge-top="panelTopPx"
         :bridge-bottom="panelBottomPx"
+        :on-size="(w, h) => recordChildSize(c.key, w, h)"
         closable
         :on-close="() => closeChild(c.key)"
         :on-replace="(spec) => replaceChild(c.key, spec)"
@@ -49,7 +57,7 @@
 </template>
 
 <script setup>
-import { shallowRef, ref, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { shallowRef, ref, reactive, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
 
@@ -67,6 +75,19 @@ const props = defineProps({
   // its own vertical center but is clamped within these bounds (button-drift).
   bridgeTop: { type: Number, default: null },
   bridgeBottom: { type: Number, default: null },
+  // ── Positioning (anchor + out-of-flow model) ──────────
+  // Open direction: 'left' (right-to-left) is implemented; right/up/down come
+  // with the per-anchor direction work (Phase 2).
+  direction: { type: String, default: 'left' },
+  gap: { type: Number, default: 8 },
+  // Assigned offset (children only): absolute top/left within the parent's
+  // node. Root panels compute their own position from `anchor`.
+  top: { type: Number, default: null },
+  left: { type: Number, default: null },
+  // Toggle anchor rect (root only): { left, right, top, bottom, centerX, centerY }.
+  anchor: { type: Object, default: null },
+  // Report this panel's measured size up to the parent (children only).
+  onSize: { type: Function, default: null },
   // Callbacks supplied by the parent Panel so this Panel can close/replace
   // itself in the parent's children list.
   onClose: { type: Function, default: null },
@@ -118,47 +139,122 @@ function toggleChildCollapse(key) {
   panelLog('toggle-child', { key, action: wasCollapsed ? 'expand' : 'collapse' })
 }
 
-// ── Diagnostic logging (opt-in) ─────────────────────
-// Enable in the browser console with `window.__PANEL_DEBUG__ = true`, then
-// interact. Each panel logs its own viewport rects so layout issues can be
-// deduced from the numbers instead of described.
+// ── Measurement + positioning ─────────────────────────
 const panelEl = ref(null)
 const actionsEl = ref(null)
-const siblingsEl = ref(null)
 const wrapperEl = ref(null)
+
+const isRoot = computed(() => !props.nested)
+
+// Measured size of THIS panel's `.panel` box (content-driven width, capped).
+const nodeSize = reactive({ w: 0, h: 0 })
+
+// Root panels compute their own viewport position; children use props.top/left.
+const selfTop = ref(null)
+const selfLeft = ref(null)
+
+// Viewport geometry of THIS panel (for the rail clamp + child bridge bounds).
+const panelTopPx = ref(null)
+const panelBottomPx = ref(null)
+const wrapperTopPx = ref(null)
+const ownCenter = ref(null)
+
+const viewHeight = ref(window.innerHeight)
+
+function measureSelf() {
+  const p = panelEl.value?.getBoundingClientRect()
+  const w = wrapperEl.value?.getBoundingClientRect()
+  if (!p) return
+  const pw = Math.round(p.width)
+  const ph = Math.round(p.height)
+  if (nodeSize.w !== pw) nodeSize.w = pw
+  if (nodeSize.h !== ph) nodeSize.h = ph
+  ownCenter.value = p.top + p.height / 2
+  panelTopPx.value = p.top
+  panelBottomPx.value = p.bottom
+  if (w) wrapperTopPx.value = w.top
+  if (props.onSize) props.onSize(pw, ph)
+  if (isRoot.value) computeRootPosition()
+}
+
+// Root placement: anchor the panel to the toggle, centered on it as much as
+// possible, but always clamped inside the viewport. Frozen afterwards — children
+// are out of flow, so they never move the parent.
+function computeRootPosition() {
+  const a = props.anchor
+  if (!a || !nodeSize.w || !nodeSize.h) return
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const MARGIN = 12
+  let top, left
+  if (props.direction === 'left') {
+    left = a.left - props.gap - nodeSize.w
+    top = a.centerY - nodeSize.h / 2
+  } else {
+    // TODO(Phase 2): other directions.
+    left = a.right + props.gap
+    top = a.centerY - nodeSize.h / 2
+  }
+  left = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, vw - nodeSize.w - MARGIN))
+  top = Math.min(Math.max(top, MARGIN), Math.max(MARGIN, vh - nodeSize.h - MARGIN))
+  selfTop.value = top
+  selfLeft.value = left
+}
+
+// ── Child sizes + layout ──────────────────────────────
+const childSizes = reactive({})
+
+function recordChildSize(key, w, h) {
+  const cur = childSizes[key]
+  if (cur && cur.w === w && cur.h === h) return
+  childSizes[key] = { w, h }
+}
+
+// Assign each child an absolute offset (relative to THIS node) so siblings
+// stack along the perpendicular axis, centered on the parent's own center.
+// Only the parent's center/height and the children's measured sizes feed this —
+// never the other way around, which is what keeps the parent position frozen.
+const childPositions = computed(() => {
+  const positions = {}
+  const list = children.value
+  const n = list.length
+  const sizes = list.map((c) => childSizes[c.key] || { w: 0, h: 0 })
+  let totalH = 0
+  for (const s of sizes) totalH += s.h
+  totalH += props.gap * Math.max(0, n - 1)
+  const stackTopLocal = nodeSize.h / 2 - totalH / 2
+  let acc = 0
+  list.forEach((c, i) => {
+    const s = sizes[i]
+    if (props.direction === 'left') {
+      positions[c.key] = { top: stackTopLocal + acc, left: -(s.w + props.gap) }
+    } else {
+      // TODO(Phase 2): other directions.
+      positions[c.key] = { top: stackTopLocal + acc, left: nodeSize.w + props.gap }
+    }
+    acc += s.h + props.gap
+  })
+  return positions
+})
+
+// The node is hidden until it has a measured size and a resolved position, so
+// panels don't flash at their pre-layout spot for a frame.
+const effectiveTop = computed(() => (isRoot.value ? selfTop.value : props.top))
+const effectiveLeft = computed(() => (isRoot.value ? selfLeft.value : props.left))
+const placed = computed(() =>
+  effectiveTop.value != null && effectiveLeft.value != null &&
+  nodeSize.w > 0 && nodeSize.h > 0
+)
+const nodeStyle = computed(() => ({
+  top: (effectiveTop.value ?? 0) + 'px',
+  left: (effectiveLeft.value ?? 0) + 'px',
+  visibility: placed.value ? 'visible' : 'hidden',
+}))
 
 // ── Button-drift: prefer own center, clamp within the parent's bounds ──
 // Direct getBoundingClientRect reads (not useElementBounding) so values stay
 // fresh when the whole stack re-centers via transform — which ResizeObserver
-// alone misses. Refreshed by a ResizeObserver + the layout watcher below.
-const ownCenter = ref(null)
-const wrapperTopPx = ref(null)
-const panelTopPx = ref(null)
-const panelBottomPx = ref(null)
-
-function measureButtonDrift() {
-  const p = panelEl.value?.getBoundingClientRect()
-  const w = wrapperEl.value?.getBoundingClientRect()
-  if (p) {
-    ownCenter.value = p.top + p.height / 2
-    panelTopPx.value = p.top
-    panelBottomPx.value = p.bottom
-  }
-  if (w) wrapperTopPx.value = w.top
-}
-
-let driftObserver = null
-function setupDriftObserver() {
-  if (typeof ResizeObserver === 'undefined' || !panelEl.value) return
-  driftObserver = new ResizeObserver(() => measureButtonDrift())
-  driftObserver.observe(panelEl.value)
-  measureButtonDrift()
-}
-onMounted(setupDriftObserver)
-onUnmounted(() => { if (driftObserver) driftObserver.disconnect() })
-
-// Viewport Y of this panel's action-rail center. Prefers ownCenter, clamped to
-// the parent's bridgeTop/bridgeBottom when provided.
+// alone misses. Refreshed by a ResizeObserver + the layout watchers below.
 const railCenterViewport = computed(() => {
   const c = ownCenter.value
   if (c == null) return null
@@ -170,7 +266,7 @@ const railCenterViewport = computed(() => {
 const railCenterLocal = computed(() => {
   const rcv = railCenterViewport.value
   const wt = wrapperTopPx.value
-  if (rcv == null || !wt) return null
+  if (rcv == null || wt == null) return null
   return rcv - wt
 })
 
@@ -179,6 +275,10 @@ const actionsStyle = computed(() => {
   return local == null ? {} : { top: local + 'px' }
 })
 
+// ── Diagnostic logging (opt-in) ─────────────────────
+// Enable in the browser console with `window.__PANEL_DEBUG__ = true`, then
+// interact. Each panel logs its own viewport rects so layout issues can be
+// deduced from the numbers instead of described.
 function isDebug() {
   return typeof window !== 'undefined' && !!window.__PANEL_DEBUG__
 }
@@ -206,32 +306,33 @@ function panelLog(reason, detail = {}) {
     bridgeBottom: props.bridgeBottom,
     ownCenter: ownCenter.value,
     railCenterViewport: railCenterViewport.value,
+    pos: { top: effectiveTop.value, left: effectiveLeft.value },
+    size: { w: nodeSize.w, h: nodeSize.h },
     panel: rectOf(panelEl.value),
-    siblings: rectOf(siblingsEl.value),
     actions: rectOf(actionsEl.value),
     buttons: buttonsOf(actionsEl.value),
     collapsedKeys: [...collapsedKeys.value],
-    children: children.value.map((c) => ({ key: c.key, title: c.spec.title, id: c.spec.id })),
+    children: children.value.map((c) => ({ key: c.key, title: c.spec.title, id: c.spec.id, pos: childPositions.value[c.key] })),
     ...detail,
   }))
 }
 
 // ── Auto-collapse on vertical overflow ──────────────
 // Collapses the oldest expanded child that is NOT the active one, until the
-// sibling column fits within the viewport height. This gives round-robin
+// sibling stack fits within the viewport height. This gives round-robin
 // behavior: expanding an older panel makes it active and collapses the then-
 // oldest expanded sibling instead.
-const viewHeight = ref(window.innerHeight)
 const AUTO_COLLAPSE_MARGIN = 40
 
-function onResize() { viewHeight.value = window.innerHeight }
-onMounted(() => { window.addEventListener('resize', onResize) })
-onUnmounted(() => { window.removeEventListener('resize', onResize) })
+function stackHeight() {
+  const list = children.value
+  let h = 0
+  for (const c of list) h += childSizes[c.key]?.h ?? 0
+  return h + props.gap * Math.max(0, list.length - 1)
+}
 
 function autoCollapse() {
-  const el = siblingsEl.value
-  if (!el) return
-  if (el.offsetHeight <= viewHeight.value - AUTO_COLLAPSE_MARGIN) return
+  if (stackHeight() <= viewHeight.value - AUTO_COLLAPSE_MARGIN) return
   const list = children.value
   for (let i = 0; i < list.length; i++) {
     const key = list[i].key
@@ -239,15 +340,39 @@ function autoCollapse() {
     if (!collapsedKeys.value.includes(key)) {
       collapsedKeys.value = [...collapsedKeys.value, key]
       panelLog('auto-collapse', { collapsedKey: key })
-      return // one at a time; the reactive height change re-triggers this watcher
+      return // one at a time; the reactive height change re-triggers the watcher
     }
   }
 }
 
+let driftObserver = null
+function setupObserver() {
+  if (typeof ResizeObserver === 'undefined' || !panelEl.value) return
+  driftObserver = new ResizeObserver(() => measureSelf())
+  driftObserver.observe(panelEl.value)
+  measureSelf()
+}
+
+function onResize() {
+  viewHeight.value = window.innerHeight
+  measureSelf()
+}
+
+onMounted(() => {
+  setupObserver()
+  window.addEventListener('resize', onResize)
+})
+onUnmounted(() => {
+  if (driftObserver) driftObserver.disconnect()
+  window.removeEventListener('resize', onResize)
+})
+
 watch([children, collapsedKeys, viewHeight], () => nextTick(() => {
   autoCollapse()
-  measureButtonDrift()
+  measureSelf()
 }))
+watch(childSizes, () => nextTick(autoCollapse), { deep: true })
+watch(() => props.anchor, () => { if (isRoot.value) computeRootPosition() })
 
 // ── Depth tracking for viewport-aware visibility ──
 const registerDepth = inject('registerDepth', null)
@@ -323,33 +448,31 @@ provide(panelKey, {
 </script>
 
 <style scoped>
-.panel-wrapper {
-  position: relative;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: flex-start;
-  gap: 8px;
+/* The node is the positioned box. Its only in-flow child is `.panel`, so it
+   shrink-to-fits around that box; `.panel-actions` and child `.panel-node`s are
+   absolutely positioned (out of flow) and therefore never affect the parent. */
+.panel-node {
+  position: absolute;
+  pointer-events: auto;
 }
 
-/* Siblings (children of the same panel) stack vertically at their depth,
-   to the left of the parent in the row-reverse layout. */
-.panel-siblings {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex-shrink: 0;
+/* Static wrapper whose children are absolutely positioned relative to
+   .panel-node (the nearest positioned ancestor). v-show hides the whole
+   child stack when this panel is collapsed, without affecting the parent. */
+.panel-children {
+  /* static; children are out of flow */
 }
 
 .panel {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   background: var(--bg-panel, rgba(10,10,20,0.92));
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 8px;
+  /* Variable width: content-driven, floored and capped. */
   min-width: 260px;
-  max-width: 380px;
+  max-width: var(--gm-panel-max-w, 560px);
   max-height: calc(100vh - 40px);
   overflow: auto;
 }
@@ -369,11 +492,6 @@ provide(panelKey, {
   cursor: pointer;
 }
 .panel-action-btn:hover { background: rgba(255,255,255,0.1); }
-
-/* Nested panel sits beside parent in the flex row */
-.nested {
-  position: relative;
-}
 
 .panel-header {
   display: flex;

@@ -1,10 +1,12 @@
 <template>
   <button v-if="!show" class="gm-toggle" @click="show = true">🛠</button>
 
-  <div v-if="show" class="panel-stack">
+  <div v-if="show" class="panel-viewport">
     <Panel
       v-for="w in allWindows"
       :key="w.id"
+      :anchor="anchorRect"
+      :direction="'left'"
       :min-visible-depth="minVisibleDepth"
       :title="w.spec?.title"
       :id="w.spec?.id"
@@ -49,6 +51,33 @@ function onWindowClose(w) {
   else closeWindow(w.id)
 }
 
+// ── Anchor: the 🛠 toggle ─────────────────────────────
+// The root panel is anchored to the toggle, centered on it as much as possible
+// but always clamped inside the viewport (see Panel.vue `computeRootPosition`).
+//
+// Phase 1 derives the anchor arithmetically from the toggle's fixed CSS
+// (`position: fixed; top: 50%; right: 12px; 42×42`). When the toggle becomes
+// draggable (Phase 3), replace this with a live getBoundingClientRect() of the
+// toggle element + its remembered edge/anchor.
+const TOGGLE_SIZE = 42
+const TOGGLE_RIGHT = 12
+
+const viewportWidth = ref(window.innerWidth)
+const viewportHeight = ref(window.innerHeight)
+
+const anchorRect = computed(() => {
+  const left = viewportWidth.value - TOGGLE_RIGHT - TOGGLE_SIZE
+  const top = viewportHeight.value / 2 - TOGGLE_SIZE / 2
+  return {
+    left,
+    right: left + TOGGLE_SIZE,
+    top,
+    bottom: top + TOGGLE_SIZE,
+    centerX: left + TOGGLE_SIZE / 2,
+    centerY: viewportHeight.value / 2,
+  }
+})
+
 // ── Depth tracking ──────────────────────────────────
 // Panels register/unregister their depth on mount/unmount via provide/inject.
 // Using reactive Map so the totalPanels computed reacts to changes.
@@ -73,7 +102,6 @@ provide('unregisterDepth', unregisterDepth)
 // minVisibleDepth = panels below this depth get v-show=false
 // Example: viewport 1247px, 4 panels open → minVisibleDepth=1 → depth-0 hidden
 const PANEL_EST_WIDTH = 388  // max panel width + gap
-const viewportWidth = ref(window.innerWidth)
 
 const totalPanels = computed(() => {
   let sum = 0
@@ -86,6 +114,7 @@ const minVisibleDepth = computed(() => Math.max(0, totalPanels.value - maxVisibl
 
 function onResize() {
   viewportWidth.value = window.innerWidth
+  viewportHeight.value = window.innerHeight
 }
 
 let resizeTimer = null
@@ -113,15 +142,12 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
- .panel-stack {
-   position: fixed; top: 50%; right: 36px; transform: translateY(-50%); z-index: 25;
-   display: flex; flex-direction: row-reverse; align-items: center; gap: 8px;
-   pointer-events: none;
-   max-width: calc(100vw - 36px);
- }
-.panel-stack > :deep(*) {
-  flex-shrink: 0;
-  pointer-events: auto;
+/* Full-viewport, pointer-transparent coordinate space. Panels position
+   themselves absolutely inside it; the root's offsets are viewport coords
+   because this element sits at (0,0) with no transform/filter (which would
+   otherwise create a containing block for fixed descendants). */
+.panel-viewport {
+  position: fixed; inset: 0; z-index: 25;
+  pointer-events: none;
 }
-
 </style>
