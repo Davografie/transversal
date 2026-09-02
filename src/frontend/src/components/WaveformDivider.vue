@@ -28,11 +28,12 @@ const props = defineProps({
 
 const canvasEl = ref(null)
 let rafId = null
+const isMobile = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 640)
 
 function draw(now) {
   const canvas = canvasEl.value
   if (!canvas) return
-  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+  const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.5)
   const w = canvas.clientWidth || 320
   const h = canvas.clientHeight || props.height
   if (w <= 0 || h <= 0) return
@@ -53,7 +54,7 @@ function draw(now) {
   const total = totalAmplitude(groups, [])
   const baseDrift = props.drift * (now / 1000)
   const ampScale = h / 2 - 2
-  const N = 160
+  const N = isMobile ? 96 : 160
   ctx.beginPath()
   ctx.moveTo(0, 0)
   for (let i = 0; i <= N; i++) {
@@ -75,6 +76,7 @@ function draw(now) {
     collapseFraction: props.collapseFraction,
     transformFraction: props.transformFraction,
     expandFraction: props.expandFraction,
+    lowQuality: isMobile,
     timeMs: now,
   })
 }

@@ -122,6 +122,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
   const radialPetals = opts.radialPetals ?? RESONANCE.radialPetals
   const breathDepth = opts.breathDepth ?? RESONANCE.breathDepth
   const breathRate = opts.breathRate ?? RESONANCE.breathRate
+  const lowQuality = opts.lowQuality === true
 
   // Radial: lock each wave to a whole number of cycles per revolution so the
   // closed loop meets itself, then breathe per-harmonic amplitude so the
@@ -139,7 +140,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
 
   // Sample points across the trace (t in 0..1). Linear maps t→x, radial maps
   // t→angle around a base circle.
-  const sampleStep = Math.max(2, Math.round(w / 180))
+  const sampleStep = lowQuality ? Math.max(3, Math.round(w / 110)) : Math.max(2, Math.round(w / 180))
   const N = Math.max(16, Math.round(w / sampleStep))
   const columns = []
   for (let j = 0; j <= N; j++) columns.push(j / N)
@@ -198,7 +199,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
       pts.forEach(([px, py], j) => { j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py) })
       ctx.stroke()
     }
-    stroke(3.2, 0.12 * strength * opacity) // halo
+    if (!lowQuality) stroke(3.2, 0.12 * strength * opacity) // halo
     stroke(1.05, 0.85 * opacity) // core
   }
 
@@ -261,7 +262,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
       pts.forEach(([px, py], j) => { j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py) })
       ctx.stroke()
     }
-    stroke(4, 0.15 * opacity) // cheap halo instead of per-frame shadowBlur
+    if (!lowQuality) stroke(4, 0.15 * opacity) // cheap halo instead of per-frame shadowBlur
     stroke(1.5, 0.9 * opacity)
   }
 
@@ -282,7 +283,7 @@ export function drawResonanceFrame(ctx, w, h, from, to, progress, opts = {}) {
         pts.forEach(([px, py], j) => { j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py) })
         ctx.stroke()
       }
-      stroke(3.2, 0.12 * strength * gain) // halo
+      if (!lowQuality) stroke(3.2, 0.12 * strength * gain) // halo
       stroke(1.05, 0.85 * gain) // core
     }
   }
