@@ -1,14 +1,15 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle">
-    <div ref="actionsEl" class="panel-actions" :style="actionsStyle">
+    <div ref="actionsEl" class="panel-actions" :style="actionsStyle" v-show="!isDepthHidden">
       <button v-if="closable" class="panel-action-btn" title="Close" @click="$emit('close')">×</button>
       <button type="button" class="panel-action-btn" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</button>
     </div>
-    <!-- ⚠ v-show is on .panel (this panel's content) NOT on .panel-node.
-         If it were on the node, nested child Panels would also be hidden.
-         We want shallow panels to hide their content while their deeper
-         children remain visible beside them. -->
-    <div ref="panelEl" class="panel" v-show="!minVisibleDepth || depth >= minVisibleDepth">
+    <!-- ⚠ Depth hiding uses visibility:hidden (NOT v-show/display:none) so the
+         panel keeps its measured size/position. With display:none the rect
+         collapses to zero and the whole geometry chain (child stacking + the
+         button-drift bridge) zeroes out, which sends deeper panels' buttons
+         flying off the top of the viewport. -->
+    <div ref="panelEl" class="panel" :style="panelVisibilityStyle">
       <header v-if="title" class="panel-header">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
@@ -146,6 +147,16 @@ const wrapperEl = ref(null)
 
 const isRoot = computed(() => !props.nested)
 
+// Depth-based hiding (viewport-aware panel limit). A shallow panel that's hidden
+// keeps its layout (visibility:hidden, not display:none) so it still reports a
+// real size/position — otherwise `measureSelf` reads a zero rect and the deeper
+// panels' button-drift bridge collapses to zero. The rail is hidden too so no
+// buttons float over an invisible panel.
+const isDepthHidden = computed(() => !!(props.minVisibleDepth && props.depth < props.minVisibleDepth))
+const panelVisibilityStyle = computed(() => ({
+  visibility: isDepthHidden.value ? 'hidden' : 'visible',
+}))
+
 // Measured size of THIS panel's `.panel` box (content-driven width, capped).
 const nodeSize = reactive({ w: 0, h: 0 })
 
@@ -249,6 +260,9 @@ const nodeStyle = computed(() => ({
   top: (effectiveTop.value ?? 0) + 'px',
   left: (effectiveLeft.value ?? 0) + 'px',
   visibility: placed.value ? 'visible' : 'hidden',
+  // A depth-hidden node keeps its box (for geometry) but must not swallow
+  // clicks; its visible children set their own `pointer-events: auto`.
+  pointerEvents: isDepthHidden.value ? 'none' : 'auto',
 }))
 
 // ── Button-drift: prefer own center, clamp within the parent's bounds ──
