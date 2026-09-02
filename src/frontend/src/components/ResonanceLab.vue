@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { RESONANCE, signatureOf } from '@/composables/resonance.js'
 import { drawResonanceFrame } from '@/composables/renderResonance.js'
+import WaveformDivider from '@/components/WaveformDivider.vue'
 
 const emit = defineEmits(['close'])
 
@@ -163,6 +164,11 @@ onUnmounted(() => {
       <template v-else>
         <canvas ref="canvasEl" class="reslab-canvas" :style="{ height: height + 'px' }" />
 
+        <div class="reslab-divider">
+          <div class="reslab-divider-label">Waveform divider preview (target composite)</div>
+          <WaveformDivider :osc="to" :height="96" />
+        </div>
+
         <div class="reslab-scrub-row">
           <button class="reslab-play" @click="togglePlay">{{ playing ? '❚❚' : '▶' }}</button>
           <input
@@ -321,6 +327,15 @@ onUnmounted(() => {
   width: 100%;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
+}
+.reslab-divider {
+  border-radius: 8px;
+  overflow: hidden;
+}
+.reslab-divider-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
 }
 .reslab-scrub-row {
   display: flex;
