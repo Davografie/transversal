@@ -384,7 +384,7 @@
           >Next: {{ nextSet.name }} →</button>
         </div> <!-- .trait-list -->
       <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
-      <button v-if="!overrideEntityId && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
+      <button v-if="(!overrideEntityId || gmMode) && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
       <button v-if="isForeignSheet && !showAddTrait" class="add-trait-btn" @click="openAddRelationshipTrait">+ Add relationship trait</button>
       <!-- 2-phase trait picker -->
       <div v-if="showAddTrait" class="trait-picker">
@@ -746,9 +746,12 @@ async function openAddTrait() {
   addMode.value = 'trait'
   addPhase.value = 'sets'
   selectedTraitSet.value = null
+  // Trait sets come from the entity being viewed (a foreign location may live
+  // in a different universe than the acting character).
+  const u = entity.value?.currentUniverse || props.universe
   const [tsData, trData] = await Promise.all([
-    graphql(`query($u: String!) { traitsetsByUniverse(universe: $u) { id name order limit entityTypes } }`, { u: props.universe }),
-    graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId defaultDieType defaultRatingType } }`, { u: props.universe }),
+    graphql(`query($u: String!) { traitsetsByUniverse(universe: $u) { id name order limit entityTypes } }`, { u }),
+    graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId defaultDieType defaultRatingType } }`, { u }),
   ])
   const etype = entity.value?.type || ''
   if (tsData?.traitsetsByUniverse) {
@@ -820,7 +823,7 @@ async function addTrait(trait) {
   const result = await graphql(`mutation($eid: ID!, $input: TraitSettingInput!) {
     addTraitSetting(entityId: $eid, input: $input) { id name traitsetName }
   }`, {
-    eid: props.entityId,
+    eid: props.overrideEntityId || props.entityId,
     input: {
       traitId: trait.id,
       traitsetId: selectedTraitSet.value.id,
