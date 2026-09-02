@@ -309,7 +309,7 @@
           <option value="gm">GM</option>
         </select>
       </div>
-      <ConsequenceMenu :entity-id="consequenceTargetId" :side="consequenceSide" :effect-die="consequenceEffectDie" :exclude-ids="consequenceExcludeIds" @close="showConsequences = false" />
+      <ConsequenceMenu :entity-id="consequenceTargetId" :side="consequenceSide" :menu-context="consequenceMenuContext" :effect-die="consequenceEffectDie" :exclude-ids="consequenceExcludeIds" @close="showConsequences = false" />
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -563,6 +563,13 @@ const consequenceExcludeIds = computed(() => {
   if (iWon.value && !contestResult.value?.gave_in) return ['sfx:take-complication']
   if (iGaveIn.value) return ['sfx:apply-complication']
   return ['sfx:apply-complication', 'sfx:take-complication']
+})
+// Menu context passed to the consequence menu so contest SFX gate on the right
+// outcome: winner → contest_win, conceder → contest_give_in, else test_success.
+const consequenceMenuContext = computed(() => {
+  if (iWon.value && !contestResult.value?.gave_in) return 'contest_win'
+  if (iGaveIn.value) return 'contest_give_in'
+  return 'test_success'
 })
 const sumLabel = computed(() =>
   (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) ? 'difficulty' : 'result'

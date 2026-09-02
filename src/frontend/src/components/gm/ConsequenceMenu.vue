@@ -47,6 +47,7 @@ import { useConsequences } from '@/composables/useConsequences.js'
 const props = defineProps({
   entityId: { type: String, required: true },
   side: { type: String, default: 'player' },
+  menuContext: { type: String, default: 'test_success' },
   effectDie: { type: String, default: '' },
   title: { type: String, default: 'Consequences' },
   excludeIds: { type: Array, default: () => [] },
@@ -62,12 +63,12 @@ const pendingChoices = ref([])
 
 async function load() {
   phase.value = 'menu'
-  const all = await fetchConsequenceOptions(props.entityId, props.side)
+  const all = await fetchConsequenceOptions(props.entityId, props.side, props.menuContext)
   options.value = all.filter(o => !props.excludeIds.includes(o.id))
 }
 
 onMounted(load)
-watch(() => [props.entityId, props.side, props.excludeIds], load)
+watch(() => [props.entityId, props.side, props.menuContext, props.excludeIds], load)
 
 async function choose(opt) {
   const result = await applyOption(props.entityId, opt, props.effectDie)

@@ -8,17 +8,17 @@ export function useConsequences() {
   const { applyEffects, resolveEffectTargets } = useEffectApplication()
   const loading = ref(false)
 
-  async function fetchConsequenceOptions(entityId, side) {
+  async function fetchConsequenceOptions(entityId, side, menuContext = 'test_success') {
     loading.value = true
     try {
       const data = await graphql(
-        `query($entityId: ID!, $side: String!) {
-          consequenceOptions(entityId: $entityId, side: $side) {
+        `query($entityId: ID!, $side: String!, $menuContext: String!) {
+          consequenceOptions(entityId: $entityId, side: $side, menuContext: $menuContext) {
             id label side source
             effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } }
           }
         }`,
-        { entityId, side }
+        { entityId, side, menuContext }
       )
       return data?.consequenceOptions || []
     } finally {
