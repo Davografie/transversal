@@ -41,7 +41,7 @@ status: canonical
 | SFX ownership resolution + seeding of table/contest SFX | `src/api/src/transversal/services/sfx_owner.py` |
 | State-change event wiring (takeout, contest win/loss, give-in, push) | `src/api/src/transversal/services/state_events.py` |
 | Consequence menu assembly (base + entity + SFX moves) | `src/api/src/transversal/services/consequence_menu.py` |
-| Trigger vocabulary (`TRIGGERS` — auto-fire + manual + menu triggers, each with `group` + `{variables}`) + `MENU_TRIGGERS` | `src/api/src/transversal/services/menu_contexts.py` |
+| Trigger vocabulary (`TRIGGERS` — auto-fire + manual, each with `group` + `{variables}`) + menu-context outcome signals (`MENU_CONTEXT_IDS`/`MENU_CONTEXT_VARIABLES`) | `src/api/src/transversal/services/menu_contexts.py` |
 | Contest lifecycle endpoints (challenge, set, give-in, push, prevent-taken-out) | `src/api/src/transversal/api/rest/contest_pools.py` |
 | Targeting bans (membership) + takeout clearing | `src/api/src/transversal/services/targeting_bans.py` |
 
@@ -136,11 +136,15 @@ class SFX(BaseModel):
     name: str
     description: str = ""
     trigger: str
+    source_kind: Optional[str] = None
+    placement: Optional[str] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
 ```
 
-- `trigger` is the single activation axis: an auto-fire event (`on_*`), `manual`, or a consequence menu (`test_success`, `simplified_roll`, `contest_win`, `contest_give_in`, `hitch`). Menu triggers carry that menu's `{variables}`.
+- `trigger` is the event axis: an auto-fire event (`on_*`) or `manual`.
+- `source_kind` declares the owner surface (`trait_setting`/`traitset_setting`/`entity`/`projection`).
+- `placement` is the activation surface (`auto`/`sheet`/`menu`), derived from `trigger` when unset (`on_*` → auto, `manual` → sheet). `placement="menu"` SFX are the consequence-menu moves, gated by role/outcome conditions (`USER_ROLE` / `CONTEST_OUTCOME` / `TEST_OUTCOME` / `HITCH`) rather than a menu-context trigger.
 - `conditions` gate which instance of that activation applies.
 - Legacy `menu_context` and `limit` strings are folded into `trigger` / a `NARRATIVE` condition by `@model_validator`s (`_fold_legacy_menu_context`, `_fold_legacy_limit`).
 
@@ -156,7 +160,7 @@ class SfxOwner(BaseModel):
 
 ### `ConsequenceOption` (line 660)
 
-A selectable post-roll consequence entry. Authored directly on entities (location/lair moves), registered as base moves, or derived from SFX whose `trigger` is a menu trigger.
+A selectable post-roll consequence entry. Authored directly on entities (location/lair moves) or derived from `placement="menu"` SFX gated by role/outcome conditions (the base moves are now seeded such SFX, not hard-coded).
 
 | Field | Meaning |
 |-------|---------|
@@ -428,7 +432,7 @@ Then context-free conditions are evaluated (`static_conditions`) so listing matc
 
 ### Editor vocabularies (backend-served)
 
-The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`auto`/`menu`); menu contexts are first-class triggers), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
+The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`dicepool`/`auto`); the activation surface is a separate `placement` field (`auto`/`sheet`/`menu`)), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
 
 The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, and missing required fields. Warnings are advisory, not a save gate.
 
@@ -490,9 +494,8 @@ Scene advance (`advance_scene` in `src/api/src/transversal/api/rest/targeting_ba
 
 `assemble_consequence_menu(entity, repo, side, menu_context)` builds the post-roll consequence options from three sources:
 
-1. **Base moves** (`BASE_CONSEQUENCE_OPTIONS`) — always available, keyed by `"player"` / `"gm"`.
-2. **Entity moves** — `Entity.consequence_options` on the acting entity's current location and its ancestors (lair moves), filtered by `side`.
-3. **SFX moves** — SFX whose `trigger` equals the requested menu trigger, wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`. Legacy `trigger="on_consequence"` SFX are included in all contexts for backward compatibility.
+1. **Entity moves** — `Entity.consequence_options` on the acting entity's current location and its ancestors (lair moves), filtered by `side`.
+2. **SFX moves** — `placement="menu"` SFX gated by their conditions (role via `USER_ROLE`, outcome via `CONTEST_OUTCOME`/`TEST_OUTCOME`/`HITCH`), wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`. Legacy `trigger="on_consequence"` SFX still appear in every menu for backward compatibility.
 
 Choosing an option applies its effects through the shared applier, resolving any `{choose_*}` targets via the wizard.
 
