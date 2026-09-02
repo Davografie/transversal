@@ -35,6 +35,18 @@ def _sfx_side(sfx) -> str:
     return "either"
 
 
+def _outcome_context(menu_context: str, role: str) -> dict:
+    """Map a menu context to the outcome keys its conditions can reference."""
+    ctx = {"role": role}
+    if menu_context == "contest_win":
+        ctx["contest_winner"] = "player"
+    elif menu_context == "contest_give_in":
+        ctx["gave_in"] = True
+    elif menu_context == "test_success":
+        ctx["tier"] = "success"
+    return ctx
+
+
 def assemble_consequence_menu(
     entity: Entity,
     repo,
@@ -70,7 +82,7 @@ def assemble_consequence_menu(
             continue
         # New model: explicitly-placed menu SFX, gated by role/outcome conditions.
         if sfx.placement == "menu":
-            if sfx.conditions and not evaluate_conditions(entity, sfx.conditions, repo, context={"role": role}):
+            if sfx.conditions and not evaluate_conditions(entity, sfx.conditions, repo, context=_outcome_context(menu_context, role)):
                 continue
             options.append(ConsequenceOption(
                 id=f"sfx:{sfx.id}", label=sfx.name, side=_sfx_side(sfx),

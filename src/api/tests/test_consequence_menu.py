@@ -168,6 +168,26 @@ def test_menu_context_sfx_appears_only_in_matching_context():
     assert "sfx:sfx-apply" not in test
 
 
+def test_contest_sfx_appears_only_in_matching_outcome():
+    from transversal.services.sfx_owner import ensure_contest_complication_sfx
+
+    repo = _base_move_repo()
+    ensure_contest_complication_sfx(repo)
+    repo.sfx_owners["table"].sfx_ids += ["apply-complication", "take-complication"]
+
+    contest_win = {o.id for o in assemble_consequence_menu(_entity(), repo, "player", "contest_win")}
+    assert "sfx:apply-complication" in contest_win
+    assert "sfx:take-complication" not in contest_win
+
+    give_in = {o.id for o in assemble_consequence_menu(_entity(), repo, "player", "contest_give_in")}
+    assert "sfx:take-complication" in give_in
+    assert "sfx:apply-complication" not in give_in
+
+    test = {o.id for o in assemble_consequence_menu(_entity(), repo, "player", "test_success")}
+    assert "sfx:apply-complication" not in test
+    assert "sfx:take-complication" not in test
+
+
 def test_legacy_on_consequence_sfx_appears_in_all_contexts():
     repo = MenuRepo()
     repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-flashback"], trait_id="origin")]

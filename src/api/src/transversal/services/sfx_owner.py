@@ -243,7 +243,7 @@ def ensure_contest_complication_sfx(repo) -> None:
     applies a complication at the effect die via Cortex create-or-step-up rules.
     Idempotent: also rewrites stale ``gain_complication`` effects in place.
     """
-    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
     def _complication_effect() -> Effect:
         return Effect(
@@ -256,14 +256,16 @@ def ensure_contest_complication_sfx(repo) -> None:
             negative=True,
         )
 
-    def _ensure(sfx_id: str, name: str, description: str, menu_context: str) -> None:
+    def _ensure(sfx_id: str, name: str, description: str, outcome: str) -> None:
         existing = repo.get_sfx(sfx_id)
+        outcome_cond = Condition(type=ConditionType.CONTEST_OUTCOME, target=outcome)
         if existing is None:
             repo.create_sfx(SFX(
                 id=sfx_id,
                 name=name,
                 description=description,
-                trigger=menu_context,
+                trigger="manual", placement="menu",
+                conditions=[outcome_cond],
                 effects=[_complication_effect()],
             ))
             return
@@ -276,18 +278,25 @@ def ensure_contest_complication_sfx(repo) -> None:
                 if eff.action != desired.action or not eff.negative:
                     existing.effects[i] = desired
                     changed = True
-        if existing.trigger != menu_context:
-            existing.trigger = menu_context
+        if existing.trigger != "manual" or existing.placement != "menu":
+            existing.trigger = "manual"
+            existing.placement = "menu"
+            changed = True
+        conditions = [c for c in (existing.conditions or []) if c.type != ConditionType.CONTEST_OUTCOME]
+        conditions.append(outcome_cond)
+        if [c.type for c in conditions] != [c.type for c in (existing.conditions or [])] or \
+           [c.target for c in conditions] != [c.target for c in (existing.conditions or [])]:
+            existing.conditions = conditions
             changed = True
         if changed:
             repo.update_sfx(existing)
 
     _ensure("apply-complication", "Apply a complication",
             "When you win a contest, give your opponent a complication at your effect die",
-            "contest_win")
+            "player")
     _ensure("take-complication", "Take a complication",
             "When you give in, take a complication at the winner's effect die",
-            "contest_give_in")
+            "give_in")
 
 
 def ensure_prevent_taken_out_sfx(repo) -> None:
