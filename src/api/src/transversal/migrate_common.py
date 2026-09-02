@@ -134,3 +134,58 @@ def build_entity_key_map(
         old_to_new[f"Entities/{key}"] = new_id
 
     return old_to_new
+
+
+# ── Rating encoding (old integer rating → DieType) ─────────────
+
+# Old ``rating`` values encode a die size by integer: 1=d4, 2=d6, 3=d8, 4=d10,
+# 5=d12. Negative = complication/negative polarity (same die size).
+RATING_TO_DIE: dict[int, str] = {
+    1: "d4", 2: "d6", 3: "d8", 4: "d10", 5: "d12",
+    -1: "d4", -2: "d6", -3: "d8", -4: "d10", -5: "d12",
+}
+
+# Old rating_type → new RatingType (identity mapping; already uses same vocab).
+RATING_TYPE_MAP = {"static": "static", "resource": "resource",
+                   "challenge": "challenge", "empty": "empty"}
+
+
+def resolve_universes_from_default(
+    en: list[str], dis: list[str], universe_lookup: dict[str, str]
+) -> set[str]:
+    """Resolve universe slugs from a default's locations_enabled/disabled.
+
+    ``en``/``dis`` are lists of ``Entities/{numeric}`` refs. ``"2"`` is the
+    Multiverse root = the "all universes" sentinel. ``universe_lookup`` maps
+    old universe numeric key → slug (the 15 children of Multiverse).
+
+    Semantics (reconciled across the two buggy prior scripts):
+    - ``2`` in ``en`` → enabled everywhere, minus any specific ``dis``.
+    - otherwise a non-empty ``en`` → explicit whitelist.
+    - otherwise empty ``en``: ``2`` in ``dis`` → nowhere; else all minus ``dis``.
+    """
+    ALL = "2"
+    en_ids = [e.split("/")[1] for e in (en or []) if e]
+    dis_ids = [e.split("/")[1] for e in (dis or []) if e]
+
+    all_names = set(universe_lookup.values())
+    en_specific = {universe_lookup[i] for i in en_ids if i in universe_lookup}
+    dis_specific = {universe_lookup[i] for i in dis_ids if i in universe_lookup}
+
+    if ALL in en_ids:
+        if ALL in dis_ids:
+            return set()
+        return all_names - dis_specific
+
+    if en_specific:
+        return en_specific - dis_specific
+
+    if ALL in dis_ids:
+        return set()
+
+    return all_names - dis_specific
+
+
+def build_universe_lookup(entities: list[dict], relations: list[dict]) -> dict[str, str]:
+    """Map old universe numeric key → slug (children of Multiverse)."""
+    return build_universe_map(entities, relations)
