@@ -40,8 +40,8 @@
         :gap="gap"
         :top="childPositions[c.key]?.top ?? null"
         :left="childPositions[c.key]?.left ?? null"
-        :bridge-top="panelTopPx"
-        :bridge-bottom="panelBottomPx"
+        :bridge-top="childBridgeTop"
+        :bridge-bottom="childBridgeBottom"
         :on-size="(w, h) => recordChildSize(c.key, w, h)"
         closable
         :on-close="() => closeChild(c.key)"
@@ -148,14 +148,11 @@ const wrapperEl = ref(null)
 const isRoot = computed(() => !props.nested)
 
 // Depth-based hiding (viewport-aware panel limit). A shallow panel that's hidden
-// keeps its layout (visibility:hidden, not display:none) so it still reports a
-// real size/position — otherwise `measureSelf` reads a zero rect and the deeper
-// panels' button-drift bridge collapses to zero. The rail is hidden too so no
-// buttons float over an invisible panel.
+// is fully removed from layout (display:none) so it takes no horizontal space and
+// the chain re-anchors rightward toward the toggle. Its children still render and
+// inherit the anchor via the pass-through bridge below.
 const isDepthHidden = computed(() => !!(props.minVisibleDepth && props.depth < props.minVisibleDepth))
-const panelVisibilityStyle = computed(() => ({
-  visibility: isDepthHidden.value ? 'hidden' : 'visible',
-}))
+const panelVisibilityStyle = computed(() => (isDepthHidden.value ? { display: 'none' } : {}))
 
 // Measured size of THIS panel's `.panel` box (content-driven width, capped).
 const nodeSize = reactive({ w: 0, h: 0 })
@@ -172,12 +169,15 @@ const ownCenter = ref(null)
 
 const viewHeight = ref(window.innerHeight)
 
+let lastReportedWidth = 0
+
 function measureSelf() {
   const p = panelEl.value?.getBoundingClientRect()
   const w = wrapperEl.value?.getBoundingClientRect()
   if (!p) return
   const pw = Math.round(p.width)
   const ph = Math.round(p.height)
+  const sizeChanged = nodeSize.w !== pw || nodeSize.h !== ph
   if (nodeSize.w !== pw) nodeSize.w = pw
   if (nodeSize.h !== ph) nodeSize.h = ph
   ownCenter.value = p.top + p.height / 2
@@ -185,6 +185,14 @@ function measureSelf() {
   panelBottomPx.value = p.bottom
   if (w) wrapperTopPx.value = w.top
   if (props.onSize) props.onSize(pw, ph)
+  // Report the *intrinsic* width for the horizontal-fit calc. A depth-hidden
+  // panel measures 0 (display:none) but must keep reporting its true width —
+  // otherwise the fit loop sees "no width", un-hides it, and oscillates.
+  if (pw > 0) lastReportedWidth = pw
+  const reportW = pw > 0 ? pw : lastReportedWidth
+  if (sizeChanged && reportW > 0 && setPanelWidth && panelUid != null) {
+    setPanelWidth(props.depth, panelUid, reportW)
+  }
   if (isRoot.value) computeRootPosition()
 }
 
@@ -193,7 +201,9 @@ function measureSelf() {
 // are out of flow, so they never move the parent.
 function computeRootPosition() {
   const a = props.anchor
-  if (!a || !nodeSize.w || !nodeSize.h) return
+  // A depth-hidden root measures 0×0 but must still resolve a position so its
+  // children (the now-shallowest panels) anchor near the toggle, not (0,0).
+  if (!a) return
   const vw = window.innerWidth
   const vh = window.innerHeight
   const MARGIN = 12
@@ -260,10 +270,14 @@ const nodeStyle = computed(() => ({
   top: (effectiveTop.value ?? 0) + 'px',
   left: (effectiveLeft.value ?? 0) + 'px',
   visibility: placed.value ? 'visible' : 'hidden',
-  // A depth-hidden node keeps its box (for geometry) but must not swallow
-  // clicks; its visible children set their own `pointer-events: auto`.
-  pointerEvents: isDepthHidden.value ? 'none' : 'auto',
 }))
+
+// The vertical scope children clamp their rail to. When THIS panel is
+// depth-hidden its own bounds are meaningless, so pass the inherited scope
+// through unchanged — the shallowest visible descendant then falls back to its
+// own center, which is the anchor it should inherit.
+const childBridgeTop = computed(() => (isDepthHidden.value ? props.bridgeTop : panelTopPx.value))
+const childBridgeBottom = computed(() => (isDepthHidden.value ? props.bridgeBottom : panelBottomPx.value))
 
 // ── Button-drift: prefer own center, clamp within the parent's bounds ──
 // Direct getBoundingClientRect reads (not useElementBounding) so values stay
@@ -318,6 +332,8 @@ function panelLog(reason, detail = {}) {
     viewHeight: viewHeight.value,
     bridgeTop: props.bridgeTop,
     bridgeBottom: props.bridgeBottom,
+    minVisibleDepth: props.minVisibleDepth,
+    depthHidden: isDepthHidden.value,
     ownCenter: ownCenter.value,
     railCenterViewport: railCenterViewport.value,
     pos: { top: effectiveTop.value, left: effectiveLeft.value },
@@ -373,12 +389,14 @@ function onResize() {
 }
 
 onMounted(() => {
+  if (registerPanel) panelUid = registerPanel(props.depth)
   setupObserver()
   window.addEventListener('resize', onResize)
 })
 onUnmounted(() => {
   if (driftObserver) driftObserver.disconnect()
   window.removeEventListener('resize', onResize)
+  if (unregisterPanel && panelUid != null) unregisterPanel(props.depth, panelUid)
 })
 
 watch([children, collapsedKeys, viewHeight], () => nextTick(() => {
@@ -388,12 +406,12 @@ watch([children, collapsedKeys, viewHeight], () => nextTick(() => {
 watch(childSizes, () => nextTick(autoCollapse), { deep: true })
 watch(() => props.anchor, () => { if (isRoot.value) computeRootPosition() })
 
-// ── Depth tracking for viewport-aware visibility ──
-const registerDepth = inject('registerDepth', null)
-const unregisterDepth = inject('unregisterDepth', null)
-
-onMounted(() => { if (registerDepth) registerDepth(props.depth) })
-onUnmounted(() => { if (unregisterDepth) unregisterDepth(props.depth) })
+// ── Width reporting for horizontal fit (viewport-aware panel limit) ──
+// PanelStack tracks per-depth widths to decide how many shallow levels to hide.
+const registerPanel = inject('registerPanel', null)
+const setPanelWidth = inject('setPanelWidth', null)
+const unregisterPanel = inject('unregisterPanel', null)
+let panelUid = null
 
 function normalizeSpec(spec) {
   return { ...spec, component: markRaw(spec.component) }

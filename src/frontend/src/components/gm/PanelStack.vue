@@ -78,39 +78,58 @@ const anchorRect = computed(() => {
   }
 })
 
-// ── Depth tracking ──────────────────────────────────
-// Panels register/unregister their depth on mount/unmount via provide/inject.
-// Using reactive Map so the totalPanels computed reacts to changes.
-// We track per-depth counts (not just total) so we can later implement
-// per-depth visibility policies if needed.
-const depthCounts = reactive(new Map())
-function registerDepth(depth) {
-  depthCounts.set(depth, (depthCounts.get(depth) || 0) + 1)
-}
-function unregisterDepth(depth) {
-  const n = depthCounts.get(depth) || 0
-  if (n <= 1) depthCounts.delete(depth)
-  else depthCounts.set(depth, n - 1)
-}
-provide('registerDepth', registerDepth)
-provide('unregisterDepth', unregisterDepth)
+// ── Horizontal fit (viewport-aware panel limit) ─────
+// Track each mounted panel's width per depth. The deepest chain's horizontal
+// extent (per-depth widths + gaps) decides how many shallow levels to hide so
+// the leftmost panel stays inside the viewport. Per-depth MAX width is exact
+// for a chain (the common case) and a safe upper bound for a tree. Hidden
+// levels re-anchor the chain rightward (see Panel.vue's display:none + bridge
+// pass-through).
+const GAP = 8
+const depthWidths = reactive(new Map()) // depth -> Map(uid -> width)
+let panelSeq = 0
 
-// ── Viewport-aware panel limit ──────────────────────
-// Hides shallow panels when the stack is wider than the viewport.
-// PANEL_EST_WIDTH = max-width (380px) + gap (8px)
-// maxVisiblePanels = how many panels fit in (viewport - right margin)
-// minVisibleDepth = panels below this depth get v-show=false
-// Example: viewport 1247px, 4 panels open → minVisibleDepth=1 → depth-0 hidden
-const PANEL_EST_WIDTH = 388  // max panel width + gap
+function registerPanel(depth) {
+  const uid = `p${++panelSeq}`
+  if (!depthWidths.has(depth)) depthWidths.set(depth, new Map())
+  depthWidths.get(depth).set(uid, 0)
+  return uid
+}
+function setPanelWidth(depth, uid, width) {
+  const m = depthWidths.get(depth)
+  if (m) m.set(uid, width)
+}
+function unregisterPanel(depth, uid) {
+  const m = depthWidths.get(depth)
+  if (m) {
+    m.delete(uid)
+    if (m.size === 0) depthWidths.delete(depth)
+  }
+}
+provide('registerPanel', registerPanel)
+provide('setPanelWidth', setPanelWidth)
+provide('unregisterPanel', unregisterPanel)
 
-const totalPanels = computed(() => {
-  let sum = 0
-  for (const [, n] of depthCounts) sum += n
-  return sum
+const minVisibleDepth = computed(() => {
+  const depths = [...depthWidths.keys()].sort((a, b) => b - a)
+  if (depths.length === 0) return 0
+  // Space left of the toggle: viewport − (toggle 42 + right 12 + gap 8) − margin.
+  const available = viewportWidth.value - 72
+  let total = 0
+  let visibleFrom = null
+  for (const d of depths) {
+    let maxW = 0
+    for (const w of depthWidths.get(d).values()) maxW = Math.max(maxW, w)
+    total += maxW + GAP
+    if (total <= available) {
+      visibleFrom = d
+    } else {
+      break
+    }
+  }
+  // If even the deepest alone doesn't fit, keep only the deepest visible.
+  return visibleFrom === null ? depths[0] : visibleFrom
 })
-// Minimum 1 so the root panel is always visible, even on very narrow screens
-const maxVisiblePanels = computed(() => Math.max(1, Math.floor((viewportWidth.value - 36) / PANEL_EST_WIDTH)))
-const minVisibleDepth = computed(() => Math.max(0, totalPanels.value - maxVisiblePanels.value))
 
 function onResize() {
   viewportWidth.value = window.innerWidth
