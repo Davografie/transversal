@@ -39,6 +39,7 @@
         :title="c.spec.title"
         :id="c.spec.id"
         :collapsed="false"
+        :active="c.key === activeKey"
         :direction="direction"
         :gap="gap"
         :top="activePosition.top"
@@ -76,6 +77,9 @@ const props = defineProps({
   // Controlled collapse. null = uncontrolled (panel owns its own local state,
   // e.g. the root). Any boolean = controlled by the parent.
   collapsed: { type: Boolean, default: null },
+  // Whether this panel is the active child (signalled to slot content so
+  // singleton-composable panels can reload their data on tab switch).
+  active: { type: Boolean, default: true },
   // Parent panel's viewport bounds. When set, this panel's action rail prefers
   // its own vertical center but is clamped within these bounds (button-drift).
   bridgeTop: { type: Number, default: null },
@@ -482,6 +486,9 @@ function replaceSelf(spec) {
 }
 
 // ── Panel navigation context for the component in this panel's slot ──
+// Whether this panel is the active tab (consumed by slot content to reload
+// singleton-composable data when the active sibling changes).
+provide('panelActive', computed(() => props.active))
 provide(panelKey, {
   open: openChild,
   closeChild,

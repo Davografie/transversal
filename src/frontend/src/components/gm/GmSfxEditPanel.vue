@@ -75,7 +75,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -91,7 +91,7 @@ import { useEffectActions } from '@/composables/useEffectActions.js'
 
 const { graphql } = useApi()
 const panel = usePanel()
-const { traitNameMap, traitsets, fetchTraitsConfig } = useTraitsConfig()
+const { traitNameMap, traitsets, allSfxs, fetchTraitsConfig } = useTraitsConfig()
 const {
   draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables,
   open, reset, save, create, remove,
@@ -106,6 +106,16 @@ const emit = defineEmits(['sfx-created', 'sfx-updated', 'sfx-deleted'])
 // Initialize the shared draft synchronously (no empty-state flash). The
 // composable's sync-flush watchers ignore this via `_suppressEdits`.
 open(props.sfx)
+
+// The draft is a module-level singleton shared across every open SFX panel. When
+// this panel becomes the active tab again, reload it from the freshest copy of
+// its SFX — otherwise it keeps showing whichever sibling was opened last.
+const panelActive = inject('panelActive', computed(() => true))
+watch(panelActive, (active) => {
+  if (!active) return
+  const fresh = allSfxs.value.find((s) => s.id === props.sfx?.id) || props.sfx
+  open(fresh)
+})
 
 const { load: loadSfxMeta, triggers } = useSfxMeta()
 loadSfxMeta()
