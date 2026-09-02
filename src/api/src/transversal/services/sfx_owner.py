@@ -63,6 +63,70 @@ def ensure_sfx_owners(repo) -> None:
         repo.delete_sfx_owner("players")
 
 
+def _challenge_pool_spec(polarity: str):
+    """Targeting path selecting challenge-rated traits of ``polarity`` (chosen at fire time)."""
+    from transversal.services.target_spec import ChooseStep, FilterStep, NavigateStep, SelectStep, TargetSpec
+
+    return TargetSpec(steps=[
+        SelectStep(collection="entities"),
+        NavigateStep(edge="traitsettings"),
+        FilterStep(field="rating_type", operator="==", value="challenge"),
+        FilterStep(field="polarity", operator="==", value=polarity),
+        ChooseStep(count=1),
+    ])
+
+
+def ensure_base_move_sfxs(repo) -> None:
+    """Seed the post-roll consequence-menu base moves as ``placement="menu"`` SFX.
+
+    Side (player vs architect) is a ``USER_ROLE`` condition rather than a hard
+    code path. The SFX live in the ``table`` bucket (available to every entity);
+    menu assembly gates them by role. Idempotent.
+    """
+    from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
+
+    base_moves = [
+        ("proceed", "Proceed the narrative", "Move the scene forward without applying a consequence.", "player", []),
+        ("create_scene_trait", "Create a scene trait", "Introduce a new scene trait at your effect die.", "player", [
+            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+                   target="{choose_trait}", result="{effect_die}"),
+        ]),
+        ("decrease_doom", "Decrease the doom pool", "Step down a doom pool die.", "player", [
+            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+                   target_spec=_challenge_pool_spec("negative")),
+        ]),
+        ("work_on_project", "Work on a project", "Advance a progress clock by stepping it up.", "player", [
+            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain_or_step_up",
+                   result="{effect_die}", target_spec=_challenge_pool_spec("positive")),
+        ]),
+        ("increase_doom", "Increase the doom pool", "Step up a doom pool die.", "architect", [
+            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up",
+                   target_spec=_challenge_pool_spec("negative")),
+        ]),
+        ("give_asset", "Give a GMC an asset", "Grant a GMC an asset at your effect die.", "architect", [
+            Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                   target="{choose_trait}", result="{effect_die}"),
+        ]),
+    ]
+
+    for sfx_id, name, description, role, effects in base_moves:
+        if repo.get_sfx(sfx_id) is not None:
+            continue
+        repo.create_sfx(SFX(
+            id=sfx_id, name=name, description=description,
+            trigger="manual", placement="menu",
+            conditions=[Condition(type=ConditionType.USER_ROLE, target=role)],
+            effects=effects,
+        ))
+
+    owner = repo.get_sfx_owner("table")
+    if owner is not None:
+        merged = list(dict.fromkeys((owner.sfx_ids or []) + [m[0] for m in base_moves]))
+        if merged != (owner.sfx_ids or []):
+            owner.sfx_ids = merged
+            repo.update_sfx_owner(owner)
+
+
 def ensure_starter_location_sfx(repo) -> None:
     """Create/migrate the character-scatter SFX. Idempotent.
 

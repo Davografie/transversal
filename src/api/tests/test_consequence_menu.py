@@ -48,6 +48,12 @@ class MenuRepo:
     def get_sfx(self, sfx_id):
         return self.sfxs.get(sfx_id)
 
+    def create_sfx(self, sfx):
+        self.sfxs[sfx.id] = sfx
+
+    def update_sfx_owner(self, owner):
+        self.sfx_owners[owner.id] = owner
+
 
 def _entity(**overrides):
     kwargs = dict(id="char-1", type=EntityType.CHARACTER, name="Kael", current_universe="earth")
@@ -68,19 +74,32 @@ def _labels(options):
     return [o.label for o in options]
 
 
+def _base_move_repo():
+    """A MenuRepo seeded with the placement=menu base moves (as SFX)."""
+    from transversal.services.sfx_owner import ensure_base_move_sfxs
+
+    repo = MenuRepo()
+    repo.sfx_owners = {"table": SimpleNamespace(id="table", sfx_ids=[])}
+    ensure_base_move_sfxs(repo)
+    return repo
+
+
 def test_player_side_returns_base_player_options():
-    out = assemble_consequence_menu(_entity(), MenuRepo(), "player")
+    out = assemble_consequence_menu(_entity(), _base_move_repo(), "player")
     labels = _labels(out)
     assert "Proceed the narrative" in labels
     assert "Create a scene trait" in labels
     assert "Decrease the doom pool" in labels
+    assert "Work on a project" in labels
 
 
 def test_gm_side_returns_base_gm_options():
-    out = assemble_consequence_menu(_entity(), MenuRepo(), "gm")
+    out = assemble_consequence_menu(_entity(), _base_move_repo(), "gm")
     labels = _labels(out)
     assert "Increase the doom pool" in labels
     assert "Give a GMC an asset" in labels
+    # Player moves are role-gated out of the GM menu.
+    assert "Proceed the narrative" not in labels
 
 
 def test_location_and_ancestor_options_are_included():
@@ -127,12 +146,12 @@ def test_non_on_consequence_sfx_is_ignored():
 
 
 def test_base_moves_carry_effect_die_placeholder():
-    repo = MenuRepo()
+    repo = _base_move_repo()
     player = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "player")}
-    assert player["create_scene_trait"].effects[0].result == "{effect_die}"
+    assert player["sfx:create_scene_trait"].effects[0].result == "{effect_die}"
 
     gm = {o.id: o for o in assemble_consequence_menu(_entity(), repo, "gm")}
-    assert gm["give_asset"].effects[0].result == "{effect_die}"
+    assert gm["sfx:give_asset"].effects[0].result == "{effect_die}"
 
 
 def test_menu_context_sfx_appears_only_in_matching_context():

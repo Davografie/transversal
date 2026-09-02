@@ -1,12 +1,12 @@
 """Post-roll consequence menu assembly.
 
 A consequence option is ``label + side + effects``. The menu is assembled
-dynamically from three sources:
+dynamically from two sources:
 
-  - base moves (always available)
   - entity moves (``Entity.consequence_options`` on the acting entity's
     current location and its ancestors — lair moves)
-  - SFX moves (``on_consequence`` SFX available to the acting entity)
+  - SFX moves (``placement="menu"`` SFX gated by role/outcome conditions, plus
+    the legacy ``trigger == menu_context`` SFX pending migration)
 
 Choosing an option applies its effects through the shared effect applier
 (``applyEffects``), which resolves any ``{choose_*}`` targets via the wizard.
@@ -17,109 +17,22 @@ from __future__ import annotations
 from transversal.domain import (
     ConditionType,
     ConsequenceOption,
-    Effect,
-    EffectTiming,
     Entity,
 )
-
-from transversal.services.target_spec import (
-    ChooseStep,
-    FilterStep,
-    NavigateStep,
-    SelectStep,
-    TargetSpec,
-)
-
 
 from transversal.services.sfx_owner import get_available_sfx_ids
 from transversal.services.conditions import evaluate_conditions
 
 
-def _challenge_pool_spec(polarity: str) -> TargetSpec:
-    """A targeting path selecting challenge-rated traits of ``polarity``.
+def _sfx_side(sfx) -> str:
+    """Derive a menu SFX's side from its ``USER_ROLE`` condition.
 
-    ``polarity`` is ``"negative"`` for doom pools and ``"positive"`` for
-    progress clocks. The trailing ``choose`` step surfaces the matching pools as
-    an interactive pick at fire time; nothing is hardcoded to a level.
+    ``player`` → player, ``architect`` → gm, no role condition → either.
     """
-    return TargetSpec(steps=[
-        SelectStep(collection="entities"),
-        NavigateStep(edge="traitsettings"),
-        FilterStep(field="rating_type", operator="==", value="challenge"),
-        FilterStep(field="polarity", operator="==", value=polarity),
-        ChooseStep(count=1),
-    ])
-
-
-# Base moves. The doom-pool moves target challenge-rated pools by rating type +
-# polarity (path-based, no level progression). ``result="{effect_die}"`` is a
-# placeholder the frontend substitutes with the roll's actual effect die before
-# applying.
-_BASE_PLAYER = [
-    ConsequenceOption(
-        id="proceed", label="Proceed the narrative", side="player",
-        effects=[], source="base",
-    ),
-    ConsequenceOption(
-        id="create_scene_trait", label="Create a scene trait", side="player",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="gain_or_step_up", target="{choose_trait}", result="{effect_die}",
-            ),
-        ],
-        source="base",
-    ),
-    ConsequenceOption(
-        id="decrease_doom", label="Decrease the doom pool", side="player",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="step_down", target_spec=_challenge_pool_spec("negative"),
-            ),
-        ],
-        source="base",
-    ),
-    ConsequenceOption(
-        id="work_on_project", label="Work on a project", side="player",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="gain_or_step_up", result="{effect_die}",
-                target_spec=_challenge_pool_spec("positive"),
-            ),
-        ],
-        source="base",
-    ),
-]
-
-_BASE_GM = [
-    ConsequenceOption(
-        id="increase_doom", label="Increase the doom pool", side="gm",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="step_up", target_spec=_challenge_pool_spec("negative"),
-            ),
-        ],
-        source="base",
-    ),
-    ConsequenceOption(
-        id="give_asset", label="Give a GMC an asset", side="gm",
-        effects=[
-            Effect(
-                timing=EffectTiming.IMMEDIATE, type="modify_trait",
-                action="gain", target="{choose_trait}", result="{effect_die}",
-            ),
-        ],
-        source="base",
-    ),
-]
-
-BASE_CONSEQUENCE_OPTIONS: dict[str, list[ConsequenceOption]] = {
-    "player": _BASE_PLAYER,
-    "gm": _BASE_GM,
-}
+    for c in (sfx.conditions or []):
+        if c.type == ConditionType.USER_ROLE:
+            return "gm" if c.target == "architect" else "player"
+    return "either"
 
 
 def assemble_consequence_menu(
@@ -130,11 +43,13 @@ def assemble_consequence_menu(
 ) -> list[ConsequenceOption]:
     """Return the consequence options offered to ``side`` in ``menu_context``.
 
-    ``menu_context`` is a menu trigger value (e.g. ``test_success``). SFX are
-    selected by their ``trigger``; the legacy ``on_consequence`` trigger still
-    matches every consequence menu for backward compatibility.
+    ``menu_context`` is a menu trigger value (e.g. ``test_success``). SFX with
+    an explicit ``placement="menu"`` are gated by their conditions (role/outcome);
+    the legacy ``trigger == menu_context`` / ``on_consequence`` SFX still match
+    for backward compatibility pending migration.
     """
-    options: list[ConsequenceOption] = list(BASE_CONSEQUENCE_OPTIONS.get(side, []))
+    options: list[ConsequenceOption] = []
+    role = "architect" if side == "gm" else "player"
 
     # Entity moves: current location and its ancestors (nearest → root).
     location_ids: list[str] = []
@@ -148,12 +63,21 @@ def assemble_consequence_menu(
             if option.side in (side, "either"):
                 options.append(option)
 
-    # SFX moves: selected by trigger (menu contexts are triggers now); the legacy
-    # on_consequence trigger matches every consequence menu for backward compat.
+    # SFX moves.
     for sfx_id in get_available_sfx_ids(entity.id, entity.current_universe, repo):
         sfx = repo.get_sfx(sfx_id)
         if sfx is None:
             continue
+        # New model: explicitly-placed menu SFX, gated by role/outcome conditions.
+        if sfx.placement == "menu":
+            if sfx.conditions and not evaluate_conditions(entity, sfx.conditions, repo, context={"role": role}):
+                continue
+            options.append(ConsequenceOption(
+                id=f"sfx:{sfx.id}", label=sfx.name, side=_sfx_side(sfx),
+                effects=sfx.effects, source="sfx",
+            ))
+            continue
+        # Legacy: trigger == menu_context (or on_consequence), pending migration.
         if sfx.trigger != menu_context and sfx.trigger != "on_consequence":
             continue
         if sfx.conditions and not evaluate_conditions(entity, sfx.conditions, repo):

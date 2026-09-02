@@ -237,6 +237,7 @@ _CONTEXT_TYPES = frozenset({
     ConditionType.CONTEST_OUTCOME,
     ConditionType.ROLL_TIER,
     ConditionType.TEST_OUTCOME,
+    ConditionType.USER_ROLE,
 })
 
 
