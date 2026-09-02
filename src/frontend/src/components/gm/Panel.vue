@@ -511,7 +511,7 @@ provide(panelKey, {
 .panel-tabs {
   position: absolute;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: wrap-reverse;
   justify-content: flex-end;
   gap: 4px;
   pointer-events: auto;
