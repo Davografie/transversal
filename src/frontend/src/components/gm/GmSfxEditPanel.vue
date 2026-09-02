@@ -14,6 +14,13 @@
         </optgroup>
         <option v-if="!knownTrigger" :value="draft.trigger">{{ draft.trigger }}</option>
       </select>
+      <label>Placement</label>
+      <select v-model="draft.placement">
+        <option :value="null">Auto (from trigger)</option>
+        <option value="auto">Auto-fire</option>
+        <option value="sheet">Sheet (owner card)</option>
+        <option value="menu">Menu (consequence menu)</option>
+      </select>
       <label>Source</label>
       <select v-model="draft.source_kind">
         <option :value="null">None</option>
@@ -204,7 +211,7 @@ async function onSave() {
   emit('sfx-updated', {
     id: props.sfx.id, name: draft.name, trigger: draft.trigger,
     description: draft.description, conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
-    source_kind: draft.source_kind,
+    source_kind: draft.source_kind, placement: draft.placement,
   })
 }
 
@@ -214,7 +221,7 @@ async function onCreate() {
   emit('sfx-created', {
     id, name: draft.name.trim(), trigger: draft.trigger,
     description: draft.description, conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
-    source_kind: draft.source_kind,
+    source_kind: draft.source_kind, placement: draft.placement,
   })
   setTimeout(() => { panel.close() }, 600)
   reset()
