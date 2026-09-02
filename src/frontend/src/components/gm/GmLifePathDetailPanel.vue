@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, inject, onMounted, onUnmounted, watch } from 'vue'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -70,6 +70,11 @@ const props = defineProps({
 async function refreshTables() {
   try { await fetchTables(props.lp.id) } catch {}
 }
+
+// `tables` is a module-level singleton (useRollTables); re-fetch this path's
+// tables when it becomes the active tab again so it doesn't show another path's.
+const panelActive = inject('panelActive', computed(() => true))
+watch(panelActive, (active) => { if (active) refreshTables() })
 
 let offLifepathSaved = null
 onMounted(() => {
