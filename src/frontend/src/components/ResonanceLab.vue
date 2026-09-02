@@ -165,7 +165,7 @@ onUnmounted(() => {
         <canvas ref="canvasEl" class="reslab-canvas" :style="{ height: height + 'px' }" />
 
         <div class="reslab-divider">
-          <div class="reslab-divider-label">Waveform divider preview (target composite)</div>
+          <div class="reslab-divider-label">Waveform divider preview (drifting tangle @ 0.7)</div>
           <WaveformDivider :osc="to" :height="96" />
         </div>
 
