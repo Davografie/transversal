@@ -256,9 +256,17 @@ const columnTotal = computed(() => tabsHeight.value + stripGap.value + activeSiz
 const columnTop = computed(() => nodeSize.h / 2 - columnTotal.value / 2)
 
 const tabsStyle = computed(() => {
-  const style = { top: columnTop.value + 'px' }
-  if (props.direction === 'left') style.right = 'calc(100% + ' + props.gap + 'px)'
-  else style.left = 'calc(100% + ' + props.gap + 'px)' // TODO(Phase 2)
+  // Width the chip strip wraps within: the focus panel's width (so chips stay
+  // no wider than the active panel), falling back to this panel's own width.
+  // A definite width is essential — an auto width with a right-only offset
+  // shrink-to-fits to min-content and stacks every chip on its own row.
+  const w = activeSize.value.w || nodeSize.w || 200
+  const style = {
+    top: columnTop.value + 'px',
+    width: w + 'px',
+  }
+  if (props.direction === 'left') style.left = -(w + props.gap) + 'px'
+  else style.left = (nodeSize.w + props.gap) + 'px' // TODO(Phase 2)
   return style
 })
 
@@ -506,7 +514,6 @@ provide(panelKey, {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
-  max-width: var(--gm-panel-max-w, 440px);
   pointer-events: auto;
 }
 .panel-chip {
