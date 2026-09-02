@@ -93,6 +93,15 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
             return tier == "fail"
         return False
 
+    if condition.type == ConditionType.USER_ROLE:
+        # The acting human's role: prefer the fire/menu context, else resolve
+        # the entity's controlling player via the agency relationship.
+        role = (context or {}).get("role")
+        if role is None and entity is not None:
+            from transversal.services.role_resolver import resolve_role
+            role = resolve_role(entity.id, repo)
+        return role == (condition.target or "").strip()
+
     if condition.type == ConditionType.SOURCE_RATING:
         # The source trait-setting's rating (its dice) vs a die threshold.
         if source is None:
@@ -288,6 +297,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">")),
     ConditionTypeDef(ConditionType.HAS_RAZMERIT.name, "Has razmerit", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">")),
     ConditionTypeDef(ConditionType.ENTITY_TYPE.name, "Entity type", needs_target=True, target_placeholder="entity type", target_options=("character", "gmc", "asset")),
+    ConditionTypeDef(ConditionType.USER_ROLE.name, "User role", needs_target=True, target_placeholder="role", target_options=("player", "architect")),
     ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),
     ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe"),
     ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved")),

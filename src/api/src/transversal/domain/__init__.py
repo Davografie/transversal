@@ -819,6 +819,19 @@ class ConsequenceOption(BaseModel):
     source: str = "base"  # "base" | "entity" | "sfx"
 
 
+def derive_placement(trigger: str) -> str:
+    """The activation surface implied by a trigger (``auto``/``sheet``/``menu``).
+
+    ``manual`` → sheet (owner card), ``on_*`` → auto (event-driven), and the
+    legacy menu-context triggers (``test_success``/``contest_win``/…) → menu.
+    """
+    if trigger == "manual":
+        return "sheet"
+    if trigger.startswith("on_"):
+        return "auto"
+    return "menu"
+
+
 class SFX(BaseModel):
     """SFX registry entry.
 
@@ -835,6 +848,9 @@ class SFX(BaseModel):
     # ``target_catalog`` (``trait_setting``/``traitset_setting``/``entity``/
     # ``projection``); ``None`` = bucket/passive (no meaningful origin).
     source_kind: Optional[str] = None
+    # Activation surface: ``auto`` (event-driven), ``sheet`` (owner card),
+    # ``menu`` (post-roll consequence menu). ``None`` = derive from ``trigger``.
+    placement: Optional[str] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
     # How long the SFX stays in effect once triggered (the in-memory effective
@@ -877,6 +893,11 @@ class SFX(BaseModel):
                 return c.narrative
         return ""
 
+    @property
+    def effective_placement(self) -> str:
+        """The activation surface, derived from ``trigger`` when unset."""
+        return self.placement or derive_placement(self.trigger)
+
 
 class SfxOwner(BaseModel):
     """A named SFX owner bucket.
@@ -903,6 +924,7 @@ class ConditionType(str, Enum):
     TRAIT_RATING = "trait_rating"        # target = trait id; value = rating threshold (e.g. d8)
     HAS_RAZMERIT = "has_razmerit"        # value = integer; operator = numeric comparator
     ENTITY_TYPE = "entity_type"          # target = entity type (character/gmc/asset); subject = the entity
+    USER_ROLE = "user_role"              # target = "player" | "architect"; the acting human's role (context or controlling player)
     NARRATIVE = "narrative"              # human-readable only, never auto-blocks
     UNPLACED = "unplaced"                # entity has no current location yet
     IN_UNIVERSE = "in_universe"          # target = universe key; entity is currently there

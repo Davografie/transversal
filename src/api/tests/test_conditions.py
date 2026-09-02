@@ -423,3 +423,62 @@ def test_target_path_evaluate_scalar_die():
         traitset_id="ts-x", dice=[DieType.D6],
     )
     assert not evaluate_condition(_entity(), cond, FakeRepo(), source=lower, source_element="traitsetting")
+
+
+def test_user_role_reads_context():
+    cond = Condition(type=ConditionType.USER_ROLE, target="architect")
+    assert evaluate_condition(_entity(), cond, FakeRepo(), context={"role": "architect"})
+    assert not evaluate_condition(_entity(), cond, FakeRepo(), context={"role": "player"})
+
+
+def test_user_role_falls_back_to_controlling_player():
+    class RoleRepo(FakeRepo):
+        def get_entity_players(self, entity_id):
+            return ["player-1"] if entity_id == "char-1" else []
+
+        def get_player(self, player_id):
+            return {"_key": player_id, "role": "architect"}
+
+    cond = Condition(type=ConditionType.USER_ROLE, target="architect")
+    assert evaluate_condition(_entity(), cond, RoleRepo())
+    # Context role takes precedence over the controlling player.
+    assert not evaluate_condition(_entity(), cond, RoleRepo(), context={"role": "player"})
+
+
+def test_user_role_no_role_resolves_false():
+    cond = Condition(type=ConditionType.USER_ROLE, target="player")
+    assert not evaluate_condition(_entity(), cond, FakeRepo())
+
+
+def test_user_role_declared_in_vocabulary():
+    assert any(c.value == ConditionType.USER_ROLE.name for c in CONDITION_TYPES)
+
+
+def test_resolve_role_architect_wins():
+    from transversal.services.role_resolver import resolve_role
+
+    class Repo:
+        def __init__(self, roles):
+            self._roles = roles
+
+        def get_entity_players(self, entity_id):
+            return list(self._roles)
+
+        def get_player(self, player_id):
+            return {"role": self._roles[player_id]}
+
+    assert resolve_role("e", Repo({"p1": "player", "p2": "architect"})) == "architect"
+    assert resolve_role("e", Repo({"p1": "player"})) == "player"
+    assert resolve_role("e", Repo({})) is None
+
+
+def test_derive_placement():
+    from transversal.domain import SFX, derive_placement
+
+    assert derive_placement("manual") == "sheet"
+    assert derive_placement("on_roll") == "auto"
+    assert derive_placement("contest_win") == "menu"
+    assert SFX(id="a", name="a", trigger="manual").effective_placement == "sheet"
+    assert SFX(id="b", name="b", trigger="on_contest_win").effective_placement == "auto"
+    assert SFX(id="c", name="c", trigger="contest_win").effective_placement == "menu"
+    assert SFX(id="d", name="d", trigger="manual", placement="menu").effective_placement == "menu"
