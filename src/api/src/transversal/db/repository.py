@@ -803,18 +803,12 @@ class EntityRepository:
         Deletes curriculum items / qualification blocks that become empty
         as a result.  Saves each modified life path.
         """
-        if self.db is not None:
-            query = f"""
-                FOR lp IN {LIFE_PATHS}
-                FILTER CONTAINS(TO_STRING(lp), @tid)
-                RETURN lp
-            """
-            docs = list(self.db.aql.execute(query, bind_vars={"tid": trait_id}))
-        else:
-            docs = []
-            for lp in self._life_paths_docs:
-                if trait_id in str(lp):
-                    docs.append(lp)
+        query = f"""
+            FOR lp IN {LIFE_PATHS}
+            FILTER CONTAINS(TO_STRING(lp), @tid)
+            RETURN lp
+        """
+        docs = list(self.db.aql.execute(query, bind_vars={"tid": trait_id}))
 
         for doc in docs:
             lp = LifePath.model_validate({**doc, "id": doc["_key"]})

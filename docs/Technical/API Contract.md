@@ -534,6 +534,114 @@ Valid roles: `"player"`, `"architect"`. The role controls which UI elements are 
 
 Players are stored in the ArangoDB `players` collection. Player→entity ownership is tracked via `relationships` edges (type: `agency`, `_from`: `players/{id}`, `_to`: `entities/{id}`). See [[Data Model#players]] and [[Data Model#relationships]].
 
+### Session Management
+
+Session CRUD and lifecycle. Each session carries a universe, a GM id, and the set of joined entity ids.
+
+**`POST /api/v1/sessions`** — create a session.
+
+Request: `{"name": "New Session", "gm_id": "", "universe": "earth"}`
+
+Response: `{ "id": "...", "name": "...", "gm_id": "...", "universe": "...", "entity_ids": [...], "player_entities": {...}, "active": true }`
+
+**`GET /api/v1/sessions`** — list active sessions.
+
+**`GET /api/v1/sessions/{session_id}`** — get one session.
+
+**`POST /api/v1/sessions/{session_id}/join`** — join a session (register an entity). Request `{"entity_id": "...", "player_id": ""}`.
+
+**`POST /api/v1/sessions/{session_id}/leave`** — leave a session. Same request shape as `join`.
+
+**`POST /api/v1/sessions/{session_id}/start`** — arm passive `on_session_start` rules; publishes `session_started`. Idempotent.
+
+**`POST /api/v1/sessions/{session_id}/end`** — drop passive rules and clear armed roll-deferrals; publishes `session_ended`.
+
+**`POST /api/v1/sessions/{session_id}/publish`** — publish a custom event to all subscribers of a session (clients share dice pools / roll results without server persistence). Request `{"event": "...", "data": {...}}`.
+
+### Scene State
+
+In-memory dice-pool + difficulty state keyed by `(location_id, entity_id)`; cleared at beat end.
+
+**`GET /api/v1/locations/{location_id}/pools`** — every saved pool at a location.
+
+**`GET /api/v1/locations/{location_id}/pools/{entity_id}`** — one entity's saved pool.
+
+**`PUT /api/v1/locations/{location_id}/pools/{entity_id}`** — persist (in-memory) an entity's assembled pool.
+
+**`DELETE /api/v1/locations/{location_id}/pools/{entity_id}`** — clear one entity's pool.
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/offer-negative`** — offer a negative trait to an opponent's pool during a contest.
+
+**`PUT /api/v1/locations/{location_id}/difficulty`** — set the current test difficulty for a location.
+
+**`GET /api/v1/locations/{location_id}/difficulty`** — current difficulty (null if unset).
+
+**`POST /api/v1/locations/{location_id}/next-beat`** — end the beat: clear every pool and the difficulty at the location.
+
+### Contest Flow
+
+The manual (concurrent) contest state machine, continuing the pool-assembly endpoints above.
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/set`** — commit one side's rolled + picked result.
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/stakes`** — set whether the contest is high-stakes (default low).
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/give-in`** — concede; the other side wins.
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/prevent-taken-out`** — spend 1 razmerit to prevent a pending high-stakes takeout.
+
+**`POST /api/v1/locations/{location_id}/pools/{entity_id}/push`** — start a push: rebuild and reroll (free, once).
+
+**`GET /api/v1/locations/{location_id}/pools/{entity_id}/contest`** — current contest state (perspective re-sync).
+
+### Challenge Pool
+
+**`POST /api/v1/challenge-pool/{traitsetting_id}/spend`** — spend one die from a challenge pool.
+
+Request: `{"die": "d8", "destination": "opposition"}` where `destination` is `opposition` (doom die the GM spends) or `pool` (progress die for partial use, returned flagged `resource`).
+
+Response: `{ "traitsetting_id": "...", "die": "d8", "resource": false, "dice": [...], "capacity": [...], "completed": false }`
+
+### Targeting Bans
+
+**`GET /api/v1/entities/{entity_id}/targeting-bans`** — active directional contest-target bans for an entity. Response `{"bans": [{"target_id": "..."}]}`.
+
+**`POST /api/v1/scenes/advance`** — advance the scene: fire scheduled scene effects, decrement bans, clear scene pools + contest trackers; publishes `scene_change`.
+
+### Plans (GM staging)
+
+Drafts live in `plan_entities` / `plan_relationships` staging collections; `apply` promotes them into live collections (fresh ids), `discard` deletes staging only.
+
+**`POST /api/v1/plans/{plan_id}/entities`** — stage a draft entity (upsert by `draft_ref`).
+
+**`POST /api/v1/plans/{plan_id}/relationships`** — stage a draft relationship edge (`from_ref`/`to_ref` accept `draft:<ref>`, `entity:<id>`, or a bare id).
+
+**`GET /api/v1/plans/{plan_id}`** — read a plan (its entities + relationships).
+
+**`POST /api/v1/plans/{plan_id}/apply`** — promote the staged plan into live `entities` / `relationships`.
+
+**`DELETE /api/v1/plans/{plan_id}`** — discard staging (staging only; live data untouched).
+
+### Image Generation
+
+Flux image generation and animation, queued and reported via SSE.
+
+**`POST /api/v1/imagen/{entity_id}`** — trigger async image generation.
+
+**`POST /api/v1/animate/{entity_id}`** — trigger async video-loop animation.
+
+**`POST /api/v1/imagen/{entity_id}/cancel`** — interrupt an active imagen/animate job.
+
+**`GET /api/v1/imagen/jobs`** — active generation/animation jobs with status + queue position.
+
+**`GET /api/v1/imagen/loras`** — available Flux LoRA files.
+
+**`GET /api/v1/imagen/{entity_id}?universe=`** — list generated images for an entity (optionally filtered by universe).
+
+**`PATCH /api/v1/imagen/{image_id}`** — update an image's roles, universe, and/or owning projection.
+
+**`DELETE /api/v1/imagen/{image_id}`** — delete a generated image and its variants.
+
 ---
 
 ## SSE Stream
