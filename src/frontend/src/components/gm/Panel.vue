@@ -9,11 +9,11 @@
          collapses to zero and the whole geometry chain (child stacking + the
          button-drift bridge) zeroes out, which sends deeper panels' buttons
          flying off the top of the viewport. -->
-    <div ref="panelEl" class="panel" :style="panelVisibilityStyle">
-      <header v-if="title" class="panel-header">
+    <div ref="panelEl" class="panel" :class="{ 'is-collapsed': isCollapsed, 'has-title': !!title }" :style="panelVisibilityStyle">
+      <header v-if="title" class="panel-header" :class="{ 'is-collapsed': isCollapsed }">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
-          <button v-if="id" type="button" class="panel-id-btn" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</button>
+          <button v-if="id && !isCollapsed" type="button" class="panel-id-btn" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</button>
         </slot>
       </header>
       <div class="panel-body" v-show="!isCollapsed">
@@ -535,6 +535,18 @@ provide(panelKey, {
   padding: 8px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
+}
+/* Collapsed panels shrink to just the title: no divider, no copy-ID button,
+   no minimum width (unless there's no title to size against). */
+.panel-header.is-collapsed {
+  border-bottom: none;
+}
+.panel.is-collapsed.has-title {
+  min-width: 0;
+}
+.panel-header.is-collapsed .panel-title {
+  flex: none;
+  white-space: nowrap;
 }
 .panel-title {
   flex: 1; min-width: 0;
