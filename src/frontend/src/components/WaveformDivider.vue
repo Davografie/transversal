@@ -16,7 +16,7 @@ const props = defineProps({
   height: { type: Number, default: 120 },
   colorTop: { type: String, default: '#1b1b28' },
   colorBottom: { type: String, default: '#2ac6a0' },
-  progress: { type: Number, default: 0.7 },
+  progress: { type: Number, default: 0.715 },
   mode: { type: String, default: RESONANCE.mode },
   renderDivisor: { type: Number, default: RESONANCE.renderDivisor },
   drift: { type: Number, default: RESONANCE.drift },

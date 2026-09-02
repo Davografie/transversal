@@ -176,11 +176,11 @@ onUnmounted(() => {
         <canvas v-if="layout !== 'divider'" ref="canvasEl" class="reslab-canvas" :style="{ height: height + 'px' }" />
 
         <div v-if="layout === 'divider'" class="reslab-divider">
-          <div class="reslab-divider-label">Waveform divider preview (drifting tangle @ 0.7)</div>
+          <div class="reslab-divider-label">Waveform divider preview (drifting tangle @ 0.715)</div>
           <WaveformDivider
             :osc="to"
             :height="Math.max(120, height)"
-            :progress="0.7"
+            :progress="0.715"
             :render-divisor="renderDivisor"
             :drift="drift"
             :collapse-fraction="collapseFraction"
