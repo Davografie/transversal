@@ -34,7 +34,7 @@ Usage:
 from __future__ import annotations
 
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 
 from transversal.db.arango import (
     ENTITIES,
@@ -103,6 +103,130 @@ def _find_relationship_key(db, from_id: str, to_id: str, rel_type: str) -> str |
         "f": f"{ENTITIES}/{from_id}", "t": f"{ENTITIES}/{to_id}", "ty": rel_type,
     }))
     return cur[0] if cur else None
+
+
+def materialize_inheritance(
+    entities: list[dict],
+    relations: list[dict],
+    traits: list[dict],
+    traitsets: list[dict],
+    tsettings: list[dict],
+) -> tuple[list[dict], Counter]:
+    """Materialize the old app's read-time trait inheritance.
+
+    Two mechanisms (verified against ``flask/app.py``):
+
+    - **archetype** — OUTBOUND ``archetype`` relations (transitive). An entity
+      inherits every TraitSetting on its archetype ancestors.
+    - **super-hierarchy** — OUTBOUND ``super`` relations (locations only). A
+      location inherits ancestor traits where ``inheritable == true``.
+
+    Replicates the old app's dedup exactly:
+
+    - priority: direct ``10000`` > super-inherited ``5000`` > archetype
+      ``max_depth - depth`` (shallower archetype wins).
+    - ``inherited_as``: a setting with ``inherited_as: TraitSettings/X``
+      shadows X (removed before dedup).
+    - dedup key per traitset: ``name`` when ``traitset.duplicates == false``,
+      else ``name + statement``; highest priority survives.
+
+    Returns synthetic entity-trait settings (``_from`` rewritten to the
+    inheriting entity, locations reset — D10) for each surviving inherited
+    trait, plus a stats counter.
+    """
+    tset_duplicates = {ts["_key"]: ts.get("duplicates", False) for ts in traitsets}
+    trait_meta: dict[str, tuple[str, str]] = {}
+    for t in traits:
+        ref = t.get("traitset") or ""
+        trait_meta[t["_key"]] = (t.get("name") or "", ref.split("/")[1] if "/" in ref else "")
+
+    settings_by_entity: dict[str, list[dict]] = defaultdict(list)
+    for s in tsettings:
+        if s["_from"].startswith("Entities/"):
+            settings_by_entity[s["_from"]].append(s)
+
+    arch_parent: dict[str, str] = {
+        r["_from"]: r["_to"] for r in relations if r.get("type") == "archetype"
+    }
+    super_parent: dict[str, str] = {
+        r["_from"]: r["_to"] for r in relations if r.get("type") == "super"
+    }
+
+    stats: Counter = Counter()
+    synthetic: list[dict] = []
+
+    for entity_ref in settings_by_entity:
+        direct = settings_by_entity[entity_ref]
+
+        # Transitive archetype ancestors with depth.
+        arch_ancestors: list[tuple[str, int]] = []
+        cur, depth, seen = entity_ref, 0, set()
+        while cur in arch_parent and cur not in seen:
+            seen.add(cur)
+            cur = arch_parent[cur]
+            depth += 1
+            arch_ancestors.append((cur, depth))
+
+        # Transitive super ancestors (locations).
+        super_ancestors: list[str] = []
+        cur, seen = entity_ref, set()
+        while cur in super_parent and cur not in seen:
+            seen.add(cur)
+            cur = super_parent[cur]
+            super_ancestors.append(cur)
+
+        if not arch_ancestors and not super_ancestors:
+            continue
+
+        max_depth = max((d for _, d in arch_ancestors), default=0)
+
+        candidates: list[tuple[int, dict, bool]] = []  # (priority, setting, is_direct)
+        for s in direct:
+            candidates.append((10000, s, True))
+        for a_ref, d in arch_ancestors:
+            for s in settings_by_entity.get(a_ref, []):
+                candidates.append((max_depth - d, s, False))
+        for a_ref in super_ancestors:
+            for s in settings_by_entity.get(a_ref, []):
+                if s.get("inheritable") is True:
+                    candidates.append((5000, s, False))
+
+        # inherited_as shadows (remove the shadowed setting _id).
+        shadowed = {s.get("inherited_as") for _, s, _ in candidates if s.get("inherited_as")}
+        kept = [(p, s, isd) for p, s, isd in candidates if s["_id"] not in shadowed]
+        stats["shadowed"] += len(candidates) - len(kept)
+
+        # Dedup per (traitset, key), highest priority wins.
+        best: dict[tuple[str, str], tuple[int, dict, bool]] = {}
+        for p, s, isd in kept:
+            tkey = s["_to"].split("/")[1]
+            name, tset_key = trait_meta.get(tkey, ("", ""))
+            dup = tset_duplicates.get(tset_key, False)
+            key = (tset_key, name if not dup else name + (s.get("statement") or ""))
+            if key not in best or p > best[key][0]:
+                best[key] = (p, s, isd)
+
+        inherited_kept = sum(1 for _, _, isd in kept if not isd)
+        materialized = 0
+        for key, (p, s, isd) in best.items():
+            if isd:
+                continue  # direct trait — already migrated normally
+            materialized += 1
+            stats["materialized"] += 1
+            synthetic.append({
+                "_from": entity_ref,
+                "_to": s["_to"],
+                "rating_type": s.get("rating_type"),
+                "rating": s.get("rating"),
+                "statement": s.get("statement") or "",
+                "notes": s.get("notes") or "",
+                "locations_enabled": [],   # D10: ancestor scoping doesn't carry over
+                "locations_disabled": [],  # D10
+                "_materialized": True,
+            })
+        stats["dedup_dropped"] += inherited_kept - materialized
+
+    return synthetic, stats
 
 
 def migrate(apply: bool = False) -> int:
@@ -232,10 +356,15 @@ def migrate(apply: bool = False) -> int:
     # old TraitSettings key → [(new traitsetting key, owning entity_id)]
     parent_new: dict[str, list[tuple[str, str]]] = {}
 
-    # ── Pass 1a: entity-traits ───────────────────────────
-    for s in tsettings:
-        if not s["_from"].startswith("Entities/"):
-            continue
+    # ── Pass 1a: entity-traits (direct + materialized inheritance) ──
+    synthetic, mat_stats = materialize_inheritance(
+        entities, relations, old_traits, old_tsets, tsettings
+    )
+    report.update(mat_stats)
+    entity_settings = [s for s in tsettings if s["_from"].startswith("Entities/")]
+    entity_settings.extend(synthetic)
+
+    for s in entity_settings:
         ent_old = s["_from"].split("/")[1]
         trait_old = s["_to"].split("/")[1]
 
@@ -262,7 +391,8 @@ def migrate(apply: bool = False) -> int:
             key = f"{entity_id}:{trait_id}"
             insert(key, f"{ENTITIES}/{entity_id}", entity_id, trait_id, tset_id,
                    "entity", rt, dice, capacity, polarity, statement, notes)
-            parent_new[s["_key"]] = [(key, entity_id)]
+            if "_key" in s:
+                parent_new[s["_key"]] = [(key, entity_id)]
             report["ego"] += 1
             continue
 
@@ -281,7 +411,8 @@ def migrate(apply: bool = False) -> int:
             report["morph"] += 1
             if len(slugs) > 1:
                 report["morph_multi_universe"] += 1
-        parent_new[s["_key"]] = entries
+        if "_key" in s:
+            parent_new[s["_key"]] = entries
 
     # ── Pass 1b: relation-traits ─────────────────────────
     for s in tsettings:
