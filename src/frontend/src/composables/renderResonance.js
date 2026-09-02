@@ -79,7 +79,7 @@ function rgbString(r, g, b) {
   return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`
 }
 
-function mixColor(a, b, t) {
+export function mixColor(a, b, t) {
   if (t <= 0) return a
   if (t >= 1) return b
   const [ar, ag, ab] = hexToRgb(a)
@@ -89,7 +89,7 @@ function mixColor(a, b, t) {
 
 // Amplitude-weighted blend of an oscillator set's die colors — the "signature
 // hue" an entity collapses toward instead of draining to white.
-function weightedColor(osc) {
+export function weightedColor(osc) {
   let r = 0
   let g = 0
   let b = 0

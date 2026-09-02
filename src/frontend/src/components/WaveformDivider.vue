@@ -1,15 +1,15 @@
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { RESONANCE, groupByTraitsetDie, sampleAt, totalAmplitude } from '@/composables/resonance.js'
-import { drawResonanceFrame } from '@/composables/renderResonance.js'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { RESONANCE, groupByTraitsetDie, sampleAt, totalAmplitude, easeInOutCubic, sinApprox } from '@/composables/resonance.js'
+import { getDieColor, weightedColor, mixColor } from '@/composables/renderResonance.js'
 
 /**
- * WaveformDivider — a section break whose edge is the entity's linear
- * resonance "tangle" at a given collapse progress. It reuses the same renderer
- * as the Resonance Lab (non-periodic frequencies), fills the top/bottom colors
- * around the composite curve, and drifts continuously via the renderer's own
- * time-based drift. This is per-frame (like the Lab), not a pre-rendered mask,
- * so it matches the exact non-periodic look.
+ * WaveformDivider — a small section break whose edge is the entity's linear
+ * resonance "tangle" at a given collapse progress. This is a dedicated slim
+ * renderer (not the full drawResonanceFrame path): it samples the composite
+ * once per column, reuses those values for both the clip fill and the group
+ * lines, and draws single strokes with normal compositing so it stays cheap on
+ * phones.
  */
 const props = defineProps({
   osc: { type: Array, default: () => [] },
@@ -30,6 +30,21 @@ const canvasEl = ref(null)
 let rafId = null
 const isMobile = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 640)
 
+const groups = computed(() => groupByTraitsetDie(props.osc))
+const total = computed(() => totalAmplitude(groups.value, []))
+const entityColor = computed(() => weightedColor(groups.value))
+const maxAmp = computed(() => groups.value.reduce((m, o) => Math.max(m, o.amp), 0) || 1)
+
+// Collapse convergence amount, mirroring the Lab's expand phase at `progress`.
+const conv = computed(() => {
+  const sum = props.collapseFraction + props.transformFraction + props.expandFraction || 1
+  const expandStart = (props.collapseFraction + props.transformFraction) / sum
+  const p = Math.max(0, Math.min(1, props.progress))
+  const s = easeInOutCubic(Math.max(0, Math.min(1, (p - expandStart) / (1 - expandStart))))
+  const c = 1 - s
+  return easeInOutCubic(Math.max(0, Math.min(1, (c - 0.5) * 2)))
+})
+
 function draw(now) {
   const canvas = canvasEl.value
   if (!canvas) return
@@ -45,40 +60,56 @@ function draw(now) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, w, h)
 
-  // Bottom region (below the composite edge).
+  const gs = groups.value
+  const tot = total.value
+  const ec = entityColor.value
+  const mx = maxAmp.value
+  const cv = conv.value
+  const baseDrift = props.drift * (now / 1000)
+  const ampScale = h / 2 - 2
+  const N = isMobile ? 72 : 160
+
+  // Composite offsets — sampled once, reused for fill and as the target line.
+  const offs = new Float32Array(N + 1)
+  for (let i = 0; i <= N; i++) {
+    const t = i / N
+    const v = tot > 0 ? sampleAt(gs, t / props.renderDivisor + baseDrift) / tot : 0
+    offs[i] = v * ampScale
+  }
+
+  // Bottom region.
   ctx.fillStyle = props.colorBottom
   ctx.fillRect(0, 0, w, h)
 
-  // Top region (above the composite curve) — the clip edge.
-  const groups = groupByTraitsetDie(props.osc)
-  const total = totalAmplitude(groups, [])
-  const baseDrift = props.drift * (now / 1000)
-  const ampScale = h / 2 - 2
-  const N = isMobile ? 96 : 160
+  // Top region (clip edge).
   ctx.beginPath()
   ctx.moveTo(0, 0)
-  for (let i = 0; i <= N; i++) {
-    const t = i / N
-    const v = total > 0 ? sampleAt(groups, t / props.renderDivisor + baseDrift) / total : 0
-    ctx.lineTo(t * w, h / 2 - v * ampScale)
-  }
+  for (let i = 0; i <= N; i++) ctx.lineTo((i / N) * w, h / 2 - offs[i])
   ctx.lineTo(w, 0)
   ctx.closePath()
   ctx.fillStyle = props.colorTop
   ctx.fill()
 
-  // Tangle lines (component dice/groups converging at `progress`).
-  drawResonanceFrame(ctx, w, h, props.osc, props.osc, props.progress, {
-    mode: props.mode,
-    layout: 'linear',
-    renderDivisor: props.renderDivisor,
-    drift: props.drift,
-    collapseFraction: props.collapseFraction,
-    transformFraction: props.transformFraction,
-    expandFraction: props.expandFraction,
-    lowQuality: isMobile,
-    timeMs: now,
-  })
+  // Tangle: one thin stroke per group, converging toward the composite.
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  for (const g of gs) {
+    const strength = g.amp / mx
+    const color = mixColor(getDieColor(g.die, g.negative), ec, cv)
+    const dr = g.driftMul ?? 1
+    ctx.beginPath()
+    ctx.strokeStyle = color
+    ctx.globalAlpha = 0.8
+    ctx.lineWidth = 1.1
+    for (let i = 0; i <= N; i++) {
+      const t = i / N
+      const own = sinApprox(2 * Math.PI * g.freq * (t / props.renderDivisor + baseDrift * dr) + g.phase) * ampScale * (0.35 + 0.65 * strength)
+      const off = own + (offs[i] - own) * cv
+      const y = h / 2 - off
+      i === 0 ? ctx.moveTo(t * w, y) : ctx.lineTo(t * w, y)
+    }
+    ctx.stroke()
+  }
 }
 
 function loop(now) {
