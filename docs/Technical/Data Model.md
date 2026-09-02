@@ -113,6 +113,13 @@ Polarity is **baked** onto a trait setting at creation (non-null), resolved from
 | `end_of_session` | At session end |
 | `after_beats` | After N beats (parameterized) |
 | `on_condition` | When a runtime condition is met |
+| `on_roll` | At the next matching roll event (per-roll deferral) |
+| `on_set` | At the next matching die-set event (per-roll deferral) |
+| `on_result` | At the next matching roll-result event (per-roll deferral) |
+| `on_contest_win` | At the next contest win |
+| `on_contest_loss` | At the next contest loss |
+| `on_success` | At the next successful test (tier != fail) |
+| `on_failure` | At the next failed test (tier == fail) |
 
 ### OutcomeTier
 
@@ -318,12 +325,17 @@ SFX (Special Effect) registry. Defines named abilities with triggers, costs, and
 | `_key` | string | ✅ | e.g. `sfx-law-bridge`, `sfx-overcharge` |
 | `name` | string | ✅ | Display name |
 | `description` | string | | Flavor text and usage notes |
-| `trigger` | string | ✅ | When the SFX auto-fires (or `manual` for player-activated): `manual`, `on_roll`, `on_result`, `on_complication`, `on_botch`, `on_success`, `on_failure`, `on_contest_win`, `on_contest_loss`, `on_give_in`, `on_push`, `on_taken_out`, `on_prevent_taken_out`, `on_location_change`, `on_trait_change`, `on_trait_learn`, `on_trait_offered`, `on_relationship_create` |
-| `menu_context` | string? | | Consequence menu this SFX appears in (e.g. `test_success`, `contest_win`, `contest_give_in`, `hitch`); null = trigger-driven |
+| `trigger` | string | ✅ | Single activation axis — an auto-fire event, `manual`, or a consequence menu (e.g. `manual`, `on_roll`, `on_result`, `on_complication`, `test_success`, `contest_win`) |
+| `source_kind` | string? | | Declarative owner type this SFX carries — `trait_setting` / `traitset_setting` / `entity` / `projection`; null = bucket/passive (no meaningful origin) |
+| `placement` | string? | | Activation surface: `auto` (event-driven), `sheet` (owner card), `menu` (post-roll consequence menu); null = derived from `trigger` |
 | `conditions` | Condition[] | | Optional gates evaluated against the entity before firing |
 | `effects` | Effect[] | | List of declarative effects |
+| `duration` | EffectDuration? | | How long the SFX stays in effect once triggered; default one roll, null = indefinite (until cleared) |
 
 **ID convention:** `sfx-{slug}` (e.g. `sfx-hinder`, `sfx-law-bridge`)
+
+> [!note] Legacy folds
+> `menu_context` is folded into `trigger` on load; `limit` (string) is folded into a `NARRATIVE` condition.
 
 ### Effect (sub-document of SFX and life-path entries)
 
@@ -331,17 +343,23 @@ Declarative effect — describes *what* changes, not *how*. Shared by SFX and li
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `timing` | string | `immediate`, `end_of_beat`, `end_of_scene`, `end_of_session`, `after_beats`, `on_condition` |
+| `timing` | EffectTiming | When it fires (see [[#EffectTiming]]; default `immediate`) |
 | `type` | string | Effect type (e.g. `modify_trait`, `transfer_razmerit`, `life_path`, `relationship`) |
 | `action` | string | What to do (e.g. `gain`, `step_up`, `gain_or_step_up`, `step_down`, `set`, `earn`, `spend`, `next_step`) |
-| `target` | string | An id, `"self"`, or a `{choose_*}` placeholder |
-| `entity` | string? | Explicit subject entity; `""` or `"self"` = the applying entity |
+| `target` | string | Legacy single-reference fallback: an id, `"self"`, or a `{choose_*}` / `{random:*}` token |
+| `entity` | string | Explicit subject entity; `""` or `"self"` = the applying entity |
 | `result` | string? | Die, integer, relationship type, or "" |
-| `target_scope` | string? | Optional narrowing for target choice |
-| `entity_scope` | string? | Optional narrowing for entity choice |
+| `target_scope` | string? | Optional narrowing for runtime target choice |
+| `entity_scope` | string? | Optional narrowing for runtime entity choice |
+| `target_filter` | dict | Candidate field predicates (e.g. `{"starter_location": true}`) |
+| `die_filter` | dict | Roll-die predicates for roll-deferred effects (e.g. `{"role": null}`) |
+| `conditions` | Condition[] | Per-effect gate (reuses the SFX condition model) |
 | `negative` | bool | Trait-grant effects only: bake the created trait as negative polarity |
 | `context` | object? | Optional dict (e.g. relationship description, `learner`, `steps`) |
 | `duration` | EffectDuration? | When set, schedules the inverse effect on expiry |
+| `target_spec` | TargetSpec? | Structured targeting pipeline (the new model); null = legacy `target` string, lazily migrated |
+| `entity_spec` | TargetSpec? | Structured subject resolution (who the effect applies to) |
+| `refs` | dict[str, TargetRef] | Named multi-target references; `target`/`entity` are the legacy single-reference fallback |
 
 ### `relationships` (edge)
 
@@ -409,6 +427,87 @@ Player identity for session persistence.
 | `role` | string | | `player` or `architect` (default `player`) |
 
 
+### `entity_images`
+
+Metadata for a generated image stored per-entity, per-universe. Files live at `media/imagen/{entity_id}/{universe}/{image_id}_{variant}.{ext}`.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `_key` | string | ✅ | UUID |
+| `entity_id` | string | ✅ | Owning entity |
+| `projection_id` | string? | | Owning body; empty = entity-level default (fallback for any body) |
+| `universe` | string | ✅ | Universe key |
+| `image_type` | ImageType | ✅ | `uploaded`, `imagen`, or `animated` |
+| `roles` | string[] | | `background`, `sheet`, `navdot` |
+| `prompt` / `negative_prompt` | string | | Generation prompts |
+| `loras` | string[] | | LoRA tags |
+| `width` / `height` / `seed` / `steps` | int | | Generation parameters |
+| `filename` | string | | Base filename without variant suffix/extension |
+| `extension` | string | | `png` (or `webp`, etc.) |
+| `created_at` | string | | ISO 8601 |
+
+### `historical_records`
+
+Append-only historical events (Blue Book / change log).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `_key` | string | ✅ | Record id |
+| `entity_id` | string | | Owning entity |
+| `record_type` | HistoricalRecordType | | `roll_table`, `contest`, or `transversal` |
+| `universe` | string | | Universe key |
+| `session_id` | string | | Session the event happened in |
+| `data` | dict | | Type-specific payload |
+| `created_at` | string | | ISO 8601 |
+
+### `life_paths`
+
+Life-path definitions — an entry point into a graph of linked roll tables. Discovery gating is optional.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `_key` | string | ✅ | e.g. `lp-...` |
+| `name` | string | ✅ | Display name |
+| `universe` | string | ✅ | Universe key |
+| `description` | string | | Explainer text |
+| `entry_table_id` | string | | `_key` of the first RollTable in the flow |
+| `discovery` | DiscoveryBlock? | | Discovery conditions; null = always visible |
+
+### `messages`
+
+Persistent in-fiction messages between entities.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `_key` | string | ✅ | Message id |
+| `sender_entity_id` | string | ✅ | Sending entity |
+| `recipient_entity_id` | string | ✅ | Receiving entity |
+| `kind` | MessageKind | | `letter`, `journal`, `report`, or `gm_note` |
+| `title` / `body` | string | | Content |
+| `images` | string[] | | Media paths |
+| `after_ids` | string[] | | Ordering: message ids this follows |
+| `threads` | string[] | | Thread tags |
+| `created_at` | string | | ISO 8601 |
+
+### `roll_tables`
+
+Reusable roll tables whose entries execute effects when selected.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `_key` | string | ✅ | e.g. `rt-...` |
+| `name` | string | ✅ | Display name |
+| `universe` | string | | Universe key |
+| `life_path` | string? | | Owning life-path id; null = shared/general |
+| `scheme` | RollTableScheme | | `range`, `weight`, `tier`, or `index` (default `range`) |
+| `roll_source` | RollSource | | `fixed_die` or `trait_dice` |
+| `trait_dice_count` | int | | Number of trait dice to roll (`trait_dice`; N=1 for now) |
+| `die` | DieType | | Die size for range/index rolls |
+| `check` | RollTableCheck? | | Legacy dice-pool check; unused |
+| `entries` | RollTableEntry[] | | Ordered entries |
+| `canvas_x` / `canvas_y` | float? | | Canvas layout persistence |
+
+
 ## Sub-Models
 
 ### Zone
@@ -447,6 +546,103 @@ base ``name`` in the UI.  First match wins; fallback is the base name.
 | `ChallengeResult` | Challenge pool outcome: `targeted_die`, `effect_die`, `outcome`, `new_challenge_rating` |
 | `ContestResult` | Head-to-head result: `winner`, `player_result`, `opponent_result`, `pushed`, `push_cost` |
 | `PoolAssembly` | Per-location dice pool tracking: `entity_id`, `location_id`, `dice` array, `opposition_entity_id`, `pushed_this_beat` |
+
+### Condition
+
+A configurable, automatically-evaluated gate or limit (parallel to `Effect`).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | ConditionType | Which predicate to evaluate (default `always`) |
+| `subject` | string | `""` = current entity; else literal id or `{variable}` |
+| `target` | string | trait / location / entity id (or `{variable}`) |
+| `value` | string? | Threshold (e.g. rank number) |
+| `operator` | string | Numeric comparator for `has_razmerit` (`<`, `<=`, `==`, `!=`, `>=`, `>`) |
+| `narrative` | string | Human-readable fallback text |
+| `spec` | TargetSpec? | `target_path`: a targeting path resolved non-empty |
+
+`ConditionType` values: `always`, `at_location`, `has_trait`, `has_effective_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `has_razmerit`, `entity_type`, `user_role`, `narrative`, `unplaced`, `in_universe`, `phase`, `contest_outcome`, `hitch`, `roll_tier`, `test_outcome`, `source_rating`, `target_path`.
+
+### Attunement
+
+Active temporary addition of a universe to an entity's effective universes (stored on `Entity.attunements`).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `universe` | string | Universe key |
+| `scope` | AttunementScope | `self` (entity only) or `domain` (occupants in its location subtree) |
+| `until` | EffectTiming? | Expiry timing (driven by the effects system) |
+| `source_sfx_id` | string? | Originating SFX |
+
+### TargetingBan
+
+Directional ban: the owning entity may not target `target_id`. Expiry is driven by a scheduled event.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `target_id` | string | The entity id that is banned as a target |
+
+### Timer / EffectDuration
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | string | Advancement signal: `beat`, `scene`, `session`, or a state-change event (e.g. `location_changed`) |
+| `remaining` | int | Countdown; `0` (or event `immediate`) fires on the next pass |
+
+`EffectDuration` = `{ timers: Timer[], combine: TimerCombine }` where `TimerCombine` is `first_to_fire` or `all_transpired`. Turns a forward effect into a temporary one (schedules the inverse on expiry).
+
+### TargetRef / TargetSpec
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `value` | string | Concrete id after resolution — or, before resolution, a literal id / `self` / `{choose_*}` / `{random:*}` token |
+| `spec` | TargetSpec? | Structured pipeline resolving `value` at fire time (null = literal) |
+| `scope` | string? | Narrows runtime choice for `{choose_*}` / `{random:*}` |
+
+`TargetSpec` is an ordered `steps` list of `select` / `filter` / `navigate` / `aggregate` / `literal` / `random` / `choose` / `evaluate` steps (the structured, type-checked targeting pipeline; see [[Targeting Model]]).
+
+### ConsequenceOption
+
+Selectable entry in the post-roll consequence menu.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Option id |
+| `label` | string | Display label |
+| `side` | string | `player`, `gm`, or `either` |
+| `effects` | Effect[] | Effects to apply |
+| `source` | string | `base`, `entity`, or `sfx` |
+
+### RollTableEntry / RollTableCheck
+
+`RollTableEntry` (per entry; which fields are meaningful depends on the table `scheme`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `label` / `description` | string | Display / flavor |
+| `min_value` / `max_value` | int? | range scheme |
+| `weight` | int? | weight scheme |
+| `tier` | OutcomeTier? | tier scheme |
+| `conditions` | Condition[] | Entry gates |
+| `effects` | Effect[] | Effects executed on selection |
+
+`RollTableCheck` (legacy dice-pool check metadata): `trait_ids`, `difficulty` (DieType, default d6), `free_choice` (bool).
+
+`RollTableScheme`: `range`, `weight`, `tier`, `index`. `RollSource`: `fixed_die`, `trait_dice`.
+
+### Life-path sub-models
+
+`DiscoveryBlock` (discovery conditions — any one met → discovered): `at_location` (string[]), `knows_entity` (string[]), `possesses_trait` (string[]), `has_trait_rating` (dict[trait→DieType]), `has_relationship` (string[]).
+
+`Enrollment` (a character's membership in a faction's life path): `faction_id`, `path_id`, `mustered` (bool), `mishap_muster` (bool).
+
+`PendingTerm` (in-progress term checkpoint): `faction_id`, `path_id`, `current_table_id`, `continuation` (string[]), `return_map` (dict).
+
+### Small enums
+
+- `ImageType`: `uploaded`, `imagen`, `animated`
+- `MessageKind`: `letter`, `journal`, `report`, `gm_note`
+- `HistoricalRecordType`: `roll_table`, `contest`, `transversal`
 
 ---
 
