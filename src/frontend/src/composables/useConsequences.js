@@ -15,7 +15,7 @@ export function useConsequences() {
         `query($entityId: ID!, $side: String!) {
           consequenceOptions(entityId: $entityId, side: $side) {
             id label side source
-            effects { timing type action target result targetScope targetFilter negative context }
+            effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } }
           }
         }`,
         { entityId, side }

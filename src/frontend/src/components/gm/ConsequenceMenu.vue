@@ -72,8 +72,11 @@ watch(() => [props.entityId, props.side, props.excludeIds], load)
 async function choose(opt) {
   const result = await applyOption(props.entityId, opt, props.effectDie)
   if (!result) return
-  if (result.pendingChoices && result.pendingChoices.length) {
-    pendingChoices.value = result.pendingChoices
+  const structured = (result.structured || []).map((c, i) => ({ ...c, index: i, entity_id: props.entityId }))
+  const legacy = (result.pendingChoices || []).map((c, i) => ({ ...c, index: i, entity_id: props.entityId }))
+  const allChoices = [...structured, ...legacy]
+  if (allChoices.length) {
+    pendingChoices.value = allChoices
     phase.value = 'wizard'
   } else {
     applied.value = result.applied || ['(no mechanical effect)']
@@ -83,7 +86,8 @@ async function choose(opt) {
 }
 
 async function finishResolve(resolutions) {
-  const result = await resolveEffectTargets(props.entityId, resolutions)
+  const clean = (resolutions || []).map(({ entity_id, ...rest }) => rest)
+  const result = await resolveEffectTargets(props.entityId, clean)
   applied.value = result?.applied || []
   phase.value = 'done'
   emit('applied', applied.value)
