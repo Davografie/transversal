@@ -403,6 +403,10 @@ watch([children, collapsedKeys, viewHeight], () => nextTick(() => {
   autoCollapse()
   measureSelf()
 }))
+// The sibling stack re-centers (or this panel is re-anchored) without a size
+// change, which ResizeObserver alone misses — re-measure on position change so
+// the action rail follows the panel instead of stranding at the pre-move spot.
+watch([effectiveTop, effectiveLeft], () => nextTick(measureSelf))
 watch(childSizes, () => nextTick(autoCollapse), { deep: true })
 watch(() => props.anchor, () => { if (isRoot.value) computeRootPosition() })
 
