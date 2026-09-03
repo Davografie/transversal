@@ -69,6 +69,14 @@ An SC is **available to play exactly when its main is active** — "active" = th
 - **Take over a peer GMC** — pick an existing authored SC (the available-SC picker).
 - **Create from scratch** — roll a new one (the roll-table entry point).
 
+## Sheet & base difficulty
+
+There is **no structural GMC/PC split** — an entity is an entity, and "GMC" is just *fewer traits* (and, practically, GM-controlled). A faction or baddie that has figured out Transversal simply has projections and razmerit like anything else. The sheet **adapts on effective trait count**: a flat trait list (one look) when traits are few, and the trait-set split only when `entity + projection` effective traits exceed a threshold. So a low-trait PC and a low-trait GMC render identically, and a big baddie with many traits automatically gets the split view.
+
+**Base difficulty** is a content field, not a sheet type — a GMC's baseline opposition die (the Cortex "minor GMC = a die" case), shown prominently, so even a GMC with zero authored traits can still oppose a roll.
+
+*Open:* the flat→split threshold number; "effective" = entity + projection; base difficulty as a dedicated field vs. just trait dice.
+
 ## Support cast tiers
 
 - **Companion** (spirit / spirit beast / artifact spirit / the follower) — *main-anchored*, recurring, defined by a **bond** + a **mystery/origin**. The rewarding tier; played by other players.
@@ -105,6 +113,9 @@ Razmerit stays **entity-scoped**. A support character **earns its own razmerit**
 
 ## Open questions
 
+- [ ] **Flat→split threshold** — what effective-trait count flips the sheet from a flat list to the trait-set split?
+- [ ] **"Effective" trait count** — entity + projection combined? (lean: yes)
+- [ ] **Base difficulty** — a dedicated field on the entity, or just the GMC's trait dice? (lean: dedicated)
 - [ ] **Roll-table menu mode** — is "menu with costs" a property of the *table* or per-*entry* (some entries cost, others don't)? Define the cost/selection model.
 - [ ] **Grant/show roll-table effect** — does "access" unlock permanently (the table joins the SC's available set) or surface one-shot (open it now)? Define the effect action semantics.
 - [ ] **Roll-table granularity** — universe archetype table, then per location-type / faction; how fine-grained do the tables get? Lean: universe → location-type first.
