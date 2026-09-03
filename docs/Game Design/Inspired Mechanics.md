@@ -385,6 +385,10 @@ zones:
 
 ## Troupe Play
 
+> [!note] Detailed design
+> The living design (spotlight model, support-cast ownership, roll-table generation,
+> razmerit economy) lives in [[Troupe Play]]. This section is the RAW framing.
+
 **Troupe play** is a session structure where players rotate between their main character and companion GMCs. Inspired by Ars Magica.
 
 The persistent home is **Earth** — every main character originates there and carries a stake in it (see [[Projections and Transversal#The Earth-Bond]]). Rotation is **soft**: the GM gauges who hasn't been in the spotlight, and players can ask. A last-played **recency list** (ordered "who last played their main") surfaces who has been quiet, but it never forces rotation.
