@@ -408,6 +408,15 @@
     <div v-else class="empty">No entity loaded</div>
   </div>
 
+  <RollTableMenu
+    v-if="rollTableMenu"
+    :entity-id="entity.id"
+    :table-id="rollTableMenu.tableId"
+    :title="rollTableMenu.name"
+    :entity-razmerit="entity.razmerit ?? 0"
+    @close="rollTableMenu = null"
+  />
+
 </template>
 
 <script setup>
@@ -421,6 +430,7 @@ import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
 import DieIcon from './DieIcon.vue'
 import MediaImage from './MediaImage.vue'
+import RollTableMenu from './gm/RollTableMenu.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -632,6 +642,7 @@ function goToNextSet() {
 const sfxActivations = ref({})
 const sfxCatalog = ref({})  // sfxId → { name, description }
 const availableSfxIds = ref(null)  // null = not loaded; else the conditions-filtered id list
+const rollTableMenu = ref(null)  // { sfxId, tableId, name } | null
 const SFX_PHASES = {
   'sfx-hinder': ['adding'],
   'sfx-spray-n-pray': ['adding'],
@@ -1084,6 +1095,14 @@ function sfxDescription(sfxId) {
   return sfxCatalog.value[sfxId]?.description || ''
 }
 
+// A roll-table-as-menu SFX carries a single roll_table/menu effect whose
+// ``target`` is the table id. Clicking it opens the picker instead of firing.
+function rollTableMenuEffect(sfxId) {
+  const sfx = sfxCatalog.value[sfxId]
+  if (!sfx) return null
+  return (sfx.effects || []).find(e => e.type === 'roll_table' && e.action === 'menu') || null
+}
+
 // A condition-blocked SFX is owned (it appears on the sheet) but its static
 // conditions (e.g. source_rating, entity_type) fail at this moment, so it can't
 // fire. ``null`` means availability hasn't loaded yet (don't block optimistically).
@@ -1117,7 +1136,7 @@ async function fetchSfxCatalog() {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `query { sfxs { id name description } }` }),
+      body: JSON.stringify({ query: `query { sfxs { id name description effects { timing type action target entity result } } }` }),
     })
     const json = await r.json()
     const map = {}
@@ -1327,6 +1346,12 @@ function findTsIdForSfx(sfxId) {
 }
 
 async function activateSfx(sfxId, sourceId = null) {
+  const menu = rollTableMenuEffect(sfxId)
+  if (menu && menu.target) {
+    rollTableMenu.value = { sfxId, tableId: menu.target, name: sfxName(sfxId) }
+    return
+  }
+
   const active = sfxActive(sfxId)
 
   if (!active) {
