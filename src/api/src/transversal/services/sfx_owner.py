@@ -199,6 +199,35 @@ def ensure_give_in_sfx(repo) -> None:
     ))
 
 
+def ensure_support_cast_sfx(repo) -> None:
+    """Create/seed the roll-table-as-menu support-cast SFX (B58). Idempotent.
+
+    A manual, sheet-placed SFX carrying a single ``roll_table/menu`` effect that
+    opens the Emberline support-cast table. Granted to the ``table`` bucket so
+    every entity can self-serve an SC; faction gating lives in the table entries.
+    """
+    from transversal.domain import Effect, EffectTiming, SFX
+
+    sfx_id = "sfx-roll-support-cast"
+    if repo.get_sfx(sfx_id) is None:
+        repo.create_sfx(SFX(
+            id=sfx_id,
+            name="Roll Support Cast",
+            description="Open the support-cast roll table to generate a support character — pick an archetype and pay its cost.",
+            trigger="manual",
+            effects=[
+                Effect(
+                    timing=EffectTiming.IMMEDIATE,
+                    type="roll_table",
+                    action="menu",
+                    target="rt-emberline-support-cast",
+                ),
+            ],
+        ))
+
+    add_sfx_to_owner(repo, "table", "table", sfx_id)
+
+
 def ensure_targeting_ban_sfx(repo) -> None:
     """Create/migrate the give-in targeting-ban SFX. Idempotent.
 
