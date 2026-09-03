@@ -386,8 +386,7 @@ zones:
 ## Troupe Play
 
 > [!note] Detailed design
-> The living design (spotlight model, support-cast ownership, roll-table generation,
-> razmerit economy) lives in [[Troupe Play]]. This section is the RAW framing.
+> The living design (spotlight model, support-cast ownership, roll-table generation, razmerit economy) lives in [[Troupe Play]]. This section is the RAW framing.
 
 **Troupe play** is a session structure where players rotate between their main character and companion GMCs. Inspired by Ars Magica.
 
