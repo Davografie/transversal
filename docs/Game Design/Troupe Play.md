@@ -43,7 +43,8 @@ They are different signals and must not share a field.
 
 On `Player`:
 
-- `main_entity_ids: list[str]` — the explicit mains (1+).
+- **`agency` edge** (`player → entity`) carries a **`main` flag** — the player's mains are the owned entities whose `agency` edge is flagged `main` (1+).
+- **`support` edge** (`entity → entity`, directional SC → main) — marks a support character and who it supports.
 - `last_spotlight_at: str | None` — recency timestamp (the sort key).
 - `last_main_entity_id: str | None` — the main last taken control of (the row's face).
 
@@ -53,11 +54,11 @@ All three stamp together on the single "took control of a main" event. `last_mai
 
 ## Support character model
 
-An **SC is a relationship, not just a character** — a `(controlling player × main)` pair joined by a **`supports` edge** (directional: SC → main). The character (traits/name) hangs off the SC entity; `supports` is the *only* SC-specific data. Ownership is many-to-many: a main has a **cast** (1→many SCs); a player owns many SCs across mains.
+An **SC is a relationship, not just a character** — an entity owned by its controlling player via `agency` (with `main: false`), joined to the main it supports via a **`support` edge** (directional: SC → main). The character (traits/name) hangs off the SC entity; the `support` edge is the *only* SC-specific data. Ownership is many-to-many: a main has a **cast** (1→many SCs); a player owns many SCs across mains.
 
 - **Location is generic** — every projection already has one; an SC needs nothing special there.
 - **Mobility = the generic `follow` mechanic** (any projection can follow). No anchor tag: a companion is an SC with a *follow* link to the main; a location-anchored SC has none. See the `#following` item in [[to-do]].
-- **`teleport to main`** — an authored **SFX** (no new plumbing): a default SFX on support characters that sets their location to their main's. Same-universe only; cross-universe rejoining goes through transversal.
+- **`teleport to main`** — an authored **SFX** (no new plumbing): a default SFX on support characters that sets their location to their main's (the `support` edge target). Same-universe only; cross-universe rejoining goes through transversal.
 - **Lifecycle = dormant.** Location-anchored SCs persist when the main leaves and reactivate on return — a main accumulates a dormant cast at every place it's been.
 - **Generation = roll tables (self-serve).** The support player rolls their own SC; no GM handout.
 
