@@ -53,11 +53,21 @@ All three stamp together on the single "took control of a main" event. `last_mai
 
 ## Support character model
 
-An **SC is a relationship, not just a character** — a triple of `(controlling player × main × anchor)`, with the character (traits/name) hanging off it. Ownership is many-to-many: a main has a **cast** (1→many SCs); a player owns many SCs across mains.
+An **SC is a relationship, not just a character** — a `(controlling player × main)` pair joined by a **`supports` edge** (directional: SC → main). The character (traits/name) hangs off the SC entity; `supports` is the *only* SC-specific data. Ownership is many-to-many: a main has a **cast** (1→many SCs); a player owns many SCs across mains.
 
-- **Mobility = the `follow` mechanic.** No anchor tag. A companion is an SC with a *follow* link to the main (its location tracks the main); a location-anchored SC has none (its location is its home). See the `#following` item in [[to-do]].
+- **Location is generic** — every projection already has one; an SC needs nothing special there.
+- **Mobility = the generic `follow` mechanic** (any projection can follow). No anchor tag: a companion is an SC with a *follow* link to the main; a location-anchored SC has none. See the `#following` item in [[to-do]].
+- **`teleport to main`** — a one-shot "join the main's current location" button, powered by `supports` (the SC already knows who its main is). Same-universe only; cross-universe rejoining goes through transversal.
 - **Lifecycle = dormant.** Location-anchored SCs persist when the main leaves and reactivate on return — a main accumulates a dormant cast at every place it's been.
 - **Generation = roll tables (self-serve).** The support player rolls their own SC; no GM handout.
+
+## Availability
+
+An SC is **available to play exactly when its main is active** — "active" = the main's player is actively controlling it. That's the same event as the spotlight stamp: *take control of a main* → stamp `last_spotlight_at`, mark the main active, and light up its cast. The switcher **greys out** (does not hide) SCs whose main is inactive.
+
+**Two ways to assume a support character:**
+- **Take over a peer GMC** — pick an existing authored SC (the available-SC picker).
+- **Create from scratch** — roll a new one (the roll-table entry point).
 
 ## Support cast tiers
 
@@ -77,9 +87,9 @@ An **SC is a relationship, not just a character** — a triple of `(controlling 
 
 **Open:** confirm `discover` **instantiates-and-executes** the path for the current character (vs. only unlocking it for the catalog) — see [[#Open questions]].
 
-## Razmerit / deed economy
+## Razmerit / roll-table access
 
-Playing a support character **earns razmerit** for the *controlling player's* own main — support play is the earning vehicle, not downtime. Razmerit then buys deeds/loresheets (Legend of the Wulin shape), e.g. **promoting a dormant location SC into a following companion** (a deed that adds a `follow` link to an existing SC).
+Razmerit stays **entity-scoped**. A support character **earns its own razmerit** while played, and spends it to **buy roll-table access** — unlocking rarer or deeper life-path tables, i.e. the SC advances by buying its way further along its path.
 
 ## UX
 
@@ -94,17 +104,16 @@ Playing a support character **earns razmerit** for the *controlling player's* ow
 ## Open questions
 
 - [ ] **Razmerit earn trigger** — per scene / per session / per "your SC did something that mattered" (a hitch, a successful aid)? Lean: on *accomplishment*, not time.
-- [ ] **Razmerit ownership** — does the earned razmerit belong to the player (their main) or the companion? Lean: the player's main.
-- [ ] **Deeds/loresheets** — new spend-target on existing razmerit, or a parallel currency?
+- [ ] **"Buy roll-table access"** — what exactly does razmerit unlock: rarer archetype tables, deeper life-path steps, location-specific casts? Define the buyable catalog.
 - [ ] **Roll-table granularity** — universe archetype table, then per location-type / faction; how fine-grained do the tables get? Lean: universe → location-type first.
 - [ ] **Roll output** — full SC (instantly playable) vs. archetype + player fills in the name/one trait? Lean: partial (roll the shape, let the player own the face).
 - [ ] **`discover` semantics** — does the existing `lifepath_discovery` / `lifepath_executor` support "discover → immediately execute," or is that a gap to file?
-- [ ] **Self-serve vs. GM-assign** — lean: self-serve with GM override.
 - [ ] **When does support end** — manual "return to main" only, or auto-return on spotlight? Lean: auto-return when my main's scene starts.
 
 ## Deferred
 
-The **fully-fledged GMC "brief"** + authoring **checklist** (how to make a GMC's personality/history/relations quickly reviewable with fresh eyes). Separately scoped; see the `#checklists` item in [[to-do]].
+- The **fully-fledged GMC "brief"** + authoring **checklist** (how to make a GMC's personality/history/relations quickly reviewable with fresh eyes). Separately scoped; see the `#checklists` item in [[to-do]].
+- **Multi-level razmerit** (projection / entity / player with conversion rates) — cool but complex to understand and not needed now.
 
 ## Related
 
