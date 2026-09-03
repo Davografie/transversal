@@ -57,13 +57,13 @@ An **SC is a relationship, not just a character** — a `(controlling player × 
 
 - **Location is generic** — every projection already has one; an SC needs nothing special there.
 - **Mobility = the generic `follow` mechanic** (any projection can follow). No anchor tag: a companion is an SC with a *follow* link to the main; a location-anchored SC has none. See the `#following` item in [[to-do]].
-- **`teleport to main`** — a one-shot "join the main's current location" button, powered by `supports` (the SC already knows who its main is). Same-universe only; cross-universe rejoining goes through transversal.
+- **`teleport to main`** — an authored **SFX** (no new plumbing): a default SFX on support characters that sets their location to their main's. Same-universe only; cross-universe rejoining goes through transversal.
 - **Lifecycle = dormant.** Location-anchored SCs persist when the main leaves and reactivate on return — a main accumulates a dormant cast at every place it's been.
 - **Generation = roll tables (self-serve).** The support player rolls their own SC; no GM handout.
 
 ## Availability
 
-An SC is **available to play exactly when its main is active** — "active" = the main's player is actively controlling it. That's the same event as the spotlight stamp: *take control of a main* → stamp `last_spotlight_at`, mark the main active, and light up its cast. The switcher **greys out** (does not hide) SCs whose main is inactive.
+An SC is **available to play exactly when its main is active** — "active" = the main's player is actively controlling it. That's the same event as the spotlight stamp: *take control of a main* → stamp `last_spotlight_at`, mark the main active, and light up its cast. The switcher **greys out** (does not hide) SCs whose main is inactive. Character switching (including assume-support) lives in the existing **player settings overlay**.
 
 **Two ways to assume a support character:**
 - **Take over a peer GMC** — pick an existing authored SC (the available-SC picker).
@@ -89,7 +89,9 @@ An SC is **available to play exactly when its main is active** — "active" = th
 
 ## Razmerit / roll-table access
 
-Razmerit stays **entity-scoped**. A support character **earns its own razmerit** while played, and spends it to **buy roll-table access** — unlocking rarer or deeper life-path tables, i.e. the SC advances by buying its way further along its path.
+Razmerit stays **entity-scoped**. A support character **earns its own razmerit** through the same paths as any character — hitch buying, d4 rolling, SFX triggering — with no new earn mechanism. It spends razmerit on **roll-table access**: a roll table in **menu mode** (entries with razmerit costs, selected rather than rolled) acts as an **upgrade package** for the SC.
+
+*To build:* a **grant / show roll-table** effect action — the generalization of the existing "discover life path" effect — so an effect can surface or unlock a roll table. Life-path discovery is already an effect; generic roll-table access isn't yet.
 
 ## UX
 
@@ -103,8 +105,8 @@ Razmerit stays **entity-scoped**. A support character **earns its own razmerit**
 
 ## Open questions
 
-- [ ] **Razmerit earn trigger** — per scene / per session / per "your SC did something that mattered" (a hitch, a successful aid)? Lean: on *accomplishment*, not time.
-- [ ] **"Buy roll-table access"** — what exactly does razmerit unlock: rarer archetype tables, deeper life-path steps, location-specific casts? Define the buyable catalog.
+- [ ] **Roll-table menu mode** — is "menu with costs" a property of the *table* or per-*entry* (some entries cost, others don't)? Define the cost/selection model.
+- [ ] **Grant/show roll-table effect** — does "access" unlock permanently (the table joins the SC's available set) or surface one-shot (open it now)? Define the effect action semantics.
 - [ ] **Roll-table granularity** — universe archetype table, then per location-type / faction; how fine-grained do the tables get? Lean: universe → location-type first.
 - [ ] **Roll output** — full SC (instantly playable) vs. archetype + player fills in the name/one trait? Lean: partial (roll the shape, let the player own the face).
 - [ ] **`discover` semantics** — does the existing `lifepath_discovery` / `lifepath_executor` support "discover → immediately execute," or is that a gap to file?
