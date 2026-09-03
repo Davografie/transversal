@@ -77,7 +77,7 @@
         <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
           <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx, 'bb-continuation': entryContinuations.has(m.id) }" draggable="true" @dragstart="dragStart($event, idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="touchStart($event, idx)">
           <div v-if="!entryContinuations.has(m.id)" class="bb-entry-header">
-            <div v-if="m.recordType" class="bb-record-badge">🎲 {{ recordLabel(m) }}</div>
+            <div v-if="m.recordType" class="bb-record-badge">{{ recordIcon(m) }} {{ recordLabel(m) }}</div>
             <div v-else-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
               <MediaImage v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" alt="" />
               <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
@@ -176,11 +176,21 @@ const MESSAGE_TAGS = `query{messageThreads}`
 const RELATED_ENTITIES = `query($eid:ID!,$q:String!){relatedEntities(entityId:$eid,query:$q){id name sheetPortrait}}`
 
 const RECORD_LABELS = { roll_table: 'Roll table', contest: 'Contest', transversal: 'Transversal' }
+const RECORD_ICONS = { roll_table: '🎲', contest: '⚔️', transversal: '🧭' }
 
 function recordLabel(m) { return RECORD_LABELS[m.recordType] || m.recordType }
+function recordIcon(m) { return RECORD_ICONS[m.recordType] || '🎲' }
 
 function formatRecord(rec) {
   const d = rec.data || {}
+  if (rec.recordType === 'transversal') {
+    const from = d.from_name || d.from_location || ''
+    const to = d.to_name || d.to_location || ''
+    if (from && to) return `${from} → ${to}`
+    if (to) return `Arrived at ${to}`
+    if (from) return `Departed ${from}`
+    return 'Location changed'
+  }
   const parts = [d.life_path_name, d.table_name, d.entry_label].filter(x => x != null && x !== '')
   return parts.length ? parts.join(' | ') : rec.recordType
 }
