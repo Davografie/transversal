@@ -202,7 +202,25 @@
 
         <div v-if="!gmMode" class="settings-section">
           <label class="settings-label">Create support character</label>
-          <button class="create-btn support-create-btn" @click="openCreateSupport">+ Roll a support character</button>
+          <template v-if="currentIsMain">
+            <button class="create-btn support-create-btn" @click="openCreateSupport(selfEntityId)">
+              + Roll a support character for {{ mainName(selfEntityId) }}
+            </button>
+          </template>
+          <template v-else-if="playerMains.length">
+            <div class="main-picker">
+              <button
+                v-for="m in playerMains" :key="m.id"
+                class="main-pick-btn"
+                :class="{ active: chosenMainId === m.id }"
+                @click="chosenMainId = m.id"
+              >{{ m.name || m.id }}</button>
+            </div>
+            <button class="create-btn support-create-btn" :disabled="!chosenMainId" @click="openCreateSupport(chosenMainId)">
+              + Roll a support character for {{ chosenMainId ? mainName(chosenMainId) : '…' }}
+            </button>
+          </template>
+          <p v-else class="support-hint">Designate a main first (★ on a character above) to roll a support character.</p>
         </div>
 
         <div class="settings-section">
@@ -253,13 +271,13 @@
   <ResonanceLab v-if="showResonanceLab" @close="showResonanceLab = false" />
   <RollTableMenu
     v-if="supportCastMenu"
-    :entity-id="selfEntityId"
+    :entity-id="supportCastMenu.mainEntityId"
     :table-id="supportCastMenu.tableId"
-    title="Create Support Character"
+    :title="supportCastMenu.mainName ? ('Create Support Character for ' + supportCastMenu.mainName) : 'Create Support Character'"
     :entity-razmerit="supportCastMenu.mainRazmerit"
     mode="create-support"
     :player-id="playerId"
-    :main-entity-id="selfEntityId"
+    :main-entity-id="supportCastMenu.mainEntityId"
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
@@ -600,6 +618,22 @@ const needsCharacterPick = computed(() =>
   !ownedEntityIds.value.includes(entityId.value) &&
   !currentSupport.value
 )
+
+// B64 — create-support targets a real designated main.
+const playerMains = computed(() => playerEntities.value.filter((e) => e.main))
+const currentIsMain = computed(() => playerEntities.value.some((e) => e.id === selfEntityId.value && e.main))
+const chosenMainId = ref(null)
+
+function mainName(id) {
+  if (!id) return ''
+  return playerEntities.value.find((e) => e.id === id)?.name || id
+}
+
+// Preselect a main when there's exactly one; clear a stale selection otherwise.
+watch(playerMains, (mains) => {
+  if (mains.length === 1) chosenMainId.value = mains[0].id
+  else if (!mains.some((m) => m.id === chosenMainId.value)) chosenMainId.value = null
+})
 
 const newCharName = ref('')
 const creatingChar = ref(false)
@@ -1768,14 +1802,19 @@ async function returnToMain() {
 }
 
 // B59 — create-from-scratch support cast (SFX → roll table → pick → pay → gain).
-const supportCastMenu = ref(null)  // { tableId, mainRazmerit } | null
+const supportCastMenu = ref(null)  // { tableId, mainEntityId, mainName, mainRazmerit } | null
 
-async function openCreateSupport() {
-  if (!playerId.value || !selfEntityId.value) return
+async function openCreateSupport(mainId) {
+  if (!playerId.value || !mainId) return
   const tableId = await fetchSupportCastTableId()
   if (!tableId) return
-  const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: selfEntityId.value })
-  supportCastMenu.value = { tableId, mainRazmerit: data?.entity?.razmerit ?? 0 }
+  const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: mainId })
+  supportCastMenu.value = {
+    tableId,
+    mainEntityId: mainId,
+    mainName: mainName(mainId),
+    mainRazmerit: data?.entity?.razmerit ?? 0,
+  }
 }
 
 function onSupportCreated() {
@@ -2072,6 +2111,10 @@ watch(gmMode, (v) => {
 .support-hint { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
 .support-create-btn { width: 100%; font-size: 12px; padding: 8px; background: var(--accent-dim); color: var(--text); border: none; border-radius: 6px; cursor: pointer; }
 .support-create-btn:hover { background: var(--accent); }
+.support-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.main-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.main-pick-btn { font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
+.main-pick-btn.active { border-color: var(--accent); background: rgba(64,136,212,0.18); color: #fff; }
 .main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: #0a0a0f; background: var(--accent); font-weight: 600; margin-left: 4px; }
 .main-toggle { flex-shrink: 0; cursor: pointer; font-size: 14px; color: var(--text-dim); opacity: 0.45; transition: color 0.15s, opacity 0.15s; line-height: 1; }
 .main-toggle.on { color: var(--accent); opacity: 1; }
