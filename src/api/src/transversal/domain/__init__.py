@@ -986,6 +986,9 @@ class RollTableEntry(BaseModel):
     weight: Optional[int] = None
     tier: Optional[OutcomeTier] = None
     conditions: list[Condition] = Field(default_factory=list)
+    # Price paid on pick (e.g. ``spend_razmerit``, ``step_down_trait``); applied
+    # before ``effects`` so a pick is pay-then-gain.
+    cost_effects: list[Effect] = Field(default_factory=list)
     effects: list[Effect] = Field(default_factory=list)
 
 

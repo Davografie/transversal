@@ -321,6 +321,7 @@ def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:
         label=e.label, description=e.description,
         min_value=e.min_value, max_value=e.max_value, weight=e.weight, tier=e.tier,
         conditions=[_condition_to_gql(c) for c in e.conditions],
+        cost_effects=[_effect_to_gql(x) for x in e.cost_effects],
         effects=[_effect_to_gql(x) for x in e.effects],
     )
 
@@ -498,6 +499,7 @@ def _entry_input_to_domain(e: RollTableEntryInput) -> DomainRollTableEntry:
         label=e.label, description=e.description,
         min_value=e.min_value, max_value=e.max_value, weight=e.weight, tier=e.tier,
         conditions=[_condition_input_to_domain(c) for c in e.conditions],
+        cost_effects=[_effect_input_to_domain(x) for x in e.cost_effects],
         effects=[_effect_input_to_domain(x) for x in e.effects],
     )
 
@@ -2229,6 +2231,22 @@ class Mutation:
         if structured:
             from transversal.services.roll_orchestrator import _emit_pending_choices
             _emit_pending_choices(str(entity_id), entity.current_universe or "", [], structured)
+        return _effects_result_to_gql(result, structured)
+
+    @strawberry.mutation
+    def apply_roll_table_entry(self, info: strawberry.Info, entity_id: strawberry.ID,
+                               table_id: strawberry.ID, index: int) -> EffectApplicationResult:
+        """Pick a roll-table entry as a menu choice: pay its cost effects, then
+        gain its effects. Returns applied summaries plus any pending target choices."""
+        from transversal.services.roll_table_menu import pick_roll_table_entry
+
+        repo = _em(info).repo
+        entity = repo.get_entity(str(entity_id))
+        if entity is None:
+            raise ValueError(f"Entity '{entity_id}' not found")
+        result, structured, _label, _cost = pick_roll_table_entry(
+            repo, entity, str(table_id), index
+        )
         return _effects_result_to_gql(result, structured)
 
     @strawberry.mutation

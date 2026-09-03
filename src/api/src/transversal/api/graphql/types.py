@@ -539,6 +539,7 @@ class RollTableEntry:
     weight: Optional[int] = None
     tier: Optional[OutcomeTier] = None
     conditions: list[Condition]
+    cost_effects: list[Effect] = strawberry.field(default_factory=list)
     effects: list[Effect]
 
 
@@ -575,6 +576,7 @@ class RollTableEntryInput:
     weight: Optional[int] = None
     tier: Optional[OutcomeTier] = None
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
+    cost_effects: list[EffectInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
 
 

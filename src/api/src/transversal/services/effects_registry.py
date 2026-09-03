@@ -749,6 +749,19 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         target_kind="life_path",
     ),
     EffectActionMeta(
+        action_id="open_roll_table",
+        label="Open Roll Table (Menu)",
+        description="Open a roll table as an interactive menu: pick an entry, pay its cost effects, then gain its effects",
+        category="either",
+        effect_type="roll_table",
+        effect_action="menu",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Roll Table", field_type="text", required=True),
+        ],
+        target_kind="roll_table",
+    ),
+    EffectActionMeta(
         action_id="next_step",
         label="Next Step",
         description="Advance the term to a roll table (target = table id, empty to continue)",
@@ -867,6 +880,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "create_asset": "Entity", "end_active_effect": "Entity", "create_projection": "Entity", "attune": "Attunement",
     "travel": "Travel", "set_location": "Travel",
     "discover_life_path": "Life Path", "next_step": "Life Path",
+    "open_roll_table": "Roll Table",
     "draft_life_path": "Life Path", "force_muster": "Life Path",
     "muster": "Life Path", "enroll_life_path": "Life Path",
     "create_relationship": "Relationship", "entity_targeting_ban": "Relationship",
