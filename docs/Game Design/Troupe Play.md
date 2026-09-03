@@ -128,5 +128,5 @@ Remaining **build** item (not a design question): the **roll-table-as-menu** eff
 
 - [[Inspired Mechanics#Troupe Play]] — RAW framing, scattering, session structure, GMC template.
 - [[Data Model]] — `Player`, `Projection.last_used_at`.
-- [[Tickets]] — B50 (recency), B51 (spotlight list), B52 (grog tables), B53 (companion authoring).
+- [[Tickets]] — B54–B61 (the troupe-play build).
 - [[Division of Labor]] — `troupe play` multi-role block.
