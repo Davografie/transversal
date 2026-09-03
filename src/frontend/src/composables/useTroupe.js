@@ -14,9 +14,8 @@ const error = ref(null)
 // currently active (the availability signal).
 const supportCharacters = ref([])
 
-// The support-cast roll-table id, resolved from the seeded `sfx-roll-support-cast`
-// SFX (its `roll_table/menu` effect target). Used by the B59 create-from-scratch
-// entry point so the table id lives in content, not duplicated in the frontend.
+// The support-cast roll-table id for a given main, resolved universe-aware by
+// the server (B65): ``rt-<universe>-support-cast`` with a generic fallback.
 const supportCastTableId = ref(null)
 
 const RECENCY_QUERY = `query {
@@ -65,18 +64,14 @@ export function useTroupe() {
     return supportCharacters.value
   }
 
-  async function fetchSupportCastTableId(force = false) {
-    if (supportCastTableId.value && !force) return supportCastTableId.value
+  async function fetchSupportCastTableId(mainId) {
+    if (!mainId) return null
     try {
       const data = await graphql(
-        `query { sfxs { id effects { type action target } } }`,
-        {},
+        `query($id: ID!) { supportCastTableId(entityId: $id) }`,
+        { id: mainId },
       )
-      const sfx = (data?.sfxs || []).find((s) => s.id === 'sfx-roll-support-cast')
-      const menu = (sfx?.effects || []).find(
-        (e) => e.type === 'roll_table' && e.action === 'menu',
-      )
-      supportCastTableId.value = menu?.target || null
+      supportCastTableId.value = data?.supportCastTableId || null
     } catch (e) {
       error.value = e?.message || String(e)
     }

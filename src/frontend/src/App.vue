@@ -1806,7 +1806,7 @@ const supportCastMenu = ref(null)  // { tableId, mainEntityId, mainName, mainRaz
 
 async function openCreateSupport(mainId) {
   if (!playerId.value || !mainId) return
-  const tableId = await fetchSupportCastTableId()
+  const tableId = await fetchSupportCastTableId(mainId)
   if (!tableId) return
   const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: mainId })
   supportCastMenu.value = {

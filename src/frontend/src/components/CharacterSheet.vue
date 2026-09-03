@@ -1353,9 +1353,22 @@ function findTsIdForSfx(sfxId) {
 async function activateSfx(sfxId, sourceId = null) {
   const menu = rollTableMenuEffect(sfxId)
   if (menu && menu.target) {
+    const isSupportCast = sfxId === 'sfx-roll-support-cast'
+    let tableId = menu.target
+    if (isSupportCast) {
+      // B65 — support-cast tables are universe-scoped: resolve from the main's
+      // current universe (falling back to the generic table) before opening.
+      const mainId = props.mainEntityId || props.entityId
+      const data = await graphql(
+        `query($id: ID!) { supportCastTableId(entityId: $id) }`,
+        { id: mainId },
+      )
+      tableId = data?.supportCastTableId || null
+      if (!tableId) return
+    }
     rollTableMenu.value = {
-      sfxId, tableId: menu.target, name: sfxName(sfxId),
-      mode: sfxId === 'sfx-roll-support-cast' && props.playerId && props.mainEntityId
+      sfxId, tableId, name: sfxName(sfxId),
+      mode: isSupportCast && props.playerId && props.mainEntityId
         ? 'create-support' : 'apply',
     }
     return

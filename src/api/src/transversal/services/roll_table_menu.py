@@ -27,6 +27,21 @@ def entry_razmerit_cost(entry: RollTableEntry) -> int:
     )
 
 
+def resolve_support_cast_table_id(repo, universe: str) -> Optional[str]:
+    """Resolve the support-cast roll table for a universe, with a generic fallback (B65).
+
+    Per-universe tables are ``rt-<universe>-support-cast`` (e.g. Emberline,
+    Three Realms); when a universe has none, the generic ``rt-support-cast`` is
+    used. Returns ``None`` when neither exists.
+    """
+    candidates = [f"rt-{universe}-support-cast"] if universe else []
+    candidates.append("rt-support-cast")
+    for candidate in candidates:
+        if repo.get_roll_table(candidate) is not None:
+            return candidate
+    return None
+
+
 def pick_roll_table_entry(
     repo,
     entity: "Entity",

@@ -13,7 +13,11 @@ from transversal.domain import (
     RollTableScheme,
     TraitSetting,
 )
-from transversal.services.roll_table_menu import entry_razmerit_cost, pick_roll_table_entry
+from transversal.services.roll_table_menu import (
+    entry_razmerit_cost,
+    pick_roll_table_entry,
+    resolve_support_cast_table_id,
+)
 
 
 class FakeTrait:
@@ -119,3 +123,20 @@ def test_pick_rejects_unaffordable():
     # Nothing applied when unaffordable.
     assert entity.razmerit == 5
     assert repo.created_traitsettings == []
+
+
+def test_resolve_support_cast_table_id_universe_scoped_with_fallback():
+    class ResolverRepo:
+        def __init__(self, ids):
+            self.ids = set(ids)
+
+        def get_roll_table(self, table_id):
+            return RollTable(id=table_id, name=table_id) if table_id in self.ids else None
+
+    repo = ResolverRepo({"rt-emberline-support-cast", "rt-support-cast"})
+    assert resolve_support_cast_table_id(repo, "emberline") == "rt-emberline-support-cast"
+    assert resolve_support_cast_table_id(repo, "three_realms") == "rt-support-cast"
+    assert resolve_support_cast_table_id(repo, "") == "rt-support-cast"
+
+    empty = ResolverRepo(set())
+    assert resolve_support_cast_table_id(empty, "emberline") is None

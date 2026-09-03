@@ -1154,6 +1154,21 @@ class Query:
         t = _em(info).repo.get_roll_table(str(id))
         return _roll_table_to_gql(t) if t else None
 
+    @strawberry.field
+    def support_cast_table_id(self, info: strawberry.Info, entity_id: strawberry.ID) -> Optional[strawberry.ID]:
+        """The universe-scoped support-cast roll table id for an entity (B65).
+
+        Resolves ``rt-<universe>-support-cast`` from the entity's current
+        universe, falling back to the generic ``rt-support-cast``.
+        """
+        from transversal.services.roll_table_menu import resolve_support_cast_table_id
+
+        entity = _em(info).repo.get_entity(str(entity_id))
+        if entity is None:
+            return None
+        tid = resolve_support_cast_table_id(_em(info).repo, entity.current_universe or "")
+        return strawberry.ID(tid) if tid else None
+
 
 # ── Life path helpers ─────────────────────────────────
 
