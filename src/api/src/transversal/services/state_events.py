@@ -59,6 +59,26 @@ def fire_state_sfx(
         _firing.discard(key)
 
 
+def broadcast_main_active(player_id: str, entity_id: str, active: bool) -> None:
+    """Broadcast a main's active state to all sessions (SSE).
+
+    ``active=True`` when a player took control of a main; ``active=False`` when
+    they switched away (e.g. to a support character). Consumed by the GM troupe
+    overview / availability grey-out.
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    event = StreamEvent(
+        event="main_active",
+        data={"player_id": player_id, "entity_id": entity_id, "active": active},
+    )
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event=event.event, session_id=s.id, data=event.data,
+        ))
+
+
 def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
     """Fire automatic SFX for a global (non-entity-scoped) boundary event.
 

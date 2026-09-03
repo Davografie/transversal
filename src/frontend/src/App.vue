@@ -1808,11 +1808,14 @@ function beginCharacterSwitch(e) {
   const claimP = playerId.value
     ? fetch(`/api/v1/players/${playerId.value}/claim/${bId}`, { method: 'POST' }).catch(() => {})
     : Promise.resolve()
+  const controlP = playerId.value
+    ? fetch(`/api/v1/players/${playerId.value}/control/${bId}`, { method: 'POST' }).catch(() => {})
+    : Promise.resolve()
   const entitiesP = fetchPlayerEntities()
   const locationP = locationInitPromise || Promise.resolve()
   const minDelayP = new Promise(resolve => setTimeout(resolve, RESONANCE.durationMs))
 
-  Promise.all([claimP, entitiesP, locationP, minDelayP, sigAP, sigBP]).then(() => {
+  Promise.all([claimP, controlP, entitiesP, locationP, minDelayP, sigAP, sigBP]).then(() => {
     if (token !== charSwitchToken) return
     charSwitchDone.value = true
     // Let the final fan-out read for a beat before closing.

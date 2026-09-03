@@ -28,6 +28,7 @@ _ENTITY_IDS = [MAIN_ID, SC_ID]
 
 def _cleanup(repo):
     repo.delete_player(P_ID)
+    repo.delete_player("test-b54-player-new")
     for eid in _ENTITY_IDS:
         repo.delete_entity(eid, rmtree=True)
 
@@ -122,3 +123,61 @@ def test_gmc_base_difficulty_seed():
 
     # Idempotent — a second run must not raise.
     ensure_gmc_base_difficulty(repo)
+
+
+def test_agency_main_query_and_spotlight_recency_order():
+    """`get_agency_main` reads the flag; `list_players_by_spotlight` sorts oldest-first."""
+    repo = _repo
+    _cleanup(repo)
+
+    repo.create_entity(_char(MAIN_ID))
+    repo.create_entity(_char(SC_ID))
+    repo.create_player(P_ID, "p-old", role="player")
+    repo.create_player("test-b54-player-new", "p-new", role="player")
+    repo.claim_entity(P_ID, MAIN_ID)
+    repo.set_agency_main(P_ID, MAIN_ID, True)
+
+    assert repo.get_agency_main(P_ID, MAIN_ID) is True
+    assert repo.get_agency_main(P_ID, SC_ID) is False
+
+    # Old player has a spotlight stamp; the new player never has → nulls first.
+    repo.update_player(P_ID, {
+        "last_spotlight_at": "2026-09-01T00:00:00+00:00",
+        "last_main_entity_id": MAIN_ID,
+    })
+    ordered = repo.list_players_by_spotlight()
+    ids = [p.id for p in ordered if p.id in (P_ID, "test-b54-player-new")]
+    assert ids == ["test-b54-player-new", P_ID]
+
+    _cleanup(repo)
+
+
+def test_record_control_stamps_only_for_mains():
+    """Taking control of a main stamps the player; a non-main does not."""
+    from transversal.services.player_manager import PlayerManager
+
+    repo = _repo
+    _cleanup(repo)
+
+    repo.create_entity(_char(MAIN_ID))
+    repo.create_entity(_char(SC_ID))
+    repo.create_player(P_ID, "test-player", role="player")
+    repo.claim_entity(P_ID, MAIN_ID)
+    repo.claim_entity(P_ID, SC_ID)
+    repo.set_agency_main(P_ID, MAIN_ID, True)
+
+    mgr = PlayerManager(repo=repo)
+
+    # Non-main → no stamp.
+    assert mgr.record_control(P_ID, SC_ID) is False
+    p = repo.get_player(P_ID)
+    assert p.last_spotlight_at is None
+    assert p.last_main_entity_id is None
+
+    # Main → stamped, actor-keyed on the explicit player id.
+    assert mgr.record_control(P_ID, MAIN_ID) is True
+    p = repo.get_player(P_ID)
+    assert p.last_spotlight_at is not None
+    assert p.last_main_entity_id == MAIN_ID
+
+    _cleanup(repo)

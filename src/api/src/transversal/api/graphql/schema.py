@@ -547,6 +547,17 @@ class Query:
         return [_player_to_gql(p, repo) for p in repo.list_players()]
 
     @strawberry.field
+    def spotlight_recency(self, info: strawberry.Info) -> list[GqlPlayer]:
+        """Players ordered oldest-first by spotlight recency (B55).
+
+        Never-spotlit players (``last_spotlight_at`` null) sort first — they are
+        most due for a spotlight scene. Each row resolves its most-recent main
+        via ``main_entity``.
+        """
+        repo = _em(info).repo
+        return [_player_to_gql(p, repo) for p in repo.list_players_by_spotlight()]
+
+    @strawberry.field
     def character(self, info: strawberry.Info, id: strawberry.ID) -> Optional[CharacterView]:
         cv = _em(info).get_character(str(id))
         if cv is None:

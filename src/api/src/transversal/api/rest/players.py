@@ -90,3 +90,14 @@ async def set_spotlight(player_id: str, req: dict | None = None) -> dict:
     req = req or {}
     ok = player_manager.set_spotlight(player_id, req.get("last_main_entity_id"), req.get("timestamp"))
     return {"player_id": player_id, "updated": ok}
+
+
+@router.post("/{player_id}/control/{entity_id}")
+async def record_control(player_id: str, entity_id: str) -> dict:
+    """A player took control of an entity (the character-switch signal).
+
+    Stamps spotlight only when the entity is one of the player's mains; always
+    broadcasts the main-active state via SSE.
+    """
+    is_main = player_manager.record_control(player_id, entity_id)
+    return {"player_id": player_id, "entity_id": entity_id, "main": is_main}

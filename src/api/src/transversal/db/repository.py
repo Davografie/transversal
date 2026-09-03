@@ -2173,6 +2173,24 @@ class EntityRepository:
         """
         return list(self.db.aql.execute(query, bind_vars={"pref": f"{PLAYERS}/{player_id}"}))
 
+    def get_agency_main(self, player_id: str, entity_id: str) -> bool:
+        """Whether ``entity_id`` is flagged ``main`` on the player's agency edge."""
+        edge = self._relationships.get(f"edge:{player_id}:{entity_id}:agency")
+        return bool(edge is not None and edge.get("main"))
+
+    def list_players_by_spotlight(self) -> list[Player]:
+        """Players ordered oldest-first by spotlight recency (nulls = never, oldest).
+
+        ``last_spotlight_at`` is the sort key; players who have never taken a
+        main sort first (most due for a spotlight scene).
+        """
+        query = f"""
+            FOR p IN {PLAYERS}
+            SORT p.last_spotlight_at == null DESC, p.last_spotlight_at ASC, p.name ASC
+            RETURN p
+        """
+        return [self._to_player(doc) for doc in self.db.aql.execute(query)]
+
     def get_entity_players(self, entity_id: str) -> list[str]:
         query = f"""
             FOR r IN {RELATIONSHIPS}

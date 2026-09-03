@@ -536,6 +536,8 @@ Valid roles: `"player"`, `"architect"`. The role controls which UI elements are 
 
 **`POST /api/v1/players/{player_id}/spotlight`** — stamp the player's spotlight recency (actor-keyed; B55 wires this to "took control of a main"). Request `{"last_main_entity_id": "...", "timestamp": "ISO"}`; `timestamp` defaults to now.
 
+**`POST /api/v1/players/{player_id}/control/{entity_id}`** — the character-switch signal (B55). Stamps `last_spotlight_at` + `last_main_entity_id` only when `entity_id` is one of the player's mains; broadcasts `main_active` via SSE in both directions (a main becoming active on take, inactive on switch-away). Response `{"player_id": "...", "entity_id": "...", "main": true|false}`.
+
 ### Player Persistence
 
 Players are stored in the ArangoDB `players` collection. Player→entity ownership is tracked via `relationships` edges (type: `agency`, `_from`: `players/{id}`, `_to`: `entities/{id}`), carrying a `main` flag for the player's mains. Support characters link to their main via a directional `support` edge (`entity → entity`). See [[Data Model#players]] and [[Data Model#relationships]].
@@ -667,6 +669,7 @@ The stream delivers state-change events as `text/event-stream`. The client opens
 | `entity_created` | `{"entity_id": "...", "name": "...", "type": "..."}` | New entity created in session |
 | `roll_result` | Full roll response (see `POST /roll`) | A dice roll completes |
 | `pool_updated` | `{"player_id": "...", "entity_id": "...", "dice": [...], "phase": "...", "location_id": "..."}` | Dice pool changes. Dice are `[{die, label}]` objects in adding phase, die-type strings from backend. |
+| `main_active` | `{"player_id": "...", "entity_id": "...", "active": true|false}` | A player took control of a main (or switched to a non-main). Drives the troupe availability grey-out. |
 | `scene_change` | `{"to_location": "..."}` | The scene changes; UI transitions |
 | `error` | `{"code": "...", "message": "..."}` | An error occurred server-side |
 

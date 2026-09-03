@@ -66,6 +66,35 @@ class PlayerManager:
         updates["last_spotlight_at"] = timestamp or datetime.now(timezone.utc).isoformat()
         return self._repo.update_player(player_id, updates)
 
+    def record_control(self, player_id: str, entity_id: str) -> bool:
+        """Handle a player taking control of an entity (B55).
+
+        Stamps ``last_spotlight_at``/``last_main_entity_id`` only when the
+        entity is one of the player's mains (agency edge ``main`` flag) — the
+        spotlight signal is *taking control of a main*, not any body switch.
+        The stamp is actor-keyed: it keys on the explicit ``player_id``, so a
+        GM possessing/roaming as a main never reaches this path.
+
+        Broadcasts ``main_active`` via SSE in both directions (a main becoming
+        active when taken, inactive when the player switches to a non-main).
+
+        Returns True when the entity is a main (and was stamped).
+        """
+        is_main = self._repo.get_agency_main(player_id, entity_id)
+        from transversal.services.state_events import broadcast_main_active
+
+        if is_main:
+            self.set_spotlight(player_id, entity_id)
+            broadcast_main_active(player_id, entity_id, True)
+            return True
+
+        # Player switched to a non-main (support character) — their previous
+        # main is no longer active. Do not stamp spotlight.
+        p = self._repo.get_player(player_id)
+        if p is not None and p.last_main_entity_id:
+            broadcast_main_active(player_id, p.last_main_entity_id, False)
+        return False
+
 
 # Global singleton
 player_manager = PlayerManager()

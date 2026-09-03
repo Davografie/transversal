@@ -1292,6 +1292,19 @@ class Player:
     last_main_entity_id: Optional[strawberry.ID] = None
     agency: list[AgencyEdge] = strawberry.field(default_factory=list)
 
+    @strawberry.field
+    def main_entity(self, info: strawberry.Info) -> Optional["Entity"]:
+        """The main entity last taken control of (resolved for the overview)."""
+        if not self.last_main_entity_id:
+            return None
+        em = info.context["entity_manager"]
+        entity = em.get(str(self.last_main_entity_id))
+        if entity is None:
+            return None
+        from transversal.api.graphql.schema import _entity_to_gql
+
+        return _entity_to_gql(entity)
+
 
 @strawberry.input
 class SetAgencyMainInput:
