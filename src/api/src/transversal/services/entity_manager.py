@@ -48,6 +48,48 @@ from transversal.domain import (
 from transversal.domain.validation import validate_entity
 
 
+def _record_transversal(
+    repo, entity_id: str, entity_name: str, from_location, to_location: str, universe: str,
+    *, from_universe: str = "", transversal_type: str = "", projection_id: str = "", session_id: str = "",
+) -> None:
+    """Append a Blue Book historical record for a location change.
+
+    No-op unless the entity's location or universe actually changed.
+    """
+    if from_location == to_location and from_universe == universe:
+        return
+    if not to_location:
+        return
+    from transversal.domain import HistoricalRecordType
+
+    def _name(loc_id):
+        if not loc_id:
+            return ""
+        try:
+            loc = repo.get_entity(loc_id)
+            return loc.name if loc is not None else ""
+        except Exception:
+            return ""
+
+    repo.add_historical_record(
+        entity_id,
+        HistoricalRecordType.TRANSVERSAL,
+        data={
+            "entity_name": entity_name,
+            "from_location": from_location or "",
+            "from_name": _name(from_location),
+            "to_location": to_location or "",
+            "to_name": _name(to_location),
+            "from_universe": from_universe or "",
+            "to_universe": universe or "",
+            "transversal_type": transversal_type,
+            "projection_id": projection_id,
+        },
+        universe=universe or "",
+        session_id=session_id or "",
+    )
+
+
 class EntityNotFoundError(Exception):
     pass
 
@@ -240,11 +282,22 @@ class EntityManager:
             proj.name = name
         if background_image is not None:
             proj.background_image = background_image or None
+        old_location = proj.current_location
+        old_universe = proj.universe
         if current_location is not None:
             proj.current_location = current_location or None
         if transversal_type is not None:
             proj.transversal_type = transversal_type
-        return self.repo.update_projection(proj)
+        result = self.repo.update_projection(proj)
+        if current_location is not None and proj.current_location != old_location:
+            owner = self.repo.get_entity(proj.entity_id)
+            _record_transversal(
+                self.repo, proj.entity_id, owner.name if owner is not None else proj.entity_id,
+                old_location, proj.current_location, proj.universe,
+                from_universe=old_universe or "",
+                projection_id=proj.id,
+            )
+        return result
 
     def activate_projection(
         self, entity_id: str, projection_id: str, location: Optional[str] = None
@@ -275,6 +328,12 @@ class EntityManager:
         entity.current_location = proj.current_location
         result = self.repo.update_entity(entity)
         _publish_location_changed(entity, old_location, old_universe)
+        _record_transversal(
+            self.repo, entity.id, entity.name,
+            old_location, entity.current_location, entity.current_universe,
+            from_universe=old_universe or "",
+            projection_id=projection_id,
+        )
         return result
 
     def travel(
@@ -299,6 +358,8 @@ class EntityManager:
             raise EntityNotFoundError(f"Entity '{entity_id}' not found")
         if self.repo.get_entity(location) is None:
             raise ValueError(f"Location '{location}' not found")
+        old_location = entity.current_location
+        old_universe = entity.current_universe
 
         context = {"transversal_type": transversal_type}
         if projection_policy:
@@ -315,6 +376,14 @@ class EntityManager:
         from transversal.services.effects_commit import commit_effects
 
         commit_effects(entity, [effect], self.repo)
+
+        _record_transversal(
+            self.repo, entity.id, entity.name,
+            old_location, entity.current_location, entity.current_universe,
+            from_universe=old_universe or "",
+            transversal_type=transversal_type or "",
+            projection_id=entity.current_projection or "",
+        )
 
         return entity
 
@@ -460,6 +529,15 @@ class EntityManager:
                   "universe": entity.current_universe},
         )
         _publish_to_sessions(event)
+
+        _record_transversal(
+            self.repo, entity.id, entity.name,
+            old_location, location, entity.current_universe,
+            from_universe=old_universe or "",
+            transversal_type="inapposite" if (old_universe and old_universe != entity.current_universe) else "",
+            projection_id=entity.current_projection or "",
+            session_id=session_id or "",
+        )
 
         return result
 

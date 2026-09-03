@@ -43,6 +43,7 @@ class InMemoryRepository(EntityRepository):
         self._traitsetsettings: dict[str, dict] = {}
         self._sfx_owners: dict[str, dict] = {}
         self._scheduled_events: dict[str, dict] = {}
+        self._historical_records: dict[str, dict] = {}
         self.db = None
 
     def _store(self, coll: dict, key: str, doc: dict) -> dict:
@@ -102,6 +103,34 @@ class InMemoryRepository(EntityRepository):
     def update_projection(self, p: Projection) -> Projection:
         self._store(self._projections, p.id, p.model_dump())
         return p
+
+    # historical records
+    def add_historical_record(self, entity_id, record_type, data, universe="", session_id=""):
+        import uuid
+        from datetime import datetime, timezone
+        rtype = record_type.value if hasattr(record_type, "value") else record_type
+        rec_id = str(uuid.uuid4())
+        self._historical_records[rec_id] = {
+            "_key": rec_id, "entity_id": entity_id, "record_type": rtype,
+            "universe": universe, "session_id": session_id, "data": data or {},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        return self._historical_records[rec_id]
+
+    def list_historical_records(self, entity_id="", record_type=""):
+        from transversal.domain import HistoricalRecord
+        out = []
+        for h in self._historical_records.values():
+            if entity_id and h["entity_id"] != entity_id:
+                continue
+            if record_type and h["record_type"] != record_type:
+                continue
+            out.append(HistoricalRecord(
+                id=h["_key"], entity_id=h["entity_id"], record_type=h["record_type"],
+                universe=h.get("universe", ""), session_id=h.get("session_id", ""),
+                data=h.get("data") or {}, created_at=h.get("created_at", ""),
+            ))
+        return out
 
     # traits registry
     def create_trait(self, t: Trait) -> Trait:
@@ -467,6 +496,30 @@ class TestLocation:
         assert proj.universe == "three_realms"
         assert proj.origin_universe == "earth"
         assert proj.transversal_type == TransversalType.INAPPOSITE
+
+    def test_move_records_transversal(self, em, kael):
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        em.move_to(kael, loc.id)
+        records = em.repo.list_historical_records(kael.id, "transversal")
+        assert len(records) == 1
+        rec = records[0]
+        assert rec.data["entity_name"] == "Kael Drift"
+        assert rec.data["to_location"] == loc.id
+        assert rec.data["to_name"] == "Aviary Peak"
+        assert rec.data["from_universe"] == "earth"
+        assert rec.data["to_universe"] == "three_realms"
+        assert rec.data["transversal_type"] == "inapposite"
+
+    def test_travel_records_transversal(self, em, kael):
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        em.travel(kael.id, loc.id, transversal_type="consciousness", projection_policy="{last_projection}")
+        records = em.repo.list_historical_records(kael.id, "transversal")
+        assert len(records) == 1
+        rec = records[0]
+        assert rec.data["entity_name"] == "Kael Drift"
+        assert rec.data["to_location"] == loc.id
+        assert rec.data["transversal_type"] == "consciousness"
+        assert rec.data["projection_id"] == f"{kael.id}:three_realms"
 
     def test_travel_effect_self_entity_id_persists(self, em, kael):
         # A travel effect whose ``entity`` is the entity's own id must not be
