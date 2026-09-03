@@ -183,6 +183,41 @@ def test_record_control_stamps_only_for_mains():
     _cleanup(repo)
 
 
+def test_designated_main_fallback():
+    """`get_designated_main` + `Player.main_entity` fall back to the flagged main (B63)."""
+    from types import SimpleNamespace
+
+    from transversal.api.graphql.types import Player as GqlPlayer
+    from transversal.services.entity_manager import EntityManager
+
+    repo = _repo
+    _cleanup(repo)
+
+    repo.create_entity(_char(MAIN_ID))
+    repo.create_entity(_char(SC_ID))
+    repo.create_player(P_ID, "test-player", role="player")
+    repo.claim_entity(P_ID, MAIN_ID)
+    repo.claim_entity(P_ID, SC_ID)
+
+    # No main designated → no fallback.
+    assert repo.get_designated_main(P_ID) is None
+
+    # Designate MAIN_ID as main; recency (last_main_entity_id) is still unset.
+    repo.set_agency_main(P_ID, MAIN_ID, True)
+    assert repo.get_designated_main(P_ID) == MAIN_ID
+    assert repo.get_player(P_ID).last_main_entity_id is None
+
+    # The resolver resolves the designated main even though recency is unset.
+    em = EntityManager(repo)
+    gql = GqlPlayer(id=P_ID, name="test-player", role="player", last_main_entity_id=None)
+    info = SimpleNamespace(context={"entity_manager": em})
+    main = gql.main_entity(info)
+    assert main is not None
+    assert str(main.id) == MAIN_ID
+
+    _cleanup(repo)
+
+
 def test_active_main_registry_and_support_edges():
     """`record_control` tracks the active main; `list_support_edges` lists support edges."""
     from transversal.services.player_manager import (

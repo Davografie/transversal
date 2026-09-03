@@ -1296,11 +1296,20 @@ class Player:
 
     @strawberry.field
     def main_entity(self, info: strawberry.Info) -> Optional["Entity"]:
-        """The main entity last taken control of (resolved for the overview)."""
-        if not self.last_main_entity_id:
-            return None
+        """The player's main entity for the overview (B63).
+
+        Resolves ``last_main_entity_id`` (recency — the main last taken control
+        of) when set; otherwise falls back to the player's *designated* main
+        (first agency edge flagged ``main``). Only null when the player truly
+        has no designated main.
+        """
         em = info.context["entity_manager"]
-        entity = em.get(str(self.last_main_entity_id))
+        main_id = str(self.last_main_entity_id) if self.last_main_entity_id else None
+        if not main_id:
+            main_id = em.repo.get_designated_main(str(self.id))
+        if not main_id:
+            return None
+        entity = em.get(main_id)
         if entity is None:
             return None
         from transversal.api.graphql.schema import _entity_to_gql

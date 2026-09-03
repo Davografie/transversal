@@ -2178,6 +2178,24 @@ class EntityRepository:
         edge = self._relationships.get(f"edge:{player_id}:{entity_id}:agency")
         return bool(edge is not None and edge.get("main"))
 
+    def get_designated_main(self, player_id: str) -> str | None:
+        """The player's designated main — the first agency edge flagged ``main``.
+
+        Deterministic when a player has several mains (ordered by entity id).
+        Returns ``None`` when the player has no main flagged. Distinct from
+        ``last_main_entity_id`` (recency), which is only set after a control
+        event; this is the structural designation that B63 falls back to.
+        """
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @pref AND r.type == 'agency' AND r.main == true
+            SORT PARSE_IDENTIFIER(r._to).key ASC
+            LIMIT 1
+            RETURN PARSE_IDENTIFIER(r._to).key
+        """
+        results = list(self.db.aql.execute(query, bind_vars={"pref": f"{PLAYERS}/{player_id}"}))
+        return results[0] if results else None
+
     def list_players_by_spotlight(self) -> list[Player]:
         """Players ordered oldest-first by spotlight recency (nulls = never, oldest).
 
