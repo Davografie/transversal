@@ -334,6 +334,7 @@ const gmRootPanel = computed(() => ({
   props: {
     universe: universe.value,
     currentLocationId: currentLocationId.value,
+    currentLocationName: locationName.value,
     currentEntityId: actingEntityId.value,
   },
   listeners: {

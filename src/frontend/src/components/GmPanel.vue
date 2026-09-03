@@ -13,6 +13,7 @@
         <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
       </div>
       <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntities" @inspect="inspectEntity" />
+      <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" />
     </template>
 
     <template v-if="mode === 'prep'">
@@ -71,6 +72,7 @@ import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import CharacterSheet from '@/components/CharacterSheet.vue'
 import GmSceneSummary from '@/components/gm/GmSceneSummary.vue'
+import GmTroupeOverview from '@/components/gm/GmTroupeOverview.vue'
 import GmLocationTree from '@/components/gm/GmLocationTree.vue'
 import GmList from '@/components/gm/GmList.vue'
 import GmTraitsetsPanel from '@/components/gm/GmTraitsetsPanel.vue'
@@ -88,6 +90,7 @@ let offLocationsChanged = null
 const props = defineProps({
   universe: { type: String, default: 'earth' },
   currentLocationId: { type: String, default: '' },
+  currentLocationName: { type: String, default: '' },
   currentEntityId: { type: String, default: '' },
 })
 
