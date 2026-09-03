@@ -181,3 +181,46 @@ def test_record_control_stamps_only_for_mains():
     assert p.last_main_entity_id == MAIN_ID
 
     _cleanup(repo)
+
+
+def test_active_main_registry_and_support_edges():
+    """`record_control` tracks the active main; `list_support_edges` lists support edges."""
+    from transversal.services.player_manager import (
+        PlayerManager,
+        _active_main,
+        is_main_active,
+    )
+
+    repo = _repo
+    _cleanup(repo)
+    _active_main.clear()  # isolate from prior tests' module-level registry
+
+    repo.create_entity(_char(MAIN_ID))
+    repo.create_entity(_char(SC_ID))
+    repo.create_player(P_ID, "test-player", role="player")
+    repo.claim_entity(P_ID, MAIN_ID)
+    repo.claim_entity(P_ID, SC_ID)
+    repo.set_agency_main(P_ID, MAIN_ID, True)
+    repo.create_relationship(SC_ID, MAIN_ID, "support")
+
+    mgr = PlayerManager(repo=repo)
+
+    # Nothing is active before a control event.
+    assert is_main_active(P_ID, MAIN_ID) is False
+
+    # Taking the main marks it active.
+    mgr.record_control(P_ID, MAIN_ID)
+    assert is_main_active(P_ID, MAIN_ID) is True
+
+    # Switching to a non-main (support) deactivates the main.
+    mgr.record_control(P_ID, SC_ID)
+    assert is_main_active(P_ID, MAIN_ID) is False
+
+    # The support edge is listed for the availability query.
+    edges = repo.list_support_edges()
+    assert any(
+        e["_from"] == f"entities/{SC_ID}" and e["_to"] == f"entities/{MAIN_ID}"
+        for e in edges
+    )
+
+    _cleanup(repo)

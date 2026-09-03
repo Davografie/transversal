@@ -9,12 +9,25 @@ const players = ref([])
 const loading = ref(false)
 const error = ref(null)
 
+// Support characters for the player settings overlay (B57). One entry per
+// `support` edge (SC → main), with the main's owner and whether that main is
+// currently active (the availability signal).
+const supportCharacters = ref([])
+
 const RECENCY_QUERY = `query {
   spotlightRecency {
     id name role lastSpotlightAt lastMainEntityId
     mainEntity {
       id type name razmerit currentUniverse currentLocation sheetPortrait
     }
+  }
+}`
+
+const SUPPORT_QUERY = `query {
+  supportCharacters {
+    entity { id type name razmerit currentUniverse currentLocation sheetPortrait }
+    main { id type name sheetPortrait }
+    mainOwnerId mainActive
   }
 }`
 
@@ -36,5 +49,16 @@ export function useTroupe() {
     return players.value
   }
 
-  return { players, loading, error, fetchRecency }
+  async function fetchSupportCharacters(force = false) {
+    if (supportCharacters.value.length && !force) return supportCharacters.value
+    try {
+      const data = await graphql(SUPPORT_QUERY, {})
+      if (data?.supportCharacters) supportCharacters.value = data.supportCharacters
+    } catch (e) {
+      error.value = e?.message || String(e)
+    }
+    return supportCharacters.value
+  }
+
+  return { players, supportCharacters, loading, error, fetchRecency, fetchSupportCharacters }
 }

@@ -93,6 +93,7 @@ from transversal.api.graphql.types import (
     AgencyEdge,
     Player as GqlPlayer,
     SetAgencyMainInput,
+    SupportCharacter,
 )
 from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
@@ -556,6 +557,37 @@ class Query:
         """
         repo = _em(info).repo
         return [_player_to_gql(p, repo) for p in repo.list_players_by_spotlight()]
+
+    @strawberry.field
+    def support_characters(self, info: strawberry.Info) -> list[SupportCharacter]:
+        """Support characters (SC → main ``support`` edges) with availability.
+
+        ``main_active`` is true when the main's owning player is currently
+        controlling it — the same signal the ``main_active`` SSE event tracks.
+        """
+        from transversal.services.player_manager import is_main_active
+
+        repo = _em(info).repo
+        out: list[SupportCharacter] = []
+        for edge in repo.list_support_edges():
+            sc_id = edge["_from"].rsplit("/", 1)[-1]
+            main_id = edge["_to"].rsplit("/", 1)[-1]
+            sc = repo.get_entity(sc_id)
+            main = repo.get_entity(main_id)
+            if sc is None or main is None:
+                continue
+            owner_id = None
+            for pid in repo.get_entity_players(main_id):
+                if repo.get_agency_main(pid, main_id):
+                    owner_id = pid
+                    break
+            out.append(SupportCharacter(
+                entity=_entity_to_gql(sc),
+                main=_entity_to_gql(main),
+                main_owner_id=owner_id,
+                main_active=owner_id is not None and is_main_active(owner_id, main_id),
+            ))
+        return out
 
     @strawberry.field
     def character(self, info: strawberry.Info, id: strawberry.ID) -> Optional[CharacterView]:

@@ -2,6 +2,10 @@
   <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
   <button v-if="playerId && !showLoginOverlay" class="lab-btn" @click="showResonanceLab = true" title="Resonance Lab">🧪</button>
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
+  <div v-if="currentSupport && !showLoginOverlay && !gmMode" class="support-banner">
+    <span>You're playing <strong>{{ currentSupport.entity.name || currentSupport.entity.id }}</strong></span>
+    <button @click="returnToMain">Return to main</button>
+  </div>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
     <!-- Fresh login: no identity yet -->
@@ -173,6 +177,28 @@
           <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
         </div>
 
+        <div v-if="supportCharacters.length" class="settings-section">
+          <label class="settings-label">Support characters</label>
+          <div class="char-list support-list">
+            <button
+              v-for="sc in supportCharacters" :key="sc.entity.id"
+              class="char-chip support-chip"
+              :class="{ 'support-unavailable': !sc.mainActive, 'support-current': sc.entity.id === entityId }"
+              :disabled="!sc.mainActive"
+              @click="assumeSupport(sc)"
+            >
+              <MediaImage v-if="sc.entity.sheetPortrait" :src="sc.entity.sheetPortrait" class="char-portrait" alt="" />
+              <span v-else class="char-portrait char-portrait-fallback">{{ (sc.entity.name || sc.entity.id).charAt(0) }}</span>
+              <span class="char-chip-meta">
+                <span class="char-chip-name">{{ sc.entity.name || sc.entity.id }}</span>
+                <span class="char-chip-location support-main">supports {{ sc.main?.name || '—' }}</span>
+              </span>
+              <span v-if="sc.mainActive" class="support-available-dot" title="Available">●</span>
+            </button>
+          </div>
+          <p v-if="!supportCharacters.some(sc => sc.mainActive)" class="support-hint">No support characters are available right now — their mains are inactive.</p>
+        </div>
+
         <div class="settings-section">
           <label class="settings-label">Find character</label>
           <div class="search-wrapper find-char-wrapper">
@@ -305,6 +331,7 @@ import { usePanelBus } from './composables/usePanelBus.js'
 import { useEntityCrud } from './composables/useEntityCrud.js'
 import { useMediaQuality } from './composables/useMediaQuality.js'
 import { useEntityCache } from './composables/entityCache.js'
+import { useTroupe } from './composables/useTroupe.js'
 import ToastBar from './components/ToastBar.vue'
 
 const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools } = useApi()
@@ -312,6 +339,7 @@ const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
+const { supportCharacters, fetchSupportCharacters } = useTroupe()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
 const DIAG = {
@@ -538,10 +566,18 @@ const locationNames = ref({})
 let locationNamesLoaded = false
 
 const ownedEntityIds = computed(() => playerEntities.value.map(e => e.id))
+// The support character currently being played (if any), for the assume/return
+// affordance (B57).
+const currentSupport = computed(() =>
+  supportCharacters.value.find((sc) => sc.entity?.id === entityId.value) || null
+)
 // True when playing as a non-GM but the current perspective entity isn't one
 // the player owns — the settings overlay must stay open until they pick one.
+// Assumed support characters are exempt: they are intentionally unowned.
 const needsCharacterPick = computed(() =>
-  !gmMode.value && !!playerId.value && !ownedEntityIds.value.includes(entityId.value)
+  !gmMode.value && !!playerId.value &&
+  !ownedEntityIds.value.includes(entityId.value) &&
+  !currentSupport.value
 )
 
 const newCharName = ref('')
@@ -1024,6 +1060,11 @@ watch(lastEvent, (evt) => {
     case 'session_ended':
       addToast('Session ended', 'session')
       break
+    case 'main_active':
+      // A main became active/inactive — refresh support-character availability
+      // (and the GM troupe overview recency if it's open).
+      fetchSupportCharacters(true)
+      break
     case 'trait_updated':
       entityCache.invalidateSheet(evt.data?.entity_id)
       if (evt.data?.entity_id === entityId.value) {
@@ -1387,6 +1428,7 @@ onMounted(() => {
   document.addEventListener('dragend', () => { documentDragging.value = false })
   document.addEventListener('click', onDocumentClick, true)  // capture: outside-tap closes panel
   if (playerId.value) fetchPlayerEntities()
+  if (playerId.value) fetchSupportCharacters()
   if (gmMode.value) prefetchEntities()  // warm scene-overview cache before panel opens
   refreshDiceBonuses()
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
@@ -1497,6 +1539,7 @@ function openSettings() {
   charSearchSearched.value = false
   charSearchError.value = ''
   fetchPlayerEntities()
+  fetchSupportCharacters()
   showLoginOverlay.value = true
 }
 
@@ -1654,6 +1697,25 @@ async function releaseCharacter(e) {
   if (wasActive && playerEntities.value.length) {
     entityId.value = playerEntities.value[0].id
   }
+}
+
+async function assumeSupport(sc) {
+  if (!playerId.value || !sc?.entity?.id) return
+  const scId = sc.entity.id
+  // Take control without claiming (it's a peer's SC): record_control stamps
+  // nothing but broadcasts my own main as inactive. The perspective switch
+  // below re-inits location via the entityId watcher.
+  await fetch(`/api/v1/players/${playerId.value}/control/${scId}`, { method: 'POST' }).catch(() => {})
+  entityId.value = scId
+  fetchSupportCharacters(true)
+  showLoginOverlay.value = false
+}
+
+async function returnToMain() {
+  if (!playerId.value || !selfEntityId.value) return
+  await fetch(`/api/v1/players/${playerId.value}/control/${selfEntityId.value}`, { method: 'POST' }).catch(() => {})
+  entityId.value = selfEntityId.value
+  fetchSupportCharacters(true)
 }
 
 async function fetchAllCharacters() {
@@ -1906,4 +1968,38 @@ watch(gmMode, (v) => {
   color: var(--text-dim);
 }
 .peer-chip.active .peer-label { color: var(--text); }
+
+.support-banner {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(64,136,212,0.18);
+  border: 1px solid var(--accent);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  color: var(--text);
+}
+.support-banner button {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #0a0a0f;
+  font-weight: 600;
+  cursor: pointer;
+}
+.support-list { display: flex; flex-direction: column; gap: 4px; }
+.support-chip.support-unavailable { opacity: 0.45; cursor: not-allowed; }
+.support-chip.support-current { border-color: var(--accent); }
+.support-main { font-size: 10px; }
+.support-available-dot { margin-left: auto; color: var(--success); font-size: 10px; }
+.support-hint { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
 </style>

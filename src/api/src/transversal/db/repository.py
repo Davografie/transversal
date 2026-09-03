@@ -2199,6 +2199,19 @@ class EntityRepository:
         """
         return list(self.db.aql.execute(query, bind_vars={"eref": f"{ENTITIES}/{entity_id}"}))
 
+    def list_support_edges(self) -> list[dict]:
+        """Return every `support` relationship edge (SC → main).
+
+        Each edge is an ArangoDB relationship doc whose ``_from``/``_to`` refs
+        are of the form ``entities/{id}`` (directional SC → main).
+        """
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r.type == 'support'
+            RETURN r
+        """
+        return list(self.db.aql.execute(query))
+
     # ── Location Navigation ────────────────────────────
 
     def location_tree(self) -> list[dict]:

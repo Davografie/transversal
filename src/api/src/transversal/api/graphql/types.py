@@ -1314,6 +1314,15 @@ class SetAgencyMainInput:
     main: bool = True
 
 
+@strawberry.type
+class SupportCharacter:
+    """A support character and the main it supports (B57)."""
+    entity: Entity
+    main: Entity
+    main_owner_id: Optional[strawberry.ID] = None
+    main_active: bool = False
+
+
 # ── Trait Transfer Result Types ──────────────────────
 
 @strawberry.type

@@ -12,6 +12,23 @@ import uuid
 from transversal.db.repository import EntityRepository
 from transversal.domain import Player
 
+# Module-level active-main registry: player_id → the main entity currently
+# controlled by that player. In-memory (mirrors the in-memory SSE bus); written
+# only by ``record_control``, read by the troupe availability query (B57).
+_active_main: dict[str, str] = {}
+
+
+def _set_active_main(player_id: str, main_id: str | None) -> None:
+    if main_id is None:
+        _active_main.pop(player_id, None)
+    else:
+        _active_main[player_id] = main_id
+
+
+def is_main_active(player_id: str, main_id: str) -> bool:
+    """Whether ``main_id`` is currently the active main of ``player_id``."""
+    return _active_main.get(player_id) == main_id
+
 
 class PlayerManager:
     """ArangoDB-backed player store."""
@@ -85,6 +102,7 @@ class PlayerManager:
 
         if is_main:
             self.set_spotlight(player_id, entity_id)
+            _set_active_main(player_id, entity_id)
             broadcast_main_active(player_id, entity_id, True)
             return True
 
@@ -92,6 +110,7 @@ class PlayerManager:
         # main is no longer active. Do not stamp spotlight.
         p = self._repo.get_player(player_id)
         if p is not None and p.last_main_entity_id:
+            _set_active_main(player_id, None)
             broadcast_main_active(player_id, p.last_main_entity_id, False)
         return False
 
