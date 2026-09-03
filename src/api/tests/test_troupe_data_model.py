@@ -224,3 +224,71 @@ def test_active_main_registry_and_support_edges():
     )
 
     _cleanup(repo)
+
+
+def test_create_support_character_flow():
+    """`create_support_character` creates an owned, support-linked SC; the main pays."""
+    from transversal.domain import (
+        Effect,
+        EffectTiming,
+        RollTable,
+        RollTableEntry,
+        RollTableScheme,
+    )
+    from transversal.services.entity_manager import EntityManager
+    from transversal.services.roll_table_menu import create_support_character
+    from transversal.services.sfx_owner import ensure_gmc_base_difficulty
+
+    repo = _repo
+    _cleanup(repo)
+    ensure_gmc_base_difficulty(repo)  # seeds trait-base-difficulty
+
+    main = _char(MAIN_ID)
+    main.razmerit = 5
+    repo.create_entity(main)
+    repo.create_player(P_ID, "test-player", role="player")
+    repo.claim_entity(P_ID, MAIN_ID)
+    repo.set_agency_main(P_ID, MAIN_ID, True)
+
+    table_id = "rt-test-support-cast"
+    if repo.get_roll_table(table_id):
+        repo.delete_roll_table(table_id)
+    repo.create_roll_table(RollTable(
+        id=table_id,
+        name="Test Support Cast",
+        scheme=RollTableScheme.INDEX,
+        entries=[
+            RollTableEntry(
+                label="Ferryhand",
+                description="test archetype",
+                cost_effects=[Effect(
+                    timing=EffectTiming.IMMEDIATE, type="transfer_razmerit",
+                    action="spend", result="1",
+                )],
+                effects=[Effect(
+                    timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="gain_or_step_up", target="trait-base-difficulty", result="d6",
+                )],
+            ),
+        ],
+    ))
+
+    sc = create_support_character(EntityManager(repo), P_ID, MAIN_ID, table_id, 1)
+
+    assert sc is not None
+    assert sc.type == EntityType.GMC
+    assert sc.name == "Ferryhand"
+    # Owned by the player, main:false.
+    agency = {a["entity_id"]: a["main"] for a in repo.get_agency_edges(P_ID)}
+    assert agency.get(sc.id) is False
+    # support edge SC → main.
+    assert repo.get_relationship(sc.id, MAIN_ID, "support") is not None
+    # The main paid 1 razmerit.
+    assert repo.get_entity(MAIN_ID).razmerit == 4
+    # The SC gained the archetype trait.
+    ts = repo.get_traitsettings_for_entity(sc.id)
+    assert any(t.trait_id == "trait-base-difficulty" for t in ts)
+
+    repo.delete_entity(sc.id, rmtree=True)
+    repo.delete_roll_table(table_id)
+    _cleanup(repo)

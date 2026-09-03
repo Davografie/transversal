@@ -52,5 +52,22 @@ export function useRollTableMenu() {
     }
   }
 
-  return { loading, fetchTable, applyEntry, resolveEffectTargets }
+  async function createSupport({ playerId, mainEntityId, tableId, index }) {
+    loading.value = true
+    try {
+      const data = await graphql(
+        `mutation($playerId: ID!, $mainEntityId: ID!, $tableId: ID!, $index: Int!) {
+          createSupportCharacter(playerId: $playerId, mainEntityId: $mainEntityId, tableId: $tableId, index: $index) {
+            id type name razmerit
+          }
+        }`,
+        { playerId, mainEntityId, tableId, index },
+      )
+      return data?.createSupportCharacter || null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { loading, fetchTable, applyEntry, createSupport, resolveEffectTargets }
 }

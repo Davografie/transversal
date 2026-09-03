@@ -414,6 +414,9 @@
     :table-id="rollTableMenu.tableId"
     :title="rollTableMenu.name"
     :entity-razmerit="entity.razmerit ?? 0"
+    :mode="rollTableMenu.mode || 'apply'"
+    :player-id="playerId"
+    :main-entity-id="mainEntityId"
     @close="rollTableMenu = null"
   />
 
@@ -443,6 +446,8 @@ const props = defineProps({
   viewerEntityId: { type: String, default: null },
   playerOwnedEntityIds: { type: Array, default: () => [] },
   visible: { type: Boolean, default: true },
+  playerId: { type: String, default: '' },
+  mainEntityId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange'])
@@ -1348,7 +1353,11 @@ function findTsIdForSfx(sfxId) {
 async function activateSfx(sfxId, sourceId = null) {
   const menu = rollTableMenuEffect(sfxId)
   if (menu && menu.target) {
-    rollTableMenu.value = { sfxId, tableId: menu.target, name: sfxName(sfxId) }
+    rollTableMenu.value = {
+      sfxId, tableId: menu.target, name: sfxName(sfxId),
+      mode: sfxId === 'sfx-roll-support-cast' && props.playerId && props.mainEntityId
+        ? 'create-support' : 'apply',
+    }
     return
   }
 

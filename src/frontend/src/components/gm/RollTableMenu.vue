@@ -33,7 +33,7 @@
 
       <!-- Step 3: done -->
       <div v-else-if="phase === 'done'" class="rtm-done">
-        <div class="rtm-done-title">Applied</div>
+        <div class="rtm-done-title">{{ mode === 'create-support' ? 'Created' : 'Applied' }}</div>
         <ul class="rtm-applied">
           <li v-for="(s, i) in applied" :key="i">{{ s }}</li>
         </ul>
@@ -56,10 +56,13 @@ const props = defineProps({
   tableId: { type: String, required: true },
   title: { type: String, default: 'Roll Table' },
   entityRazmerit: { type: Number, default: 0 },
+  mode: { type: String, default: 'apply' },  // 'apply' | 'create-support'
+  playerId: { type: String, default: '' },
+  mainEntityId: { type: String, default: '' },
 })
 const emit = defineEmits(['applied', 'close'])
 
-const { loading, fetchTable, applyEntry, resolveEffectTargets } = useRollTableMenu()
+const { loading, fetchTable, applyEntry, createSupport, resolveEffectTargets } = useRollTableMenu()
 const { load: loadActions, summarize } = useEffectActions()
 
 const entries = ref([])
@@ -107,6 +110,20 @@ onMounted(load)
 watch(() => [props.tableId, props.entityRazmerit], load)
 
 async function choose(entry, index) {
+  if (props.mode === 'create-support') {
+    const created = await createSupport({
+      playerId: props.playerId,
+      mainEntityId: props.mainEntityId,
+      tableId: props.tableId,
+      index,
+    })
+    if (!created) { error.value = 'Failed to create support character.'; return }
+    applied.value = [`Created ${created.name}`]
+    phase.value = 'done'
+    emit('applied', applied.value)
+    return
+  }
+
   const result = await applyEntry(props.entityId, props.tableId, index)
   if (!result) { error.value = 'Failed to apply entry.'; return }
   const structured = (result.structured || []).map((c, i) => ({ ...c, index: i, entity_id: props.entityId }))

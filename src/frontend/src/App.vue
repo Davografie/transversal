@@ -199,6 +199,11 @@
           <p v-if="!supportCharacters.some(sc => sc.mainActive)" class="support-hint">No support characters are available right now — their mains are inactive.</p>
         </div>
 
+        <div v-if="!gmMode" class="settings-section">
+          <label class="settings-label">Create support character</label>
+          <button class="create-btn support-create-btn" @click="openCreateSupport">+ Roll a support character</button>
+        </div>
+
         <div class="settings-section">
           <label class="settings-label">Find character</label>
           <div class="search-wrapper find-char-wrapper">
@@ -245,6 +250,18 @@
     </template>
   </div>
   <ResonanceLab v-if="showResonanceLab" @close="showResonanceLab = false" />
+  <RollTableMenu
+    v-if="supportCastMenu"
+    :entity-id="selfEntityId"
+    :table-id="supportCastMenu.tableId"
+    title="Create Support Character"
+    :entity-razmerit="supportCastMenu.mainRazmerit"
+    mode="create-support"
+    :player-id="playerId"
+    :main-entity-id="selfEntityId"
+    @applied="onSupportCreated"
+    @close="supportCastMenu = null"
+  />
   <LocationViewer
     v-if="!fullCanvas"
     ref="locationRef"
@@ -291,6 +308,8 @@
         :override-entity-id="viewingEntityId"
         :viewer-entity-id="entityId"
         :player-owned-entity-ids="ownedEntityIds"
+        :player-id="playerId"
+        :main-entity-id="selfEntityId"
         :universe="universe"
         :phase="phase"
         :visible="sheetVisible"
@@ -333,13 +352,14 @@ import { useMediaQuality } from './composables/useMediaQuality.js'
 import { useEntityCache } from './composables/entityCache.js'
 import { useTroupe } from './composables/useTroupe.js'
 import ToastBar from './components/ToastBar.vue'
+import RollTableMenu from './components/gm/RollTableMenu.vue'
 
 const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools } = useApi()
 const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
-const { supportCharacters, fetchSupportCharacters } = useTroupe()
+const { supportCharacters, fetchSupportCharacters, fetchSupportCastTableId } = useTroupe()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
 const DIAG = {
@@ -1718,6 +1738,25 @@ async function returnToMain() {
   fetchSupportCharacters(true)
 }
 
+// B59 — create-from-scratch support cast (SFX → roll table → pick → pay → gain).
+const supportCastMenu = ref(null)  // { tableId, mainRazmerit } | null
+
+async function openCreateSupport() {
+  if (!playerId.value || !selfEntityId.value) return
+  const tableId = await fetchSupportCastTableId()
+  if (!tableId) return
+  const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: selfEntityId.value })
+  supportCastMenu.value = { tableId, mainRazmerit: data?.entity?.razmerit ?? 0 }
+}
+
+function onSupportCreated() {
+  // Refresh the character + support lists so the new SC shows up immediately;
+  // the menu stays open so the player sees the "Created X" confirmation and
+  // closes it via Done.
+  fetchPlayerEntities()
+  fetchSupportCharacters(true)
+}
+
 async function fetchAllCharacters() {
   if (allCharactersCache) return allCharactersCache
   fetchLocationNames()
@@ -2002,4 +2041,6 @@ watch(gmMode, (v) => {
 .support-main { font-size: 10px; }
 .support-available-dot { margin-left: auto; color: var(--success); font-size: 10px; }
 .support-hint { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
+.support-create-btn { width: 100%; font-size: 12px; padding: 8px; background: var(--accent-dim); color: var(--text); border: none; border-radius: 6px; cursor: pointer; }
+.support-create-btn:hover { background: var(--accent); }
 </style>

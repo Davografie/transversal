@@ -2250,6 +2250,27 @@ class Mutation:
         return _effects_result_to_gql(result, structured)
 
     @strawberry.mutation
+    def create_support_character(
+        self, info: strawberry.Info,
+        player_id: strawberry.ID,
+        main_entity_id: strawberry.ID,
+        table_id: strawberry.ID,
+        index: int,
+    ) -> Entity:
+        """Create a support character from a roll-table entry (B59).
+
+        The main pays the entry's cost; a new GMC is created, owned by the player
+        (``agency``, ``main: false``) and linked to the main via ``support``; the
+        entry's benefit effects land on the new SC.
+        """
+        from transversal.services.roll_table_menu import create_support_character
+
+        sc = create_support_character(
+            _em(info), str(player_id), str(main_entity_id), str(table_id), index
+        )
+        return _entity_to_gql(sc)
+
+    @strawberry.mutation
     def set_consequence_options(self, info: strawberry.Info, entity_id: strawberry.ID,
                                 options: list[ConsequenceOptionInput]) -> Entity:
         """Replace an entity's authored consequence options (location moves)."""
