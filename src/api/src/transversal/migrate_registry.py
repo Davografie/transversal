@@ -36,6 +36,7 @@ from transversal.migrate_common import (
 )
 
 EMBERLINE_TS = "ts-emberline"
+GMC_BASE_TS = "ts-gmc-base"
 
 # New-app-only traitsets that have no old-app source but hold hand-authored
 # traits we must preserve (Option A). Old-app traits of the SAME name are
@@ -50,6 +51,7 @@ PRESERVED_TRAITS = {
     "trait-rel-rank",
     "trait-rel-tenure",
     "trait-regime-alert",
+    "trait-base-difficulty",
 }
 
 
@@ -144,7 +146,7 @@ def migrate(apply: bool = False) -> int:
     report["existing_traits"] = len(existing_traits)
 
     # ── Apply: wipe old-app-sourced traits/traitsets, preserve new-only ──
-    preserved_tset_keys = set(PRESERVED_TRAITSETS.values()) | {EMBERLINE_TS}
+    preserved_tset_keys = set(PRESERVED_TRAITSETS.values()) | {EMBERLINE_TS, GMC_BASE_TS}
     to_wipe_tsets = [
         k for k in existing_tsets
         if k.startswith("ts-") and k not in preserved_tset_keys

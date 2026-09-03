@@ -1,23 +1,16 @@
 """Player management — ArangoDB-backed player identity and entity ownership.
 
-Players are stored in the `players` collection.
-Player→entity associations are `relationships` edges (type: `agency`).
+Players are stored in the `players` collection (see ``domain.Player``).
+Player→entity associations are `relationships` edges (type: `agency`), and are
+resolved from the graph at read time rather than stored on the player document.
 """
 
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
 
 from transversal.db.repository import EntityRepository
-
-
-@dataclass
-class Player:
-    id: str
-    name: str = ""
-    entity_ids: set[str] = field(default_factory=set)
-    role: str = "player"  # "player" or "architect"
+from transversal.domain import Player
 
 
 class PlayerManager:
@@ -28,20 +21,10 @@ class PlayerManager:
 
     def create(self, name: str = "") -> Player:
         pid = f"player-{uuid.uuid4().hex[:6]}"
-        self._repo.create_player(pid, name=name or pid, role="player")
-        return Player(id=pid, name=name or pid, role="player")
+        return self._repo.create_player(pid, name=name or pid, role="player")
 
     def get(self, player_id: str) -> Player | None:
-        doc = self._repo.get_player(player_id)
-        if not doc:
-            return None
-        entity_ids = set(self._repo.get_player_entities(player_id))
-        return Player(
-            id=doc["_key"],
-            name=doc.get("name", ""),
-            entity_ids=entity_ids,
-            role=doc.get("role", "player"),
-        )
+        return self._repo.get_player(player_id)
 
     def claim_entity(self, player_id: str, entity_id: str) -> bool:
         return self._repo.claim_entity(player_id, entity_id)
@@ -49,33 +32,39 @@ class PlayerManager:
     def release_entity(self, player_id: str, entity_id: str) -> bool:
         return self._repo.release_entity(player_id, entity_id)
 
-    def get_player_entities(self, player_id: str) -> set[str]:
-        return set(self._repo.get_player_entities(player_id))
+    def set_agency_main(self, player_id: str, entity_id: str, main: bool) -> bool:
+        return self._repo.set_agency_main(player_id, entity_id, main)
+
+    def get_player_entities(self, player_id: str) -> list[str]:
+        return self._repo.get_player_entities(player_id)
 
     def find_by_name(self, name: str) -> Player | None:
-        doc = self._repo.find_player_by_name(name)
-        if not doc:
-            return None
-        return self._to_player(doc)
+        return self._repo.find_player_by_name(name)
 
     def list_all(self) -> list[Player]:
-        return [self._to_player(d) for d in self._repo.list_players()]
+        return self._repo.list_players()
 
     def search(self, query: str) -> list[Player]:
-        return [self._to_player(d) for d in self._repo.search_players(query)]
+        return self._repo.search_players(query)
 
     def set_role(self, player_id: str, role: str) -> bool:
         return self._repo.update_player(player_id, {"role": role})
 
-    def _to_player(self, doc: dict) -> Player:
-        pid = doc["_key"]
-        entity_ids = set(self._repo.get_player_entities(pid))
-        return Player(
-            id=pid,
-            name=doc.get("name", ""),
-            entity_ids=entity_ids,
-            role=doc.get("role", "player"),
-        )
+    def set_spotlight(
+        self, player_id: str, last_main_entity_id: str | None, timestamp: str | None = None
+    ) -> bool:
+        """Stamp spotlight recency for a player (actor-keyed; see B55).
+
+        ``last_main_entity_id`` is the main the player last took control of;
+        ``timestamp`` defaults to the current ISO time. This is the *only* path
+        that writes ``last_spotlight_at`` so the GM possessing a main can never
+        falsely stamp a player.
+        """
+        from datetime import datetime, timezone
+
+        updates: dict = {"last_main_entity_id": last_main_entity_id}
+        updates["last_spotlight_at"] = timestamp or datetime.now(timezone.utc).isoformat()
+        return self._repo.update_player(player_id, updates)
 
 
 # Global singleton

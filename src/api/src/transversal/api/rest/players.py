@@ -13,7 +13,14 @@ router = APIRouter(prefix="/api/v1/players", tags=["players"])
 
 
 def _player_dict(p):
-    return {"id": p.id, "name": p.name, "entity_ids": sorted(p.entity_ids), "role": p.role}
+    return {
+        "id": p.id,
+        "name": p.name,
+        "entity_ids": sorted(p.entity_ids),
+        "role": p.role,
+        "last_spotlight_at": p.last_spotlight_at,
+        "last_main_entity_id": p.last_main_entity_id,
+    }
 
 
 @router.post("")
@@ -67,3 +74,19 @@ async def claim_entity(player_id: str, entity_id: str) -> dict:
 async def release_entity(player_id: str, entity_id: str) -> dict:
     ok = player_manager.release_entity(player_id, entity_id)
     return {"released": ok}
+
+
+@router.post("/{player_id}/main/{entity_id}")
+async def set_agency_main(player_id: str, entity_id: str, req: dict | None = None) -> dict:
+    """Flag (or un-flag) an owned entity as one of the player's mains."""
+    main = bool((req or {}).get("main", True))
+    ok = player_manager.set_agency_main(player_id, entity_id, main)
+    return {"player_id": player_id, "entity_id": entity_id, "main": main, "updated": ok}
+
+
+@router.post("/{player_id}/spotlight")
+async def set_spotlight(player_id: str, req: dict | None = None) -> dict:
+    """Stamp the player's spotlight recency (actor-keyed)."""
+    req = req or {}
+    ok = player_manager.set_spotlight(player_id, req.get("last_main_entity_id"), req.get("timestamp"))
+    return {"player_id": player_id, "updated": ok}

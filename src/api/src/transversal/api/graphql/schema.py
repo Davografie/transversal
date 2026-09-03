@@ -90,9 +90,13 @@ from transversal.api.graphql.types import (
     UpdateEntityInput,
     UpdateMessageInput,
     Zone,
+    AgencyEdge,
+    Player as GqlPlayer,
+    SetAgencyMainInput,
 )
 from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
+from transversal.domain import Player as DomainPlayer
 from transversal.domain import TraitSetting as DomainTraitSetting
 from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import Condition as DomainCondition
@@ -179,6 +183,21 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
             for a in e.attunements
         ],
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,
+    )
+
+
+def _player_to_gql(p: DomainPlayer, repo) -> GqlPlayer:
+    agency = [
+        AgencyEdge(entity_id=edge["entity_id"], main=edge["main"])
+        for edge in repo.get_agency_edges(p.id)
+    ]
+    return GqlPlayer(
+        id=p.id,
+        name=p.name,
+        role=p.role,
+        last_spotlight_at=p.last_spotlight_at,
+        last_main_entity_id=p.last_main_entity_id,
+        agency=agency,
     )
 
 
@@ -513,6 +532,19 @@ class Query:
     def entity(self, info: strawberry.Info, id: strawberry.ID) -> Optional[Entity]:
         e = _em(info).repo.get_entity(str(id))
         return _entity_to_gql(e) if e else None
+
+    @strawberry.field
+    def player(self, info: strawberry.Info, id: strawberry.ID) -> Optional[GqlPlayer]:
+        """A player by id, with their agency edges (and ``main`` flags)."""
+        repo = _em(info).repo
+        p = repo.get_player(str(id))
+        return _player_to_gql(p, repo) if p else None
+
+    @strawberry.field
+    def players(self, info: strawberry.Info) -> list[GqlPlayer]:
+        """All players (identity + spotlight recency + agency)."""
+        repo = _em(info).repo
+        return [_player_to_gql(p, repo) for p in repo.list_players()]
 
     @strawberry.field
     def character(self, info: strawberry.Info, id: strawberry.ID) -> Optional[CharacterView]:
@@ -1096,6 +1128,18 @@ def _life_path_to_gql(lp) -> GqlLifePath:
 
 @strawberry.type
 class Mutation:
+    @strawberry.mutation
+    def set_agency_main(self, info: strawberry.Info, input: SetAgencyMainInput) -> GqlPlayer:
+        """Flag (or un-flag) an owned entity as one of the player's mains."""
+        repo = _em(info).repo
+        player_id = str(input.player_id)
+        entity_id = str(input.entity_id)
+        if not repo.set_agency_main(player_id, entity_id, input.main):
+            raise ValueError(f"Player '{player_id}' has no agency over entity '{entity_id}'")
+        p = repo.get_player(player_id)
+        assert p is not None
+        return _player_to_gql(p, repo)
+
     @strawberry.mutation
     def create_entity(self, info: strawberry.Info, input: CreateEntityInput) -> Entity:
         e = _em(info).create(

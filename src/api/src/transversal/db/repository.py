@@ -44,6 +44,7 @@ from transversal.domain import (
     ImageType,
     LifePath,
     Message,
+    Player,
     Projection,
     RollTable,
     ScheduledEvent,
@@ -2051,15 +2052,29 @@ class EntityRepository:
 
     # ── Players ──────────────────────────────────────
 
-    def create_player(self, player_id: str, name: str, role: str = "player") -> dict:
+    def create_player(self, player_id: str, name: str, role: str = "player") -> Player:
         doc = {"_key": player_id, "name": name, "role": role}
         self._players.insert(doc)
-        return doc
+        return Player(id=player_id, name=name, role=role)
 
-    def get_player(self, player_id: str) -> dict | None:
-        return self._players.get(player_id)
+    def get_player(self, player_id: str) -> Player | None:
+        doc = self._players.get(player_id)
+        if not doc:
+            return None
+        return self._to_player(doc)
 
-    def find_player_by_name(self, name: str) -> dict | None:
+    def _to_player(self, doc: dict) -> Player:
+        pid = doc["_key"]
+        return Player(
+            id=pid,
+            name=doc.get("name", ""),
+            role=doc.get("role", "player"),
+            last_spotlight_at=doc.get("last_spotlight_at"),
+            last_main_entity_id=doc.get("last_main_entity_id"),
+            entity_ids=self.get_player_entities(pid),
+        )
+
+    def find_player_by_name(self, name: str) -> Player | None:
         query = f"""
             FOR p IN {PLAYERS}
             FILTER LOWER(p.name) == @name
@@ -2068,9 +2083,9 @@ class EntityRepository:
         """
         cursor = self.db.aql.execute(query, bind_vars={"name": name.lower().strip()})
         results = list(cursor)
-        return results[0] if results else None
+        return self._to_player(results[0]) if results else None
 
-    def search_players(self, query_str: str) -> list[dict]:
+    def search_players(self, query_str: str) -> list[Player]:
         q = query_str.lower().strip()
         if not q:
             return []
@@ -2080,10 +2095,10 @@ class EntityRepository:
             SORT p.name
             RETURN p
         """
-        return list(self.db.aql.execute(aql, bind_vars={"q": q}))
+        return [self._to_player(doc) for doc in self.db.aql.execute(aql, bind_vars={"q": q})]
 
-    def list_players(self) -> list[dict]:
-        return list(self._players.all())
+    def list_players(self) -> list[Player]:
+        return [self._to_player(doc) for doc in self._players.all()]
 
     def update_player(self, player_id: str, updates: dict) -> bool:
         player = self._players.get(player_id)
@@ -2115,8 +2130,32 @@ class EntityRepository:
                 "_from": f"{PLAYERS}/{player_id}",
                 "_to": f"{ENTITIES}/{entity_id}",
                 "type": "agency",
+                "main": False,
             })
         return True
+
+    def set_agency_main(self, player_id: str, entity_id: str, main: bool) -> bool:
+        """Set the ``main`` flag on a player's agency edge to an entity.
+
+        Returns True only when the edge exists and was updated (a player can
+        only flag entities they already own as mains).
+        """
+        edge_key = f"edge:{player_id}:{entity_id}:agency"
+        edge = self._relationships.get(edge_key)
+        if edge is None:
+            return False
+        edge["main"] = bool(main)
+        self._relationships.update(edge)
+        return True
+
+    def get_agency_edges(self, player_id: str) -> list[dict]:
+        """Return the player's agency edges (each with its ``main`` flag)."""
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @pref AND r.type == 'agency'
+            RETURN {{ entity_id: PARSE_IDENTIFIER(r._to).key, main: !!r.main }}
+        """
+        return list(self.db.aql.execute(query, bind_vars={"pref": f"{PLAYERS}/{player_id}"}))
 
     def release_entity(self, player_id: str, entity_id: str) -> bool:
         edge_key = f"edge:{player_id}:{entity_id}:agency"

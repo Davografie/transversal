@@ -370,8 +370,9 @@ Entity-to-entity connections.
 | `_key` | string | ✅ | Deterministic: `edge:{from}:{to}:{type}` |
 | `_from` | string | ✅ | `entities/{from_id}` |
 | `_to` | string | ✅ | `entities/{to_id}` |
-| `type` | string | ✅ | `super`, `transversal`, `relation`, `associate`, `commands`, `membership`, `agency` |
+| `type` | string | ✅ | `super`, `transversal`, `relation`, `associate`, `commands`, `membership`, `agency`, `support` |
 | `description` | string | | Optional description (e.g. relationship narrative) |
+| `main` | bool | | On `agency` edges only: whether the entity is one of the player's mains (see [[Troupe Play]]) |
 
 ### `sfx_owners`
 
@@ -425,6 +426,8 @@ Player identity for session persistence.
 | `_key` | string | ✅ | `player-{hex6}` (e.g. `player-bc80b9`) |
 | `name` | string | ✅ | Player display name |
 | `role` | string | | `player` or `architect` (default `player`) |
+| `last_spotlight_at` | string? | | ISO timestamp of when this player last took control of a main (spotlight recency sort key) |
+| `last_main_entity_id` | string? | | The main entity the player last took control of (stored, not derived) |
 
 
 ### `entity_images`

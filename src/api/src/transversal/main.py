@@ -127,6 +127,7 @@ async def on_startup():
         ensure_offer_negative_sfx,
         ensure_starter_location_sfx,
         ensure_base_move_sfxs,
+        ensure_gmc_base_difficulty,
         remove_legacy_contest_complication_sfx,
         remove_legacy_buy_hitch_sfx,
         backfill_trait_default_sfx,
@@ -147,6 +148,7 @@ async def on_startup():
     ensure_offer_negative_sfx(repo)
     ensure_starter_location_sfx(repo)
     ensure_base_move_sfxs(repo)
+    ensure_gmc_base_difficulty(repo)
     remove_legacy_contest_complication_sfx(repo)
     remove_legacy_buy_hitch_sfx(repo)
     backfill_trait_default_sfx(repo)

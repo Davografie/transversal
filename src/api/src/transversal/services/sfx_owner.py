@@ -840,3 +840,40 @@ def backfill_trait_default_sfx(repo) -> int:
     for trait in repo.get_all_traits():
         total += propagate_trait_default_sfx(repo, trait.id)
     return total
+
+
+def ensure_gmc_base_difficulty(repo) -> None:
+    """Seed the GMC-only trait set + its ``base difficulty`` trait. Idempotent.
+
+    A GMC's baseline opposition die (the Cortex "minor GMC = a die" case) lives
+    as a registry trait in a trait set filtered to ``EntityType.GMC`` — not as a
+    separate entity field — so even a GMC with zero authored traits can oppose a
+    roll. See [[Troupe Play]] (Sheet & base difficulty).
+    """
+    from transversal.domain import DieType, EntityType, RatingType, Trait, TraitSet
+
+    TRAITSET_ID = "ts-gmc-base"
+    TRAIT_ID = "trait-base-difficulty"
+
+    if repo.get_traitset_by_id(TRAITSET_ID) is None:
+        repo.create_traitset(TraitSet(
+            id=TRAITSET_ID,
+            name="GMC base",
+            description="Baseline opposition for GMCs with no authored traits.",
+            universes=[],  # universe-agnostic (applies everywhere)
+            entity_types=[EntityType.GMC],
+            order=0,
+            limit=1,
+            default_rating_type=RatingType.STATIC,
+            default_die_type=DieType.D6,
+        ))
+
+    if repo.get_trait(TRAIT_ID) is None:
+        repo.create_trait(Trait(
+            id=TRAIT_ID,
+            name="base difficulty",
+            universes=[],
+            traitset_id=TRAITSET_ID,
+            default_die_type=DieType.D6,
+            default_rating_type=RatingType.STATIC,
+        ))

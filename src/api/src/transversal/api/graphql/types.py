@@ -1273,6 +1273,34 @@ class LifePathStepResult:
     entry_label: Optional[str] = None
 
 
+# ── Players ──────────────────────────────────────────
+
+@strawberry.type
+class AgencyEdge:
+    """A player→entity ownership edge, with its ``main`` flag."""
+    entity_id: strawberry.ID
+    main: bool = False
+
+
+@strawberry.type
+class Player:
+    """A human player's identity + spotlight recency."""
+    id: strawberry.ID
+    name: str
+    role: str = "player"
+    last_spotlight_at: Optional[str] = None
+    last_main_entity_id: Optional[strawberry.ID] = None
+    agency: list[AgencyEdge] = strawberry.field(default_factory=list)
+
+
+@strawberry.input
+class SetAgencyMainInput:
+    """Flag (or un-flag) an owned entity as a player main."""
+    player_id: strawberry.ID
+    entity_id: strawberry.ID
+    main: bool = True
+
+
 # ── Trait Transfer Result Types ──────────────────────
 
 @strawberry.type

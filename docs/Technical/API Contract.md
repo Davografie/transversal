@@ -506,6 +506,8 @@ Response:
   "name": "Kael",
   "entity_ids": ["kael-1"],
   "role": "player",
+  "last_spotlight_at": null,
+  "last_main_entity_id": null,
   "found": true
 }
 ```
@@ -530,9 +532,13 @@ Valid roles: `"player"`, `"architect"`. The role controls which UI elements are 
 
 **`POST /api/v1/players/{player_id}/release/{entity_id}`** — release an entity.
 
+**`POST /api/v1/players/{player_id}/main/{entity_id}`** — flag (or un-flag) an owned entity as a main. Request `{"main": true}` (default `true`); response `{"player_id": "...", "entity_id": "...", "main": true, "updated": true}`. A player can only flag entities they already own via an `agency` edge.
+
+**`POST /api/v1/players/{player_id}/spotlight`** — stamp the player's spotlight recency (actor-keyed; B55 wires this to "took control of a main"). Request `{"last_main_entity_id": "...", "timestamp": "ISO"}`; `timestamp` defaults to now.
+
 ### Player Persistence
 
-Players are stored in the ArangoDB `players` collection. Player→entity ownership is tracked via `relationships` edges (type: `agency`, `_from`: `players/{id}`, `_to`: `entities/{id}`). See [[Data Model#players]] and [[Data Model#relationships]].
+Players are stored in the ArangoDB `players` collection. Player→entity ownership is tracked via `relationships` edges (type: `agency`, `_from`: `players/{id}`, `_to`: `entities/{id}`), carrying a `main` flag for the player's mains. Support characters link to their main via a directional `support` edge (`entity → entity`). See [[Data Model#players]] and [[Data Model#relationships]].
 
 ### Session Management
 
