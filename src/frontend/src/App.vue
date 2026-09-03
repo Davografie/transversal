@@ -148,9 +148,10 @@
               <MediaImage v-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-portrait" alt="" />
               <span v-else class="char-portrait char-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
               <span class="char-chip-meta">
-                <span class="char-chip-name">{{ e.name || e.id }}</span>
+                <span class="char-chip-name">{{ e.name || e.id }} <span v-if="e.main" class="main-badge">MAIN</span></span>
                 <span v-if="locationLabel(e)" class="char-chip-location">{{ locationLabel(e) }}</span>
               </span>
+              <span class="main-toggle" :class="{ on: e.main }" :title="e.main ? 'Unset as main' : 'Set as main'" @click.stop="toggleMain(e)">★</span>
               <span class="char-release-btn" title="Relinquish agency" @click.stop="releaseCharacter(e)">✕</span>
             </button>
           </div>
@@ -1648,11 +1649,39 @@ async function fetchEntitiesFor(pid) {
       })
       const json = await r2.json()
       const results = json.data?.entities || []
-      for (const e of results) entityCache.setEntity(e.id, e)
+      const mains = await fetchPlayerMains(pid)
+      for (const e of results) {
+        e.main = mains.has(e.id)
+        entityCache.setEntity(e.id, e)
+      }
       return results
     }
   } catch {}
   return []
+}
+
+async function fetchPlayerMains(pid) {
+  // The agency `main` flag lives on the player→entity edge, not the entity doc.
+  try {
+    const data = await graphql(`query($id: ID!) { player(id: $id) { agency { entityId main } } }`, { id: pid })
+    return new Set((data?.player?.agency || []).filter((a) => a.main).map((a) => a.entityId))
+  } catch { return new Set() }
+}
+
+async function toggleMain(e) {
+  if (!playerId.value || !e?.id) return
+  const next = !e.main
+  await fetch(`/api/v1/players/${playerId.value}/main/${e.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ main: next }),
+  }).catch(() => {})
+  // Marking the currently-controlled body as main should stamp spotlight now
+  // (the control endpoint writes last_spotlight_at/last_main_entity_id).
+  if (next && entityId.value === e.id) {
+    await fetch(`/api/v1/players/${playerId.value}/control/${e.id}`, { method: 'POST' }).catch(() => {})
+  }
+  await fetchPlayerEntities()
 }
 
 async function onSwitchEnter() {
@@ -2043,4 +2072,8 @@ watch(gmMode, (v) => {
 .support-hint { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
 .support-create-btn { width: 100%; font-size: 12px; padding: 8px; background: var(--accent-dim); color: var(--text); border: none; border-radius: 6px; cursor: pointer; }
 .support-create-btn:hover { background: var(--accent); }
+.main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: #0a0a0f; background: var(--accent); font-weight: 600; margin-left: 4px; }
+.main-toggle { flex-shrink: 0; cursor: pointer; font-size: 14px; color: var(--text-dim); opacity: 0.45; transition: color 0.15s, opacity 0.15s; line-height: 1; }
+.main-toggle.on { color: var(--accent); opacity: 1; }
+.main-toggle:hover { opacity: 1; }
 </style>
