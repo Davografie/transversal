@@ -1352,6 +1352,7 @@ const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')
 const wrapperOpen = computed(() => hoverOpen.value || sheetVisible.value)
+let panelResizeObserver = null
 const documentDragging = ref(false)
 
 function openPanel() {
@@ -1564,6 +1565,12 @@ onMounted(() => {
     window.addEventListener('resize', onViewportResize)
     window.addEventListener('orientationchange', onViewportResize)
     if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewportResize)
+    if (typeof ResizeObserver !== 'undefined' && wrapperEl.value) {
+      panelResizeObserver = new ResizeObserver(() => {
+        if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+      })
+      panelResizeObserver.observe(wrapperEl.value)
+    }
   }
   document.addEventListener('dragstart', () => { documentDragging.value = true })
   document.addEventListener('dragend', () => { documentDragging.value = false })
@@ -1596,6 +1603,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', onViewportResize)
   window.removeEventListener('orientationchange', onViewportResize)
   if (window.visualViewport) window.visualViewport.removeEventListener('resize', onViewportResize)
+  if (panelResizeObserver) panelResizeObserver.disconnect()
   if (offRollTablePrepare) offRollTablePrepare()
   if (offRollTableResolved) offRollTableResolved()
   if (offCanvasOpenFull) offCanvasOpenFull()

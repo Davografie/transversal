@@ -406,19 +406,21 @@
       </template>
     </template>
     <div v-else class="empty">No entity loaded</div>
-  </div>
 
-  <RollTableMenu
-    v-if="rollTableMenu"
-    :entity-id="entity.id"
-    :table-id="rollTableMenu.tableId"
-    :title="rollTableMenu.name"
-    :entity-razmerit="entity.razmerit ?? 0"
-    :mode="rollTableMenu.mode || 'apply'"
-    :player-id="playerId"
-    :main-entity-id="mainEntityId"
-    @close="rollTableMenu = null"
-  />
+    <Teleport to="body">
+      <RollTableMenu
+        v-if="rollTableMenu"
+        :entity-id="entity.id"
+        :table-id="rollTableMenu.tableId"
+        :title="rollTableMenu.name"
+        :entity-razmerit="entity.razmerit ?? 0"
+        :mode="rollTableMenu.mode || 'apply'"
+        :player-id="playerId"
+        :main-entity-id="mainEntityId"
+        @close="rollTableMenu = null"
+      />
+    </Teleport>
+  </div>
 
 </template>
 
