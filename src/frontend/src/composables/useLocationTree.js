@@ -163,6 +163,44 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     return false
   }
 
+  // ── Scene scope ─────────────────────────────────────
+  // The scene summary should show only entities in the current location, its
+  // ancestors, and its descendants — not every entity in the multiverse.
+  function _findNodeWithAncestors(nodes, targetId, ancestors) {
+    for (const n of nodes) {
+      if (n.id === targetId) return n
+      if (n.children && n.children.length) {
+        ancestors.push(n)
+        const found = _findNodeWithAncestors(n.children, targetId, ancestors)
+        if (found) return found
+        ancestors.pop()
+      }
+    }
+    return null
+  }
+
+  function _collectDescendants(node, set) {
+    if (!node) return
+    for (const c of node.children || []) {
+      set.add(c.id)
+      _collectDescendants(c, set)
+    }
+  }
+
+  function sceneLocationIds(targetId) {
+    const set = new Set()
+    if (!targetId) return set
+    // Always include the current location itself, even before the tree loads.
+    set.add(targetId)
+    if (!locationTree.value.length) return set
+    const ancestors = []
+    const target = _findNodeWithAncestors(locationTree.value, targetId, ancestors)
+    if (!target) return set
+    for (const a of ancestors) set.add(a.id)
+    _collectDescendants(target, set)
+    return set
+  }
+
   return {
     locationTree,
     expandedNodes,
@@ -171,5 +209,6 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     flatTree,
     occupantsByLocation,
     findAncestorIds,
+    sceneLocationIds,
   }
 }

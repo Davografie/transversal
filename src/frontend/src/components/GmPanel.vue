@@ -12,7 +12,7 @@
         <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
         <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
       </div>
-      <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntities" @inspect="inspectEntity" />
+      <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntitiesInScope" @inspect="inspectEntity" />
       <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" />
     </template>
 
@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, toRef, onMounted, onUnmounted, watch } from 'vue'
+import { ref, toRef, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -136,8 +136,14 @@ watch(() => props.currentEntityId, (id) => {
 // ── Location tree ───────────────────────────────────
 const {
   locationTree, expandedNodes,
-  fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds,
+  fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds, sceneLocationIds,
 } = useLocationTree({ filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
+
+// Scene summary scope: current location + its ancestors + descendants.
+const sceneEntitiesInScope = computed(() => {
+  const ids = sceneLocationIds(props.currentLocationId)
+  return sceneEntities.value.filter((e) => e.currentLocation && ids.has(e.currentLocation))
+})
 
 // ── Entity selection ────────────────────────────────
 function toggleEntity(e) {
