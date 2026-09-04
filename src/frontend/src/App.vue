@@ -373,7 +373,7 @@ const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
-const { supportCharacters, activeMains, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId, fetchRecency, fetchPlayerBodies } = useTroupe()
+const { supportCharacters, activeMains, onlinePlayers, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId, fetchRecency, fetchPlayerBodies, fetchOnlinePlayers } = useTroupe()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
 const DIAG = {
@@ -1034,7 +1034,7 @@ let offSwitchPerspective = null
 let offSwitchViewLocation = null
 
 // SSE — live state sync (subscribe with the stable identity; free-roam has no perspective entity)
-const { connected, lastEvent, error } = useSSE(sessionId, computed(() => entityId.value || selfEntityId.value))
+const { connected, lastEvent, error } = useSSE(sessionId, computed(() => entityId.value || selfEntityId.value), playerId)
 
 // Architect toast notifications
 const { toasts, addToast, dismissToast } = useToasts()
@@ -1114,6 +1114,9 @@ watch(lastEvent, (evt) => {
       fetchActiveMains(true)
       fetchRecency(true)
       fetchPlayerBodies(true)
+      break
+    case 'presence_changed':
+      fetchOnlinePlayers(true)
       break
     case 'trait_updated':
       entityCache.invalidateSheet(evt.data?.entity_id)

@@ -585,13 +585,23 @@ class Query:
                 if repo.get_agency_main(pid, main_id):
                     owner_id = pid
                     break
+            sc_owner_ids = repo.get_entity_players(sc_id)
+            sc_owner_id = sc_owner_ids[0] if sc_owner_ids else None
             out.append(SupportCharacter(
                 entity=_entity_to_gql(sc),
                 main=_entity_to_gql(main),
                 main_owner_id=owner_id,
+                owner_id=sc_owner_id,
                 main_active=owner_id is not None and is_main_active(owner_id, main_id),
             ))
         return out
+
+    @strawberry.field
+    def online_players(self, info: strawberry.Info) -> list[strawberry.ID]:
+        """Player ids with an active SSE connection (presence)."""
+        from transversal.services.presence import list_online_players
+
+        return list_online_players()
 
     @strawberry.field
     def active_mains(self, info: strawberry.Info) -> list[ActiveMain]:

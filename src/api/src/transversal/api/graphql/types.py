@@ -1331,6 +1331,7 @@ class SupportCharacter:
     entity: Entity
     main: Entity
     main_owner_id: Optional[strawberry.ID] = None
+    owner_id: Optional[strawberry.ID] = None
     main_active: bool = False
 
 

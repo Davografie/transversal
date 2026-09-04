@@ -1,6 +1,6 @@
 import { ref, watch, onUnmounted, isRef } from 'vue'
 
-export function useSSE(sessionId, entityId) {
+export function useSSE(sessionId, entityId, playerId) {
   const connected = ref(false)
   const lastEvent = ref(null)
   const error = ref(null)
@@ -10,13 +10,14 @@ export function useSSE(sessionId, entityId) {
     disconnect()
     const sid = isRef(sessionId) ? sessionId.value : sessionId
     const eid = isRef(entityId) ? entityId.value : entityId
+    const pid = isRef(playerId) ? playerId.value : playerId
     console.log('[SSE] connect() called — sid:', sid, 'eid:', eid, 'isDefault:', sid === 'session-default')
     if (!sid || !eid || sid === 'session-default') {
       console.log('[SSE] connect() skipped — guard blocked (session-default or missing id)')
       return
     }
 
-    const url = `/api/v1/stream?session_id=${sid}&entity_id=${eid}`
+    const url = `/api/v1/stream?session_id=${sid}&entity_id=${eid}&player_id=${pid || ''}`
     console.log('[SSE] creating EventSource →', url)
     source = new EventSource(url)
 
@@ -37,7 +38,7 @@ export function useSSE(sessionId, entityId) {
       'entity_updated', 'entity_moved', 'difficulty_set', 'sfx_choice_required',
       'contest_challenged', 'contest_set', 'contest_resolved', 'contest_give_in', 'contest_compare', 'contest_push', 'contest_stakes', 'traits_revealed',
       'dice_limits_changed',
-      'main_active',
+      'main_active', 'presence_changed',
       'session_started', 'session_ended'
     ]
 
@@ -62,6 +63,7 @@ export function useSSE(sessionId, entityId) {
   // Watch for ref changes and reconnect (handles initial + subsequent)
   if (isRef(entityId)) watch(() => entityId.value, connect, { immediate: true })
   if (isRef(sessionId)) watch(() => sessionId.value, connect, { immediate: true })
+  if (isRef(playerId)) watch(() => playerId.value, connect)
 
   onUnmounted(disconnect)
 

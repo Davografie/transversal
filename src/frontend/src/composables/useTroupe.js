@@ -24,6 +24,10 @@ const activeMains = ref([])
 // currently playing.
 const playerBodies = ref([])
 
+// Player ids with an active SSE connection (presence). Used to filter the troupe
+// overview to online players and to mark SCs "available".
+const onlinePlayers = ref([])
+
 // The support-cast roll-table id for a given main, resolved universe-aware by
 // the server (B65): ``rt-<universe>-support-cast`` with a generic fallback.
 const supportCastTableId = ref(null)
@@ -41,7 +45,7 @@ const SUPPORT_QUERY = `query {
   supportCharacters {
     entity { id type name razmerit currentUniverse currentLocation sheetPortrait }
     main { id type name sheetPortrait }
-    mainOwnerId mainActive
+    mainOwnerId ownerId mainActive
   }
 }`
 
@@ -58,6 +62,8 @@ const PLAYER_BODIES_QUERY = `query {
     entity { id type name razmerit currentUniverse currentLocation sheetPortrait }
   }
 }`
+
+const ONLINE_PLAYERS_QUERY = `query { onlinePlayers }`
 
 export function useTroupe() {
   const { graphql } = useApi()
@@ -110,6 +116,17 @@ export function useTroupe() {
     return playerBodies.value
   }
 
+  async function fetchOnlinePlayers(force = false) {
+    if (onlinePlayers.value.length && !force) return onlinePlayers.value
+    try {
+      const data = await graphql(ONLINE_PLAYERS_QUERY, {})
+      if (data?.onlinePlayers) onlinePlayers.value = data.onlinePlayers
+    } catch (e) {
+      error.value = e?.message || String(e)
+    }
+    return onlinePlayers.value
+  }
+
   async function fetchSupportCastTableId(mainId) {
     if (!mainId) return null
     try {
@@ -125,8 +142,8 @@ export function useTroupe() {
   }
 
   return {
-    players, supportCharacters, activeMains, playerBodies, supportCastTableId,
+    players, supportCharacters, activeMains, playerBodies, onlinePlayers, supportCastTableId,
     loading, error,
-    fetchRecency, fetchSupportCharacters, fetchActiveMains, fetchPlayerBodies, fetchSupportCastTableId,
+    fetchRecency, fetchSupportCharacters, fetchActiveMains, fetchPlayerBodies, fetchOnlinePlayers, fetchSupportCastTableId,
   }
 }

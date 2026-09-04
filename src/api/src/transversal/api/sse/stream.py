@@ -16,19 +16,22 @@ async def stream(
     request: Request,
     session_id: str = Query(...),
     entity_id: str = Query(...),
+    player_id: str = Query(""),
 ):
     """SSE endpoint for real-time state push.
 
     Query params:
         session_id: The session to subscribe to
         entity_id: The entity whose events to receive (filtered server-side)
-
-    Events pushed:
-        location_changed, trait_updated, razmerit_changed,
-        roll_result, sfx_triggered, beat_end, scene_change
+        player_id: The acting player (for presence tracking)
     """
-    logger.info(f"SSE client connecting — session={session_id} entity={entity_id}")
+    from transversal.services.presence import mark_offline, mark_online
+    from transversal.services.state_events import broadcast_presence_changed
+
+    logger.info(f"SSE client connecting — session={session_id} entity={entity_id} player={player_id}")
     sub = event_bus.subscribe(session_id)
+    if player_id and mark_online(player_id):
+        broadcast_presence_changed()
 
     async def event_generator():
         try:
@@ -40,6 +43,8 @@ async def stream(
                 yield sse_message
         finally:
             sub.close()
+            if player_id and mark_offline(player_id):
+                broadcast_presence_changed()
             logger.info(f"SSE subscription closed — session={session_id}")
 
     return EventSourceResponse(event_generator())

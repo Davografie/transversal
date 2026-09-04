@@ -79,6 +79,20 @@ def broadcast_main_active(player_id: str, entity_id: str, active: bool) -> None:
         ))
 
 
+def broadcast_presence_changed() -> None:
+    """Broadcast that the set of online players changed (someone joined/left).
+
+    Consumed by the GM troupe overview to refresh which players are online.
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="presence_changed", session_id=s.id, data={},
+        ))
+
+
 def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
     """Fire automatic SFX for a global (non-entity-scoped) boundary event.
 
