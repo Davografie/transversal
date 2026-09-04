@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <div v-if="loading" class="empty">Loading troupe…</div>
+    <div v-if="loading && rotationPlayers.length === 0" class="empty">Loading troupe…</div>
     <div v-else-if="rotationPlayers.length === 0" class="empty">No players</div>
     <div v-else class="recency-list">
       <div
