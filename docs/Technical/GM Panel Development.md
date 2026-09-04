@@ -68,6 +68,7 @@ Singleton composables (the reference implementations):
 - `useEntityCrud` — entities, selection, CRUD, auto-save watcher, imagen job polling.
 - `useTraitsConfig` — traitsets, allSfxs, `traitNameMap`, fetch, optimistic `patchData`.
 - `useLocationTree` — location tree + expansion state (module-level), derivation computeds.
+- `useTroupe` — troupe-play state (spotlight recency, support characters, active mains, current bodies, online players); read by `GmTroupeOverview` and the player settings overlay.
 
 Derivation/helper composables take inputs as parameters and expose computeds
 (no shared state):
@@ -127,6 +128,7 @@ tree that a parent assembled specifically to pass down.
 
 - Thin consumer panels: `GmPanel.vue` (root), `GmEntityEditPanel.vue`, `GmTraitEditPanel.vue`.
 - Infrastructure: `PanelStack.vue`, `Panel.vue`, `usePanel.js`, `usePanelBus.js`.
+- Troupe play: `GmTroupeOverview.vue` (recency + active-main groups), `RollTableMenu.vue` (roll-table-as-menu picker), `useRollTableMenu.js`.
 
 ## Migration backlog — complete
 
