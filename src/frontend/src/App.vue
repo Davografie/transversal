@@ -1416,12 +1416,89 @@ function onPanelDragEnd({ dy, velocity }) {
   else open = panelDragState.wasOpen                       // revert to previous state
 
   el.style.transition = ''  // re-enable the CSS transition, then settle
+  logPanelGeometry('drag-end')
   if (open) {
     if (diceRef.value) diceRef.value.panelOpen = true
     openPanel()
   } else {
     closePanel()
   }
+}
+
+// ── Panel geometry diagnostics ─────────────────────
+// The wrapper is position:fixed;bottom:0 and slides via an inline translateY
+// (closed = `translateY(offsetHeight - PANEL_CLOSED_PEEK)`). When it ends up
+// off-screen / half-hidden, these numbers tell us whether it's a stale height,
+// a visual-vs-layout viewport offset, or a stuck transform. Exposed as
+// `window.__panelDebug()` for copy-paste from devtools.
+function panelGeometry() {
+  const el = wrapperEl.value
+  const roller = el?.querySelector('.dice-roller')
+  const sheet = el?.querySelector('.embedded-sheet')
+  const vv = window.visualViewport
+  const vh = vv?.height ?? window.innerHeight
+  const rect = el?.getBoundingClientRect()
+  const rollerRect = roller?.getBoundingClientRect()
+  const sheetRect = sheet?.getBoundingClientRect()
+  return {
+    viewport: {
+      innerW: window.innerWidth,
+      innerH: window.innerHeight,
+      visualW: vv?.width ?? null,
+      visualH: vv?.height ?? null,
+      visualOffsetTop: vv?.offsetTop ?? null,
+      scale: vv?.scale ?? null,
+    },
+    wrapper: {
+      top: rect ? Math.round(rect.top) : null,
+      bottom: rect ? Math.round(rect.bottom) : null,
+      height: rect ? Math.round(rect.height) : null,
+      offsetHeight: el?.offsetHeight ?? null,
+      scrollHeight: el?.scrollHeight ?? null,
+      inlineTransform: el?.style.transform || '(none)',
+      computedTransform: el ? getComputedStyle(el).transform : null,
+      open: wrapperOpen.value,
+    },
+    sheet: sheetRect ? { top: Math.round(sheetRect.top), bottom: Math.round(sheetRect.bottom), height: Math.round(sheetRect.height), display: getComputedStyle(sheet).display } : null,
+    roller: rollerRect ? { top: Math.round(rollerRect.top), bottom: Math.round(rollerRect.bottom), height: Math.round(rollerRect.height) } : null,
+    state: {
+      hoverOpen: hoverOpen.value,
+      sheetVisible: sheetVisible.value,
+      forceSheet: forceSheet.value,
+      phase: phase.value,
+      gmMode: gmMode.value,
+      closedOffset: el ? Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK) : null,
+    },
+    flags: {
+      wrapperBelowViewport: rect ? rect.bottom > vh + 1 : null,
+      rollerBelowViewport: rollerRect ? rollerRect.bottom > vh + 1 : null,
+      wrapperAboveViewport: rect ? rect.top < -1 : null,
+      visualViewportShorter: vv ? vv.height < window.innerHeight : false,
+    },
+  }
+}
+
+function logPanelGeometry(label) {
+  const g = panelGeometry()
+  const w = g.wrapper, r = g.roller ?? {}, v = g.viewport
+  console.log(
+    `%c[panel] ${label}`,
+    'font-weight:bold; color:#8ecae6',
+    `wrapper top=${w.top} bottom=${w.bottom} h=${w.height} open=${w.open} inline="${w.inlineTransform}"`,
+    `roller top=${r.top ?? '-'} bottom=${r.bottom ?? '-'}`,
+    `viewport innerH=${v.innerH} visualH=${v.visualH} vOffsetTop=${v.visualOffsetTop} scale=${v.scale}`,
+    `state hoverOpen=${g.state.hoverOpen} sheetVisible=${g.state.sheetVisible} phase=${g.state.phase} closedOffset=${g.state.closedOffset}`,
+    `flags belowViewport=${g.flags.wrapperBelowViewport} rollerBelow=${g.flags.rollerBelowViewport} aboveViewport=${g.flags.wrapperAboveViewport} visualShorter=${g.flags.visualViewportShorter}`,
+  )
+  return g
+}
+
+function onViewportResize() {
+  // Viewport changes (orientation, keyboard, URL-bar collapse) can leave a
+  // fixed-position panel drifted. Re-sync the closed position, and log so the
+  // human can correlate a mis-position with the resize.
+  if (!wrapperOpen.value) nextTick(() => syncClosedPosition())
+  logPanelGeometry('viewport-resize')
 }
 
 function onPanelOpen(v) {
@@ -1474,6 +1551,17 @@ function onDocumentClick(e) {
 
 onMounted(() => {
   syncClosedPosition()
+  // Panel diagnostics — run window.__panelDebug() in devtools to dump geometry.
+  if (typeof window !== 'undefined') {
+    window.__panelDebug = () => {
+      const g = logPanelGeometry('manual')
+      console.log('%c[panel] geometry (copy this)', 'font-weight:bold', JSON.stringify(g, null, 2))
+      return g
+    }
+    window.addEventListener('resize', onViewportResize)
+    window.addEventListener('orientationchange', onViewportResize)
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewportResize)
+  }
   document.addEventListener('dragstart', () => { documentDragging.value = true })
   document.addEventListener('dragend', () => { documentDragging.value = false })
   document.addEventListener('click', onDocumentClick, true)  // capture: outside-tap closes panel
@@ -1502,6 +1590,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick, true)
+  window.removeEventListener('resize', onViewportResize)
+  window.removeEventListener('orientationchange', onViewportResize)
+  if (window.visualViewport) window.visualViewport.removeEventListener('resize', onViewportResize)
   if (offRollTablePrepare) offRollTablePrepare()
   if (offRollTableResolved) offRollTableResolved()
   if (offCanvasOpenFull) offCanvasOpenFull()
