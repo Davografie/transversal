@@ -1549,6 +1549,8 @@ function onDocumentClick(e) {
   closePanel()
 }
 
+let presencePollTimer = null
+
 onMounted(() => {
   syncClosedPosition()
   // Panel diagnostics — run window.__panelDebug() in devtools to dump geometry.
@@ -1574,6 +1576,9 @@ onMounted(() => {
   if (playerId.value) fetchPlayerEntities()
   if (playerId.value) fetchSupportCharacters()
   if (playerId.value) fetchActiveMains()
+  // Periodically re-fetch presence so grace-window expiry (a player whose device
+  // slept past the 10-minute grace) drops them from the online list.
+  presencePollTimer = setInterval(() => { if (playerId.value) fetchOnlinePlayers(true) }, 60_000)
   if (gmMode.value) prefetchEntities()  // warm scene-overview cache before panel opens
   refreshDiceBonuses()
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
@@ -1605,6 +1610,7 @@ onUnmounted(() => {
   if (offCanvasOpenFull) offCanvasOpenFull()
   if (offSwitchPerspective) offSwitchPerspective()
   if (offSwitchViewLocation) offSwitchViewLocation()
+  if (presencePollTimer) clearInterval(presencePollTimer)
 })
 
 // Re-sync closed position when sheet visibility changes while wrapper is closed

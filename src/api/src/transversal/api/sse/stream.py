@@ -43,8 +43,8 @@ async def stream(
                 yield sse_message
         finally:
             sub.close()
-            if player_id and mark_offline(player_id):
-                broadcast_presence_changed()
+            if player_id:
+                mark_offline(player_id)
             logger.info(f"SSE subscription closed — session={session_id}")
 
     return EventSourceResponse(event_generator())
