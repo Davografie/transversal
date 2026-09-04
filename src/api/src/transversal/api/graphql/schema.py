@@ -94,6 +94,7 @@ from transversal.api.graphql.types import (
     Player as GqlPlayer,
     SetAgencyMainInput,
     SupportCharacter,
+    ActiveMain,
 )
 from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
@@ -588,6 +589,29 @@ class Query:
                 main=_entity_to_gql(main),
                 main_owner_id=owner_id,
                 main_active=owner_id is not None and is_main_active(owner_id, main_id),
+            ))
+        return out
+
+    @strawberry.field
+    def active_mains(self, info: strawberry.Info) -> list[ActiveMain]:
+        """The mains currently being controlled by their players (B66).
+
+        One entry per active main (player → main), resolved to its entity. The
+        frontend filters out the acting player to show other players' active mains.
+        """
+        from transversal.services.player_manager import list_active_mains
+
+        repo = _em(info).repo
+        out: list[ActiveMain] = []
+        for player_id, main_id in list_active_mains().items():
+            main = repo.get_entity(main_id)
+            if main is None:
+                continue
+            player = repo.get_player(player_id)
+            out.append(ActiveMain(
+                player_id=player_id,
+                player_name=player.name if player else player_id,
+                main=_entity_to_gql(main),
             ))
         return out
 

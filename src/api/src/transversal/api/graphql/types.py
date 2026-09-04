@@ -1334,6 +1334,14 @@ class SupportCharacter:
     main_active: bool = False
 
 
+@strawberry.type
+class ActiveMain:
+    """A main currently being controlled by its player (B66)."""
+    player_id: strawberry.ID
+    player_name: str = ""
+    main: Entity
+
+
 # ── Trait Transfer Result Types ──────────────────────
 
 @strawberry.type

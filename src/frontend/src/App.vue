@@ -202,25 +202,20 @@
 
         <div v-if="!gmMode" class="settings-section">
           <label class="settings-label">Create support character</label>
-          <template v-if="currentIsMain">
-            <button class="create-btn support-create-btn" @click="openCreateSupport(selfEntityId)">
-              + Roll a support character for {{ mainName(selfEntityId) }}
-            </button>
-          </template>
-          <template v-else-if="playerMains.length">
-            <div class="main-picker">
-              <button
-                v-for="m in playerMains" :key="m.id"
-                class="main-pick-btn"
-                :class="{ active: chosenMainId === m.id }"
-                @click="chosenMainId = m.id"
-              >{{ m.name || m.id }}</button>
+          <template v-if="otherPlayersMains.length">
+            <div class="other-mains-list">
+              <div v-for="a in otherPlayersMains" :key="a.playerId" class="other-main-row">
+                <MediaImage v-if="a.main?.sheetPortrait" :src="a.main.sheetPortrait" class="char-portrait" alt="" />
+                <span v-else class="char-portrait char-portrait-fallback">{{ (a.main?.name || a.playerId).charAt(0) }}</span>
+                <span class="char-chip-meta">
+                  <span class="char-chip-name">{{ a.main?.name || a.playerId }}</span>
+                  <span class="char-chip-location">{{ a.playerName || a.playerId }}</span>
+                </span>
+                <button class="support-create-btn support-create-inline" :title="'Create a support character for ' + (a.main?.name || a.playerId)" @click="openCreateSupport(a.main.id)">＋ support</button>
+              </div>
             </div>
-            <button class="create-btn support-create-btn" :disabled="!chosenMainId" @click="openCreateSupport(chosenMainId)">
-              + Roll a support character for {{ chosenMainId ? mainName(chosenMainId) : '…' }}
-            </button>
           </template>
-          <p v-else class="support-hint">Designate a main first (★ on a character above) to roll a support character.</p>
+          <p v-else class="support-hint">No other mains are active right now to support.</p>
         </div>
 
         <div class="settings-section">
@@ -378,7 +373,7 @@ const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
-const { supportCharacters, fetchSupportCharacters, fetchSupportCastTableId } = useTroupe()
+const { supportCharacters, activeMains, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId } = useTroupe()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
 const DIAG = {
@@ -619,21 +614,18 @@ const needsCharacterPick = computed(() =>
   !currentSupport.value
 )
 
-// B64 — create-support targets a real designated main.
-const playerMains = computed(() => playerEntities.value.filter((e) => e.main))
-const currentIsMain = computed(() => playerEntities.value.some((e) => e.id === selfEntityId.value && e.main))
-const chosenMainId = ref(null)
+// B66 — create-support targets another player's active main (not your own).
+// `activeMains` is one entry per active main: { playerId, playerName, main }.
+const otherPlayersMains = computed(() =>
+  activeMains.value.filter((a) => a.playerId !== playerId.value)
+)
 
 function mainName(id) {
   if (!id) return ''
+  const active = activeMains.value.find((a) => a.main?.id === id)
+  if (active?.main?.name) return active.main.name
   return playerEntities.value.find((e) => e.id === id)?.name || id
 }
-
-// Preselect a main when there's exactly one; clear a stale selection otherwise.
-watch(playerMains, (mains) => {
-  if (mains.length === 1) chosenMainId.value = mains[0].id
-  else if (!mains.some((m) => m.id === chosenMainId.value)) chosenMainId.value = null
-})
 
 const newCharName = ref('')
 const creatingChar = ref(false)
@@ -1116,9 +1108,10 @@ watch(lastEvent, (evt) => {
       addToast('Session ended', 'session')
       break
     case 'main_active':
-      // A main became active/inactive — refresh support-character availability
-      // (and the GM troupe overview recency if it's open).
+      // A main became active/inactive — refresh support-character availability,
+      // active mains, and the GM troupe overview recency if it's open.
       fetchSupportCharacters(true)
+      fetchActiveMains(true)
       break
     case 'trait_updated':
       entityCache.invalidateSheet(evt.data?.entity_id)
@@ -1484,6 +1477,7 @@ onMounted(() => {
   document.addEventListener('click', onDocumentClick, true)  // capture: outside-tap closes panel
   if (playerId.value) fetchPlayerEntities()
   if (playerId.value) fetchSupportCharacters()
+  if (playerId.value) fetchActiveMains()
   if (gmMode.value) prefetchEntities()  // warm scene-overview cache before panel opens
   refreshDiceBonuses()
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
@@ -1595,6 +1589,7 @@ function openSettings() {
   charSearchError.value = ''
   fetchPlayerEntities()
   fetchSupportCharacters()
+  fetchActiveMains()
   showLoginOverlay.value = true
 }
 
@@ -2112,9 +2107,9 @@ watch(gmMode, (v) => {
 .support-create-btn { width: 100%; font-size: 12px; padding: 8px; background: var(--accent-dim); color: var(--text); border: none; border-radius: 6px; cursor: pointer; }
 .support-create-btn:hover { background: var(--accent); }
 .support-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.main-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.main-pick-btn { font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
-.main-pick-btn.active { border-color: var(--accent); background: rgba(64,136,212,0.18); color: #fff; }
+.other-mains-list { display: flex; flex-direction: column; gap: 4px; }
+.other-main-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+.support-create-inline { width: auto; flex: 0 0 auto; font-size: 11px; padding: 5px 10px; }
 .main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: #0a0a0f; background: var(--accent); font-weight: 600; margin-left: 4px; }
 .main-toggle { flex-shrink: 0; cursor: pointer; font-size: 14px; color: var(--text-dim); opacity: 0.45; transition: color 0.15s, opacity 0.15s; line-height: 1; }
 .main-toggle.on { color: var(--accent); opacity: 1; }

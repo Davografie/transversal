@@ -30,6 +30,11 @@ def is_main_active(player_id: str, main_id: str) -> bool:
     return _active_main.get(player_id) == main_id
 
 
+def list_active_mains() -> dict[str, str]:
+    """Snapshot of the active mains: player_id → active main entity id (B66)."""
+    return dict(_active_main)
+
+
 class PlayerManager:
     """ArangoDB-backed player store."""
 
