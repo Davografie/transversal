@@ -13,7 +13,7 @@
         <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
       </div>
       <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntitiesInScope" @inspect="inspectEntity" />
-      <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" />
+      <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" @go-to-location="goToLocation" />
     </template>
 
     <template v-if="mode === 'prep'">
@@ -193,6 +193,13 @@ function switchToSheet() {
 function inspectEntity(id) {
   // Scene overview click → assume this character (perspective switch), not a sheet peek.
   bus.emit('switch-perspective', id)
+}
+
+function goToLocation(locId) {
+  // Troupe row click → move the GM's view to that location without assuming
+  // the character (perspective stays put).
+  if (!locId) return
+  bus.emit('switch-view-location', locId)
 }
 
 function startCreate() {

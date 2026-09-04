@@ -20,14 +20,14 @@
         <div class="section-label">Active</div>
         <div class="main-groups">
           <div v-for="a in activeMainGroups" :key="a.playerId" class="main-group">
-            <div class="main-line">
+            <div class="main-line" :class="{ clickable: a.main?.currentLocation }" :title="a.main?.currentLocation ? 'Go to location' : ''" @click="goTo(a.main)">
               <MediaImage v-if="a.main?.sheetPortrait" :src="a.main.sheetPortrait" class="row-portrait" alt="" />
               <span v-else class="entity-type-badge" :class="'type-' + (a.main?.type || 'CHARACTER')">{{ typeBadge(a.main) }}</span>
               <span class="row-main">{{ a.main?.name || a.playerId }}</span>
               <span class="row-player">{{ a.playerName || a.playerId }}</span>
               <span class="row-state" :class="mainStateClass(a.main)">{{ mainStateLabel(a.main) }}</span>
             </div>
-            <div v-for="sc in scsFor(a.main?.id)" :key="sc.entity?.id" class="sc-line">
+            <div v-for="sc in scsFor(a.main?.id)" :key="sc.entity?.id" class="sc-line" :class="{ clickable: sc.entity?.currentLocation }" @click="goTo(sc.entity)">
               <span class="sc-name">{{ sc.entity?.name || sc.entity?.id }}</span>
               <span class="sc-status" :class="scStatusClass(sc)">{{ scStatus(sc) }}</span>
             </div>
@@ -45,7 +45,7 @@
             class="recency-row"
             :class="{ 'due': i === 0 }"
           >
-            <div class="recency-line">
+            <div class="recency-line" :class="{ clickable: p.mainEntity?.currentLocation }" @click="goTo(p.mainEntity)">
               <span v-if="i === 0" class="due-dot" title="Most due for spotlight">◉</span>
               <span v-else class="due-dot placeholder"></span>
               <MediaImage v-if="p.mainEntity?.sheetPortrait" :src="p.mainEntity.sheetPortrait" class="row-portrait" alt="" />
@@ -72,6 +72,8 @@ const props = defineProps({
   currentLocationId: { type: String, default: '' },
   currentLocationName: { type: String, default: '' },
 })
+
+const emit = defineEmits(['go-to-location'])
 
 const {
   players, supportCharacters, activeMains, playerBodies, onlinePlayers,
@@ -103,6 +105,12 @@ const remainingPlayers = computed(() =>
 
 function entityInScene(entity) {
   return !!props.currentLocationId && entity?.currentLocation === props.currentLocationId
+}
+
+// Navigate the GM's view to an entity's location (GM view, not a perspective
+// switch — the assumed entity is left alone).
+function goTo(entity) {
+  if (entity?.currentLocation) emit('go-to-location', entity.currentLocation)
 }
 
 const inSceneCount = computed(() => onlineRotationPlayers.value.filter((p) => entityInScene(p.mainEntity)).length)
@@ -194,7 +202,10 @@ onMounted(() => {
   padding: 5px 8px; background: rgba(64,136,212,0.10); border: 1px solid rgba(64,136,212,0.35); border-radius: 6px;
 }
 .main-line { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.main-line.clickable, .sc-line.clickable, .recency-line.clickable { cursor: pointer; }
+.main-line.clickable:hover { background: rgba(255,255,255,0.06); border-radius: 4px; }
 .sc-line { display: flex; align-items: center; gap: 6px; padding-left: 22px; font-size: 11px; color: var(--text-dim); }
+.sc-line.clickable:hover { color: var(--text); background: rgba(255,255,255,0.06); border-radius: 4px; }
 .sc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-status { margin-left: auto; flex: 0 0 auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 .sc-status.played { color: var(--text); }
@@ -208,6 +219,7 @@ onMounted(() => {
   font-size: 13px; border: 1px solid transparent;
 }
 .recency-line { display: flex; align-items: center; gap: 6px; }
+.recency-line.clickable:hover { background: rgba(255,255,255,0.06); border-radius: 4px; }
 .recency-row.due { border-color: rgba(64,136,212,0.35); background: rgba(64,136,212,0.10); }
 .due-dot { color: var(--accent); font-size: 12px; flex: 0 0 auto; line-height: 1; }
 .due-dot.placeholder { visibility: hidden; }
