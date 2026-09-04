@@ -20,22 +20,28 @@
         class="recency-row"
         :class="{ 'due': i === 0 }"
       >
-        <span v-if="i === 0" class="due-dot" title="Most due for spotlight">◉</span>
-        <span v-else class="due-dot placeholder"></span>
-        <MediaImage
-          v-if="p.mainEntity?.sheetPortrait"
-          :src="p.mainEntity.sheetPortrait"
-          class="row-portrait"
-          alt=""
-        />
-        <span
-          v-else
-          class="entity-type-badge"
-          :class="'type-' + (p.mainEntity?.type || 'CHARACTER')"
-        >{{ typeBadge(p.mainEntity) }}</span>
-        <span class="row-main">{{ p.mainEntity?.name || '—' }}</span>
-        <span class="row-player">{{ p.name }}</span>
-        <span class="row-state" :class="stateClass(p)">{{ stateLabel(p) }}</span>
+        <div class="recency-line">
+          <span v-if="i === 0" class="due-dot" title="Most due for spotlight">◉</span>
+          <span v-else class="due-dot placeholder"></span>
+          <MediaImage
+            v-if="p.mainEntity?.sheetPortrait"
+            :src="p.mainEntity.sheetPortrait"
+            class="row-portrait"
+            alt=""
+          />
+          <span
+            v-else
+            class="entity-type-badge"
+            :class="'type-' + (p.mainEntity?.type || 'CHARACTER')"
+          >{{ typeBadge(p.mainEntity) }}</span>
+          <span class="row-main">{{ p.mainEntity?.name || '—' }}</span>
+          <span class="row-player">{{ p.name }}</span>
+          <span class="row-state" :class="stateClass(p)">{{ stateLabel(p) }}</span>
+        </div>
+        <div v-if="playedSupport(p)" class="playing-support">
+          ▸ playing {{ playedSupport(p).entity.name }}
+          <span class="for">(for {{ playedSupport(p).main?.name || '—' }})</span>
+        </div>
       </div>
     </div>
   </div>
@@ -51,7 +57,7 @@ const props = defineProps({
   currentLocationName: { type: String, default: '' },
 })
 
-const { players, loading, fetchRecency } = useTroupe()
+const { players, supportCharacters, playerBodies, loading, fetchRecency, fetchSupportCharacters, fetchPlayerBodies } = useTroupe()
 
 const sceneLabel = computed(() => props.currentLocationName || props.currentLocationId || '')
 
@@ -82,7 +88,19 @@ function stateClass(p) {
   return isInScene(p) ? 'in-scene' : 'scattered'
 }
 
-onMounted(() => fetchRecency())
+// The SC a player is currently playing (if their body is a support character).
+function playedSupport(p) {
+  const body = playerBodies.value.find((b) => b.playerId === p.id)
+  if (!body?.entity?.id) return null
+  const sc = supportCharacters.value.find((s) => s.entity?.id === body.entity.id)
+  return sc ? { entity: sc.entity, main: sc.main } : null
+}
+
+onMounted(() => {
+  fetchRecency()
+  fetchSupportCharacters()
+  fetchPlayerBodies()
+})
 </script>
 
 <style scoped>
@@ -100,10 +118,11 @@ onMounted(() => fetchRecency())
 
 .recency-list { display: flex; flex-direction: column; gap: 3px; }
 .recency-row {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; flex-direction: column; gap: 2px;
   padding: 5px 8px; background: rgba(255,255,255,0.04); border-radius: 6px;
   font-size: 13px; border: 1px solid transparent;
 }
+.recency-line { display: flex; align-items: center; gap: 6px; }
 .recency-row.due { border-color: rgba(64,136,212,0.35); background: rgba(64,136,212,0.10); }
 .due-dot { color: var(--accent); font-size: 12px; flex: 0 0 auto; line-height: 1; }
 .due-dot.placeholder { visibility: hidden; }
@@ -118,5 +137,7 @@ onMounted(() => fetchRecency())
 .row-state { margin-left: auto; flex: 0 0 auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 .row-state.in-scene { color: var(--success); }
 .row-state.scattered { color: var(--text-dim); }
+.playing-support { font-size: 11px; color: var(--text-dim); padding-left: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.playing-support .for { color: var(--text-dim); opacity: 0.7; }
 .empty { font-size: 12px; color: var(--text-dim); padding: 8px 0; }
 </style>

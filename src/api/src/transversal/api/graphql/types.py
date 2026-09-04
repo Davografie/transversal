@@ -1342,6 +1342,14 @@ class ActiveMain:
     main: Entity
 
 
+@strawberry.type
+class PlayerBody:
+    """The entity a player is currently controlling (main or SC)."""
+    player_id: strawberry.ID
+    player_name: str = ""
+    entity: Entity
+
+
 # ── Trait Transfer Result Types ──────────────────────
 
 @strawberry.type

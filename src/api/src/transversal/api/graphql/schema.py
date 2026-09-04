@@ -95,6 +95,7 @@ from transversal.api.graphql.types import (
     SetAgencyMainInput,
     SupportCharacter,
     ActiveMain,
+    PlayerBody,
 )
 from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
@@ -612,6 +613,25 @@ class Query:
                 player_id=player_id,
                 player_name=player.name if player else player_id,
                 main=_entity_to_gql(main),
+            ))
+        return out
+
+    @strawberry.field
+    def player_bodies(self, info: strawberry.Info) -> list[PlayerBody]:
+        """The entity each player is currently controlling (main or SC)."""
+        from transversal.services.player_manager import list_current_bodies
+
+        repo = _em(info).repo
+        out: list[PlayerBody] = []
+        for player_id, entity_id in list_current_bodies().items():
+            entity = repo.get_entity(entity_id)
+            if entity is None:
+                continue
+            player = repo.get_player(player_id)
+            out.append(PlayerBody(
+                player_id=player_id,
+                player_name=player.name if player else player_id,
+                entity=_entity_to_gql(entity),
             ))
         return out
 

@@ -19,6 +19,11 @@ const supportCharacters = ref([])
 // someone else's main" entry point.
 const activeMains = ref([])
 
+// The entity each player is currently controlling — main OR support character
+// (B66+). Cross-referenced with `supportCharacters` to show what SC a player is
+// currently playing.
+const playerBodies = ref([])
+
 // The support-cast roll-table id for a given main, resolved universe-aware by
 // the server (B65): ``rt-<universe>-support-cast`` with a generic fallback.
 const supportCastTableId = ref(null)
@@ -44,6 +49,13 @@ const ACTIVE_MAINS_QUERY = `query {
   activeMains {
     playerId playerName
     main { id type name razmerit currentUniverse currentLocation sheetPortrait }
+  }
+}`
+
+const PLAYER_BODIES_QUERY = `query {
+  playerBodies {
+    playerId playerName
+    entity { id type name razmerit currentUniverse currentLocation sheetPortrait }
   }
 }`
 
@@ -87,6 +99,17 @@ export function useTroupe() {
     return activeMains.value
   }
 
+  async function fetchPlayerBodies(force = false) {
+    if (playerBodies.value.length && !force) return playerBodies.value
+    try {
+      const data = await graphql(PLAYER_BODIES_QUERY, {})
+      if (data?.playerBodies) playerBodies.value = data.playerBodies
+    } catch (e) {
+      error.value = e?.message || String(e)
+    }
+    return playerBodies.value
+  }
+
   async function fetchSupportCastTableId(mainId) {
     if (!mainId) return null
     try {
@@ -102,8 +125,8 @@ export function useTroupe() {
   }
 
   return {
-    players, supportCharacters, activeMains, supportCastTableId,
+    players, supportCharacters, activeMains, playerBodies, supportCastTableId,
     loading, error,
-    fetchRecency, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId,
+    fetchRecency, fetchSupportCharacters, fetchActiveMains, fetchPlayerBodies, fetchSupportCastTableId,
   }
 }

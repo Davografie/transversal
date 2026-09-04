@@ -373,7 +373,7 @@ const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
-const { supportCharacters, activeMains, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId, fetchRecency } = useTroupe()
+const { supportCharacters, activeMains, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId, fetchRecency, fetchPlayerBodies } = useTroupe()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
 const DIAG = {
@@ -1109,10 +1109,11 @@ watch(lastEvent, (evt) => {
       break
     case 'main_active':
       // A main became active/inactive — refresh support-character availability,
-      // active mains, and the GM troupe overview recency.
+      // active mains, current bodies, and the GM troupe overview recency.
       fetchSupportCharacters(true)
       fetchActiveMains(true)
       fetchRecency(true)
+      fetchPlayerBodies(true)
       break
     case 'trait_updated':
       entityCache.invalidateSheet(evt.data?.entity_id)

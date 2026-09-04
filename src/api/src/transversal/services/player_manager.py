@@ -17,6 +17,11 @@ from transversal.domain import Player
 # only by ``record_control``, read by the troupe availability query (B57).
 _active_main: dict[str, str] = {}
 
+# Module-level current-body registry: player_id → the entity currently
+# controlled by that player (main OR support character). Written on every
+# ``record_control``; read by the troupe overview's "now playing" column (B66+).
+_current_body: dict[str, str] = {}
+
 
 def _set_active_main(player_id: str, main_id: str | None) -> None:
     if main_id is None:
@@ -33,6 +38,11 @@ def is_main_active(player_id: str, main_id: str) -> bool:
 def list_active_mains() -> dict[str, str]:
     """Snapshot of the active mains: player_id → active main entity id (B66)."""
     return dict(_active_main)
+
+
+def list_current_bodies() -> dict[str, str]:
+    """Snapshot of player_id → currently-controlled entity id (main or SC)."""
+    return dict(_current_body)
 
 
 class PlayerManager:
@@ -104,6 +114,9 @@ class PlayerManager:
         """
         is_main = self._repo.get_agency_main(player_id, entity_id)
         from transversal.services.state_events import broadcast_main_active
+
+        # Track the current body on every switch (main or support character).
+        _current_body[player_id] = entity_id
 
         if is_main:
             self.set_spotlight(player_id, entity_id)

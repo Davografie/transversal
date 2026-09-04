@@ -225,6 +225,7 @@ def test_active_main_registry_and_support_edges():
         _active_main,
         is_main_active,
         list_active_mains,
+        list_current_bodies,
     )
 
     repo = _repo
@@ -248,11 +249,13 @@ def test_active_main_registry_and_support_edges():
     mgr.record_control(P_ID, MAIN_ID)
     assert is_main_active(P_ID, MAIN_ID) is True
     assert list_active_mains() == {P_ID: MAIN_ID}
+    assert list_current_bodies() == {P_ID: MAIN_ID}
 
     # Switching to a non-main (support) deactivates the main.
     mgr.record_control(P_ID, SC_ID)
     assert is_main_active(P_ID, MAIN_ID) is False
     assert list_active_mains() == {}
+    assert list_current_bodies() == {P_ID: SC_ID}
 
     # The support edge is listed for the availability query.
     edges = repo.list_support_edges()
