@@ -40,9 +40,6 @@ export function useEntityCrud() {
       `query($type: EntityType) {
         entities(type: $type) {
           id type name razmerit currentUniverse currentLocation hidden unpublished
-          traitSettings {
-            id name dieType rating ratingType statement ego sfxIds traitsetName universe
-          }
         }
       }`,
       { type: null }
