@@ -25,7 +25,7 @@ from transversal.services.entity_manager import _origin_universe_from_key
 OCCUPANT_TYPES = {EntityType.CHARACTER, EntityType.GMC, EntityType.ASSET}
 
 
-def migrate() -> int:
+def migrate(apply: bool = False) -> int:
     repo = EntityRepository()
 
     origin_backfills = 0
@@ -36,7 +36,8 @@ def migrate() -> int:
     for proj in repo.list_all_projections():
         if not proj.origin_universe:
             proj.origin_universe = _origin_universe_from_key(proj.id)
-            repo.update_projection(proj)
+            if apply:
+                repo.update_projection(proj)
             origin_backfills += 1
 
     # 2. Ensure occupants have a NATIVE projection + valid current_projection.
@@ -50,14 +51,16 @@ def migrate() -> int:
         if not native:
             if not entity.current_universe:
                 continue
-            proj = repo.create_projection(Projection(
+            proj = Projection(
                 id=f"{entity.id}:{entity.current_universe}",
                 entity_id=entity.id,
                 origin_universe=entity.current_universe,
                 universe=entity.current_universe,
                 current_location=entity.current_location,
                 transversal_type=TransversalType.NATIVE,
-            ))
+            )
+            if apply:
+                repo.create_projection(proj)
             projections.append(proj)
             projections_created += 1
 
@@ -77,15 +80,18 @@ def migrate() -> int:
                 )
             if target is not None:
                 entity.current_projection = target.id
-                repo.update_entity(entity)
+                if apply:
+                    repo.update_entity(entity)
                 current_projections_set += 1
 
-    print("=== DONE ===")
-    print(f"Origin backfills: {origin_backfills}")
-    print(f"Projections created: {projections_created}")
-    print(f"Current projections set: {current_projections_set}")
+    print("=== PROJECTIONS MIGRATION ===")
+    print(f"apply={apply}")
+    print(f"origin_backfills: {origin_backfills}")
+    print(f"projections_created: {projections_created}")
+    print(f"current_projections_set: {current_projections_set}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(migrate())
+    apply = "--apply" in sys.argv
+    sys.exit(migrate(apply=apply))
