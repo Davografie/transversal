@@ -228,6 +228,18 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         ],
     ),
     EffectActionMeta(
+        action_id="resolve_pool",
+        label="Resolve Dice Pool",
+        description="Auto-resolve a target dice pool: roll it, pick the two highest as the total, and set the difficulty",
+        category="either",
+        effect_type="modify_pool",
+        effect_action="resolve",
+        valid_timings=["IMMEDIATE"],
+        refs=[
+            RefDef("pool", "Pool", "pool"),
+        ],
+    ),
+    EffectActionMeta(
         action_id="remove_die",
         label="Remove Die",
         description="Remove a die from the pool",
@@ -876,7 +888,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "play_as_rating": "Dice Pool", "step_up_die": "Dice Pool",
     "step_down_die": "Dice Pool", "double_die": "Dice Pool",
     "reroll_die": "Dice Pool", "add_dice": "Dice Pool",
-    "add_trait_rating_dice": "Dice Pool", "roll_pool": "Dice Pool",
+    "add_trait_rating_dice": "Dice Pool", "roll_pool": "Dice Pool", "resolve_pool": "Dice Pool",
     "remove_die": "Dice Pool", "split_die": "Dice Pool",
     "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
     "increase_dice_limit": "Outcome", "decrease_dice_limit": "Outcome",

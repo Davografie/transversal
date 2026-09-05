@@ -680,6 +680,33 @@ def test_roll_pool_empty_or_missing_target_is_noop():
     store.clear_all()
 
 
+def test_resolve_pool_rolls_and_sets_difficulty():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "loc-1", [
+        {"die": "d8", "source_kind": "trait", "source_id": "", "label": "complication", "ts_id": None},
+        {"die": "d8", "source_kind": "trait", "source_id": "", "label": "base", "ts_id": None},
+        {"die": "d6", "source_kind": "trait", "source_id": "", "label": "base", "ts_id": None},
+    ])
+
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="resolve",
+        refs={"pool": TargetRef(value="difficulty:loc-1")},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.applied) == 1
+    assert result.applied[0].summary.startswith("resolved loc-1 pool")
+
+    pool = store.get_pool("loc-1", "loc-1")
+    results = sorted([d["result"] for d in pool], reverse=True)
+    assert store.get_difficulty("loc-1") == sum(results[:2])
+    store.clear_all()
+
+
 def test_add_trait_rating_dice_to_difficulty_pool():
     from transversal.services.scene_state import get_scene_store
 

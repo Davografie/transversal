@@ -97,6 +97,7 @@ def _register_core_handlers(em, raz):
     effect_registry.register("modify_pool", "add_dice", _commit)
     effect_registry.register("modify_pool", "add_trait_rating", _commit)
     effect_registry.register("modify_pool", "roll", _commit)
+    effect_registry.register("modify_pool", "resolve", _commit)
 
     # Entity operations
     def _create_asset(a, eid, u, ctx):
@@ -1271,32 +1272,27 @@ def _apply_add_trait_rating(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"added {label} rating {dice} to pool"))
 
 
-def _apply_roll_pool(entity, effect, repo, result):
-    """Roll a target dice pool in place and broadcast the result (auto-difficulty).
+def _resolve_pool_ref(effect):
+    """Return the resolved pool id from ``refs["pool"]`` or the literal ``target``."""
+    pool_ref = (effect.refs or {}).get("pool")
+    return (pool_ref.value if pool_ref else "") or (effect.target or "")
 
-    The pool is resolved from ``refs["pool"]`` (a structured pool ref, e.g.
-    ``difficulty:<loc>``) with a fallback to the literal ``effect.target``.
-    Every die in that pool is rolled (hitches are not reported — mirrors the GM
-    difficulty roll); the enriched dice are saved back and broadcast so the
-    client sees a rolled pool without the GM.
+
+def _roll_stored_pool(location_id: str, owner_id: str):
+    """Roll a stored pool in place; return the enriched dice, or None if empty.
+
+    Mirrors the REST ``difficulty-roll`` (no hitches reported): rolls every die,
+    saves the enriched result, and broadcasts ``pool_updated`` phase="rolled".
     """
     from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.services.scene_state import get_scene_store
     from transversal.services.dice_resolver import roll_dice
     from transversal.domain import DieSpec
 
-    pool_ref = (effect.refs or {}).get("pool")
-    pool_id = (pool_ref.value if pool_ref else "") or (effect.target or "")
-    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
-    if not location_id or not owner_id:
-        result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
-        return
-
     store = get_scene_store()
     dice = store.get_pool(location_id, owner_id)
     if not dice:
-        result.applied.append(AppliedEffect(effect, f"pool {owner_id} is empty"))
-        return
+        return None
 
     specs = [
         DieSpec(
@@ -1318,7 +1314,63 @@ def _apply_roll_pool(entity, effect, repo, result):
     ]
     store.save_pool(location_id, owner_id, enriched)
     broadcast_pool_change(location_id, owner_id, dice=enriched, phase="rolled")
+    return enriched
+
+
+def _apply_roll_pool(entity, effect, repo, result):
+    """Roll a target dice pool in place and broadcast the result.
+
+    The pool is resolved from ``refs["pool"]`` (or ``effect.target``); every die
+    is rolled and the enriched result is broadcast — no difficulty is set.
+    """
+    pool_id = _resolve_pool_ref(effect)
+    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
+    if not location_id or not owner_id:
+        result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
+        return
+
+    enriched = _roll_stored_pool(location_id, owner_id)
+    if enriched is None:
+        result.applied.append(AppliedEffect(effect, f"pool {owner_id} is empty"))
+        return
     result.applied.append(AppliedEffect(effect, f"rolled {owner_id} pool ({len(enriched)} dice)"))
+
+
+def _apply_resolve_pool(entity, effect, repo, result):
+    """Auto-resolve a target dice pool: roll it, auto-pick the total, set difficulty.
+
+    Rolls the pool (see ``_apply_roll_pool``), then sums the two highest dice
+    (the standard keep-2 opposition total) and sets the location's difficulty,
+    broadcasting ``difficulty_set`` — the GM's manual total-pick step is gone.
+    """
+    pool_id = _resolve_pool_ref(effect)
+    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
+    if not location_id or not owner_id:
+        result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
+        return
+
+    enriched = _roll_stored_pool(location_id, owner_id)
+    if enriched is None:
+        result.applied.append(AppliedEffect(effect, f"pool {owner_id} is empty"))
+        return
+
+    results = sorted((d.get("result") or 0 for d in enriched), reverse=True)
+    total = sum(results[:2])
+
+    from transversal.services.scene_state import get_scene_store
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    store = get_scene_store()
+    store.set_difficulty(location_id, total)
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="difficulty_set",
+            session_id=s.id,
+            data={"difficulty": total, "location_id": location_id},
+        ))
+
+    result.applied.append(AppliedEffect(effect, f"resolved {owner_id} pool → difficulty {total}"))
 
 
 def _apply_earn(entity, effect, repo, result):
@@ -1697,6 +1749,7 @@ _MUTATION_HANDLERS = {
     ("modify_pool", "add_dice"): _apply_add_dice,
     ("modify_pool", "add_trait_rating"): _apply_add_trait_rating,
     ("modify_pool", "roll"): _apply_roll_pool,
+    ("modify_pool", "resolve"): _apply_resolve_pool,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,
