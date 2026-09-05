@@ -633,6 +633,53 @@ def test_add_dice_no_dice_is_noop():
     assert result.applied[0].summary == "no dice to add"
 
 
+def test_roll_pool_rolls_difficulty_pool():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "loc-1", [
+        {"die": "d8", "source_kind": "trait", "source_id": "", "label": "complication", "ts_id": None},
+        {"die": "d6", "source_kind": "trait", "source_id": "", "label": "base", "ts_id": None},
+    ])
+
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_pool", action="roll",
+        refs={"pool": TargetRef(value="difficulty:loc-1")},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.applied) == 1
+    pool = store.get_pool("loc-1", "loc-1")
+    assert len(pool) == 2
+    assert all(d.get("result") is not None for d in pool)
+    assert all(1 <= d["result"] <= 8 for d in pool)
+    store.clear_all()
+
+
+def test_roll_pool_empty_or_missing_target_is_noop():
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    store.save_pool("loc-1", "loc-1", [])
+
+    repo = FakeRepo()
+    entity = _entity()
+    # Empty pool → no-op summary.
+    empty = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="roll",
+                   refs={"pool": TargetRef(value="difficulty:loc-1")})
+    r1 = apply_effects(entity, [empty], repo)
+    assert r1.applied[0].summary == "pool loc-1 is empty"
+    # Missing target → no-op summary (pool:<entity> with an unknown entity).
+    missing = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="roll",
+                     refs={"pool": TargetRef(value="pool:char-1")})
+    r2 = apply_effects(entity, [missing], repo)
+    assert r2.applied[0].summary == "pool target not found: pool:char-1"
+    store.clear_all()
+
+
 def test_add_trait_rating_dice_to_difficulty_pool():
     from transversal.services.scene_state import get_scene_store
 

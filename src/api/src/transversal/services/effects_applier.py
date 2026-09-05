@@ -96,6 +96,7 @@ def _register_core_handlers(em, raz):
     effect_registry.register("modify_dice_limit", "decrease", _commit)
     effect_registry.register("modify_pool", "add_dice", _commit)
     effect_registry.register("modify_pool", "add_trait_rating", _commit)
+    effect_registry.register("modify_pool", "roll", _commit)
 
     # Entity operations
     def _create_asset(a, eid, u, ctx):
@@ -1270,6 +1271,56 @@ def _apply_add_trait_rating(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"added {label} rating {dice} to pool"))
 
 
+def _apply_roll_pool(entity, effect, repo, result):
+    """Roll a target dice pool in place and broadcast the result (auto-difficulty).
+
+    The pool is resolved from ``refs["pool"]`` (a structured pool ref, e.g.
+    ``difficulty:<loc>``) with a fallback to the literal ``effect.target``.
+    Every die in that pool is rolled (hitches are not reported — mirrors the GM
+    difficulty roll); the enriched dice are saved back and broadcast so the
+    client sees a rolled pool without the GM.
+    """
+    from transversal.services.contest_tracker import broadcast_pool_change
+    from transversal.services.scene_state import get_scene_store
+    from transversal.services.dice_resolver import roll_dice
+    from transversal.domain import DieSpec
+
+    pool_ref = (effect.refs or {}).get("pool")
+    pool_id = (pool_ref.value if pool_ref else "") or (effect.target or "")
+    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
+    if not location_id or not owner_id:
+        result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
+        return
+
+    store = get_scene_store()
+    dice = store.get_pool(location_id, owner_id)
+    if not dice:
+        result.applied.append(AppliedEffect(effect, f"pool {owner_id} is empty"))
+        return
+
+    specs = [
+        DieSpec(
+            die=DieType(d["die"]),
+            source_kind=d.get("source_kind", "manual"),
+            source_id=d.get("source_id", ""),
+            label=d.get("label", ""),
+            ts_id=d.get("ts_id"),
+            resource=d.get("resource", False),
+        )
+        for d in dice
+    ]
+    rolls = roll_dice(specs)
+    enriched = [
+        {**d, "result": r.result, "hitch": r.result == 1, "role": None, "bought": False,
+         "tier": r.tier.value if r.tier else None,
+         "effect_die": r.tier.effect_die.value if r.tier and r.tier.effect_die else None}
+        for d, r in zip(dice, rolls)
+    ]
+    store.save_pool(location_id, owner_id, enriched)
+    broadcast_pool_change(location_id, owner_id, dice=enriched, phase="rolled")
+    result.applied.append(AppliedEffect(effect, f"rolled {owner_id} pool ({len(enriched)} dice)"))
+
+
 def _apply_earn(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -1645,6 +1696,7 @@ _MUTATION_HANDLERS = {
     ("modify_dice_limit", "decrease"): _apply_dice_limit,
     ("modify_pool", "add_dice"): _apply_add_dice,
     ("modify_pool", "add_trait_rating"): _apply_add_trait_rating,
+    ("modify_pool", "roll"): _apply_roll_pool,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,
