@@ -331,6 +331,44 @@ def test_die_context_exposes_ts_id(monkeypatch):
     assert [e.result for e in fired] == ["ts-crimson"]
 
 
+def test_armed_source_threads_into_effect_context(monkeypatch):
+    """Deferred effects carry the resolved source so per-effect source_rating
+    conditions evaluate against the trait that owns the SFX (not ``source=None``)."""
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.domain import Condition, ConditionType
+
+    roll_deferral.reset()
+    ts = SimpleNamespace(id="char-1:cultivation")
+    repo = SimpleNamespace(
+        get_entity=lambda eid: SimpleNamespace(id=eid),
+        get_traitsetting=lambda tid: ts if tid == ts.id else None,
+    )
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    seen = {}
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            seen["context"] = context
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    effect = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "total"},
+        conditions=[Condition(type=ConditionType.SOURCE_RATING, value="d4", operator="==")],
+    )
+    roll_deferral.arm_sfx(
+        "e1", [effect],
+        source_sfx_id="sfx-qi", source_kind="trait_setting", source_id=ts.id,
+        duration=_rolls_duration(1),
+    )
+    fired = roll_deferral.fire_armed("e1", "on_result", "earth", {})
+
+    assert len(fired) == 1
+    assert seen["context"].get("_source") is ts
+    assert seen["context"].get("_source_element") == "traitsetting"
+
+
 def test_passive_rule_applies_to_every_entity(monkeypatch):
     roll_deferral.reset()
     applied = []

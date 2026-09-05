@@ -243,6 +243,14 @@ def _apply_armed(
     from transversal.services.effects_engine import _substitute_effect_context
 
     bindings: dict = dict(armed.bindings)
+    source = source_element = None
+    if armed.source_id:
+        from transversal.main import _get_repo
+        from transversal.services.target_resolver import resolve_source
+        resolved = resolve_source(armed.source_kind or "", armed.source_id, _get_repo())
+        if resolved:
+            source, source_element = resolved
+    effect_context = _source_context(context, source, source_element)
     applied: list[Effect] = []
     for effect in armed.effects:
         if effect.timing.value != event_type:
@@ -266,11 +274,11 @@ def _apply_armed(
             for die in dice:
                 resolved = _substitute_die_context(effect, die, context or {})
                 resolved = _substitute_effect_context(resolved, context or {}, bindings)
-                effect_registry.apply(resolved, entity_id, universe, context or {})
+                effect_registry.apply(resolved, entity_id, universe, effect_context)
                 applied.append(resolved)
         else:
             resolved = _substitute_effect_context(effect, context or {}, bindings)
-            effect_registry.apply(resolved, entity_id, universe, context or {})
+            effect_registry.apply(resolved, entity_id, universe, effect_context)
             applied.append(resolved)
     armed.bindings = bindings
     return applied
@@ -281,6 +289,19 @@ def _resolved_id(value) -> str | None:
     if isinstance(value, dict):
         return value.get("ts_id") or value.get("id")
     return getattr(value, "ts_id", None) or getattr(value, "id", None)
+
+
+def _source_context(context: dict | None, source, source_element: str | None) -> dict:
+    """Thread a resolved activation source into the effect context.
+
+    Per-effect ``source_rating`` / ``target_path`` conditions read ``_source`` /
+    ``_source_element`` back out in ``effects_applier._commit``. No-op when the
+    armed SFX carries no source.
+    """
+    if source is None:
+        return context or {}
+    from transversal.services.effects_applier import SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY
+    return {**(context or {}), SOURCE_CONTEXT_KEY: source, SOURCE_ELEMENT_CONTEXT_KEY: source_element}
 
 
 def _apply_refs_roll(
@@ -305,6 +326,7 @@ def _apply_refs_roll(
     repo = _get_repo()
     entity = repo.get_entity(entity_id)
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
+    effect_context = _source_context(context, source, source_element)
     before = len(structured) if structured is not None else 0
     resolved_list = resolve_refs(
         _substitute_effect_context(effect, context or {}, bindings),
@@ -319,7 +341,7 @@ def _apply_refs_roll(
     # immediate path's ``len(structured) == before`` gate).
     if structured is None or len(structured) == before:
         for resolved in resolved_list:
-            effect_registry.apply(resolved, entity_id, universe, context or {})
+            effect_registry.apply(resolved, entity_id, universe, effect_context)
     return resolved_list
 
 
@@ -348,6 +370,7 @@ def _apply_spec_target(
     repo = _get_repo()
     entity = repo.get_entity(entity_id)
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
+    effect_context = _source_context(context, source, source_element)
     # Substitute roll-context variables (e.g. ``{effect_die}``) before applying,
     # mirroring ``_apply_refs_roll``.
     effect = _substitute_effect_context(effect, context or {}, bindings)
@@ -376,7 +399,7 @@ def _apply_spec_target(
         if target_id is None:
             continue
         resolved = effect.model_copy(update={"target": target_id})
-        effect_registry.apply(resolved, entity_id, universe, context or {})
+        effect_registry.apply(resolved, entity_id, universe, effect_context)
         applied.append(resolved)
     return applied
 

@@ -21,6 +21,13 @@ from transversal.services.trait_reveal import reveal_trait_to
 # Handler signature: (action, entity_id, universe, context) -> None
 EffectHandler = Callable[[Effect, str, str, dict], None]
 
+# Reserved effect-context keys for threading a resolved activation source into
+# the commit path. Written by the engine (immediate) and roll_deferral (deferred),
+# read back by ``_commit`` so per-effect ``source_rating`` / ``target_path``
+# conditions resolve against the trait (etc.) that owns the SFX.
+SOURCE_CONTEXT_KEY = "_source"
+SOURCE_ELEMENT_CONTEXT_KEY = "_source_element"
+
 
 class EffectRegistry:
     """Registry of effect handlers.
@@ -85,8 +92,8 @@ def _register_core_handlers(em, raz):
             return
         commit_effects(
             entity, [a], em.repo, ctx,
-            source=(ctx or {}).get("_source"),
-            source_element=(ctx or {}).get("_source_element"),
+            source=(ctx or {}).get(SOURCE_CONTEXT_KEY),
+            source_element=(ctx or {}).get(SOURCE_ELEMENT_CONTEXT_KEY),
         )
 
     for action in ("step_up", "step_down", "reduce_by_effect", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die"):
