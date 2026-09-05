@@ -647,12 +647,44 @@ function populate(eff) {
     : { timers: [], combine: 'FIRST_TO_FIRE' }
 }
 
-onMounted(async () => {
-  // effectActions must be loaded before we can resolve an existing effect's
-  // (type, action) → actionId for the editor.
+// Reset the form to a blank (add-mode) state.
+function resetBlank() {
+  newEffect.actionId = ''
+  newEffect.timing = 'IMMEDIATE'
+  newEffect.fields = {}
+  newEffect.context = {}
+  newEffect.extraContext = {}
+  newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
+  newEffect.targetMode = 'literal'
+  newEffect.targetSpec = { steps: [] }
+  newEffect.scope = ''
+  newEffect.targetFilter = {}
+  newEffect.dieFilter = {}
+  newEffect.returnExit = ''
+  newEffect.entityMode = 'literal'
+  newEffect.entitySpec = { steps: [] }
+  newEffect.entityScope = ''
+  newEffect.negative = false
+  newEffect.refs = {}
+  newEffect.conditions = []
+  resultMode.value = 'die'
+  effectDieMode.value = 'variable'
+}
+
+// Hydrate the form from an effect. ``effectActions`` must be loaded first so an
+// existing effect's (type, action) resolves to an actionId.
+async function hydrate(eff) {
   await load()
-  if (props.value) populate(props.value)
-})
+  if (eff) populate(eff)
+  else resetBlank()
+}
+
+onMounted(() => { hydrate(props.value) })
+
+// The parent reuses this form instance when the user switches which effect they
+// are editing (the child panel is replaced in place, not remounted), so re-sync
+// when the effect changes — otherwise the form keeps showing the previous one.
+watch(() => props.value, (eff) => { hydrate(eff) })
 
 async function copyVariable(v) {
   const token = `{${v}}`
