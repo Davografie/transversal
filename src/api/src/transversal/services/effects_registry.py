@@ -230,13 +230,14 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="resolve_pool",
         label="Resolve Dice Pool",
-        description="Auto-resolve a target dice pool: roll it, pick the two highest as the total, and set the difficulty",
+        description="Auto-resolve a target dice pool: assemble a trait's rating (optional), roll it, pick the two highest as the total, and set the difficulty",
         category="either",
         effect_type="modify_pool",
         effect_action="resolve",
         valid_timings=["IMMEDIATE"],
         refs=[
             RefDef("pool", "Pool", "pool"),
+            RefDef("trait", "Trait", "traitsetting"),
         ],
     ),
     EffectActionMeta(

@@ -1231,17 +1231,41 @@ def _apply_add_dice(entity, effect, repo, result):
     result.applied.append(AppliedEffect(effect, f"added {len(dice)} dice to {owner_id} pool"))
 
 
+def _add_trait_rating_to_pool(ts_id: str, pool_id: str, entity, repo):
+    """Add a trait setting's rating dice to a pool; return ``(location_id, owner_id)``.
+
+    Returns ``(None, None)`` when the trait is missing/has no rating, or the pool
+    target is unresolvable.
+    """
+    from transversal.services.contest_tracker import broadcast_pool_change
+    from transversal.services.scene_state import get_scene_store
+
+    ts = repo.get_traitsetting(ts_id) if ts_id else None
+    if ts is None or not ts.dice:
+        return (None, None)
+    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
+    if not location_id or not owner_id:
+        return (None, None)
+
+    trait = repo.get_trait(ts.trait_id)
+    label = trait.name if trait else ts.trait_id
+    dice = [d.value for d in ts.dice]
+    store = get_scene_store()
+    pool = store.get_pool(location_id, owner_id)
+    for die in dice:
+        pool.append({"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id})
+    store.save_pool(location_id, owner_id, pool)
+    broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
+    return (location_id, owner_id)
+
+
 def _apply_add_trait_rating(entity, effect, repo, result):
     """Add a trait instance's rating dice to a targeted dice pool.
 
     ``refs["trait"]`` is a resolved ``traitsetting`` id (the complication to
     heal); ``refs["pool"]`` is a resolved pool id (``difficulty:<loc>`` or
-    ``pool:<entity>``). Both are authored through the targeting wizard; the
-    destination is no longer implicit.
+    ``pool:<entity>``). Both are authored through the targeting wizard.
     """
-    from transversal.services.contest_tracker import broadcast_pool_change
-    from transversal.services.scene_state import get_scene_store
-
     trait_ref = (effect.refs or {}).get("trait")
     pool_ref = (effect.refs or {}).get("pool")
     ts_id = trait_ref.value if trait_ref else ""
@@ -1251,25 +1275,17 @@ def _apply_add_trait_rating(entity, effect, repo, result):
     if ts is None:
         result.applied.append(AppliedEffect(effect, f"trait {ts_id or '(unset)'} not found"))
         return
-    dice = [d.value for d in (ts.dice or [])]
-    if not dice:
+    if not ts.dice:
         result.applied.append(AppliedEffect(effect, f"trait {ts_id} has no rating"))
         return
 
-    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
-    if not location_id or not owner_id:
+    loc = _add_trait_rating_to_pool(ts_id, pool_id, entity, repo)
+    if loc == (None, None):
         result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
         return
-
     trait = repo.get_trait(ts.trait_id)
     label = trait.name if trait else ts.trait_id
-    store = get_scene_store()
-    pool = store.get_pool(location_id, owner_id)
-    for die in dice:
-        pool.append({"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id})
-    store.save_pool(location_id, owner_id, pool)
-    broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
-    result.applied.append(AppliedEffect(effect, f"added {label} rating {dice} to pool"))
+    result.applied.append(AppliedEffect(effect, f"added {label} rating {[d.value for d in ts.dice]} to pool"))
 
 
 def _resolve_pool_ref(effect):
@@ -1337,17 +1353,30 @@ def _apply_roll_pool(entity, effect, repo, result):
 
 
 def _apply_resolve_pool(entity, effect, repo, result):
-    """Auto-resolve a target dice pool: roll it, auto-pick the total, set difficulty.
+    """Auto-resolve a target dice pool: assemble (optional trait), roll, set difficulty.
 
-    Rolls the pool (see ``_apply_roll_pool``), then sums the two highest dice
-    (the standard keep-2 opposition total) and sets the location's difficulty,
-    broadcasting ``difficulty_set`` — the GM's manual total-pick step is gone.
+    When ``refs["trait"]`` is resolved, its rating dice are added to the pool
+    first (so a heal SFX assembles the complication's rating then resolves it —
+    no separate ``add_trait_rating`` step, hence no cross-effect ordering bug).
+    Then the pool is rolled and the two highest set as the location difficulty.
     """
+    trait_ref = (effect.refs or {}).get("trait")
+    ts_id = trait_ref.value if trait_ref else ""
     pool_id = _resolve_pool_ref(effect)
-    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
-    if not location_id or not owner_id:
-        result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
-        return
+
+    if ts_id:
+        if repo.get_traitsetting(ts_id) is None:
+            result.applied.append(AppliedEffect(effect, f"trait {ts_id} not found"))
+            return
+        location_id, owner_id = _add_trait_rating_to_pool(ts_id, pool_id, entity, repo)
+        if not location_id or not owner_id:
+            result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
+            return
+    else:
+        location_id, owner_id = _resolve_pool(pool_id, entity, repo)
+        if not location_id or not owner_id:
+            result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
+            return
 
     enriched = _roll_stored_pool(location_id, owner_id)
     if enriched is None:
