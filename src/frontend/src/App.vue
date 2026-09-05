@@ -506,19 +506,32 @@ function applyPeers(entities) {
 async function fetchPeers(force = false) {
   if (!force && peersCache && Date.now() - peersCache.at < PEERS_TTL_MS) {
     applyPeers(peersCache.entities)
+    resolvePeerSheetImages()
     return
   }
   DIAG.mark('fetchPeers-start', { currentLocationId: currentLocationId.value })
   const data = await graphql(`query {
-    entities { id type name sheetImage: image(role: "sheet") currentLocation unpublished }
+    entities { id type name currentLocation unpublished }
   }`)
   if (data?.entities) {
     peersCache = { entities: data.entities, at: Date.now() }
     applyPeers(data.entities)
+    resolvePeerSheetImages()
     DIAG.mark('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
   } else {
     DIAG.mark('fetchPeers-no-data')
   }
+}
+
+async function resolvePeerSheetImages() {
+  const ids = peers.value.map((p) => p.id).filter(Boolean)
+  if (!ids.length) return
+  const qs = new URLSearchParams({ role: 'sheet', ids: ids.join(',') })
+  const r = await fetch(`/api/v1/entities/images?${qs}`)
+  if (!r.ok) return
+  const data = await r.json()
+  const images = data?.images || {}
+  peers.value = peers.value.map((p) => ({ ...p, sheetImage: images[p.id] || '' }))
 }
 
 function onMoved(data) {

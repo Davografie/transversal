@@ -3122,6 +3122,10 @@ class EntityRepository:
         """
         return self._navdot_urls(entity_ids)
 
+    def get_role_images(self, entity_ids: list[str], role: str, variant: str = "Large") -> dict[str, str]:
+        """Resolve one image URL per entity for any role tag, in one batch."""
+        return self._role_urls(entity_ids, role, variant)
+
     # ── Helpers ───────────────────────────────────────
 
     def _doc_to_entity(self, doc: dict) -> Entity:

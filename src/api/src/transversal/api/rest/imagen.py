@@ -311,6 +311,23 @@ async def list_loras():
     except Exception:
         return {"loras": []}
 
+@router.get("/entities/images")
+async def entity_images_batch(role: str = "sheet", ids: str = ""):
+    """Resolve one role image URL per entity in a single batch query.
+
+    Used by the frontend peers bar to resolve sheet images lazily for just the
+    entities at the current location, instead of loading images for the whole
+    entity list.
+    """
+    entity_ids = [i for i in (s.strip() for s in ids.split(",")) if i]
+    if not entity_ids:
+        return {"images": {}}
+    from transversal.db.repository import EntityRepository
+
+    variant = "Small" if role == "sheet" else "Large"
+    images = EntityRepository().get_role_images(entity_ids, role, variant)
+    return {"images": images}
+
 @router.get("/imagen/{entity_id}", response_model=ImageListResponse)
 async def list_images(entity_id: str, universe: str | None = None):
     """List generated images for an entity, optionally filtered by universe."""
