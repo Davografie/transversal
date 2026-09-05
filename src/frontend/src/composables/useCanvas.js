@@ -1152,14 +1152,14 @@ export function useCanvas() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: `mutation($input: CreateRelationshipInput!){ createRelationship(input:$input){ id } }`,
-          variables: { input: { fromEntityId: fromId, toEntityId: toId, type: 'associate', description: '' } },
+          variables: { input: { fromEntityId: fromId, toEntityId: toId, type: 'relation', description: '' } },
         }),
       })
       const data = await r.json()
       if (!r.ok || data.errors) throw new Error((data.errors && data.errors[0]?.message) || `HTTP ${r.status}`)
       if (locationGraph) {
         if (!locationGraph.occupantRelations.some((rel) => rel.from === fromId && rel.to === toId)) {
-          locationGraph.occupantRelations.push({ from: fromId, to: toId, type: 'associate', description: '' })
+          locationGraph.occupantRelations.push({ from: fromId, to: toId, type: 'relation', description: '' })
         }
         renderLocationGraph()
       } else {
