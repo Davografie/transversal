@@ -61,12 +61,14 @@ def migrate(apply: bool = False) -> int:
             report["skip_not_found"] += 1
             continue
 
-        current_location = None
-        current_universe = ""
         if new_id.startswith("universe-"):
-            current_universe = doc.get("current_universe") or universe_map.get(key, "")
+            # Universes are the top of the hierarchy — no location, just a slug.
+            current_location = doc.get("current_location")  # stay None
+            current_universe = universe_map.get(key, doc.get("current_universe") or "")
         else:
             loc_key = resolve_direct_location(key, entity_type, entity_loc, parent_map)
+            current_location = None
+            current_universe = ""
             if loc_key:
                 if loc_key in universe_keys:
                     current_location = f"universe-{universe_map[loc_key]}"
@@ -75,13 +77,13 @@ def migrate(apply: bool = False) -> int:
                     current_location = f"loc-{loc_key}"
                     uni_key = resolve_universe_key(loc_key, parent_map, universe_keys)
                     current_universe = universe_map.get(uni_key, "") if uni_key else ""
-
-        if current_location is None:
-            report["scatter"] += 1
-            current_location = starter_by_universe.get(current_universe)
-            if current_location is None:
-                current_location = FALLBACK_LOCATION
-                current_universe = "earth"
+            else:
+                # No resolvable location — scatter to a starter location.
+                report["scatter"] += 1
+                current_location = starter_by_universe.get(current_universe)
+                if current_location is None:
+                    current_location = FALLBACK_LOCATION
+                    current_universe = "earth"
 
         if doc.get("current_location") == current_location and doc.get("current_universe") == current_universe:
             report["unchanged"] += 1
