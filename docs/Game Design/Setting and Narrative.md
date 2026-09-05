@@ -80,10 +80,9 @@ The Three Realms is a xianxia universe — a world governed by dao, qi, and the 
 
 ### The Valley of Ascension
 
-The Valley is the arrival point for all consciousness transversals that use the jian as an anchor. It is a place of extraordinary qi density, a natural cultivation paradise that has drawn practitioners for tens of thousands of years. The Valley contains:
+The Valley is the arrival point for all consciousness transversals that use the jian as an anchor. It is a place of extraordinary qi density, a natural cultivation paradise that has drawn practitioners for tens of thousands of years. The Valley is a formation laid down by an ancient array master. The formation suppresses cultivation to the foundation building realm. Cultivators coming in from outside will feel their realm suppressed and their memories fading quickly. The Valley contains:
 
 - **The Arrival Platform**: An ancient stone dais carved with formation arrays. Consciousness transversals materialize here, given form by the Valley's ambient qi. New arrivals find themselves in cultivator bodies — baseline, untrained, but alive.
-- **The Verdant Steps Sect**: A small, unambitious cultivation sect that has guarded the Arrival Platform for generations. They don't know where arrivals come from, only that they appear, disoriented and weak. The sect's tradition is to shelter them, teach them the basics of cultivation, and send them on their way. The current sect master, Elder Yun, is a kindly Foundation Establishment cultivator who has seen dozens of "outsiders" pass through.
 - **The Remnant Formations**: Ancient arrays left by the immortal who first carved the Valley. Some are protective. Some are traps. Some are trials — designed to test and strengthen those who pass through them. The players will encounter these as their cultivation advances.
 - **The Transversal Artifacts**: Scattered through the Valley and its surrounding regions are a handful of artifacts attuned to different universes. Each is a key — a way out of the Three Realms to another world. Finding them, attuning to them, and activating them is the players' long-term objective. The jian is one such artifact, but it's on Earth. The others are here.
 
