@@ -405,7 +405,15 @@
       </div> <!-- .sheet-scroll -->
       </template>
     </template>
-    <div v-else class="empty">No entity loaded</div>
+    <div v-else class="empty empty-no-entity">
+      <span>No entity loaded</span>
+      <button
+        v-if="!gmMode && !isForeignSheet"
+        class="empty-settings-btn"
+        @click="$emit('openSettings')"
+        title="Choose a character"
+      >↩ Player settings</button>
+    </div>
 
     <Teleport to="body">
       <RollTableMenu
@@ -2904,6 +2912,27 @@ watch(() => props.externalPoolSources, (sources) => {
   padding: 16px 0;
 }
 .error { color: var(--danger); }
+.empty-no-entity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.empty-settings-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.empty-settings-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
 
 .sfx-cards {
   display: flex;
