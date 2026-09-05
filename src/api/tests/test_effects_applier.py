@@ -708,6 +708,8 @@ def test_resolve_pool_rolls_and_sets_difficulty():
     total_roles = [d for d in pool if d.get("role") == "total"]
     assert len(total_roles) == 2
     assert {d["result"] for d in total_roles} == set(results[:2])
+    # The pool is committed (resolved), not left in the picking phase.
+    assert store.get_phase("loc-1", "loc-1") == "resolved"
     store.clear_all()
 
 

@@ -1390,7 +1390,7 @@ def _apply_resolve_pool(entity, effect, repo, result):
 
     store = get_scene_store()
     store.save_pool(location_id, owner_id, enriched)
-    broadcast_pool_change(location_id, owner_id, dice=enriched, phase="selected")
+    broadcast_pool_change(location_id, owner_id, dice=enriched, phase="resolved")
 
     store.set_difficulty(location_id, total)
     for s in session_manager.list_active():
