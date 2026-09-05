@@ -96,10 +96,11 @@ def create_support_character(
 ) -> "Entity":
     """Create a support character from a roll-table entry (B59).
 
-    The main pays the entry's cost effects; a new GMC is created at the main's
-    location, owned by the player (``agency``, ``main: false``) and linked to the
-    main via a ``support`` edge; the entry's benefit effects then land on the new
-    SC. Raises ``ValueError`` on a missing table/entry or an unaffordable cost.
+    The main pays the entry's cost effects; a new character is created at the
+    main's location, owned by the player (``agency``, ``main: false``) and linked
+    to the main via a ``support`` edge; the entry's benefit effects then land on
+    the new SC. Raises ``ValueError`` on a missing table/entry or an unaffordable
+    cost.
     """
     from transversal.domain import EntityType
     from transversal.services.effects_commit import commit_effects
@@ -124,10 +125,10 @@ def create_support_character(
     if entry.cost_effects:
         commit_effects(main, list(entry.cost_effects), repo)
 
-    # 2. Create the SC (GMC) at the main's location.
+    # 2. Create the SC (a player-playable character) at the main's location.
     sc = em.create(
         name=entry.label,
-        entity_type=EntityType.GMC,
+        entity_type=EntityType.CHARACTER,
         universe=main.current_universe,
         location=main.current_location,
     )

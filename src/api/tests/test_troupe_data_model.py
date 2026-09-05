@@ -317,7 +317,7 @@ def test_create_support_character_flow():
     sc = create_support_character(EntityManager(repo), P_ID, MAIN_ID, table_id, 1)
 
     assert sc is not None
-    assert sc.type == EntityType.GMC
+    assert sc.type == EntityType.CHARACTER
     assert sc.name == "Ferryhand"
     # Owned by the player, main:false.
     agency = {a["entity_id"]: a["main"] for a in repo.get_agency_edges(P_ID)}
