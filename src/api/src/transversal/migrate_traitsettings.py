@@ -47,6 +47,7 @@ from transversal.migrate_common import (
     MULTIVERSE,
     RATING_TO_DIE,
     RATING_TYPE_MAP,
+    build_archetype_depths,
     build_entity_key_map,
     build_registry_key_maps,
     build_universe_map,
@@ -145,9 +146,7 @@ def materialize_inheritance(
         if s["_from"].startswith("Entities/"):
             settings_by_entity[s["_from"]].append(s)
 
-    arch_parent: dict[str, str] = {
-        r["_from"]: r["_to"] for r in relations if r.get("type") == "archetype"
-    }
+    arch_depths = build_archetype_depths(relations)
     super_parent: dict[str, str] = {
         r["_from"]: r["_to"] for r in relations if r.get("type") == "super"
     }
@@ -158,14 +157,8 @@ def materialize_inheritance(
     for entity_ref in settings_by_entity:
         direct = settings_by_entity[entity_ref]
 
-        # Transitive archetype ancestors with depth.
-        arch_ancestors: list[tuple[str, int]] = []
-        cur, depth, seen = entity_ref, 0, set()
-        while cur in arch_parent and cur not in seen:
-            seen.add(cur)
-            cur = arch_parent[cur]
-            depth += 1
-            arch_ancestors.append((cur, depth))
+        # Transitive archetype ancestors with (shortest) depth.
+        arch_ancestors = list(arch_depths.get(entity_ref, {}).items())
 
         # Transitive super ancestors (locations).
         super_ancestors: list[str] = []

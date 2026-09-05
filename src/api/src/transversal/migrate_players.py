@@ -1,4 +1,4 @@
-"""Phase 6 migration: old ``Players`` → new ``players`` + ``agency`` edges.
+"""Phase 6 migration: old ``Players`` → new ``players`` + ``agency``/``support`` edges.
 
 - Players are name-matched (case-insensitive) against the existing new-app
   ``players`` collection; matches reuse the existing key. New players get a
@@ -6,8 +6,14 @@
   ``player-{hex6}`` convention).
 - ``agency`` relations (``Players/* → Entities/*``) become ``relationships``
   edges of type ``agency``, keyed ``edge:{player}:{entity}:agency``.
-- The old ``count`` / ``last_used`` recency fields are dropped — the new model
-  has no equivalent (see report).
+- ``main`` is derived from the old archetypes: an agency-owned ``character``
+  inheriting ``default character`` (Entities/3) but **not** ``support
+  character`` (Entities/206403975) is a main.
+- ``support`` edges (SC → main) are derived by following a support character's
+  ``relation`` edges (both directions) to *other players'* mains; a support
+  character may support multiple mains (one edge each).
+- The old ``count`` / ``last_used`` recency fields are dropped — recency now
+  lives in spotlight state (stamped at runtime), not migration.
 
 Dry-run by default. Pass ``--apply`` to write.
 
@@ -19,10 +25,17 @@ from __future__ import annotations
 
 import hashlib
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 
 from transversal.db.arango import ENTITIES, PLAYERS, RELATIONSHIPS, get_db
-from transversal.migrate_common import build_entity_key_map, load_json
+from transversal.migrate_common import (
+    build_archetype_depths,
+    build_entity_key_map,
+    load_json,
+)
+
+DEFAULT_CHARACTER = "Entities/3"          # "default character" = player-character archetype
+SUPPORT_CHARACTER = "Entities/206403975"  # "support character" archetype (inherits default)
 
 
 def _player_key(name: str) -> str:
@@ -35,13 +48,42 @@ def migrate(apply: bool = False) -> int:
     old_players = load_json("players.json")
 
     entity_key_map = build_entity_key_map(entities, relations)
+    archetype_depths = build_archetype_depths(relations)
+    entity_type = {e["_key"]: e.get("type") for e in entities}
+
     agency = [r for r in relations if r.get("type") == "agency"]
+    relation_edges = [r for r in relations if r.get("type") == "relation"]
+
+    # relation adjacency (undirected: both directions), entity ref → related refs
+    related: dict[str, set[str]] = defaultdict(set)
+    for r in relation_edges:
+        related[r["_from"]].add(r["_to"])
+        related[r["_to"]].add(r["_from"])
+
+    owner = {r["_to"]: r["_from"] for r in agency}  # entity ref → player ref
+
+    def _anc(ref: str) -> dict[str, int]:
+        return archetype_depths.get(ref, {})
+
+    def is_support(ref: str) -> bool:
+        return SUPPORT_CHARACTER in _anc(ref)
+
+    def is_main(ref: str) -> bool:
+        anc = _anc(ref)
+        return DEFAULT_CHARACTER in anc and SUPPORT_CHARACTER not in anc
+
+    # agency-owned mains: character type + default (not support)
+    main_entities = {
+        e for e in owner
+        if entity_type.get(e.split("/")[1]) == "character" and is_main(e)
+    }
+    # agency-owned support characters
+    support_entities = {e for e in owner if is_support(e)}
 
     db = get_db()
     player_col = db.collection(PLAYERS)
     rel_col = db.collection(RELATIONSHIPS)
 
-    # Existing players: lowercase-name → key.
     existing_by_name = {
         (p.get("name") or "").lower().strip(): p["_key"] for p in player_col.all()
     }
@@ -58,7 +100,6 @@ def migrate(apply: bool = False) -> int:
             old_to_new_player[key] = matched
             report["player_matched"] += 1
             continue
-
         new_key = _player_key(name)
         old_to_new_player[key] = new_key
         report["player_created"] += 1
@@ -85,14 +126,39 @@ def migrate(apply: bool = False) -> int:
             "_from": f"{PLAYERS}/{new_player}",
             "_to": f"{ENTITIES}/{new_entity}",
             "type": "agency",
-            "main": False,  # troupe-play B54: no old-app main concept; mains designated post-migration
+            "main": entity_ref in main_entities,
         }
         if apply and rel_col.get(edge_key) is None:
             rel_col.insert(doc)
 
-    print("=== PLAYERS + AGENCY MIGRATION (Phase 6) ===")
+    # support edges: SC → main (another player's main), via relation adjacency
+    for sc in support_entities:
+        sc_player = owner[sc]
+        new_sc = entity_key_map.get(sc)
+        if new_sc is None:
+            report["skip_support_sc_dangling"] += 1
+            continue
+        for target in related.get(sc, set()):
+            if target not in main_entities or owner.get(target) == sc_player:
+                continue
+            new_main = entity_key_map.get(target)
+            if new_main is None:
+                continue
+            report["support_created"] += 1
+            edge_key = f"edge:{new_sc}:{new_main}:support"
+            doc = {
+                "_key": edge_key,
+                "_from": f"{ENTITIES}/{new_sc}",
+                "_to": f"{ENTITIES}/{new_main}",
+                "type": "support",
+            }
+            if apply and rel_col.get(edge_key) is None:
+                rel_col.insert(doc)
+
+    print("=== PLAYERS + AGENCY + SUPPORT MIGRATION (Phase 6) ===")
     print(f"apply={apply}")
     print(f"source players: {len(old_players)}; source agency: {len(agency)}")
+    print(f"mains: {len(main_entities)}; support chars: {len(support_entities)}")
     for k in sorted(report):
         print(f"  {k}: {report[k]}")
     return 0

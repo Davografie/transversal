@@ -191,6 +191,34 @@ def build_universe_lookup(entities: list[dict], relations: list[dict]) -> dict[s
     return build_universe_map(entities, relations)
 
 
+def build_archetype_depths(relations: list[dict]) -> dict[str, dict[str, int]]:
+    """Map each entity ref → {archetype ancestor ref: shortest depth}.
+
+    Follows ALL ``archetype`` edges OUTBOUND (entity → template), transitively —
+    an entity can inherit from several archetypes (e.g. a faction template plus
+    a role template), so this is a multi-parent closure. Depth is the shortest
+    path length (1 = direct archetype), used for the old app's priority tie-break
+    (shallower archetype wins).
+    """
+    child_parents: dict[str, list[str]] = {}
+    for r in relations:
+        if r.get("type") == "archetype":
+            child_parents.setdefault(r["_from"], []).append(r["_to"])
+
+    result: dict[str, dict[str, int]] = {}
+    for start in child_parents:
+        depths: dict[str, int] = {}
+        frontier = [(p, 1) for p in child_parents[start]]
+        while frontier:
+            ref, d = frontier.pop(0)
+            if ref in depths and depths[ref] <= d:
+                continue
+            depths[ref] = d
+            frontier.extend((p, d + 1) for p in child_parents.get(ref, []))
+        result[start] = depths
+    return result
+
+
 # ── Trait/traitset registry key maps ─────────────────────
 #
 # Single source of truth for the old→new trait/traitset key formula, shared by
