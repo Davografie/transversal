@@ -98,7 +98,7 @@ def _log_profile(request: Request, elapsed_ms: float, stats) -> None:
     line = (
         f"{request.method} {request.url.path} {elapsed_ms:.0f}ms — "
         f"{stats.count} AQL ({stats.aql_ms:.0f}ms), "
-        f"{len(stats.resolvers)} resolvers ({stats.resolver_ms:.0f}ms)"
+        f"{len(stats.resolvers)} resolvers (max {stats.resolver_max:.0f}ms)"
     )
     if elapsed_ms >= profiling.BREAKDOWN_MS or stats.count >= profiling.BREAKDOWN_QUERIES:
         _prof_logger.warning("%s\n%s", line, profiling.summarize(stats))

@@ -47,6 +47,12 @@ class QueryStats:
     def resolver_ms(self) -> float:
         return sum(d for _, d in self.resolvers)
 
+    @property
+    def resolver_max(self) -> float:
+        """Slowest single resolver — meaningful with DataLoader, where the sum
+        double-counts the shared batch await."""
+        return max((d for _, d in self.resolvers), default=0.0)
+
 
 _ctx: contextvars.ContextVar[QueryStats | None] = contextvars.ContextVar(
     "transversal_profiling", default=None
@@ -89,6 +95,17 @@ def _group(entries: list[tuple[str, float]]) -> list[tuple[str, float, int]]:
     return grouped
 
 
+def _group_max(entries: list[tuple[str, float]]) -> list[tuple[str, float, int]]:
+    """Like ``_group`` but reports per-key *max* (used for resolvers, whose
+    per-call durations overlap under DataLoader batching)."""
+    totals: dict[str, list[float]] = {}
+    for key, ms in entries:
+        totals.setdefault(key, []).append(ms)
+    grouped = [(k, max(v), len(v)) for k, v in totals.items()]
+    grouped.sort(key=lambda x: -x[1])
+    return grouped
+
+
 def summarize(stats: QueryStats) -> str:
     """Multi-line breakdown of the slowest AQL queries and resolvers."""
     lines: list[str] = []
@@ -99,10 +116,9 @@ def summarize(stats: QueryStats) -> str:
     if not aql_groups:
         lines.append("  (no AQL queries)")
     lines.append("  ---")
-    resolver_groups = _group(stats.resolvers)
-    for field, total_ms, count in resolver_groups[:8]:
-        lines.append(f"  RSLV {total_ms:7.1f}ms  x{count:<4} {field}")
-    if not resolver_groups:
+    for field, max_ms, count in _group_max(stats.resolvers)[:8]:
+        lines.append(f"  RSLV {max_ms:7.1f}ms  x{count:<4} {field}")
+    if not stats.resolvers:
         lines.append("  (no resolvers timed)")
     return "\n".join(lines)
 
