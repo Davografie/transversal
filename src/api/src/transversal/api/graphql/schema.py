@@ -2279,8 +2279,6 @@ class Mutation:
             raise ValueError(f"Entity '{entity_id}' not found")
         resolved = []
         structured = []
-        import logging
-        log = logging.getLogger("transversal.effects")
 
         for r in resolutions:
             continuation = [_effect_input_to_domain(c) for c in (r.continuation or [])]
@@ -2300,13 +2298,9 @@ class Mutation:
                     # More choose steps remain — carry the continuation forward.
                     pending[-1].continuation = continuation
                     structured.extend(pending)
-                    log.info("[resolve] sfx=%s still pending (%d more choose); continuation carried (%d effects)",
-                             r.source_sfx_id or "", len(pending), len(continuation))
                 else:
                     # Fully resolved — apply the deferred continuation now.
                     _resolve_continuation_effects(continuation, entity, repo, resolved, structured)
-                    log.info("[resolve] sfx=%s fully resolved; applying continuation (%d effects)",
-                             r.source_sfx_id or "", len(continuation))
                 # Write any step-output bindings into the armed activation.
                 if local_scope and r.source_sfx_id:
                     from transversal.services.roll_deferral import bind_activation
