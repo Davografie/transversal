@@ -192,12 +192,16 @@ def _ensure_indexes(db) -> None:
 def _add_hash_index(db, collection: str, fields: list[str], unique: bool = False) -> None:
     try:
         col = db.collection(collection)
-        opts = {"type": "hash", "fields": fields, "unique": unique, "sparse": False}
         # Skip if already exists
         for idx in col.indexes():
             if idx.get("type") == "hash" and idx.get("fields") == fields:
                 return
-        col.add_hash_index(fields, unique=unique, sparse=False)
+        col.add_index({
+            "type": "hash",
+            "fields": fields,
+            "unique": unique,
+            "sparse": False,
+        })
     except Exception:
         pass
 
