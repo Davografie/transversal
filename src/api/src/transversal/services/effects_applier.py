@@ -83,7 +83,11 @@ def _register_core_handlers(em, raz):
         entity = em.repo.get_entity(eid)
         if entity is None:
             return
-        commit_effects(entity, [a], em.repo, ctx)
+        commit_effects(
+            entity, [a], em.repo, ctx,
+            source=(ctx or {}).get("_source"),
+            source_element=(ctx or {}).get("_source_element"),
+        )
 
     for action in ("step_up", "step_down", "reduce_by_effect", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die"):
         effect_registry.register("modify_trait", action, _commit)
@@ -1786,7 +1790,7 @@ _MUTATION_HANDLERS = {
 }
 
 
-def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None) -> EffectsResult:
+def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None, source=None, source_element: str | None = None) -> EffectsResult:
     """Apply operational effects to an entity's in-memory state (no persistence).
 
     Mutates ``entity`` in place for entity-level fields (razmerit, rank, discovered
@@ -1800,7 +1804,7 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
     """
     result = EffectsResult()
     for effect in effects:
-        if effect.conditions and not evaluate_conditions(entity, effect.conditions, repo, context):
+        if effect.conditions and not evaluate_conditions(entity, effect.conditions, repo, context, source=source, source_element=source_element):
             continue
         scope_choice = _scope_choice(effect)
         if scope_choice is not None:

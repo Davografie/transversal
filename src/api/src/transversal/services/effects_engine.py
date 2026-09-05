@@ -283,6 +283,11 @@ class EffectsEngine:
             if sfx.source_kind and source_id:
                 from transversal.services.target_catalog import bind_source
                 effect_context = bind_source(sfx.source_kind, source_id, event.context)
+            # Thread the resolved activation source into the effect context so
+            # per-effect ``source_rating`` / ``target_path`` conditions can gate
+            # on the trait (etc.) that owns/triggered this SFX.
+            if source is not None:
+                effect_context = {**(effect_context or {}), "_source": source, "_source_element": source_element}
             roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]
             log.info(
                 "[process_event] sfx=%s trigger=%s deferred_effects=%s",

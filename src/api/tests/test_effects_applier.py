@@ -585,6 +585,36 @@ def test_dice_limit_without_duration_is_permanent():
     assert repo.scheduled_events == []  # no duration → no revert
 
 
+def test_dice_limit_source_rating_condition_threads_source():
+    """Per-effect ``source_rating`` conditions gate on the resolved source."""
+    repo = FakeRepo()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_dice_limit", action="increase",
+        result="1", context={"limit": "total"},
+        conditions=[Condition(type=ConditionType.SOURCE_RATING, value="d4", operator="==")],
+    )
+
+    # Matching source → applies.
+    entity = _entity()
+    source = _ts("cultivation-stage", [DieType.D4])
+    result = apply_effects(entity, [effect], repo, source=source, source_element="traitsetting")
+    assert entity.total_dice_bonus == 1
+    assert len(result.applied) == 1
+
+    # No source threaded → skipped (guards against the source not reaching the applier).
+    entity2 = _entity()
+    result2 = apply_effects(entity2, [effect], repo)
+    assert entity2.total_dice_bonus == 0
+    assert result2.applied == []
+
+    # Non-matching source rating → skipped.
+    entity3 = _entity()
+    source_d6 = _ts("cultivation-stage", [DieType.D6])
+    result3 = apply_effects(entity3, [effect], repo, source=source_d6, source_element="traitsetting")
+    assert entity3.total_dice_bonus == 0
+    assert result3.applied == []
+
+
 # ── Dice-pool mutation (add_dice) ────────────────────
 
 def test_resolve_pool_targets():
