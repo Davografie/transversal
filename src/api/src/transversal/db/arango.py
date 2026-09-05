@@ -123,8 +123,11 @@ def get_db(config: ArangoConfig | None = None) -> "StandardDatabase":
             db.create_collection(name, edge=is_edge)
 
     _ensure_indexes(db)
-    _db_cache[cache_key] = db
-    return db
+    from transversal.db.profiling import instrument_db
+
+    wrapped = instrument_db(db)
+    _db_cache[cache_key] = wrapped
+    return wrapped
 
 
 def _ensure_indexes(db) -> None:

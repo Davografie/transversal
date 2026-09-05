@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from strawberry.fastapi import GraphQLRouter
 
+import time
+
 from transversal.api.graphql.schema import schema
 from transversal.api.rest.roll import router as roll_router
 from transversal.api.rest.effects import router as effects_router
@@ -64,6 +66,43 @@ class _NoisyPathFilter(logging.Filter):
         return True
 
 logging.getLogger("uvicorn.access").addFilter(_NoisyPathFilter())
+
+# ── Request profiling (AQL + resolver timing) ─────────
+
+from transversal.db import profiling
+
+_prof_logger = logging.getLogger("transversal.profiling")
+_QUIET_PROFILE_PATHS = {"/health", "/api/v1/imagen/jobs"}
+
+
+@app.middleware("http")
+async def profiling_middleware(request: Request, call_next):
+    profiling.start_request()
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        profiling.finish_request()
+        raise
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    stats = profiling.finish_request()
+    if stats is not None and request.url.path not in _QUIET_PROFILE_PATHS:
+        _log_profile(request, elapsed_ms, stats)
+    return response
+
+
+def _log_profile(request: Request, elapsed_ms: float, stats) -> None:
+    if stats.count == 0 and not stats.resolvers:
+        return
+    line = (
+        f"{request.method} {request.url.path} {elapsed_ms:.0f}ms — "
+        f"{stats.count} AQL ({stats.aql_ms:.0f}ms), "
+        f"{len(stats.resolvers)} resolvers ({stats.resolver_ms:.0f}ms)"
+    )
+    if elapsed_ms >= profiling.BREAKDOWN_MS or stats.count >= profiling.BREAKDOWN_QUERIES:
+        _prof_logger.warning("%s\n%s", line, profiling.summarize(stats))
+    else:
+        _prof_logger.info(line)
 
 # ── Dependency injection (lazy — swapped in tests) ───
 

@@ -4,6 +4,8 @@ import json
 import strawberry
 from typing import Optional
 
+from transversal.api.graphql.extensions import ResolverTimingExtension
+
 from transversal.api.graphql.types import (
     CharacterView,
     Condition,
@@ -2394,4 +2396,4 @@ class Mutation:
         return _entity_to_gql(entity)
 
 
-schema = strawberry.Schema(query=Query, mutation=Mutation)
+schema = strawberry.Schema(query=Query, mutation=Mutation, extensions=[ResolverTimingExtension])
