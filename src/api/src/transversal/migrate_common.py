@@ -92,6 +92,35 @@ def resolve_universe_key(
     return None
 
 
+def resolve_direct_location(
+    key: str,
+    entity_type: dict[str, str],
+    entity_loc: dict[str, str],
+    parent_map: dict[str, str],
+) -> str | None:
+    """Return the old key of an entity's *direct* location (first hop).
+
+    Mirrors the old app's ``retrieve_location``: non-location entities use their
+    ``location`` field (recursing if it points at a non-location), while
+    locations use their ``super`` parent.
+    """
+    seen: set[str] = set()
+    cur = key
+    while cur and cur not in seen:
+        seen.add(cur)
+        t = entity_type.get(cur)
+        if t == "location":
+            return parent_map.get(cur)
+        loc = entity_loc.get(cur)
+        if not loc:
+            return None
+        nxt = loc.split("/")[1]
+        if entity_type.get(nxt) == "location":
+            return nxt
+        cur = nxt
+    return None
+
+
 def build_entity_key_map(
     entities: list[dict], relations: list[dict]
 ) -> dict[str, str]:

@@ -33,6 +33,7 @@ from transversal.migrate_common import (
     build_parent_map,
     build_universe_map,
     load_json,
+    resolve_direct_location,
     resolve_universe_key,
 )
 
@@ -48,6 +49,8 @@ def migrate(apply: bool = False) -> int:
     parent_map = build_parent_map(relations)
     universe_map = build_universe_map(entities, relations)
     universe_keys = set(universe_map.keys())
+    entity_type_map = {e["_key"]: e.get("type") for e in entities}
+    entity_loc = {e["_key"]: e.get("location") for e in entities}
 
     repo = EntityRepository()
 
@@ -103,18 +106,23 @@ def migrate(apply: bool = False) -> int:
 
         report["type_map"][old_type] = report["type_map"].get(old_type, 0) + 1
 
-        # Resolve universe (which universe does this entity belong to?)
-        uni_key = resolve_universe_key(key, parent_map, universe_keys)
-        current_universe = universe_map.get(uni_key, "") if uni_key else ""
-
-        # Resolve current_location: the entity's parent in the super chain
-        parent_new = None
-        parent_old = parent_map.get(key)
-        if parent_old and parent_old != MULTIVERSE:
-            if parent_old in universe_keys:
-                parent_new = f"universe-{universe_map[parent_old]}"
-            else:
-                parent_new = f"loc-{parent_old}"
+        # Resolve current_location + current_universe (mirrors the old app's
+        # retrieve_location): non-location entities use their `location` field;
+        # locations use their `super` parent.
+        current_location = None
+        current_universe = ""
+        if new_type == EntityType.UNIVERSE:
+            current_universe = universe_map[key]
+        else:
+            loc_key = resolve_direct_location(key, entity_type_map, entity_loc, parent_map)
+            if loc_key:
+                if loc_key in universe_keys:
+                    current_location = f"universe-{universe_map[loc_key]}"
+                    current_universe = universe_map[loc_key]
+                else:
+                    current_location = f"loc-{loc_key}"
+                    uni_key = resolve_universe_key(loc_key, parent_map, universe_keys)
+                    current_universe = universe_map.get(uni_key, "") if uni_key else ""
 
         # ID
         if new_type == EntityType.UNIVERSE:
@@ -134,7 +142,7 @@ def migrate(apply: bool = False) -> int:
                 name=name,
                 razmerit=e.get("pp") or 0,
                 current_universe=current_universe,
-                current_location=parent_new,
+                current_location=current_location,
             )
             if new_type == EntityType.UNIVERSE:
                 report["created_universe"] += 1
