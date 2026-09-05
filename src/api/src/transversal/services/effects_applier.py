@@ -1375,14 +1375,23 @@ def _apply_resolve_pool(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"pool {owner_id} is empty"))
         return
 
-    results = sorted((d.get("result") or 0 for d in enriched), reverse=True)
-    total = sum(results[:2])
+    # Auto-select the two highest as the total (the keep-2 opposition total),
+    # marking their role so the difficulty tab renders the resolved selection
+    # rather than empty slots.
+    order = sorted(range(len(enriched)), key=lambda i: (enriched[i].get("result") or 0), reverse=True)
+    for i in order[:2]:
+        enriched[i]["role"] = "total"
+    total = sum((enriched[i].get("result") or 0) for i in order[:2])
 
     from transversal.services.scene_state import get_scene_store
+    from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.api.sse.bus import StreamEvent, event_bus
     from transversal.services.session_manager import session_manager
 
     store = get_scene_store()
+    store.save_pool(location_id, owner_id, enriched)
+    broadcast_pool_change(location_id, owner_id, dice=enriched, phase="selected")
+
     store.set_difficulty(location_id, total)
     for s in session_manager.list_active():
         event_bus.publish(StreamEvent(

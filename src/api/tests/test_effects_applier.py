@@ -704,6 +704,10 @@ def test_resolve_pool_rolls_and_sets_difficulty():
     pool = store.get_pool("loc-1", "loc-1")
     results = sorted([d["result"] for d in pool], reverse=True)
     assert store.get_difficulty("loc-1") == sum(results[:2])
+    # The two highest dice are marked as the total so the client renders them.
+    total_roles = [d for d in pool if d.get("role") == "total"]
+    assert len(total_roles) == 2
+    assert {d["result"] for d in total_roles} == set(results[:2])
     store.clear_all()
 
 
