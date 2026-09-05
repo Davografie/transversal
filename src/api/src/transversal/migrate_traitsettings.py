@@ -343,6 +343,9 @@ def migrate(apply: bool = False) -> int:
             doc["projection_id"] = projection_id
         if parent_key is not None:
             doc["parent_traitsetting_id"] = parent_key
+        if apply and ts_col.get(key) is not None:
+            report["skipped_existing"] += 1
+            return
         if apply:
             ts_col.insert(doc)
         report["created"] += 1
