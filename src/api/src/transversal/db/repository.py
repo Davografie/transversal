@@ -3068,15 +3068,26 @@ class EntityRepository:
         ``_key`` values sorted from nearest ancestor to root.
         """
         if self.db is not None:
-            query = f"""
-                FOR v, e IN 1..10 OUTBOUND @loc_ref {RELATIONSHIPS}
-                FILTER e.type == 'super'
-                RETURN v._key
-            """
-            cursor = self.db.aql.execute(query, bind_vars={
-                "loc_ref": f"{ENTITIES}/{location_id}",
-            })
-            return list(cursor)
+            # Load every 'super' edge in one index scan (they number in the
+            # hundreds) and walk the child→parent chain in Python. The previous
+            # `1..10 OUTBOUND … FILTER e.type == 'super'` traversed *all*
+            # relationship types and filtered after, exploding combinatorially
+            # on the dense relationship graph (measured 60s+).
+            parent: dict[str, str] = {}
+            for doc in self.db.aql.execute(
+                f"FOR r IN {RELATIONSHIPS} FILTER r.type == 'super' RETURN r"
+            ):
+                child = doc["_from"].split("/", 1)[1]
+                parent.setdefault(child, doc["_to"].split("/", 1)[1])
+            ancestors: list[str] = []
+            current = location_id
+            for _ in range(10):
+                nxt = parent.get(current)
+                if not nxt:
+                    break
+                ancestors.append(nxt)
+                current = nxt
+            return ancestors
         else:
             # In-memory mode
             ancestors = []
@@ -3103,15 +3114,28 @@ class EntityRepository:
         root itself is not included).
         """
         if self.db is not None:
-            query = f"""
-                FOR v, e IN 1..10 INBOUND @loc_ref {RELATIONSHIPS}
-                FILTER e.type == 'super'
-                RETURN DISTINCT v._key
-            """
-            cursor = self.db.aql.execute(query, bind_vars={
-                "loc_ref": f"{ENTITIES}/{location_id}",
-            })
-            return list(cursor)
+            # Load every 'super' edge once and BFS downward — same logic as the
+            # in-memory fallback, without the 1..10 INBOUND traversal explosion.
+            children: dict[str, list[str]] = {}
+            for doc in self.db.aql.execute(
+                f"FOR r IN {RELATIONSHIPS} FILTER r.type == 'super' RETURN r"
+            ):
+                parent = doc["_to"].split("/", 1)[1]
+                child = doc["_from"].split("/", 1)[1]
+                children.setdefault(parent, []).append(child)
+            descendants: list[str] = []
+            frontier = [location_id]
+            for _ in range(10):
+                next_frontier: list[str] = []
+                for loc in frontier:
+                    for child in children.get(loc, []):
+                        if child not in descendants and child != location_id:
+                            descendants.append(child)
+                            next_frontier.append(child)
+                if not next_frontier:
+                    break
+                frontier = next_frontier
+            return descendants
         else:
             # In-memory mode: follow child → parent edges in reverse.
             descendants: list[str] = []
