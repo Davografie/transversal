@@ -38,7 +38,7 @@
         <div class="header-controls">
           <div v-if="isForeignSheet" class="rel-widget">
             <template v-if="relationship">
-              <span class="rel-desc" @click.stop="showRelEditor = true" :title="'Click to edit'">{{ relationship.description || 'associated' }}</span>
+              <span class="rel-desc" @click.stop="showRelEditor = true" :title="'Click to edit'">{{ relationship.description || 'related' }}</span>
               <button class="rel-btn rel-del" @click.stop="removeRelationship" title="Remove relationship">✕</button>
               <button class="rel-btn rel-send" @click.stop="openBlueBookLetter" title="Send letter">✉</button>
             </template>
