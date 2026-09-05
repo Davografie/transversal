@@ -53,6 +53,9 @@ class PendingSfxEffect:
     effect: Effect
     sfx_name: str
     sfx_description: str = ""
+    # Immediate effects that come after this blocked effect; applied in order
+    # once the choice resolves (sequential execution).
+    continuation: list[Effect] = field(default_factory=list)
 
 
 @dataclass
@@ -76,6 +79,9 @@ class StructuredChoice:
     source_id: str = ""
     source_sfx_id: str = ""
     answers_so_far: list = field(default_factory=list)
+    # Immediate effects that come after this blocked effect; applied in order
+    # once the choice resolves (sequential execution).
+    continuation: list[Effect] = field(default_factory=list)
 
 
 @dataclass
@@ -161,6 +167,16 @@ def _resolve_activation_source(sfx: SFX, event: GameEvent, repo):
             source, element = resolved
             return source, element, getattr(source, "id", None)
     return None, None, source_id
+
+
+def _attach_continuation(outcome: EventOutcome, continuation: list[Effect]) -> None:
+    """Attach the deferred (post-choice) effects to the last pending choice."""
+    if not continuation:
+        return
+    if outcome.structured:
+        outcome.structured[-1].continuation = continuation
+    elif outcome.pending:
+        outcome.pending[-1].continuation = continuation
 
 
 class EffectsEngine:
@@ -284,16 +300,19 @@ class EffectsEngine:
                 )
                 sfx_applied = True
 
-            for effect in sfx.effects:
+            for idx, effect in enumerate(sfx.effects):
                 if effect.timing in _deferred_timings:
                     continue  # armed above (raw; substituted at fire time)
 
                 effect = _substitute_effect_context(effect, effect_context, bindings)
                 if effect.timing == EffectTiming.IMMEDIATE:
+                    blocked = False
                     if effect.refs:
                         before = len(outcome.structured)
                         resolved_list = resolve_refs(effect, _fire_context(event, sfx, repo, bindings=bindings), outcome.structured, source_sfx_id=sfx.id)
-                        if len(outcome.structured) == before:
+                        if len(outcome.structured) > before:
+                            blocked = True
+                        else:
                             for resolved in resolved_list:
                                 _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
                                 outcome.applied.append(resolved)
@@ -307,17 +326,27 @@ class EffectsEngine:
                         outcome.applied.extend(applied)
                         if applied:
                             sfx_applied = True
+                        if len(outcome.structured) > before:
+                            blocked = True
                     elif _effects_applier.find_choose_placeholder(effect):
                         outcome.pending.append(PendingSfxEffect(
                             effect=effect,
                             sfx_name=sfx.name,
                             sfx_description=sfx.description,
                         ))
+                        blocked = True
                     else:
                         _effects_applier.effect_registry.apply(effect, event.entity_id, event.universe, effect_context)
                         outcome.applied.append(effect)
                         sfx_applied = True
                         log.info("[process_event] applied sfx=%s effect=%s/%s target=%s", sfx.id, effect.type, effect.action, effect.target)
+
+                    if blocked:
+                        # Sequential execution: this effect needs a choice, so the
+                        # remaining immediate effects must wait for resolution.
+                        continuation = [e for e in sfx.effects[idx + 1:] if e.timing == EffectTiming.IMMEDIATE]
+                        _attach_continuation(outcome, continuation)
+                        break
                 else:
                     # Persist deferred effects in the central timer store.
                     if repo is not None:

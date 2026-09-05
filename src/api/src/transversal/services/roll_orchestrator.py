@@ -56,6 +56,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
             "sfx_name": p.sfx_name,
             "sfx_description": p.sfx_description,
             "effect": effect_to_wire_dict(p.effect),
+            **({"continuation": [effect_to_wire_dict(e) for e in p.continuation]} if p.continuation else {}),
         })
     for c in (structured or []):
         choices.append({
@@ -72,6 +73,7 @@ def _emit_pending_choices(entity_id: str, universe: str, effects: list, structur
             "sfx_name": c.sfx_name,
             "sfx_description": c.sfx_description,
             "effect": effect_to_wire_dict(c.effect),
+            **({"continuation": [effect_to_wire_dict(e) for e in c.continuation]} if c.continuation else {}),
         })
     for session in session_manager.list_active():
         event_bus.publish(StreamEvent(

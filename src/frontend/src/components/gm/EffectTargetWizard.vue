@@ -122,13 +122,14 @@ function apply() {
           sourceKind: c.source_kind || '',
           sourceId: c.source_id || '',
           sourceSfxId: c.source_sfx_id || '',
+          continuation: c.continuation || [],
           entity_id: c.entity_id,
         }
       }
       // Multi-select fan-out (one effect per chosen candidate) is not wired yet;
       // resolve the first selection for now.
       const target = Array.isArray(v) ? v[0] : v
-      return { effect: c.effect, target, field: c.field || 'target', entity_id: c.entity_id }
+      return { effect: c.effect, target, field: c.field || 'target', continuation: c.continuation || [], entity_id: c.entity_id }
     })
   emit('resolve', resolutions)
 }

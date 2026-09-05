@@ -456,6 +456,9 @@ class EffectTargetResolutionInput:
     source_kind: str = ""
     source_id: str = ""
     source_sfx_id: str = ""
+    # Immediate effects that were deferred behind this choice (sequential
+    # execution) — applied in order after the resolved effect.
+    continuation: list[EffectInput] = strawberry.field(default_factory=list)
 
 
 @strawberry.type

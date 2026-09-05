@@ -412,6 +412,30 @@ def test_resolve_effect_spec_choices_resolves_all_refs():
     assert resolved[0].refs["pool"].value == "kael"
 
 
+def test_sequential_execution_defers_effects_after_choose():
+    """An effect that blocks on a choose must gate every later immediate effect."""
+    _reset()
+    engine = EffectsEngine()
+    engine.register(_make_sfx(
+        "sfx-seq", "Seq", "manual",
+        effects=[
+            _make_effect("positive", "immediate", "modify_roll", "step_up_die", "primary"),
+            _make_effect("either", "immediate", "modify_pool", "add_trait_rating", "{choose_trait}"),
+            _make_effect("either", "immediate", "modify_pool", "resolve", "difficulty:loc-1"),
+        ],
+    ))
+
+    event = GameEvent(type="manual", entity_id="e1", universe="earth")
+    outcome = engine.process_event_outcome(event, available_sfx_ids=["sfx-seq"], razmerit_balance=10)
+
+    # Effect 1 applied; effect 2 blocked; effect 3 deferred to the continuation.
+    assert [a.action for a in outcome.applied] == ["step_up_die"]
+    assert len(outcome.pending) == 1
+    assert len(outcome.pending[0].continuation) == 1
+    assert outcome.pending[0].continuation[0].action == "resolve"
+    assert "resolve" not in [a.action for a in outcome.applied]
+
+
 def test_on_trait_offered_trigger_matches_trait_offered():
     engine = EffectsEngine()
     sfx = _make_sfx("sfx-offer", "Offer", "on_trait_offered")

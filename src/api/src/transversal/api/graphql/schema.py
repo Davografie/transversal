@@ -2296,6 +2296,25 @@ class Mutation:
             else:
                 eff = eff.model_copy(update={field: r.target})
             resolved.append(eff)
+
+        # Sequential continuation: immediate effects deferred behind a blocked
+        # choose now apply (in order) after the resolved effects.
+        for r in resolutions:
+            for c in (r.continuation or []):
+                eff = _effect_input_to_domain(c)
+                if eff.refs:
+                    applied, pending = resolve_effect_spec_choices(
+                        eff, "refs." + next(iter(eff.refs)), {}, entity, repo,
+                    )
+                    resolved.extend(applied)
+                    structured.extend(pending)
+                elif eff.target_spec is not None:
+                    applied, pending = resolve_effect_spec_choices(eff, "target", {}, entity, repo)
+                    resolved.extend(applied)
+                    structured.extend(pending)
+                else:
+                    resolved.append(eff)
+
         result = commit_effects(entity, resolved, repo)
         if structured:
             from transversal.services.roll_orchestrator import _emit_pending_choices

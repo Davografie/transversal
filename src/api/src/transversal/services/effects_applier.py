@@ -1353,30 +1353,17 @@ def _apply_roll_pool(entity, effect, repo, result):
 
 
 def _apply_resolve_pool(entity, effect, repo, result):
-    """Auto-resolve a target dice pool: assemble (optional trait), roll, set difficulty.
+    """Auto-resolve a target dice pool: roll it, auto-pick the total, set difficulty.
 
-    When ``refs["trait"]`` is resolved, its rating dice are added to the pool
-    first (so a heal SFX assembles the complication's rating then resolves it —
-    no separate ``add_trait_rating`` step, hence no cross-effect ordering bug).
-    Then the pool is rolled and the two highest set as the location difficulty.
+    Rolls the pool (see ``_apply_roll_pool``), then sums the two highest dice
+    (the standard keep-2 opposition total) and sets the location's difficulty,
+    broadcasting ``difficulty_set`` — the GM's manual total-pick step is gone.
     """
-    trait_ref = (effect.refs or {}).get("trait")
-    ts_id = trait_ref.value if trait_ref else ""
     pool_id = _resolve_pool_ref(effect)
-
-    if ts_id:
-        if repo.get_traitsetting(ts_id) is None:
-            result.applied.append(AppliedEffect(effect, f"trait {ts_id} not found"))
-            return
-        location_id, owner_id = _add_trait_rating_to_pool(ts_id, pool_id, entity, repo)
-        if not location_id or not owner_id:
-            result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
-            return
-    else:
-        location_id, owner_id = _resolve_pool(pool_id, entity, repo)
-        if not location_id or not owner_id:
-            result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
-            return
+    location_id, owner_id = _resolve_pool(pool_id, entity, repo)
+    if not location_id or not owner_id:
+        result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
+        return
 
     enriched = _roll_stored_pool(location_id, owner_id)
     if enriched is None:
