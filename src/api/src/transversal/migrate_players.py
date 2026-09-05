@@ -85,6 +85,7 @@ def migrate(apply: bool = False) -> int:
             "_from": f"{PLAYERS}/{new_player}",
             "_to": f"{ENTITIES}/{new_entity}",
             "type": "agency",
+            "main": False,  # troupe-play B54: no old-app main concept; mains designated post-migration
         }
         if apply and rel_col.get(edge_key) is None:
             rel_col.insert(doc)
