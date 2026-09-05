@@ -643,7 +643,7 @@ def draft_relationship(args: dict) -> dict:
     body = {
         "from_ref": args["from_ref"],
         "to_ref": args["to_ref"],
-        "type": args.get("type", "associate"),
+        "type": args.get("type", "relation"),
         "description": args.get("description", ""),
     }
     return _rest_post(f"/api/v1/plans/{args['plan_id']}/relationships", body)

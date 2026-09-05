@@ -6,6 +6,7 @@ from transversal.domain import (
     DicePoolRequest,
     DieType,
     Opposition,
+    PERSONAL_RELATIONSHIP_TYPE,
     TraitSetting,
     TransferFlags,
 )
@@ -135,7 +136,7 @@ def gift_trait(giver_id: str, recipient_id: str, trait_setting_id: str, repo) ->
     ts.source_entity_id = giver_id
 
     # 6. Create relationship edge
-    rel = repo.create_relationship(giver_id, recipient_id, "gifted",
+    rel = repo.create_relationship(giver_id, recipient_id, PERSONAL_RELATIONSHIP_TYPE,
                                    description=f"Gifted trait {ts.trait_id}")
 
     # 7. Update the TraitSetting
@@ -150,7 +151,7 @@ def take_trait(taker_id: str, victim_id: str, trait_setting_id: str, method: str
     """Take a trait from victim by contest.
 
     On success: transfers the trait to taker.
-    On failure: creates a "suspects" relationship from victim to taker.
+    On failure: creates a `relation` edge (victim → taker) describing suspicion.
     """
     # 1. Get TraitSetting, verify ownership
     ts = repo.get_traitsetting(trait_setting_id)
@@ -238,8 +239,8 @@ def take_trait(taker_id: str, victim_id: str, trait_setting_id: str, method: str
             "stolen": True,
         }
     else:
-        # Create suspects relationship
-        repo.create_relationship(victim_id, taker_id, "suspects",
+        # Create suspects relationship (a personal `relation`, not a distinct type)
+        repo.create_relationship(victim_id, taker_id, PERSONAL_RELATIONSHIP_TYPE,
                                  description=f"Suspects theft of trait {ts.trait_id}")
         return {
             "success": False,

@@ -34,7 +34,7 @@ class PlanEntityRequest(BaseModel):
 class PlanRelationshipRequest(BaseModel):
     from_ref: str  # "draft:<ref>" | "entity:<id>" | bare id
     to_ref: str
-    type: str = "associate"
+    type: str = "relation"
     description: str = ""
 
 

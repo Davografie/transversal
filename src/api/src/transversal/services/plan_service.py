@@ -85,7 +85,7 @@ class PlanService:
             if from_id and to_id:
                 self.repo.create_relationship(
                     from_id, to_id,
-                    r.get("type", "associate"),
+                    r.get("type", "relation"),
                     description=r.get("description", ""),
                 )
 

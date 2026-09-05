@@ -56,7 +56,16 @@ from transversal.domain import (
     TransversalType,
     Zone,
     dice_list_to_rating,
+    PERSONAL_RELATIONSHIP_TYPE,
+    STRUCTURAL_RELATIONSHIP_TYPES,
 )
+
+# AQL array literal for the structural relationship types — used by the
+# personal-relation queries so structural edges (super/membership/agency/
+# transversal/commands/support) never leak into personal results.
+_STRUCTURAL_TYPES_AQL = "[" + ", ".join(
+    f"'{t}'" for t in sorted(STRUCTURAL_RELATIONSHIP_TYPES)
+) + "]"
 
 
 def _key(doc_id: str) -> str:
@@ -1320,7 +1329,7 @@ class EntityRepository:
     ) -> list[TraitSetting]:
         """Get all trait settings on relationships between two entities (either direction)."""
         results: list[TraitSetting] = []
-        for rel_type in ["relation", "associate", "gifted", "suspects", "hostile_to"]:
+        for rel_type in [PERSONAL_RELATIONSHIP_TYPE]:
             for frm, to in [(entity_id_a, entity_id_b), (entity_id_b, entity_id_a)]:
                 rel = self.get_relationship(frm, to, rel_type)
                 if rel:
@@ -2230,6 +2239,43 @@ class EntityRepository:
         """
         return list(self.db.aql.execute(query))
 
+    def collapse_legacy_personal_relationship_types(self) -> int:
+        """Idempotently fold retired personal edge types onto ``relation``.
+
+        ``associate``/``gifted``/``suspects``/``hostile_to`` are retired — the
+        single personal type is ``relation``. This flips any edges written before
+        the collapse, preserving ``description`` and dropping exact duplicates.
+        Returns the number of edges renamed (not counting pure duplicate drops).
+        """
+        renamed = 0
+        for legacy in ("associate", "gifted", "suspects", "hostile_to"):
+            rows = list(self.db.aql.execute(
+                f"FOR r IN {RELATIONSHIPS} FILTER r.type == @t RETURN r",
+                bind_vars={"t": legacy},
+            ))
+            for r in rows:
+                dup = list(self.db.aql.execute(
+                    f"""
+                    FOR x IN {RELATIONSHIPS}
+                    FILTER x._from == @f AND x._to == @t AND x.type == @rel
+                    LIMIT 1
+                    RETURN x._key
+                    """,
+                    bind_vars={"f": r["_from"], "t": r["_to"], "rel": PERSONAL_RELATIONSHIP_TYPE},
+                ))
+                if dup:
+                    self._relationships.delete(r["_key"])
+                    continue
+                self._relationships.insert({
+                    "_from": r["_from"],
+                    "_to": r["_to"],
+                    "type": PERSONAL_RELATIONSHIP_TYPE,
+                    "description": r.get("description", ""),
+                })
+                self._relationships.delete(r["_key"])
+                renamed += 1
+        return renamed
+
     # ── Location Navigation ────────────────────────────
 
     def location_tree(self) -> list[dict]:
@@ -2767,7 +2813,7 @@ class EntityRepository:
         query = f"""
             FOR r IN {RELATIONSHIPS}
             FILTER (r._from == @gmc_ref OR r._to == @gmc_ref)
-              AND r.type NOT IN ['super', 'membership', 'agency', 'transversal']
+              AND r.type NOT IN {_STRUCTURAL_TYPES_AQL}
             LET other_key = PARSE_IDENTIFIER(r._from).key == @gid
                 ? PARSE_IDENTIFIER(r._to).key
                 : PARSE_IDENTIFIER(r._from).key
@@ -2828,7 +2874,7 @@ class EntityRepository:
             LET from_key = PARSE_IDENTIFIER(r._from).key
             LET to_key = PARSE_IDENTIFIER(r._to).key
             FILTER from_key IN @ids AND to_key IN @ids
-              AND r.type NOT IN ['super', 'membership', 'agency', 'transversal']
+              AND r.type NOT IN {_STRUCTURAL_TYPES_AQL}
             RETURN {{ from: from_key, to: to_key, type: r.type, description: NOT_NULL(r.description, '') }}
         """
         return list(self.db.aql.execute(query, bind_vars={"ids": entity_ids}))

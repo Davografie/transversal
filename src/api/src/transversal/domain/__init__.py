@@ -98,6 +98,36 @@ class TransversalType(str, Enum):
     INAPPOSITE = "inapposite"
 
 
+# ── Relationship edge types ──────────────────────────
+#
+# ``relationships`` edges split into two kinds:
+#   * structural — system wiring the graph traverses (hierarchy, ownership,
+#     membership, travel, authority, troupe cast). These are the only
+#     ``type`` values the code may key behaviour on.
+#   * personal — narrative posture between two entities, carried by
+#     relationship *traits* (name/statement/rating), not by distinct edge
+#     types. All personal edges use the single ``relation`` type.
+#
+# The retired types (``associate``/``gifted``/``suspects``/``hostile_to``)
+# collapse onto ``relation``; their meaning lives in the trait / ``description``
+# / trait-setting ``source_type`` provenance.
+STRUCTURAL_RELATIONSHIP_TYPES: frozenset[str] = frozenset({
+    "super",        # child location → parent location
+    "membership",   # entity → faction
+    "agency",       # player → entity (carries the ``main`` flag)
+    "transversal",  # location travel / portal
+    "commands",     # GMC → GMC command chain (conspyramid)
+    "support",      # support character → main
+})
+
+PERSONAL_RELATIONSHIP_TYPE: str = "relation"
+
+
+def is_structural_relationship_type(rel_type: str) -> bool:
+    """Whether ``rel_type`` is structural system wiring (vs a personal relation)."""
+    return rel_type in STRUCTURAL_RELATIONSHIP_TYPES
+
+
 # ── Die Roll Models ───────────────────────────────────
 
 class DieSpec(BaseModel):

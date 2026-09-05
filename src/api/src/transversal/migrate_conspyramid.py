@@ -97,8 +97,8 @@ def _ensure_rank_role(
 def _ensure_relation(
     repo: EntityRepository, from_id: str, to_id: str, description: str
 ) -> None:
-    if repo.get_relationship(from_id, to_id, "associate") is None:
-        repo.create_relationship(from_id, to_id, "associate", description=description)
+    if repo.get_relationship(from_id, to_id, "relation") is None:
+        repo.create_relationship(from_id, to_id, "relation", description=description)
 
 
 def seed_transversal_edges(repo: EntityRepository) -> int:

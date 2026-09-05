@@ -100,6 +100,7 @@ from transversal.api.graphql.types import (
 from transversal.domain import Entity as DomainEntity
 from transversal.domain import EntityType as DomainEntityType
 from transversal.domain import Player as DomainPlayer
+from transversal.domain import is_structural_relationship_type
 from transversal.domain import TraitSetting as DomainTraitSetting
 from transversal.domain import TraitDisplayName as DomainTraitDisplayName
 from transversal.domain import Condition as DomainCondition
@@ -143,10 +144,10 @@ def _maybe_rearm_passives(*triggers: str) -> None:
 
 
 # Relationship types that model a *personal* relationship between two beings
-# (and therefore resolve to entity/projection handles). Structural edges
-# (super/transversal/membership/commands/gifted/suspects/hostile_to) stay
-# entity→entity and are not routed through this resolver.
-PERSONAL_RELATIONSHIP_TYPES = {"associate", "relation"}
+# (and therefore resolve to entity/projection handles) are everything that is
+# NOT structural — see ``STRUCTURAL_RELATIONSHIP_TYPES`` in ``domain``. Structural
+# edges (super/transversal/membership/commands/agency/support) stay entity→entity
+# and are not routed through this resolver.
 
 
 def _resolve_relationship_endpoint(repo, entity_id, elevated: bool = False):
@@ -243,11 +244,11 @@ def _trait_to_gql(t) -> TraitRef:
 
 def _message_to_gql(m: "Message", repo) -> Message:
     """Convert a domain Message to GraphQL Message, resolving the
-    ``associate`` relationship description between sender and recipient."""
+    ``relation`` relationship description between sender and recipient."""
     from transversal.domain import MessageKind as DomainMessageKind
-    rel = repo.get_relationship(m.sender_entity_id, m.recipient_entity_id, "associate")
+    rel = repo.get_relationship(m.sender_entity_id, m.recipient_entity_id, "relation")
     if rel is None:
-        rel = repo.get_relationship(m.recipient_entity_id, m.sender_entity_id, "associate")
+        rel = repo.get_relationship(m.recipient_entity_id, m.sender_entity_id, "relation")
     return Message(
         id=m.id,
         sender_entity_id=m.sender_entity_id,
@@ -1152,14 +1153,14 @@ class Query:
         self, info: strawberry.Info,
         from_entity_id: strawberry.ID,
         to_entity_id: strawberry.ID,
-        type: str = "associate",
+        type: str = "relation",
         elevated: bool = False,
     ) -> Optional[Relationship]:
         """Get a directional relationship edge between two entities, or null."""
         repo = _em(info).repo
         from_id = str(from_entity_id)
         to_id = str(to_entity_id)
-        if type in PERSONAL_RELATIONSHIP_TYPES:
+        if not is_structural_relationship_type(type):
             frm, from_proj = _resolve_relationship_endpoint(repo, from_id, elevated)
             to, to_proj = _resolve_relationship_endpoint(repo, to_id, elevated)
         else:
@@ -1882,15 +1883,16 @@ class Mutation:
     def create_relationship(self, info: strawberry.Info, input: CreateRelationshipInput) -> Relationship:
         """Create (or update) a directional relationship edge between two entities.
 
-        Personal types (``associate``/``relation``) resolve each endpoint to the
-        entity (elevated + multiversal) or its active projection (default).
-        Structural types (super/transversal/membership/…) stay entity→entity.
+        Personal types (anything non-structural, i.e. ``relation``) resolve each
+        endpoint to the entity (elevated + multiversal) or its active projection
+        (default). Structural types (super/transversal/membership/…) stay
+        entity→entity.
         Returns the real ArangoDB edge key as ``id``.
         """
         repo = _em(info).repo
         from_id = str(input.from_entity_id)
         to_id = str(input.to_entity_id)
-        if input.type in PERSONAL_RELATIONSHIP_TYPES:
+        if not is_structural_relationship_type(input.type):
             frm, from_proj = _resolve_relationship_endpoint(repo, from_id, input.elevated)
             to, to_proj = _resolve_relationship_endpoint(repo, to_id, input.elevated)
         else:
@@ -1916,7 +1918,7 @@ class Mutation:
         repo = _em(info).repo
         from_id = str(input.from_entity_id)
         to_id = str(input.to_entity_id)
-        if input.type in PERSONAL_RELATIONSHIP_TYPES:
+        if not is_structural_relationship_type(input.type):
             frm, from_proj = _resolve_relationship_endpoint(repo, from_id, input.elevated)
             to, to_proj = _resolve_relationship_endpoint(repo, to_id, input.elevated)
         else:
@@ -1947,7 +1949,7 @@ class Mutation:
         if not ts_id:
             raise ValueError(f"Cannot resolve traitset for trait '{trait_id}'")
 
-        if rel_type in PERSONAL_RELATIONSHIP_TYPES:
+        if not is_structural_relationship_type(rel_type):
             frm, from_proj = _resolve_relationship_endpoint(repo, str(from_entity_id), elevated)
             to, to_proj = _resolve_relationship_endpoint(repo, str(to_entity_id), elevated)
         else:

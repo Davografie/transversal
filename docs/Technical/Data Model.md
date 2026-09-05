@@ -133,15 +133,23 @@ Polarity is **baked** onto a trait setting at creation (non-null), resolved from
 
 ### Relationship Types
 
+Edges split into **structural** wiring (the graph traverses these for hierarchy,
+ownership, membership, travel, authority, cast) and one **personal** type
+(`relation`) that carries narrative posture as relationship traits.
+
 | Type | Direction | Meaning |
 |------|-----------|---------|
 | `super` | child → parent | Location hierarchy (sub-location of) |
 | `transversal` | bidirectional | Portal / traversal connection between locations |
-| `relation` | arbitrary | Generic relationship between entities (legacy) |
-| `associate` | entity → entity | Named association; resolves relationship descriptions in `messages` |
-| `commands` | faction → entity | Command/control hierarchy |
-| `membership` | entity → faction | Entity is a member of a faction |
-| `agency` | player → entity | Player ownership / control of an entity |
+| `membership` | entity → faction | Entity is a member of a faction (rank/role hang here) |
+| `agency` | player → entity | Player ownership / control (carries the `main` flag) |
+| `commands` | GMC → GMC | Command chain within a conspiracy (conspyramid authority) |
+| `support` | SC → main | Support character belongs to a main's cast |
+| `relation` | entity → entity | The single personal type — narrative posture lives as relationship traits |
+
+Retired: `associate`, `gifted`, `suspects`, `hostile_to` collapse onto `relation`
+(their meaning lives in the trait / `description` / trait-setting `source_type`).
+See `STRUCTURAL_RELATIONSHIP_TYPES` in `domain/__init__.py` for the source of truth.
 
 ---
 
@@ -370,7 +378,7 @@ Entity-to-entity connections.
 | `_key` | string | ✅ | Deterministic: `edge:{from}:{to}:{type}` |
 | `_from` | string | ✅ | `entities/{from_id}` |
 | `_to` | string | ✅ | `entities/{to_id}` |
-| `type` | string | ✅ | `super`, `transversal`, `relation`, `associate`, `commands`, `membership`, `agency`, `support` |
+| `type` | string | ✅ | `super`, `membership`, `agency`, `transversal`, `commands`, `support`, `relation` |
 | `description` | string | | Optional description (e.g. relationship narrative) |
 | `main` | bool | | On `agency` edges only: whether the entity is one of the player's mains (see [[Troupe Play]]) |
 

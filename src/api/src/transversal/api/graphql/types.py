@@ -1207,7 +1207,7 @@ class CreateRelationshipInput:
     """Input for creating or updating a relationship edge."""
     from_entity_id: strawberry.ID
     to_entity_id: strawberry.ID
-    type: str = "associate"
+    type: str = "relation"
     description: str = ""
     elevated: bool = False  # True → entity→entity (both multiversal); False → projection→projection
 
@@ -1217,7 +1217,7 @@ class DeleteRelationshipInput:
     """Input for deleting a relationship edge."""
     from_entity_id: strawberry.ID
     to_entity_id: strawberry.ID
-    type: str = "associate"
+    type: str = "relation"
     elevated: bool = False
 
 
