@@ -746,6 +746,11 @@ class TraitSetting:
         trait = em.repo.get_trait(self.trait_id)
         if not trait:
             return ""
+        # The universe only matters when the trait has per-universe/per-rating
+        # display names; skip the entity lookup (an N+1 per trait setting) in
+        # the common case where the name is static.
+        if not trait.display_names or not self.dice:
+            return trait.name
         entity = em.repo.get_entity(self.entity_id)
         universe = entity.current_universe if entity else ""
         return resolve_trait_display_name(trait, self.dice, universe)

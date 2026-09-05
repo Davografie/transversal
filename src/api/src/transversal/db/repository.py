@@ -7,6 +7,7 @@ Assembles CharacterView from multiple collections.
 from __future__ import annotations
 
 import os
+import time
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -95,6 +96,52 @@ class EntityRepository:
         self._historical_records = self.db.collection(HISTORICAL_RECORDS)
         self._plan_entities = self.db.collection(PLAN_ENTITIES)
         self._plan_relationships = self.db.collection(PLAN_RELATIONSHIPS)
+
+        # Registry read cache: the traits/traitsets registries are small
+        # (hundreds) and read on every trait-setting resolution, so they are
+        # memoized per-process as a whole-collection index, invalidated on the
+        # repository's own writes and refreshed after a TTL (self-healing
+        # against out-of-process writers such as migrations).
+        self._traits_index_cache: dict[str, dict] = {}
+        self._traits_index_at = 0.0
+        self._traitsets_index_cache: dict[str, dict] = {}
+        self._traitsets_index_at = 0.0
+
+    # ── Registry read cache ───────────────────────────
+
+    _REGISTRY_CACHE_TTL = 30.0  # seconds; out-of-process writes surface within this window
+
+    def _traits_index(self) -> dict[str, dict]:
+        now = time.monotonic()
+        cache = getattr(self, "_traits_index_cache", {})
+        at = getattr(self, "_traits_index_at", 0.0)
+        if not cache or now - at > self._REGISTRY_CACHE_TTL:
+            store = self._traits
+            docs = store.all() if hasattr(store, "all") else store.values()
+            cache = {d["_key"]: d for d in docs}
+            self._traits_index_cache = cache
+            self._traits_index_at = now
+        return cache
+
+    def _traitsets_index(self) -> dict[str, dict]:
+        now = time.monotonic()
+        cache = getattr(self, "_traitsets_index_cache", {})
+        at = getattr(self, "_traitsets_index_at", 0.0)
+        if not cache or now - at > self._REGISTRY_CACHE_TTL:
+            store = self._traitsets
+            docs = store.all() if hasattr(store, "all") else store.values()
+            cache = {d["_key"]: d for d in docs}
+            self._traitsets_index_cache = cache
+            self._traitsets_index_at = now
+        return cache
+
+    def _invalidate_traits_index(self) -> None:
+        self._traits_index_cache = {}
+        self._traits_index_at = 0.0
+
+    def _invalidate_traitsets_index(self) -> None:
+        self._traitsets_index_cache = {}
+        self._traitsets_index_at = 0.0
 
     # ── Entity CRUD ───────────────────────────────────
 
@@ -521,10 +568,11 @@ class EntityRepository:
         doc = trait.model_dump()
         doc["_key"] = trait.id
         self._traits.insert(doc)
+        self._invalidate_traits_index()
         return trait
 
     def get_trait(self, trait_id: str) -> Optional[Trait]:
-        doc = self._traits.get(trait_id)
+        doc = self._traits_index().get(trait_id)
         return Trait.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
     def get_traits_by_universe(self, universe: str) -> list[Trait]:
@@ -590,6 +638,7 @@ class EntityRepository:
         doc = trait.model_dump()
         doc["_key"] = trait.id
         self._traits.replace(doc)
+        self._invalidate_traits_index()
         return trait
 
     def delete_trait(self, trait_id: str) -> bool:
@@ -602,6 +651,7 @@ class EntityRepository:
         self._cleanup_lifepath_trait_refs(trait_id)
         try:
             self._traits.delete(trait_id)
+            self._invalidate_traits_index()
             return True
         except Exception:
             return False
@@ -843,10 +893,11 @@ class EntityRepository:
         doc = traitset.model_dump()
         doc["_key"] = traitset.id
         self._traitsets.insert(doc)
+        self._invalidate_traitsets_index()
         return traitset
 
     def get_traitset_by_id(self, traitset_id: str) -> Optional[TraitSet]:
-        doc = self._traitsets.get(traitset_id)
+        doc = self._traitsets_index().get(traitset_id)
         return TraitSet.model_validate({**doc, "id": doc["_key"]}) if doc else None
 
     def get_traitsets_by_universe(self, universe: str) -> list[TraitSet]:
@@ -875,6 +926,7 @@ class EntityRepository:
         if existing:
             doc["_rev"] = existing["_rev"]
             self._traitsets.replace(doc)
+        self._invalidate_traitsets_index()
         return traitset
 
     def delete_traitset(self, traitset_id: str) -> dict:
@@ -903,6 +955,9 @@ class EntityRepository:
         )
         try: self._traitsets.delete(traitset_id)
         except Exception: pass
+        # The cascade also removed traits, so invalidate both indexes.
+        self._invalidate_traitsets_index()
+        self._invalidate_traits_index()
         return {"deleted": True, "traits_removed": len(trait_keys), "settings_removed": ts_removed}
 
     def reorder_traitsets(self, ordered_ids: list[str]) -> None:
