@@ -95,7 +95,7 @@ def migrate(apply: bool = False) -> int:
             role = "sheet" if e.get("type") in SHEET_TYPES else "background"
             report[f"flat_{role}"] += 1
             if apply:
-                _write_image(repo, e, entry.read_bytes(), [role], e.get("current_universe") or "earth")
+                _write_image(repo, e, entry, [role], e.get("current_universe") or "earth")
             continue
 
         # ── Entity dir: {key}/ ────────────────────────────
@@ -118,12 +118,12 @@ def migrate(apply: bool = False) -> int:
         if bg:
             report["dir_background"] += 1
             if apply:
-                _write_image(repo, e, bg.read_bytes(), ["background"], e.get("current_universe") or "earth")
+                _write_image(repo, e, bg, ["background"], e.get("current_universe") or "earth")
         sh = _pick(direct, SHEET_ORDER)
         if sh:
             report["dir_sheet"] += 1
             if apply:
-                _write_image(repo, e, sh.read_bytes(), ["sheet"], e.get("current_universe") or "earth")
+                _write_image(repo, e, sh, ["sheet"], e.get("current_universe") or "earth")
 
         # Per-location subdirs → per-universe images.
         for sub in sorted(entry.iterdir()):
@@ -141,12 +141,12 @@ def migrate(apply: bool = False) -> int:
             if bg2:
                 report["loc_background"] += 1
                 if apply:
-                    _write_image(repo, e, bg2.read_bytes(), ["background"], universe)
+                    _write_image(repo, e, bg2, ["background"], universe)
             sh2 = _pick(variants, SHEET_ORDER)
             if sh2:
                 report["loc_sheet"] += 1
                 if apply:
-                    _write_image(repo, e, sh2.read_bytes(), ["sheet"], universe)
+                    _write_image(repo, e, sh2, ["sheet"], universe)
 
     print("=== MEDIA MIGRATION ===")
     print(f"apply={apply}")
@@ -156,14 +156,18 @@ def migrate(apply: bool = False) -> int:
     return 0
 
 
-def _write_image(repo: EntityRepository, entity: dict, image_data: bytes, roles: list[str], universe: str) -> None:
+def _write_image(repo: EntityRepository, entity: dict, source: Path, roles: list[str], universe: str) -> None:
     entity_id = entity["_key"]
     safe_name = _safe_filename(entity.get("name") or entity_id)
     safe_universe = _safe_filename(universe)
     short_hash = uuid.uuid4().hex[:8]
     base_name = f"{safe_name}_{safe_universe}_{short_hash}"
     output_dir = IMAGEN_DIR / entity_id / universe
+    image_data = source.read_bytes()
     _save_image_variants(image_data, output_dir, base_name)
+    # Use the source file's mtime so migrated images sort OLDER than the
+    # survived new-app images (resolver picks newest-first).
+    created_at = datetime.fromtimestamp(source.stat().st_mtime, tz=timezone.utc).isoformat()
     repo.create_entity_image(EntityImage(
         id=short_hash,
         entity_id=entity_id,
@@ -173,7 +177,7 @@ def _write_image(repo: EntityRepository, entity: dict, image_data: bytes, roles:
         roles=roles,
         filename=base_name,
         extension="webp",
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=created_at,
     ))
 
 
