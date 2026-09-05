@@ -984,10 +984,8 @@ class Entity:
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
 
     @strawberry.field
-    def projections(self, info: strawberry.Info) -> list[Projection]:
-        from transversal.services.entity_manager import EntityManager
-        em = info.context["entity_manager"]
-        projs = em.get_projections(self.id)
+    async def projections(self, info: strawberry.Info) -> list[Projection]:
+        projs = await info.context["loaders"].projections.load(str(self.id))
         return [
             Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe,
                        universe=p.universe, name=p.name, background_image=p.background_image,
@@ -997,17 +995,16 @@ class Entity:
         ]
 
     @strawberry.field
-    def trait_set_settings(self, info: strawberry.Info) -> list[TraitSetSetting]:
+    async def trait_set_settings(self, info: strawberry.Info) -> list[TraitSetSetting]:
         """This entity's per-trait-set settings (SFX + limit override)."""
-        from transversal.services.entity_manager import EntityManager
-        em = info.context["entity_manager"]
+        tss_list = await info.context["loaders"].traitsetsettings.load(str(self.id))
         return [
             TraitSetSetting(
                 id=tss.id, entity_id=tss.entity_id, traitset_id=tss.traitset_id,
                 from_type=tss.from_type, projection_id=tss.projection_id,
                 sfx_ids=tss.sfx_ids, limit=tss.limit,
             )
-            for tss in em.repo.get_traitsetsettings_for_entity(str(self.id))
+            for tss in tss_list
         ]
 
     @strawberry.field
@@ -1062,12 +1059,10 @@ class Entity:
         )
 
     @strawberry.field
-    def trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
-        from transversal.services.entity_manager import EntityManager
-        em = info.context["entity_manager"]
-        settings = em.get_traitsettings(self.id)
+    async def trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:
+        settings = await info.context["loaders"].traitsettings.load(str(self.id))
         result = [_gql_trait_setting(s) for s in settings]
-        for enriched in em.repo.get_relationship_traitsettings_for_entity(str(self.id)):
+        for enriched in await info.context["loaders"].relationship_traitsettings.load(str(self.id)):
             result.append(_gql_trait_setting(enriched["setting"], enriched))
         return result
 

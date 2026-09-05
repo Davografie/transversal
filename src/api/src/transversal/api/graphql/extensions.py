@@ -7,6 +7,7 @@ request-end log covers both database and resolver time.
 
 from __future__ import annotations
 
+import inspect
 import time
 
 from strawberry.extensions import SchemaExtension
@@ -15,12 +16,14 @@ from transversal.db.profiling import enabled, record_resolver
 
 
 class ResolverTimingExtension(SchemaExtension):
-    def resolve(self, _next, root, info, *args, **kwargs):
+    async def resolve(self, _next, root, info, *args, **kwargs):
         if not enabled():
-            return _next(root, info, *args, **kwargs)
+            result = _next(root, info, *args, **kwargs)
+            return await result if inspect.isawaitable(result) else result
         start = time.perf_counter()
         try:
-            return _next(root, info, *args, **kwargs)
+            result = _next(root, info, *args, **kwargs)
+            return await result if inspect.isawaitable(result) else result
         finally:
             field = info.field_name
             path = getattr(info, "path", None)

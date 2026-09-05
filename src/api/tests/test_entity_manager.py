@@ -94,6 +94,8 @@ class InMemoryRepository(EntityRepository):
         return p
     def get_projections_for_entity(self, eid: str) -> list[Projection]:
         return [Projection.model_validate(d) for d in self._projections.values() if d["entity_id"] == eid]
+    def get_projections_for_entities(self, entity_ids: list[str]) -> dict[str, list[Projection]]:
+        return {eid: self.get_projections_for_entity(eid) for eid in entity_ids}
     def get_projection(self, pid: str) -> Projection | None:
         d = self._projections.get(pid)
         return Projection.model_validate(d) if d else None
@@ -131,9 +133,13 @@ class InMemoryRepository(EntityRepository):
         return ts
     def get_traitsettings_for_entity(self, eid: str) -> list[TraitSetting]:
         return [TraitSetting.model_validate(d) for d in self._traitsettings.values() if d["entity_id"] == eid]
+    def get_traitsettings_for_entities(self, entity_ids: list[str]) -> dict[str, list[TraitSetting]]:
+        return {eid: self.get_traitsettings_for_entity(eid) for eid in entity_ids}
     def get_relationship_traitsettings_for_entity(self, entity_id: str) -> list[dict]:
         # No relationship edges in the plain in-memory double.
         return []
+    def get_relationship_traitsettings_for_entities(self, entity_ids: list[str]) -> dict[str, list[dict]]:
+        return {eid: self.get_relationship_traitsettings_for_entity(eid) for eid in entity_ids}
     def get_traitsettings_by_traitset(self, eid, tsid) -> list[TraitSetting]:
         return [TraitSetting.model_validate(d) for d in self._traitsettings.values()
                 if d["entity_id"] == eid and d["traitset_id"] == tsid]
@@ -156,6 +162,8 @@ class InMemoryRepository(EntityRepository):
             for d in self._traitsetsettings.values()
             if d["entity_id"] == eid
         ]
+    def get_traitsetsettings_for_entities(self, entity_ids: list[str]) -> dict[str, list[TraitSetSetting]]:
+        return {eid: self.get_traitsetsettings_for_entity(eid) for eid in entity_ids}
 
     # sfx owners
     def get_sfx_owner(self, owner_id: str) -> SfxOwner | None:

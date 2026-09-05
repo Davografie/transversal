@@ -470,6 +470,23 @@ class EntityRepository:
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
         ]
 
+    def get_projections_for_entities(
+        self, entity_ids: list[str]
+    ) -> dict[str, list[Projection]]:
+        """Batch: projections grouped by owning entity (one AQL query)."""
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR p IN {PROJECTIONS}
+            FILTER p.entity_id IN @eids
+            RETURN p
+        """
+        grouped: dict[str, list[Projection]] = {eid: [] for eid in entity_ids}
+        for doc in self.db.aql.execute(query, bind_vars={"eids": list(entity_ids)}):
+            proj = Projection.model_validate({**doc, "id": doc["_key"]})
+            grouped.setdefault(proj.entity_id, []).append(proj)
+        return grouped
+
     def list_all_projections(self) -> list[Projection]:
         query = f"""
             FOR p IN {PROJECTIONS}
@@ -1021,6 +1038,23 @@ class EntityRepository:
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
         ]
 
+    def get_traitsettings_for_entities(
+        self, entity_ids: list[str]
+    ) -> dict[str, list[TraitSetting]]:
+        """Batch: trait settings grouped by owning entity (one AQL query)."""
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.entity_id IN @eids AND ts.from_type != 'traitsetting'
+            RETURN ts
+        """
+        grouped: dict[str, list[TraitSetting]] = {eid: [] for eid in entity_ids}
+        for doc in self.db.aql.execute(query, bind_vars={"eids": list(entity_ids)}):
+            ts = TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            grouped.setdefault(ts.entity_id, []).append(ts)
+        return grouped
+
     def list_all_traitsettings(self) -> list[TraitSetting]:
         """Return every trait setting (entity↔trait edge)."""
         query = f"""
@@ -1173,6 +1207,23 @@ class EntityRepository:
             TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id})
         ]
+
+    def get_traitsetsettings_for_entities(
+        self, entity_ids: list[str]
+    ) -> dict[str, list[TraitSetSetting]]:
+        """Batch: trait-set settings grouped by owning entity (one AQL query)."""
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            FILTER tss.entity_id IN @eids
+            RETURN tss
+        """
+        grouped: dict[str, list[TraitSetSetting]] = {eid: [] for eid in entity_ids}
+        for doc in self.db.aql.execute(query, bind_vars={"eids": list(entity_ids)}):
+            tss = TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
+            grouped.setdefault(tss.entity_id, []).append(tss)
+        return grouped
 
     def list_all_traitsetsettings(self) -> list[TraitSetSetting]:
         """Return every trait set setting (entity↔traitset edge)."""
@@ -1422,6 +1473,71 @@ class EntityRepository:
                     "edge_type": edge.get("type", ""),
                 })
         return results
+
+    def get_relationship_traitsettings_for_entities(
+        self, entity_ids: list[str]
+    ) -> dict[str, list[dict]]:
+        """Batch outgoing relationship traits across many entities.
+
+        Mirrors :meth:`get_relationship_traitsettings_for_entity` but resolves
+        the whole set in a constant number of AQL queries (projections, edges,
+        edge trait settings) instead of one per entity + one per edge.
+        """
+        if not entity_ids:
+            return {}
+        grouped: dict[str, list[dict]] = {eid: [] for eid in entity_ids}
+
+        # All projections for all entities → build ``_from`` refs + owner map.
+        projs_by_entity = self.get_projections_for_entities(entity_ids)
+        from_refs: list[str] = []
+        ref_to_owner: dict[str, str] = {}
+        for eid in entity_ids:
+            ref = f"{ENTITIES}/{eid}"
+            from_refs.append(ref)
+            ref_to_owner[ref] = eid
+            for p in projs_by_entity.get(eid, []):
+                pref = f"{PROJECTIONS}/{p.id}"
+                from_refs.append(pref)
+                ref_to_owner[pref] = eid
+
+        # All outgoing relationship edges for the whole set.
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from IN @from_refs
+            RETURN r
+        """
+        edges = list(self.db.aql.execute(query, bind_vars={"from_refs": from_refs}))
+
+        # All relationship trait settings for those edges.
+        edge_keys = [e["_key"] for e in edges]
+        ts_by_edge: dict[str, list[TraitSetting]] = {k: [] for k in edge_keys}
+        if edge_keys:
+            ts_query = f"""
+                FOR ts IN {TRAITSETTINGS}
+                FILTER ts.from_type == 'relationship' AND ts.entity_id IN @ekeys
+                RETURN ts
+            """
+            for doc in self.db.aql.execute(ts_query, bind_vars={"ekeys": edge_keys}):
+                ts = TraitSetting.model_validate({**doc, "id": doc["_key"]})
+                ts_by_edge.setdefault(ts.entity_id, []).append(ts)
+
+        # Assemble per-owner results (contact resolution stays direct-key lookups).
+        for edge in edges:
+            owner = ref_to_owner.get(edge["_from"])
+            if owner is None:
+                continue
+            contact = self._resolve_relationship_contact(edge["_to"])
+            if contact is None:
+                continue
+            for ts in ts_by_edge.get(edge["_key"], []):
+                grouped[owner].append({
+                    "setting": ts,
+                    "contact_id": contact["id"],
+                    "contact_name": contact["name"],
+                    "contact_type": contact["type"],
+                    "edge_type": edge.get("type", ""),
+                })
+        return grouped
 
     def _resolve_relationship_contact(self, ref: str) -> dict | None:
         """Resolve a relationship endpoint ref to {id, name, type}."""

@@ -12,6 +12,7 @@ from strawberry.fastapi import GraphQLRouter
 import time
 
 from transversal.api.graphql.schema import schema
+from transversal.api.graphql.loaders import build_loaders
 from transversal.api.rest.roll import router as roll_router
 from transversal.api.rest.effects import router as effects_router
 from transversal.api.rest.players import router as players_router
@@ -146,6 +147,7 @@ async def get_context(request: Request) -> dict:
         "entity_manager": _get_em(),
         "razmerit_service": _get_raz(),
         "effects_engine": _get_engine(),
+        "loaders": build_loaders(_get_em()),
     }
 
 
