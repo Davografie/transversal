@@ -439,6 +439,7 @@ def _structured_choice_to_dict(c) -> dict:
         "sfx_name": c.sfx_name,
         "sfx_description": c.sfx_description,
         "effect": effect_to_wire_dict(c.effect),
+        **({"continuation": [effect_to_wire_dict(e) for e in c.continuation]} if c.continuation else {}),
     }
 
 
@@ -451,6 +452,33 @@ def _effects_result_to_gql(result, structured=None) -> EffectApplicationResult:
         ],
         structured=[_structured_choice_to_dict(c) for c in (structured or [])],
     )
+
+
+def _resolve_continuation_effects(continuation, entity, repo, resolved, structured):
+    """Resolve + apply a list of domain ``Effect``s in order.
+
+    Defer the rest when one blocks on a ``choose`` (nested sequential
+    continuation): the remaining effects are attached to the new pending choice.
+    """
+    from transversal.services.effects_engine import resolve_effect_spec_choices
+
+    for i, eff in enumerate(continuation):
+        if eff.refs:
+            applied, pending = resolve_effect_spec_choices(eff, "refs." + next(iter(eff.refs)), {}, entity, repo)
+            resolved.extend(applied)
+            if pending:
+                pending[-1].continuation = continuation[i + 1:]
+                structured.extend(pending)
+                return
+        elif eff.target_spec is not None:
+            applied, pending = resolve_effect_spec_choices(eff, "target", {}, entity, repo)
+            resolved.extend(applied)
+            if pending:
+                pending[-1].continuation = continuation[i + 1:]
+                structured.extend(pending)
+                return
+        else:
+            resolved.append(eff)
 
 
 def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
@@ -2251,7 +2279,11 @@ class Mutation:
             raise ValueError(f"Entity '{entity_id}' not found")
         resolved = []
         structured = []
+        import logging
+        log = logging.getLogger("transversal.effects")
+
         for r in resolutions:
+            continuation = [_effect_input_to_domain(c) for c in (r.continuation or [])]
             eff = _effect_input_to_domain(r.effect)
             field = r.field or "target"
             if r.answers:
@@ -2264,7 +2296,17 @@ class Mutation:
                     bindings=local_scope,
                 )
                 resolved.extend(applied)
-                structured.extend(pending)
+                if pending:
+                    # More choose steps remain — carry the continuation forward.
+                    pending[-1].continuation = continuation
+                    structured.extend(pending)
+                    log.info("[resolve] sfx=%s still pending (%d more choose); continuation carried (%d effects)",
+                             r.source_sfx_id or "", len(pending), len(continuation))
+                else:
+                    # Fully resolved — apply the deferred continuation now.
+                    _resolve_continuation_effects(continuation, entity, repo, resolved, structured)
+                    log.info("[resolve] sfx=%s fully resolved; applying continuation (%d effects)",
+                             r.source_sfx_id or "", len(continuation))
                 # Write any step-output bindings into the armed activation.
                 if local_scope and r.source_sfx_id:
                     from transversal.services.roll_deferral import bind_activation
@@ -2296,24 +2338,9 @@ class Mutation:
             else:
                 eff = eff.model_copy(update={field: r.target})
             resolved.append(eff)
-
-        # Sequential continuation: immediate effects deferred behind a blocked
-        # choose now apply (in order) after the resolved effects.
-        for r in resolutions:
-            for c in (r.continuation or []):
-                eff = _effect_input_to_domain(c)
-                if eff.refs:
-                    applied, pending = resolve_effect_spec_choices(
-                        eff, "refs." + next(iter(eff.refs)), {}, entity, repo,
-                    )
-                    resolved.extend(applied)
-                    structured.extend(pending)
-                elif eff.target_spec is not None:
-                    applied, pending = resolve_effect_spec_choices(eff, "target", {}, entity, repo)
-                    resolved.extend(applied)
-                    structured.extend(pending)
-                else:
-                    resolved.append(eff)
+            # Legacy single-target resolution: no further choose — apply the
+            # deferred continuation immediately.
+            _resolve_continuation_effects(continuation, entity, repo, resolved, structured)
 
         result = commit_effects(entity, resolved, repo)
         if structured:

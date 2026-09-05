@@ -8,6 +8,7 @@ universe-specific modules, or by content plugins.
 
 from __future__ import annotations
 
+import logging
 import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional
@@ -16,6 +17,8 @@ from transversal.domain import DieType, Effect, Entity, Polarity, RatingType, Tr
 from transversal.services.conditions import evaluate_conditions
 from transversal.services.effect_targets import resolve_candidates
 from transversal.services.trait_reveal import reveal_trait_to
+
+log = logging.getLogger("transversal.effects")
 
 
 # Handler signature: (action, entity_id, universe, context) -> None
@@ -1228,6 +1231,7 @@ def _apply_add_dice(entity, effect, repo, result):
         pool.append({"die": die, "source_kind": "sfx", "source_id": "", "label": die, "ts_id": None})
     store.save_pool(location_id, owner_id, pool)
     broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
+    log.info("[effect] add_dice pool=%s owner=%s dice=%s", effect.target, owner_id, dice)
     result.applied.append(AppliedEffect(effect, f"added {len(dice)} dice to {owner_id} pool"))
 
 
@@ -1256,6 +1260,7 @@ def _add_trait_rating_to_pool(ts_id: str, pool_id: str, entity, repo):
         pool.append({"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id})
     store.save_pool(location_id, owner_id, pool)
     broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
+    log.info("[effect] add_trait_rating pool=%s owner=%s trait=%s dice=%s", pool_id, owner_id, ts_id, dice)
     return (location_id, owner_id)
 
 
@@ -1386,6 +1391,8 @@ def _apply_resolve_pool(entity, effect, repo, result):
             data={"difficulty": total, "location_id": location_id},
         ))
 
+    log.info("[effect] resolve_pool pool=%s owner=%s rolled=%s difficulty=%s",
+             pool_id, owner_id, [d.get("result") for d in enriched], total)
     result.applied.append(AppliedEffect(effect, f"resolved {owner_id} pool → difficulty {total}"))
 
 

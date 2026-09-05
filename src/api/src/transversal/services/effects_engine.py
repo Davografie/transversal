@@ -346,6 +346,9 @@ class EffectsEngine:
                         # remaining immediate effects must wait for resolution.
                         continuation = [e for e in sfx.effects[idx + 1:] if e.timing == EffectTiming.IMMEDIATE]
                         _attach_continuation(outcome, continuation)
+                        log.info("[process_event] sfx=%s effect[%d]=%s/%s BLOCKED on choose; deferring %d continuation effects: %s",
+                                 sfx.id, idx, effect.type, effect.action, len(continuation),
+                                 [(e.type, e.action) for e in continuation])
                         break
                 else:
                     # Persist deferred effects in the central timer store.
