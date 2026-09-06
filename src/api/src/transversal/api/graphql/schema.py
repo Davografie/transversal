@@ -1512,21 +1512,23 @@ class Mutation:
     def create_traitset(self, info: strawberry.Info, id: str, name: str, universes: list[str],
                         entity_types: Optional[list[EntityType]] = None, description: str = "",
                         order: int = 0, limit: int = 1,
+                        allow_duplicates: bool = False,
                         polarity: Optional[Polarity] = None) -> TraitSetRef:
         from transversal.domain import TraitSet as DomainTraitSet
         ts = DomainTraitSet(id=id, name=name, universes=universes,
                             entity_types=entity_types or [], description=description,
-                            order=order, limit=limit, polarity=polarity)
+                            order=order, limit=limit, allow_duplicates=allow_duplicates, polarity=polarity)
         created = _em(info).repo.create_traitset(ts)
         return TraitSetRef(id=created.id, name=created.name, universes=created.universes,
                            entity_types=created.entity_types, order=created.order, limit=created.limit,
-                           polarity=created.polarity)
+                           allow_duplicates=created.allow_duplicates, polarity=created.polarity)
 
     @strawberry.mutation
     def update_traitset(self, info: strawberry.Info, id: strawberry.ID, name: Optional[str] = None,
                         universes: Optional[list[str]] = None, entity_types: Optional[list[EntityType]] = None,
                         description: Optional[str] = None, order: Optional[int] = None,
-                        limit: Optional[int] = None, polarity: Optional[Polarity] = None,
+                        limit: Optional[int] = None, allow_duplicates: Optional[bool] = None,
+                        polarity: Optional[Polarity] = None,
                         clear_polarity: bool = False) -> TraitSetRef:
         existing = _em(info).repo.get_traitset_by_id(str(id))
         if not existing: raise ValueError(f"TraitSet '{id}' not found")
@@ -1537,6 +1539,7 @@ class Mutation:
         if description is not None: existing.description = description
         if order is not None: existing.order = order
         if limit is not None: existing.limit = limit
+        if allow_duplicates is not None: existing.allow_duplicates = allow_duplicates
         if clear_polarity:
             existing.polarity = None
         elif polarity is not None:
@@ -1546,7 +1549,7 @@ class Mutation:
         propagate_traitset_polarity(_em(info).repo, str(id), old_polarity, existing.polarity)
         return TraitSetRef(id=updated.id, name=updated.name, universes=updated.universes,
                            entity_types=updated.entity_types, order=updated.order, limit=updated.limit,
-                           polarity=updated.polarity)
+                           allow_duplicates=updated.allow_duplicates, polarity=updated.polarity)
 
     @strawberry.mutation
     def delete_traitset(self, info: strawberry.Info, id: strawberry.ID) -> str:
