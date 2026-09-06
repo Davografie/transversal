@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, computed } from 'vue'
+import { reactive, ref, watch, computed, onMounted } from 'vue'
 import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -64,10 +64,14 @@ const { graphql } = useApi()
 const panel = usePanel()
 const { traitsets, allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()
 
-const universeOptions = [
-  { label: 'Earth', value: 'earth' },
-  { label: 'Three Realms', value: 'three_realms' },
-]
+const universeOptions = ref([])
+
+async function loadUniverseOptions() {
+  try {
+    const res = await graphql(`query($type: EntityType){ entities(type: $type){ id name currentUniverse } }`, { type: 'UNIVERSE' })
+    universeOptions.value = (res?.entities || []).map(u => ({ value: u.currentUniverse, label: u.name }))
+  } catch { /* leave empty */ }
+}
 const ENTITY_TYPE_LABELS = {
   CHARACTER: 'Character',
   GMC: 'GMC',
@@ -161,6 +165,8 @@ async function onDeleteTraitset() {
     panel.close()
   } finally { saving.value = false }
 }
+
+onMounted(loadUniverseOptions)
 </script>
 
 <style scoped>
