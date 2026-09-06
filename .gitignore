@@ -16,6 +16,9 @@ dist-ssr/
 # Docker
 .env
 
+# Frontend auth (basic-auth htpasswd — secret, not committed)
+.htpasswd
+
 # ArangoDB
 arangodb/
 arangodump/
