@@ -4,9 +4,9 @@ Fixes transversal2's own data (not the old-app migration):
 
 1. Backfill ``origin_universe`` on every projection from its immutable key
    (``"{entity_id}:{origin_universe}"``).
-2. Ensure every occupant entity has a NATIVE projection and a valid
-   ``current_projection`` pointer (only set when missing or dangling — an
-   existing pointer is never re-pointed).
+2. Ensure every occupant has exactly one NATIVE home projection (keyed on
+   ``current_universe``) and a valid ``current_projection`` pointer; every
+   other projection is demoted to CONSCIOUSNESS.
 
 Idempotent: re-running is safe (existence checks + empty-field backfills).
 
@@ -30,6 +30,8 @@ def migrate(apply: bool = False) -> int:
 
     origin_backfills = 0
     projections_created = 0
+    promoted = 0
+    demoted = 0
     current_projections_set = 0
 
     # 1. Backfill origin_universe on every projection from its stable key.
@@ -40,19 +42,24 @@ def migrate(apply: bool = False) -> int:
                 repo.update_projection(proj)
             origin_backfills += 1
 
-    # 2. Ensure occupants have a NATIVE projection + valid current_projection.
+    # 2. Occupants: exactly one NATIVE home projection (keyed on
+    #    current_universe); every other projection is CONSCIOUSNESS.
     for entity in repo.list_all_entities():
         if entity.type not in OCCUPANT_TYPES:
             continue
 
         projections = repo.get_projections_for_entity(entity.id)
-        native = [p for p in projections if p.transversal_type == TransversalType.NATIVE]
 
-        if not native:
+        home_id = (
+            f"{entity.id}:{entity.current_universe}" if entity.current_universe else None
+        )
+        home = next((p for p in projections if p.id == home_id), None) if home_id else None
+
+        if home is None:
             if not entity.current_universe:
                 continue
-            proj = Projection(
-                id=f"{entity.id}:{entity.current_universe}",
+            home = Projection(
+                id=home_id,
                 entity_id=entity.id,
                 origin_universe=entity.current_universe,
                 universe=entity.current_universe,
@@ -60,34 +67,37 @@ def migrate(apply: bool = False) -> int:
                 transversal_type=TransversalType.NATIVE,
             )
             if apply:
-                repo.create_projection(proj)
-            projections.append(proj)
+                repo.create_projection(home)
+            projections.append(home)
             projections_created += 1
 
-        if not entity.current_projection or not any(
-            p.id == entity.current_projection for p in projections
-        ):
-            target = next(
-                (p for p in projections
-                 if p.transversal_type == TransversalType.NATIVE
-                 and p.origin_universe == entity.current_universe),
-                None,
-            )
-            if target is None:
-                target = next(
-                    (p for p in projections if p.transversal_type == TransversalType.NATIVE),
-                    None,
-                )
-            if target is not None:
-                entity.current_projection = target.id
+        # Promote the home projection to NATIVE (idempotent).
+        if home.transversal_type != TransversalType.NATIVE:
+            home.transversal_type = TransversalType.NATIVE
+            if apply:
+                repo.update_projection(home)
+            promoted += 1
+
+        # Demote every other projection to CONSCIOUSNESS (idempotent).
+        for p in projections:
+            if p.id != home.id and p.transversal_type == TransversalType.NATIVE:
+                p.transversal_type = TransversalType.CONSCIOUSNESS
                 if apply:
-                    repo.update_entity(entity)
-                current_projections_set += 1
+                    repo.update_projection(p)
+                demoted += 1
+
+        if entity.current_projection != home.id:
+            entity.current_projection = home.id
+            if apply:
+                repo.update_entity(entity)
+            current_projections_set += 1
 
     print("=== PROJECTIONS MIGRATION ===")
     print(f"apply={apply}")
     print(f"origin_backfills: {origin_backfills}")
     print(f"projections_created: {projections_created}")
+    print(f"promoted: {promoted}")
+    print(f"demoted: {demoted}")
     print(f"current_projections_set: {current_projections_set}")
     return 0
 

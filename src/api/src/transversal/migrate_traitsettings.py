@@ -305,7 +305,7 @@ def migrate(apply: bool = False) -> int:
                 "universe": slug,
                 "name": "",
                 "current_location": None,
-                "transversal_type": "native",
+                "transversal_type": "consciousness",
                 "sfx_ids": [],
             })
         existing_proj.add(pid)
