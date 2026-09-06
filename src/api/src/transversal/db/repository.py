@@ -6,6 +6,7 @@ Assembles CharacterView from multiple collections.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 from typing import TYPE_CHECKING, Optional
@@ -1026,6 +1027,65 @@ class EntityRepository:
     def get_traitsetting(self, ts_id: str) -> Optional[TraitSetting]:
         doc = self._traitsettings.get(ts_id)
         return TraitSetting.model_validate({**doc, "id": doc["_key"]}) if doc else None
+
+    def get_traitsettings_for_entity_and_trait(
+        self, entity_id: str, trait_id: str
+    ) -> list[TraitSetting]:
+        """Every instance of ``trait_id`` the entity holds (entity-anchored)."""
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.entity_id == @eid AND ts.trait_id == @tid AND ts.from_type != 'traitsetting'
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(query, bind_vars={"eid": entity_id, "tid": trait_id})
+        ]
+
+    def find_traitsetting_collision(
+        self,
+        entity_id: str,
+        trait_id: str,
+        statement: str = "",
+        allow_duplicates: bool = False,
+    ) -> Optional[TraitSetting]:
+        """The existing setting a new (entity, trait, statement) would collide with.
+
+        ``allow_duplicates=False`` → any instance of the trait collides (one per
+        trait definition). ``allow_duplicates=True`` → only an instance with the
+        same statement collides (multiple instances, distinguished by statement).
+        """
+        existing = self.get_traitsettings_for_entity_and_trait(entity_id, trait_id)
+        if not existing:
+            return None
+        if not allow_duplicates:
+            return existing[0]
+        stmt = statement or ""
+        for ts in existing:
+            if (ts.statement or "") == stmt:
+                return ts
+        return None
+
+    def resolve_traitsetting_id(
+        self,
+        entity_id: str,
+        trait_id: str,
+        statement: str = "",
+        allow_duplicates: bool = False,
+    ) -> str:
+        """Deterministic TraitSetting key for a new instance.
+
+        ``allow_duplicates=False`` → ``{entity}:{trait}`` (backward-compatible,
+        one instance per trait). ``allow_duplicates=True`` + non-empty statement
+        → ``{entity}:{trait}:{hash8(statement)}`` so same-statement duplicates
+        collide (and are caught by :meth:`find_traitsetting_collision`) while
+        distinct statements get distinct keys.
+        """
+        base = f"{entity_id}:{trait_id}"
+        if allow_duplicates and statement:
+            h = hashlib.sha1(statement.encode("utf-8")).hexdigest()[:8]
+            return f"{base}:{h}"
+        return base
 
     def get_traitsettings_for_entity(self, entity_id: str) -> list[TraitSetting]:
         query = f"""

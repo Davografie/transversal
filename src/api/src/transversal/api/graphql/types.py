@@ -125,6 +125,7 @@ class TraitSetRef:
     entity_types: list[EntityType]
     order: int = 0
     limit: int = 1
+    allow_duplicates: bool = False
     polarity: Optional[Polarity] = None
 
     @strawberry.field

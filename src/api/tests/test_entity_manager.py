@@ -133,6 +133,12 @@ class InMemoryRepository(EntityRepository):
         return ts
     def get_traitsettings_for_entity(self, eid: str) -> list[TraitSetting]:
         return [TraitSetting.model_validate(d) for d in self._traitsettings.values() if d["entity_id"] == eid]
+    def get_traitsettings_for_entity_and_trait(self, eid: str, tid: str) -> list[TraitSetting]:
+        return [
+            TraitSetting.model_validate(d)
+            for d in self._traitsettings.values()
+            if d["entity_id"] == eid and d["trait_id"] == tid
+        ]
     def get_traitsettings_for_entities(self, entity_ids: list[str]) -> dict[str, list[TraitSetting]]:
         return {eid: self.get_traitsettings_for_entity(eid) for eid in entity_ids}
     def get_relationship_traitsettings_for_entity(self, entity_id: str) -> list[dict]:
@@ -320,6 +326,30 @@ class TestTraitSettings:
         assert any(p.universe == "earth" for p in cv.projections)
         assert len(cv.trait_settings) == 1
         assert cv.trait_settings[0].dice == [DieType.D10]
+
+
+class TestAllowDuplicates:
+    def test_resolve_id_default_no_discriminator(self, repo):
+        assert repo.resolve_traitsetting_id("kael", "trait-x") == "kael:trait-x"
+        # allow_duplicates=False never discriminates, even with a statement
+        assert repo.resolve_traitsetting_id("kael", "trait-x", statement="hack", allow_duplicates=False) == "kael:trait-x"
+
+    def test_resolve_id_statement_discriminator_when_allowed(self, repo):
+        base = repo.resolve_traitsetting_id("kael", "trait-x", statement="computers", allow_duplicates=True)
+        assert base.startswith("kael:trait-x:")
+        assert base == repo.resolve_traitsetting_id("kael", "trait-x", statement="computers", allow_duplicates=True)
+        # empty statement falls back to the base key
+        assert repo.resolve_traitsetting_id("kael", "trait-x", statement="", allow_duplicates=True) == "kael:trait-x"
+
+    def test_collision_default_blocks_duplicate(self, repo):
+        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x", traitset_id="ts"))
+        assert repo.find_traitsetting_collision("kael", "trait-x") is not None
+        assert repo.find_traitsetting_collision("kael", "trait-y") is None
+
+    def test_collision_allow_duplicates_by_statement(self, repo):
+        repo.create_traitsetting(TraitSetting(id="kael:trait-x", entity_id="kael", trait_id="trait-x", traitset_id="ts", statement="computers"))
+        assert repo.find_traitsetting_collision("kael", "trait-x", statement="networks", allow_duplicates=True) is None
+        assert repo.find_traitsetting_collision("kael", "trait-x", statement="computers", allow_duplicates=True) is not None
 
 
 class TestRazmerit:

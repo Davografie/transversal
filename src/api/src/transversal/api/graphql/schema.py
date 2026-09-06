@@ -716,7 +716,7 @@ class Query:
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
                         entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
-                        polarity=ts.polarity)
+                        allow_duplicates=ts.allow_duplicates, polarity=ts.polarity)
             for ts in tss
         ]
 
@@ -832,7 +832,7 @@ class Query:
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
                         entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
-                        polarity=ts.polarity)
+                        allow_duplicates=ts.allow_duplicates, polarity=ts.polarity)
             for ts in tss
         ]
 
@@ -1305,13 +1305,23 @@ class Mutation:
 
     @strawberry.mutation
     def add_trait_setting(self, info: strawberry.Info, entity_id: strawberry.ID, input: TraitSettingInput) -> TraitSetting:
-        ts_id = f"{entity_id}:{input.trait_id}"
         repo = _em(info).repo
-        existing = repo.get_traitsetting(ts_id)
-        if existing:
-            raise ValueError(f"TraitSetting '{ts_id}' already exists")
-        trait = repo.get_trait(str(input.trait_id))
         traitset = repo.get_traitset_by_id(str(input.traitset_id))
+        allow_duplicates = traitset.allow_duplicates if traitset is not None else False
+        collision = repo.find_traitsetting_collision(
+            str(entity_id), str(input.trait_id),
+            statement=input.statement or "", allow_duplicates=allow_duplicates,
+        )
+        if collision is not None:
+            raise ValueError(
+                f"Trait '{input.trait_id}' already present"
+                + (f" with statement '{input.statement}'" if allow_duplicates and input.statement else "")
+            )
+        ts_id = repo.resolve_traitsetting_id(
+            str(entity_id), str(input.trait_id),
+            statement=input.statement or "", allow_duplicates=allow_duplicates,
+        )
+        trait = repo.get_trait(str(input.trait_id))
         from transversal.services.polarity import default_polarity
         polarity = input.polarity if input.polarity is not None else default_polarity(trait, traitset)
         from_type = input.from_type

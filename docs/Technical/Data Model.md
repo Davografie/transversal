@@ -233,6 +233,7 @@ Registry of trait groupings. Defines named sets of traits available to entity ty
 | `entity_types` | EntityType[] | | Which entity types can use this set |
 | `order` | int | | Display sort order (default `0`) |
 | `limit` | int | | Max traits an entity can select from this set (default `1`) |
+| `allow_duplicates` | bool | | Allow multiple instances of the same trait definition, distinguished by `statement` (default `false`) |
 | `location_restricted` | bool | | Whether universe-specific laws are required (default `false`) |
 | `polarity` | Polarity? | | Default polarity override for traits in this set (null = global positive) |
 | `default_rating_type` | RatingType | | Default rating behaviour for new traits in this set (default `static`) |
@@ -706,7 +707,7 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 | Universe | `universe-{key}` | `universe-earth` |
 | TraitSet | `ts-{slug}-{hash4}` | `ts-attributes-8f3a` |
 | Trait | `trait-{slug}-{hash4}` | `trait-hacking-7f2a` |
-| TraitSetting | `{entity}:{trait}` | `kael-1:trait-hacking-7f2a` |
+| TraitSetting | `{entity}:{trait}` (default) / `{entity}:{trait}:{hash8}` when `allow_duplicates` + statement | `kael-1:trait-hacking-7f2a` |
 | SFX | `sfx-{slug}` | `sfx-hinder` |
 | Relationship | `edge:{from}:{to}:{type}` | `edge:loc-platform:loc-valley:super` |
 | Projection | `{entity}:{origin_universe}` | `kael-1:three_realms` |

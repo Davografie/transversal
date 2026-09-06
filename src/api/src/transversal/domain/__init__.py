@@ -402,6 +402,7 @@ class TraitSet(BaseModel):
     entity_types: list[EntityType] = Field(default_factory=list)
     order: int = 0
     limit: int = 1
+    allow_duplicates: bool = False
     location_restricted: bool = False
     polarity: Optional["Polarity"] = None  # default polarity override (None = global positive)
     default_rating_type: RatingType = RatingType.STATIC

@@ -93,6 +93,9 @@ type TraitSetRef {
   name: String!
   universe: String!
   entityTypes: [EntityType!]!
+  order: Int!
+  limit: Int!
+  allowDuplicates: Boolean!
   polarity: Polarity
 }
 
