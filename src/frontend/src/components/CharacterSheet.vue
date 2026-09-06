@@ -748,6 +748,12 @@ const selectedTraitSet = ref(null)
 
 const filteredTraits = computed(() => {
   if (!selectedTraitSet.value) return []
+  // A set with allow_duplicates can hold several instances of the same trait
+  // definition (e.g. two weapons, distinguished by statement), so don't drop
+  // already-assigned traits there. Otherwise a trait may be assigned once.
+  if (selectedTraitSet.value.allowDuplicates) {
+    return availableTraits.value.filter(t => t.traitsetId === selectedTraitSet.value.id)
+  }
   const assigned = new Set([
     ...traitSets.value.flatMap(ts => ts.traits.map(t => t.traitId || t.id)),
     ...profileTraits.value.map(t => t.traitId || t.id),
@@ -776,7 +782,7 @@ async function openAddTrait() {
   // in a different universe than the acting character).
   const u = entity.value?.currentUniverse || props.universe
   const [tsData, trData] = await Promise.all([
-    graphql(`query($u: String!) { traitsetsByUniverse(universe: $u) { id name order limit entityTypes } }`, { u }),
+    graphql(`query($u: String!) { traitsetsByUniverse(universe: $u) { id name order limit entityTypes allowDuplicates } }`, { u }),
     graphql(`query($u: String!) { traitsByUniverse(universe: $u) { id name traitsetId defaultDieType defaultRatingType } }`, { u }),
   ])
   const etype = entity.value?.type || ''
@@ -802,7 +808,7 @@ async function openAddRelationshipTrait() {
   selectedTraitSet.value = null
   // Relationship traits are universe-agnostic: offer every trait set that is
   // usable on the 'relation' entity type.
-  const tsData = await graphql(`query { traitsets { id name order limit entityTypes } }`)
+  const tsData = await graphql(`query { traitsets { id name order limit entityTypes allowDuplicates } }`)
   const relationSets = (tsData?.traitsets || [])
     .filter(ts => (ts.entityTypes || []).includes('RELATION'))
     .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
