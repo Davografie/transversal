@@ -61,7 +61,7 @@ services:
     build: ./src/frontend
     container_name: tv2_frontend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./src/frontend/src:/app/src
       - ./src/frontend/public:/app/public
