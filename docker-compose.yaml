@@ -16,9 +16,10 @@ services:
     build: ./src/api
     container_name: tv2_api
     ports:
-      - "8085:8080"
+      - "127.0.0.1:8085:8080"
     environment:
       ARANGO_URL: "http://arango:8529"
+      ARANGO_ROOT_PASSWORD: "${ARANGO_ROOT_PASSWORD}"
       REDIS_URL: "redis://redis:6379"
     depends_on:
       arango:
@@ -36,13 +37,13 @@ services:
     image: arangodb:3.12
     container_name: tv2_arango
     environment:
-      ARANGO_ROOT_PASSWORD: "transversal"
+      ARANGO_ROOT_PASSWORD: "${ARANGO_ROOT_PASSWORD}"
     ports:
-      - "8531:8529"
+      - "127.0.0.1:8531:8529"
     volumes:
       - arango_data:/var/lib/arangodb3
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://root:transversal@127.0.0.1:8529/_api/version || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://root:$${ARANGO_ROOT_PASSWORD}@127.0.0.1:8529/_api/version || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -52,7 +53,7 @@ services:
     image: redis:7-alpine
     container_name: tv2_redis
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data:/data
 
@@ -95,9 +96,9 @@ services:
               capabilities: [gpu]
               count: 1
     ports:
-      - "8190:8188"
-      - "8191:8191"
-      - "11435:11434"
+      - "127.0.0.1:8190:8188"
+      - "127.0.0.1:8191:8191"
+      - "127.0.0.1:11435:11434"
 
 volumes:
   arango_data:
