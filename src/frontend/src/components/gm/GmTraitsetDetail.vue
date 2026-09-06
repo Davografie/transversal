@@ -15,6 +15,7 @@
         <option value="POSITIVE">Positive</option>
         <option value="NEGATIVE">Negative</option>
       </select>
+      <label class="checkbox-label"><input type="checkbox" v-model="form.allowDuplicates" /> Allow duplicate trait instances</label>
     </div>
 
     <h4 class="ps-section-title">Traits</h4>
@@ -96,7 +97,7 @@ watch(traitset, (ts) => {
 })
 
 const saving = ref(false)
-const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1, polarity: '' })
+const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1, polarity: '', allowDuplicates: false })
 
 watch(traitset, (ts) => {
   if (ts) {
@@ -105,11 +106,12 @@ watch(traitset, (ts) => {
     form.entityTypes = [...(ts.entityTypes || [])]
     form.limit = ts.limit || 1
     form.polarity = ts.polarity || ''
+    form.allowDuplicates = !!ts.allowDuplicates
   }
 }, { immediate: true })
 
 let saveTimer = null
-watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit, () => form.polarity], () => {
+watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit, () => form.polarity, () => form.allowDuplicates], () => {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => saveTraitset(), 600)
 })
@@ -117,11 +119,11 @@ watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], 
 async function saveTraitset() {
   if (!traitset.value?.id) return
   await graphql(
-    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int, $polarity: Polarity, $clearPolarity: Boolean) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit, polarity: $polarity, clearPolarity: $clearPolarity) { id } }`,
-    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit, polarity: form.polarity || null, clearPolarity: !form.polarity }
+    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int, $polarity: Polarity, $clearPolarity: Boolean, $allowDuplicates: Boolean) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit, polarity: $polarity, clearPolarity: $clearPolarity, allowDuplicates: $allowDuplicates) { id } }`,
+    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit, polarity: form.polarity || null, clearPolarity: !form.polarity, allowDuplicates: form.allowDuplicates }
   )
   patchData('traitsets', traitset.value.id, {
-    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit, polarity: form.polarity || null,
+    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit, polarity: form.polarity || null, allowDuplicates: form.allowDuplicates,
   })
 }
 
@@ -163,6 +165,8 @@ async function onDeleteTraitset() {
 
 <style scoped>
 .ps-form input { font-size: 12px; padding: 6px 8px; }
+.checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: none; cursor: pointer; margin-top: 8px; }
+.checkbox-label input { width: auto; }
 
 .trait-head-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
 .trait-head-actions .ps-add-btn { margin-top: 0; width: auto; }
