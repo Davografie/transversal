@@ -207,13 +207,26 @@ function measureSelf() {
 // possible, but always clamped inside the viewport. Frozen afterwards — children
 // are out of flow, so they never move the parent.
 function computeRootPosition() {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const MARGIN = 12
+
+  // A depth-hidden root's own content is hidden; its visible child is the
+  // shallowest panel in the chain. Anchor that child to the viewport's left
+  // margin (not the toggle) so a full-width child fits on narrow screens
+  // instead of being pushed off the left edge. The child offsets itself by
+  // -(childW + gap), so place this node at MARGIN + childW + gap.
+  if (isDepthHidden.value) {
+    const childW = activeSize.value.w || 0
+    selfLeft.value = MARGIN + childW + props.gap
+    selfTop.value = props.anchor ? props.anchor.centerY : vh / 2
+    return
+  }
+
   const a = props.anchor
   // A depth-hidden root measures 0×0 but must still resolve a position so its
   // children (the now-shallowest panels) anchor near the toggle, not (0,0).
   if (!a) return
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const MARGIN = 12
   let top, left
   if (props.direction === 'left') {
     left = a.left - props.gap - nodeSize.w
@@ -557,9 +570,10 @@ provide(panelKey, {
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 8px;
-  /* Variable width: content-driven, floored and capped. */
-  min-width: 260px;
-  max-width: var(--gm-panel-max-w, 440px);
+  /* Variable width: content-driven, floored and capped. The cap is also
+     viewport-bound so a single panel always fits the screen (mobile). */
+  min-width: min(260px, calc(100vw - 24px));
+  max-width: min(var(--gm-panel-max-w, 440px), calc(100vw - 24px));
   max-height: calc(100vh - 40px);
   overflow: auto;
 }
