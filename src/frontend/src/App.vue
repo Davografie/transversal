@@ -4,6 +4,7 @@
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
+    <div class="name-entry-scroll">
     <!-- Fresh login: no identity yet -->
     <template v-if="!playerId">
       <h3>Who are you?</h3>
@@ -258,6 +259,7 @@
       <p v-if="switchError" class="switch-error">{{ switchError }}</p>
       <button v-if="!charSwitchLoading" class="cancel-btn" @click="dismissOverlay">Back to game</button>
     </template>
+    </div>
   </div>
   <ResonanceLab v-if="showResonanceLab" @close="showResonanceLab = false" />
   <RollTableMenu
