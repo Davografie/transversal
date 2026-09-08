@@ -1479,12 +1479,8 @@ function setMobileFocus(f) {
   if (f === 'location' || f === 'sheet' || f === 'dice') mobileFocus.value = f
 }
 
-// Focus follows the activity: pool-building → sheet, rolling/results → dice.
-watch(phase, (p) => {
-  if (!mobileStackActive.value) return
-  if (p === 'adding') setMobileFocus('sheet')
-  else if (p === 'rolling' || p === 'picking' || p === 'resolved') setMobileFocus('dice')
-})
+// Focus is tap-driven only — no auto-focus on phase changes. (An earlier
+// phase watcher yanked focus around rolls, which read as panel jumps.)
 
 // The mobile dice-focus band sizes to the roller's CONTENT as a concrete
 // length (keyword flex-basis: auto doesn't interpolate, which made entering /
