@@ -436,7 +436,7 @@ function parallaxY(imgY) { return parseFloat(toViewportPos(0, imgY).top) || imgY
 // Inverse parallax for navdot "hole" images: the destination scene pans
 // opposite to the current scene's shift, like looking through a hole in the
 // world at a distant scene. Returns the offset in destination-image % units.
-const INVERSE_PAN_STRENGTH = 1.5  // tune the hole-parallax feel (>1 = stronger)
+const INVERSE_PAN_STRENGTH = 2  // tune the hole-parallax feel (>1 = stronger)
 function inverseNavPan(destAspect) {
   if (!destAspect) return { x: 0, y: 0 }
   const self = occupants.value.find(o => o.id === props.entityId)
@@ -730,7 +730,7 @@ let dragTarget = null  // non-reactive: nearest travel target during self-drag
 const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
 
 const EXPAND_PROXIMITY = 24  // image-% — the bubble pops out within this distance
-const TRAVEL_PROXIMITY_FACTOR = 0.75  // <1 = narrower drop zone; 0.75 ≈ the character's center must sit inside the bubble
+const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop zone; 0.75 ≈ the character's center must sit inside the bubble
 
 // Drop-to-travel radius in image-% units: the expanded bubble's on-screen
 // radius plus the self dot's radius, converted through the current image scale.
