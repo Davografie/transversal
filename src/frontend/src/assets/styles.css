@@ -289,7 +289,7 @@ select option {
   margin-bottom: 8px;
 }
 .settings-name-wrapper {
-  width: min(560px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   margin-bottom: 4px;
 }
 .settings-name-static {
@@ -323,7 +323,7 @@ select option {
   color: var(--text) !important;
 }
 .settings-section {
-  width: min(560px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -413,8 +413,8 @@ select option {
 .char-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 0 1 200px;
+  gap: 6px;
+  flex: 0 1 160px;
   text-align: left;
   padding: 6px 8px !important;
   border-radius: 8px;
@@ -423,8 +423,8 @@ select option {
   cursor: pointer;
 }
 .char-portrait {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
@@ -517,7 +517,7 @@ select option {
   color: #0a0a0f;
 }
 .find-char-wrapper {
-  width: min(560px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
 }
 .find-char-input {
   width: 100% !important;
