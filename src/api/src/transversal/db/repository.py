@@ -229,16 +229,12 @@ class EntityRepository:
 
         if rmtree:
             # ── Prune: recursively delete sub-locations and their occupants ──
-            descendant_query = f"""
-                FOR v IN 0..100 INBOUND @eref {RELATIONSHIPS}
-                FILTER v._key != @lid
-                RETURN v._key
-            """
-            descendants = [
-                d for d in self.db.aql.execute(
-                    descendant_query, bind_vars={"eref": eref, "lid": location_id}
-                )
-            ]
+            # Only ``super`` children are sub-locations (mirroring the reparent
+            # branch). The previous 0..100 INBOUND walk over all relationship
+            # types both exploded on deep/wide hierarchies and would have
+            # deleted portal-linked or otherwise related entities that are not
+            # sub-locations.
+            descendants = self.list_location_descendants(location_id)
             # Delete bottom-up to avoid dangling references. Occupants go through
             # the cascade path (not a raw REMOVE) so their dependent records are
             # cleaned rather than orphaned (B49).
@@ -1161,6 +1157,25 @@ class EntityRepository:
                 query, bind_vars={"pid": parent_traitsetting_id}
             )
         ]
+
+    def get_sub_traitsettings_for_parents(
+        self, parent_ids: list[str]
+    ) -> dict[str, list[TraitSetting]]:
+        """Batch: sub-trait settings grouped by parent setting (one AQL query)."""
+        if not parent_ids:
+            return {}
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.from_type == 'traitsetting'
+                AND ts.parent_traitsetting_id IN @pids
+            SORT ts.traitset_id, ts.trait_id
+            RETURN ts
+        """
+        grouped: dict[str, list[TraitSetting]] = {pid: [] for pid in parent_ids}
+        for doc in self.db.aql.execute(query, bind_vars={"pids": list(parent_ids)}):
+            ts = TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            grouped.setdefault(ts.parent_traitsetting_id, []).append(ts)
+        return grouped
 
     def get_traitsettings_by_trait(self, trait_id: str) -> list[TraitSetting]:
         """Return every trait setting that references a trait (across entities)."""

@@ -139,6 +139,15 @@ class InMemoryRepository(EntityRepository):
             for d in self._traitsettings.values()
             if d["entity_id"] == eid and d["trait_id"] == tid
         ]
+    def get_sub_traitsettings(self, parent_traitsetting_id: str) -> list[TraitSetting]:
+        return [
+            TraitSetting.model_validate(d)
+            for d in self._traitsettings.values()
+            if d.get("from_type") == "traitsetting"
+            and d.get("parent_traitsetting_id") == parent_traitsetting_id
+        ]
+    def get_sub_traitsettings_for_parents(self, parent_ids: list[str]) -> dict[str, list[TraitSetting]]:
+        return {pid: self.get_sub_traitsettings(pid) for pid in parent_ids}
     def get_traitsettings_for_entities(self, entity_ids: list[str]) -> dict[str, list[TraitSetting]]:
         return {eid: self.get_traitsettings_for_entity(eid) for eid in entity_ids}
     def get_relationship_traitsettings_for_entity(self, entity_id: str) -> list[dict]:

@@ -778,13 +778,12 @@ class TraitSetting:
         return ts.order if ts else 0
 
     @strawberry.field
-    def traitset_limit(self, info: strawberry.Info) -> int:
+    async def traitset_limit(self, info: strawberry.Info) -> int:
         """Effective trait-set limit: per-entity override, else registry default."""
-        em = info.context["entity_manager"]
-        repo = em.repo
+        repo = info.context["entity_manager"].repo
         ts = repo.get_traitset_by_id(self.traitset_id)
         default = ts.limit if ts else 1
-        for tss in repo.get_traitsetsettings_for_entity(str(self.entity_id)):
+        for tss in await info.context["loaders"].traitsetsettings.load(str(self.entity_id)):
             if tss.traitset_id == self.traitset_id and tss.from_type == "entity" and tss.limit is not None:
                 return tss.limit
         return default
@@ -827,14 +826,10 @@ class TraitSetting:
         return em.repo.resolve_possible_subtrait_ids(trait) if trait else []
 
     @strawberry.field
-    def sub_trait_settings(self, info: strawberry.Info) -> list["TraitSetting"]:
+    async def sub_trait_settings(self, info: strawberry.Info) -> list["TraitSetting"]:
         """Sub-trait settings nested directly under this trait setting."""
-        from transversal.services.entity_manager import EntityManager
-        em = info.context["entity_manager"]
-        return [
-            _gql_trait_setting(s)
-            for s in em.repo.get_sub_traitsettings(str(self.id))
-        ]
+        subs = await info.context["loaders"].sub_traitsettings.load(str(self.id))
+        return [_gql_trait_setting(s) for s in subs]
 
 
 @strawberry.input

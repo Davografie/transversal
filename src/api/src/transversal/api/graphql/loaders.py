@@ -28,6 +28,7 @@ class Loaders:
     projections: DataLoader
     traitsettings: DataLoader
     traitsetsettings: DataLoader
+    sub_traitsettings: DataLoader
     relationship_traitsettings: DataLoader
 
 
@@ -43,6 +44,9 @@ def build_loaders(em: EntityManager) -> Loaders:
     async def load_traitsetsettings(keys: list[str]) -> list[list]:
         return _ordered(keys, repo.get_traitsetsettings_for_entities(keys))
 
+    async def load_sub_traitsettings(keys: list[str]) -> list[list]:
+        return _ordered(keys, repo.get_sub_traitsettings_for_parents(keys))
+
     async def load_relationship_traitsettings(keys: list[str]) -> list[list]:
         return _ordered(keys, repo.get_relationship_traitsettings_for_entities(keys))
 
@@ -50,5 +54,6 @@ def build_loaders(em: EntityManager) -> Loaders:
         projections=DataLoader(load_fn=load_projections),
         traitsettings=DataLoader(load_fn=load_traitsettings),
         traitsetsettings=DataLoader(load_fn=load_traitsetsettings),
+        sub_traitsettings=DataLoader(load_fn=load_sub_traitsettings),
         relationship_traitsettings=DataLoader(load_fn=load_relationship_traitsettings),
     )
