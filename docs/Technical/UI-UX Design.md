@@ -107,9 +107,11 @@ above the breakpoint.
   (travel dots, trait taps, dice drags) work normally. Focus is tap-driven
   only — no auto-focus on phase changes (an earlier phase watcher caused
   surprising focus yanks around rolls).
-- **Organic transitions.** Bands animate `flex-grow` together on a springy
-  `cubic-bezier(0.3, 1.15, 0.5, 1)` (~450ms), so the whole column redistributes
-  as one motion.
+- **Organic transitions.** Every band height is a single animated length
+  (`flex-basis`), so the whole column redistributes as one motion on a plain
+  `ease-in-out` (~450ms). No `flex-grow`, no springy overshoot — an earlier
+  bouncy `cubic-bezier` made panel heights look like they overshot their
+  target and was removed.
 
 Tunables: breakpoint `MOBILE_MAX_WIDTH = 820` (App.vue) mirrored by the
 `@media (max-width: 820px)` block in `styles.css`; the focus grow ratios live
