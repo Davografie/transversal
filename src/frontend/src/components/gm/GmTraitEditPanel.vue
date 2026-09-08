@@ -457,6 +457,14 @@ function createToggleUniverse(value) {
   else createForm.universes.splice(idx, 1)
 }
 
+// Default a new trait to the traitset's universes (all enabled) — a trait with
+// no universes would be usable nowhere.
+watch(createAllowedUniverses, (allowed) => {
+  if (allowed.length && createForm.universes.length === 0) {
+    createForm.universes = allowed.map((u) => u.value)
+  }
+}, { immediate: true })
+
 async function onCreate() {
   if (!createForm.name.trim()) return
   saving.value = true
