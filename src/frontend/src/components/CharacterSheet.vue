@@ -436,6 +436,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEntityCache } from '../composables/entityCache.js'
+import { perfMark } from '../composables/perfLog.js'
 import { useScheduledEvents } from '../composables/useScheduledEvents.js'
 import { usePersistedRef } from '../composables/usePersistedState.js'
 import DiePicker from './DiePicker.vue'
@@ -1298,6 +1299,7 @@ async function fetchEntity() {
   if (data?.entity) {
     entityCache.setSheet(id, data.entity)
     applyEntity(data.entity)
+    perfMark('sheet-loaded', { id, cached: false })
   }
 }
 
@@ -1309,6 +1311,7 @@ function loadCachedEntity() {
   const cached = entityCache.getSheet(id)
   if (cached) {
     applyEntity(cached)
+    perfMark('sheet-loaded', { id, cached: true })
     return
   }
   fetchEntity()

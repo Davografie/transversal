@@ -373,6 +373,7 @@ import { usePanelBus } from './composables/usePanelBus.js'
 import { useEntityCrud } from './composables/useEntityCrud.js'
 import { useMediaQuality } from './composables/useMediaQuality.js'
 import { useEntityCache } from './composables/entityCache.js'
+import { perfMark } from './composables/perfLog.js'
 import { useTroupe } from './composables/useTroupe.js'
 import ToastBar from './components/ToastBar.vue'
 import RollTableMenu from './components/gm/RollTableMenu.vue'
@@ -390,10 +391,16 @@ const DIAG = {
   mark(label, detail) {
     const entry = { label, time: performance.now().toFixed(1), detail }
     this.marks.push(entry)
-    console.log(`[diag] ${label}`, detail !== undefined ? detail : '')
+    perfMark(label, detail)
   },
   dump() {
-    console.table(this.marks.map(m => ({ label: m.label, ms: m.time, detail: typeof m.detail === 'object' ? JSON.stringify(m.detail) : String(m.detail ?? '') })))
+    const lines = this.marks.map(m => {
+      const d = m.detail !== undefined && m.detail !== null
+        ? (typeof m.detail === 'object' ? JSON.stringify(m.detail) : String(m.detail))
+        : ''
+      return `  +${m.time}ms ${m.label}${d ? ' ' + d : ''}`
+    })
+    console.log('[perf] --- timeline summary ---\n' + lines.join('\n'))
   }
 }
 
@@ -861,10 +868,20 @@ async function initSession() {
   }
 }
 DIAG.mark('initSession-called')
-initSession()
+const initSessionPromise = initSession()
 DIAG.mark('initLocation-called')
 const peers = ref([])
-initLocation()
+const initLocationPromise = initLocation()
+
+// Mark play-ready once the initial pipeline (session + location + background +
+// peers) settles. The sheet and pool log their own completion marks.
+Promise.allSettled([initSessionPromise, initLocationPromise]).then(() => {
+  DIAG.mark('app-ready', {
+    location: currentLocationId.value,
+    peers: peers.value.length,
+    session: sessionId.value,
+  })
+})
 
 const shareCount = ref(0)
 const lastSent = ref('')

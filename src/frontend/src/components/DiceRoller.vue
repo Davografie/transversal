@@ -370,6 +370,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { useEffectApplication } from '../composables/useEffectApplication.js'
 import { useHitchMenu } from '../composables/useHitchMenu.js'
+import { perfMark } from '../composables/perfLog.js'
 import DieIcon from './DieIcon.vue'
 import ConsequenceMenu from './gm/ConsequenceMenu.vue'
 import EffectTargetWizard from './gm/EffectTargetWizard.vue'
@@ -1904,7 +1905,7 @@ onMounted(() => {
   document.addEventListener('touchend', onDocTouchEnd)
   document.addEventListener('touchmove', onPanelTouchMove, { passive: false })
   document.addEventListener('touchend', onPanelTouchEnd)
-  restorePool()
+  restorePool().then(() => perfMark('pool-restored'))
 })
 
 watch([() => props.entityId, () => props.locationId], restorePool)

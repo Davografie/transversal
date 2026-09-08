@@ -168,6 +168,7 @@ import MapDot from './MapDot.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { isVideoUrl, panAxis } from '@/composables/media.js'
+import { perfMark } from '@/composables/perfLog.js'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -831,6 +832,7 @@ async function fetchNav() {
     zones.value = data.location?.zones || []
     occupants.value = data.occupants || []
     loadNavPositions()
+    perfMark('location-nav-loaded', { locationId: props.locationId, occupants: occupants.value.length })
 
     // Lazy pre-fetch destination nav data in background (doesn't block render)
     preloadDestNavCache()
