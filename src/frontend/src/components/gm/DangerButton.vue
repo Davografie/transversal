@@ -62,17 +62,17 @@ onUnmounted(clearTimer)
 .danger-button {
   width: 100%;
   font-size: 12px; padding: 6px;
-  background: rgba(212, 64, 64, 0.12); color: var(--danger);
-  border: 1px solid rgba(212, 64, 64, 0.25); border-radius: 6px;
+  background: var(--danger-12); color: var(--danger);
+  border: 1px solid var(--danger-20); border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
 }
-.danger-button:hover { background: rgba(212, 64, 64, 0.25); }
+.danger-button:hover { background: var(--danger-20); }
 
 .danger-button:disabled { opacity: 0.4; cursor: default; }
 
 .danger-button.confirming {
-  background: rgba(212, 64, 64, 0.35); border-color: rgba(212, 64, 64, 0.5);
+  background: var(--danger-32); border-color: var(--danger-45);
   font-weight: 600;
   animation: pulse-confirm 0.6s ease-in-out infinite alternate;
 }

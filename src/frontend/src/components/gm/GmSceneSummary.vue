@@ -23,9 +23,9 @@ defineEmits(['inspect'])
 .scene-row {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 10px; margin-bottom: 3px;
-  background: rgba(255,255,255,0.04); border-radius: 6px;
+  background: var(--overlay-4); border-radius: 6px;
   font-size: 13px; cursor: pointer; transition: background 0.15s;
 }
-.scene-row:hover { background: rgba(255,255,255,0.08); }
+.scene-row:hover { background: var(--overlay-8); }
 .scene-raz { font-size: 11px; color: var(--accent); font-weight: 600; margin-left: auto; }
 </style>

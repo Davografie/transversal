@@ -108,16 +108,16 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
 
 <style scoped>
 .tree-row { cursor: pointer; transition: background 0.15s; touch-action: pan-y; }
-.tree-row:hover { background: rgba(255,255,255,0.06); }
-.tree-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
-.tree-row.occupant { font-size: 12px; background: rgba(255,255,255,0.02); }
-.tree-row.occupant:hover { background: rgba(255,255,255,0.05); }
+.tree-row:hover { background: var(--overlay-6); }
+.tree-row.selected { background: var(--accent-16); border: 1px solid var(--accent-dim); }
+.tree-row.occupant { font-size: 12px; background: var(--overlay-2); }
+.tree-row.occupant:hover { background: var(--overlay-4); }
 .tree-row.location { }
-.tree-row.drag-over { background: rgba(64,136,212,0.15); border: 1px dashed var(--accent); }
+.tree-row.drag-over { background: var(--accent-16); border: 1px dashed var(--accent); }
 .tree-row.pulse-reject { animation: pulse-reject 0.7s ease; }
 @keyframes pulse-reject {
   0%, 100% { box-shadow: none; }
-  50% { box-shadow: inset 0 0 0 2px #e06060; }
+  50% { box-shadow: inset 0 0 0 2px var(--danger-soft); }
 }
 
 .tree-toggle {
@@ -125,8 +125,8 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
   color: var(--text-dim); cursor: pointer; flex-shrink: 0; text-align: center; user-select: none;
   border-radius: 6px; transition: background 0.12s, color 0.12s;
 }
-.tree-toggle:hover { color: var(--text); background: rgba(255,255,255,0.08); }
-.tree-toggle:active { background: rgba(255,255,255,0.12); }
+.tree-toggle:hover { color: var(--text); background: var(--overlay-8); }
+.tree-toggle:active { background: var(--overlay-12); }
 .tree-toggle.leaf { visibility: hidden; }
 .tree-toggle.occupant { font-size: 8px; width: 32px; min-height: 32px; line-height: 32px; color: var(--text-dim); }
 
@@ -136,7 +136,7 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
   color: var(--text-dim); cursor: grab; font-size: 15px;
   border-radius: 6px;
 }
-.tree-drag-handle:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+.tree-drag-handle:hover { color: var(--text); background: var(--overlay-8); }
 .tree-drag-handle:active { cursor: grabbing; }
 .tree-drag-handle.inactive { opacity: 0.15; cursor: default; }
 .tree-drag-handle.inactive:hover { color: var(--text-dim); background: transparent; }

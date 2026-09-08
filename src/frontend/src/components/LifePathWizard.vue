@@ -499,43 +499,43 @@ watch(() => props.visible, (v) => { if (v) init() })
 .wiz-path-nofac{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:1px}
 .wiz-path-desc{font-size:12px;color:var(--text-dim);margin-top:2px}
 .wiz-phase-label{font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:12px;color:var(--accent);margin:0 0 8px;display:flex;align-items:center;gap:6px}
-.wiz-chip{font-size:9px;color:var(--text-dim);background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:3px;text-transform:uppercase;font-weight:400}
+.wiz-chip{font-size:9px;color:var(--text-dim);background:var(--overlay-6);padding:1px 5px;border-radius:3px;text-transform:uppercase;font-weight:400}
 .wiz-check{font-size:12px;color:var(--text-dim);margin:0 0 10px}
 .wiz-table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}
 .wiz-table th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--text-dim);font-size:10px;text-transform:uppercase}
-.wiz-table td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:top}
+.wiz-table td{padding:5px 8px;border-bottom:1px solid var(--overlay-4);vertical-align:top}
 .wiz-table tbody tr{cursor:pointer}
-.wiz-table tbody tr:hover{background:rgba(255,255,255,0.03)}
+.wiz-table tbody tr:hover{background:var(--overlay-2)}
 .wiz-td-key{font-weight:600;color:var(--accent);width:50px;white-space:nowrap}
 .wiz-entry-label{font-weight:500}
 .wiz-entry-desc{font-size:11px;color:var(--text-dim)}
 .wiz-conds{margin-top:2px;display:flex;flex-direction:column;gap:1px}
 .wiz-cond{font-size:10px;color:var(--accent)}
-.wiz-effect{font-family:monospace;font-size:10px;color:var(--text);background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:3px 6px;margin:2px 0;line-height:1.4;word-break:break-word}
+.wiz-effect{font-family:monospace;font-size:10px;color:var(--text);background:var(--overlay-6);border:1px solid var(--overlay-10);border-radius:4px;padding:3px 6px;margin:2px 0;line-height:1.4;word-break:break-word}
 .wiz-actions{display:flex;gap:6px}
 .wiz-next,.wiz-back,.wiz-done-btn{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input);color:var(--text);cursor:pointer;font-size:13px;text-align:center}
 .wiz-next:hover:not(:disabled),.wiz-done-btn:hover{border-color:var(--accent)}
 .wiz-next:disabled,.wiz-back:disabled{opacity:0.5;cursor:not-allowed}
 .wiz-back{flex:0}
-.wiz-error{color:#c55;font-size:12px;margin:8px 0 0}
+.wiz-error{color: var(--danger-dim);font-size:12px;margin:8px 0 0}
 .wiz-loading-inline{padding:10px;text-align:center;color:var(--text-dim);font-size:13px}
-.wiz-result-block{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02)}
+.wiz-result-block{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--overlay-2)}
 .wiz-result-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
 .wiz-applied{display:flex;flex-direction:column;gap:3px}
 .wiz-applied-line{font-size:12px}
 .wiz-scheduled{font-size:11px;color:var(--text-dim);margin-top:4px}
-.wiz-choices{font-size:11px;color:#da0;margin-top:4px}
+.wiz-choices{font-size:11px;color: var(--warn-yellow);margin-top:4px}
 .wiz-log{margin-top:12px;font-size:11px;color:var(--text-dim)}
 .wiz-log summary{cursor:pointer}
-.wiz-log-line{padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.03)}
+.wiz-log-line{padding:2px 0;border-bottom:1px solid var(--overlay-2)}
 .wiz-log-label{color:var(--text);margin-right:6px}
 .wiz-log-applied{color:var(--text-dim)}
 .wiz-result{padding:10px 12px;border-radius:6px;margin-bottom:8px;font-size:13px}
-.wiz-good{color:#4c4}
+.wiz-good{color: var(--success-bright)}
 .wiz-done-actions{display:flex;flex-direction:column;gap:4px;margin-top:12px}
 .wiz-traits{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
 .wiz-traits-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px}
 .wiz-trait-select{font-size:12px;padding:6px 8px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;font-family:inherit;width:100%}
-.wiz-table tbody tr.wiz-row-selected{background:rgba(64,136,212,0.18);box-shadow:inset 2px 0 0 var(--accent)}
+.wiz-table tbody tr.wiz-row-selected{background:var(--accent-16);box-shadow:inset 2px 0 0 var(--accent)}
 .dice-roller{margin:8px 0}
 </style>

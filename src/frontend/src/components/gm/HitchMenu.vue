@@ -54,12 +54,12 @@ async function apply(opt) {
 </script>
 
 <style scoped>
-.hm-root { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; }
+.hm-root { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--overlay-2); border: 1px solid var(--overlay-8); border-radius: 6px; }
 .hm-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .hm-menu { display: flex; flex-direction: column; gap: 4px; }
-.hm-option { padding: 7px 9px; border-radius: 4px; cursor: pointer; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 11px; text-align: left; }
+.hm-option { padding: 7px 9px; border-radius: 4px; cursor: pointer; background: var(--overlay-4); border: 1px solid var(--overlay-10); color: var(--text); font-size: 11px; text-align: left; }
 .hm-option:hover { background: rgba(0,200,150,0.1); border-color: var(--accent); }
 .hm-option:disabled { opacity: 0.5; cursor: default; }
 .hm-empty { font-size: 10px; color: var(--text-dim); }
-.hm-cancel { align-self: flex-start; font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text-dim); }
+.hm-cancel { align-self: flex-start; font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text-dim); }
 </style>

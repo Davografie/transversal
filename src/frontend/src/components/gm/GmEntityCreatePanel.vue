@@ -117,16 +117,16 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
 .raz-dot {
   width: 40px; height: 40px; border-radius: 50%;
   padding: 0; cursor: pointer;
-  background: rgba(255,255,255,0.06);
-  border: 2px solid rgba(255,255,255,0.25);
+  background: var(--overlay-6);
+  border: 2px solid var(--overlay-25);
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 .raz-dot.filled {
-  background: var(--accent, #00c896);
-  border-color: var(--accent, #00c896);
+  background: var(--accent, var(--resonance));
+  border-color: var(--accent, var(--resonance));
 }
 .raz-dot:active { transform: scale(0.92); }
 optgroup { font-weight: 600; color: var(--text); }
-.save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; margin-top: 8px; padding: 8px; border-radius: 6px; border: none; cursor: pointer; width: 100%; }
+.save-btn { background: var(--success); color: var(--text-invert); font-weight: 600; margin-top: 8px; padding: 8px; border-radius: 6px; border: none; cursor: pointer; width: 100%; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }
 </style>

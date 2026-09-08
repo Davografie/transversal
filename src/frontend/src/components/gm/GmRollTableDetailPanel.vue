@@ -119,16 +119,16 @@ function conditionSummary(c) {
 .rtd-root { padding: 0; }
 .rtd-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .rtd-name { font-weight: 600; font-size: 14px; }
-.rtd-type { font-size: 9px; color: var(--text-dim); text-transform: uppercase; background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; }
-.rtd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; }
+.rtd-type { font-size: 9px; color: var(--text-dim); text-transform: uppercase; background: var(--overlay-6); padding: 1px 5px; border-radius: 3px; }
+.rtd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: var(--overlay-6); border: 1px solid var(--overlay-10); color: var(--text); border-radius: 4px; cursor: pointer; }
 .rtd-meta { display: flex; gap: 6px; margin-bottom: 8px; }
-.rtd-chip { font-size: 9px; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
+.rtd-chip { font-size: 9px; color: var(--text-dim); background: var(--overlay-4); padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
 .rtd-subsection { margin-top: 10px; }
 .rtd-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .rtd-detail { display: block; font-size: 10px; color: var(--text-dim); line-height: 1.5; }
 .rtd-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 10px; }
-.rtd-table th { text-align: left; padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); color: var(--text-dim); font-size: 8px; text-transform: uppercase; }
-.rtd-table td { padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: top; color: var(--text); }
+.rtd-table th { text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--overlay-6); color: var(--text-dim); font-size: 8px; text-transform: uppercase; }
+.rtd-table td { padding: 4px 6px; border-bottom: 1px solid var(--overlay-2); vertical-align: top; color: var(--text); }
 .rtd-num { width: 20px; color: var(--text-dim); }
 .rtd-key { width: 60px; color: var(--text-dim); font-family: monospace; }
 .rtd-label { font-weight: 500; }
@@ -139,8 +139,8 @@ function conditionSummary(c) {
   font-family: monospace;
   font-size: 10px;
   color: var(--text);
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--overlay-6);
+  border: 1px solid var(--overlay-10);
   border-radius: 4px;
   padding: 3px 6px;
   margin: 2px 0;
@@ -148,5 +148,5 @@ function conditionSummary(c) {
   word-break: break-word;
 }
 .rtd-row { cursor: pointer; }
-.rtd-row:hover { background: rgba(255,255,255,0.04); }
+.rtd-row:hover { background: var(--overlay-4); }
 </style>

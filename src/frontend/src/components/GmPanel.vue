@@ -337,22 +337,22 @@ onUnmounted(() => {
 <style scoped>
 
 
-.mode-tabs { display: flex; gap: 0; margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
-.mode-tabs button { flex: 1; font-size: 12px; padding: 6px 0; border: none; background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
-.mode-tabs button.active { background: var(--accent); color: #fff; }
-.mode-tabs button:hover:not(.active) { background: rgba(255,255,255,0.08); }
+.mode-tabs { display: flex; gap: 0; margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--overlay-8); }
+.mode-tabs button { flex: 1; font-size: 12px; padding: 6px 0; border: none; background: var(--overlay-4); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
+.mode-tabs button.active { background: var(--accent); color: var(--text-on-accent); }
+.mode-tabs button:hover:not(.active) { background: var(--overlay-8); }
 
 .gm-shortcuts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-.shortcut-btn { flex: 1; font-size: 11px; padding: 8px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--text-dim); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-.shortcut-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
-.beat-btn { border-color: rgba(64,136,212,0.3); } .beat-btn:hover { border-color: var(--accent); background: rgba(64,136,212,0.12); }
-.scene-btn { border-color: rgba(64,184,96,0.3); } .scene-btn:hover { border-color: #40b860; background: rgba(64,184,96,0.12); }
-.session-btn { border-color: rgba(232,136,48,0.3); } .session-btn:hover { border-color: #e88830; background: rgba(232,136,48,0.12); }
-.session-btn.active { border-color: #d44040; color: #d44040; } .session-btn.active:hover { background: rgba(212,64,64,0.12); }
+.shortcut-btn { flex: 1; font-size: 11px; padding: 8px 6px; border-radius: 6px; border: 1px solid var(--overlay-8); background: var(--overlay-4); color: var(--text-dim); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.shortcut-btn:hover { background: var(--overlay-8); color: var(--text); }
+.beat-btn { border-color: var(--accent-32); } .beat-btn:hover { border-color: var(--accent); background: var(--accent-12); }
+.scene-btn { border-color: var(--success-32); } .scene-btn:hover { border-color: var(--success); background: var(--success-12); }
+.session-btn { border-color: var(--warn-32); } .session-btn:hover { border-color: var(--warn); background: var(--warn-12); }
+.session-btn.active { border-color: var(--danger); color: var(--danger); } .session-btn.active:hover { background: var(--danger-12); }
 
 .filter-bar { margin-bottom: 8px; }
 .chip-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
-.filter-chip { display: flex; align-items: center; gap: 2px; font-size: 11px; padding: 3px 8px; background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); border-radius: 10px; color: var(--text); }
+.filter-chip { display: flex; align-items: center; gap: 2px; font-size: 11px; padding: 3px 8px; background: var(--accent-16); border: 1px solid var(--accent-dim); border-radius: 10px; color: var(--text); }
 .chip-label { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-remove { font-size: 14px; padding: 0 2px; background: none; border: none; color: var(--text-dim); cursor: pointer; line-height: 1; }
 .chip-remove:hover { color: var(--danger); }
@@ -361,22 +361,22 @@ onUnmounted(() => {
 .filter-input { width: 100%; font-size: 12px; padding: 6px 28px 6px 8px; box-sizing: border-box; }
 .filter-clear-inline { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 2px 6px; background: none; color: var(--text-dim); border: none; cursor: pointer; }
 .filter-clear-inline:hover { color: var(--text); }
-.filter-suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 30; background: var(--bg-panel); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; }
+.filter-suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 30; background: var(--bg-panel); backdrop-filter: blur(12px); border: 1px solid var(--overlay-10); border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; }
 .suggestion-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
-.suggestion-row:hover { background: rgba(255,255,255,0.06); }
+.suggestion-row:hover { background: var(--overlay-6); }
 
 .create-btn { width: 100%; font-size: 12px; padding: 8px; margin-bottom: 8px; background: var(--accent-dim); color: var(--text); }
 .create-btn:hover { background: var(--accent); }
-.canvas-btn { background: rgba(64, 136, 212, 0.3); border: 1px dashed var(--accent-dim); }
+.canvas-btn { background: var(--accent-32); border: 1px dashed var(--accent-dim); }
 .canvas-btn:hover { background: var(--accent); border-color: var(--accent); }
 .canvas-btn-row { display: flex; gap: 6px; }
 .canvas-btn-row .create-btn { flex: 1; }
-.faction-canvas-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
+.faction-canvas-btn { background: var(--overlay-6); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
 .faction-canvas-btn:hover { background: var(--accent); }
 .draft-badge {
   flex: 0 0 auto; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
-  padding: 1px 5px; border-radius: 3px; color: #93c5fd;
-  background: rgba(64,136,212,0.16); border: 1px solid rgba(64,136,212,0.4);
+  padding: 1px 5px; border-radius: 3px; color: var(--accent-pale);
+  background: var(--accent-16); border: 1px solid var(--accent-45);
   margin-left: 6px;
 }
 
@@ -386,20 +386,20 @@ onUnmounted(() => {
   width: 56px; height: 56px;
   margin-left: auto; margin-top: 12px;
   border-radius: 50%; border: none; cursor: pointer;
-  background: var(--accent); color: #0a0a0f;
+  background: var(--accent); color: var(--text-invert);
   font-size: 26px; font-weight: 700; line-height: 1;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 .fab-create:hover { opacity: 0.9; }
 
 .entity-row { margin-bottom: 4px; }
-.factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
+.factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--overlay-8); }
 
 .form-actions { display: flex; gap: 6px; }
 .top-actions { justify-content: space-between; margin-bottom: 4px; }
-.danger-btn { background: var(--danger) !important; color: #fff !important; }
-.sheet-edit-btn { background: var(--accent); color: #fff; }
-.save-btn { background: var(--success) !important; color: #0a0a0f !important; font-weight: 600; margin-top: 4px; }
+.danger-btn { background: var(--danger) !important; color: var(--text-on-accent) !important; }
+.sheet-edit-btn { background: var(--accent); color: var(--text-on-accent); }
+.save-btn { background: var(--success) !important; color: var(--text-invert) !important; font-weight: 600; margin-top: 4px; }
 .panel-body label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-top: 8px; }
 .panel-body input, .panel-body select { font-size: 13px; padding: 6px 10px; width: 100%; box-sizing: border-box; }
 

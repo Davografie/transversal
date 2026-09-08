@@ -530,12 +530,12 @@ provide(panelKey, {
   padding: 3px 8px;
   font-size: 11px;
   border-radius: 6px;
-  background: var(--bg-panel, rgba(10,10,20,0.92));
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--bg-panel, var(--bg-panel));
+  border: 1px solid var(--overlay-12);
   cursor: pointer;
   white-space: nowrap;
 }
-.panel-chip:hover { background: rgba(255,255,255,0.08); }
+.panel-chip:hover { background: var(--overlay-8); }
 .chip-expand { color: var(--text-dim); font-size: 11px; }
 .chip-title {
   color: var(--text-dim);
@@ -553,9 +553,9 @@ provide(panelKey, {
 .panel {
   display: inline-flex;
   flex-direction: column;
-  background: var(--bg-panel, rgba(10,10,20,0.92));
+  background: var(--bg-panel, var(--bg-panel));
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--overlay-8);
   border-radius: 8px;
   /* Variable width: content-driven, floored and capped. The cap is also
      viewport-bound so a single panel always fits the screen (mobile). */
@@ -576,16 +576,16 @@ provide(panelKey, {
   display: flex; align-items: center; justify-content: center;
   font-size: 14px; padding: 0;
   background: var(--bg-panel); backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid var(--overlay-15);
   cursor: pointer;
 }
-.panel-action-btn:hover { background: rgba(255,255,255,0.1); }
+.panel-action-btn:hover { background: var(--overlay-10); }
 
 .panel-header {
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--overlay-6);
   flex-shrink: 0;
 }
 /* Collapsed panels shrink to just the title: no divider, no copy-ID button,
@@ -612,13 +612,13 @@ provide(panelKey, {
   font-weight: 600;
   color: var(--text-dim);
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   border-radius: 4px;
   padding: 1px 7px;
   line-height: 1.4;
   cursor: pointer;
 }
-.panel-id-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
+.panel-id-btn:hover { color: var(--text); border-color: var(--overlay-25); background: var(--overlay-4); }
 
 .panel-body {
   flex: 1; overflow-y: auto; padding: 10px;

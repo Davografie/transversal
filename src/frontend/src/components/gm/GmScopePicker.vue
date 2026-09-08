@@ -85,7 +85,7 @@ watch(() => props.modelValue, () => { search.value = '' })
 .gsp-input-wrap { position: relative; }
 .gsp-input {
   width: 100%; font-size: 11px; padding: 4px 20px 4px 6px; border-radius: 3px;
-  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text);
+  border: 1px solid var(--overlay-10); background: var(--overlay-4); color: var(--text);
   box-sizing: border-box;
 }
 .gsp-input::placeholder { color: var(--text-dim); }
@@ -93,11 +93,11 @@ watch(() => props.modelValue, () => { search.value = '' })
   position: absolute; right: 4px; top: 4px; font-size: 12px; line-height: 1;
   padding: 0 2px; cursor: pointer; background: none; border: none; color: var(--text-dim);
 }
-.gsp-clear:hover { color: #e06060; }
+.gsp-clear:hover { color: var(--danger-soft); }
 .gsp-drop {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
   max-height: 160px; overflow-y: auto;
-  background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 3px;
+  background: var(--bg-panel-raised); border: 1px solid var(--overlay-10); border-radius: 3px;
 }
 .gsp-item {
   font-size: 10px; padding: 4px 8px; cursor: pointer; color: var(--text);

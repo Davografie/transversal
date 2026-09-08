@@ -86,8 +86,8 @@ function onBlur() {
 .chip-input {
   display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
   padding: 4px 6px; min-height: 34px;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 6px; background: rgba(255,255,255,0.04);
+  border: 1px solid var(--overlay-10);
+  border-radius: 6px; background: var(--overlay-4);
   cursor: text;
   position: relative;
 }
@@ -98,7 +98,7 @@ function onBlur() {
   border-radius: 4px;
 }
 .chip-x { font-size: 12px; padding: 0 2px; background: none; border: none; color: var(--accent); cursor: pointer; }
-.chip-x:hover { color: #fff; }
+.chip-x:hover { color: var(--text-on-accent); }
 .chip-text {
   flex: 1; min-width: 80px; font-size: 12px;
   background: none; border: none; outline: none; color: var(--text);
@@ -107,9 +107,9 @@ function onBlur() {
 .chip-dropdown {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 30;
   background: var(--bg-panel); backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 6px 6px;
+  border: 1px solid var(--overlay-10); border-radius: 0 0 6px 6px;
   max-height: 140px; overflow-y: auto;
 }
 .chip-option { padding: 4px 8px; font-size: 11px; cursor: pointer; }
-.chip-option:hover { background: rgba(255,255,255,0.06); }
+.chip-option:hover { background: var(--overlay-6); }
 </style>

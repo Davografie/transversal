@@ -6,11 +6,11 @@
   display: flex; align-items: center; gap: 6px;
   padding: 8px 10px; border-radius: 6px;
   cursor: pointer; font-size: 13px;
-  background: rgba(255,255,255,0.04);
+  background: var(--overlay-4);
   transition: background 0.15s;
 }
-.entity-row:hover { background: rgba(255,255,255,0.08); }
-.entity-row.selected { background: rgba(64,136,212,0.15); border: 1px solid var(--accent-dim); }
+.entity-row:hover { background: var(--overlay-8); }
+.entity-row.selected { background: var(--accent-16); border: 1px solid var(--accent-dim); }
 .entity-name { flex: 1; font-weight: 500; }
 .entity-universe { font-size: 10px; color: var(--text-dim); }
 .entity-id { font-family: monospace; font-size: 9px; color: var(--text-dim); }
@@ -19,12 +19,12 @@
   font-size: 9px; text-transform: uppercase; padding: 1px 6px;
   border-radius: 3px; font-weight: 600;
 }
-.type-character, .type-pc, .type-CHARACTER, .type-PC { background: #4088d4; color: #fff; }
-.type-location, .type-LOCATION { background: #40b860; color: #0a0a0f; }
-.type-gmc, .type-GMC { background: #e88830; color: #0a0a0f; }
-.type-faction, .type-FACTION { background: #d44040; color: #fff; }
-.type-asset, .type-ASSET { background: #888; color: #fff; }
-.type-universe, .type-UNIVERSE { background: #c060d8; color: #fff; }
+.type-character, .type-pc, .type-CHARACTER, .type-PC { background: var(--accent); color: var(--text-on-accent); }
+.type-location, .type-LOCATION { background: var(--success); color: var(--text-invert); }
+.type-gmc, .type-GMC { background: var(--warn); color: var(--text-invert); }
+.type-faction, .type-FACTION { background: var(--danger); color: var(--text-on-accent); }
+.type-asset, .type-ASSET { background: var(--text-dim); color: var(--text-on-accent); }
+.type-universe, .type-UNIVERSE { background: var(--type-universe); color: var(--text-on-accent); }
 
 /* ── Form layout (traitset/trait/sfx editors) ─────── */
 .ps-form { display: flex; flex-direction: column; gap: 6px; }
@@ -36,7 +36,7 @@
   font-size: 11px; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 1px;
   margin-top: 12px; padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--overlay-8);
 }
 .ps-add-btn {
   font-size: 12px; padding: 6px; margin-top: 8px;
@@ -52,11 +52,11 @@
   background: none; color: var(--text-dim);
   border: none; cursor: pointer; border-radius: 3px;
 }
-.row-del-btn:hover { color: var(--danger); background: rgba(212,64,64,0.12); }
+.row-del-btn:hover { color: var(--danger); background: var(--danger-12); }
 
 /* ── Danger zone (divider variant; the card variant is
       component-scoped in GmEntityEditPanel/ImageViewer) ── */
-.danger-zone { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(212,64,64,0.2); }
+.danger-zone { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--danger-20); }
 
 /* ── Status text ──────────────────────────────────── */
 .empty, .loading { font-size: 12px; color: var(--text-dim); padding: 12px 0; text-align: center; }

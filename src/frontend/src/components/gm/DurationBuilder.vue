@@ -60,16 +60,16 @@ function removeTimer(i) {
 .db-row { display: flex; gap: 4px; align-items: center; }
 .db-event, .db-count {
   font-size: 11px; padding: 4px 6px;
-  background: rgba(255,255,255,0.06); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--overlay-10); border-radius: 4px;
   font-family: inherit; box-sizing: border-box;
 }
 .db-event { flex: 2; }
 .db-count { flex: 1; min-width: 0; }
 .db-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
-.db-add { font-size: 10px; padding: 3px 8px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
+.db-add { font-size: 10px; padding: 3px 8px; background: var(--overlay-4); border: 1px dashed var(--overlay-15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
 .db-add:hover { color: var(--text); }
 .db-combine { display: flex; align-items: center; gap: 6px; }
 .db-combine label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.db-combine select { font-size: 11px; padding: 4px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: inherit; }
+.db-combine select { font-size: 11px; padding: 4px 6px; background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 4px; font-family: inherit; }
 </style>

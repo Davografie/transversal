@@ -562,7 +562,7 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-suggestion-avatar{width:20px;height:20px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .bb-embedded{display:flex;flex-direction:column;overflow:hidden;flex:1}
 .bb-compose-actions{display:flex;gap:6px;justify-content:flex-end}
-.bb-send{padding:4px 12px;border:none;border-radius:4px;background:var(--accent);color:#fff;font-size:12px;cursor:pointer;white-space:nowrap}
+.bb-send{padding:4px 12px;border:none;border-radius:4px;background:var(--accent);color: var(--text-on-accent);font-size:12px;cursor:pointer;white-space:nowrap}
 .bb-send:disabled{opacity:0.4;cursor:default}
 .bb-send:not(:disabled):hover{opacity:0.85}
 .bb-cancel{padding:4px 12px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-dim);font-size:12px;cursor:pointer}
@@ -572,7 +572,7 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-thread-filter{display:flex;gap:4px;flex-wrap:wrap;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
 .bb-thread-filter button{padding:2px 8px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-dim);font-size:11px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s}
 .bb-thread-filter button:hover{background:var(--bg-hover);color:var(--text)}
-.bb-thread-filter button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bb-thread-filter button.active{background:var(--accent);color: var(--text-on-accent);border-color:var(--accent)}
 .bb-entry{padding:10px 0;border-bottom:1px solid var(--border)}
 .bb-entry:last-child{border-bottom:none}
 .bb-entry.bb-dragging{opacity:0.4}
@@ -595,11 +595,11 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-images-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .bb-image-preview{position:relative;width:48px;height:48px;border-radius:4px;overflow:hidden;border:1px solid var(--border)}
 .bb-image-preview img{width:100%;height:100%;object-fit:cover}
-.bb-image-remove{position:absolute;top:0;right:0;background:rgba(0,0,0,0.7);color:#fff;border:none;font-size:8px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:0 0 0 4px;line-height:1}
+.bb-image-remove{position:absolute;top:0;right:0;background:rgba(0,0,0,0.7);color: var(--text-on-accent);border:none;font-size:8px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:0 0 0 4px;line-height:1}
 .bb-image-add{cursor:pointer;width:48px;height:48px;border:1px dashed var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-dim);transition:color 0.15s,border-color 0.15s}
 .bb-image-add:hover{color:var(--accent);border-color:var(--accent)}
 .bb-image-add.uploading{opacity:0.5;pointer-events:none}
-.bb-upload-error{font-size:11px;color:#e06060;margin-top:4px}
+.bb-upload-error{font-size:11px;color:var(--danger-soft);margin-top:4px}
 .bb-entry-actions{margin-top:4px}
 .bb-reply-btn{background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px}
 .bb-reply-btn:hover{background:var(--bg-hover)}

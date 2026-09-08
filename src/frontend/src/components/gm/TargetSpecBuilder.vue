@@ -490,8 +490,8 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .tsb-loading, .tsb-empty { font-size: 10px; color: var(--text-dim); font-style: italic; }
 .tsb-step { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; border-radius: 4px; }
-.tsb-step.tsb-valid { box-shadow: 0 0 0 1px #40b860 inset; }
-.tsb-step.tsb-error { box-shadow: 0 0 0 1px #d04a4a inset; }
+.tsb-step.tsb-valid { box-shadow: 0 0 0 1px var(--success) inset; }
+.tsb-step.tsb-error { box-shadow: 0 0 0 1px var(--danger) inset; }
 .tsb-step-head { display: flex; align-items: center; gap: 5px; }
 .tsb-outputs-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
 .tsb-output-row { display: flex; align-items: center; gap: 4px; }
@@ -499,24 +499,24 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-step-index { font-size: 9px; color: var(--text-dim); font-family: monospace; min-width: 12px; }
 .tsb-kind { flex: none; width: 88px; }
 .tsb-type { font-family: monospace; font-size: 9px; color: var(--text-dim); }
-.tsb-match { font-size: 9px; color: #40b860; }
+.tsb-match { font-size: 9px; color: var(--success); }
 .tsb-step-row { display: flex; gap: 6px; }
 .tsb-step-main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .tsb-step-rail { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .tsb-btn {
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
   width: 22px; height: 22px; line-height: 1; cursor: pointer; font-size: 10px;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  background: var(--overlay-6); border: 1px solid var(--overlay-12);
   border-radius: 3px; color: var(--text-dim);
 }
 .tsb-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .tsb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.tsb-remove:hover:not(:disabled) { color: #d04a4a; border-color: #d04a4a; }
-.tsb-err { font-size: 9px; color: #d04a4a; }
+.tsb-remove:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+.tsb-err { font-size: 9px; color: var(--danger); }
 .tsb-config { display: flex; gap: 4px; flex-wrap: wrap; }
 .tsb-config select, .tsb-config input {
-  font-size: 10px; padding: 3px 5px; background: rgba(255,255,255,0.06);
-  color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 3px;
+  font-size: 10px; padding: 3px 5px; background: var(--overlay-6);
+  color: var(--text); border: 1px solid var(--overlay-10); border-radius: 3px;
   font-family: inherit; min-width: 0;
 }
 .tsb-config em { font-style: normal; font-size: 8px; color: var(--text-dim); }
@@ -532,14 +532,14 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-add-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .tsb-add-btn {
   font-size: 9px; padding: 2px 8px; border-radius: 3px; cursor: pointer;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text);
+  background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text);
 }
 .tsb-add-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .tsb-add-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .tsb-plus {
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
   width: 22px; height: 22px; line-height: 1; font-size: 13px; cursor: pointer;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  background: var(--overlay-6); border: 1px solid var(--overlay-12);
   border-radius: 3px; color: var(--text-dim);
 }
 .tsb-plus:hover { color: var(--accent); border-color: var(--accent); }
@@ -547,14 +547,14 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-lightbulb {
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
   width: 22px; height: 22px; font-size: 12px; cursor: pointer; line-height: 1;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  background: var(--overlay-6); border: 1px solid var(--overlay-12);
   border-radius: 3px; opacity: 0.55;
 }
 .tsb-lightbulb:hover { opacity: 0.85; }
-.tsb-lightbulb-on { opacity: 1; background: rgba(255,214,102,0.15); border-color: rgba(255,214,102,0.4); }
+.tsb-lightbulb-on { opacity: 1; background: var(--warn-12); border-color: var(--warn-45); }
 .tsb-empty { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .tsb-summary { display: flex; gap: 10px; align-items: center; }
 .tsb-root :deep(.gml-item) { cursor: default; }
 .tsb-summary-type, .tsb-summary-dest { font-size: 9px; color: var(--text-dim); font-family: monospace; }
-.tsb-summary-dest.tsb-ok { color: #40b860; }
+.tsb-summary-dest.tsb-ok { color: var(--success); }
 </style>

@@ -248,23 +248,23 @@ async function onDelete() {
 <style scoped>
 .ps-form input, .ps-form select, .ps-form textarea {
   font-size: 12px; padding: 6px 8px;
-  background: rgba(255,255,255,0.06); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--overlay-10); border-radius: 6px;
   font-family: inherit; width: 100%; box-sizing: border-box;
 }
 .ps-form textarea { resize: vertical; min-height: 48px; }
 
-.sfx-summary { font-size: 11px; color: var(--accent); font-family: monospace; background: rgba(64,136,212,0.08); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; line-height: 1.4; }
+.sfx-summary { font-size: 11px; color: var(--accent); font-family: monospace; background: var(--accent-8); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; line-height: 1.4; }
 .sfx-warnings { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
-.sfx-warning { font-size: 11px; color: #e8b54a; background: rgba(212,160,64,0.1); border: 1px solid rgba(212,160,64,0.3); border-radius: 4px; padding: 5px 8px; font-family: monospace; }
+.sfx-warning { font-size: 11px; color: var(--warn-soft); background: var(--warn-12); border: 1px solid var(--warn-32); border-radius: 4px; padding: 5px 8px; font-family: monospace; }
 .sfx-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
 .sfx-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }
+.sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: var(--accent-12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }
 .sfx-var-type { font-style: normal; font-family: inherit; font-size: 8px; color: var(--text-dim); margin-left: 3px; }
 .hint { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 9px; }
-.save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
+.save-btn { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }
 .save-main { margin-top: 10px; width: 100%; }
-.error-msg { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
-.success-msg { font-size: 11px; color: #40b860; background: rgba(64,184,96,0.08); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
+.error-msg { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
+.success-msg { font-size: 11px; color: var(--success); background: var(--success-8); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 </style>

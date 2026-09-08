@@ -106,15 +106,15 @@ function addNew() {
   width: 100%; display: flex; align-items: center; gap: 8px;
   padding: 8px 10px; margin-bottom: 4px; border-radius: 6px; cursor: pointer;
   font-size: 13px; text-align: left; color: var(--text);
-  background: rgba(255,255,255,0.04); border: 1px solid transparent;
+  background: var(--overlay-4); border: 1px solid transparent;
 }
-.rtp-group:hover { background: rgba(255,255,255,0.08); }
+.rtp-group:hover { background: var(--overlay-8); }
 .rtp-section { margin-top: 12px; }
 .rtp-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .rtp-add-btn {
   width: 100%; margin-top: 8px; font-size: 11px; padding: 6px 0;
-  background: rgba(0,200,150,0.08); border: 1px dashed rgba(0,200,150,0.25);
+  background: var(--resonance-8); border: 1px dashed var(--resonance-25);
   border-radius: 4px; color: var(--accent); cursor: pointer;
 }
-.rtp-add-btn:hover { background: rgba(0,200,150,0.14); }
+.rtp-add-btn:hover { background: var(--resonance-12); }
 </style>

@@ -180,18 +180,18 @@ async function removeSfx(id) {
 <style scoped>
 .mgmt-panel { display: flex; flex-direction: column; gap: 8px; }
 .filter-input { width: 100%; font-size: 12px; padding: 6px 8px; box-sizing: border-box;
-  background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; }
+  background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 6px; }
 .top-row { display: flex; gap: 6px; }
 .top-row .filter-input { flex: 1; min-width: 0; }
-.new-btn { flex: none; background: var(--success); color: #0a0a0f; font-weight: 600; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; cursor: pointer; }
+.new-btn { flex: none; background: var(--success); color: var(--text-invert); font-weight: 600; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; cursor: pointer; }
 .filter-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .filter-select { flex: 1; min-width: 110px; font-size: 11px; padding: 5px 6px;
-  background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; }
-.add-btn { background: rgba(64,136,212,0.16); color: var(--accent); border: 1px solid var(--accent-dim);
+  background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 6px; }
+.add-btn { background: var(--accent-16); color: var(--accent); border: 1px solid var(--accent-dim);
   border-radius: 6px; padding: 5px 10px; font-size: 11px; cursor: pointer; }
 .sfx-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sfx-trigger { font-size: 9px; color: var(--text-dim); white-space: nowrap; }
 .row-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; padding: 0 2px; }
 .count { font-size: 10px; color: var(--text-dim); }
-.error-msg { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; }
+.error-msg { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

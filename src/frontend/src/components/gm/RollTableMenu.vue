@@ -150,21 +150,21 @@ async function finishResolve(resolutions) {
 
 <style scoped>
 .rtm-overlay { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); }
-.rtm-root { width: min(360px, 90vw); max-height: 80vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: #12121a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; }
+.rtm-root { width: min(360px, 90vw); max-height: 80vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-panel-solid); border: 1px solid var(--overlay-10); border-radius: 8px; }
 .rtm-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .rtm-menu { display: flex; flex-direction: column; gap: 4px; }
-.rtm-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 5px; cursor: pointer; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 12px; text-align: left; }
+.rtm-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 5px; cursor: pointer; background: var(--overlay-4); border: 1px solid var(--overlay-10); color: var(--text); font-size: 12px; text-align: left; }
 .rtm-option:hover:not(:disabled) { background: rgba(0,200,150,0.1); border-color: var(--accent); }
 .rtm-option:disabled { opacity: 0.45; cursor: not-allowed; }
 .rtm-label { font-weight: 600; }
 .rtm-desc { font-size: 10px; color: var(--text-dim); }
-.rtm-cost { align-self: flex-end; font-size: 10px; color: #e0a030; font-weight: 600; }
+.rtm-cost { align-self: flex-end; font-size: 10px; color: var(--warn-bright); font-weight: 600; }
 .rtm-cost-free { color: var(--text-dim); font-weight: 400; }
 .rtm-empty { font-size: 11px; color: var(--text-dim); }
 .rtm-done-title { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
 .rtm-applied { margin: 0; padding-left: 16px; font-size: 11px; color: var(--text); }
-.rtm-error { font-size: 11px; color: #ff6b6b; }
-.rtm-btn { font-size: 11px; padding: 5px 12px; border-radius: 5px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); }
+.rtm-error { font-size: 11px; color: var(--danger-bright); }
+.rtm-btn { font-size: 11px; padding: 5px 12px; border-radius: 5px; cursor: pointer; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text); }
 .rtm-cancel { color: var(--text-dim); }
-.rtm-primary { background: var(--success); color: #0a0a0f; border-color: transparent; font-weight: 600; }
+.rtm-primary { background: var(--success); color: var(--text-invert); border-color: transparent; font-weight: 600; }
 </style>

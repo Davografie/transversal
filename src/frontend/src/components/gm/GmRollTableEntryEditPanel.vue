@@ -163,14 +163,14 @@ async function save() {
 .eep-field label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .eep-field input, .eep-field select {
   font-size: 12px; padding: 6px 8px;
-  background: rgba(255,255,255,0.06); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--overlay-10); border-radius: 6px;
   font-family: inherit; width: 100%; box-sizing: border-box;
 }
 .eep-row { display: flex; gap: 8px; }
 .eep-subsection { margin-top: 2px; }
 .eep-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.eep-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
+.eep-save { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .eep-save:disabled { opacity: 0.5; cursor: default; }
-.eep-error { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; }
+.eep-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

@@ -355,6 +355,7 @@
 
 <script setup>
 import { ref, reactive, useTemplateRef, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { useColorMode } from '@vueuse/core'
 import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
@@ -1480,6 +1481,14 @@ function onPanelDragEnd({ dy, velocity }) {
 // instead of the desktop bottom sheet. The focused band grows; tapping a
 // teaser band expands it (the .band-tap capture layers above). Breakpoint
 // mirrors the @media block in styles.css.
+// ── Theme (light/dark) — auto from OS, persisted on manual override.
+//    Adds `.dark`/`.light` on <html>; CSS defaults to dark, `html.light` overrides.
+const colorMode = useColorMode({ selector: 'html', storageKey: 'transversal-color-scheme' })
+watch(colorMode, (m) => {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) meta.setAttribute('content', m === 'light' ? '#e9e9ee' : '#0a0a0f')
+}, { immediate: true })
+
 const MOBILE_MAX_WIDTH = 820
 const isMobile = ref(false)
 const mobileFocus = ref('location')  // 'location' | 'sheet' | 'dice'
@@ -2235,11 +2244,11 @@ watch(gmMode, (v) => {
   padding: 3px 10px 3px 4px;
   border-radius: 16px;
   background: var(--bg-panel);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--overlay-8);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
-.peer-chip:hover { border-color: rgba(255,255,255,0.2); }
+.peer-chip:hover { border-color: var(--overlay-20); }
 .peer-chip.active {
   border-color: var(--accent);
   background: var(--bg-panel);
@@ -2276,9 +2285,9 @@ watch(gmMode, (v) => {
 .support-create-btn:hover { background: var(--accent); }
 .support-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .other-mains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-.other-main-row { flex: 0 1 200px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+.other-main-row { flex: 0 1 200px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--overlay-6); border: 1px solid var(--overlay-8); }
 .support-create-inline { width: auto; flex: 0 0 auto; font-size: 11px; padding: 5px 10px; }
-.main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: #0a0a0f; background: var(--accent); font-weight: 600; margin-left: 4px; }
+.main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: var(--text-invert); background: var(--accent); font-weight: 600; margin-left: 4px; }
 .main-toggle { flex-shrink: 0; cursor: pointer; font-size: 14px; color: var(--text-dim); opacity: 0.45; transition: color 0.15s, opacity 0.15s; line-height: 1; }
 .main-toggle.on { color: var(--accent); opacity: 1; }
 .main-toggle:hover { opacity: 1; }

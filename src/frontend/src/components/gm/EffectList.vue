@@ -71,11 +71,11 @@ function rowClassFn(eff) {
 <style scoped>
 .ee-root { display: flex; flex-direction: column; gap: 4px; }
 .ee-cat { font-weight: 700; font-size: 11px; width: 18px; text-align: center; }
-.cat-cost { color: #d44040; }
-.cat-benefit { color: #40b860; }
+.cat-cost { color: var(--danger); }
+.cat-benefit { color: var(--success); }
 .cat-either { color: var(--text-dim); }
 .ee-summary { flex: 1; font-family: monospace; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ee-timing { font-size: 9px; color: var(--text-dim); }
 .ee-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
-.ee-add { font-size: 10px; padding: 3px 8px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
+.ee-add { font-size: 10px; padding: 3px 8px; background: var(--overlay-4); border: 1px dashed var(--overlay-15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
 </style>

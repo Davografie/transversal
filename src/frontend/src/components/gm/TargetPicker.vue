@@ -98,7 +98,7 @@ watch(() => [props.kind, props.scope, props.entityId, props.action, props.filter
 .tp-input { flex: 1; min-width: 0; }
 .tp-random {
   flex: none; width: 26px; height: 24px; line-height: 1; cursor: pointer;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  background: var(--overlay-6); border: 1px solid var(--overlay-12);
   border-radius: 3px; color: var(--text-dim); font-size: 13px;
 }
 .tp-random:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }

@@ -106,5 +106,5 @@ function closeEditor() {
 
 <style scoped>
 .ee-root { display: flex; flex-direction: column; gap: 4px; }
-.ee-inline-form { margin-top: 6px; padding: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; }
+.ee-inline-form { margin-top: 6px; padding: 8px; background: var(--overlay-4); border: 1px solid var(--overlay-8); border-radius: 6px; }
 </style>

@@ -91,12 +91,12 @@ function emitAdd() {
 .traits-heading {
   font-size: 12px; color: var(--text-dim); text-transform: uppercase;
   letter-spacing: 1px; margin-top: 12px; padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--overlay-8);
 }
 .trait-list { display: flex; flex-direction: column; gap: 4px; }
 .trait-row {
   display: flex; align-items: center; gap: 6px;
-  padding: 4px 8px; background: rgba(255,255,255,0.04); border-radius: 4px; font-size: 12px;
+  padding: 4px 8px; background: var(--overlay-4); border-radius: 4px; font-size: 12px;
 }
 .trait-name { flex: 1; font-weight: 500; }
 .trait-ego {
@@ -104,13 +104,13 @@ function emitAdd() {
   padding: 1px 5px; border-radius: 3px; text-transform: uppercase;
 }
 .trait-remove { font-size: 14px; padding: 2px 6px; background: none; color: var(--danger); border-radius: 4px; }
-.trait-remove:hover { background: rgba(212,64,64,0.15); }
+.trait-remove:hover { background: var(--danger-12); }
 
 .add-trait { margin-top: 8px; }
 .add-trait select { width: 100%; font-size: 12px; }
 .add-trait-detail {
   display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 8px;
-  background: rgba(255,255,255,0.03); border-radius: 6px;
+  background: var(--overlay-2); border-radius: 6px;
 }
 .add-trait-detail label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .add-trait-detail input { font-size: 12px; padding: 6px 10px; }
@@ -119,8 +119,8 @@ function emitAdd() {
 .rating-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .die-chip {
   font-size: 14px; font-weight: 700; padding: 4px 10px;
-  border-radius: 6px; border: 2px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.06); color: var(--text);
+  border-radius: 6px; border: 2px solid var(--overlay-10);
+  background: var(--overlay-6); color: var(--text);
   cursor: pointer; transition: border-color 0.15s;
 }
 .die-chip:hover { border-color: var(--accent); }
@@ -128,12 +128,12 @@ function emitAdd() {
   color: var(--accent); border-color: var(--accent-dim);
   font-size: 16px; font-weight: 400; padding: 4px 8px;
 }
-.add-chip:hover { border-color: var(--accent); background: rgba(64,136,212,0.1); }
+.add-chip:hover { border-color: var(--accent); background: var(--accent-12); }
 
 .picker-popup {
   margin-top: 4px; padding: 8px;
   background: rgba(0,0,0,0.3); border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--overlay-6);
 }
 
 </style>

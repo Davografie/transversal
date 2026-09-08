@@ -244,9 +244,9 @@ onMounted(() => {
   font-size: 9px; text-transform: uppercase; padding: 1px 6px;
   border-radius: 3px; font-weight: 600; letter-spacing: 0.3px;
 }
-.rt-static { background: rgba(255,255,255,0.12); color: var(--text); }
-.rt-resource { background: rgba(64,136,212,0.18); color: var(--accent); }
-.rt-challenge { background: rgba(212,64,64,0.18); color: var(--danger); }
+.rt-static { background: var(--overlay-12); color: var(--text); }
+.rt-resource { background: var(--accent-16); color: var(--accent); }
+.rt-challenge { background: var(--danger-12); color: var(--danger); }
 .rt-empty { background: transparent; color: var(--text-dim); border: 1px solid var(--text-dim); }
 
 .ego-badge {
@@ -259,13 +259,13 @@ onMounted(() => {
   font-size: 9px; text-transform: uppercase; padding: 1px 6px;
   border-radius: 3px; font-weight: 600;
 }
-.pol-positive { background: rgba(64,184,96,0.16); color: var(--success); }
-.pol-negative { background: rgba(212,64,64,0.16); color: var(--danger); }
+.pol-positive { background: var(--success-12); color: var(--success); }
+.pol-negative { background: var(--danger-12); color: var(--danger); }
 .pol-inherit { background: transparent; color: var(--text-dim); border: 1px solid var(--text-dim); }
 
 .batch-actions {
   margin-top: 4px; padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--overlay-8);
   display: flex; flex-direction: column; gap: 6px;
 }
 .action-row { display: flex; flex-direction: column; gap: 3px; }

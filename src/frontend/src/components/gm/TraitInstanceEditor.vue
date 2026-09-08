@@ -87,7 +87,7 @@ function setVariableMode(variable) {
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--overlay-10);
   border-radius: 8px;
 }
 .tie-field { display: flex; flex-direction: column; gap: 4px; }
@@ -101,7 +101,7 @@ function setVariableMode(variable) {
   width: 100%;
   padding: 6px 8px;
   background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--overlay-12);
   border-radius: 6px;
   color: var(--text);
   font-size: 12px;
@@ -112,12 +112,12 @@ function setVariableMode(variable) {
   font-size: 10px;
   padding: 3px 9px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--overlay-4);
+  border: 1px solid var(--overlay-12);
   color: var(--text-dim);
   cursor: pointer;
 }
-.tie-die-mode button.active { background: rgba(64, 136, 212, 0.2); border-color: var(--accent); color: var(--accent); }
+.tie-die-mode button.active { background: var(--accent-20); border-color: var(--accent); color: var(--accent); }
 .polarity-toggle {
   align-self: flex-start;
   padding: 4px 12px;
@@ -130,5 +130,5 @@ function setVariableMode(variable) {
   letter-spacing: 0.5px;
   cursor: pointer;
 }
-.polarity-toggle.is-positive { border-color: var(--accent); color: var(--accent); background: rgba(255, 255, 255, 0.06); }
+.polarity-toggle.is-positive { border-color: var(--accent); color: var(--accent); background: var(--overlay-6); }
 </style>

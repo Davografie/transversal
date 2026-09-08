@@ -108,8 +108,8 @@ function onModeChange() {
 .sb-root { display: flex; flex-direction: column; gap: 4px; }
 .sb-root select, .sb-root input {
   font-size: 11px; padding: 4px 6px;
-  background: rgba(255,255,255,0.06); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--overlay-10); border-radius: 4px;
   font-family: inherit; width: 100%; box-sizing: border-box;
 }
 .sb-prefix { width: 100%; }

@@ -242,12 +242,12 @@ async function save() {
 .rte-field label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .rte-field input, .rte-field select, .rte-entry-body input, .rte-entry-body select {
   font-size: 12px; padding: 6px 8px;
-  background: rgba(255,255,255,0.06); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--overlay-10); border-radius: 6px;
   font-family: inherit; width: 100%; box-sizing: border-box;
 }
 .rte-row { display: flex; gap: 8px; }
-.rte-check { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.rte-check { background: var(--overlay-4); border: 1px solid var(--overlay-8); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .rte-check-toggle { font-size: 11px; color: var(--text); display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .rte-subsection { margin-top: 4px; }
 .rte-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
@@ -256,11 +256,11 @@ async function save() {
 .rte-entry-head { display: flex; align-items: center; gap: 4px; }
 .rte-entry-index { font-size: 9px; color: var(--text-dim); }
 .rte-spacer { flex: 1; }
-.rte-mini { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 6px; }
+.rte-mini { background: var(--overlay-6); border: 1px solid var(--overlay-10); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 6px; }
 .rte-del { color: var(--danger); }
 .rte-num { width: 70px; }
-.rte-add { font-size: 11px; padding: 5px 10px; background: rgba(0,200,150,0.08); border: 1px dashed rgba(0,200,150,0.25); border-radius: 4px; color: var(--accent); cursor: pointer; }
-.rte-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
+.rte-add { font-size: 11px; padding: 5px 10px; background: var(--resonance-8); border: 1px dashed var(--resonance-25); border-radius: 4px; color: var(--accent); cursor: pointer; }
+.rte-save { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .rte-save:disabled { opacity: 0.5; cursor: default; }
-.rte-error { font-size: 11px; color: var(--danger); background: rgba(212,64,64,0.08); padding: 6px 10px; border-radius: 4px; }
+.rte-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

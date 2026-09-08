@@ -126,27 +126,27 @@ const discoveryRows = computed(() => {
 .lpd-root { padding: 0; }
 .lpd-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .lpd-name { font-weight: 600; font-size: 14px; }
-.lpd-type { font-size: 9px; color: var(--text-dim); text-transform: uppercase; background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; }
+.lpd-type { font-size: 9px; color: var(--text-dim); text-transform: uppercase; background: var(--overlay-6); padding: 1px 5px; border-radius: 3px; }
 .lpd-desc { font-size: 11px; color: var(--text-dim); margin: 0 0 8px 0; }
 .lpd-subsection { margin-top: 8px; }
 .lpd-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .lpd-detail { display: block; font-size: 10px; color: var(--text-dim); line-height: 1.5; }
 .lpd-table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; font-size: 10px; }
-.lpd-table td { padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text); }
+.lpd-table td { padding: 2px 6px; border-bottom: 1px solid var(--overlay-2); color: var(--text); }
 .lpd-key { color: var(--text-dim); width: 130px; }
 .lpd-add-btn {
   width: 100%; margin-top: 4px; font-size: 11px; padding: 6px 0;
-  background: rgba(0,200,150,0.08); border: 1px dashed rgba(0,200,150,0.25);
+  background: var(--resonance-8); border: 1px dashed var(--resonance-25);
   border-radius: 4px; color: var(--accent); cursor: pointer;
 }
-.lpd-add-btn:hover { background: rgba(0,200,150,0.14); }
-.lpd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 4px; cursor: pointer; }
-.lpd-canvas { font-size: 12px; padding: 2px 6px; background: rgba(0,200,150,0.08); border: 1px solid rgba(0,200,150,0.25); color: var(--accent); border-radius: 4px; cursor: pointer; }
-.lpd-canvas:hover { background: rgba(0,200,150,0.16); }
+.lpd-add-btn:hover { background: var(--resonance-12); }
+.lpd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: var(--overlay-6); border: 1px solid var(--overlay-10); color: var(--text); border-radius: 4px; cursor: pointer; }
+.lpd-canvas { font-size: 12px; padding: 2px 6px; background: var(--resonance-8); border: 1px solid var(--resonance-25); color: var(--accent); border-radius: 4px; cursor: pointer; }
+.lpd-canvas:hover { background: var(--resonance-16); }
 .lpd-delete {
   width: 100%; margin-top: 12px; font-size: 11px; padding: 6px 0;
-  background: rgba(212,64,64,0.08); border: 1px solid rgba(212,64,64,0.25);
+  background: var(--danger-8); border: 1px solid var(--danger-20);
   border-radius: 4px; color: var(--danger); cursor: pointer;
 }
-.lpd-delete:hover { background: rgba(212,64,64,0.16); }
+.lpd-delete:hover { background: var(--danger-12); }
 </style>

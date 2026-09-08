@@ -118,6 +118,34 @@ Tunables: breakpoint `MOBILE_MAX_WIDTH = 820` (App.vue) mirrored by the
 in that same CSS block. The desktop wrapper's slide/peek mechanics (hover,
 `syncClosedPosition`, panel drag) are inert while the stack is active.
 
+## Theming
+
+Light and dark are **fallback layers** over one token API; a future
+per-universe palette is an **override layer** (universe entity → inline
+`--` overrides on `:root`). Both share the rule that no palette color appears
+as a literal in components.
+
+- **Tokens are the only API.** `:root` holds the dark values (the default);
+  `html.light` overrides the same tokens with light values. `color-scheme`
+  is set per block so native controls and scrollbars follow.
+- **Neutral overlays are text-mixed** (`--overlay-N: color-mix(in srgb,
+  var(--text) N%, transparent)`) so hovers/borders flip automatically when
+  `--text` flips. Hue tints (`--accent-12`, `--danger-45`, …) mix from the
+  base hue, so a universe palette only needs to override the base color.
+- **Detection** — `useColorMode` (VueUse) in `App.vue`: follows the OS,
+  persists a manual override to `localStorage`, toggles a `.light`/`.dark`
+  class on `<html>`, and keeps the `theme-color` meta in sync. No toggle UI
+  yet (settings overlay later).
+- **Theme-stable surfaces** stay dark in both themes because they render on
+  their own dark canvas: the location map (`LocationViewer`, `MapDot`), the GM
+  graph (`canvas/*`), dice (`DieIcon`, `PoolDiceRing`, die chips), and the
+  resonance divider (`WaveformDivider`). Their colors are kept as literal or
+  as `--map-*` / `--dot-*` / `--die-*` tokens.
+- **Light variants** darken the base hue tokens ~10–15% for contrast on light
+  surfaces (`--accent`, `--danger`, `--success`, `--warn`, `--resource`,
+  `--offered`); `--accent-dim` flips to a pale blue `#b9d3ec` so its
+  `background + var(--text)` pairing stays readable in both themes.
+
 ## Razmerit
 
 `− value +` controls around the amount, with touch-friendly round buttons (no background). Tapping the value opens direct numeric input.

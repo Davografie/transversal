@@ -66,8 +66,8 @@ function addTable() {
 .rtg-root { padding: 0; }
 .rtg-add-btn {
   width: 100%; margin-top: 8px; font-size: 11px; padding: 6px 0;
-  background: rgba(0,200,150,0.08); border: 1px dashed rgba(0,200,150,0.25);
+  background: var(--resonance-8); border: 1px dashed var(--resonance-25);
   border-radius: 4px; color: var(--accent); cursor: pointer;
 }
-.rtg-add-btn:hover { background: rgba(0,200,150,0.14); }
+.rtg-add-btn:hover { background: var(--resonance-12); }
 </style>

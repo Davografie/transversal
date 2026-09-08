@@ -158,8 +158,8 @@ async function doSave() {
 <style scoped>
 .ps-form input, .ps-form select {
   font-size: 12px; padding: 6px 8px;
-  background: rgba(255,255,255,0.06); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--overlay-10); border-radius: 6px;
   width: 100%; box-sizing: border-box;
 }
 
@@ -169,34 +169,34 @@ async function doSave() {
 .rating-dice { display: flex; align-items: center; gap: 3px; font-size: 11px; flex-wrap: wrap; }
 
 .die-chip {
-  display: inline-block; padding: 2px 6px; background: rgba(255,255,255,0.1);
+  display: inline-block; padding: 2px 6px; background: var(--overlay-10);
   border-radius: 4px; font-size: 11px; font-weight: 600;
 }
 .die-chip.clickable { cursor: pointer; transition: background 0.1s; }
-.die-chip.clickable:hover { background: rgba(212,64,64,0.2); color: var(--danger); }
+.die-chip.clickable:hover { background: var(--danger-20); color: var(--danger); }
 
 .add-chip {
-  background: rgba(64,136,212,0.12); color: var(--accent); cursor: pointer;
-  border: 1px solid rgba(64,136,212,0.2); padding: 1px 7px; font-size: 13px;
+  background: var(--accent-12); color: var(--accent); cursor: pointer;
+  border: 1px solid var(--accent-20); padding: 1px 7px; font-size: 13px;
   transition: background 0.1s;
 }
-.add-chip:hover, .add-chip.active { background: var(--accent); color: #fff; }
+.add-chip:hover, .add-chip.active { background: var(--accent); color: var(--text-on-accent); }
 
 .die-options {
   display: flex; gap: 3px; width: 100%; margin-top: 4px;
 }
 .die-opt {
   font-size: 11px; padding: 3px 6px; font-weight: 600;
-  background: rgba(255,255,255,0.08); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; cursor: pointer;
+  background: var(--overlay-8); color: var(--text);
+  border: 1px solid var(--overlay-12); border-radius: 4px; cursor: pointer;
   transition: background 0.1s;
 }
-.die-opt:hover { background: var(--accent); color: #fff; }
+.die-opt:hover { background: var(--accent); color: var(--text-on-accent); }
 
 .row-del-btn { flex-shrink: 0; }
 
 .ps-add-btn { margin-top: 4px; }
 
-.error-msg { font-size: 11px; color: var(--danger); margin-top: 8px; padding: 6px 8px; background: rgba(212,64,64,0.08); border-radius: 4px; }
+.error-msg { font-size: 11px; color: var(--danger); margin-top: 8px; padding: 6px 8px; background: var(--danger-8); border-radius: 4px; }
 .saving-hint { font-size: 10px; color: var(--text-dim); text-align: center; margin-top: 6px; }
 </style>

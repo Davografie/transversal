@@ -67,12 +67,12 @@ function clear() {
 .die-picker { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .die-btn {
   width: 40px; height: 44px; padding: 2px;
-  background: transparent; border: 2px solid rgba(255,255,255,0.08);
+  background: transparent; border: 2px solid var(--overlay-8);
   border-radius: 6px; cursor: pointer;
   transition: border-color 0.15s, transform 0.15s;
   display: flex; align-items: center; justify-content: center;
 }
-.die-btn:hover { border-color: rgba(255,255,255,0.2); }
+.die-btn:hover { border-color: var(--overlay-20); }
 .die-btn.active { border-color: var(--accent); transform: scale(1.05); }
 .die-btn .die-icon { width: 100%; height: 100%; }
 .empty-btn { font-size: 18px; color: var(--text-dim); }
@@ -81,7 +81,7 @@ function clear() {
 .die-array-empty { font-size: 10px; color: var(--text-dim); font-style: italic; }
 .die-array-chip {
   display: inline-flex; align-items: center; gap: 2px;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  background: var(--overlay-6); border: 1px solid var(--overlay-10);
   border-radius: 4px; padding: 2px 3px;
 }
 .die-array-chip .die-icon { width: 24px; height: 24px; }
@@ -89,5 +89,5 @@ function clear() {
   border: none; background: none; color: var(--text-dim); cursor: pointer;
   font-size: 11px; line-height: 1; padding: 0 1px;
 }
-.die-chip-remove:hover { color: #e06060; }
+.die-chip-remove:hover { color: var(--danger-soft); }
 </style>

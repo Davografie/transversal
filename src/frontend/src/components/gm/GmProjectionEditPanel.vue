@@ -84,7 +84,7 @@ async function save() {
   height: 40px;
   object-fit: cover;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--overlay-12);
   flex: 0 0 auto;
 }
 .proj-preview-empty {
@@ -93,7 +93,7 @@ async function save() {
   justify-content: center;
   font-size: 16px;
   color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--overlay-4);
 }
 .image-input {
   flex: 1;
@@ -108,7 +108,7 @@ async function save() {
   padding: 0 4px;
 }
 .clear-btn:hover {
-  color: #e06060;
+  color: var(--danger-soft);
 }
 .readonly-row {
   display: flex;
@@ -125,7 +125,7 @@ async function save() {
 }
 .save-btn {
   background: var(--success);
-  color: #0a0a0f;
+  color: var(--text-invert);
   font-weight: 600;
   padding: 6px 14px;
   border-radius: 6px;
@@ -140,13 +140,13 @@ async function save() {
 .cancel-btn {
   padding: 6px 14px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-2);
   color: var(--text);
   cursor: pointer;
   font-size: 12px;
 }
 .cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay-6);
 }
 </style>

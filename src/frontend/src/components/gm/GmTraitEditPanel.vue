@@ -511,7 +511,7 @@ async function onDelete() {
 .ego-toggle.is-ego {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay-6);
 }
 .universe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .universe-chip {
@@ -525,12 +525,12 @@ async function onDelete() {
 .universe-chip.enabled {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
 }
 .universe-chip:not(.enabled) {
   border-color: var(--danger);
   color: var(--danger);
-  background: rgba(212, 64, 64, 0.10);
+  background: var(--danger-12);
 }
 .sfx-name { flex: 1; font-weight: 500; }
 .vx-toggle {
@@ -548,7 +548,7 @@ async function onDelete() {
 .vx-toggle.is-on {
   border-color: var(--success);
   color: var(--success);
-  background: rgba(64, 184, 96, 0.12);
+  background: var(--success-12);
 }
 .sfx-trigger { font-size: 10px; color: var(--text-dim); }
 .subtrait-add { display: flex; gap: 6px; margin-top: 4px; }
@@ -566,7 +566,7 @@ async function onDelete() {
 .subtarget-kind.set { border-color: var(--accent); color: var(--accent); }
 
 .create-actions { display: flex; gap: 6px; margin-top: 4px; }
-.save-btn { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
+.save-btn { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
 .save-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* Display Names (read-only list) */
@@ -574,6 +574,6 @@ async function onDelete() {
 .dn-universe { font-size: 10px; color: var(--text-dim); min-width: 80px; }
 .dn-ratings { display: flex; align-items: center; gap: 2px; flex: 1; }
 .dn-rating { display: inline-flex; align-items: center; gap: 2px; }
-.die-chip { display: inline-block; padding: 1px 5px; background: rgba(255,255,255,0.1); border-radius: 3px; font-size: 10px; font-weight: 600; }
+.die-chip { display: inline-block; padding: 1px 5px; background: var(--overlay-10); border-radius: 3px; font-size: 10px; font-weight: 600; }
 .dn-sep { color: var(--text-dim); margin: 0 2px; font-size: 10px; }
 </style>

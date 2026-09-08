@@ -222,9 +222,9 @@ async function onDelete() {
 
 .animate-section { margin-top: 8px; }
 .motion-hint-row { display: flex; gap: 6px; align-items: center; }
-.motion-hint-row input { flex: 1; font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text); }
-.animate-btn { background: #f59e0b; color: #fff; font-size: 11px; padding: 0; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; overflow: hidden; white-space: nowrap; }
-.animate-btn.cancelling { background: #dc2626; }
+.motion-hint-row input { flex: 1; font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--overlay-12); background: var(--overlay-6); color: var(--text); }
+.animate-btn { background: var(--amber); color: var(--text-on-accent); font-size: 11px; padding: 0; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; overflow: hidden; white-space: nowrap; }
+.animate-btn.cancelling { background: var(--danger-strong); }
 .animate-btn .btn-label { padding: 4px 8px; }
 .animate-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 
@@ -235,7 +235,7 @@ async function onDelete() {
 
 .universe-assign { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 4px; }
 .universe-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
-.universe-select { font-size: 10px; padding: 2px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text); }
+.universe-select { font-size: 10px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--overlay-10); background: var(--overlay-4); color: var(--text); }
 
 .image-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
 .meta-size { color: var(--accent); }
@@ -244,14 +244,14 @@ async function onDelete() {
 
 .danger-zone {
   margin-top: 12px; padding: 10px;
-  border: 1px solid rgba(220,64,64,0.25); border-radius: 6px;
-  background: rgba(220,64,64,0.06); text-align: left;
+  border: 1px solid var(--danger-20); border-radius: 6px;
+  background: var(--danger-8); text-align: left;
 }
 .danger-zone h4 {
-  font-size: 10px; color: #e06060; text-transform: uppercase; letter-spacing: 1px;
+  font-size: 10px; color: var(--danger-soft); text-transform: uppercase; letter-spacing: 1px;
   margin: 0 0 8px 0;
 }
 .danger-actions { display: flex; gap: 6px; }
-.delete-btn { background: var(--danger); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
+.delete-btn { background: var(--danger); color: var(--text-on-accent); font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 .delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

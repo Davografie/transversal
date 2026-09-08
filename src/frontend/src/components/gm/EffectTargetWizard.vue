@@ -136,7 +136,7 @@ function apply() {
 </script>
 
 <style scoped>
-.etw-root { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; }
+.etw-root { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--overlay-2); border: 1px solid var(--overlay-8); border-radius: 6px; }
 .etw-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .etw-step { display: flex; flex-direction: column; gap: 4px; }
 .etw-step-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 9px; color: var(--text-dim); }
@@ -147,16 +147,16 @@ function apply() {
 .etw-sfx-desc { font-size: 9px; color: var(--text-dim); }
 .etw-empty { font-size: 10px; color: var(--text-dim); }
 .etw-candidates { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
-.etw-candidate { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 5px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); cursor: pointer; }
+.etw-candidate { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 5px 8px; border-radius: 4px; background: var(--overlay-4); border: 1px solid var(--overlay-10); color: var(--text); cursor: pointer; }
 .etw-candidate:hover { border-color: var(--accent); }
-.etw-candidate.selected { border-color: var(--accent); background: rgba(64,136,212,0.15); }
+.etw-candidate.selected { border-color: var(--accent); background: var(--accent-16); }
 .etw-cand-name { font-size: 11px; }
 .etw-cand-sub { font-size: 9px; color: var(--text-dim); }
 .etw-cand-rating :deep(.die-icon) { width: 18px; height: 20px; }
 .etw-multi-hint { font-size: 9px; color: var(--text-dim); }
 .etw-actions { display: flex; gap: 6px; }
-.etw-btn { font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); }
+.etw-btn { font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text); }
 .etw-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.etw-primary { background: var(--success); color: #0a0a0f; border-color: transparent; font-weight: 600; }
+.etw-primary { background: var(--success); color: var(--text-invert); border-color: transparent; font-weight: 600; }
 .etw-cancel { color: var(--text-dim); }
 </style>

@@ -157,7 +157,7 @@ onUnmounted(() => {
   display: flex; align-items: center; justify-content: center;
   font-size: 20px; padding: 0;
   background: var(--bg-panel); backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--overlay-10);
   cursor: pointer;
 }
 

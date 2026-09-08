@@ -699,7 +699,7 @@ async function copyVariable(v) {
 <style scoped>
 .ee-form { display: flex; flex-direction: column; gap: 6px; }
 .ee-form-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; }
-.ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
+.ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
 .ee-form textarea { resize: vertical; min-height: 34px; }
 .ee-field { display: flex; flex-direction: column; gap: 2px; }
 .ee-timing-top { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
@@ -713,22 +713,22 @@ async function copyVariable(v) {
 .ee-output-row { display: flex; align-items: center; gap: 6px; }
 .ee-output-row input { flex: 1; min-width: 0; }
 .ee-output-row select { flex: none; }
-.ee-output-remove { background: rgba(200,60,60,0.15); border: 1px solid rgba(200,60,60,0.4); color: #e08a8a; border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 6px; }
-.ee-output-add { align-self: flex-start; font-size: 10px; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text); cursor: pointer; }
+.ee-output-remove { background: var(--danger-12); border: 1px solid var(--danger-45); color: var(--danger-pale); border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 6px; }
+.ee-output-add { align-self: flex-start; font-size: 10px; padding: 3px 8px; border-radius: 4px; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text); cursor: pointer; }
 .ee-fixed-dest { font-size: 10px; color: var(--text-dim); }
 .ee-fixed-dest b { color: var(--text); font-weight: 600; }
 .ee-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .ee-vars-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.ee-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: rgba(64,136,212,0.12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); cursor: pointer; }
-.ee-var.copied { background: rgba(64,184,96,0.2); border-color: #40b860; color: #40b860; }
+.ee-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: var(--accent-12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); cursor: pointer; }
+.ee-var.copied { background: rgba(64,184,96,0.2); border-color: var(--success); color: var(--success); }
 .ee-var-type { font-style: normal; font-family: inherit; font-size: 8px; color: var(--text-dim); margin-left: 3px; }
 .ee-result-mode { display: flex; gap: 4px; }
-.ee-result-mode button { font-size: 9px; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); cursor: pointer; }
-.ee-result-mode button.active { background: rgba(64,136,212,0.2); border-color: var(--accent-dim); color: var(--accent); }
+.ee-result-mode button { font-size: 9px; padding: 2px 7px; border-radius: 4px; background: var(--overlay-6); border: 1px solid var(--overlay-10); color: var(--text-dim); cursor: pointer; }
+.ee-result-mode button.active { background: var(--accent-20); border-color: var(--accent-dim); color: var(--accent); }
 .ee-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text); text-transform: none; letter-spacing: 0; cursor: pointer; }
 .ee-check input { width: auto; }
 .ee-preview { font-size: 10px; color: var(--accent); font-style: italic; margin-top: 2px; }
 .ee-form-actions { display: flex; gap: 6px; margin-top: 4px; }
-.ee-save { background: var(--success); color: #0a0a0f; font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }
-.ee-cancel { background: rgba(255,255,255,0.06); color: var(--text-dim); padding: 5px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 11px; }
+.ee-save { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }
+.ee-cancel { background: var(--overlay-6); color: var(--text-dim); padding: 5px 10px; border-radius: 4px; border: 1px solid var(--overlay-10); cursor: pointer; font-size: 11px; }
 </style>

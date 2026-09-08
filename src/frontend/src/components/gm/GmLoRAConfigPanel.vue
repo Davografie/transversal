@@ -76,7 +76,7 @@ onMounted(() => { fetchLoras() })
 .lora-selects { display: flex; gap: 4px; }
 .lora-select {
   font-size: 10px; padding: 3px 6px; border-radius: 3px; flex: 1; min-width: 0;
-  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+  border: 1px solid var(--overlay-10); background: var(--overlay-4);
   color: var(--text);
 }
 </style>

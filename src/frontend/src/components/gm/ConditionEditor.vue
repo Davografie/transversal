@@ -147,8 +147,8 @@ function remove(i) {
 .ce-row { display: flex; gap: 4px; align-items: center; }
 .ce-row select, .ce-row input {
   font-size: 11px; padding: 4px 6px;
-  background: rgba(255,255,255,0.06); color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+  background: var(--overlay-6); color: var(--text);
+  border: 1px solid var(--overlay-10); border-radius: 4px;
   font-family: inherit; flex: 1; min-width: 0;
 }
 .ce-target { flex: 2 !important; }
@@ -157,7 +157,7 @@ function remove(i) {
 .ce-operator { flex: none !important; width: 58px; }
 .ce-picker { min-width: 0; }
 .ce-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
-.ce-add { font-size: 10px; padding: 3px 8px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
+.ce-add { font-size: 10px; padding: 3px 8px; background: var(--overlay-4); border: 1px dashed var(--overlay-15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
 .ce-add:hover { color: var(--text); }
 .ce-row-spec { flex-wrap: wrap; align-items: flex-start; }
 .ce-row-spec > select { flex: none; width: 140px; }

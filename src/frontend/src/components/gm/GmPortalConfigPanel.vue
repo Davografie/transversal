@@ -72,7 +72,7 @@ async function save() {
   color: var(--text-dim);
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--overlay-4);
 }
 .portal-effects {
   margin-bottom: 12px;
@@ -83,7 +83,7 @@ async function save() {
 }
 .save-btn {
   background: var(--success);
-  color: #0a0a0f;
+  color: var(--text-invert);
   font-weight: 600;
   padding: 6px 14px;
   border-radius: 6px;
@@ -98,13 +98,13 @@ async function save() {
 .cancel-btn {
   padding: 6px 14px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-2);
   color: var(--text);
   cursor: pointer;
   font-size: 12px;
 }
 .cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay-6);
 }
 </style>

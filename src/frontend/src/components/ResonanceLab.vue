@@ -311,8 +311,8 @@ onUnmounted(() => {
   gap: 14px;
   padding: 16px;
   border-radius: 12px;
-  background: #10101a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--overlay-10);
   color: var(--text);
 }
 .reslab-head {
@@ -334,7 +334,7 @@ onUnmounted(() => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--overlay-10);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -348,7 +348,7 @@ onUnmounted(() => {
   display: block;
   width: 100%;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--overlay-2);
   border-radius: 8px;
 }
 .reslab-divider {
@@ -370,8 +370,8 @@ onUnmounted(() => {
   width: 40px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--overlay-15);
+  background: var(--overlay-6);
   color: var(--text);
   cursor: pointer;
   font-size: 14px;
@@ -412,12 +412,12 @@ onUnmounted(() => {
   width: 100%;
   padding: 5px 6px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--overlay-12);
+  background: var(--overlay-4);
   color: var(--text);
 }
 .reslab-output {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--overlay-8);
   padding-top: 12px;
 }
 .reslab-output-head {
@@ -431,8 +431,8 @@ onUnmounted(() => {
 .reslab-copy {
   padding: 4px 10px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--overlay-12);
+  background: var(--overlay-4);
   color: var(--text);
   cursor: pointer;
   font-size: 12px;

@@ -8,8 +8,8 @@ html, body, #app {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0a0a0f;
-  color: #e0e0e0;
+  background: var(--bg-deep);
+  color: var(--text);
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
@@ -17,8 +17,14 @@ html, body, #app {
   /* Animate keyword sizes (flex-basis: auto ↔ length) for smooth focus
      transitions on the mobile stack. Safari 18.4+ / Chrome 129+. */
   interpolate-size: allow-keywords;
+  color-scheme: dark;
+
+  /* ── Palette (dark = default) ──────────────────────────────── */
   --bg-overlay: rgba(10, 10, 15, 0.75);
   --bg-panel: rgba(15, 15, 25, 0.85);
+  --bg-panel-solid: #12121a;
+  --bg-panel-raised: #1a1a2e;
+  --bg-deep: #0a0a0f;
   --accent: #4088d4;
   --accent-dim: #2a5a8a;
   --danger: #d44040;
@@ -28,8 +34,111 @@ html, body, #app {
   --offered: #f2908a;
   --text: #e0e0e0;
   --text-dim: #888;
+  --text-invert: #0a0a0f;   /* text on saturated hue fills (dark in both themes) */
+  --text-on-accent: #fff;   /* text on accent fills (light in both themes) */
+  --text-on-accent-dim: rgba(255, 255, 255, 0.7); /* secondary text on accent fills */
   --radius: 10px;
   --gap: 12px;
+
+  /* ── Neutral overlays (text-tinted → flip automatically with theme) ── */
+  --overlay-2: color-mix(in srgb, var(--text) 2%, transparent);
+  --overlay-4: color-mix(in srgb, var(--text) 4%, transparent);
+  --overlay-6: color-mix(in srgb, var(--text) 6%, transparent);
+  --overlay-8: color-mix(in srgb, var(--text) 8%, transparent);
+  --overlay-10: color-mix(in srgb, var(--text) 10%, transparent);
+  --overlay-12: color-mix(in srgb, var(--text) 12%, transparent);
+  --overlay-15: color-mix(in srgb, var(--text) 15%, transparent);
+  --overlay-20: color-mix(in srgb, var(--text) 20%, transparent);
+  --overlay-25: color-mix(in srgb, var(--text) 25%, transparent);
+  --overlay-40: color-mix(in srgb, var(--text) 40%, transparent);
+  --overlay-50: color-mix(in srgb, var(--text) 50%, transparent);
+  --overlay-60: color-mix(in srgb, var(--text) 60%, transparent);
+  --overlay-80: color-mix(in srgb, var(--text) 80%, transparent);
+  --overlay-90: color-mix(in srgb, var(--text) 90%, transparent);
+
+  /* Aliases — the canonical border / fill knobs */
+  --border: var(--overlay-12);
+  --border-soft: var(--overlay-6);
+  --border-faint: var(--overlay-4);
+  --border-strong: var(--overlay-20);
+  --bg-hover: var(--overlay-8);
+  --bg-input: var(--overlay-6);
+
+  /* ── Hue tints (derive from the base hue: a universe palette only
+        needs to override the base color to retint everything) ── */
+  --accent-8: color-mix(in srgb, var(--accent) 8%, transparent);
+  --accent-12: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-16: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-20: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-32: color-mix(in srgb, var(--accent) 32%, transparent);
+  --accent-45: color-mix(in srgb, var(--accent) 45%, transparent);
+  --accent-60: color-mix(in srgb, var(--accent) 60%, transparent);
+  --accent-85: color-mix(in srgb, var(--accent) 85%, transparent);
+  --danger-8: color-mix(in srgb, var(--danger) 8%, transparent);
+  --danger-12: color-mix(in srgb, var(--danger) 12%, transparent);
+  --danger-20: color-mix(in srgb, var(--danger) 20%, transparent);
+  --danger-32: color-mix(in srgb, var(--danger) 32%, transparent);
+  --danger-45: color-mix(in srgb, var(--danger) 45%, transparent);
+  --warn-12: color-mix(in srgb, var(--warn) 12%, transparent);
+  --warn-20: color-mix(in srgb, var(--warn) 20%, transparent);
+  --warn-45: color-mix(in srgb, var(--warn) 45%, transparent);
+  --warn-80: color-mix(in srgb, var(--warn) 80%, transparent);
+  --success-8: color-mix(in srgb, var(--success) 8%, transparent);
+  --success-12: color-mix(in srgb, var(--success) 12%, transparent);
+  --success-25: color-mix(in srgb, var(--success) 25%, transparent);
+  --success-32: color-mix(in srgb, var(--success) 32%, transparent);
+  --success-45: color-mix(in srgb, var(--success) 45%, transparent);
+  --success-70: color-mix(in srgb, var(--success) 70%, transparent);
+  --resource-12: color-mix(in srgb, var(--resource) 12%, transparent);
+  --offered-12: color-mix(in srgb, var(--offered) 12%, transparent);
+  --resonance: #00c896;
+  --resonance-8: color-mix(in srgb, var(--resonance) 8%, transparent);
+  --resonance-12: color-mix(in srgb, var(--resonance) 12%, transparent);
+  --resonance-16: color-mix(in srgb, var(--resonance) 16%, transparent);
+  --resonance-25: color-mix(in srgb, var(--resonance) 25%, transparent);
+  --warn-32: color-mix(in srgb, var(--warn) 32%, transparent);
+
+  /* ── Extended semantic hues (exact current values; light variants in
+        html.light). Kept distinct from the base hue tokens so the verified
+        dark appearance is preserved bit-for-bit. ── */
+  --danger-strong: #dc2626;
+  --danger-soft: #e06060;
+  --danger-bright: #ff6b6b;
+  --danger-pale: #e08a8a;
+  --danger-dim: #cc5555;
+  --warn-soft: #e8b54a;
+  --warn-bright: #e0a030;
+  --warn-yellow: #ddaa00;
+  --gold: #fcd34d;
+  --amber: #f59e0b;
+  --success-bright: #44cc44;
+  --success-pale: #86efac;
+  --purple: #b080d4;
+  --violet: #8b5cf6;
+  --violet-pale: #c4b5fd;
+  --accent-pale: #93c5fd;
+  --toast-roll: #e8a840;
+  --toast-trait: #a860c8;
+  --toast-scene: #40c8c8;
+  --toast-session: #40a8c8;
+  --type-universe: #c060d8;   /* entity-type badge (GM panel lists) */
+
+  /* ── Theme-stable: render over dark surfaces (map, canvas, dice) ── */
+  --map-bg: #0a0a0f;
+  --map-glow: #1a1a2e;
+  --selection-glow: #64b4ff;
+  --dot-character: #4088d4;
+  --dot-gmc: #e88830;
+  --dot-zone: #40b860;
+  --dot-parent: #c8aa3c;
+  --dot-portal: #a050c8;
+  --heat: #ff5a1f;
+
+  /* ── Scrims & shadows (black in both themes) ────────────────── */
+  --scrim: rgba(0, 0, 0, 0.6);
+  --scrim-heavy: rgba(0, 0, 0, 0.8);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --shadow-deep: rgba(0, 0, 0, 0.7);
 
   /* Dice colors — positive (bright) & negative (dark/ominous) */
   --die-d4: #e88830;
@@ -42,6 +151,44 @@ html, body, #app {
   --die-d8-neg: #7a1f1f;
   --die-d10-neg: #1f3d6e;
   --die-d12-neg: #1f5a34;
+}
+
+/* Light fallback — same tokens, light values. Hues darken slightly for
+   contrast on light surfaces; neutral overlays flip automatically because
+   they are mixed from --text. Map/canvas/dice tokens stay as-is. */
+html.light {
+  color-scheme: light;
+  --bg-overlay: rgba(235, 235, 242, 0.72);
+  --bg-panel: rgba(248, 248, 252, 0.85);
+  --bg-panel-solid: #f4f4f8;
+  --bg-panel-raised: #ffffff;
+  --bg-deep: #e9e9ee;
+  --accent: #2f6fb8;
+  --accent-dim: #b9d3ec;
+  --danger: #c83232;
+  --success: #2e9e50;
+  --warn: #b05e00;
+  --resource: #8d4fd6;
+  --offered: #d46a62;
+  --text: #16161c;
+  --text-dim: #5a5a66;
+
+  --danger-strong: #b91c1c;
+  --danger-soft: #c83232;
+  --danger-bright: #d43c3c;
+  --danger-pale: #b35656;
+  --danger-dim: #b91c1c;
+  --warn-soft: #8f6400;
+  --warn-bright: #a05c00;
+  --warn-yellow: #8a6d00;
+  --gold: #8a6d00;
+  --amber: #b45309;
+  --success-bright: #17933f;
+  --success-pale: #1e7a3c;
+  --purple: #6d28d9;
+  --violet-pale: #5b21b6;
+  --accent-pale: #1e5fae;
+  /* --violet and --toast-* stay the same in both themes */
 }
 
 button {
@@ -58,9 +205,9 @@ button:hover { background: var(--accent); }
 button:disabled { opacity: 0.4; cursor: default; }
 
 input, select {
-  background: rgba(255,255,255,0.08);
+  background: var(--overlay-8);
   color: var(--text);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 14px;
@@ -108,22 +255,22 @@ select option {
   transition: all 0.15s;
 }
 .entity-switcher button.active {
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--text-on-accent);
 }
 .entity-pool {
   display: flex; flex-direction: column; gap: 3px; align-items: center;
 }
 .pool-chip {
   font-size: 13px; font-weight: 700;
-  background: rgba(10,10,20,0.85);
+  background: var(--bg-panel);
   backdrop-filter: blur(6px);
   padding: 3px 10px; border-radius: 6px;
 }
-.die-chip-remote.die-d4  { background: var(--die-d4); color: #0a0a0f; }
-.die-chip-remote.die-d6  { background: var(--die-d6); color: #0a0a0f; }
-.die-chip-remote.die-d8  { background: var(--die-d8); color: #fff; }
-.die-chip-remote.die-d10 { background: var(--die-d10); color: #fff; }
-.die-chip-remote.die-d12 { background: var(--die-d12); color: #0a0a0f; }
+.die-chip-remote.die-d4  { background: var(--die-d4); color: var(--text-invert); }
+.die-chip-remote.die-d6  { background: var(--die-d6); color: var(--text-invert); }
+.die-chip-remote.die-d8  { background: var(--die-d8); color: var(--text-on-accent); }
+.die-chip-remote.die-d10 { background: var(--die-d10); color: var(--text-on-accent); }
+.die-chip-remote.die-d12 { background: var(--die-d12); color: var(--text-invert); }
 .entity-die { width: 28px; height: 32px; }
 .entity-result {
   font-size: 11px; color: var(--text-dim); text-align: center;
@@ -131,7 +278,7 @@ select option {
 }
 .result-pill {
   display: flex; align-items: center; gap: 4px;
-  background: rgba(10,10,20,0.85); backdrop-filter: blur(6px);
+  background: var(--bg-panel); backdrop-filter: blur(6px);
   padding: 4px 10px; border-radius: 20px;
 }
 .result-pill-total { font-weight: 800; font-size: 15px; color: var(--text); }
@@ -190,7 +337,7 @@ select option {
   color: var(--text-dim); margin-right: 6px;
 }
 .die-remote {
-  background: rgba(255,255,255,0.06); padding: 2px 8px;
+  background: var(--overlay-6); padding: 2px 8px;
   border-radius: 4px; font-weight: 600; font-size: 11px;
 }
 
@@ -200,7 +347,7 @@ select option {
   z-index: 100;
   display: flex;
   overflow-y: auto;
-  background: rgba(0,0,0,0.85);
+  background: var(--bg-overlay);
   backdrop-filter: blur(20px);
 }
 .name-entry-scroll {
@@ -231,7 +378,7 @@ select option {
 .name-found { color: var(--success); }
 .name-new { color: var(--accent); }
 .continue-btn {
-  background: var(--success) !important; color: #0a0a0f !important;
+  background: var(--success) !important; color: var(--text-invert) !important;
   font-weight: 700;
 }
 
@@ -245,7 +392,7 @@ select option {
   border-radius: 50%;
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--overlay-8);
   color: var(--text-dim);
   font-size: 18px;
   display: flex;
@@ -257,7 +404,7 @@ select option {
 }
 .settings-btn:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 .lab-btn {
@@ -270,7 +417,7 @@ select option {
   border-radius: 50%;
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--overlay-8);
   color: var(--text-dim);
   font-size: 16px;
   display: flex;
@@ -282,7 +429,7 @@ select option {
 }
 .lab-btn:hover {
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 
@@ -317,8 +464,8 @@ select option {
   font-weight: 300 !important;
   text-align: center !important;
   color: var(--text-dim) !important;
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: var(--overlay-4) !important;
+  border: 1px solid var(--overlay-8) !important;
   border-radius: 8px !important;
 }
 .settings-name-input:focus {
@@ -343,7 +490,7 @@ select option {
   gap: 0;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--overlay-10);
   max-width: 320px;
   width: 100%;
   align-self: center;
@@ -358,7 +505,7 @@ select option {
 }
 .mode-toggle button.active {
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .switch-row {
   display: flex;
@@ -386,7 +533,7 @@ select option {
   font-size: 12px;
   padding: 5px 10px;
   background: transparent;
-  border: 1px dashed rgba(255,255,255,0.15);
+  border: 1px dashed var(--overlay-15);
   color: var(--text-dim);
   border-radius: 6px;
   cursor: pointer;
@@ -405,13 +552,13 @@ select option {
 .char-list button {
   font-size: 12px;
   padding: 5px 10px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--overlay-6);
+  border: 1px solid var(--overlay-8);
 }
 .char-list button.active {
   background: var(--accent-dim);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .char-chip {
   display: flex;
@@ -421,8 +568,8 @@ select option {
   text-align: left;
   padding: 6px 8px !important;
   border-radius: 8px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--overlay-6);
+  border: 1px solid var(--overlay-8);
   cursor: pointer;
 }
 .char-portrait {
@@ -431,7 +578,7 @@ select option {
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
-  background: rgba(255,255,255,0.06);
+  background: var(--overlay-6);
 }
 .char-portrait-fallback {
   display: flex;
@@ -462,8 +609,8 @@ select option {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.char-list button.active .char-chip-name { color: #fff; }
-.char-list button.active .char-chip-location { color: rgba(255,255,255,0.7); }
+.char-list button.active .char-chip-name { color: var(--text-on-accent); }
+.char-list button.active .char-chip-location { color: var(--text-on-accent-dim); }
 .char-release-btn {
   flex-shrink: 0;
   width: 20px;
@@ -480,9 +627,9 @@ select option {
 }
 .char-release-btn:hover {
   color: var(--danger);
-  background: rgba(255,255,255,0.08);
+  background: var(--overlay-8);
 }
-.char-list button.active .char-release-btn { color: rgba(255,255,255,0.7); }
+.char-list button.active .char-release-btn { color: var(--text-on-accent-dim); }
 .char-create-row {
   display: flex;
   align-items: center;
@@ -517,7 +664,7 @@ select option {
   align-items: center;
   justify-content: center;
   background: var(--success);
-  color: #0a0a0f;
+  color: var(--text-invert);
 }
 .find-char-wrapper {
   width: min(520px, calc(100vw - 32px));
@@ -527,8 +674,8 @@ select option {
   padding: 8px 12px !important;
   font-size: 14px !important;
   text-align: left !important;
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: var(--overlay-4) !important;
+  border: 1px solid var(--overlay-8) !important;
   border-radius: 6px !important;
 }
 .find-char-input:focus {
@@ -547,7 +694,7 @@ select option {
   border-radius: 4px;
   object-fit: cover;
   flex-shrink: 0;
-  background: rgba(255,255,255,0.06);
+  background: var(--overlay-6);
 }
 .char-search-portrait-fallback {
   display: flex;
@@ -586,7 +733,7 @@ select option {
   background: transparent;
 }
 .char-skeleton-pulse {
-  background: rgba(255,255,255,0.08);
+  background: var(--overlay-8);
   animation: charSkeletonPulse 1.2s ease-in-out infinite;
 }
 .char-skeleton-line {
@@ -615,15 +762,15 @@ select option {
   padding: 12px 10px;
   font-size: 14px;
   cursor: pointer;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--overlay-6);
+  border: 1px solid var(--overlay-12);
   border-radius: 8px;
   color: var(--text);
   transition: background 0.15s, border-color 0.15s;
 }
 .char-loading-btn:hover {
-  background: rgba(255,255,255,0.1);
-  border-color: rgba(255,255,255,0.22);
+  background: var(--overlay-10);
+  border-color: var(--overlay-20);
 }
 .char-loading-label {
   font-size: 12px;
@@ -644,7 +791,7 @@ select option {
   left: 0;
   right: 0;
   z-index: 50;
-  background: rgba(20, 20, 35, 0.95);
+  background: var(--bg-panel);
   backdrop-filter: blur(16px);
   border: 1px solid var(--accent-dim);
   border-radius: 0 0 8px 8px;
@@ -671,24 +818,24 @@ select option {
   background: var(--accent-dim);
 }
 .suggestion-create {
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--overlay-8);
   color: var(--accent);
   font-style: italic;
 }
 .suggestion-create:hover {
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .cancel-btn {
   margin-top: 12px;
   width: 100%;
   background: transparent !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
+  border: 1px solid var(--overlay-12) !important;
   color: var(--text-dim) !important;
 }
 .cancel-btn:hover {
-  background: rgba(255,255,255,0.06) !important;
+  background: var(--overlay-6) !important;
   color: var(--text) !important;
 }
 
@@ -751,7 +898,7 @@ select option {
 }
 
 @keyframes patchFlash {
-  0%   { background: rgba(64,184,96,0.25); }
+  0%   { background: var(--success-25); }
   100% { background: transparent; }
 }
 .patch-flash {

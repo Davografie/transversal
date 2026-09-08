@@ -2042,7 +2042,7 @@ watch(() => props.externalPoolSources, (sources) => {
   margin: 0;
   flex: 0 0 auto;
   max-width: 100%;
-  background: rgba(255,255,255,0.02);
+  background: var(--overlay-2);
 }
 .trait-list-wrap .trait-left {
   flex: 0 1 auto;
@@ -2063,7 +2063,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .next-set-btn {
   align-self: flex-end;
   background: transparent;
-  border: 1px dashed rgba(255,255,255,0.12);
+  border: 1px dashed var(--overlay-12);
   color: var(--text-dim);
   cursor: pointer;
   font-size: 12px;
@@ -2094,11 +2094,11 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 
 .trait-row.in-pool {
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .trait-row.offered {
-  background: rgba(242, 144, 138, 0.14);
+  background: var(--offered-12);
   box-shadow: inset 2px 0 0 var(--offered);
 }
 .trait-row.limit-reached {
@@ -2163,8 +2163,8 @@ watch(() => props.externalPoolSources, (sources) => {
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 6px;
-  border: 2px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.06);
+  border: 2px solid var(--overlay-10);
+  background: var(--overlay-6);
   color: var(--text);
   cursor: pointer;
   transition: border-color 0.15s;
@@ -2181,7 +2181,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .edit-dice .add-chip:hover {
   border-color: var(--accent);
-  background: rgba(64,136,212,0.1);
+  background: var(--accent-12);
 }
 .edit-spent-dice {
   display: flex;
@@ -2198,8 +2198,8 @@ watch(() => props.externalPoolSources, (sources) => {
   font-weight: 700;
   padding: 2px 9px;
   border-radius: 6px;
-  border: 2px dashed rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.04);
+  border: 2px dashed var(--overlay-25);
+  background: var(--overlay-4);
   color: var(--text-dim);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
@@ -2233,7 +2233,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .rating-type-btn {
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   background: transparent;
   color: var(--text-dim);
   font-size: 11px;
@@ -2243,7 +2243,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .rating-type-btn.active {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
 }
 .edit-sfx {
   display: flex;
@@ -2255,14 +2255,14 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 10px;
   padding: 3px 8px;
   border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-4);
   color: var(--text-dim);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .sfx-chip:hover {
-  border-color: rgba(255,255,255,0.2);
+  border-color: var(--overlay-20);
   color: var(--text);
 }
 .sfx-chip.assigned {
@@ -2283,8 +2283,8 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 12px;
   padding: 3px 8px;
   border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-4);
 }
 .edit-subtrait-name { font-weight: 500; }
 .edit-subtrait-statement { font-size: 11px; opacity: 0.7; flex: 1; }
@@ -2311,8 +2311,8 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 10px;
   padding: 3px 8px;
   border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--overlay-10);
+  background: var(--overlay-4);
   color: var(--text-dim);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -2327,8 +2327,8 @@ watch(() => props.externalPoolSources, (sources) => {
 .edit-notes {
   width: 100%;
   box-sizing: border-box;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--overlay-4);
+  border: 1px solid var(--overlay-12);
   border-radius: 6px;
   color: var(--text);
   font-size: 12px;
@@ -2350,14 +2350,14 @@ watch(() => props.externalPoolSources, (sources) => {
   gap: 6px;
   margin-top: 4px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--overlay-8);
 }
 .edit-done-btn {
   flex: 1;
   font-size: 12px;
   padding: 6px;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -2366,19 +2366,19 @@ watch(() => props.externalPoolSources, (sources) => {
   flex: 1;
   font-size: 12px;
   padding: 6px;
-  background: rgba(212,64,64,0.12);
+  background: var(--danger-12);
   color: var(--danger);
-  border: 1px solid rgba(212,64,64,0.25);
+  border: 1px solid var(--danger-20);
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
 }
 .edit-delete-btn:hover {
-  background: rgba(212,64,64,0.25);
+  background: var(--danger-20);
 }
 .edit-delete-btn.counting {
-  background: rgba(212,64,64,0.35);
-  color: #fff;
+  background: var(--danger-32);
+  color: var(--text-on-accent);
   animation: deletePulse 1s ease-in-out infinite;
 }
 @keyframes deletePulse {
@@ -2393,7 +2393,7 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 13px;
   background: transparent;
   color: var(--text-dim);
-  border: 1px dashed rgba(255,255,255,0.12);
+  border: 1px dashed var(--overlay-12);
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
@@ -2423,8 +2423,8 @@ watch(() => props.externalPoolSources, (sources) => {
   width: 100%;
   padding: 6px 10px;
   font-size: 13px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--overlay-4);
+  border: 1px solid var(--overlay-6);
   border-radius: 6px;
   color: var(--text);
   cursor: pointer;
@@ -2432,8 +2432,8 @@ watch(() => props.externalPoolSources, (sources) => {
   transition: background 0.15s, border-color 0.15s;
 }
 .picker-item:hover {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.12);
+  background: var(--overlay-8);
+  border-color: var(--overlay-12);
 }
 .picker-die {
   font-weight: 700;
@@ -2456,13 +2456,13 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 12px;
   background: transparent;
   color: var(--text-dim);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--overlay-8);
   border-radius: 6px;
   cursor: pointer;
 }
 .picker-cancel:hover {
   color: var(--text);
-  border-color: rgba(255,255,255,0.15);
+  border-color: var(--overlay-15);
 }
 
 .header-top {
@@ -2483,7 +2483,7 @@ watch(() => props.externalPoolSources, (sources) => {
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   flex-shrink: 0;
   order: 1;
 }
@@ -2492,7 +2492,7 @@ watch(() => props.externalPoolSources, (sources) => {
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   flex-shrink: 0;
   order: 1;
 }
@@ -2504,7 +2504,7 @@ watch(() => props.externalPoolSources, (sources) => {
   height: 28px;
   border-radius: 50%;
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--overlay-10);
   color: var(--text-dim);
   font-size: 14px;
   display: flex;
@@ -2517,7 +2517,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .sheet-settings-btn:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 
@@ -2557,7 +2557,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .ego-toggle.is-ego {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay-6);
 }
 .polarity-toggle {
   padding: 3px 12px;
@@ -2573,7 +2573,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .polarity-toggle.is-positive {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay-6);
 }
 .edit-projection {
   display: flex;
@@ -2591,7 +2591,7 @@ watch(() => props.externalPoolSources, (sources) => {
   padding: 3px 10px;
   border-radius: 999px;
   border: 1px solid var(--accent-dim);
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
   color: var(--accent);
   font-size: 11px;
   cursor: pointer;
@@ -2628,7 +2628,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .projection-option.selected {
   color: var(--accent);
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
 }
 .razmerit-anchor {
   position: relative;
@@ -2642,7 +2642,7 @@ watch(() => props.externalPoolSources, (sources) => {
   font-weight: 600;
   color: var(--accent);
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   border-radius: 999px;
   padding: 5px 10px;
   cursor: pointer;
@@ -2650,7 +2650,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .razmerit-chip:hover {
   border-color: var(--accent-dim);
-  background: rgba(64,136,212,0.08);
+  background: var(--accent-8);
 }
 .razmerit-popover {
   position: absolute;
@@ -2663,7 +2663,7 @@ watch(() => props.externalPoolSources, (sources) => {
   gap: 8px;
   padding: 8px 12px;
   background: var(--bg-panel);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   border-radius: 10px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.4);
   white-space: nowrap;
@@ -2681,7 +2681,7 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 24px;
   font-weight: 700;
   color: var(--accent);
-  background: rgba(255,255,255,0.04);
+  background: var(--overlay-4);
   border: 1px solid var(--accent-dim);
   border-radius: 6px;
   padding: 2px 4px;
@@ -2691,7 +2691,7 @@ watch(() => props.externalPoolSources, (sources) => {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--overlay-12);
   background: transparent;
   color: var(--text-dim);
   font-size: 18px;
@@ -2721,7 +2721,7 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--text-dim);
   margin-bottom: 6px;
   padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--overlay-6);
 }
 
 .trait-row {
@@ -2737,17 +2737,17 @@ watch(() => props.externalPoolSources, (sources) => {
   transition: background 0.1s;
 }
 .trait-row:hover {
-  background: rgba(255,255,255,0.04);
+  background: var(--overlay-4);
 }
 .trait-row.morph {
-  background: rgba(64, 136, 212, 0.08);
+  background: var(--accent-8);
   border-left: 2px solid var(--accent);
 }
 
 .sub-trait-list {
   margin: 0 0 4px 20px;
   padding-left: 8px;
-  border-left: 2px solid rgba(255,255,255,0.10);
+  border-left: 2px solid var(--overlay-10);
 }
 .sub-trait-row {
   display: flex;
@@ -2761,10 +2761,10 @@ watch(() => props.externalPoolSources, (sources) => {
   transition: background 0.1s;
 }
 .sub-trait-row:hover {
-  background: rgba(255,255,255,0.04);
+  background: var(--overlay-4);
 }
 .sub-trait-row.in-pool {
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .sub-trait-row.negative {
@@ -2919,11 +2919,11 @@ watch(() => props.externalPoolSources, (sources) => {
   --die-d8: var(--die-d8-neg);
   --die-d10: var(--die-d10-neg);
   --die-d12: var(--die-d12-neg);
-  background: rgba(122, 31, 31, 0.10);
+  background: color-mix(in srgb, var(--die-d8-neg) 10%, transparent);
 }
 .trait-row.negative.morph {
-  background: rgba(122, 31, 31, 0.14);
-  border-left: 2px solid #7a1f1f;
+  background: color-mix(in srgb, var(--die-d8-neg) 14%, transparent);
+  border-left: 2px solid var(--die-d8-neg);
 }
 
 .loading, .error, .empty {
@@ -2941,7 +2941,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .empty-settings-btn {
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid var(--overlay-15);
   color: var(--text-dim);
   border-radius: var(--radius);
   padding: 6px 14px;
@@ -2951,7 +2951,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .empty-settings-btn:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 
@@ -2969,17 +2969,17 @@ watch(() => props.externalPoolSources, (sources) => {
   max-width: 100%;
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--overlay-8);
+  background: var(--overlay-2);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 .sfx-card:hover {
-  border-color: rgba(255,255,255,0.2);
+  border-color: var(--overlay-20);
 }
 .sfx-card.sfx-active {
   border-color: var(--accent);
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
 }
 .sfx-card.sfx-used {
   opacity: 0.35;
@@ -3050,7 +3050,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .rel-del:hover {
   background: var(--danger);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .rel-send {
   background: transparent;
@@ -3059,7 +3059,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .rel-send:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .rel-editor {
   position: absolute;
@@ -3090,7 +3090,7 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .rel-save {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .rel-save:hover {
   opacity: 0.8;
@@ -3102,9 +3102,9 @@ watch(() => props.externalPoolSources, (sources) => {
 .rel-cancel:hover {
   color: var(--text);
 }
-.sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
-.pill { padding: 5px 14px; font-size: 11px; border: none; cursor: pointer; background: rgba(255,255,255,0.02); color: var(--text-dim); transition: background 0.15s, color 0.15s; }
-.pill + .pill { border-left: 1px solid rgba(255,255,255,0.06); }
-.pill:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: 20px; overflow: hidden; border: 1px solid var(--overlay-8); }
+.pill { padding: 5px 14px; font-size: 11px; border: none; cursor: pointer; background: var(--overlay-2); color: var(--text-dim); transition: background 0.15s, color 0.15s; }
+.pill + .pill { border-left: 1px solid var(--overlay-6); }
+.pill:hover { background: var(--overlay-4); color: var(--text); }
 .pill.active { background: var(--accent-dim); color: var(--text); font-weight: 600; }
 </style>

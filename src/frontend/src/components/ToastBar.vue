@@ -58,7 +58,7 @@ function typeIcon(type) {
   padding: 6px 10px;
   border-radius: 6px;
   background: var(--bg-panel);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--overlay-6);
   font-size: 12px;
   line-height: 1.3;
   color: var(--text-dim);
@@ -69,7 +69,7 @@ function typeIcon(type) {
 }
 
 .toast-item:hover {
-  background: rgba(30, 30, 45, 0.95);
+  background: var(--bg-panel);
   color: var(--text);
 }
 
@@ -87,13 +87,13 @@ function typeIcon(type) {
 
 /* type accents — subtle left-border via padding trick */
 .toast-dice  { border-left: 2px solid var(--accent); }
-.toast-roll  { border-left: 2px solid #e8a840; }
+.toast-roll  { border-left: 2px solid var(--toast-roll); }
 .toast-move  { border-left: 2px solid var(--success); }
-.toast-trait { border-left: 2px solid #a860c8; }
-.toast-scene { border-left: 2px solid #40c8c8; }
-.toast-sfx   { border-left: 2px solid #e8a840; }
-.toast-session { border-left: 2px solid #40a8c8; }
-.toast-info  { border-left: 2px solid rgba(255,255,255,0.15); }
+.toast-trait { border-left: 2px solid var(--toast-trait); }
+.toast-scene { border-left: 2px solid var(--toast-scene); }
+.toast-sfx   { border-left: 2px solid var(--toast-roll); }
+.toast-session { border-left: 2px solid var(--toast-session); }
+.toast-info  { border-left: 2px solid var(--overlay-15); }
 
 /* TransitionGroup animations */
 .toast-enter-active {

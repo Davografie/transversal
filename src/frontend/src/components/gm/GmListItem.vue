@@ -61,15 +61,15 @@ function onHandleTouchStart(e) {
 .gml-item { user-select: none; }
 .gml-item.dragging { opacity: 0.4; }
 .gml-item.drag-over {
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
   box-shadow: 0 0 0 1px var(--accent-dim) inset;
   transform: scale(1.02);
 }
-.gml-item.editing { background: rgba(64, 136, 212, 0.12); border: 1px solid var(--accent-dim); }
+.gml-item.editing { background: var(--accent-12); border: 1px solid var(--accent-dim); }
 
 /* Semantic row states */
 .gml-item.is-active {
-  background: rgba(64, 136, 212, 0.12);
+  background: var(--accent-12);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
 .gml-item.is-disabled {
@@ -77,15 +77,15 @@ function onHandleTouchStart(e) {
   pointer-events: none;
 }
 .gml-item.is-warning {
-  background: rgba(232, 136, 48, 0.12);
+  background: var(--warn-12);
   box-shadow: 0 0 0 1px var(--warn) inset;
 }
 .gml-item.is-danger {
-  background: rgba(212, 64, 64, 0.12);
+  background: var(--danger-12);
   box-shadow: 0 0 0 1px var(--danger) inset;
 }
 .gml-item.is-success {
-  background: rgba(64, 184, 96, 0.12);
+  background: var(--success-12);
   box-shadow: 0 0 0 1px var(--success) inset;
 }
 .gml-item.is-muted {
