@@ -128,7 +128,17 @@
         <label>Name</label>
         <input v-model="createForm.name" placeholder="Trait name…" />
         <label>Universes</label>
-        <ChipInput v-model="createForm.universes" :options="universeOptions" placeholder="Add universe…" />
+        <div class="universe-chips">
+          <button
+            v-for="u in createAllowedUniverses"
+            :key="u.value"
+            type="button"
+            class="universe-chip"
+            :class="{ enabled: createForm.universes.includes(u.value) }"
+            :title="createForm.universes.includes(u.value) ? 'Enabled — click to disable' : 'Disabled — click to enable'"
+            @click="createToggleUniverse(u.value)"
+          >{{ u.label }}</button>
+        </div>
         <label>Default Die Type</label>
         <select v-model="createForm.defaultDieType">
           <option value="D4">d4</option><option value="D6">d6</option><option value="D8">d8</option><option value="D10">d10</option><option value="D12">d12</option>
@@ -212,7 +222,6 @@ import { reactive, ref, watch, onMounted, computed } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
-import ChipInput from './ChipInput.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
@@ -433,6 +442,19 @@ const createError = ref('')
 
 function generateTraitId(name) {
   return 'trait-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+// Create mode: universes restricted to the target traitset (same as edit mode).
+const createAllowedUniverses = computed(() => {
+  const ts = (traitsets.value || []).find((t) => t.id === props.traitsetId)
+  if (!ts) return []
+  return (ts.universes || []).map((u) => universeOptions.value.find((o) => o.value === u) || { label: u, value: u })
+})
+
+function createToggleUniverse(value) {
+  const idx = createForm.universes.indexOf(value)
+  if (idx === -1) createForm.universes.push(value)
+  else createForm.universes.splice(idx, 1)
 }
 
 async function onCreate() {
