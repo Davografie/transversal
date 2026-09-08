@@ -93,14 +93,14 @@ function initials(name) {
   padding: 8px 10px;
   border-radius: 12px;
   background: radial-gradient(circle at 50% 30%, rgba(64, 136, 212, 0.35), rgba(20, 20, 35, 0.95));
-  border: 1px solid var(--accent-dim);
+  border: 1px solid var(--map-accent-dim);
   box-shadow: inset 0 0 12px rgba(64, 136, 212, 0.25);
-  color: var(--text);
+  color: var(--map-text);
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .canvas-location-node.focus {
-  border-color: var(--accent);
+  border-color: var(--map-accent);
   box-shadow: 0 0 16px rgba(64, 136, 212, 0.6), inset 0 0 12px rgba(64, 136, 212, 0.3);
 }
 .canvas-location-node.scaffolding {
@@ -119,10 +119,10 @@ function initials(name) {
 .loc-actions { display: flex; gap: 4px; margin-top: 6px; }
 .loc-btn {
   flex: 1; padding: 3px 0; font-size: 12px; border-radius: 5px;
-  background: rgba(255, 255, 255, 0.06); color: var(--text-dim); border: none; cursor: pointer;
+  background: rgba(255, 255, 255, 0.06); color: var(--map-text-dim); border: none; cursor: pointer;
 }
-.loc-btn:hover { background: var(--accent); color: #fff; }
-.loc-btn.active { background: var(--accent); color: #fff; }
+.loc-btn:hover { background: var(--map-accent); color: #fff; }
+.loc-btn.active { background: var(--map-accent); color: #fff; }
 .loc-occupants {
   display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
 }
@@ -133,17 +133,17 @@ function initials(name) {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
   margin-bottom: 2px;
   font-size: 8px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--text-dim); opacity: 0; transition: opacity 0.12s; pointer-events: none;
+  color: var(--map-text-dim); opacity: 0; transition: opacity 0.12s; pointer-events: none;
 }
 .occ-tile:hover .occ-name, .occ-tile:focus-within .occ-name { opacity: 1; }
 .occ-navdot {
   position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent-dim); overflow: hidden;
+  background: var(--map-accent-dim); overflow: hidden;
 }
 .occ-navdot img, .occ-navdot-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .occ-navdot.selected {
-  box-shadow: 0 0 0 2px var(--accent), 0 0 10px rgba(64, 136, 212, 0.9);
+  box-shadow: 0 0 0 2px var(--map-accent), 0 0 10px rgba(64, 136, 212, 0.9);
 }
 .occ-initials { font-size: 10px; font-weight: 700; color: #fff; }
 .occ-handle { width: 0; height: 0; min-width: 0; min-height: 0; background: transparent; border: none; }

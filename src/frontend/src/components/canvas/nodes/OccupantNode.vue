@@ -62,19 +62,19 @@ const portraitStyle = computed(() => {
   padding: 6px 8px; border-radius: 20px;
   background: rgba(15, 15, 25, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text); cursor: pointer;
+  color: var(--map-text); cursor: pointer;
 }
 .canvas-occupant-node.is-gmc { border-color: rgba(232, 136, 48, 0.5); }
-.canvas-occupant-node.is-pc { border-color: var(--accent); }
+.canvas-occupant-node.is-pc { border-color: var(--map-accent); }
 .occ-portrait {
   width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent-dim); font-weight: 700; font-size: 12px; color: #fff;
+  background: var(--map-accent-dim); font-weight: 700; font-size: 12px; color: #fff;
 }
 .occ-body { flex: 1; min-width: 0; }
 .occ-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.occ-role { font-size: 10px; color: var(--text-dim); font-style: italic; }
-.occ-rank { font-size: 10px; color: var(--accent); font-weight: 700; }
+.occ-role { font-size: 10px; color: var(--map-text-dim); font-style: italic; }
+.occ-rank { font-size: 10px; color: var(--map-accent); font-weight: 700; }
 .occ-factions { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
 .faction-chip {
   font-size: 8px; padding: 1px 5px; border-radius: 3px;
@@ -82,5 +82,5 @@ const portraitStyle = computed(() => {
 }
 .occ-actions { display: flex; flex-direction: column; gap: 2px; }
 .occ-btn { padding: 2px 4px; font-size: 11px; border-radius: 4px; background: rgba(255,255,255,0.06); border: none; cursor: pointer; }
-.occ-btn:hover { background: var(--accent); }
+.occ-btn:hover { background: var(--map-accent); }
 </style>

@@ -27,6 +27,7 @@ html, body, #app {
   --bg-deep: #0a0a0f;
   --accent: #4088d4;
   --accent-dim: #2a5a8a;
+  --accent-active: #2a5a8a;  /* selected/hover fill that pairs with white text */
   --danger: #d44040;
   --success: #40b860;
   --warn: #e88830;
@@ -126,6 +127,11 @@ html, body, #app {
   /* ── Theme-stable: render over dark surfaces (map, canvas, dice) ── */
   --map-bg: #0a0a0f;
   --map-glow: #1a1a2e;
+  --map-text: #e0e0e0;        /* text directly over the dark map/canvas */
+  --map-text-dim: #888;
+  --map-accent: #4088d4;      /* accent stays bright on dark surfaces */
+  --map-accent-dim: #2a5a8a;
+  --map-panel: rgba(15, 15, 25, 0.85);
   --selection-glow: #64b4ff;
   --dot-character: #4088d4;
   --dot-gmc: #e88830;
@@ -165,6 +171,7 @@ html.light {
   --bg-deep: #e9e9ee;
   --accent: #2f6fb8;
   --accent-dim: #b9d3ec;
+  --accent-active: #2f6fb8;
   --danger: #c83232;
   --success: #2e9e50;
   --warn: #b05e00;
@@ -428,7 +435,7 @@ select option {
   padding: 0;
 }
 .lab-btn:hover {
-  background: var(--accent-dim);
+  background: var(--accent-active);
   color: var(--text-on-accent);
   border-color: var(--accent);
 }
@@ -504,7 +511,7 @@ select option {
   padding: 8px 0;
 }
 .mode-toggle button.active {
-  background: var(--accent-dim);
+  background: var(--accent-active);
   color: var(--text-on-accent);
 }
 .switch-row {
@@ -556,7 +563,7 @@ select option {
   border: 1px solid var(--overlay-8);
 }
 .char-list button.active {
-  background: var(--accent-dim);
+  background: var(--accent-active);
   border-color: var(--accent);
   color: var(--text-on-accent);
 }
@@ -823,7 +830,7 @@ select option {
   font-style: italic;
 }
 .suggestion-create:hover {
-  background: var(--accent-dim);
+  background: var(--accent-active);
   color: var(--text-on-accent);
 }
 

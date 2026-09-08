@@ -157,15 +157,15 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   opacity: 0; transition: opacity 0.2s ease; cursor: pointer;
 }
 .map-dot.expanded .dot-label, .map-dot.expanded .dot-initials { opacity: 1; }
-.dot-label { font-size: 11px; font-weight: 600; color: var(--text); text-align: center; padding: 4px; line-height: 1.2; }
+.dot-label { font-size: 11px; font-weight: 600; color: var(--map-text); text-align: center; padding: 4px; line-height: 1.2; }
 .dot-initials { font-size: 18px; font-weight: 800; color: #fff; }
-.map-dot.draggable { cursor: grab; border: 2px dashed var(--accent); animation: dot-pulse 2s ease-in-out infinite; }
+.map-dot.draggable { cursor: grab; border: 2px dashed var(--map-accent); animation: dot-pulse 2s ease-in-out infinite; }
 .zone-dot.draggable { width: 240px !important; height: 240px !important; margin-left: -120px; margin-top: -120px; background: rgba(10,10,20,0.85); backdrop-filter: blur(8px); z-index: 10; overflow: hidden; }
 .occ-dot.draggable:not(.self) { width: 96px !important; height: 96px !important; margin-left: -48px; margin-top: -48px; background: rgba(10,10,20,0.85); backdrop-filter: blur(8px); z-index: 10; overflow: hidden; }
 .nav-dot.draggable { width: 240px !important; height: 240px !important; margin-left: -120px; margin-top: -120px; background: rgba(10,10,20,0.85); backdrop-filter: blur(8px); z-index: 10; overflow: hidden; }
 .map-dot.draggable .dot-overlay, .map-dot.draggable .dot-label, .map-dot.draggable .dot-initials { opacity: 1; }
 @keyframes dot-pulse {
-  0%, 100% { border-color: var(--accent); }
+  0%, 100% { border-color: var(--map-accent); }
   50% { border-color: rgba(64,136,212,0.3); }
 }
 

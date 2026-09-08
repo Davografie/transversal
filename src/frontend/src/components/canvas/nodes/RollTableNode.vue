@@ -82,9 +82,9 @@ function rowTooltip(row) {
   position: relative;
   width: 250px;
   background: rgba(14, 16, 26, 0.96);
-  border: 1px solid var(--accent-dim);
+  border: 1px solid var(--map-accent-dim);
   border-radius: 8px;
-  color: var(--text);
+  color: var(--map-text);
   overflow: visible;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
@@ -100,12 +100,12 @@ function rowTooltip(row) {
   background: #40b860; color: #0a0a0f; font-weight: 700; flex-shrink: 0;
 }
 .rt-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rt-edit { font-size: 12px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text); cursor: pointer; flex-shrink: 0; }
-.rt-edit:hover { background: var(--accent); color: #fff; }
+.rt-edit { font-size: 12px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--map-text); cursor: pointer; flex-shrink: 0; }
+.rt-edit:hover { background: var(--map-accent); color: #fff; }
 .rt-subtitle {
   height: 16px; box-sizing: border-box;
   display: flex; align-items: center; gap: 6px; padding: 0 8px;
-  font-size: 9px; color: var(--text-dim);
+  font-size: 9px; color: var(--map-text-dim);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   white-space: nowrap; overflow: hidden;
 }
@@ -116,10 +116,10 @@ function rowTooltip(row) {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 .rt-chip {
-  font-size: 8px; color: var(--text-dim); background: rgba(255,255,255,0.05);
+  font-size: 8px; color: var(--map-text-dim); background: rgba(255,255,255,0.05);
   padding: 1px 5px; border-radius: 3px; text-transform: uppercase;
 }
-.rt-chip-accent { color: var(--accent); }
+.rt-chip-accent { color: var(--map-accent); }
 .rt-row {
   height: 26px; box-sizing: border-box;
   display: flex; align-items: center; gap: 6px; padding: 0 8px;
@@ -127,11 +127,11 @@ function rowTooltip(row) {
   white-space: nowrap; overflow: hidden;
 }
 .rt-row:last-child { border-bottom: none; }
-.rt-num { width: 14px; color: var(--text-dim); flex-shrink: 0; }
-.rt-key { color: var(--text-dim); font-family: monospace; flex-shrink: 0; }
+.rt-num { width: 14px; color: var(--map-text-dim); flex-shrink: 0; }
+.rt-key { color: var(--map-text-dim); font-family: monospace; flex-shrink: 0; }
 .rt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rt-next {
-  font-size: 8px; color: var(--accent); background: rgba(0, 200, 150, 0.12);
+  font-size: 8px; color: var(--map-accent); background: rgba(0, 200, 150, 0.12);
   padding: 1px 4px; border-radius: 3px; flex-shrink: 0; max-width: 90px;
   overflow: hidden; text-overflow: ellipsis;
 }

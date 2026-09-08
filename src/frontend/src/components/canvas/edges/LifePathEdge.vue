@@ -94,7 +94,7 @@ const labelY = computed(() => pathData.value[2])
   position: absolute;
   pointer-events: none;
   font-size: 10px;
-  color: var(--text);
+  color: var(--map-text);
   background: rgba(10, 10, 15, 0.85);
   padding: 1px 5px;
   border-radius: 3px;

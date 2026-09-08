@@ -1312,6 +1312,7 @@ onMounted(() => {
   top: env(safe-area-inset-top, 16px);
   left: 16px;
   font-size: 20px; font-weight: 600;
+  color: var(--map-text);
   text-shadow: 0 2px 8px rgba(0,0,0,0.8);
   z-index: 2;
   pointer-events: none;
@@ -1321,7 +1322,7 @@ onMounted(() => {
   position: absolute;
   top: calc(env(safe-area-inset-top, 16px) + 24px);
   left: 16px;
-  font-size: 12px; color: var(--text-dim);
+  font-size: 12px; color: var(--map-text-dim);
   text-transform: uppercase; letter-spacing: 2px;
   z-index: 2;
   pointer-events: none;
@@ -1350,7 +1351,7 @@ onMounted(() => {
 }
 .overlay-btn.active {
   background: rgba(64,136,212,0.3);
-  border-color: var(--accent);
+  border-color: var(--map-accent);
 }
 .overlay-btn:hover { background: rgba(255,255,255,0.1); }
 
@@ -1487,7 +1488,7 @@ onMounted(() => {
 .map-dot.expanded .dot-initials { opacity: 1; }
 
 .dot-label {
-  font-size: 11px; font-weight: 600; color: var(--text);
+  font-size: 11px; font-weight: 600; color: var(--map-text);
   text-align: center; padding: 4px; line-height: 1.2;
 }
 .dot-initials {
@@ -1496,7 +1497,7 @@ onMounted(() => {
 
 /* Draggable state — show as expanded bubbles */
 .map-dot.draggable {
-  cursor: grab; border: 2px dashed var(--accent);
+  cursor: grab; border: 2px dashed var(--map-accent);
   animation: dot-pulse 2s ease-in-out infinite;
 }
 /* Zones full-size when editing */
@@ -1533,7 +1534,7 @@ onMounted(() => {
   opacity: 1;
 }
 @keyframes dot-pulse {
-  0%, 100% { border-color: var(--accent); }
+  0%, 100% { border-color: var(--map-accent); }
   50% { border-color: rgba(64,136,212,0.3); }
 }
 

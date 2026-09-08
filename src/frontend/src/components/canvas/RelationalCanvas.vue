@@ -306,7 +306,7 @@ onMounted(async () => {
 <style scoped>
 .relational-canvas {
   display: flex; flex-direction: column; height: 100%; min-height: 320px;
-  background: #0a0a0f; color: var(--text);
+  background: #0a0a0f; color: var(--map-text);
 }
 .relational-canvas.fullscreen {
   position: fixed; inset: 0; z-index: 20; height: 100vh; min-height: 0;
@@ -324,29 +324,29 @@ onMounted(async () => {
 }
 .canvas-controls { display: flex; align-items: center; gap: 6px; }
 .faction-select {
-  background: var(--bg-panel); color: var(--text); border: 1px solid var(--accent-dim);
+  background: var(--map-panel); color: var(--map-text); border: 1px solid var(--map-accent-dim);
   border-radius: 5px; padding: 3px 6px; font-size: 11px;
 }
 .tool-btn {
-  background: rgba(255, 255, 255, 0.06); color: var(--text); border: none;
+  background: rgba(255, 255, 255, 0.06); color: var(--map-text); border: none;
   border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer;
 }
-.tool-btn:hover { background: var(--accent); }
+.tool-btn:hover { background: var(--map-accent); }
 .tool-btn.close { background: rgba(232, 106, 106, 0.2); }
 .tool-btn.close:hover { background: #c05050; }
-.canvas-status { padding: 20px; text-align: center; color: var(--text-dim); }
+.canvas-status { padding: 20px; text-align: center; color: var(--map-text-dim); }
 .canvas-status.error { color: #e86a6a; }
-.canvas-hint { padding: 4px 8px; font-size: 10px; color: var(--text-dim); background: rgba(20,20,35,0.9); border-bottom: 1px solid rgba(255,255,255,0.06); }
+.canvas-hint { padding: 4px 8px; font-size: 10px; color: var(--map-text-dim); background: rgba(20,20,35,0.9); border-bottom: 1px solid rgba(255,255,255,0.06); }
 .canvas-flow { flex: 1; }
 .link-menu {
   position: fixed; z-index: 30; width: 260px;
   background: #1a1a2e; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
   padding: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
-.link-menu-title { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.link-menu-title { font-size: 9px; color: var(--map-text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .link-menu-close {
   position: absolute; top: 4px; right: 4px; font-size: 12px; line-height: 1;
-  padding: 2px 4px; background: none; border: none; color: var(--text-dim); cursor: pointer;
+  padding: 2px 4px; background: none; border: none; color: var(--map-text-dim); cursor: pointer;
 }
 .link-menu-close:hover { color: #e06060; }
 </style>
