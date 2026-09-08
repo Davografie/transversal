@@ -1305,6 +1305,8 @@ async function fetchEntity() {
 
 // Render the cached sheet immediately when we have it; otherwise fetch fresh.
 // Used on open/switch so re-opening a sheet doesn't re-download the whole entity.
+let inflightLoad = null // { id, promise } — dedupe concurrent cache-miss loads
+
 function loadCachedEntity() {
   const id = props.overrideEntityId || props.entityId
   if (!id) return
@@ -1314,7 +1316,17 @@ function loadCachedEntity() {
     perfMark('sheet-loaded', { id, cached: true })
     return
   }
-  fetchEntity()
+  // Dedupe: a concurrent load for the same entity (e.g. the universe watcher
+  // refiring while the first fetch is still in flight) shares the in-flight
+  // request instead of starting a second full fetch.
+  if (inflightLoad && inflightLoad.id === id) {
+    return
+  }
+  const promise = fetchEntity()
+  inflightLoad = { id, promise }
+  promise.finally(() => {
+    if (inflightLoad && inflightLoad.id === id) inflightLoad = null
+  })
 }
 
 function applyEntity(e) {
