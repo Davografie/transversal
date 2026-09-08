@@ -730,6 +730,7 @@ let dragTarget = null  // non-reactive: nearest travel target during self-drag
 const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
 
 const EXPAND_PROXIMITY = 24  // image-% — the bubble pops out within this distance
+const TRAVEL_PROXIMITY_FACTOR = 0.75  // <1 = narrower drop zone; 0.75 ≈ the character's center must sit inside the bubble
 
 // Drop-to-travel radius in image-% units: the expanded bubble's on-screen
 // radius plus the self dot's radius, converted through the current image scale.
@@ -744,7 +745,7 @@ function travelProximity() {
   let pxPerPct = vw / 100  // unknown aspect: image-% == viewport-%
   if (imgAspect && imgAspect > viewAspect) pxPerPct = (vh * imgAspect) / 100
   else if (imgAspect && imgAspect < viewAspect) pxPerPct = (vw / imgAspect) / 100
-  return radiusPx / pxPerPct
+  return (radiusPx / pxPerPct) * TRAVEL_PROXIMITY_FACTOR
 }
 
 function onOccupantDragStart(e, occupant, index) {
