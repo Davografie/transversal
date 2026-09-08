@@ -125,8 +125,6 @@
     <!-- Create mode: new trait form -->
     <template v-else>
       <div class="ps-form">
-        <label>ID</label>
-        <input v-model="createForm.id" placeholder="trait-3r-my-trait" />
         <label>Name</label>
         <input v-model="createForm.name" placeholder="Trait name…" />
         <label>Universes</label>
@@ -139,10 +137,72 @@
         <select v-model="createForm.defaultRatingType">
           <option value="STATIC">Static</option><option value="RESOURCE">Resource</option><option value="CHALLENGE">Challenge</option><option value="EMPTY">Empty</option>
         </select>
-        <div class="create-actions">
-          <button class="save-btn" @click="onCreate" :disabled="saving || !createForm.id.trim() || !createForm.name.trim()">{{ saving ? 'Creating…' : 'Create Trait' }}</button>
+        <label class="checkbox-label"><input type="checkbox" v-model="createForm.locationRestricted" /> Location Restricted</label>
+        <div class="default-ego-row">
+          <span class="field-label">Default</span>
+          <button type="button" class="ego-toggle" :class="{ 'is-ego': createForm.defaultEgo }" @click="createForm.defaultEgo = !createForm.defaultEgo">{{ createForm.defaultEgo ? 'ego' : 'morph' }}</button>
         </div>
+        <label>Polarity</label>
+        <select v-model="createForm.polarity">
+          <option value="">Inherit traitset</option>
+          <option value="POSITIVE">Positive</option>
+          <option value="NEGATIVE">Negative</option>
+        </select>
       </div>
+
+      <h4 class="ps-section-title">Possible SFXs</h4>
+      <GmList
+        :items="createPossibleSfxs"
+        item-key="id"
+        empty-text="No SFXs assigned — add one below"
+        @click="onSfxClick"
+      >
+        <template #item="{ item: s }">
+          <button
+            type="button"
+            class="vx-toggle"
+            :class="{ 'is-on': createForm.defaultSfxIds.includes(s.id) }"
+            :title="createForm.defaultSfxIds.includes(s.id) ? 'Default SFX — click to unset' : 'Not default — click to make default'"
+            @click.stop="createToggleDefaultSfx(s.id)"
+          >{{ createForm.defaultSfxIds.includes(s.id) ? '✓' : '✗' }}</button>
+          <span class="sfx-name">{{ s.name }}</span>
+          <span class="sfx-trigger">{{ s.trigger || '' }}</span>
+          <button class="row-del-btn" @click.stop="createRemovePossibleSfx(s.id)" title="Remove from trait">✕</button>
+        </template>
+      </GmList>
+      <button class="ps-add-btn" @click="createOpenSfxPicker">+ Add SFX</button>
+
+      <h4 class="ps-section-title">Possible Sub-traits</h4>
+      <p class="section-hint">Add a whole sub-trait set (e.g. "elements") to make every trait in it nestable, or add individual traits.</p>
+      <GmList
+        :items="createPossibleSubtargetItems"
+        item-key="key"
+        empty-text="No sub-traits assigned"
+      >
+        <template #item="{ item: st }">
+          <span class="subtarget-kind" :class="st.kind">{{ st.kind === 'set' ? 'set' : 'trait' }}</span>
+          <span class="sfx-name">{{ st.name }}</span>
+          <span class="sfx-trigger">{{ st.traitsetName || '' }}</span>
+          <button class="row-del-btn" @click.stop="createRemovePossibleSubtarget(st.key)" title="Remove">✕</button>
+        </template>
+      </GmList>
+      <div class="subtrait-add">
+        <select v-model="newSubtargetCreate">
+          <option value="" disabled>Add sub-trait…</option>
+          <optgroup label="Trait sets">
+            <option v-for="ts in createUnassignedSubtraitsets()" :key="'set-' + ts.id" :value="'set:' + ts.id">{{ ts.name }} (all traits)</option>
+          </optgroup>
+          <optgroup v-for="ts in subtraitTraitsets" :key="ts.id" :label="ts.name">
+            <option v-for="st in createUnassignedSubtraitOptions(ts)" :key="st.id" :value="'trait:' + st.id">{{ st.name }}</option>
+          </optgroup>
+        </select>
+        <button class="save-btn" @click="createAddSubtarget" :disabled="!newSubtargetCreate">Add</button>
+      </div>
+
+      <div class="create-actions">
+        <button class="save-btn" @click="onCreate" :disabled="saving || !createForm.name.trim()">{{ saving ? 'Creating…' : 'Create Trait' }}</button>
+      </div>
+      <p v-if="createError" class="switch-error">{{ createError }}</p>
     </template>
   </div>
 </template>
@@ -356,19 +416,126 @@ function openDisplayNameEditor(index) {
 }
 
 // ── Create mode ──
-const createForm = reactive({ id: '', name: '', universes: [], defaultDieType: 'D6', defaultRatingType: 'STATIC' })
+const createForm = reactive({
+  name: '',
+  universes: [],
+  defaultDieType: 'D6',
+  defaultRatingType: 'STATIC',
+  locationRestricted: false,
+  defaultEgo: false,
+  polarity: '',
+  possibleSfxIds: [],
+  defaultSfxIds: [],
+  possibleSubtraitIds: [],
+  possibleSubtraitsetIds: [],
+})
+const createError = ref('')
+
+function generateTraitId(name) {
+  return 'trait-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
 
 async function onCreate() {
+  if (!createForm.name.trim()) return
   saving.value = true
+  createError.value = ''
   try {
     const tsId = props.traitsetId || trait.value?.traitsetId || ''
-    const universes = createForm.universes.length > 0 ? [...createForm.universes] : []
-    await graphql(
-      `mutation($input: TraitInput!) { createTrait(input: $input) { id } }`,
-      { input: { id: createForm.id.trim(), name: createForm.name.trim(), universes, traitsetId: tsId, defaultDieType: createForm.defaultDieType, defaultRatingType: createForm.defaultRatingType, displayNames: [] } }
-    )
+    const input = {
+      id: generateTraitId(createForm.name),
+      name: createForm.name.trim(),
+      universes: [...createForm.universes],
+      traitsetId: tsId,
+      defaultDieType: createForm.defaultDieType,
+      defaultRatingType: createForm.defaultRatingType,
+      locationRestricted: createForm.locationRestricted,
+      defaultEgo: createForm.defaultEgo,
+      polarity: createForm.polarity || null,
+      possibleSfxIds: [...createForm.possibleSfxIds],
+      defaultSfxIds: [...createForm.defaultSfxIds],
+      possibleSubtraitIds: [...createForm.possibleSubtraitIds],
+      possibleSubtraitsetIds: [...createForm.possibleSubtraitsetIds],
+      displayNames: [],
+    }
+    await graphql(`mutation($input: TraitInput!) { createTrait(input: $input) { id } }`, { input })
     await fetchTraitsConfig()
+    panel.close()
+  } catch (e) {
+    const msg = e?.message || 'Create failed'
+    createError.value = /unique|already exists|conflicting key/i.test(msg)
+      ? `"${createForm.name.trim()}" already exists`
+      : msg
   } finally { saving.value = false }
+}
+
+// ── Create-mode SFX / sub-trait helpers (mirror edit mode against createForm) ──
+const createPossibleSfxs = computed(() =>
+  allSfxs.value.filter((s) => createForm.possibleSfxIds.includes(s.id))
+)
+
+function createRemovePossibleSfx(id) {
+  createForm.possibleSfxIds = createForm.possibleSfxIds.filter((sid) => sid !== id)
+  createForm.defaultSfxIds = createForm.defaultSfxIds.filter((sid) => sid !== id)
+}
+
+function createToggleDefaultSfx(id) {
+  if (createForm.defaultSfxIds.includes(id)) {
+    createForm.defaultSfxIds = createForm.defaultSfxIds.filter((sid) => sid !== id)
+  } else {
+    createForm.defaultSfxIds.push(id)
+  }
+}
+
+function createOpenSfxPicker() {
+  panel.open({
+    component: GmSfxPickerPanel,
+    title: 'Add SFX to Trait',
+    props: {
+      selectedIds: [...createForm.possibleSfxIds],
+    },
+    listeners: {
+      'add-sfx': (id) => {
+        if (!createForm.possibleSfxIds.includes(id)) createForm.possibleSfxIds.push(id)
+      },
+      'remove-sfx': (id) => {
+        createForm.possibleSfxIds = createForm.possibleSfxIds.filter((sid) => sid !== id)
+      },
+    },
+  })
+}
+
+const newSubtargetCreate = ref('')
+const createPossibleSubtargetItems = computed(() => [
+  ...(createForm.possibleSubtraitsetIds || []).map((id) => ({ key: 'set:' + id, kind: 'set', name: subtraitsetMap.value[id]?.name || id, traitsetName: '' })),
+  ...(createForm.possibleSubtraitIds || []).map((id) => ({ key: 'trait:' + id, kind: 'trait', name: subtraitTraitMap.value[id]?.name || id, traitsetName: subtraitTraitMap.value[id]?.traitsetName || '' })),
+])
+
+function createUnassignedSubtraitsets() {
+  return subtraitTraitsets.value.filter((ts) => !createForm.possibleSubtraitsetIds.includes(ts.id))
+}
+
+function createUnassignedSubtraitOptions(ts) {
+  return (ts.traits || []).filter((t) => !createForm.possibleSubtraitIds.includes(t.id))
+}
+
+function createAddSubtarget() {
+  if (!newSubtargetCreate.value) return
+  if (newSubtargetCreate.value.startsWith('set:')) {
+    const id = newSubtargetCreate.value.slice(4)
+    if (!createForm.possibleSubtraitsetIds.includes(id)) createForm.possibleSubtraitsetIds.push(id)
+  } else {
+    const id = newSubtargetCreate.value.slice(6)
+    if (!createForm.possibleSubtraitIds.includes(id)) createForm.possibleSubtraitIds.push(id)
+  }
+  newSubtargetCreate.value = ''
+}
+
+function createRemovePossibleSubtarget(key) {
+  if (key.startsWith('set:')) {
+    createForm.possibleSubtraitsetIds = createForm.possibleSubtraitsetIds.filter((id) => id !== key.slice(4))
+  } else {
+    createForm.possibleSubtraitIds = createForm.possibleSubtraitIds.filter((id) => id !== key.slice(6))
+  }
 }
 
 // ── Possible SFXs (filtered from all) ──
