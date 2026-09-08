@@ -147,6 +147,42 @@ type CharacterView {
   projections: [Projection!]!
   traitSettings: [TraitSetting!]!
 }
+
+# Players & troupe (B54–B66)
+type Player {
+  id: ID!
+  name: String!
+  role: String!
+  lastSpotlightAt: String
+  lastMainEntityId: ID
+  agency: [AgencyEdge!]!
+  mainEntity: Entity        # recency main, else designated main (B63)
+}
+
+type AgencyEdge {
+  entityId: ID!
+  main: Boolean!
+}
+
+type SupportCharacter {
+  entity: Entity!
+  main: Entity!
+  mainOwnerId: ID
+  ownerId: ID
+  mainActive: Boolean!
+}
+
+type ActiveMain {
+  playerId: ID!
+  playerName: String!
+  main: Entity!
+}
+
+type PlayerBody {
+  playerId: ID!
+  playerName: String!
+  entity: Entity!
+}
 ```
 
 ### Queries
@@ -161,6 +197,14 @@ type Query {
   # Trait registry
   traitsByUniverse(universe: String!): [TraitRef!]!
   traitsetsByUniverse(universe: String!): [TraitSetRef!]!
+
+  # Players & troupe
+  players: [Player!]!
+  spotlightRecency: [Player!]!
+  supportCharacters: [SupportCharacter!]!
+  activeMains: [ActiveMain!]!
+  playerBodies: [PlayerBody!]!
+  onlinePlayers: [ID!]!
 
   # Effect authoring (served vocabularies + candidate resolution)
   effectActions: [EffectActionMeta!]!
@@ -204,6 +248,10 @@ type Mutation {
 
   # Projection
   addProjection(entityId: ID!, universe: String!, type: TransversalType): Entity!
+
+  # Troupe / support cast
+  setAgencyMain(input: SetAgencyMainInput!): Player!
+  createSupportCharacter(playerId: ID!, mainEntityId: ID!, tableId: ID!, index: Int!): Entity!
 }
 
 input CreateEntityInput {
@@ -245,6 +293,12 @@ input TraitSettingUpdateInput {
   polarity: Polarity
   ego: Boolean
   sfxIds: [ID!]
+}
+
+input SetAgencyMainInput {
+  playerId: ID!
+  entityId: ID!
+  main: Boolean!
 }
 
 type RazmeritResult {

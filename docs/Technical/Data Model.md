@@ -435,6 +435,12 @@ Player identity for session persistence.
 | `last_spotlight_at` | string? | | ISO timestamp of when this player last took control of a main (spotlight recency sort key) |
 | `last_main_entity_id` | string? | | The main entity the player last took control of (stored, not derived) |
 
+> [!note] Player presence (not persisted)
+> "Online" state is in-memory only (`services/presence.py`): a player is online
+> while they hold an SSE connection, plus a 10-minute grace window after the last
+> connection drops. It is never written to Arango — the `onlinePlayers` GraphQL
+> field reads this in-memory set.
+
 
 ### `entity_images`
 
