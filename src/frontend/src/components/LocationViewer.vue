@@ -436,6 +436,7 @@ function parallaxY(imgY) { return parseFloat(toViewportPos(0, imgY).top) || imgY
 // Inverse parallax for navdot "hole" images: the destination scene pans
 // opposite to the current scene's shift, like looking through a hole in the
 // world at a distant scene. Returns the offset in destination-image % units.
+const INVERSE_PAN_STRENGTH = 1.5  // tune the hole-parallax feel (>1 = stronger)
 function inverseNavPan(destAspect) {
   if (!destAspect) return { x: 0, y: 0 }
   const self = occupants.value.find(o => o.id === props.entityId)
@@ -452,11 +453,11 @@ function inverseNavPan(destAspect) {
 
   if (destAspect > viewAspect) {
     const overflow = vh * destAspect - vw
-    return { x: overflow > 0 ? -(shiftX / overflow) * 100 : 0, y: 0 }
+    return { x: overflow > 0 ? -(shiftX / overflow) * 100 * INVERSE_PAN_STRENGTH : 0, y: 0 }
   }
   if (destAspect < viewAspect) {
     const overflow = vw / destAspect - vh
-    return { x: 0, y: overflow > 0 ? -(shiftY / overflow) * 100 : 0 }
+    return { x: 0, y: overflow > 0 ? -(shiftY / overflow) * 100 * INVERSE_PAN_STRENGTH : 0 }
   }
   return { x: 0, y: 0 }
 }
@@ -725,8 +726,26 @@ const poolPhaseFor = (eid) => props.remotePools[eid]?.phase || 'adding'
 const occDragging = ref(null)  // { index }
 let occDragMoved = false       // pointer moved past the tap threshold
 let occSuppressClick = false   // suppress the synthesized click after a real drag
-let dragTarget = null  // non-reactive: nearest target during self-drag
+let dragTarget = null  // non-reactive: nearest travel target during self-drag
 const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
+
+const EXPAND_PROXIMITY = 24  // image-% — the bubble pops out within this distance
+
+// Drop-to-travel radius in image-% units: the expanded bubble's on-screen
+// radius plus the self dot's radius, converted through the current image scale.
+// Travel only triggers when the character is dropped on the bubble.
+function travelProximity() {
+  const vw = window.innerWidth, vh = window.innerHeight
+  const bubbleW = Math.min(260, Math.max(120, vw * 0.14))
+  const selfW = Math.min(88, Math.max(60, vw * 0.055))
+  const radiusPx = bubbleW / 2 + selfW / 2
+  const viewAspect = vw / vh
+  const imgAspect = imageAspect.value
+  let pxPerPct = vw / 100  // unknown aspect: image-% == viewport-%
+  if (imgAspect && imgAspect > viewAspect) pxPerPct = (vh * imgAspect) / 100
+  else if (imgAspect && imgAspect < viewAspect) pxPerPct = (vw / imgAspect) / 100
+  return radiusPx / pxPerPct
+}
 
 function onOccupantDragStart(e, occupant, index) {
   if (!canDragOccupant(occupant)) return
@@ -774,26 +793,28 @@ function onOccDragMove(e) {
     occ.map_y = Math.max(2, Math.min(98, Math.round(img.y)))
   }
 
-  // Track nearest target — all positions now image-relative
+  // Track nearest targets — all positions image-relative. Two radii:
+  // EXPAND_PROXIMITY pops the bubble out; travelProximity() arms travel
+  // (drop must land on the expanded bubble to travel).
   if (occ && occ.id === props.entityId) {
     const px = occ.map_x, py = occ.map_y
-    let nearest = null, nearestDist = 12
+    const travelDist = travelProximity()
+
+    let expandNearest = null, expandNearestDist = EXPAND_PROXIMITY
+    let travelNearest = null, travelNearestDist = travelDist
+
     for (const z of zones.value) {
       const dist = Math.sqrt((z.x - px) ** 2 + (z.y - py) ** 2)
-      if (dist < nearestDist) { nearest = { type: 'zone', name: z.name }; nearestDist = dist }
-    }
-    for (const o of occupants.value) {
-      if (o.id === props.entityId) continue
-      const ox = o.map_x ?? 50, oy = o.map_y ?? 50
-      const dist = Math.sqrt((ox - px) ** 2 + (oy - py) ** 2)
-      if (dist < nearestDist) { nearest = { type: 'occupant', id: o.id }; nearestDist = dist }
+      if (dist < expandNearestDist) { expandNearest = { type: 'zone', name: z.name }; expandNearestDist = dist }
+      if (dist < travelNearestDist) { travelNearest = { type: 'zone', name: z.name }; travelNearestDist = dist }
     }
     for (const nd of navDots.value) {
       const dist = Math.sqrt((nd.x - px) ** 2 + (nd.y - py) ** 2)
-      if (dist < nearestDist) { nearest = { type: 'nav', key: nd.key }; nearestDist = dist }
+      if (dist < expandNearestDist) { expandNearest = { type: 'nav', key: nd.key }; expandNearestDist = dist }
+      if (dist < travelNearestDist) { travelNearest = { type: 'nav', key: nd.key }; travelNearestDist = dist }
     }
-    dragTarget = nearest
-    hoveredDot.value = nearest ? `${nearest.type}-${nearest.name || nearest.key || nearest.id}` : ''
+    dragTarget = travelNearest
+    hoveredDot.value = expandNearest ? `${expandNearest.type}-${expandNearest.name || expandNearest.key}` : ''
   }
 }
 
