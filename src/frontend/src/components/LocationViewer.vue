@@ -682,22 +682,6 @@ watch(currentImage, (url) => {
 
 // ── Occupant positioning ────────────────────────────
 
-function occupantStyle(index, occupant) {
-  // Position only — dot styling is handled by CSS
-  if (occupant.map_x != null && occupant.map_y != null) {
-    return { left: occupant.map_x + '%', top: occupant.map_y + '%' }
-  }
-  if (zones.value.length > 0) {
-    const zoneIdx = index % zones.value.length
-    const z = zones.value[zoneIdx]
-    const offset = 5 + (Math.floor(index / zones.value.length) * 5)
-    return { left: (z.x + offset) + '%', top: (z.y + offset) + '%' }
-  }
-  const x = 20 + (index * 15) % 60
-  const y = 75 + (index * 5) % 15
-  return { left: x + '%', top: y + '%' }
-}
-
 function canDragOccupant(occupant) {
   if (props.editZones) return true                // GM can drag anyone
   if (occupant.id === props.entityId) return true  // player can drag self
@@ -760,13 +744,31 @@ function onOccupantDragStart(e, occupant, index) {
   const rect = el.getBoundingClientRect()
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
+
+  // Drag origin must be the dot's rendered viewport position at grab time:
+  // self renders 1:1 at its map %, other occupants render through the
+  // parallax conversion — otherwise the dot jumps on the first move.
+  const imgX = occupant.map_x ?? occupantX(index, occupant)
+  const imgY = occupant.map_y ?? occupantY(index, occupant)
+  let origX, origY
+  if (occupant.id === props.entityId) {
+    origX = imgX
+    origY = imgY
+  } else {
+    const vp = toViewportPos(imgX, imgY)
+    origX = parseFloat(vp.left)
+    origY = parseFloat(vp.top)
+    if (Number.isNaN(origX)) origX = 50
+    if (Number.isNaN(origY)) origY = 50
+  }
+
   // Store initial position so we can compute delta
   occDragging.value = {
     index: realIndex,
     startX: clientX,
     startY: clientY,
-    origX: (occupant.map_x ?? parseFloat(occupantStyle(index, occupant).left)) || 50,
-    origY: (occupant.map_y ?? parseFloat(occupantStyle(index, occupant).top)) || 50,
+    origX,
+    origY,
   }
   document.addEventListener('mousemove', onOccDragMove)
   document.addEventListener('mouseup', onOccDragEnd)
