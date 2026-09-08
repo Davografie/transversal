@@ -2194,8 +2194,8 @@ watch(gmMode, (v) => {
 .support-create-btn { width: 100%; font-size: 12px; padding: 8px; background: var(--accent-dim); color: var(--text); border: none; border-radius: 6px; cursor: pointer; }
 .support-create-btn:hover { background: var(--accent); }
 .support-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.other-mains-list { display: flex; flex-direction: column; gap: 4px; }
-.other-main-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+.other-mains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.other-main-row { flex: 0 1 200px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
 .support-create-inline { width: auto; flex: 0 0 auto; font-size: 11px; padding: 5px 10px; }
 .main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: #0a0a0f; background: var(--accent); font-weight: 600; margin-left: 4px; }
 .main-toggle { flex-shrink: 0; cursor: pointer; font-size: 14px; color: var(--text-dim); opacity: 0.45; transition: color 0.15s, opacity 0.15s; line-height: 1; }
