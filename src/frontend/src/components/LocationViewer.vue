@@ -751,6 +751,10 @@ function travelProximity() {
 function onOccupantDragStart(e, occupant, index) {
   if (!canDragOccupant(occupant)) return
   occDragMoved = false
+  // The template loops over the filtered (non-self) occupants, so the loop
+  // index does not match occupants.value — resolve the real index by id.
+  const realIndex = occupants.value.findIndex(o => o.id === occupant.id)
+  if (realIndex === -1) return
   const el = viewerEl.value
   if (!el) return
   const rect = el.getBoundingClientRect()
@@ -758,7 +762,7 @@ function onOccupantDragStart(e, occupant, index) {
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
   // Store initial position so we can compute delta
   occDragging.value = {
-    index,
+    index: realIndex,
     startX: clientX,
     startY: clientY,
     origX: (occupant.map_x ?? parseFloat(occupantStyle(index, occupant).left)) || 50,
