@@ -55,6 +55,8 @@ const props = defineProps({
   arrivalX: { type: Number, default: null },
   arrivalY: { type: Number, default: null },
   destAspect: { type: Number, default: null },
+  panX: { type: Number, default: 0 },
+  panY: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['click', 'overlay-click', 'drag-start'])
@@ -82,8 +84,8 @@ const overlayBgStyle = computed(() => {
   if (props.arrivalX == null || props.arrivalY == null || props.destAspect == null) return null
   const viewAspect = window.innerWidth / window.innerHeight
   const axis = panAxis(props.destAspect, viewAspect)
-  if (axis === 'x') return { backgroundPosition: `${props.arrivalX}% 50%` }
-  if (axis === 'y') return { backgroundPosition: `50% ${props.arrivalY}%` }
+  if (axis === 'x') return { backgroundPosition: `${props.arrivalX + props.panX}% 50%` }
+  if (axis === 'y') return { backgroundPosition: `50% ${props.arrivalY + props.panY}%` }
   return null
 })
 

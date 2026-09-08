@@ -105,6 +105,8 @@
       :arrival-x="destNavCache[nd.target.id]?.arriveX"
       :arrival-y="destNavCache[nd.target.id]?.arriveY"
       :dest-aspect="destNavCache[nd.target.id]?.destAspect"
+      :pan-x="inverseNavPan(destNavCache[nd.target.id]?.destAspect).x"
+      :pan-y="inverseNavPan(destNavCache[nd.target.id]?.destAspect).y"
       @click="onDotClick('nav', nd)"
       @overlay-click="onExpandedClick('nav', nd)"
       @drag-start="(e) => onNavDragStart(e, nd)"
@@ -430,6 +432,34 @@ function parallaxedStyle(imgX, imgY) {
 
 function parallaxX(imgX) { return parseFloat(toViewportPos(imgX, 0).left) || imgX }
 function parallaxY(imgY) { return parseFloat(toViewportPos(0, imgY).top) || imgY }
+
+// Inverse parallax for navdot "hole" images: the destination scene pans
+// opposite to the current scene's shift, like looking through a hole in the
+// world at a distant scene. Returns the offset in destination-image % units.
+function inverseNavPan(destAspect) {
+  if (!destAspect) return { x: 0, y: 0 }
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
+  const vw = window.innerWidth, vh = window.innerHeight
+  const viewAspect = vw / vh
+  const curAspect = imageAspect.value
+
+  // Current scene's pan in px (positive = scene shifted left/up)
+  let shiftX = 0, shiftY = 0
+  if (curAspect && curAspect > viewAspect) shiftX = (mx / 100) * (vh * curAspect - vw)
+  else if (curAspect && curAspect < viewAspect) shiftY = (my / 100) * (vw / curAspect - vh)
+
+  if (destAspect > viewAspect) {
+    const overflow = vh * destAspect - vw
+    return { x: overflow > 0 ? -(shiftX / overflow) * 100 : 0, y: 0 }
+  }
+  if (destAspect < viewAspect) {
+    const overflow = vw / destAspect - vh
+    return { x: 0, y: overflow > 0 ? -(shiftY / overflow) * 100 : 0 }
+  }
+  return { x: 0, y: 0 }
+}
 
 function occupantX(index, occupant) {
   if (zones.value.length > 0) {
