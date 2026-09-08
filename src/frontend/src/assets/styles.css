@@ -777,7 +777,7 @@ select option {
   .stage.mobile-stack .sheet-band,
   .stage.mobile-stack .roller-band {
     position: relative;
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-height: 0;
     transition:
       flex-grow 0.45s ease-in-out,
@@ -790,23 +790,12 @@ select option {
     inset: 0;
   }
 
-  /* The wrapper becomes a static band; neutralize the desktop bottom-sheet
-     slide (class-based transform and inline transform from syncClosedPosition) */
+  /* The desktop bottom-sheet wrapper dissolves on mobile: its children (peers
+     bar, sheet, roller) become first-class bands of the stage, so each band's
+     height is a single animated value — no nested-grow crossfade (which made
+     the dice band hump mid-transition). */
   .stage.mobile-stack .dice-panel-wrapper {
-    position: relative;
-    left: auto;
-    bottom: auto;
-    transform: none !important;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    padding-bottom: 0;
-    flex: 1 1 0;
-    min-height: 0;
-    transition:
-      flex-grow 0.45s ease-in-out,
-      flex-basis 0.45s ease-in-out;
+    display: contents;
   }
 
   .stage.mobile-stack .sheet-band {
@@ -839,25 +828,25 @@ select option {
     z-index: 20;
   }
 
-  /* Focus distribution — flex-grow ratios per focus state */
-  .stage.mobile-stack.focus-location .loc-band { flex-grow: 1; }
-  .stage.mobile-stack.focus-location .dice-panel-wrapper { flex-grow: 0.3; }
-  .stage.mobile-stack.focus-location .sheet-band { flex-grow: 0.4; }
-  .stage.mobile-stack.focus-location .roller-band { flex-grow: 1; }
+  /* Focus distribution — explicit heights (percents of the stage height), so
+     every band glides monotonically between states. The peers bar takes its
+     natural height on top; bands shrink slightly to absorb it (min-height 0),
+     so no gaps ever appear. */
+  .stage.mobile-stack.focus-location .loc-band { flex-basis: 77%; }
+  .stage.mobile-stack.focus-location .sheet-band { flex-basis: 7%; }
+  .stage.mobile-stack.focus-location .roller-band { flex-basis: 16%; }
 
-  .stage.mobile-stack.focus-sheet .loc-band { flex-grow: 0.25; }
-  .stage.mobile-stack.focus-sheet .dice-panel-wrapper { flex-grow: 1; }
-  .stage.mobile-stack.focus-sheet .sheet-band { flex-grow: 1; }
-  .stage.mobile-stack.focus-sheet .roller-band { flex-grow: 0.25; }
+  .stage.mobile-stack.focus-sheet .loc-band { flex-basis: 20%; }
+  .stage.mobile-stack.focus-sheet .sheet-band { flex-basis: 64%; }
+  .stage.mobile-stack.focus-sheet .roller-band { flex-basis: 16%; }
 
-  /* Dice focus: the bottom stack is content-dependent — the roller takes its
-     natural height (grows when a wizard/menu opens, capped at 42dvh then
-     scrolls) and the location fills everything else. */
-  .stage.mobile-stack.focus-dice .loc-band { flex-grow: 1; }
-  .stage.mobile-stack.focus-dice .dice-panel-wrapper { flex-grow: 0; flex-basis: auto; }
-  .stage.mobile-stack.focus-dice .sheet-band { flex: 0 0 56px; }
+  /* Dice focus: content-dependent bottom stack — the roller takes its natural
+     height (grows for wizards/menus, capped at 42dvh then scrolls) and the
+     location fills everything else. */
+  .stage.mobile-stack.focus-dice .loc-band { flex: 1 1 0; }
+  .stage.mobile-stack.focus-dice .sheet-band { flex-basis: 56px; }
   .stage.mobile-stack.focus-dice .roller-band {
-    flex: 0 0 auto;
+    flex-basis: auto;
     min-height: 148px;
     max-height: 42dvh;
     overflow: hidden auto;

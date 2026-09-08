@@ -95,11 +95,12 @@ sheet** (middle) · **dice roller** (bottom). The desktop layout is untouched
 above the breakpoint.
 
 - **Focus = height.** The focused band grows; teaser bands keep a tappable
-  strip. Focus states: `location` (location dominates, sheet + dice teasers),
-  `sheet` (sheet dominates, location ~20%, dice teaser), `dice` (content-
-  dependent bottom stack: the roller takes its natural height up to 42dvh and
-  scrolls beyond; the sheet is a fixed 56px header teaser; the location fills
-  the rest).
+  strip. Bands size directly against the stage (explicit heights) so every
+  height animates monotonically — no crossfade overshoot. Focus states:
+  `location` (loc 77% / sheet 7% / roller 16%), `sheet` (loc 20% / sheet 64% /
+  roller 16%), `dice` (content-dependent bottom stack: the roller takes its
+  natural height up to 42dvh and scrolls beyond; the sheet is a fixed 56px
+  header teaser; the location fills the rest).
 - **Tap a teaser to expand it.** App renders a capture layer (`.band-tap`)
   over every non-focused band; the first tap expands the band, removing the
   layer. The focused band gets no capture layer, so its own interactions
