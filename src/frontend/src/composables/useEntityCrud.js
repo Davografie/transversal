@@ -171,8 +171,8 @@ export function useEntityCrud() {
 
   async function updateProjection(projectionId, patch = {}) {
     const result = await graphql(
-      `mutation($projectionId: ID!, $name: String, $currentLocation: ID) {
-        updateProjection(projectionId: $projectionId, name: $name, currentLocation: $currentLocation) {
+      `mutation($projectionId: ID!, $name: String, $currentLocation: ID, $transversalType: TransversalType) {
+        updateProjection(projectionId: $projectionId, name: $name, currentLocation: $currentLocation, transversalType: $transversalType) {
           id originUniverse universe name currentLocation transversalType
         }
       }`,
@@ -180,6 +180,7 @@ export function useEntityCrud() {
         projectionId,
         name: patch.name ?? null,
         currentLocation: patch.currentLocation ?? null,
+        transversalType: patch.transversalType ?? null,
       }
     )
     if (result?.updateProjection) {

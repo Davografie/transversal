@@ -7,9 +7,15 @@
       <label>Current Location</label>
       <TargetPicker v-model="currentLocation" kind="location" :scope="projection.universe ? `universe:${projection.universe}` : ''" placeholder="Search location…" />
 
+      <label>Type</label>
+      <select v-model="transversalType">
+        <option value="NATIVE">native</option>
+        <option value="CONSCIOUSNESS">consciousness</option>
+        <option value="INAPPOSITE">inapposite</option>
+      </select>
+
       <div class="readonly-row">
         <span>Origin: {{ universeName(projection.originUniverse) }}</span>
-        <span>Type: {{ (projection.transversalType || 'native').toLowerCase() }}</span>
         <span v-if="projection.universe !== projection.originUniverse">Current universe: {{ universeName(projection.universe) }}</span>
       </div>
     </div>
@@ -37,6 +43,7 @@ const { updateProjection } = useEntityCrud()
 
 const name = ref(props.projection.name || '')
 const currentLocation = ref(props.projection.currentLocation || '')
+const transversalType = ref(props.projection.transversalType || 'NATIVE')
 const saving = ref(false)
 
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
@@ -49,6 +56,7 @@ async function save() {
     await updateProjection(props.projection.id, {
       name: name.value,
       currentLocation: currentLocation.value || null,
+      transversalType: transversalType.value,
     })
     panel.close()
   } finally {

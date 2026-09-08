@@ -227,8 +227,9 @@ class EntityManager:
         name: Optional[str] = None,
         background_image: Optional[str] = None,
         current_location: Optional[str] = None,
+        transversal_type: Optional[TransversalType] = None,
     ) -> Projection:
-        """Update a projection's mutable fields (name / image / location).
+        """Update a projection's mutable fields (name / image / location / type).
 
         ``None`` means "leave unchanged"; an empty string clears the field.
         """
@@ -241,6 +242,8 @@ class EntityManager:
             proj.background_image = background_image or None
         if current_location is not None:
             proj.current_location = current_location or None
+        if transversal_type is not None:
+            proj.transversal_type = transversal_type
         return self.repo.update_projection(proj)
 
     def activate_projection(

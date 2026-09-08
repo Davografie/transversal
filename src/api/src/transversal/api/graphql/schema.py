@@ -1405,8 +1405,8 @@ class Mutation:
         return _entity_to_gql(updated)
 
     @strawberry.mutation
-    def update_projection(self, info: strawberry.Info, projection_id: strawberry.ID, name: Optional[str] = None, background_image: Optional[str] = None, current_location: Optional[strawberry.ID] = None) -> Projection:
-        p = _em(info).update_projection(str(projection_id), name=name, background_image=background_image, current_location=str(current_location) if current_location else None)
+    def update_projection(self, info: strawberry.Info, projection_id: strawberry.ID, name: Optional[str] = None, background_image: Optional[str] = None, current_location: Optional[strawberry.ID] = None, transversal_type: Optional[TransversalTypeEnum] = None) -> Projection:
+        p = _em(info).update_projection(str(projection_id), name=name, background_image=background_image, current_location=str(current_location) if current_location else None, transversal_type=transversal_type)
         return Projection(id=p.id, entity_id=p.entity_id, origin_universe=p.origin_universe, universe=p.universe, name=p.name, background_image=p.background_image, current_location=p.current_location, transversal_type=p.transversal_type, sfx_ids=p.sfx_ids)
 
     @strawberry.mutation
