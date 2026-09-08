@@ -1091,7 +1091,7 @@ function setPoolSources(sources) {
   if (recovered) fetchEntity()
 }
 
-defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity })
+defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, refreshBlueBook: () => blueBookRef.value?.refresh() })
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0

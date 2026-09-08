@@ -1187,6 +1187,7 @@ watch(lastEvent, (evt) => {
           .then(r => r.json())
           .then(nav => { locationName.value = nav.location?.name || evt.data.to })
           .catch(() => { locationName.value = evt.data.to })
+        sheetRef.value?.refreshBlueBook()
       } else {
         locationRef.value?.fetchNav()
       }
