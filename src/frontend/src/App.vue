@@ -175,11 +175,11 @@
           <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
         </div>
 
-        <div v-if="supportCharacters.length" class="settings-section">
+        <div v-if="mySupportCharacters.length" class="settings-section">
           <label class="settings-label">Support characters</label>
           <div class="char-list support-list">
             <button
-              v-for="sc in supportCharacters" :key="sc.entity.id"
+              v-for="sc in mySupportCharacters" :key="sc.entity.id"
               class="char-chip support-chip"
               :class="{ 'support-unavailable': !sc.mainActive, 'support-current': sc.entity.id === entityId }"
               :disabled="!sc.mainActive"
@@ -194,7 +194,7 @@
               <span v-if="sc.mainActive" class="support-available-dot" title="Available">●</span>
             </button>
           </div>
-          <p v-if="!supportCharacters.some(sc => sc.mainActive)" class="support-hint">No support characters are available right now — their mains are inactive.</p>
+          <p v-if="!mySupportCharacters.some(sc => sc.mainActive)" class="support-hint">No support characters are available right now — their mains are inactive.</p>
         </div>
 
         <div v-if="!gmMode" class="settings-section">
@@ -611,6 +611,12 @@ const locationNames = ref({})
 let locationNamesLoaded = false
 
 const ownedEntityIds = computed(() => playerEntities.value.map(e => e.id))
+// Support characters the player has agency over (owned) — not every player's
+// SCs. Assumed-but-unowned SCs are intentionally excluded from this list.
+const mySupportCharacters = computed(() =>
+  supportCharacters.value.filter((sc) => sc.ownerId === playerId.value)
+)
+
 // The support character currently being played (if any), for the assume/return
 // affordance (B57).
 const currentSupport = computed(() =>
