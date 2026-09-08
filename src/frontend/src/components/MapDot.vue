@@ -38,7 +38,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { isVideoUrl, panAxis } from '@/composables/media.js'
+import { isVideoUrl, coverOverscan } from '@/composables/media.js'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -82,11 +82,12 @@ const overlayVisible = computed(() => props.expanded || props.type === 'self' ||
 
 const overlayBgStyle = computed(() => {
   if (props.arrivalX == null || props.arrivalY == null || props.destAspect == null) return null
-  const viewAspect = window.innerWidth / window.innerHeight
-  const axis = panAxis(props.destAspect, viewAspect)
-  if (axis === 'x') return { backgroundPosition: `${props.arrivalX + props.panX}% 50%` }
-  if (axis === 'y') return { backgroundPosition: `50% ${props.arrivalY + props.panY}%` }
-  return null
+  const vw = window.innerWidth, vh = window.innerHeight
+  const { w, h } = coverOverscan(vw, vh, props.destAspect)
+  return {
+    backgroundSize: `${w}px ${h}px`,
+    backgroundPosition: `${props.arrivalX + props.panX}% ${props.arrivalY + props.panY}%`,
+  }
 })
 
 function onClick() { emit('click', { type: props.type, x: props.x, y: props.y }) }
@@ -151,7 +152,11 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   cursor: pointer; pointer-events: none;
 }
 .map-dot.expanded .dot-overlay { opacity: 1; pointer-events: auto; }
-.zone-dot .dot-overlay, .nav-dot .dot-overlay { background-attachment: fixed; }
+.zone-dot .dot-overlay, .nav-dot .dot-overlay {
+  background-attachment: fixed;
+  /* recessed-hole vignette — makes the destination scene read as seen through a hole */
+  box-shadow: inset 0 0 clamp(18px, 2.5vw, 48px) rgba(0,0,0,0.65), inset 0 0 6px rgba(0,0,0,0.45);
+}
 .occ-img-overlay { border-radius: 50%; }
 .dot-label, .dot-initials {
   position: absolute; inset: 0;

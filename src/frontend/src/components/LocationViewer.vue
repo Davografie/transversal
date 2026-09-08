@@ -169,7 +169,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import MapDot from './MapDot.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
-import { isVideoUrl, panAxis } from '@/composables/media.js'
+import { isVideoUrl, coverOverscan } from '@/composables/media.js'
 import { perfMark } from '@/composables/perfLog.js'
 
 const props = defineProps({
@@ -395,35 +395,25 @@ function parallaxOffset() {
   return { x: mx, y: my }
 }
 
+// Rendered px size of the current scene: covers the viewport, overscanned by
+// PAN_OVERSCAN on both axes so panning works horizontally AND vertically.
+function sceneSize() {
+  const vw = window.innerWidth, vh = window.innerHeight
+  if (imageAspect.value) return coverOverscan(vw, vh, imageAspect.value)
+  return { w: vw * 1.8, h: vh * 1.8 }  // unknown aspect: 180% fallback
+}
+
 // Convert image-relative position to viewport position based on pan offset
 function toViewportPos(imgX, imgY) {
   const self = occupants.value.find(o => o.id === props.entityId)
-  const charX = self?.map_x ?? 50
-  const charY = self?.map_y ?? 50
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
   const vw = window.innerWidth, vh = window.innerHeight
-  const viewAspect = vw / vh
-  const imgAspect = imageAspect.value
-
-  if (imgAspect && imgAspect > viewAspect) {
-    // Landscape: image fills height, overflows horizontally
-    const imgW = vh * imgAspect
-    const overflow = imgW - vw
-    const panPx = ((charX / 100) * overflow)
-    const dotPx = (imgX / 100) * imgW
-    const viewX = ((dotPx - panPx) / vw) * 100
-    return { left: viewX.toFixed(1) + '%', top: imgY.toFixed(1) + '%' }
-  }
-  if (imgAspect && imgAspect < viewAspect) {
-    // Portrait: image fills width, overflows vertically
-    const imgH = vw / imgAspect
-    const overflow = imgH - vh
-    const panPx = ((charY / 100) * overflow)
-    const dotPy = (imgY / 100) * imgH
-    const viewY = ((dotPy - panPx) / vh) * 100
-    return { left: imgX.toFixed(1) + '%', top: viewY.toFixed(1) + '%' }
-  }
-  // Unknown aspect: fallback — dots locked to image via pan
-  return { left: imgX.toFixed(1) + '%', top: imgY.toFixed(1) + '%' }
+  const { w, h } = sceneSize()
+  const overX = w - vw, overY = h - vh
+  const viewX = (((imgX / 100) * w - (mx / 100) * overX) / vw) * 100
+  const viewY = (((imgY / 100) * h - (my / 100) * overY) / vh) * 100
+  return { left: viewX.toFixed(1) + '%', top: viewY.toFixed(1) + '%' }
 }
 
 function parallaxedStyle(imgX, imgY) {
@@ -443,23 +433,18 @@ function inverseNavPan(destAspect) {
   const mx = self?.map_x ?? 50
   const my = self?.map_y ?? 50
   const vw = window.innerWidth, vh = window.innerHeight
-  const viewAspect = vw / vh
-  const curAspect = imageAspect.value
-
+  const { w, h } = sceneSize()
   // Current scene's pan in px (positive = scene shifted left/up)
-  let shiftX = 0, shiftY = 0
-  if (curAspect && curAspect > viewAspect) shiftX = (mx / 100) * (vh * curAspect - vw)
-  else if (curAspect && curAspect < viewAspect) shiftY = (my / 100) * (vw / curAspect - vh)
-
-  if (destAspect > viewAspect) {
-    const overflow = vh * destAspect - vw
-    return { x: overflow > 0 ? -(shiftX / overflow) * 100 * INVERSE_PAN_STRENGTH : 0, y: 0 }
+  const shiftX = (mx / 100) * (w - vw)
+  const shiftY = (my / 100) * (h - vh)
+  // Destination window uses the same overscan model — pan both axes
+  const dest = coverOverscan(vw, vh, destAspect)
+  const overX = dest.w - vw
+  const overY = dest.h - vh
+  return {
+    x: overX > 0 ? -(shiftX / overX) * 100 * INVERSE_PAN_STRENGTH : 0,
+    y: overY > 0 ? -(shiftY / overY) * 100 * INVERSE_PAN_STRENGTH : 0,
   }
-  if (destAspect < viewAspect) {
-    const overflow = vw / destAspect - vh
-    return { x: 0, y: overflow > 0 ? -(shiftY / overflow) * 100 * INVERSE_PAN_STRENGTH : 0 }
-  }
-  return { x: 0, y: 0 }
 }
 
 function occupantX(index, occupant) {
@@ -488,27 +473,15 @@ const dragging = ref(null)  // { zoneIndex, startX, startY, origX, origY }
 
 function toImagePos(viewX, viewY) {
   const self = occupants.value.find(o => o.id === props.entityId)
-  const charX = self?.map_x ?? 50
-  const charY = self?.map_y ?? 50
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
   const vw = window.innerWidth, vh = window.innerHeight
-  const viewAspect = vw / vh
-  const imgAspect = imageAspect.value
-
-  if (imgAspect && imgAspect > viewAspect) {
-    const imgW = vh * imgAspect
-    const overflow = imgW - vw
-    const panPx = (charX / 100) * overflow
-    const dotPx = (viewX / 100) * vw + panPx
-    return { x: (dotPx / imgW) * 100, y: viewY }
+  const { w, h } = sceneSize()
+  const overX = w - vw, overY = h - vh
+  return {
+    x: (((viewX / 100) * vw + (mx / 100) * overX) / w) * 100,
+    y: (((viewY / 100) * vh + (my / 100) * overY) / h) * 100,
   }
-  if (imgAspect && imgAspect < viewAspect) {
-    const imgH = vw / imgAspect
-    const overflow = imgH - vh
-    const panPy = (charY / 100) * overflow
-    const dotPy = (viewY / 100) * vh + panPy
-    return { x: viewX, y: (dotPy / imgH) * 100 }
-  }
-  return { x: viewX, y: viewY }
 }
 
 function getPosFromEvent(e) {
@@ -623,38 +596,28 @@ const bgStyle = computed(() => {
   const self = occupants.value.find(o => o.id === props.entityId)
   const mx = self?.map_x ?? 50
   const my = self?.map_y ?? 50
-  const viewAspect = window.innerWidth / window.innerHeight
-  const axis = panAxis(imageAspect.value, viewAspect)
-
-  if (axis === 'x') {
-    // Image is wider: fit height, pan horizontally only
-    return {
-      backgroundImage: `url(${currentImage.value})`,
-      backgroundSize: `auto 100%`,
-      backgroundPosition: `${mx}% 50%`,
-    }
-  } else if (axis === 'y') {
-    // Image is taller: fit width, pan vertically only
-    return {
-      backgroundImage: `url(${currentImage.value})`,
-      backgroundSize: `100% auto`,
-      backgroundPosition: `50% ${my}%`,
-    }
-  }
-  // Unknown aspect: default 180% both axes
+  const { w, h } = sceneSize()
   return {
     backgroundImage: `url(${currentImage.value})`,
-    backgroundSize: '180%',
+    backgroundSize: `${w}px ${h}px`,
     backgroundPosition: `${mx}% ${my}%`,
   }
 })
 
 const videoStyle = computed(() => {
   if (!isVideoBg.value || !currentImage.value) return {}
+  if (!imageAspect.value) return {}  // aspect unknown yet: fall back to CSS cover
   const self = occupants.value.find(o => o.id === props.entityId)
   const mx = self?.map_x ?? 50
   const my = self?.map_y ?? 50
-  return { objectPosition: `${mx}% ${my}%` }
+  const vw = window.innerWidth, vh = window.innerHeight
+  const { w, h } = sceneSize()
+  return {
+    width: `${w}px`,
+    height: `${h}px`,
+    left: `${-((mx / 100) * (w - vw))}px`,
+    top: `${-((my / 100) * (h - vh))}px`,
+  }
 })
 
 // Track image aspect ratio on load — uses video element for .webm/.mp4
@@ -720,15 +683,11 @@ const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop zone; 0.75 ≈ the ch
 // radius plus the self dot's radius, converted through the current image scale.
 // Travel only triggers when the character is dropped on the bubble.
 function travelProximity() {
-  const vw = window.innerWidth, vh = window.innerHeight
+  const vw = window.innerWidth
   const bubbleW = Math.min(260, Math.max(120, vw * 0.14))
   const selfW = Math.min(88, Math.max(60, vw * 0.055))
   const radiusPx = bubbleW / 2 + selfW / 2
-  const viewAspect = vw / vh
-  const imgAspect = imageAspect.value
-  let pxPerPct = vw / 100  // unknown aspect: image-% == viewport-%
-  if (imgAspect && imgAspect > viewAspect) pxPerPct = (vh * imgAspect) / 100
-  else if (imgAspect && imgAspect < viewAspect) pxPerPct = (vw / imgAspect) / 100
+  const pxPerPct = sceneSize().w / 100  // image-% ↔ px on the X axis
   return (radiusPx / pxPerPct) * TRAVEL_PROXIMITY_FACTOR
 }
 

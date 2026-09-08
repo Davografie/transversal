@@ -26,3 +26,20 @@ export function panAxis(imageAspect, viewAspect) {
   if (imageAspect && imageAspect < viewAspect) return 'y'
   return null
 }
+
+/**
+ * Overscan factor applied to scene backgrounds: the image is always rendered
+ * larger than the viewport on BOTH axes so panning works horizontally and
+ * vertically (the hole-through-the-world parallax needs both axes).
+ */
+export const PAN_OVERSCAN = 1.1
+
+/**
+ * px size that covers the viewport at the given image aspect, overscanned by
+ * PAN_OVERSCAN on both axes.
+ */
+export function coverOverscan(vw, vh, aspect) {
+  const coverW = Math.max(vw, vh * aspect)
+  const coverH = Math.max(vh, vw / aspect)
+  return { w: coverW * PAN_OVERSCAN, h: coverH * PAN_OVERSCAN }
+}
