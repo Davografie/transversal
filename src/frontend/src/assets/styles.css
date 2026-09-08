@@ -845,10 +845,8 @@ select option {
 
   /* Dice focus: the bottom stack is content-dependent — the roller takes its
      natural height (grows when a wizard/menu opens, capped at 42dvh then
-     scrolls); the location fills the rest (capped ~45dvh) and the middle
-     breathes — the future home of the resonance divider. */
-  .stage.mobile-stack.focus-dice { justify-content: space-between; }
-  .stage.mobile-stack.focus-dice .loc-band { flex-grow: 1; max-height: 45dvh; }
+     scrolls) and the location fills everything else. */
+  .stage.mobile-stack.focus-dice .loc-band { flex-grow: 1; }
   .stage.mobile-stack.focus-dice .dice-panel-wrapper { flex-grow: 0; flex-basis: auto; }
   .stage.mobile-stack.focus-dice .sheet-band { flex: 0 0 56px; }
   .stage.mobile-stack.focus-dice .roller-band {

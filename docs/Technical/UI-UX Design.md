@@ -99,7 +99,7 @@ above the breakpoint.
   `sheet` (sheet dominates, location ~20%, dice teaser), `dice` (content-
   dependent bottom stack: the roller takes its natural height up to 42dvh and
   scrolls beyond; the sheet is a fixed 56px header teaser; the location fills
-  the rest up to ~45dvh — the middle gap is the future resonance home).
+  the rest).
 - **Tap a teaser to expand it.** App renders a capture layer (`.band-tap`)
   over every non-focused band; the first tap expands the band, removing the
   layer. The focused band gets no capture layer, so its own interactions
