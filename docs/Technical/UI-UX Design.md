@@ -104,9 +104,9 @@ above the breakpoint.
 - **Tap a teaser to expand it.** App renders a capture layer (`.band-tap`)
   over every non-focused band; the first tap expands the band, removing the
   layer. The focused band gets no capture layer, so its own interactions
-  (travel dots, trait taps, dice drags) work normally.
-- **Focus follows the activity.** Phase `adding` → `sheet`; `rolling` /
-  `picking` / `resolved` → `dice`.
+  (travel dots, trait taps, dice drags) work normally. Focus is tap-driven
+  only — no auto-focus on phase changes (an earlier phase watcher caused
+  surprising focus yanks around rolls).
 - **Organic transitions.** Bands animate `flex-grow` together on a springy
   `cubic-bezier(0.3, 1.15, 0.5, 1)` (~450ms), so the whole column redistributes
   as one motion.
