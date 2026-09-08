@@ -75,37 +75,45 @@
         <div v-if="loading" class="bb-empty">Loading…</div>
         <div v-else-if="!displayEntries.length" class="bb-empty">No entries yet.</div>
         <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
-          <div v-for="(m, idx) in displayEntries" :key="m.id" :data-bb-idx="idx" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (displayEntries.length - 1 - idx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': dragIndex === idx, 'bb-drag-over': dragOverIndex === idx, 'bb-continuation': entryContinuations.has(m.id) }" draggable="true" @dragstart="dragStart($event, idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="touchStart($event, idx)">
-          <div v-if="!entryContinuations.has(m.id)" class="bb-entry-header">
-            <div v-if="m.recordType" class="bb-record-badge">{{ recordIcon(m) }} {{ recordLabel(m) }}</div>
-            <div v-else-if="m.senderEntityId !== m.recipientEntityId" class="bb-sender-row">
-              <MediaImage v-if="senderPortrait(m.senderEntityId)" :src="senderPortrait(m.senderEntityId)" class="bb-sender-img" alt="" />
-              <span v-else class="bb-sender-avatar">{{ senderInitial(m.senderEntityId) }}</span>
-              <span class="bb-sender-name">{{ senderName(m.senderEntityId) }}</span>
-              <span v-if="m.relationshipDescription" class="bb-rel">· {{ m.relationshipDescription }} ·</span>
-            </div>
-            <div v-else class="bb-journal-badge">📓 Journal entry</div>
-            <div v-if="m.title && !m.recordType" class="bb-entry-title">{{ m.title }}</div>
-          </div>
-          <div v-if="m.recordType === 'transversal'" class="bb-record-locations">
-            <template v-if="!chainSkipFrom.has(m.id)">
-              <img v-if="locationPortraits[m.data?.from_location]" :src="locationPortraits[m.data?.from_location]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[m.data?.from_location])" />
-              <span v-if="m.data?.from_location && m.data?.to_location" class="bb-location-arrow">→</span>
+          <div v-for="(g, gidx) in renderGroups" :key="g.key" :data-bb-idx="g.type === 'entry' ? g.idx : -1" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (renderGroups.length - 1 - gidx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': g.type === 'entry' && dragIndex === g.idx, 'bb-drag-over': g.type === 'entry' && dragOverIndex === g.idx, 'bb-continuation': g.type === 'entry' && entryContinuations.has(g.entry.id) }" :draggable="g.type === 'entry'" @dragstart="g.type === 'entry' && dragStart($event, g.idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="g.type === 'entry' && touchStart($event, g.idx)">
+            <!-- ── Chain group: consecutive transversal records, inline images ── -->
+            <template v-if="g.type === 'chain'">
+              <div class="bb-entry-header">
+                <div class="bb-record-badge">{{ recordIcon(g.entries[0]) }} {{ recordLabel(g.entries[0]) }}</div>
+              </div>
+              <div class="bb-record-locations">
+                <template v-for="(locId, li) in chainLocationIds(g.entries)" :key="locId">
+                  <img v-if="locationPortraits[locId]" :src="locationPortraits[locId]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[locId])" />
+                  <span v-else class="bb-location-missing">{{ locationNames[locId] || locId }}</span>
+                  <span v-if="li < chainLocationIds(g.entries).length - 1" class="bb-location-arrow">→</span>
+                </template>
+                <span v-if="!chainLocationIds(g.entries).length" class="bb-entry-title bb-record-title">{{ chainTitle(g.entries) }}</span>
+              </div>
             </template>
-            <span v-else class="bb-location-arrow bb-chain-arrow">→</span>
-            <img v-if="locationPortraits[m.data?.to_location]" :src="locationPortraits[m.data?.to_location]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[m.data?.to_location])" />
-            <span v-if="!recordLocations(m).some(id => locationPortraits[id])" class="bb-entry-title bb-record-title">{{ m.title }}</span>
+            <!-- ── Single entry (message or non-transversal record) ── -->
+            <template v-else>
+              <div v-if="!entryContinuations.has(g.entry.id)" class="bb-entry-header">
+                <div v-if="g.entry.recordType" class="bb-record-badge">{{ recordIcon(g.entry) }} {{ recordLabel(g.entry) }}</div>
+                <div v-else-if="g.entry.senderEntityId !== g.entry.recipientEntityId" class="bb-sender-row">
+                  <MediaImage v-if="senderPortrait(g.entry.senderEntityId)" :src="senderPortrait(g.entry.senderEntityId)" class="bb-sender-img" alt="" />
+                  <span v-else class="bb-sender-avatar">{{ senderInitial(g.entry.senderEntityId) }}</span>
+                  <span class="bb-sender-name">{{ senderName(g.entry.senderEntityId) }}</span>
+                  <span v-if="g.entry.relationshipDescription" class="bb-rel">· {{ g.entry.relationshipDescription }} ·</span>
+                </div>
+                <div v-else class="bb-journal-badge">📓 Journal entry</div>
+                <div v-if="g.entry.title && !g.entry.recordType" class="bb-entry-title">{{ g.entry.title }}</div>
+              </div>
+              <div v-if="g.entry.recordType && g.entry.title" class="bb-entry-title bb-record-title">{{ g.entry.title }}</div>
+              <div v-if="g.entry.threads?.length && !g.entry.recordType" class="bb-entry-threads"><span v-for="t in g.entry.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
+              <div class="bb-body" v-html="renderMarkdown(g.entry.body)"></div>
+              <div v-if="g.entry.images?.length" class="bb-images">
+                <img v-for="(img, i) in g.entry.images" :key="i" :src="img" class="bb-image" @click="viewImage(img)" />
+              </div>
+              <div class="bb-entry-actions">
+                <button v-if="g.entry.senderEntityId !== g.entry.recipientEntityId && lastInGroup.has(g.entry.id)" class="bb-reply-btn" @click="replyTo(g.entry)">↩ Reply</button>
+              </div>
+            </template>
           </div>
-          <div v-else-if="m.recordType && m.title" class="bb-entry-title bb-record-title">{{ m.title }}</div>
-          <div v-if="m.threads?.length && !m.recordType" class="bb-entry-threads"><span v-for="t in m.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
-          <div class="bb-body" v-html="renderMarkdown(m.body)"></div>
-          <div v-if="m.images?.length" class="bb-images">
-            <img v-for="(img, i) in m.images" :key="i" :src="img" class="bb-image" @click="viewImage(img)" />
-          </div>
-          <div class="bb-entry-actions">
-            <button v-if="m.senderEntityId !== m.recipientEntityId && lastInGroup.has(m.id)" class="bb-reply-btn" @click="replyTo(m)">↩ Reply</button>
-          </div>
-        </div>
         </TransitionGroup>
       </div>
   </div>
@@ -158,6 +166,7 @@ const relatedEntities = ref([])
 const senderNames = ref({})
 const senderPortraits = ref({})
 const locationPortraits = ref({})
+const locationNames = ref({})
 const replyTarget = ref(null)
 const replyName = ref('')
 
@@ -329,21 +338,51 @@ const lastInGroup = computed(() => {
   return last
 })
 
-// For consecutive transversal records whose to_location chains into the next
-// record's from_location, the next record skips rendering its "from" image.
-const chainSkipFrom = computed(() => {
+// Merge consecutive transversal records into single chain groups so their
+// location images render inline (wrapping) as one connected path.
+const renderGroups = computed(() => {
   const items = displayEntries.value
-  const skip = new Set()
-  for (let i = 1; i < items.length; i++) {
-    const prev = items[i - 1]
-    const curr = items[i]
-    if (prev.recordType !== 'transversal' || curr.recordType !== 'transversal') continue
-    const prevTo = prev.data?.to_location
-    const currFrom = curr.data?.from_location
-    if (prevTo && currFrom && prevTo === currFrom) skip.add(curr.id)
+  const groups = []
+  let i = 0
+  while (i < items.length) {
+    const m = items[i]
+    if (m.recordType === 'transversal') {
+      const chain = [m]
+      let j = i + 1
+      while (j < items.length && items[j].recordType === 'transversal') {
+        chain.push(items[j])
+        j++
+      }
+      groups.push({ key: 'chain-' + chain[0].id, type: 'chain', entries: chain })
+      i = j
+    } else {
+      groups.push({ key: m.id, type: 'entry', entry: m, idx: i })
+      i++
+    }
   }
-  return skip
+  return groups
 })
+
+function chainLocationIds(group) {
+  const ids = []
+  for (const m of group) {
+    const d = m.data || {}
+    if (d.from_location && ids[ids.length - 1] !== d.from_location) ids.push(d.from_location)
+    if (d.to_location && ids[ids.length - 1] !== d.to_location) ids.push(d.to_location)
+  }
+  return ids
+}
+
+function chainTitle(group) {
+  const names = []
+  const fd = group[0]?.data || {}
+  if (fd.from_name && names[names.length - 1] !== fd.from_name) names.push(fd.from_name)
+  for (const m of group) {
+    const d = m.data || {}
+    if (d.to_name && names[names.length - 1] !== d.to_name) names.push(d.to_name)
+  }
+  return names.join(' → ')
+}
 
 const filteredThreadSuggestions = computed(() => {
   if (!composeThreads.value) return allThreads.value
@@ -401,8 +440,11 @@ async function fetchEntityInfo(eid) {
 async function fetchLocationPortrait(locId) {
   try {
     const data = await graphql(`{entity(id:"${locId}"){name sheetPortrait}}`)
-    if (data?.entity?.sheetPortrait) {
-      locationPortraits.value[locId] = data.entity.sheetPortrait
+    if (data?.entity) {
+      locationNames.value[locId] = data.entity.name
+      if (data.entity.sheetPortrait) {
+        locationPortraits.value[locId] = data.entity.sheetPortrait
+      }
     }
   } catch {}
 }
@@ -443,7 +485,9 @@ async function reorder(srcIdx, dropIdx) {
 const { source: dragIndex, over: dragOverIndex, touchStart, dragStart, dragOver, drop, dragEnd } = useDragDrop({
   resolveTarget: (el) => {
     const row = el && el.closest ? el.closest('.bb-entry') : null
-    return row ? parseInt(row.dataset.bbIdx) : null
+    if (!row || row.dataset.bbIdx === undefined) return null
+    const idx = parseInt(row.dataset.bbIdx)
+    return idx >= 0 ? idx : null
   },
   onCommit: ({ from, to }) => reorder(from, to),
 })
@@ -558,7 +602,7 @@ function openCompose(mode, recipient) {
   nextTick(() => bodyEl.value?.focus())
 }
 
-defineExpose({ openCompose })
+defineExpose({ openCompose, refresh: fetch })
 
 function cancelCompose() {
   showCompose.value = false
@@ -654,7 +698,7 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-record-locations{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0}
 .bb-location-img{width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:pointer}
 .bb-location-arrow{font-size:14px;color:var(--text-dim)}
-.bb-chain-arrow{margin-left:2px}
+.bb-location-missing{font-size:11px;color:var(--text-dim);padding:4px 8px;border:1px dashed var(--border);border-radius:6px}
 .bb-entry-threads{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
 .bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}
