@@ -840,15 +840,14 @@ select option {
   .stage.mobile-stack.focus-sheet .sheet-band { flex-basis: 64%; }
   .stage.mobile-stack.focus-sheet .roller-band { flex-basis: 16%; }
 
-  /* Dice focus: content-dependent bottom stack — the roller takes its natural
-     height (grows for wizards/menus, capped at 42dvh then scrolls) and the
-     location fills everything else. */
+  /* Dice focus: content-dependent bottom stack — the roller takes its
+     measured content height (a concrete length via --roller-h, so the band
+     animates smoothly; grows for wizards/menus, clamped to 42dvh then
+     scrolls) and the location fills everything else. */
   .stage.mobile-stack.focus-dice .loc-band { flex: 1 1 0; }
   .stage.mobile-stack.focus-dice .sheet-band { flex-basis: 56px; }
   .stage.mobile-stack.focus-dice .roller-band {
-    flex-basis: auto;
-    min-height: 148px;
-    max-height: 42dvh;
+    flex-basis: clamp(148px, var(--roller-h, 148px), 42dvh);
     overflow: hidden auto;
   }
 }

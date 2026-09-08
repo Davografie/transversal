@@ -331,7 +331,7 @@
         />
         <div v-if="mobileStackActive && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
       </div>
-      <div class="roller-band">
+      <div class="roller-band" :style="{ '--roller-h': rollerContentH + 'px' }">
         <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @click="setMobileFocus('dice')"></div>
       </div>
@@ -1484,6 +1484,29 @@ watch(phase, (p) => {
   if (!mobileStackActive.value) return
   if (p === 'adding') setMobileFocus('sheet')
   else if (p === 'rolling' || p === 'picking' || p === 'resolved') setMobileFocus('dice')
+})
+
+// The mobile dice-focus band sizes to the roller's CONTENT as a concrete
+// length (keyword flex-basis: auto doesn't interpolate, which made entering /
+// leaving dice focus jump). --roller-h feeds the clamp() in styles.css.
+const rollerContentH = ref(148)
+function syncRollerContentH() {
+  const roller = wrapperEl.value?.querySelector('.dice-roller')
+  if (roller) rollerContentH.value = Math.max(0, roller.scrollHeight)
+}
+watch(mobileFocus, () => nextTick(syncRollerContentH))
+watch(isMobile, () => nextTick(syncRollerContentH))
+onMounted(() => {
+  const roller = wrapperEl.value?.querySelector('.dice-roller')
+  if (!roller) return
+  syncRollerContentH()
+  const mo = new MutationObserver(syncRollerContentH)
+  mo.observe(roller, { subtree: true, childList: true, attributes: true, characterData: true })
+  window.addEventListener('resize', syncRollerContentH)
+  onUnmounted(() => {
+    mo.disconnect()
+    window.removeEventListener('resize', syncRollerContentH)
+  })
 })
 
 // ── Panel geometry diagnostics ─────────────────────
