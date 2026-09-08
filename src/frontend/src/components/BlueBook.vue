@@ -88,10 +88,12 @@
             <div v-if="m.title && !m.recordType" class="bb-entry-title">{{ m.title }}</div>
           </div>
           <div v-if="m.recordType === 'transversal'" class="bb-record-locations">
-            <template v-for="(locId, li) in recordLocations(m)" :key="locId">
-              <img v-if="locationPortraits[locId]" :src="locationPortraits[locId]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[locId])" />
-              <span v-if="li < recordLocations(m).length - 1" class="bb-location-arrow">→</span>
+            <template v-if="!chainSkipFrom.has(m.id)">
+              <img v-if="locationPortraits[m.data?.from_location]" :src="locationPortraits[m.data?.from_location]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[m.data?.from_location])" />
+              <span v-if="m.data?.from_location && m.data?.to_location" class="bb-location-arrow">→</span>
             </template>
+            <span v-else class="bb-location-arrow bb-chain-arrow">→</span>
+            <img v-if="locationPortraits[m.data?.to_location]" :src="locationPortraits[m.data?.to_location]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[m.data?.to_location])" />
             <span v-if="!recordLocations(m).some(id => locationPortraits[id])" class="bb-entry-title bb-record-title">{{ m.title }}</span>
           </div>
           <div v-else-if="m.recordType && m.title" class="bb-entry-title bb-record-title">{{ m.title }}</div>
@@ -325,6 +327,22 @@ const lastInGroup = computed(() => {
     if (!next || !entryContinuations.value.has(next.id)) last.add(items[i].id)
   }
   return last
+})
+
+// For consecutive transversal records whose to_location chains into the next
+// record's from_location, the next record skips rendering its "from" image.
+const chainSkipFrom = computed(() => {
+  const items = displayEntries.value
+  const skip = new Set()
+  for (let i = 1; i < items.length; i++) {
+    const prev = items[i - 1]
+    const curr = items[i]
+    if (prev.recordType !== 'transversal' || curr.recordType !== 'transversal') continue
+    const prevTo = prev.data?.to_location
+    const currFrom = curr.data?.from_location
+    if (prevTo && currFrom && prevTo === currFrom) skip.add(curr.id)
+  }
+  return skip
 })
 
 const filteredThreadSuggestions = computed(() => {
@@ -636,6 +654,7 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-record-locations{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0}
 .bb-location-img{width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:pointer}
 .bb-location-arrow{font-size:14px;color:var(--text-dim)}
+.bb-chain-arrow{margin-left:2px}
 .bb-entry-threads{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
 .bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}
