@@ -274,23 +274,69 @@
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
-  <LocationViewer
-    v-if="!fullCanvas"
-    ref="locationRef"
-    :location-id="currentLocationId"
-    :location-name="locationName"
-    :universe="universe"
-    :background-image="displayBgImage"
-    :raw-background-image="locationBgImage"
-    :entity-id="entityId"
-    v-model:edit-zones="editZones"
-    :overlay="locationOverlay"
-    :gm-mode="gmMode"
-    :remote-pools="remotePools"
-    :remote-results="remoteResults"
-    @moved="onMoved"
-    @inspect-entity="onInspectEntity"
-  />
+  <div class="stage" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '']">
+    <div class="loc-band">
+      <LocationViewer
+        v-if="!fullCanvas"
+        ref="locationRef"
+        :location-id="currentLocationId"
+        :location-name="locationName"
+        :universe="universe"
+        :background-image="displayBgImage"
+        :raw-background-image="locationBgImage"
+        :entity-id="entityId"
+        v-model:edit-zones="editZones"
+        :overlay="locationOverlay"
+        :gm-mode="gmMode"
+        :remote-pools="remotePools"
+        :remote-results="remoteResults"
+        @moved="onMoved"
+        @inspect-entity="onInspectEntity"
+      />
+      <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @click="setMobileFocus('location')"></div>
+    </div>
+    <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+      <div v-if="(wrapperOpen || mobileStackActive) && peers.length" class="peers-bar">
+        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: isPeerActive(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
+          <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
+          <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
+          <span class="peer-label">{{ p.name }}</span>
+        </button>
+      </div>
+      <div class="sheet-band">
+        <CharacterSheet
+          v-show="(mobileStackActive || (sheetVisible && (phase === 'adding' || forceSheet))) && (!gmMode || actingEntityId || viewingEntityId)"
+          ref="sheetRef"
+          class="embedded-sheet"
+          :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive }"
+          :entity-id="entityId"
+          :override-entity-id="viewingEntityId"
+          :viewer-entity-id="entityId"
+          :player-owned-entity-ids="ownedEntityIds"
+          :player-id="playerId"
+          :main-entity-id="selfEntityId"
+          :universe="universe"
+          :phase="phase"
+          :visible="sheetVisible || mobileStackActive"
+          embedded
+          :gm-mode="gmMode"
+          @open-settings="openSettings"
+          @add-to-pool="(d) => diceRef?.addFromSheet(d)"
+          @remove-from-pool="(s) => diceRef?.removeBySource(s)"
+          @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
+          @split-die="(d) => diceRef?.splitDie(d)"
+          @sfx-toggled="onSfxToggled"
+          @stamp-sfx="(d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId)"
+          @sheet-view-change="onSheetViewChange"
+        />
+        <div v-if="mobileStackActive && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
+      </div>
+      <div class="roller-band">
+        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
+        <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @click="setMobileFocus('dice')"></div>
+      </div>
+    </div>
+  </div>
   <RelationalCanvas
     v-if="fullCanvas"
     :key="fullCanvas.mode + ':' + fullCanvas.entityId"
@@ -303,41 +349,6 @@
     :initial-universe="fullCanvas.mode === 'location' && fullCanvas.scope === 'tree' ? fullCanvas.entityId : ''"
     @close-full="fullCanvas = null"
   />
-  <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
-      <div v-if="wrapperOpen && peers.length" class="peers-bar">
-        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: isPeerActive(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
-          <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
-          <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
-          <span class="peer-label">{{ p.name }}</span>
-        </button>
-      </div>
-      <CharacterSheet
-        v-show="sheetVisible && (phase === 'adding' || forceSheet) && (!gmMode || actingEntityId || viewingEntityId)"
-        ref="sheetRef"
-        class="embedded-sheet"
-        :class="{ 'sheet-hidden': !sheetVisible }"
-        :entity-id="entityId"
-        :override-entity-id="viewingEntityId"
-        :viewer-entity-id="entityId"
-        :player-owned-entity-ids="ownedEntityIds"
-        :player-id="playerId"
-        :main-entity-id="selfEntityId"
-        :universe="universe"
-        :phase="phase"
-        :visible="sheetVisible"
-        embedded
-        :gm-mode="gmMode"
-        @open-settings="openSettings"
-        @add-to-pool="(d) => diceRef?.addFromSheet(d)"
-        @remove-from-pool="(s) => diceRef?.removeBySource(s)"
-        @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
-        @split-die="(d) => diceRef?.splitDie(d)"
-        @sfx-toggled="onSfxToggled"
-        @stamp-sfx="(d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId)"
-        @sheet-view-change="onSheetViewChange"
-      />
-    <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
-  </div>
   <PanelStack v-if="gmMode" :root-panel="gmRootPanel" />
   <ToastBar :toasts="toasts" @dismiss="dismissToast" />
 </template>
@@ -1402,12 +1413,13 @@ const PANEL_DRAG_VELOCITY = 0.5    // px/ms: flick speed that triggers open/clos
 const panelDragState = { active: false, wasOpen: false, startOffset: 0 }
 
 function syncClosedPosition() {
-  if (!wrapperEl.value) return
+  if (mobileStackActive.value || !wrapperEl.value) return
   const h = wrapperEl.value.offsetHeight
   wrapperEl.value.style.transform = `translateX(-50%) translateY(${h - PANEL_CLOSED_PEEK}px)`
 }
 
 function onPanelDragStart() {
+  if (mobileStackActive.value) return
   const el = wrapperEl.value
   if (!el) return
   panelDragState.wasOpen = wrapperOpen.value
@@ -1445,6 +1457,34 @@ function onPanelDragEnd({ dy, velocity }) {
     closePanel()
   }
 }
+
+// ── Mobile focus stack ───────────────────────────────
+// Player phones get three first-class bands (location / sheet / dice)
+// instead of the desktop bottom sheet. The focused band grows; tapping a
+// teaser band expands it (the .band-tap capture layers above). Breakpoint
+// mirrors the @media block in styles.css.
+const MOBILE_MAX_WIDTH = 820
+const isMobile = ref(false)
+const mobileFocus = ref('location')  // 'location' | 'sheet' | 'dice'
+
+const mobileMq = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`)
+function syncIsMobile() { isMobile.value = mobileMq.matches }
+syncIsMobile()
+mobileMq.addEventListener('change', syncIsMobile)
+onUnmounted(() => mobileMq.removeEventListener('change', syncIsMobile))
+
+const mobileStackActive = computed(() => isMobile.value && !gmMode.value)
+
+function setMobileFocus(f) {
+  if (f === 'location' || f === 'sheet' || f === 'dice') mobileFocus.value = f
+}
+
+// Focus follows the activity: pool-building → sheet, rolling/results → dice.
+watch(phase, (p) => {
+  if (!mobileStackActive.value) return
+  if (p === 'adding') setMobileFocus('sheet')
+  else if (p === 'rolling' || p === 'picking' || p === 'resolved') setMobileFocus('dice')
+})
 
 // ── Panel geometry diagnostics ─────────────────────
 // The wrapper is position:fixed;bottom:0 and slides via an inline translateY
@@ -1523,7 +1563,7 @@ function onViewportResize() {
 }
 
 function onPanelOpen(v) {
-  if (gmMode.value) return
+  if (gmMode.value || mobileStackActive.value) return
   if (v) openPanel()
   else closePanel()
 }

@@ -87,6 +87,32 @@ Shared semantics (both route through the same toggle):
 - Click the **same peer again** → return to self.
 - Click **your own chip/dot** → return to self (`viewingEntityId = null`), keeping the header pills visible.
 
+## Mobile focus stack
+
+Player phones/portraits (≤ 820px, non-GM) replace the desktop bottom-sheet
+with three first-class vertical bands: **location** (top) · **character
+sheet** (middle) · **dice roller** (bottom). The desktop layout is untouched
+above the breakpoint.
+
+- **Focus = height.** The focused band grows; teaser bands keep a tappable
+  strip. Focus states: `location` (location dominates, sheet + dice teasers),
+  `sheet` (sheet dominates, location ~half, dice teaser), `dice` (dice ~40%,
+  location ~40%, sheet teaser showing the header).
+- **Tap a teaser to expand it.** App renders a capture layer (`.band-tap`)
+  over every non-focused band; the first tap expands the band, removing the
+  layer. The focused band gets no capture layer, so its own interactions
+  (travel dots, trait taps, dice drags) work normally.
+- **Focus follows the activity.** Phase `adding` → `sheet`; `rolling` /
+  `picking` / `resolved` → `dice`.
+- **Organic transitions.** Bands animate `flex-grow` together on a springy
+  `cubic-bezier(0.3, 1.15, 0.5, 1)` (~450ms), so the whole column redistributes
+  as one motion.
+
+Tunables: breakpoint `MOBILE_MAX_WIDTH = 820` (App.vue) mirrored by the
+`@media (max-width: 820px)` block in `styles.css`; the focus grow ratios live
+in that same CSS block. The desktop wrapper's slide/peek mechanics (hover,
+`syncClosedPosition`, panel drag) are inert while the stack is active.
+
 ## Razmerit
 
 `− value +` controls around the amount, with touch-friendly round buttons (no background). Tapping the value opens direct numeric input.

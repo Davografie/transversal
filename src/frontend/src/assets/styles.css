@@ -718,7 +718,7 @@ select option {
 }
 
 /* Dice roller — pinned at bottom of wrapper */
-.dice-panel-wrapper > .dice-roller {
+.dice-panel-wrapper > .roller-band {
   flex-shrink: 0;
 }
 .embedded-sheet.sheet-hidden {
@@ -753,4 +753,98 @@ select option {
 }
 .patch-flash {
   animation: patchFlash 0.6s ease-out;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Mobile focus stack (player view)
+   Location (top) · character sheet (middle) · dice roller (bottom) as
+   three first-class bands. The focused band grows; teaser bands keep a
+   tappable strip and a tap (App.vue's .band-tap capture layers) expands
+   them. Breakpoint mirrors MOBILE_MAX_WIDTH in App.vue.
+   ════════════════════════════════════════════════════════════════════ */
+@media (max-width: 820px) {
+  .stage.mobile-stack {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .stage.mobile-stack .loc-band,
+  .stage.mobile-stack .sheet-band,
+  .stage.mobile-stack .roller-band {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    transition: flex-grow 0.45s cubic-bezier(0.3, 1.15, 0.5, 1);
+  }
+
+  /* Keep the viewer a positioned ancestor for its dot layer, but fill the band */
+  .stage.mobile-stack .loc-band .location-viewer {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* The wrapper becomes a static band; neutralize the desktop bottom-sheet
+     slide (class-based transform and inline transform from syncClosedPosition) */
+  .stage.mobile-stack .dice-panel-wrapper {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    transform: none !important;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding-bottom: 0;
+    flex: 1 1 0;
+    min-height: 0;
+    transition: flex-grow 0.45s cubic-bezier(0.3, 1.15, 0.5, 1);
+  }
+
+  .stage.mobile-stack .sheet-band {
+    display: flex;
+    flex-direction: column;
+  }
+  .stage.mobile-stack .sheet-band .embedded-sheet {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .stage.mobile-stack .roller-band {
+    display: flex;
+    flex-direction: column;
+  }
+  .stage.mobile-stack .roller-band > .dice-roller {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden auto;
+  }
+
+  .stage.mobile-stack .peers-bar { flex-shrink: 0; }
+
+  /* Tap-capture layer over non-focused bands (rendered by App.vue).
+     Must sit above band content — DiceRoller's root is z-index 10. */
+  .stage.mobile-stack .band-tap {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+  }
+
+  /* Focus distribution — flex-grow ratios per focus state */
+  .stage.mobile-stack.focus-location .loc-band { flex-grow: 1; }
+  .stage.mobile-stack.focus-location .dice-panel-wrapper { flex-grow: 0.3; }
+  .stage.mobile-stack.focus-location .sheet-band { flex-grow: 0.4; }
+  .stage.mobile-stack.focus-location .roller-band { flex-grow: 1; }
+
+  .stage.mobile-stack.focus-sheet .loc-band { flex-grow: 0.5; }
+  .stage.mobile-stack.focus-sheet .dice-panel-wrapper { flex-grow: 1; }
+  .stage.mobile-stack.focus-sheet .sheet-band { flex-grow: 1; }
+  .stage.mobile-stack.focus-sheet .roller-band { flex-grow: 0.25; }
+
+  .stage.mobile-stack.focus-dice .loc-band { flex-grow: 0.5; }
+  .stage.mobile-stack.focus-dice .dice-panel-wrapper { flex-grow: 1; }
+  .stage.mobile-stack.focus-dice .sheet-band { flex-grow: 0.22; }
+  .stage.mobile-stack.focus-dice .roller-band { flex-grow: 1; }
 }
