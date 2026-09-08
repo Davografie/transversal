@@ -87,7 +87,14 @@
             <div v-else class="bb-journal-badge">📓 Journal entry</div>
             <div v-if="m.title && !m.recordType" class="bb-entry-title">{{ m.title }}</div>
           </div>
-          <div v-if="m.recordType && m.title" class="bb-entry-title bb-record-title">{{ m.title }}</div>
+          <div v-if="m.recordType === 'transversal'" class="bb-record-locations">
+            <template v-for="(locId, li) in recordLocations(m)" :key="locId">
+              <img v-if="locationPortraits[locId]" :src="locationPortraits[locId]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[locId])" />
+              <span v-if="li < recordLocations(m).length - 1" class="bb-location-arrow">→</span>
+            </template>
+            <span v-if="!recordLocations(m).some(id => locationPortraits[id])" class="bb-entry-title bb-record-title">{{ m.title }}</span>
+          </div>
+          <div v-else-if="m.recordType && m.title" class="bb-entry-title bb-record-title">{{ m.title }}</div>
           <div v-if="m.threads?.length && !m.recordType" class="bb-entry-threads"><span v-for="t in m.threads" :key="t" class="bb-thread">#{{ t }}</span></div>
           <div class="bb-body" v-html="renderMarkdown(m.body)"></div>
           <div v-if="m.images?.length" class="bb-images">
@@ -148,6 +155,7 @@ const relatedEntities = ref([])
 
 const senderNames = ref({})
 const senderPortraits = ref({})
+const locationPortraits = ref({})
 const replyTarget = ref(null)
 const replyName = ref('')
 
@@ -209,6 +217,15 @@ function normalizeRecord(rec) {
     threads: [rec.recordType],
     createdAt: rec.createdAt,
   }
+}
+
+function recordLocations(m) {
+  if (m.recordType !== 'transversal') return []
+  const d = m.data || {}
+  const ids = []
+  if (d.from_location) ids.push(d.from_location)
+  if (d.to_location && d.to_location !== d.from_location) ids.push(d.to_location)
+  return ids
 }
 
 function byCreatedAt(a, b) {
@@ -335,6 +352,16 @@ async function fetch() {
         fetchEntityInfo(m.senderEntityId)
       }
     }
+    // Resolve sheet portraits for transversal record locations
+    const seenLocs = new Set(Object.keys(locationPortraits.value))
+    for (const m of entries.value) {
+      for (const locId of recordLocations(m)) {
+        if (!seenLocs.has(locId)) {
+          seenLocs.add(locId)
+          fetchLocationPortrait(locId)
+        }
+      }
+    }
   } finally { loading.value = false }
   fetchThreads()
   nextTick(() => {
@@ -349,6 +376,15 @@ async function fetchEntityInfo(eid) {
     if (data?.entity) {
       senderNames.value[eid] = data.entity.name
       if (data.entity.sheetPortrait) senderPortraits.value[eid] = data.entity.sheetPortrait
+    }
+  } catch {}
+}
+
+async function fetchLocationPortrait(locId) {
+  try {
+    const data = await graphql(`{entity(id:"${locId}"){name sheetPortrait}}`)
+    if (data?.entity?.sheetPortrait) {
+      locationPortraits.value[locId] = data.entity.sheetPortrait
     }
   } catch {}
 }
@@ -597,6 +633,9 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-record-badge{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px}
 .bb-entry-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
 .bb-record-title{font-size:12px;font-weight:500;color:var(--text);margin:2px 0}
+.bb-record-locations{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0}
+.bb-location-img{width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:pointer}
+.bb-location-arrow{font-size:14px;color:var(--text-dim)}
 .bb-entry-threads{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
 .bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}
