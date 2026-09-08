@@ -14,6 +14,9 @@ html, body, #app {
 }
 
 :root {
+  /* Animate keyword sizes (flex-basis: auto ↔ length) for smooth focus
+     transitions on the mobile stack. Safari 18.4+ / Chrome 129+. */
+  interpolate-size: allow-keywords;
   --bg-overlay: rgba(10, 10, 15, 0.75);
   --bg-panel: rgba(15, 15, 25, 0.85);
   --accent: #4088d4;
@@ -776,7 +779,9 @@ select option {
     position: relative;
     flex: 1 1 0;
     min-height: 0;
-    transition: flex-grow 0.45s cubic-bezier(0.3, 1.15, 0.5, 1);
+    transition:
+      flex-grow 0.45s cubic-bezier(0.3, 1.15, 0.5, 1),
+      flex-basis 0.45s cubic-bezier(0.3, 1.15, 0.5, 1);
   }
 
   /* Keep the viewer a positioned ancestor for its dot layer, but fill the band */
@@ -799,7 +804,9 @@ select option {
     padding-bottom: 0;
     flex: 1 1 0;
     min-height: 0;
-    transition: flex-grow 0.45s cubic-bezier(0.3, 1.15, 0.5, 1);
+    transition:
+      flex-grow 0.45s cubic-bezier(0.3, 1.15, 0.5, 1),
+      flex-basis 0.45s cubic-bezier(0.3, 1.15, 0.5, 1);
   }
 
   .stage.mobile-stack .sheet-band {
