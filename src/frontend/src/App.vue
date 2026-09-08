@@ -2185,7 +2185,6 @@ watch(gmMode, (v) => {
 }
 .peer-chip.active .peer-label { color: var(--text); }
 
-.support-list { display: flex; flex-direction: column; gap: 4px; }
 .support-chip.support-unavailable { opacity: 0.45; cursor: not-allowed; }
 .support-chip.support-current { border-color: var(--accent); }
 .support-main { font-size: 10px; }
