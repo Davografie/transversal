@@ -131,6 +131,36 @@ class ComfyUIClient:
 
         raise TimeoutError(f"ComfyUI generation timed out after {timeout_secs}s (prompt_id={prompt_id})")
 
+    async def wait_for_result_images(
+        self, prompt_id: str, timeout_secs: int = 300, poll_interval: float = 2.0
+    ) -> list[dict]:
+        """Poll until completion; return ALL output images of the run.
+
+        Used for frame sequences (e.g. SaveImage writing a batch of frames as
+        numbered PNGs). Each entry has ``filename``/``subfolder``/``type``.
+        """
+        deadline = time.monotonic() + timeout_secs
+        while time.monotonic() < deadline:
+            status = await self.get_status(prompt_id)
+            if not status:
+                await asyncio.sleep(poll_interval)
+                continue
+
+            outputs = status.get("outputs", {})
+            best: list[dict] = []
+            for node_output in outputs.values():
+                media = node_output.get("images", []) or node_output.get("gifs", [])
+                if len(media) > len(best):
+                    best = media
+            if best:
+                return best
+            # Prompt complete but no media reported (unlikely for SaveImage)
+            if outputs:
+                return []
+            await asyncio.sleep(poll_interval)
+
+        raise TimeoutError(f"ComfyUI generation timed out after {timeout_secs}s (prompt_id={prompt_id})")
+
     async def get_image(
         self, filename: str, subfolder: str = "", image_type: str = "output"
     ) -> bytes:
@@ -155,9 +185,21 @@ class ComfyUIClient:
                     raise RuntimeError(f"Failed to interrupt: {resp.status}")
 
     async def upload_image(self, image_data: bytes, filename: str) -> str:
-        """Upload an image to ComfyUI's input directory. Returns the stored filename."""
+        """Upload a file to ComfyUI's input directory. Returns the stored filename.
+
+        Works for images and videos (VHS_LoadVideo reads videos from the same
+        input dir); content-type is inferred from the filename extension.
+        """
+        if filename.endswith((".webm",)):
+            content_type = "video/webm"
+        elif filename.endswith((".mp4",)):
+            content_type = "video/mp4"
+        elif filename.endswith((".webp",)):
+            content_type = "image/webp"
+        else:
+            content_type = "image/png"
         form = aiohttp.FormData()
-        form.add_field("image", image_data, filename=filename, content_type="image/png")
+        form.add_field("image", image_data, filename=filename, content_type=content_type)
         async with aiohttp.ClientSession() as session:
             async with session.post(f"{self.base_url}/upload/image", data=form) as resp:
                 if resp.status != 200:
@@ -316,6 +358,24 @@ def inject_bg_removal_params(
     wf = json.loads(json.dumps(workflow))  # deep copy
 
     wf["1"]["inputs"]["image"] = input_image
+    wf["6"]["inputs"]["filename_prefix"] = filename_prefix
+
+    return wf
+
+
+def inject_bg_removal_video_params(
+    workflow: dict,
+    input_video: str,  # filename already uploaded to ComfyUI's input dir
+    filename_prefix: str = "bgremoved_video",
+) -> dict:
+    """Inject the video filename into the per-frame BiRefNet matting workflow.
+
+    Node 1 (VHS_LoadVideo): video filename
+    Node 6 (SaveImage): filename_prefix (PNG frame sequence)
+    """
+    wf = json.loads(json.dumps(workflow))  # deep copy
+
+    wf["1"]["inputs"]["video"] = input_video
     wf["6"]["inputs"]["filename_prefix"] = filename_prefix
 
     return wf

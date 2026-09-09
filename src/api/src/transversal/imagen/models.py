@@ -18,6 +18,7 @@ class GenerationStatus(str, Enum):
     GENERATING = "generating"     # ComfyUI running
     VISION = "vision"             # Ollama gemma3 analysing (animate only)
     ANIMATING = "animating"       # WanVideo running (animate only)
+    MATTING = "matting"           # per-frame bg removal (transparent animations)
     SAVING = "saving"             # writing variants to disk
     COMPLETE = "complete"
     FAILED = "failed"

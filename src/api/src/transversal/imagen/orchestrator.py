@@ -10,21 +10,25 @@ VRAM contention between ComfyUI and Ollama on a single RTX 4090.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
 import random
+import subprocess
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import Entity, EntityImage, EntityType, ImageType
 from transversal.imagen.comfyui import (
     ComfyUIClient,
     inject_bg_removal_params,
+    inject_bg_removal_video_params,
     inject_flux_params,
     inject_wan_params,
 )
@@ -277,6 +281,7 @@ class ImagenOrchestrator:
         session_id: str = "",
         existing_image_path: str = "",
         motion_hint: str = "",
+        source_transparent: bool = False,
     ) -> EntityImage:
         """Generate a video loop for an entity.
 
@@ -413,6 +418,11 @@ class ImagenOrchestrator:
                 wan_result["filename"], wan_result.get("subfolder", ""), wan_result.get("type", "output")
             )
 
+            if source_transparent:
+                await self._report(entity_id, gen_type, GenerationStatus.MATTING,
+                                   "Removing background from frames...", 70)
+                video_data = await self._matte_video(video_data, short_hash)
+
           finally:
             await self.comfyui.free_memory()
             await self.ollama.unload_model()
@@ -424,8 +434,12 @@ class ImagenOrchestrator:
         video_path = ANIMATED_DIR / output_subpath
         video_path.mkdir(parents=True, exist_ok=True)
 
-        # Determine extension
-        ext = Path(wan_result["filename"]).suffix if "filename" in wan_result else ".webp"
+        # Transparent animations are re-encoded as VP9-alpha webm by the
+        # matting stage; opaque ones keep the WanVideo output container.
+        if source_transparent:
+            ext = ".webm"
+        else:
+            ext = Path(wan_result["filename"]).suffix if "filename" in wan_result else ".webp"
         video_file = video_path / f"{base_name}{ext}"
         video_file.write_bytes(video_data)
 
@@ -435,6 +449,7 @@ class ImagenOrchestrator:
             entity_id=entity_id,
             universe=universe,
             image_type=ImageType.ANIMATED,
+            transparent=source_transparent,
             prompt=prompt,
             negative_prompt=anim_negative,
             loras=loras,
@@ -452,6 +467,69 @@ class ImagenOrchestrator:
                            f"/media/animated/{output_subpath}/{base_name}{ext}", 100)
 
         return entity_image
+
+    # ── Video matting (transparent animations) ─────────
+
+    async def _matte_video(self, video_bytes: bytes, tag: str, framerate: float = 24.0) -> bytes:
+        """Per-frame BiRefNet background removal on an opaque video loop.
+
+        VHS_LoadVideo frames → BiRefNet → invert mask → alpha composite →
+        RGBA PNG sequence → download → 3-frame temporal median on the alpha
+        channel (anti-flicker) → VP9 alpha webm via ffmpeg.
+
+        Must be called while holding ``_gpu_lock`` (it submits GPU work).
+        """
+        input_filename = f"matte_{tag}.webm"
+        await self.comfyui.upload_image(video_bytes, input_filename)
+
+        workflow = _load_workflow("bg_remove_video.json")
+        workflow = inject_bg_removal_video_params(
+            workflow,
+            input_video=input_filename,
+            filename_prefix=f"matte_{tag}",
+        )
+
+        prompt_id = await self.comfyui.submit_workflow(workflow)
+        frames = await self.comfyui.wait_for_result_images(prompt_id, timeout_secs=1200)
+        if not frames:
+            raise FileNotFoundError("Frame matting produced no output frames")
+        await self.comfyui.free_memory()
+
+        frames = sorted(frames, key=lambda f: f["filename"])
+        images: list[Image.Image] = []
+        for f in frames:
+            data = await self.comfyui.get_image(
+                f["filename"], f.get("subfolder", ""), f.get("type", "output")
+            )
+            images.append(Image.open(io.BytesIO(data)).convert("RGBA"))
+
+        with tempfile.TemporaryDirectory(prefix="matte_") as tmp:
+            tmp_path = Path(tmp)
+            n = len(images)
+            for i, img in enumerate(images):
+                # Temporal median (radius 1) over the alpha channel only —
+                # BiRefNet has no temporal consistency, so edges can flicker.
+                a0 = images[max(0, i - 1)].getchannel("A")
+                a1 = img.getchannel("A")
+                a2 = images[min(n - 1, i + 1)].getchannel("A")
+                med = ImageChops.lighter(
+                    ImageChops.darker(a0, a1),
+                    ImageChops.darker(ImageChops.lighter(a0, a1), a2),
+                )
+                rgb = img.convert("RGB").split()
+                Image.merge("RGBA", (*rgb, med)).save(tmp_path / f"frame_{i:05d}.png")
+
+            out_path = tmp_path / "out.webm"
+            cmd = [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-framerate", str(framerate),
+                "-i", str(tmp_path / "frame_%05d.png"),
+                "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p",
+                "-crf", "32", "-b:v", "0",
+                str(out_path),
+            ]
+            subprocess.run(cmd, check=True, timeout=600)
+            return out_path.read_bytes()
 
     # ── Remove background (static image cutout) ────────
 

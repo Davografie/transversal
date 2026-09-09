@@ -1,0 +1,83 @@
+{
+  "1": {
+    "inputs": {
+      "video": "__INPUT_VIDEO__",
+      "force_rate": 0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (frames)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "bg_removal_name": "BiRefNet_HR.safetensors"
+    },
+    "class_type": "LoadBackgroundRemovalModel",
+    "_meta": {
+      "title": "Load Background Removal Model"
+    }
+  },
+  "3": {
+    "inputs": {
+      "bg_removal_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "RemoveBackground",
+    "_meta": {
+      "title": "Remove Background (per frame)"
+    }
+  },
+  "4": {
+    "inputs": {
+      "mask": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "Invert Mask (BiRefNet_HR emits background mask)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "alpha": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "Join Image With Alpha"
+    }
+  },
+  "6": {
+    "inputs": {
+      "images": [
+        "5",
+        0
+      ],
+      "filename_prefix": "bgremoved_video"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Frames (RGBA PNG sequence)"
+    }
+  }
+}
