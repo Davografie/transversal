@@ -721,18 +721,23 @@ watch(playerName, (val) => {
     }
     await searchPlayers(q)
     const exact = nameSuggestions.value.find(s => s.name.toLowerCase() === q.toLowerCase())
-    if (exact) {
-      // Exact match — auto-assume it and show no suggestions (the
+    loginHasExactMatch.value = !!exact
+    if (exact && nameSuggestions.value.length === 1) {
+      // Unique exact match — auto-assume it and show no suggestions (the
       // "New transverser" option hides via loginHasExactMatch).
       nameSuggestions.value = []
-      loginHasExactMatch.value = true
       pendingPlayer.value = { id: exact.id, name: exact.name, found: true }
       nameStatus.value = `You've transversed before, ${exact.name}.`
       nameFound.value = true
     } else {
-      loginHasExactMatch.value = false
-      // Typing away from a previously auto-assumed match clears it.
-      if (pendingPlayer.value?.found) {
+      // Multiple candidates (e.g. "Daan" + "Daan2") or none — keep the
+      // suggestions visible so the player can pick. If the already-selected
+      // player's name still matches the query, hold the selection and hide
+      // the list; otherwise clear a stale auto-assumed match.
+      const assumed = pendingPlayer.value
+      if (assumed?.found && assumed.name.toLowerCase() === q.toLowerCase()) {
+        nameSuggestions.value = []
+      } else if (assumed?.found) {
         pendingPlayer.value = null
         nameStatus.value = ''
         nameFound.value = false
