@@ -711,11 +711,33 @@ watch(playerName, (val) => {
   if (nameDebounce) clearTimeout(nameDebounce)
   const q = val.trim()
   nameDebounce = setTimeout(async () => {
+    if (!q) {
+      nameSuggestions.value = []
+      loginHasExactMatch.value = false
+      pendingPlayer.value = null
+      nameStatus.value = ''
+      nameFound.value = false
+      return
+    }
     await searchPlayers(q)
-    const exact = nameSuggestions.value.some(s => s.name.toLowerCase() === q.toLowerCase())
-    loginHasExactMatch.value = exact
-    // Keep suggestions visible on exact match so the player can click their
-    // own name to continue ("New transverser" is hidden by loginHasExactMatch).
+    const exact = nameSuggestions.value.find(s => s.name.toLowerCase() === q.toLowerCase())
+    if (exact) {
+      // Exact match — auto-assume it and show no suggestions (the
+      // "New transverser" option hides via loginHasExactMatch).
+      nameSuggestions.value = []
+      loginHasExactMatch.value = true
+      pendingPlayer.value = { id: exact.id, name: exact.name, found: true }
+      nameStatus.value = `You've transversed before, ${exact.name}.`
+      nameFound.value = true
+    } else {
+      loginHasExactMatch.value = false
+      // Typing away from a previously auto-assumed match clears it.
+      if (pendingPlayer.value?.found) {
+        pendingPlayer.value = null
+        nameStatus.value = ''
+        nameFound.value = false
+      }
+    }
   }, 150)
 })
 
@@ -747,6 +769,7 @@ async function onNameEnter() {
 function selectSuggestion(s) {
   playerName.value = s.name
   nameSuggestions.value = []
+  loginHasExactMatch.value = true  // an existing player was picked — no "New transverser" flash
   localStorage.setItem('playerName', s.name)
   pendingPlayer.value = { id: s.id, name: s.name, found: true }
   nameStatus.value = `You've transversed before, ${s.name}.`
