@@ -192,8 +192,9 @@
         </div>
       </div>
       <div v-if="selectedAction.supportsDuration" class="ee-field">
-        <label>Duration</label>
+        <label>Duration (undo timer)</label>
         <DurationBuilder v-model="newEffect.duration" allow-rolls />
+        <p class="ee-help">How long before this change reverts. This is the effect's own timer — separate from the SFX-level listening window (how long the SFX stays armed).</p>
       </div>
       <div v-if="selectedAction.supportsPolarity && !isGainAction" class="ee-field ee-polarity">
         <label class="ee-check">

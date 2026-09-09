@@ -94,9 +94,20 @@ Two important subtleties:
 
 The list of operations the SFX performs, in order. Effects are executed **sequentially**: if an effect needs a runtime choice (`choose`), later effects wait for that choice to resolve. Add, reorder, and edit effects here; each effect's form opens in a child panel.
 
-### Duration
+### Duration — the *listening window*
 
-How long the SFX stays *armed/effective* after it triggers. Default is **one roll** (`rolls: 1`). For roll-timed effects this is the number of rolls the SFX stays active; a `beat`/`scene`/`session`/state-change timer drops it on that boundary. `None` = indefinite.
+How long the SFX stays **armed** (listening for the next roll/outcome event) after it triggers.
+
+Two things matter:
+
+- **It only affects *delayed* effects** — those with an `On roll` / `On set` / `On result` / `On contest …` timing. `Immediate` effects fire once at trigger time and ignore this entirely.
+- **It is *not* an undo timer.** It controls *when the SFX stops listening*, not when a change reverts — that is each effect's own **effect duration** (see below).
+
+Timers:
+
+- `rolls: N` — fire on the next **N** matching roll events, then drop. The default is `rolls: 1` (fire once).
+- `beat` / `scene` / `session` / a state-change event — drop the armed SFX when that boundary fires; until then it keeps firing on every matching roll.
+- no timer — armed indefinitely.
 
 ---
 
@@ -144,9 +155,11 @@ Action-specific inputs — a die rating, an amount, a pool, `{variable}` tokens,
 
 For trait-granting effects, toggles whether the granted trait is a **complication** (negative) vs a benefit.
 
-### Effect duration
+### Effect duration — the *undo timer*
 
-Schedules the *inverse* of the effect to revert it later. E.g. `step_up` with a `beat` timer means "step up now, step back down at end of beat". This is separate from the SFX-level duration (which governs how long roll-timed effects stay armed).
+Schedules the **inverse** of this effect to revert it later: `step_up` with a `beat` timer means "step up now, step back down at end of beat."
+
+This is a **different clock** from the SFX-level **listening window**. The SFX duration says *how long the SFX keeps listening*; the effect duration says *how long the resulting change lasts*. A single SFX can be "armed for 1 roll" (listening window) while one of its effects is "1 scene" (undo timer) — the change it makes is reverted at end of scene, but the SFX itself stopped listening after that one roll.
 
 ### Effect conditions
 
@@ -327,6 +340,7 @@ Because effects run sequentially, the resolution effect waits for the dice-addin
 
 - **Effect conditions need a source.** `source_rating` / `target_path` conditions on an *effect* only work when the SFX declares a matching **Source**. Without it, `source` is empty and the condition fails silently.
 - **Trigger ≠ timing.** `manual` SFX are `immediate`; passive rules pair an `on_session_start`/`on_*` trigger with a roll/outcome timing effect.
+- **SFX duration ≠ effect duration.** The SFX duration is a *listening window* (how long the SFX stays armed); the effect duration is an *undo timer* (when a change reverts). They don't influence each other.
 - **Sequential execution.** If an effect needs a `choose`, the effects after it pause until the choice resolves.
 - **Legacy vs structured targeting.** Old effects used `target`/`entity` strings; new effects use the **Targeting path** (`target_spec`/`entity_spec`). When both exist, the spec wins. Prefer the targeting path for anything that needs drillthrough or multi-target fan-out (see [[Targeting Model]]).
 

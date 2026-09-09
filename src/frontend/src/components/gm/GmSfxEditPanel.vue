@@ -43,8 +43,12 @@
       @edit="openEffectEditor"
     />
 
-    <label>Duration (in effect)</label>
-    <DurationBuilder v-model="draft.duration" allow-rolls />
+    <!-- Armed window: only meaningful when the SFX has delayed effects. -->
+    <div v-if="hasDeferredEffects" class="sfx-duration">
+      <label>Armed for (listening window)</label>
+      <DurationBuilder v-model="draft.duration" allow-rolls />
+      <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts.</p>
+    </div>
 
     <!-- Status messages -->
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
@@ -154,6 +158,13 @@ const triggerGroups = computed(() => {
   ]
 })
 const knownTrigger = computed(() => !draft.trigger || triggers.value.some(t => t.value === draft.trigger))
+
+// Deferred (roll/outcome-timed) effect timings — the only effects the SFX-level
+// armed window applies to. Immediate effects fire once at trigger time.
+const DEFERRED_EFFECT_TIMINGS = ['ON_ROLL', 'ON_SET', 'ON_RESULT', 'ON_CONTEST_WIN', 'ON_CONTEST_LOSS', 'ON_SUCCESS', 'ON_FAILURE']
+const hasDeferredEffects = computed(() =>
+  (draft.effects || []).some(e => DEFERRED_EFFECT_TIMINGS.includes(e.timing))
+)
 
 // ── Plain-English summary ────────────────────────────
 
