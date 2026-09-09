@@ -739,7 +739,7 @@ const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop zone; 0.75 ≈ the ch
 function travelProximity() {
   const cw = sceneW.value
   const bubbleW = Math.min(260, Math.max(120, cw * 0.14))
-  const selfW = Math.min(88, Math.max(60, vw * 0.055))
+  const selfW = Math.min(88, Math.max(60, cw * 0.055))
   const radiusPx = bubbleW / 2 + selfW / 2
   const pxPerPct = sceneSize().w / 100  // image-% ↔ px on the X axis
   return (radiusPx / pxPerPct) * TRAVEL_PROXIMITY_FACTOR
