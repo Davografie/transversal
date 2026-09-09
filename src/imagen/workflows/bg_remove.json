@@ -35,12 +35,24 @@
   },
   "4": {
     "inputs": {
+      "mask": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "Invert Mask (BiRefNet_HR emits background mask)"
+    }
+  },
+  "5": {
+    "inputs": {
       "image": [
         "1",
         0
       ],
       "alpha": [
-        "3",
+        "4",
         0
       ]
     },
@@ -49,10 +61,10 @@
       "title": "Join Image With Alpha"
     }
   },
-  "5": {
+  "6": {
     "inputs": {
       "images": [
-        "4",
+        "5",
         0
       ],
       "filename_prefix": "bgremoved"
