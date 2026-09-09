@@ -21,7 +21,7 @@ status: implemented
 An SFX can declare **what kind of thing carries it** (`source_kind`), separate from **when it fires** (`trigger`). When it activates, the carrying thing is exposed as a **typed variable named after its kind** — so a trait-SFX yields `{trait_setting}`, an entity-SFX yields `{entity}` — and the editor/type-checker know exactly which fields that variable has.
 
 > [!note] Status
-> Implemented. Settled in discussion 2026-08-28. Supersedes the dangling `{source_trait}` token (which was reserved in `sfx_validation.py` but never resolved anywhere). `source_kind` is stored on `SFX`, exposed as `sourceKind` in GraphQL, and resolved at fire time via `target_resolver.resolve_source`; the `SOURCE_KINDS` seam in `target_catalog.py` is the single touch point for the future entity/projection redesign.
+> Implemented (2026-08-28), extended 2026-09-09. `source_kind` is stored on `SFX`, exposed as `sourceKind` in GraphQL, and resolved at fire time via `target_resolver.resolve_source`. The `SOURCE_KINDS` seam in `target_catalog.py` now also covers the `table`/`gm` owner buckets as **non-resolving** sources (empty element/variable — no `select source`/`source_rating`), folding ownership into one axis. See [[SFX Activation Model Plan]].
 
 ## Goal
 
@@ -56,8 +56,10 @@ They stay separate. `manual` is **not** split into four triggers — the only th
 | `traitset_setting` | `{traitset_setting}` | a `TraitSetSetting` (instance) | `entity_id`, `traitset_id`, `limit` |
 | `entity` | `{entity}` | an `Entity` | `razmerit`, `type`, `current_location`, `current_universe` |
 | `projection` | `{projection}` | a `Projection` | `entity_id`, `current_location`, `type` |
+| `table` | *(none)* | the `table` owner bucket (everyone) | — |
+| `gm` | *(none)* | the `gm` owner bucket (GM contexts) | — |
 
-`source_kind` unset = buckets (`table`, `gm`) and passive rules (which are deliberately origin-less).
+`table`/`gm` are **bucket sources** — non-resolving (empty element/variable), so they expose no `{variable}`, no `select source`, and no `source_rating`. `source_kind` unset = an SFX not yet attached to any owner (an orphan).
 
 ### Naming
 
@@ -77,11 +79,11 @@ So the server never guesses a type; it only fills an id of a type it already exp
 
 ### UX
 
-1. **SFX editor → "Source" dropdown**: `None` (default), `Trait setting`, `Trait set setting`, `Entity`, `Projection`.
-2. Picking one **changes the variable palette** — the author sees `{trait_setting}` with its fields (`rating`, `rating_type`, `polarity`, …) *before* anything runs.
+1. **SFX editor → "Source" dropdown**: `None` (default), `Trait setting`, `Trait set setting`, `Entity`, `Projection`, `Table`, `GM`.
+2. Picking a typed source **changes the variable palette** — the author sees `{trait_setting}` with its fields (`rating`, `rating_type`, `polarity`, …) *before* anything runs. `Table`/`GM` expose no variable.
 3. The choice is **stored on the SFX** (`SFX.source_kind`).
 4. The **character sheet places it accordingly** — a `trait_setting` SFX renders on trait cards, an `entity` SFX on the entity, etc.
-5. **Enforcement follows** — `sfx_validation.py` rejects attaching an SFX to a surface that doesn't match its `source_kind`; the GM ownership panel only offers compatible surfaces.
+5. **Validation warns** — `sfx_validation.validate_sfx` warns when a declared `source_kind` matches no actual owner (via `owned_surfaces`); `backfill_source_kinds` (startup) idempotently backfills `source_kind` from ownership.
 
 ### Consequence
 

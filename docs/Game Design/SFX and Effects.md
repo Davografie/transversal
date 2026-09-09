@@ -138,13 +138,16 @@ class SFX(BaseModel):
     trigger: str
     source_kind: Optional[str] = None
     placement: Optional[str] = None
+    arming_scope: Optional[str] = None       # "self" | "global" | "listener_spec"
+    listener_spec: Optional[TargetSpec] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
 ```
 
 - `trigger` is the event axis: an auto-fire event (`on_*`) or `manual`.
-- `source_kind` declares the owner surface (`trait_setting`/`traitset_setting`/`entity`/`projection`).
+- `source_kind` declares the owner surface — `trait_setting`/`traitset_setting`/`entity`/`projection`, plus the non-resolving bucket sources `table`/`gm` (empty element/variable; no `select source`/`source_rating`). Ownership is the concrete instances of the declared kind (see [[#Ownership & source resolution]]).
 - `placement` is the activation surface (`auto`/`sheet`/`menu`), derived from `trigger` when unset (`on_*` → auto, `manual` → sheet). `placement="menu"` SFX are the consequence-menu moves, gated by role/outcome conditions (`USER_ROLE` / `CONTEST_OUTCOME` / `TEST_OUTCOME` / `HITCH`) rather than a menu-context trigger.
+- `arming_scope` is the listener scope — who the armed SFX listens to once it fires its roll/outcome-timed effects. `None` = derive from trigger (`on_session_start` → `global`, else `self`); `listener_spec` resolves the listener set from a `TargetSpec`. See [[#Arming scope]].
 - `conditions` gate which instance of that activation applies.
 - Legacy `menu_context` and `limit` strings are folded into `trigger` / a `NARRATIVE` condition by `@model_validator`s (`_fold_legacy_menu_context`, `_fold_legacy_limit`).
 
@@ -395,6 +398,16 @@ Running timers are exposed so the UI can reconnect a timer to its owner:
 
 Non-`IMMEDIATE` effects from the effects engine are persisted as scheduled events (`scheduled_events.schedule_deferred` → `timing_to_timer` maps `END_OF_BEAT` / `END_OF_SCENE` / `END_OF_SESSION` / `AFTER_BEATS` to a timer). There is no in-memory fallback — life-path deferrals and duration reverts share the same central store.
 
+### Arming scope
+
+Roll/outcome-timed effects (`on_roll`/`on_set`/`on_result`/`on_contest_*`/`on_success`/`on_failure`) arm in `roll_deferral.py` (`_armed[entity_id]` + `_global_armed`). An armed entry's **listener scope** says *who it listens to*:
+
+- `self` — the triggering entity (default; the `_armed[entity_id]` register).
+- `global` — every entity's rolls (the `_global_armed` register).
+- `listener_spec` — a `TargetSpec` resolving the listener entity set (open decision D3: falls back to `self` until a consumer needs it).
+
+`SFX.arming_scope` declares this; `None` derives it from trigger (`on_session_start` → `global`, else `self`). `fire_armed` honors the `rolls` budget for **both** registers — a `rolls:N` entry fires N times then drops; `rolls=None` stays armed until a boundary expires it. This makes session-scoped passives (e.g. `sfx-one-trick`) *declare* their lifetime instead of relying on the global path silently ignoring the roll budget.
+
 ## SFX ownership and seeding
 
 `src/api/src/transversal/services/sfx_owner.py`.
@@ -402,6 +415,12 @@ Non-`IMMEDIATE` effects from the effects engine are persisted as scheduled event
 ### Owner buckets
 
 `ensure_sfx_owners` (line 22) seeds two owner buckets: `table` (everyone) and `gm` (GM-context only, not entity-derived). The `gm` bucket is intentionally excluded from entity-derived resolution. There is no `players` bucket — "player-character-only" is expressed as an `ENTITY_TYPE` condition (target `character`) on the SFX, not a grant surface. The legacy `players` bucket is migrated into `table` and dropped on seed.
+
+### Ownership & source resolution
+
+Ownership is the **concrete instances** of an SFX's declared `source_kind`: an `entity`-kind SFX lives on `Entity.sfx_ids`, a `trait_setting`-kind SFX on a `TraitSetting.sfx_ids`, a `table`/`gm`-kind SFX in the matching owner bucket. `source_kind` is the single axis that names *what shape of thing carries the SFX*; `resolve_sfx_source` reads it to resolve the activation source for `select source` / `source_rating`.
+
+`owned_surfaces(repo, sfx_id)` reverse-indexes which owner surfaces actively carry an SFX (used by validation). `backfill_source_kinds(repo)` idempotently backfills `source_kind` from ownership — folding the `table`/`gm` buckets into `source_kind=table`/`gm` and trait-instance grants into `trait_setting` — and marks `on_session_start` rules `arming_scope=global`.
 
 ### Available SFX resolution (`get_available_sfx_ids`, line 181)
 
@@ -434,7 +453,7 @@ Then context-free conditions are evaluated (`static_conditions`) so listing matc
 
 The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`dicepool`/`auto`); the activation surface is a separate `placement` field (`auto`/`sheet`/`menu`)), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
 
-The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, and missing required fields. Warnings are advisory, not a save gate.
+The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, missing required fields, a declared `source_kind` that matches no actual owner (a silent `select source` / `source_rating` no-op), and a `listener_spec` arming scope without a listener path. Warnings are advisory, not a save gate.
 
 ### Target pickers (frontend)
 
