@@ -179,7 +179,7 @@ import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { isVideoUrl, coverOverscan } from '@/composables/media.js'
 import { perfMark } from '@/composables/perfLog.js'
-import { startFrameProfile, stopFrameProfile, notePointerEvent } from '@/composables/frameProfile.js'
+import { startFrameProfile, stopFrameProfile, notePointerEvent, noteFrameWork } from '@/composables/frameProfile.js'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -797,9 +797,10 @@ function onOccDragMove(e) {
 
 // Apply the latest buffered pointer position once per frame (not per event),
 // so a high-polling mouse can't saturate the main thread with re-renders.
-function applyOccDragFrame() {
+async function applyOccDragFrame() {
   occDragRafId = null
   if (!occDragging.value || !occDragPending) return
+  const t0 = performance.now()
   const { clientX, clientY } = occDragPending
   occDragPending = null
   const start = occDragging.value
@@ -839,6 +840,9 @@ function applyOccDragFrame() {
     expandLevels.value = levels
     armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.key || travelNearest.name}` : ''
   }
+
+  await nextTick() // wait for Vue to flush the reactive re-render
+  noteFrameWork(performance.now() - t0)
 }
 
 async function onOccDragEnd() {

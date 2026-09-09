@@ -2,12 +2,11 @@
 //
 // Samples requestAnimationFrame deltas during an occupant drag and logs one
 // summary line at drag end. It answers "is the background keeping up with the
-// pointer?" — the mean/min/1%low fps, frame-time percentiles, dropped-frame
-// count, and the pointer→paint lag (mousemove timestamp → next frame).
+// pointer?" — mean/min/1%low fps, frame-time percentiles, dropped-frame count,
+// pointer→paint lag, and the JS+render work per frame.
 //
-// Toggle off with FRAME_PROFILE=false, or delete this file and its three call
-// sites in LocationViewer.vue (import, startFrameProfile, stopFrameProfile +
-// notePointerEvent) once we've measured.
+// Toggle off with FRAME_PROFILE=false, or delete this file and its call sites
+// in LocationViewer.vue once we've measured.
 
 export const FRAME_PROFILE = true
 
@@ -16,6 +15,7 @@ let _rafId = null
 let _lastTs = 0
 let _deltas = []
 let _lags = []
+let _work = []
 let _lastPointerTs = 0
 let _label = ''
 
@@ -33,6 +33,7 @@ export function startFrameProfile(label = 'drag') {
   _label = label
   _deltas = []
   _lags = []
+  _work = []
   _lastPointerTs = 0
   _lastTs = performance.now()
   _rafId = requestAnimationFrame(_tick)
@@ -42,6 +43,12 @@ export function startFrameProfile(label = 'drag') {
 // visual lags behind the pointer (event time → next painted frame).
 export function notePointerEvent() {
   if (FRAME_PROFILE && _running) _lastPointerTs = performance.now()
+}
+
+// Call once per applied frame with the JS+DOM work duration (handler + Vue
+// render flush). Splits "our code is slow" from "paint/composite is slow".
+export function noteFrameWork(ms) {
+  if (FRAME_PROFILE && _running) _work.push(ms)
 }
 
 export function stopFrameProfile() {
@@ -68,9 +75,15 @@ export function stopFrameProfile() {
     lag = ` paintlag=${ls[Math.min(ls.length - 1, Math.floor(0.95 * ls.length))].toFixed(1)}/${ls[ls.length - 1].toFixed(1)}ms`
   }
 
+  let work = ''
+  if (_work.length) {
+    const w = _work.sort((a, b) => a - b)
+    work = ` work=${(w.reduce((a, b) => a + b, 0) / w.length).toFixed(1)}/${w[w.length - 1].toFixed(1)}ms`
+  }
+
   console.log(
     `[frameprofile] ${_label} fps=${fps(mean)}/${fps(max)}/${fps(slow)} ` +
     `frame=${mean.toFixed(1)}/${p95.toFixed(1)}/${max.toFixed(1)}ms ` +
-    `dropped=${dropped}/${n}${lag}`
+    `dropped=${dropped}/${n}${work}${lag}`
   )
 }
