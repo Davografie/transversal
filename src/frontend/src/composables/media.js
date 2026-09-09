@@ -38,8 +38,8 @@ export const PAN_OVERSCAN = 1.1
  * px size that covers the viewport at the given image aspect, overscanned by
  * PAN_OVERSCAN on both axes.
  */
-export function coverOverscan(vw, vh, aspect, overscan = PAN_OVERSCAN) {
+export function coverOverscan(vw, vh, aspect) {
   const coverW = Math.max(vw, vh * aspect)
   const coverH = Math.max(vh, vw / aspect)
-  return { w: coverW * overscan, h: coverH * overscan }
+  return { w: coverW * PAN_OVERSCAN, h: coverH * PAN_OVERSCAN }
 }

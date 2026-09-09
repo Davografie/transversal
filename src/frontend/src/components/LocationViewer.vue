@@ -107,9 +107,6 @@
       :dest-aspect="destNavCache[nd.target.id]?.destAspect"
       :pan-x="navDotPerspective[nd.key]?.panX"
       :pan-y="navDotPerspective[nd.key]?.panY"
-      :overscan="navDotPerspective[nd.key]?.overscan"
-      :dir-x="navDotPerspective[nd.key]?.dirX"
-      :dir-y="navDotPerspective[nd.key]?.dirY"
       @click="onDotClick('nav', nd)"
       @overlay-click="onExpandedClick('nav', nd)"
       @drag-start="(e) => onNavDragStart(e, nd)"
@@ -468,42 +465,24 @@ function parallaxedStyle(imgX, imgY) {
 function parallaxX(imgX) { return parseFloat(toViewportPos(imgX, 0).left) || imgX }
 function parallaxY(imgY) { return parseFloat(toViewportPos(0, imgY).top) || imgY }
 
-// Inverse parallax + perspective zoom for navdot "hole" images. The
-// destination scene pans opposite to the current scene's shift and zooms
-// with the character's distance to the hole: closer → zoomed out, farther →
-// zoomed in. Also exposes the character→navdot direction for rim shading.
-const INVERSE_PAN_STRENGTH = 2      // tune the hole-parallax feel (>1 = stronger)
-const DEST_ZOOM_MIN = 1.0           // closest: most zoomed out (smallest scale)
-const DEST_ZOOM_MAX = 1.4           // farthest: most zoomed in (biggest scale)
-const DEST_ZOOM_RANGE = 40          // image-% distance to reach max zoom
-function destZoomOverscan(dist) {
-  const t = Math.min(1, Math.max(0, dist / DEST_ZOOM_RANGE))
-  return DEST_ZOOM_MIN + (DEST_ZOOM_MAX - DEST_ZOOM_MIN) * t
-}
+// Inverse parallax for navdot "hole" images: the destination scene pans
+// opposite to the current scene's shift, like looking through a hole in the
+// world at a distant scene. Returns the offset in destination-image % units.
+const INVERSE_PAN_STRENGTH = 2  // tune the hole-parallax feel (>1 = stronger)
 
 const navDotPerspective = computed(() => {
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
   const { cw, ch } = sceneDims()
   const s = panShift()
   const out = {}
   for (const nd of navDots.value) {
     const destAspect = destNavCache.value[nd.target.id]?.destAspect
     if (!destAspect) continue
-    const dx = nd.x - mx
-    const dy = nd.y - my
-    const dist = Math.hypot(dx, dy)
-    const overscan = destZoomOverscan(dist)
-    const dest = coverOverscan(cw, ch, destAspect, overscan)
+    const dest = coverOverscan(cw, ch, destAspect)
     const overX = dest.w - cw
     const overY = dest.h - ch
     out[nd.key] = {
       panX: overX > 0 ? -(s.x / overX) * 100 * INVERSE_PAN_STRENGTH : 0,
       panY: overY > 0 ? -(s.y / overY) * 100 * INVERSE_PAN_STRENGTH : 0,
-      overscan,
-      dirX: dist ? dx / dist : 0,
-      dirY: dist ? dy / dist : 0,
     }
   }
   return out

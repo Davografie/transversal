@@ -38,7 +38,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { isVideoUrl, coverOverscan, PAN_OVERSCAN } from '@/composables/media.js'
+import { isVideoUrl, coverOverscan } from '@/composables/media.js'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -57,9 +57,6 @@ const props = defineProps({
   destAspect: { type: Number, default: null },
   panX: { type: Number, default: 0 },
   panY: { type: Number, default: 0 },
-  overscan: { type: Number, default: 0 },
-  dirX: { type: Number, default: 0 },
-  dirY: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['click', 'overlay-click', 'drag-start'])
@@ -86,18 +83,13 @@ const overlayVisible = computed(() => props.expanded || props.type === 'self' ||
 const overlayBgStyle = computed(() => {
   if (props.arrivalX == null || props.arrivalY == null || props.destAspect == null) return null
   const vw = window.innerWidth, vh = window.innerHeight
-  const overscan = props.overscan || PAN_OVERSCAN
-  const { w, h } = coverOverscan(vw, vh, props.destAspect, overscan)
-  // Recessed-hole vignette: a uniform inner shadow plus a directional one
-  // on the side facing the character.
+  const { w, h } = coverOverscan(vw, vh, props.destAspect)
+  // Recessed-hole vignette (uniform inner shadow).
   const uniform = `inset 0 0 clamp(18px, 2.5vw, 48px) rgba(0,0,0,0.65), inset 0 0 6px rgba(0,0,0,0.45)`
-  const ox = (props.dirX || 0) * 14
-  const oy = (props.dirY || 0) * 14
-  const dir = (ox || oy) ? `, inset ${ox}px ${oy}px 28px -10px rgba(0,0,0,0.5)` : ''
   return {
     backgroundSize: `${w}px ${h}px`,
     backgroundPosition: `${props.arrivalX + props.panX}% ${props.arrivalY + props.panY}%`,
-    boxShadow: uniform + dir,
+    boxShadow: uniform,
   }
 })
 
