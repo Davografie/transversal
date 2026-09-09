@@ -177,6 +177,14 @@ import { isVideoUrl, coverOverscan } from '@/composables/media.js'
 import { perfMark } from '@/composables/perfLog.js'
 import { startFrameProfile, stopFrameProfile, notePointerEvent, noteFrameWork } from '@/composables/frameProfile.js'
 
+// ── Tunable constants ──────────────────────────────────────────────────────
+// Edit these to tune the navigation feel. PAN_OVERSCAN (background overscan,
+// default 1.1) lives in composables/media.js next to coverOverscan.
+const INVERSE_PAN_STRENGTH = 2   // hole "see-through" parallax strength (>1 = stronger)
+const TEASER_ZOOM = 2            // mobile teaser-camera zoom factor
+const EXPAND_PROXIMITY = 24      // image-% — distance at which bubbles pop out
+const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop-to-travel zone
+
 const props = defineProps({
   locationId: { type: String, required: true },
   locationName: { type: String, default: '' },
@@ -408,7 +416,6 @@ function parallaxOffset() {
 // `camera` (mobile teaser states) zooms in on the self character instead of
 // showing the full map: the character is centered, dots keep their
 // image-relative positions, and anything outside the crop clips.
-const TEASER_ZOOM = 2  // camera zoom factor over the container-cover fit
 const sceneW = ref(typeof window !== 'undefined' ? window.innerWidth : 1000)
 const sceneH = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
 let sceneRO = null
@@ -467,8 +474,6 @@ function toViewportPos(imgX, imgY) {
 // Inverse parallax for navdot "hole" images: the destination scene pans
 // opposite to the current scene's shift, like looking through a hole in the
 // world at a distant scene. Returns the offset in destination-image % units.
-const INVERSE_PAN_STRENGTH = 2  // tune the hole-parallax feel (>1 = stronger)
-
 const navDotPerspective = computed(() => {
   const { cw, ch } = sceneDims()
   const s = panShift()
@@ -499,8 +504,13 @@ function holeStyleFor(imgX, imgY, arriveX, arriveY, destAspect, panX, panY) {
   const s = panShift()
   const overX = w - cw
   const overY = h - ch
-  const x = (-((arriveX + (panX || 0)) / 100) * overX) + s.x - ((imgX / 100) * wCur)
-  const y = (-((arriveY + (panY || 0)) / 100) * overY) + s.y - ((imgY / 100) * hCur)
+  // Clamp the alignment point to [0, 100]: beyond the image there is nothing
+  // to show, so the parallax shift is limited by the remaining image space in
+  // each direction (asymmetric when the arrival point sits near an edge).
+  const alignX = Math.min(100, Math.max(0, arriveX + (panX || 0)))
+  const alignY = Math.min(100, Math.max(0, arriveY + (panY || 0)))
+  const x = (-(alignX / 100) * overX) + s.x - ((imgX / 100) * wCur)
+  const y = (-(alignY / 100) * overY) + s.y - ((imgY / 100) * hCur)
   return {
     width: `${w}px`,
     height: `${h}px`,
@@ -734,9 +744,6 @@ let occDragRafId = null
 let occDragPending = null  // { clientX, clientY } — latest unapplied pointer position
 const expandLevels = ref({})  // reactive: 'zone-<name>'/'nav-<key>' → 0..1 proximity level
 const armedDot = ref('')   // reactive: travel is armed on this dot (drop → travel)
-
-const EXPAND_PROXIMITY = 24  // image-% — the bubble pops out within this distance
-const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop zone; 0.75 ≈ the character's center must sit inside the bubble
 
 // Drop-to-travel radius in image-% units: the expanded bubble's on-screen
 // radius plus the self dot's radius, converted through the current image scale.
