@@ -21,8 +21,8 @@
       v-else-if="image && overlayVisible"
       :src="image"
       class="dot-overlay"
-      :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self', 'dot-hole': holeStyle }"
-      :style="holeStyle || { width: '100%', height: '100%', objectFit: 'cover' }"
+      :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self', 'dot-hole': holeStyle, 'img-transparent': imageTransparent }"
+      :style="holeStyle || { width: '100%', height: '100%', objectFit: imageTransparent ? 'contain' : 'cover' }"
       alt=""
       draggable="false"
       @click.stop="onOverlayClick"
@@ -47,6 +47,7 @@ const props = defineProps({
   type: { type: String, required: true },
   variant: { type: String, default: '' },
   image: { type: String, default: null },
+  imageTransparent: { type: Boolean, default: false },  // cutout image — no bubble/crop
   label: { type: String, default: '' },
   initials: { type: String, default: '' },
   x: { type: Number, required: true },
@@ -78,7 +79,7 @@ const dotClasses = computed(() => [
   props.type === 'self' ? 'occ-dot self' : '',
   props.variant ? `occ-${props.variant}` : '',
   props.variant && props.type === 'nav' ? `nav-${props.variant}` : '',
-  { expanded: effectiveLevel.value > 0, draggable: props.draggable, lerping: props.lerping },
+  { expanded: effectiveLevel.value > 0, draggable: props.draggable, lerping: props.lerping, 'dot-transparent': props.imageTransparent },
 ].filter(Boolean))
 
 const dotStyle = computed(() => {
@@ -198,5 +199,17 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   opacity: 0.55;
   outline: 2px dashed rgba(255,255,255,0.6);
   outline-offset: 3px;
+}
+
+/* Transparent (background-removed) navdot images: floating cutout — no filled
+   bubble, no inset vignette, no circular crop. The image's own alpha is the
+   shape. (No drop-shadow filter — filters force repaints on the drag path.) */
+.map-dot.dot-transparent {
+  background: transparent;
+  box-shadow: none;
+  border: none !important;  /* beats .occ-dot.self's white ring */
+}
+.dot-overlay.img-transparent {
+  border-radius: 0;
 }
 </style>

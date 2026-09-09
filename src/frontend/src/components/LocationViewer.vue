@@ -14,6 +14,7 @@
         type="zone"
         :x="z.x" :y="z.y"
         :image="childImage(z)"
+        :image-transparent="!!childForZone(z)?.navdot_image_transparent"
         :label="z.name"
         :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || (expandLevels['zone-' + z.name] || 0) > 0"
         :draggable="editZones"
@@ -36,6 +37,7 @@
         :class="{ 'dot-draft': o.unpublished }"
         :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
         :image="o.image"
+        :image-transparent="!!o.image_transparent"
         :initials="occupantInitials(o.name)"
         :expanded="true"
         :draggable="canDragOccupant(o)"
@@ -64,6 +66,7 @@
         :variant="nd.type"
         :x="nd.x" :y="nd.y"
         :image="nd.image"
+        :image-transparent="!!nd.transparent"
         :label="nd.name"
         :expanded="editZones || (activeElement?.type === 'nav' && activeElement?.key === nd.key) || (expandLevels['nav-' + nd.key] || 0) > 0"
         :draggable="editZones"
@@ -135,6 +138,7 @@
       class="fade-in"
       :x="selfX" :y="selfY"
       :image="selfImage"
+      :image-transparent="!!selfOccupant.image_transparent"
       :initials="selfInitials"
       :expanded="true"
       :draggable="true"
@@ -508,11 +512,14 @@ function holeStyleFor(imgX, imgY, arriveX, arriveY, destAspect, panX, panY) {
 }
 
 function zoneHoleStyle(z) {
+  const child = childForZone(z)
+  if (child?.navdot_image_transparent) return null  // cutout floats — no window/pan
   const c = zoneCache(z)
   return c ? holeStyleFor(z.x, z.y, c.arriveX, c.arriveY, c.destAspect, 0, 0) : null
 }
 
 function navHoleStyle(nd) {
+  if (nd.transparent) return null  // cutout floats — no window/pan
   const c = destNavCache.value[nd.target.id]
   const p = navDotPerspective.value[nd.key]
   if (!c) return null
@@ -635,7 +642,8 @@ const navDots = computed(() => {
     const pos = navDotPositions.value.parent
     dots.push({
       key: 'parent', type: 'parent', name: nav.value.parent.name,
-      image: nav.value.parent.background_image || null,
+      image: nav.value.parent.navdot_image || nav.value.parent.background_image || null,
+      transparent: !!nav.value.parent.navdot_image_transparent,
       x: pos.x, y: pos.y,
       target: { id: nav.value.parent._key, universe: nav.value.parent.current_universe },
     })
@@ -645,7 +653,8 @@ const navDots = computed(() => {
     const pos = navDotPositions.value[key] || { x: 90, y: 50 + i * 10 }
     dots.push({
       key, type: 'portal', name: `${t.name} · ${t.transversal_type || 'inapposite'}`,
-      image: t.background_image || null,
+      image: t.navdot_image || t.background_image || null,
+      transparent: !!t.navdot_image_transparent,
       x: pos.x, y: pos.y,
       transversal_type: t.transversal_type || 'inapposite',
       target: { id: t._key, universe: t.current_universe },
