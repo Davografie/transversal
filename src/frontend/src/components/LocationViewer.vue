@@ -55,6 +55,7 @@
       :arrival-x="zoneCache(z)?.arriveX"
       :arrival-y="zoneCache(z)?.arriveY"
       :dest-aspect="zoneCache(z)?.destAspect"
+      :class="{ armed: armedDot === 'zone-' + z.name }"
       @click="onDotClick('zone', z)"
       @overlay-click="onExpandedClick('zone', z)"
       @drag-start="(e) => onZoneDragStart(e, z, i)"
@@ -107,6 +108,7 @@
       :dest-aspect="destNavCache[nd.target.id]?.destAspect"
       :pan-x="navDotPerspective[nd.key]?.panX"
       :pan-y="navDotPerspective[nd.key]?.panY"
+      :class="{ armed: armedDot === 'nav-' + nd.key }"
       @click="onDotClick('nav', nd)"
       @overlay-click="onExpandedClick('nav', nd)"
       @drag-start="(e) => onNavDragStart(e, nd)"
@@ -709,6 +711,7 @@ let draggingEmitted = false    // emitted 'dragging' so the HUD hides during a r
 let occSuppressClick = false   // suppress the synthesized click after a real drag
 let dragTarget = null  // non-reactive: nearest travel target during self-drag
 const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
+const armedDot = ref('')   // reactive: travel is armed on this dot (drop → travel)
 
 const EXPAND_PROXIMITY = 24  // image-% — the bubble pops out within this distance
 const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop zone; 0.75 ≈ the character's center must sit inside the bubble
@@ -816,6 +819,7 @@ function onOccDragMove(e) {
     }
     dragTarget = travelNearest
     hoveredDot.value = expandNearest ? `${expandNearest.type}-${expandNearest.name || expandNearest.key}` : ''
+    armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.name || travelNearest.key}` : ''
   }
 }
 
@@ -825,6 +829,7 @@ async function onOccDragEnd() {
   document.removeEventListener('touchmove', onOccDragMove)
   document.removeEventListener('touchend', onOccDragEnd)
   hoveredDot.value = ''
+  armedDot.value = ''
   if (draggingEmitted) { draggingEmitted = false; emit('dragging', false) }
   if (!occDragging.value) return
   const occ = occupants.value[occDragging.value.index]

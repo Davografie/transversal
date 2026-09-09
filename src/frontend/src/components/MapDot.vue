@@ -177,6 +177,15 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   50% { border-color: rgba(64,136,212,0.3); }
 }
 
+/* Travel-armed: the bubble breathes so a drop here will travel */
+.map-dot.armed {
+  animation: armed-breathe 1.1s ease-in-out infinite;
+}
+@keyframes armed-breathe {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(120,220,255,0.9), 0 0 18px rgba(120,220,255,0.55), 0 0 40px rgba(120,220,255,0.3); }
+  50%      { box-shadow: 0 0 0 9px rgba(120,220,255,0.55), 0 0 34px rgba(120,220,255,0.9), 0 0 70px rgba(120,220,255,0.5); }
+}
+
 /* GM-only draft (unpublished) entity marker */
 .map-dot.dot-draft {
   opacity: 0.55;
