@@ -988,6 +988,20 @@ select option {
   .stage.mobile-stack.focus-location .sheet-band { flex-basis: 7%; }
   .stage.mobile-stack.focus-location .roller-band { flex-basis: 16%; }
 
+  /* Empty pool: hide the roller band entirely while the location is focused —
+     the roller is reached through the sheet instead. Driven by the roller's
+     own `kind-empty-pool` class (pool empty, nothing rolling, no results), so
+     the band glides back the moment any die enters the pool or a roll is
+     active. The location absorbs the freed 16% in the same motion — no gap. */
+  .stage.mobile-stack.focus-location:has(.roller-band .kind-empty-pool) .loc-band { flex-basis: 93%; }
+  .stage.mobile-stack.focus-location:has(.roller-band .kind-empty-pool) .roller-band {
+    flex-basis: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: flex-basis 0.45s ease-in-out, opacity 0.25s ease;
+  }
+
   .stage.mobile-stack.focus-sheet .loc-band { flex-basis: 20%; }
   .stage.mobile-stack.focus-sheet .sheet-band { flex-basis: 64%; }
   .stage.mobile-stack.focus-sheet .roller-band { flex-basis: 16%; }

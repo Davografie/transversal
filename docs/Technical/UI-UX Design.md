@@ -107,6 +107,13 @@ above the breakpoint.
   (travel dots, trait taps, dice drags) work normally. Focus is tap-driven
   only — no auto-focus on phase changes (an earlier phase watcher caused
   surprising focus yanks around rolls).
+- **Empty pool hides the roller.** While the location is focused and the
+  roller shows nothing (`kind-empty-pool` — no dice, no roll in flight, no
+  results), the roller band collapses to 0 (93% / 7% / 0) and the location
+  absorbs the space in the same 0.45s motion. The band glides back the
+  moment a die enters the pool or a roll starts. The roller stays reachable
+  through the sheet teaser. (CSS-only via `:has(.roller-band
+  .kind-empty-pool)` — no JS state.)
 - **Organic transitions.** Every band height is a single animated length
   (`flex-basis`), so the whole column redistributes as one motion on a plain
   `ease-in-out` (~450ms). No `flex-grow`, no springy overshoot — an earlier
