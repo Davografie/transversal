@@ -332,8 +332,8 @@ def bind_source(source_kind: str, source_id: str | None, context: dict) -> dict:
     if not source_id:
         return context
     sk = _SOURCE_KINDS_BY_VALUE.get(source_kind)
-    if sk is None:
-        return context
+    if sk is None or not sk.variable:
+        return context  # unknown kind or non-resolving bucket source (table/gm)
     return {**context, sk.variable: source_id}
 
 

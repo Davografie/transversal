@@ -643,6 +643,52 @@ def owned_surfaces(repo, sfx_id: str) -> set[str]:
     return surfaces
 
 
+def backfill_source_kinds(repo) -> int:
+    """Idempotently backfill ``source_kind`` to match each SFX's owner surface.
+
+    Folds the table/GM owner buckets into the unified source axis (``table`` /
+    ``gm``) and fills trait/entity-owned SFX that never declared a source. Runs
+    on every startup; a no-op once backfilled. Skips orphaned SFX (owned by
+    nothing) and SFX that already declare a source. Returns the number of SFX
+    mutated.
+    """
+    changed = 0
+
+    # Buckets → source kind.
+    for bucket_id, kind in (("table", "table"), ("gm", "gm")):
+        bucket = repo.get_sfx_owner(bucket_id)
+        for sfx_id in (bucket.sfx_ids or []) if bucket else []:
+            sfx = repo.get_sfx(sfx_id)
+            if sfx is not None and not sfx.source_kind:
+                sfx.source_kind = kind
+                repo.update_sfx(sfx)
+                changed += 1
+
+    # Typed surfaces → source kind. ``trait`` (registry default) and
+    # ``trait_instance`` both mean the SFX is carried by a trait setting.
+    for sfx in repo.get_all_sfxs():
+        if sfx.source_kind:
+            continue
+        surfaces = owned_surfaces(repo, sfx.id)
+        if "trait_instance" in surfaces or "trait" in surfaces:
+            sfx.source_kind = "trait_setting"
+            repo.update_sfx(sfx)
+            changed += 1
+        elif "entity" in surfaces:
+            sfx.source_kind = "entity"
+            repo.update_sfx(sfx)
+            changed += 1
+
+    # Explicit passive scope for session-start rules.
+    for sfx in repo.get_all_sfxs():
+        if sfx.trigger == "on_session_start" and not sfx.arming_scope:
+            sfx.arming_scope = "global"
+            repo.update_sfx(sfx)
+            changed += 1
+
+    return changed
+
+
 def _entity_name(repo, entity_id: str) -> str:
     entity = repo.get_entity(entity_id)
     return entity.name if entity else ""

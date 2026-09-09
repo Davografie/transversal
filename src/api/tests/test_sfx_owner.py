@@ -700,3 +700,43 @@ def test_owned_surfaces_collects_across_surfaces(monkeypatch):
     assert sfo.owned_surfaces(None, "sfx-x") == {"table"}
     assert sfo.owned_surfaces(None, "sfx-y") == {"entity"}
     assert sfo.owned_surfaces(None, "sfx-z") == set()
+
+
+def test_backfill_source_kinds_folds_buckets_and_traits(monkeypatch):
+    from types import SimpleNamespace
+    import transversal.services.sfx_owner as sfo
+
+    repo = SimpleNamespace()
+    repo._sfxs = {
+        "sfx-table": SimpleNamespace(id="sfx-table", trigger="manual", source_kind=None, arming_scope=None),
+        "sfx-gm": SimpleNamespace(id="sfx-gm", trigger="manual", source_kind=None, arming_scope=None),
+        "sfx-trait": SimpleNamespace(id="sfx-trait", trigger="manual", source_kind=None, arming_scope=None),
+        "sfx-orphan": SimpleNamespace(id="sfx-orphan", trigger="manual", source_kind=None, arming_scope=None),
+        "sfx-session": SimpleNamespace(id="sfx-session", trigger="on_session_start", source_kind=None, arming_scope=None),
+        "sfx-done": SimpleNamespace(id="sfx-done", trigger="manual", source_kind="entity", arming_scope=None),
+    }
+    repo._owners = {
+        "table": SimpleNamespace(sfx_ids=["sfx-table", "sfx-session"]),
+        "gm": SimpleNamespace(sfx_ids=["sfx-gm"]),
+    }
+    repo.get_sfx_owner = lambda oid: repo._owners.get(oid)
+    repo.get_sfx = lambda sid: repo._sfxs.get(sid)
+    repo.update_sfx = lambda sfx: repo._sfxs.__setitem__(sfx.id, sfx)
+    repo.get_all_sfxs = lambda: list(repo._sfxs.values())
+
+    def fake_owned_surfaces(_repo, sid):
+        return {"trait_instance"} if sid == "sfx-trait" else ({"entity"} if sid == "sfx-done" else set())
+    monkeypatch.setattr(sfo, "owned_surfaces", fake_owned_surfaces)
+
+    changed = sfo.backfill_source_kinds(repo)
+    assert changed == 5  # table, gm, session(source), session(scope), trait
+    assert repo._sfxs["sfx-table"].source_kind == "table"
+    assert repo._sfxs["sfx-gm"].source_kind == "gm"
+    assert repo._sfxs["sfx-trait"].source_kind == "trait_setting"
+    assert repo._sfxs["sfx-session"].source_kind == "table"
+    assert repo._sfxs["sfx-session"].arming_scope == "global"
+    assert repo._sfxs["sfx-orphan"].source_kind is None  # orphan skipped
+    assert repo._sfxs["sfx-done"].source_kind == "entity"  # already set, untouched
+
+    # Idempotent: second pass changes nothing.
+    assert sfo.backfill_source_kinds(repo) == 0

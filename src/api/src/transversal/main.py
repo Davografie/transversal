@@ -174,6 +174,7 @@ async def on_startup():
         remove_legacy_contest_complication_sfx,
         remove_legacy_buy_hitch_sfx,
         backfill_trait_default_sfx,
+        backfill_source_kinds,
     )
 
     _register_core_handlers(_get_em(), _get_raz())
@@ -196,6 +197,7 @@ async def on_startup():
     remove_legacy_contest_complication_sfx(repo)
     remove_legacy_buy_hitch_sfx(repo)
     backfill_trait_default_sfx(repo)
+    backfill_source_kinds(repo)
     repo.collapse_legacy_personal_relationship_types()
     db_sfxs = repo.get_all_sfxs()
     for s in db_sfxs:
