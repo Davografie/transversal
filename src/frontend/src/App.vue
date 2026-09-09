@@ -33,7 +33,6 @@
           >New transverser: <strong>{{ playerName.trim() }}</strong></button>
         </div>
       </div>
-      <button @click="onNameEnter" :disabled="checking || !playerName.trim()">{{ checking ? 'Searching…' : 'Search' }}</button>
       <p v-if="nameStatus" class="name-status" :class="{ 'name-found': nameFound, 'name-new': !nameFound }">{{ nameStatus }}</p>
       <button v-if="nameStatus" class="continue-btn" @click="confirmPlayer">{{ nameFound ? 'Continue' : 'Begin' }}</button>
     </template>
@@ -140,7 +139,12 @@
               v-for="e in playerEntities" :key="e.id"
               class="char-chip"
               :class="{ active: entityId === e.id }"
-              @click="selectCharacter(e)"
+              @click="onCharChipClick(e)"
+              @contextmenu.prevent="revealRelease(e.id)"
+              @touchstart="onReleaseTouchStart($event, e.id)"
+              @touchmove="onReleaseTouchCancel"
+              @touchend="onReleaseTouchEnd"
+              @touchcancel="onReleaseTouchCancel"
             >
               <MediaImage v-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-portrait" alt="" />
               <span v-else class="char-portrait char-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
@@ -149,7 +153,7 @@
                 <span v-if="locationLabel(e)" class="char-chip-location">{{ locationLabel(e) }}</span>
               </span>
               <span class="main-toggle" :class="{ on: e.main }" :title="e.main ? 'Unset as main' : 'Set as main'" @click.stop="toggleMain(e)">★</span>
-              <span class="char-release-btn" title="Relinquish agency" @click.stop="releaseCharacter(e)">✕</span>
+              <span class="char-release-btn" :class="{ revealed: revealedReleaseId === e.id }" title="Relinquish agency" @click.stop="releaseCharacter(e)">✕</span>
             </button>
           </div>
           <div class="char-create-row">
@@ -710,7 +714,8 @@ watch(playerName, (val) => {
     await searchPlayers(q)
     const exact = nameSuggestions.value.some(s => s.name.toLowerCase() === q.toLowerCase())
     loginHasExactMatch.value = exact
-    if (exact) nameSuggestions.value = []
+    // Keep suggestions visible on exact match so the player can click their
+    // own name to continue ("New transverser" is hidden by loginHasExactMatch).
   }, 150)
 })
 
@@ -841,8 +846,11 @@ function confirmPlayer() {
   localStorage.setItem('playerName', playerName.value.trim())
   nameStatus.value = ''
   pendingPlayer.value = null
-  showLoginOverlay.value = false
-  loadPlayerRole()
+  // Stay on the overlay until this player has a usable character: a fresh
+  // player has no entities yet and must create or claim one before playing.
+  Promise.all([loadPlayerRole(), fetchPlayerEntities(), fetchSupportCharacters(), fetchActiveMains()]).then(() => {
+    if (!needsCharacterPick.value) showLoginOverlay.value = false
+  })
 }
 ensurePlayer()
 
@@ -1917,6 +1925,40 @@ async function fetchPlayerMains(pid) {
   } catch { return new Set() }
 }
 
+// Reveal the release (✕) button on long-press (touch) or right-click.
+const revealedReleaseId = ref(null)
+let releaseTouchTimer = null
+let suppressCardClickUntil = 0
+
+function revealRelease(id) {
+  revealedReleaseId.value = id
+}
+
+function onReleaseTouchStart(event, id) {
+  clearTimeout(releaseTouchTimer)
+  releaseTouchTimer = setTimeout(() => {
+    revealedReleaseId.value = id
+    // Long-press engaged — swallow the synthetic tap-click that follows.
+    suppressCardClickUntil = Date.now() + 700
+  }, 500)
+}
+
+function onReleaseTouchCancel() {
+  clearTimeout(releaseTouchTimer)
+  releaseTouchTimer = null
+}
+
+function onReleaseTouchEnd() {
+  clearTimeout(releaseTouchTimer)
+  releaseTouchTimer = null
+}
+
+function onCharChipClick(e) {
+  if (Date.now() < suppressCardClickUntil) return
+  revealedReleaseId.value = null
+  selectCharacter(e)
+}
+
 async function toggleMain(e) {
   if (!playerId.value || !e?.id) return
   const next = !e.main
@@ -2296,7 +2338,21 @@ watch(gmMode, (v) => {
 .other-main-row { flex: 0 1 200px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--overlay-6); border: 1px solid var(--overlay-8); }
 .support-create-inline { width: auto; flex: 0 0 auto; font-size: 11px; padding: 5px 10px; }
 .main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: var(--text-invert); background: var(--accent); font-weight: 600; margin-left: 4px; }
-.main-toggle { flex-shrink: 0; cursor: pointer; font-size: 14px; color: var(--text-dim); opacity: 0.45; transition: color 0.15s, opacity 0.15s; line-height: 1; }
+.main-toggle {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-dim);
+  opacity: 0.45;
+  transition: color 0.15s, opacity 0.15s, background 0.15s;
+}
 .main-toggle.on { color: var(--accent); opacity: 1; }
-.main-toggle:hover { opacity: 1; }
+.main-toggle:hover { opacity: 1; background: var(--overlay-8); }
 </style>

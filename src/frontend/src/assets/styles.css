@@ -350,7 +350,11 @@ select option {
 
 .name-entry {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh; /* keyboard-aware: shrinks with the visual viewport on mobile */
   z-index: 100;
   display: flex;
   overflow-y: auto;
@@ -545,6 +549,7 @@ select option {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  align-self: center;
 }
 .new-char-toggle:hover {
   border-color: var(--accent);
@@ -620,17 +625,21 @@ select option {
 .char-list button.active .char-chip-location { color: var(--text-on-accent-dim); }
 .char-release-btn {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  display: none; /* hidden — reveal via long-press (touch) or right-click */
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   color: var(--text-dim);
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
+}
+.char-release-btn.revealed {
+  display: flex;
+  background: var(--overlay-8);
 }
 .char-release-btn:hover {
   color: var(--danger);
@@ -641,6 +650,9 @@ select option {
   display: flex;
   align-items: center;
   gap: 6px;
+  max-width: 320px;
+  width: 100%;
+  align-self: center;
 }
 .settings-empty {
   gap: 4px;
@@ -674,7 +686,9 @@ select option {
   color: var(--text-invert);
 }
 .find-char-wrapper {
-  width: min(520px, calc(100vw - 32px));
+  width: 100%;
+  max-width: 320px;
+  align-self: center;
 }
 .find-char-input {
   width: 100% !important;
