@@ -25,6 +25,13 @@ by `App.vue`. It is the immersive projection of the player's current location:
 a background scene with interactive dots for zones, navigation destinations,
 other occupants, and the player's own character.
 
+> [!note] Current state & pending rework
+> Parallax is now **2D overscan** (scene rendered ~10% larger than the viewport
+> on both axes, panning both axes), and navdot destination images pan inversely
+> through the "hole". A planned rework — [[Location Parallax Rework]] — will move
+> panning from `background-position`/`left/top`/`background-attachment: fixed`
+> onto GPU transforms to remove drag lag.
+
 ## Responsibilities
 
 - Render the current location's background (static image, or animated `.webm`/`.mp4`).
@@ -65,14 +72,16 @@ props = {
   gmMode,
   remotePools,          // entity_id → { dice, player_id, phase }
   remoteResults,        // entity_id → { total, effect_die, rolls, ... }
+  camera,               // mobile teaser: zoom in on the self character
 }
 
-emits = ['moved', 'update:editZones', 'inspectEntity']
+emits = ['moved', 'update:editZones', 'inspectEntity', 'dragging']
 ```
 
 `moved` fires after any relocation and is handled by `App.vue` (`onMoved`) to
 update `currentLocationId`/`universe` and re-fetch peers. `inspectEntity` opens
-the character sheet for a tapped occupant.
+the character sheet for a tapped occupant. `dragging` (boolean) fires when an
+occupant drag actually starts/ends, so `App.vue` fades the HUD out during desktop drags.
 
 ## State model
 
@@ -98,8 +107,9 @@ Drag state is kept separately:
 ```js
 dragging          // zone drag: { index, startX, startY, origX, origY }
 occDragging       // occupant drag: { index, startX, startY, origX, origY }
-dragTarget        // non-reactive — nearest zone/nav/occupant during self-drag
-hoveredDot        // reactive — CSS class for the proximity highlight
+dragTarget        // non-reactive — nearest travel target during self-drag
+expandLevels      // reactive — 'zone-<name>'/'nav-<key>' → 0..1 proximity level (multi-bubble)
+armedDot          // reactive — which dot is within travelProximity (drop → travel)
 occDragMoved      // pointer passed the 6px tap threshold
 occSuppressClick  // suppress the synthesized click after a real drag
 ```
@@ -139,21 +149,18 @@ On mount (and whenever `locationId` changes while not mid-travel),
 
 ### Background & parallax
 
-The background is a `position: fixed` div whose `backgroundSize`/`backgroundPosition`
-are computed from the player's position (`self.map_x`, `self.map_y`) and the
-image's aspect ratio (`panAxis`):
-
-- Image **wider** than viewport → `backgroundSize: auto 100%`, pan horizontally on `map_x`.
-- Image **taller** than viewport → `backgroundSize: 100% auto`, pan vertically on `map_y`.
-- Aspect unknown → fallback `backgroundSize: 180%`, pan both axes.
-
-Animated backgrounds render as a `<video>` (`object-fit: cover`, `objectPosition`
-driven the same way) instead of a CSS background.
+The scene renders relative to the viewer container (`sceneW`/`sceneH` via
+ResizeObserver → `sceneDims()`), sized to `sceneSize()` — the cover fit,
+overscanned by `PAN_OVERSCAN` (1.1) on **both** axes so it pans horizontally and
+vertically at once. `panShift()` positions it so the self character sits at
+`anchorPct()` (50/50 in the mobile `camera`/teaser mode, otherwise its
+`map_x`/`map_y`). The background is a CSS `background` (image) or `<video>`.
 
 Dots are positioned in **image-space** (0–100) and converted to viewport
 percentages with `toViewportPos()`; the inverse `toImagePos()` is used during
 drags so a dot's stored `map_x`/`map_y` stays correct even as the background
-pans under it.
+pans under it. Navdot destination images pan inversely through the "hole"
+(`navDotPerspective`).
 
 ### Dot types
 
@@ -195,12 +202,16 @@ live and persists the whole `nav_positions` object on end via the
 
 **3. Occupant / self drag** — the core interaction:
 
-- `canDragOccupant`: GM can drag anyone; the player can drag self and any GMC/asset.
+- `canDragOccupant`: GM (arrange mode) can drag anyone; the player can drag
+  self; the GM (outside arrange mode) can drag GMCs/assets directly.
 - A 6px threshold separates a tap (inspect) from a real drag (`occDragMoved`).
-- While dragging self, `onOccDragMove` tracks the nearest target within 12%
-  distance, in priority order: zones → other occupants → nav dots. The winner is
-  stored in `dragTarget` (non-reactive) and reflected in `hoveredDot` for the
-  snap highlight.
+- While dragging self, `onOccDragMove` computes two proximity sets:
+  - **`expandLevels`** — every zone/nav bubble within `EXPAND_PROXIMITY` (24 image-%)
+    opens, sized continuously by distance (`1 - (d/EXPAND_PROXIMITY)²`, quick ramp).
+  - **`armedDot`** — the single nearest bubble within `travelProximity()` (the
+    expanded bubble's rendered radius) arms travel; it breathes so a drop there
+    reads as "will travel".
+  - `dragTarget` (non-reactive) holds the armed target for the drop handler.
 
 On drop:
 
