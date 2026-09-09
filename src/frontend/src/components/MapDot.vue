@@ -156,6 +156,7 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 .occ-dot.expanded {
   width: clamp(60px, 5.5vw, 88px) !important; height: clamp(60px, 5.5vw, 88px) !important;
   margin-left: calc(clamp(60px, 5.5vw, 88px) / -2); margin-top: calc(clamp(60px, 5.5vw, 88px) / -2);
+  --dot-r: calc(clamp(60px, 5.5vw, 88px) / 2);  /* ring radius, for the cutout's bottom crop */
 }
 .dot-overlay {
   position: absolute; inset: 0; border-radius: 50%;
@@ -210,23 +211,24 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 }
 
 /* Transparent (background-removed) occupant portraits: floating cutout
-   emerging from a "portal ring" — transparent circle outline, no fill, and
-   the image bottom-anchored so a tall portrait's head sticks out above the
-   ring. The image's own alpha is the shape. */
+   emerging from a "portal ring". The circle's bottom crops the image (same
+   radius + bottom border as the ring), the top stays open so a tall
+   portrait's head sticks out above the rim. */
 .map-dot.dot-transparent {
   background: transparent;
   box-shadow: none;
   border: 2px solid rgba(255,255,255,0.4) !important;
-  overflow: visible !important;  /* the cutout may stick out above the ring */
+  overflow: visible !important;  /* the cutout's top may stick out above the ring */
 }
 .dot-overlay.img-transparent {
-  border-radius: 0;
+  border-radius: 0 0 var(--dot-r, 44px) var(--dot-r, 44px);
+  border-bottom: 2px solid rgba(255,255,255,0.4);
   object-fit: contain;
   top: auto;
   right: auto;
   left: 50%;
   bottom: 0;
-  width: 96%;
+  width: 100%;
   height: auto;
   transform: translateX(-50%);
 }
