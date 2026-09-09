@@ -936,10 +936,13 @@ select option {
     transition: flex-basis 0.45s ease-in-out;
   }
 
-  /* Keep the viewer a positioned ancestor for its dot layer, but fill the band */
+  /* Keep the viewer a positioned ancestor for its dot layer, but fill the
+     band and clip: in teaser (camera) mode dots outside the character crop
+     fall outside the band and must not bleed into the bands below. */
   .stage.mobile-stack .loc-band .location-viewer {
     position: absolute;
     inset: 0;
+    overflow: hidden;
   }
 
   /* The desktop bottom-sheet wrapper dissolves on mobile: its children (peers

@@ -288,6 +288,7 @@
         v-model:edit-zones="editZones"
         :overlay="locationOverlay"
         :gm-mode="gmMode"
+        :camera="mobileStackActive && mobileFocus !== 'location'"
         :remote-pools="remotePools"
         :remote-results="remoteResults"
         @moved="onMoved"

@@ -123,6 +123,14 @@ above the breakpoint.
   `ease-in-out` (~450ms). No `flex-grow`, no springy overshoot — an earlier
   bouncy `cubic-bezier` made panel heights look like they overshot their
   target and was removed.
+- **Teaser camera.** The whole scene renders relative to the viewer's
+  container, so dots and background always share one coordinate space — the
+  band can shrink without squeezing dots or drifting. When the location is
+  not focused (`camera` prop, mobile), the view zooms in (`TEASER_ZOOM = 2`)
+  and centers the self character; dots keep image-relative positions and
+  anything outside the crop is clipped by the band. Full-map view returns
+  when the location is focused. Desktop is unaffected (its container is the
+  window).
 
 Tunables: breakpoint `MOBILE_MAX_WIDTH = 820` (App.vue) mirrored by the
 `@media (max-width: 820px)` block in `styles.css`; the focus grow ratios live

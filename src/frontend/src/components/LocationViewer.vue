@@ -181,6 +181,7 @@ const props = defineProps({
   entityId: { type: String, required: true },
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
+  camera: { type: Boolean, default: false },  // teaser mode: zoom in on the self character
   gmMode: { type: Boolean, default: false },
   remotePools: { type: Object, default: () => ({}) },  // entity_id → { dice: [...], player_id, phase }
   remoteResults: { type: Object, default: () => ({}) },  // entity_id → { total, effect_die, rolls, ... }
@@ -395,24 +396,65 @@ function parallaxOffset() {
   return { x: mx, y: my }
 }
 
+// ── Scene canvas tracking ────────────────────────────────────────────
+// The whole scene renders relative to the viewer's CONTAINER (the location
+// band on mobile, the window on desktop) so dots and background share one
+// coherent coordinate space when the band shrinks — no squeezing, no drift.
+// `camera` (mobile teaser states) zooms in on the self character instead of
+// showing the full map: the character is centered, dots keep their
+// image-relative positions, and anything outside the crop clips.
+const TEASER_ZOOM = 2  // camera zoom factor over the container-cover fit
+const sceneW = ref(typeof window !== 'undefined' ? window.innerWidth : 1000)
+const sceneH = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
+let sceneRO = null
+onMounted(() => {
+  sceneRO = new ResizeObserver((entries) => {
+    const r = entries[0]?.contentRect
+    if (r && r.width > 0) { sceneW.value = r.width; sceneH.value = r.height }
+  })
+  if (viewerEl.value) sceneRO.observe(viewerEl.value)
+})
+onUnmounted(() => sceneRO?.disconnect())
+
+const sceneDims = () => ({ cw: sceneW.value, ch: sceneH.value })
+
+// Where the self character lands in the container, in container %.
+function anchorPct() {
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
+  return props.camera ? { x: 50, y: 50 } : { x: mx, y: my }
+}
+
+// Scene pan shift in px (positive = scene shifted left/up) so the self
+// character sits at the anchor point.
+function panShift() {
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
+  const { cw, ch } = sceneDims()
+  const { w, h } = sceneSize()
+  const a = anchorPct()
+  return { x: (mx / 100) * w - (a.x / 100) * cw, y: (my / 100) * h - (a.y / 100) * ch }
+}
+
 // Rendered px size of the current scene: covers the viewport, overscanned by
 // PAN_OVERSCAN on both axes so panning works horizontally AND vertically.
+// Camera mode covers a TEASER_ZOOM×-larger virtual viewport — a zoomed crop.
 function sceneSize() {
-  const vw = window.innerWidth, vh = window.innerHeight
-  if (imageAspect.value) return coverOverscan(vw, vh, imageAspect.value)
-  return { w: vw * 1.8, h: vh * 1.8 }  // unknown aspect: 180% fallback
+  const { cw, ch } = sceneDims()
+  const zoom = props.camera ? TEASER_ZOOM : 1
+  if (imageAspect.value) return coverOverscan(cw * zoom, ch * zoom, imageAspect.value)
+  return { w: cw * zoom * 1.8, h: ch * zoom * 1.8 }  // unknown aspect: 180% fallback
 }
 
 // Convert image-relative position to viewport position based on pan offset
 function toViewportPos(imgX, imgY) {
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
-  const vw = window.innerWidth, vh = window.innerHeight
+  const { cw, ch } = sceneDims()
   const { w, h } = sceneSize()
-  const overX = w - vw, overY = h - vh
-  const viewX = (((imgX / 100) * w - (mx / 100) * overX) / vw) * 100
-  const viewY = (((imgY / 100) * h - (my / 100) * overY) / vh) * 100
+  const s = panShift()
+  const viewX = (((imgX / 100) * w - s.x) / cw) * 100
+  const viewY = (((imgY / 100) * h - s.y) / ch) * 100
   return { left: viewX.toFixed(1) + '%', top: viewY.toFixed(1) + '%' }
 }
 
@@ -429,21 +471,15 @@ function parallaxY(imgY) { return parseFloat(toViewportPos(0, imgY).top) || imgY
 const INVERSE_PAN_STRENGTH = 2  // tune the hole-parallax feel (>1 = stronger)
 function inverseNavPan(destAspect) {
   if (!destAspect) return { x: 0, y: 0 }
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
-  const vw = window.innerWidth, vh = window.innerHeight
-  const { w, h } = sceneSize()
-  // Current scene's pan in px (positive = scene shifted left/up)
-  const shiftX = (mx / 100) * (w - vw)
-  const shiftY = (my / 100) * (h - vh)
+  const { cw, ch } = sceneDims()
+  const s = panShift()
   // Destination window uses the same overscan model — pan both axes
-  const dest = coverOverscan(vw, vh, destAspect)
-  const overX = dest.w - vw
-  const overY = dest.h - vh
+  const dest = coverOverscan(cw, ch, destAspect)
+  const overX = dest.w - cw
+  const overY = dest.h - ch
   return {
-    x: overX > 0 ? -(shiftX / overX) * 100 * INVERSE_PAN_STRENGTH : 0,
-    y: overY > 0 ? -(shiftY / overY) * 100 * INVERSE_PAN_STRENGTH : 0,
+    x: overX > 0 ? -(s.x / overX) * 100 * INVERSE_PAN_STRENGTH : 0,
+    y: overY > 0 ? -(s.y / overY) * 100 * INVERSE_PAN_STRENGTH : 0,
   }
 }
 
@@ -472,15 +508,12 @@ function occupantY(index, occupant) {
 const dragging = ref(null)  // { zoneIndex, startX, startY, origX, origY }
 
 function toImagePos(viewX, viewY) {
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
-  const vw = window.innerWidth, vh = window.innerHeight
+  const { cw, ch } = sceneDims()
   const { w, h } = sceneSize()
-  const overX = w - vw, overY = h - vh
+  const s = panShift()
   return {
-    x: (((viewX / 100) * vw + (mx / 100) * overX) / w) * 100,
-    y: (((viewY / 100) * vh + (my / 100) * overY) / h) * 100,
+    x: (((viewX / 100) * cw + s.x) / w) * 100,
+    y: (((viewY / 100) * ch + s.y) / h) * 100,
   }
 }
 
@@ -593,30 +626,25 @@ const bgStyle = computed(() => {
   if (!currentImage.value) return ''
   if (isVideoBg.value) return ''  // video element handles the visual
 
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
   const { w, h } = sceneSize()
+  const s = panShift()
   return {
     backgroundImage: `url(${currentImage.value})`,
     backgroundSize: `${w}px ${h}px`,
-    backgroundPosition: `${mx}% ${my}%`,
+    backgroundPosition: `${-s.x}px ${-s.y}px`,
   }
 })
 
 const videoStyle = computed(() => {
   if (!isVideoBg.value || !currentImage.value) return {}
   if (!imageAspect.value) return {}  // aspect unknown yet: fall back to CSS cover
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
-  const vw = window.innerWidth, vh = window.innerHeight
   const { w, h } = sceneSize()
+  const s = panShift()
   return {
     width: `${w}px`,
     height: `${h}px`,
-    left: `${-((mx / 100) * (w - vw))}px`,
-    top: `${-((my / 100) * (h - vh))}px`,
+    left: `${-s.x}px`,
+    top: `${-s.y}px`,
   }
 })
 
@@ -683,8 +711,8 @@ const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop zone; 0.75 ≈ the ch
 // radius plus the self dot's radius, converted through the current image scale.
 // Travel only triggers when the character is dropped on the bubble.
 function travelProximity() {
-  const vw = window.innerWidth
-  const bubbleW = Math.min(260, Math.max(120, vw * 0.14))
+  const cw = sceneW.value
+  const bubbleW = Math.min(260, Math.max(120, cw * 0.14))
   const selfW = Math.min(88, Math.max(60, vw * 0.055))
   const radiusPx = bubbleW / 2 + selfW / 2
   const pxPerPct = sceneSize().w / 100  // image-% ↔ px on the X axis
