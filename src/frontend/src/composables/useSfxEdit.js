@@ -13,6 +13,8 @@ const draft = reactive({
   trigger: 'manual',
   source_kind: null,
   placement: null,
+  arming_scope: null,   // null = auto (derive from trigger)
+  listener_spec: { steps: [] },
   conditions: [],
   effects: [],
   duration: { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' },
@@ -24,8 +26,8 @@ const savedAt = ref(null)
 const validationWarnings = ref([])
 const scopeVariables = ref([])
 
-const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
-const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
 const SCOPE_VARS_QUERY = `query($trigger: String, $sourceKind: String) { scopeVariables(trigger: $trigger, sourceKind: $sourceKind) { name type } }`
 
@@ -84,6 +86,8 @@ export function useSfxEdit() {
     draft.trigger = sfx?.trigger || 'manual'
     draft.source_kind = sfx?.sourceKind ?? sfx?.source_kind ?? null
     draft.placement = sfx?.placement ?? null
+    draft.arming_scope = sfx?.armingScope ?? sfx?.arming_scope ?? null
+    draft.listener_spec = sfx?.listenerSpec ?? sfx?.listener_spec ?? { steps: [] }
     draft.conditions = initialConditions(sfx)
     draft.duration = initialDuration(sfx)
     draft.effects = (sfx?.effects || []).map(e => ({ ...e }))
@@ -101,6 +105,8 @@ export function useSfxEdit() {
     draft.trigger = 'manual'
     draft.source_kind = null
     draft.placement = null
+    draft.arming_scope = null
+    draft.listener_spec = { steps: [] }
     draft.conditions = []
     draft.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
     draft.effects = []
@@ -123,6 +129,8 @@ export function useSfxEdit() {
         trigger: draft.trigger,
         sourceKind: draft.source_kind || null,
         placement: draft.placement || null,
+        armingScope: draft.arming_scope || null,
+        listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
         conditions: draft.conditions || [],
         effects: draft.effects || [],
         duration: draft.duration,
@@ -143,6 +151,8 @@ export function useSfxEdit() {
         input: {
           id: sfxId.value, name: draft.name, trigger: draft.trigger, description: draft.description,
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
+          armingScope: draft.arming_scope || null,
+          listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
       })
@@ -150,6 +160,7 @@ export function useSfxEdit() {
       patchData('sfxs', sfxId.value, {
         name: draft.name, trigger: draft.trigger, description: draft.description,
         source_kind: draft.source_kind, placement: draft.placement,
+        arming_scope: draft.arming_scope, listener_spec: draft.listener_spec,
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       savedAt.value = Date.now()
@@ -166,6 +177,8 @@ export function useSfxEdit() {
         input: {
           id, name: draft.name.trim(), trigger: draft.trigger, description: draft.description,
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
+          armingScope: draft.arming_scope || null,
+          listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
       })
@@ -183,6 +196,7 @@ export function useSfxEdit() {
       patchData('sfxs', id, {
         id, name: draft.name.trim(), trigger: draft.trigger, description: draft.description,
         source_kind: draft.source_kind, placement: draft.placement,
+        arming_scope: draft.arming_scope, listener_spec: draft.listener_spec,
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       successMsg.value = `Created "${draft.name}"`
@@ -209,13 +223,13 @@ export function useSfxEdit() {
       if (_suppressEdits) return
       fetchScopeVariables(t || '', sk || null)
     }, { flush: 'sync' })
-    watch(() => [draft.trigger, draft.source_kind, draft.conditions, draft.effects], () => {
+    watch(() => [draft.trigger, draft.source_kind, draft.arming_scope, draft.listener_spec, draft.conditions, draft.effects], () => {
       if (_suppressEdits) return
       clearTimeout(_validationTimer)
       _validationTimer = setTimeout(validate, 400)
     }, { deep: true, flush: 'sync' })
     watch(
-      () => [draft.name, draft.description, draft.trigger, draft.source_kind, draft.placement, draft.conditions, draft.duration, draft.effects],
+      () => [draft.name, draft.description, draft.trigger, draft.source_kind, draft.placement, draft.arming_scope, draft.listener_spec, draft.conditions, draft.duration, draft.effects],
       () => {
         if (_suppressEdits) return
         if (!sfxId.value) return

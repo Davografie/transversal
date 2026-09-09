@@ -730,6 +730,8 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit, source_kind=s.source_kind, placement=s.placement,
+                    arming_scope=s.arming_scope,
+                    listener_spec=s.listener_spec.model_dump() if s.listener_spec else None,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                     duration=_duration_to_gql(s.duration),
@@ -743,6 +745,8 @@ class Query:
                 SfxRef(
                     id=s.id, name=s.name, description=s.description,
                     trigger=s.trigger, limit=s.limit, source_kind=s.source_kind, placement=s.placement,
+                    arming_scope=s.arming_scope,
+                    listener_spec=s.listener_spec.model_dump() if s.listener_spec else None,
                     conditions=[_condition_to_gql(c) for c in s.conditions],
                     effects=[_effect_to_gql(e) for e in s.effects],
                     duration=_duration_to_gql(s.duration),
@@ -902,6 +906,8 @@ class Query:
         draft = DomainSFX(
             id=input.id, name=input.name, trigger=input.trigger,
             source_kind=input.source_kind, placement=input.placement,
+            arming_scope=input.arming_scope,
+            listener_spec=_target_spec_from_input(input.listener_spec),
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
             duration=_duration_input_to_domain(input.duration),
@@ -1698,6 +1704,8 @@ class Mutation:
             id=input.id, name=input.name, description=input.description,
             trigger=input.trigger, conditions=conditions,
             source_kind=input.source_kind, placement=input.placement,
+            arming_scope=input.arming_scope,
+            listener_spec=_target_spec_from_input(input.listener_spec),
             effects=[_effect_input_to_domain(e) for e in input.effects],
             duration=_duration_input_to_domain(input.duration),
         )
@@ -1710,6 +1718,8 @@ class Mutation:
         return SfxRef(
             id=created.id, name=created.name, description=created.description,
             trigger=created.trigger, limit=created.limit, source_kind=created.source_kind, placement=created.placement,
+            arming_scope=created.arming_scope,
+            listener_spec=created.listener_spec.model_dump() if created.listener_spec else None,
             conditions=[_condition_to_gql(c) for c in created.conditions],
             effects=[_effect_to_gql(e) for e in created.effects],
             duration=_duration_to_gql(created.duration),
@@ -1748,6 +1758,10 @@ class Mutation:
             existing.source_kind = input.source_kind
         if input.placement is not None:
             existing.placement = input.placement
+        if input.arming_scope is not None:
+            existing.arming_scope = input.arming_scope
+        if input.listener_spec is not None:
+            existing.listener_spec = _target_spec_from_input(input.listener_spec)
         if input.effects is not None:
             existing.effects = [_effect_input_to_domain(e) for e in input.effects]
         if input.duration is not None:
@@ -1761,6 +1775,8 @@ class Mutation:
         return SfxRef(
             id=updated.id, name=updated.name, description=updated.description,
             trigger=updated.trigger, limit=updated.limit, source_kind=updated.source_kind, placement=updated.placement,
+            arming_scope=updated.arming_scope,
+            listener_spec=updated.listener_spec.model_dump() if updated.listener_spec else None,
             conditions=[_condition_to_gql(c) for c in updated.conditions],
             effects=[_effect_to_gql(e) for e in updated.effects],
             duration=_duration_to_gql(updated.duration),

@@ -472,6 +472,8 @@ class SfxRef:
     limit: str = ""
     source_kind: Optional[str] = None
     placement: Optional[str] = None
+    arming_scope: Optional[str] = None
+    listener_spec: Optional[strawberry.scalars.JSON] = None
     conditions: list[Condition] = strawberry.field(default_factory=list)
     effects: list[Effect] = strawberry.field(default_factory=list)
     duration: Optional[EffectDuration] = None
@@ -487,6 +489,8 @@ class SfxInput:
     limit: str = ""
     source_kind: Optional[str] = None
     placement: Optional[str] = None
+    arming_scope: Optional[str] = None
+    listener_spec: Optional[strawberry.scalars.JSON] = None
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
     effects: list[EffectInput] = strawberry.field(default_factory=list)
     duration: Optional[EffectDurationInput] = None
@@ -502,6 +506,8 @@ class SfxUpdateInput:
     limit: Optional[str] = None
     source_kind: Optional[str] = None
     placement: Optional[str] = None
+    arming_scope: Optional[str] = None
+    listener_spec: Optional[strawberry.scalars.JSON] = None
     conditions: Optional[list[ConditionInput]] = None
     effects: Optional[list[EffectInput]] = None
     duration: Optional[EffectDurationInput] = None

@@ -30,6 +30,17 @@
         <span class="sfx-vars-label">Available variables:</span>
         <span v-for="v in scopeVariables" :key="v.name" class="sfx-var">{{ '{' + v.name + '}' }}<em class="sfx-var-type">{{ v.type }}</em></span>
       </div>
+      <label>Listens to</label>
+      <select v-model="draft.arming_scope">
+        <option :value="null">Auto (from trigger)</option>
+        <option value="self">Self</option>
+        <option value="global">Global (everyone)</option>
+        <option value="listener_spec">A targeting path</option>
+      </select>
+      <div v-if="draft.arming_scope === 'listener_spec'" class="sfx-listener">
+        <TargetSpecBuilder v-model="draft.listener_spec" :destination="{ element: 'entity' }" :source-element="sourceElement" />
+        <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>).</p>
+      </div>
       <label>Conditions</label>
       <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" />
     </div>
@@ -91,6 +102,7 @@ import GmEffectEditPanel from './GmEffectEditPanel.vue'
 import EffectList from './EffectList.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
+import TargetSpecBuilder from './TargetSpecBuilder.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 
 const { graphql } = useApi()
