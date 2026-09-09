@@ -33,6 +33,7 @@ from transversal.db.arango import get_db
 from transversal.db.repository import EntityRepository
 from transversal.domain import EntityImage, ImageType
 from transversal.imagen.orchestrator import _safe_filename, _save_image_variants
+from transversal.services.media_utils import has_transparency
 from transversal.migrate_common import (
     build_entity_key_map,
     build_parent_map,
@@ -175,6 +176,7 @@ def _write_image(repo: EntityRepository, entity: dict, source: Path, roles: list
         universe=universe,
         image_type=ImageType.UPLOADED,
         roles=roles,
+        transparent=has_transparency(image_data),
         filename=base_name,
         extension="webp",
         created_at=created_at,

@@ -887,6 +887,13 @@ class Projection:
             str(self.entity_id), "sheet", str(self.id), "Small"
         )
 
+    @strawberry.field
+    def sheet_image_transparent(self, info: strawberry.Info) -> bool:
+        """Whether this body's sheet role image has a transparent background."""
+        em = info.context["entity_manager"]
+        entry = em.repo.resolve_role_image_entry(str(self.entity_id), "sheet", str(self.id))
+        return entry.transparent if entry is not None else False
+
 
 # ── Entity ───────────────────────────────────────────
 
@@ -1018,6 +1025,21 @@ class Entity:
             return url
         # Fall back to background image
         return self.background_image(info)
+
+    @strawberry.field
+    def sheet_portrait_transparent(self, info: strawberry.Info) -> bool:
+        """Whether the resolved sheet portrait has a transparent background.
+
+        Mirrors ``sheet_portrait``'s fallback chain (sheet role image, then
+        the background image); the legacy denormalized background is unknown
+        and reported as opaque.
+        """
+        em = info.context["entity_manager"]
+        entry = em.repo.resolve_role_image_entry(str(self.id), "sheet", None)
+        if entry is not None:
+            return entry.transparent
+        entry = em.repo.resolve_role_image_entry(str(self.id), "background", None)
+        return entry.transparent if entry is not None else False
 
     # Canonical role-based media resolver. The only valid roles are
     # "background", "sheet", and "navdot" — resolved from the image's roles

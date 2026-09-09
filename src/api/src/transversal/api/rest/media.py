@@ -23,6 +23,7 @@ except ImportError:
 
 from transversal.domain import EntityImage, ImageType
 from transversal.db.repository import EntityRepository
+from transversal.services.media_utils import has_transparency
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
 
@@ -133,6 +134,7 @@ async def upload_media(entity_id: str = "", universe: str = "", file: UploadFile
                     entity_id=entity_id,
                     universe=resolved_universe,
                     image_type=ImageType.UPLOADED,
+                    transparent=has_transparency(converted),
                     width=w,
                     height=h,
                     filename=base_name,

@@ -444,6 +444,7 @@ async def list_images(entity_id: str, universe: str | None = None):
                 "created_at": img.created_at,
                 "size_bytes": _file_size(img),
                 "roles": img.roles,
+                "transparent": img.transparent,
                 "path_large": f"/media/imagen/{img.entity_id}/{img.universe}/{img.filename}_Large.{img.extension}",
                 "path_animated": f"/media/animated/{img.entity_id}/{img.universe}/{img.filename}.{img.extension}" if img.image_type == ImageType.ANIMATED else "",
             }

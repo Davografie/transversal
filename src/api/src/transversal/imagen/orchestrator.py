@@ -37,6 +37,7 @@ from transversal.imagen.models import (
 )
 from transversal.imagen.ollama import OllamaClient
 from transversal.imagen.prompt_builder import build_imagen_prompt
+from transversal.services.media_utils import has_transparency
 
 logger = logging.getLogger("transversal.imagen")
 logger.setLevel(logging.INFO)
@@ -247,6 +248,7 @@ class ImagenOrchestrator:
             universe=universe,
             image_type=ImageType.IMAGEN,
             roles=roles,
+            transparent=has_transparency(image_data),
             prompt=prompt,
             negative_prompt=negative,
             loras=loras,
@@ -516,6 +518,7 @@ class ImagenOrchestrator:
             universe=src.universe,
             image_type=ImageType.CUTOUT,
             roles=[],
+            transparent=has_transparency(cutout_bytes),
             prompt=f"background removed from {src.filename}",
             negative_prompt="",
             loras=[],

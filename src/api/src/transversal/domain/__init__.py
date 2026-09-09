@@ -1111,6 +1111,7 @@ class EntityImage(BaseModel):
     universe: str
     image_type: ImageType
     roles: list[str] = Field(default_factory=list)  # ["background", "sheet", "navdot"]
+    transparent: bool = False  # image has a transparent background (alpha channel)
     prompt: str = ""
     negative_prompt: str = ""
     loras: list[str] = Field(default_factory=list)

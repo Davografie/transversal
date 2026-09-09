@@ -58,29 +58,33 @@ async def navigate(location_id: str):
     parent = result.get("parent")
     if parent:
         nav_targets.append(parent)
-    navdot_images = repo.get_navdot_images(
-        [eid for eid in (_eid(e) for e in nav_targets) if eid]
-    )
+    nav_target_ids = [eid for eid in (_eid(e) for e in nav_targets) if eid]
+    navdot_images = repo.get_navdot_images(nav_target_ids)
+    navdot_transparent = repo.get_navdot_transparency(nav_target_ids)
 
     for occ in result.get("occupants", []):
         nav = navdot_images.get(_eid(occ))
         if nav:
             occ["image"] = nav
+            occ["image_transparent"] = navdot_transparent.get(_eid(occ), False)
 
     for child in result.get("children", []):
         nav = navdot_images.get(_eid(child))
         if nav:
             child["navdot_image"] = nav
+            child["navdot_image_transparent"] = navdot_transparent.get(_eid(child), False)
 
     for trans in result.get("transversal", []):
         nav = navdot_images.get(_eid(trans))
         if nav:
             trans["navdot_image"] = nav
+            trans["navdot_image_transparent"] = navdot_transparent.get(_eid(trans), False)
 
     if parent:
         nav = navdot_images.get(_eid(parent))
         if nav:
             parent["navdot_image"] = nav
+            parent["navdot_image_transparent"] = navdot_transparent.get(_eid(parent), False)
 
     # Populate zone location_id by matching children to zones by name
     children = result.get("children", [])
