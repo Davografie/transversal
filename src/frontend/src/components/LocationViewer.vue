@@ -18,9 +18,7 @@
         :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || (expandLevels['zone-' + z.name] || 0) > 0"
         :draggable="editZones"
         :title="z.name"
-        :arrival-x="zoneCache(z)?.arriveX"
-        :arrival-y="zoneCache(z)?.arriveY"
-        :dest-aspect="zoneCache(z)?.destAspect"
+        :hole-style="zoneHoleStyle(z)"
         :expand-level="expandLevels['zone-' + z.name] || 0"
         :class="{ armed: armedDot === 'zone-' + z.name }"
         @click="onDotClick('zone', z)"
@@ -70,11 +68,7 @@
         :expanded="editZones || (activeElement?.type === 'nav' && activeElement?.key === nd.key) || (expandLevels['nav-' + nd.key] || 0) > 0"
         :draggable="editZones"
         :title="nd.name"
-        :arrival-x="destNavCache[nd.target.id]?.arriveX"
-        :arrival-y="destNavCache[nd.target.id]?.arriveY"
-        :dest-aspect="destNavCache[nd.target.id]?.destAspect"
-        :pan-x="navDotPerspective[nd.key]?.panX"
-        :pan-y="navDotPerspective[nd.key]?.panY"
+        :hole-style="navHoleStyle(nd)"
         :expand-level="expandLevels['nav-' + nd.key] || 0"
         :class="{ armed: armedDot === 'nav-' + nd.key }"
         @click="onDotClick('nav', nd)"
@@ -492,6 +486,39 @@ const navDotPerspective = computed(() => {
   }
   return out
 })
+
+// "Hole" preview style for zone/nav dots: the destination image rendered as a
+// screen-fixed window. The px transform (a) cancels the scene layer's pan so
+// the content stays anchored to the viewport, (b) aligns the destination's
+// arrival point, and (c) adds the inverse-parallax shift from navDotPerspective.
+function holeStyleFor(imgX, imgY, arriveX, arriveY, destAspect, panX, panY) {
+  if (arriveX == null || arriveY == null || !destAspect) return null
+  const { cw, ch } = sceneDims()
+  const { w, h } = coverOverscan(cw, ch, destAspect)
+  const { w: wCur, h: hCur } = sceneSize()
+  const s = panShift()
+  const overX = w - cw
+  const overY = h - ch
+  const x = (-((arriveX + (panX || 0)) / 100) * overX) + s.x - ((imgX / 100) * wCur)
+  const y = (-((arriveY + (panY || 0)) / 100) * overY) + s.y - ((imgY / 100) * hCur)
+  return {
+    width: `${w}px`,
+    height: `${h}px`,
+    transform: `translate3d(${x}px, ${y}px, 0)`,
+  }
+}
+
+function zoneHoleStyle(z) {
+  const c = zoneCache(z)
+  return c ? holeStyleFor(z.x, z.y, c.arriveX, c.arriveY, c.destAspect, 0, 0) : null
+}
+
+function navHoleStyle(nd) {
+  const c = destNavCache.value[nd.target.id]
+  const p = navDotPerspective.value[nd.key]
+  if (!c) return null
+  return holeStyleFor(nd.x, nd.y, c.arriveX, c.arriveY, c.destAspect, p?.panX || 0, p?.panY || 0)
+}
 
 function occupantX(index, occupant) {
   if (zones.value.length > 0) {
@@ -1445,7 +1472,7 @@ onMounted(() => {
 
 .map-dot {
   position: absolute;
-  /* Centered via negative margins (not transform) to preserve background-attachment: fixed */
+  /* Centered via negative margins; dots live inside the transformed scene layer */
   margin-left: -8px; margin-top: -8px;
   border-radius: 50%;
   border: none;
@@ -1549,10 +1576,6 @@ onMounted(() => {
 }
 .map-dot.expanded .dot-overlay { opacity: 1; pointer-events: auto; }
 
-.zone-dot .dot-overlay,
-.nav-dot .dot-overlay {
-  background-attachment: fixed;
-}
 .occ-img-overlay { border-radius: 50%; }
 
 .dot-label, .dot-initials {

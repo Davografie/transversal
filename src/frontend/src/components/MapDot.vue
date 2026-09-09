@@ -17,11 +17,14 @@
       autoplay loop muted playsinline
       @click.stop="onOverlayClick"
     />
-    <div
+    <img
       v-else-if="image && overlayVisible"
+      :src="image"
       class="dot-overlay"
-      :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self' }"
-      :style="{ backgroundImage: 'url(' + image + ')', ...(overlayBgStyle || {}) }"
+      :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self', 'dot-hole': holeStyle }"
+      :style="holeStyle || { width: '100%', height: '100%', objectFit: 'cover' }"
+      alt=""
+      draggable="false"
       @click.stop="onOverlayClick"
     />
     <span
@@ -38,7 +41,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { isVideoUrl, coverOverscan } from '@/composables/media.js'
+import { isVideoUrl } from '@/composables/media.js'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -52,11 +55,7 @@ const props = defineProps({
   draggable: { type: Boolean, default: false },
   lerping: { type: Boolean, default: false },
   title: { type: String, default: '' },
-  arrivalX: { type: Number, default: null },
-  arrivalY: { type: Number, default: null },
-  destAspect: { type: Number, default: null },
-  panX: { type: Number, default: 0 },
-  panY: { type: Number, default: 0 },
+  holeStyle: { type: Object, default: null },  // px transform for the "hole" dest preview (zone/nav)
   expandLevel: { type: Number, default: 0 },  // 0..1 — proximity-driven size
 })
 
@@ -96,19 +95,6 @@ const dotStyle = computed(() => {
 })
 
 const overlayVisible = computed(() => effectiveLevel.value > 0 || props.type === 'self' || props.type === 'occupant')
-
-const overlayBgStyle = computed(() => {
-  if (props.arrivalX == null || props.arrivalY == null || props.destAspect == null) return null
-  const vw = window.innerWidth, vh = window.innerHeight
-  const { w, h } = coverOverscan(vw, vh, props.destAspect)
-  // Recessed-hole vignette (uniform inner shadow).
-  const uniform = `inset 0 0 clamp(18px, 2.5vw, 48px) rgba(0,0,0,0.65), inset 0 0 6px rgba(0,0,0,0.45)`
-  return {
-    backgroundSize: `${w}px ${h}px`,
-    backgroundPosition: `${props.arrivalX + props.panX}% ${props.arrivalY + props.panY}%`,
-    boxShadow: uniform,
-  }
-})
 
 function onClick() { emit('click', { type: props.type, x: props.x, y: props.y }) }
 function onOverlayClick() { emit('overlay-click', { type: props.type, x: props.x, y: props.y }) }
@@ -164,14 +150,18 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 }
 .dot-overlay {
   position: absolute; inset: 0; border-radius: 50%;
-  background-size: cover; background-position: center;
   opacity: 0; transition: opacity 0.2s ease;
   cursor: pointer; pointer-events: none;
 }
-.map-dot.expanded .dot-overlay { opacity: 1; pointer-events: auto; }
-.zone-dot .dot-overlay, .nav-dot .dot-overlay {
-  background-attachment: fixed;
+/* "Hole" destination preview: an overscan-sized <img> positioned by the parent
+   (cancel scene pan + align arrival point + inverse parallax), clipped by the
+   dot's border-radius + overflow. Replaces background-attachment: fixed. */
+.dot-hole {
+  position: absolute;
+  left: 50%; top: 50%;
+  will-change: transform;
 }
+.map-dot.expanded .dot-overlay { opacity: 1; pointer-events: auto; }
 .occ-img-overlay { border-radius: 50%; }
 .dot-label, .dot-initials {
   position: absolute; inset: 0;
