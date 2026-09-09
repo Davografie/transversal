@@ -1,0 +1,29 @@
+{
+  "1": {
+    "inputs": {
+      "image": "ComfyUI_temp_lrfgm_00353_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "2": {
+    "inputs": {
+      "rem_mode": "BEN2",
+      "image_output": "Save",
+      "save_prefix": "rembg",
+      "torchscript_jit": false,
+      "add_background": "none",
+      "refine_foreground": false,
+      "images": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "easy imageRemBg",
+    "_meta": {
+      "title": "Image Remove Bg"
+    }
+  }
+}
