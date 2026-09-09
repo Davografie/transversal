@@ -1521,7 +1521,6 @@ onMounted(() => {
   width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
   margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
   background: rgba(10,10,20,0.85);
-  backdrop-filter: blur(8px);
   border: none;
   box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
   z-index: 10;
@@ -1533,7 +1532,6 @@ onMounted(() => {
   width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
   margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
   background: rgba(10,10,20,0.85);
-  backdrop-filter: blur(8px);
   border: none;
   box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
   z-index: 10;
@@ -1590,7 +1588,6 @@ onMounted(() => {
   width: 240px !important; height: 240px !important;
   margin-left: -120px; margin-top: -120px;
   background: rgba(10,10,20,0.85);
-  backdrop-filter: blur(8px);
   z-index: 10;
   overflow: hidden;
 }
@@ -1599,7 +1596,6 @@ onMounted(() => {
   width: 96px !important; height: 96px !important;
   margin-left: -48px; margin-top: -48px;
   background: rgba(10,10,20,0.85);
-  backdrop-filter: blur(8px);
   z-index: 10;
   overflow: hidden;
 }
@@ -1608,7 +1604,6 @@ onMounted(() => {
   width: 240px !important; height: 240px !important;
   margin-left: -120px; margin-top: -120px;
   background: rgba(10,10,20,0.85);
-  backdrop-filter: blur(8px);
   z-index: 10;
   overflow: hidden;
 }
