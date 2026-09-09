@@ -114,6 +114,10 @@ above the breakpoint.
   moment a die enters the pool or a roll starts. The roller stays reachable
   through the sheet teaser. (CSS-only via `:has(.roller-band
   .kind-empty-pool)` — no JS state.)
+- **Empty pool + sheet focused** — the roller teaser shrinks to a slim 7%
+  strip (≈ the 56px sheet teaser of dice focus) and the [+] add-die toggle is
+  hidden (dice come from the sheet anyway): 20% / 73% / 7%. Both return once
+  a die is in the pool.
 - **Organic transitions.** Every band height is a single animated length
   (`flex-basis`), so the whole column redistributes as one motion on a plain
   `ease-in-out` (~450ms). No `flex-grow`, no springy overshoot — an earlier

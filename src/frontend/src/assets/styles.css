@@ -1006,6 +1006,14 @@ select option {
   .stage.mobile-stack.focus-sheet .sheet-band { flex-basis: 64%; }
   .stage.mobile-stack.focus-sheet .roller-band { flex-basis: 16%; }
 
+  /* Empty pool + sheet focused: the roller teaser shrinks to a slim strip
+     (7%, ≈ the 56px sheet teaser of dice focus) and drops the [+] add-die
+     toggle — dice come from the sheet anyway. Both return once a die is in
+     the pool. */
+  .stage.mobile-stack.focus-sheet:has(.roller-band .kind-empty-pool) .sheet-band { flex-basis: 73%; }
+  .stage.mobile-stack.focus-sheet:has(.roller-band .kind-empty-pool) .roller-band { flex-basis: 7%; }
+  .stage.mobile-stack.focus-sheet:has(.roller-band .kind-empty-pool) .add-die-toggle { display: none; }
+
   /* Dice focus: content-dependent bottom stack — the roller takes its
      measured content height (a concrete length via --roller-h, so the band
      animates smoothly; grows for wizards/menus, clamped to 42dvh then
