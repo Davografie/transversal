@@ -293,10 +293,11 @@
         :remote-results="remoteResults"
         @moved="onMoved"
         @inspect-entity="onInspectEntity"
+        @dragging="occupantDragging = $event"
       />
       <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @click="setMobileFocus('location')"></div>
     </div>
-    <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
+    <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, dragging: occupantDragging && !isMobile }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="(wrapperOpen || mobileStackActive) && peers.length" class="peers-bar">
         <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: isPeerActive(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
           <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
@@ -1390,6 +1391,7 @@ const switchInputRef = useTemplateRef('switchInputRef')
 
 const hoverOpen = ref(false)
 const sheetVisible = ref(false)
+const occupantDragging = ref(false)  // LocationViewer is mid-occupant-drag
 let sheetTimer = null
 let closeTimer = null
 

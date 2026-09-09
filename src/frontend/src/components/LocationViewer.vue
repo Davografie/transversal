@@ -187,7 +187,7 @@ const props = defineProps({
   remoteResults: { type: Object, default: () => ({}) },  // entity_id → { total, effect_die, rolls, ... }
 })
 
-const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity'])
+const emit = defineEmits(['moved', 'update:editZones', 'inspectEntity', 'dragging'])
 const { toggleTransversalType } = useTransversalLinks()
 
 const currentImage = ref('')
@@ -705,6 +705,7 @@ const poolPhaseFor = (eid) => props.remotePools[eid]?.phase || 'adding'
 
 const occDragging = ref(null)  // { index }
 let occDragMoved = false       // pointer moved past the tap threshold
+let draggingEmitted = false    // emitted 'dragging' so the HUD hides during a real drag
 let occSuppressClick = false   // suppress the synthesized click after a real drag
 let dragTarget = null  // non-reactive: nearest travel target during self-drag
 const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
@@ -778,6 +779,7 @@ function onOccDragMove(e) {
   if (!occDragMoved) {
     if (Math.hypot(clientX - start.startX, clientY - start.startY) < 6) return
     occDragMoved = true
+    if (!draggingEmitted) { draggingEmitted = true; emit('dragging', true) }
   }
   e.preventDefault()
   const rect = el.getBoundingClientRect()
@@ -823,6 +825,7 @@ async function onOccDragEnd() {
   document.removeEventListener('touchmove', onOccDragMove)
   document.removeEventListener('touchend', onOccDragEnd)
   hoveredDot.value = ''
+  if (draggingEmitted) { draggingEmitted = false; emit('dragging', false) }
   if (!occDragging.value) return
   const occ = occupants.value[occDragging.value.index]
   const wasMoved = occDragMoved

@@ -858,7 +858,12 @@ select option {
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  transition: transform 0.3s ease;
+  transition: transform 0.3s ease, opacity 0.2s ease;
+}
+
+.dice-panel-wrapper.dragging {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .dice-panel-wrapper.open {
