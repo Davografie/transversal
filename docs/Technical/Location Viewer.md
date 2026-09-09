@@ -198,6 +198,12 @@ shift. The dot's own `border-radius` + `overflow: hidden` clips it; the img must
 not clip itself (`border-radius: 0`). `destNavCache` supplies
 `arrivalX`/`arrivalY`/`destAspect` so that preview shows the exact arrival point.
 
+Transparent navdot images (media pipeline's `EntityImage.transparent`, exposed
+as `image_transparent` on occupants and `navdot_image_transparent` on
+destinations) bypass the hole: they render as **floating cutouts** — no filled
+bubble, no inset vignette, no circular crop (`object-fit: contain`), the
+image's own alpha is the shape.
+
 ## Interactions
 
 ### Click / pop-out
