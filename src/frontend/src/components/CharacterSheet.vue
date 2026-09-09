@@ -1,6 +1,6 @@
 <template>
   <!-- Embedded: single root for attribute inheritance -->
-  <div v-if="embedded" class="sheet-embedded">
+  <div v-if="embedded" class="sheet-embedded" :class="{ 'transparent-portrait': sheetPortraitTransparent }">
     <div v-if="loading" class="loading">Loading…</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <template v-else-if="entity">
@@ -33,7 +33,7 @@
               <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(1)">+</button>
             </div>
           </div>
-          <MediaImage v-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" />
+          <MediaImage v-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" :class="{ transparent: sheetPortraitTransparent }" />
         </div>
         <div class="header-controls">
           <div v-if="isForeignSheet" class="rel-widget">
@@ -480,6 +480,12 @@ const activeProjection = computed(() => {
   return e.projections.find((p) => p.id === e.currentProjection) || null
 })
 const sheetPortrait = computed(() => activeProjection.value?.sheetImage || entity.value?.sheetPortrait || '')
+// Mirror sheetPortrait's resolution chain: the projection's sheet image when
+// present, else the entity's resolved sheet portrait.
+const sheetPortraitTransparent = computed(() => {
+  if (activeProjection.value?.sheetImage) return !!activeProjection.value.sheetImageTransparent
+  return !!entity.value?.sheetPortraitTransparent
+})
 
 // SFX owned at three surfaces beyond the per-trait cards:
 //   - entity-level (entity.sfxIds)
@@ -1185,9 +1191,10 @@ const QUERY = `
       currentProjection
       backgroundImage
       sheetPortrait
+      sheetPortraitTransparent
       sfxIds
       projections {
-        id originUniverse universe name sheetImage currentLocation transversalType sfxIds
+        id originUniverse universe name sheetImage sheetImageTransparent currentLocation transversalType sfxIds
       }
       traitSetSettings {
         id traitsetId sfxIds
@@ -1989,7 +1996,32 @@ watch(() => props.externalPoolSources, (sources) => {
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  position: relative;
+  min-height: 0;
+}
+
+/* Transparent (background-removed) sheet portraits: no circular crop — the
+   character cutout pops out over the sheet's top edge. Bottom-only border +
+   radius anchor it to the sheet; the top stays open and uncropped. */
+.sheet-embedded.transparent-portrait {
+  --portrait-size: 76px;
+  --portrait-lift: 34px;
+  --portrait-bottom-radius: 14px;
+}
+.sheet-embedded.transparent-portrait .header-top,
+.sheet-embedded.transparent-portrait .header-controls {
+  padding-right: calc(var(--portrait-size) + 8px);
+}
+.sheet-portrait.transparent {
+  width: var(--portrait-size);
+  height: auto;
+  object-fit: contain;
+  position: absolute;
+  top: calc(-1 * var(--portrait-lift));
+  right: 16px;
+  border: none;
+  border-bottom: 1px solid var(--overlay-12);
+  border-radius: 0 0 var(--portrait-bottom-radius) var(--portrait-bottom-radius);
 }
 
 .sheet-scroll {

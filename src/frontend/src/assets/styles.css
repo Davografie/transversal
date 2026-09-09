@@ -870,12 +870,13 @@ select option {
   transform: translateX(-50%) translateY(0);
 }
 
-/* Embedded character sheet — flex column, children handle their own scroll */
+/* Embedded character sheet — flex column, children handle their own scroll.
+   No overflow clip here so a transparent sheet portrait can pop above the
+   sheet's top edge; .sheet-scroll bounds its own content. */
 .embedded-sheet {
   max-height: calc(100dvh - 240px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   transition: opacity 0.25s ease;
 }
 
