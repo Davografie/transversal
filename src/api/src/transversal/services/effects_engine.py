@@ -298,15 +298,35 @@ class EffectsEngine:
                 sfx.id, sfx.trigger, [e.timing.value for e in roll_effects],
             )
             if roll_effects:
-                # Arm the SFX's roll-timing effects as a unit for its duration.
-                from transversal.services.roll_deferral import arm_sfx
-                arm_sfx(
-                    event.entity_id, roll_effects,
-                    source_sfx_id=sfx.id,
-                    source_kind=sfx.source_kind,
-                    source_id=source_id,
-                    duration=sfx.duration,
-                )
+                # Arm the SFX's roll-timing effects as a unit for its duration,
+                # routed by the SFX's declared (or trigger-derived) listener scope.
+                from transversal.services.roll_deferral import arm_passive, arm_sfx
+                scope = sfx.effective_arming_scope
+                if scope == "global":
+                    arm_passive(
+                        roll_effects,
+                        source_sfx_id=sfx.id,
+                        source_kind=sfx.source_kind,
+                        source_id=source_id,
+                        duration=sfx.duration,
+                    )
+                else:
+                    # ``listener_spec`` fan-out to a resolved entity set is not yet
+                    # implemented (open decision D3, no current consumer) — fall back
+                    # to the triggering entity and surface it.
+                    if scope == "listener_spec":
+                        log.warning(
+                            "[process_event] sfx=%s scope=listener_spec not implemented; arming on self",
+                            sfx.id,
+                        )
+                    arm_sfx(
+                        event.entity_id, roll_effects,
+                        source_sfx_id=sfx.id,
+                        source_kind=sfx.source_kind,
+                        source_id=source_id,
+                        duration=sfx.duration,
+                        scope="self",
+                    )
                 sfx_applied = True
 
             for idx, effect in enumerate(sfx.effects):

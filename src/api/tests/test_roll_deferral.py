@@ -393,6 +393,31 @@ def test_passive_rule_applies_to_every_entity(monkeypatch):
     assert roll_deferral.list_global_armed() != []  # never consumed
 
 
+def test_global_scope_honors_roll_budget(monkeypatch):
+    """A global entry with a rolls:N duration fires N times then drops (not forever)."""
+    roll_deferral.reset()
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append((effect, entity_id))
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    roll_deferral.arm_passive(
+        [_make_effect(timing=EffectTiming.ON_ROLL, result="d8")],
+        duration=_rolls_duration(1),
+    )
+
+    # First roll fires and exhausts the one-roll budget.
+    fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {})
+    assert len(fired) == 1
+    assert roll_deferral.list_global_armed() == []  # exhausted → dropped
+
+    # A second roll (a different entity) has nothing global left to fire.
+    fired2 = roll_deferral.fire_armed("e2", "on_roll", "earth", {})
+    assert fired2 == []
+
+
 def test_expire_global_drops_matching_boundary():
     roll_deferral.reset()
     beat = EffectDuration(timers=[Timer(event="beat", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE)

@@ -58,6 +58,7 @@ class ArmedSfx:
     source_kind: str | None = None  # the SFX's declared source_kind (for `select source`)
     source_id: str | None = None  # the concrete source id (activation origin)
     bindings: dict = field(default_factory=dict)  # per-activation typed output variables
+    scope: str = "self"  # listener scope: self | global | listener_spec
 
 
 _armed: dict[str, list[ArmedSfx]] = {}
@@ -90,6 +91,7 @@ def arm_sfx(
     source_kind: str | None = None,
     source_id: str | None = None,
     duration=None,
+    scope: str = "self",
 ) -> None:
     """Arm an SFX's roll-timing ``effects`` so they fire at their roll events.
 
@@ -100,12 +102,13 @@ def arm_sfx(
     substitute at fire time, because the roll state does not exist at arm time.
 
     ``source_kind``/``source_id`` carry the SFX's activation source so a
-    ``select source`` spec resolves at fire time.
+    ``select source`` spec resolves at fire time. ``scope`` records the listener
+    scope (``self``/``global``/``listener_spec``).
     """
     rolls, expiry_events = _split_duration(duration)
     log.info(
-        "[roll_deferral.arm_sfx] entity=%s sfx=%s effects=%s rolls=%s expiry=%s",
-        entity_id, source_sfx_id,
+        "[roll_deferral.arm_sfx] entity=%s sfx=%s scope=%s effects=%s rolls=%s expiry=%s",
+        entity_id, source_sfx_id, scope,
         [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
         rolls, expiry_events,
     )
@@ -117,6 +120,7 @@ def arm_sfx(
             source_sfx_id=source_sfx_id,
             source_kind=source_kind,
             source_id=source_id,
+            scope=scope,
         )
     )
 
@@ -125,16 +129,22 @@ def arm_passive(
     effects: list[Effect],
     *,
     duration=None,
+    source_sfx_id: str | None = None,
+    source_kind: str | None = None,
+    source_id: str | None = None,
 ) -> None:
-    """Arm a passive rule's roll-timing effects in the *global* set.
+    """Arm a rule's roll-timing effects in the *global* set (scope = ``global``).
 
-    Unlike :func:`arm_sfx`, this is not entity-keyed and carries no
-    ``source_sfx_id``: a passive rule's scope is declarative, so it selects
-    dice via ``die_filter`` (stamping is a player-choice signal, not used here).
+    Global entries are not entity-keyed, so they apply to every entity's rolls
+    (late joiners included). Passive rules (``on_session_start``) carry no
+    ``source_sfx_id``; a manual SFX that explicitly declares ``global`` scope
+    does, so ``source_sfx_id``/``source_kind``/``source_id`` are accepted and
+    preserved for ``die_filter`` selection and ``select source``.
     """
     rolls, expiry_events = _split_duration(duration)
     log.info(
-        "[roll_deferral.arm_passive] effects=%s rolls=%s expiry=%s",
+        "[roll_deferral.arm_passive] scope=global sfx=%s effects=%s rolls=%s expiry=%s",
+        source_sfx_id,
         [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
         rolls, expiry_events,
     )
@@ -143,7 +153,10 @@ def arm_passive(
             effects=list(effects),
             rolls=rolls,
             expiry_events=expiry_events,
-            source_sfx_id=None,
+            source_sfx_id=source_sfx_id,
+            source_kind=source_kind,
+            source_id=source_id,
+            scope="global",
         )
     )
 
@@ -178,10 +191,10 @@ def fire_armed(
 ) -> list[Effect]:
     """Fire armed-SFX effects whose timing matches ``event_type``; consume a roll.
 
-    Returns the applied effects. Each entity-local armed SFX survives ``rolls``
-    matching events (``None`` = indefinite); a one-roll SFX fires once and is
-    dropped. Passive (global) rules are not consumed — they apply to every
-    entity's rolls for the whole session.
+    Returns the applied effects. Each armed SFX survives ``rolls`` matching
+    events (``None`` = indefinite); a one-roll SFX fires once and is dropped.
+    Global (scope=``global``) entries fire for every entity but still honor their
+    own ``rolls`` budget the same way.
     """
     local = _armed.get(entity_id, [])
     if not local and not _global_armed:
@@ -218,9 +231,21 @@ def fire_armed(
             kept.append(armed)
     _armed[entity_id] = kept
 
-    # Passive (global) rules — not consumed; apply to this entity's rolls too.
+    # Passive (global) rules — also consume their roll budget. A global entry
+    # with a ``rolls`` timer fires that many times then drops; ``rolls=None``
+    # (e.g. a session-scoped passive) stays armed until a boundary drops it.
+    kept_global: list[ArmedSfx] = []
     for armed in _global_armed:
-        applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls, structured))
+        if any(e.timing.value == event_type for e in armed.effects):
+            applied.extend(_apply_armed(armed, event_type, entity_id, universe, context, rolls, structured))
+            if armed.rolls is not None:
+                armed.rolls -= 1
+                if armed.rolls <= 0:
+                    continue  # exhausted — drop
+            kept_global.append(armed)
+        else:
+            kept_global.append(armed)
+    _global_armed[:] = kept_global
 
     if structured:
         from transversal.services.roll_orchestrator import _emit_pending_choices
