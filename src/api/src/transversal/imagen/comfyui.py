@@ -301,3 +301,21 @@ def inject_wan_params(
     wf["562"]["inputs"]["Xf"] = lora_strength
 
     return wf
+
+
+def inject_bg_removal_params(
+    workflow: dict,
+    input_image: str,  # filename already uploaded to ComfyUI's input dir
+    filename_prefix: str = "bgremoved",
+) -> dict:
+    """Inject the input filename into the BiRefNet background-removal workflow.
+
+    Node 1 (LoadImage): image filename
+    Node 5 (SaveImage): filename_prefix
+    """
+    wf = json.loads(json.dumps(workflow))  # deep copy
+
+    wf["1"]["inputs"]["image"] = input_image
+    wf["5"]["inputs"]["filename_prefix"] = filename_prefix
+
+    return wf

@@ -24,6 +24,7 @@ from transversal.db.repository import EntityRepository
 from transversal.domain import Entity, EntityImage, EntityType, ImageType
 from transversal.imagen.comfyui import (
     ComfyUIClient,
+    inject_bg_removal_params,
     inject_flux_params,
     inject_wan_params,
 )
@@ -447,6 +448,89 @@ class ImagenOrchestrator:
 
         await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
                            f"/media/animated/{output_subpath}/{base_name}{ext}", 100)
+
+        return entity_image
+
+    # ── Remove background (static image cutout) ────────
+
+    async def run_remove_background(self, entity: Entity, image_id: str) -> EntityImage:
+        """Remove the background from an existing static image via BiRefNet.
+
+        Produces a new transparent cutout image owned by the same entity or
+        projection as the source. Non-destructive: the source is untouched.
+        """
+        entity_id = entity.id
+        gen_type = GenerationType.REMOVE_BG
+
+        src = self.repo.get_entity_image(image_id)
+        if not src:
+            raise FileNotFoundError(f"Image '{image_id}' not found")
+        if src.image_type == ImageType.ANIMATED:
+            raise ValueError("Background removal only works on static images")
+
+        source_path = IMAGEN_DIR / f"{src.entity_id}/{src.universe}/{src.filename}_Large.{src.extension}"
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source image not found: {source_path}")
+        source_bytes = source_path.read_bytes()
+
+        short_hash = uuid.uuid4().hex[:8]
+        safe_name = _safe_filename(entity.name)
+        safe_universe = _safe_filename(src.universe)
+        base_name = f"{safe_name}_{safe_universe}_cut_{short_hash}"
+        output_subpath = f"{src.entity_id}/{src.universe}"
+        output_full = IMAGEN_DIR / output_subpath
+        output_full.mkdir(parents=True, exist_ok=True)
+
+        await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Removing background...", 20)
+
+        async with self._gpu_lock:
+            input_filename = f"bgrem_{short_hash}.png"
+            await self.comfyui.upload_image(source_bytes, input_filename)
+
+            workflow = _load_workflow("bg_remove.json")
+            workflow = inject_bg_removal_params(
+                workflow,
+                input_image=input_filename,
+                filename_prefix=f"bgremoved_{short_hash}",
+            )
+
+            prompt_id = await self.comfyui.submit_workflow(workflow)
+            result = await self.comfyui.wait_for_result(prompt_id, timeout_secs=600)
+            if not result.get("filename"):
+                raise FileNotFoundError("Background removal produced no output image")
+            cutout_bytes = await self.comfyui.get_image(
+                result["filename"], result.get("subfolder", ""), result.get("type", "output")
+            )
+            await self.comfyui.free_memory()
+
+        await self._report(entity_id, gen_type, GenerationStatus.SAVING, "Saving cutout...", 85)
+
+        variants = _save_image_variants(cutout_bytes, output_full, base_name)
+        with Image.open(output_full / variants["original"]) as _im:
+            width, height = _im.size
+
+        entity_image = EntityImage(
+            id=short_hash,
+            entity_id=src.entity_id,
+            projection_id=src.projection_id,
+            universe=src.universe,
+            image_type=ImageType.CUTOUT,
+            roles=[],
+            prompt=f"background removed from {src.filename}",
+            negative_prompt="",
+            loras=[],
+            width=width,
+            height=height,
+            seed=0,
+            steps=0,
+            filename=base_name,
+            extension="webp",
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.repo.create_entity_image(entity_image)
+
+        await self._report(entity_id, gen_type, GenerationStatus.COMPLETE,
+                           f"/media/imagen/{output_subpath}/{variants['large']}", 100)
 
         return entity_image
 

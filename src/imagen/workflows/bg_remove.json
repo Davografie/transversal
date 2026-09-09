@@ -1,0 +1,65 @@
+{
+  "1": {
+    "inputs": {
+      "image": "__INPUT_IMAGE__"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "2": {
+    "inputs": {
+      "bg_removal_name": "BiRefNet_HR.safetensors"
+    },
+    "class_type": "LoadBackgroundRemovalModel",
+    "_meta": {
+      "title": "Load Background Removal Model"
+    }
+  },
+  "3": {
+    "inputs": {
+      "bg_removal_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "RemoveBackground",
+    "_meta": {
+      "title": "Remove Background"
+    }
+  },
+  "4": {
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "alpha": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "Join Image With Alpha"
+    }
+  },
+  "5": {
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ],
+      "filename_prefix": "bgremoved"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

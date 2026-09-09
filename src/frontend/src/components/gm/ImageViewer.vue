@@ -10,6 +10,11 @@
           <span v-if="statusInfo.status" class="btn-status">{{ statusInfo.status }}</span>
         </button>
       </div>
+      <div class="bg-remove-row" v-if="imageType !== 'cutout'">
+        <button class="bg-btn" @click="onRemoveBgClick" :disabled="bgBusy || !!localBgJob">
+          <span class="btn-label">{{ bgLabel }}</span>
+        </button>
+      </div>
     </div>
     <div class="role-assign">
       <label class="role-check" title="Use as background"><input type="checkbox" :checked="hasRole('background')" @change="toggleRole('background')" /> BG</label>
@@ -133,6 +138,7 @@ async function toggleRole(r) {
 
 // Independent job polling — Panel system props are static on open
 const localJob = ref(null)
+const localBgJob = ref(null)
 let _pollTimer = null
 
 async function pollOwnJob() {
@@ -143,6 +149,7 @@ async function pollOwnJob() {
       const jobs = (await r.json()).jobs || {}
       const j = jobs[props.entityId]
       localJob.value = (j && j.type === 'animate') ? j : null
+      localBgJob.value = (j && j.type === 'remove_bg') ? j : null
     }
   } catch {}
 }
@@ -154,6 +161,32 @@ onUnmounted(() => { clearInterval(_pollTimer) })
 watch(localJob, (now, prev) => {
   if (prev && !now) emit('refresh')
 })
+watch(localBgJob, (now, prev) => {
+  if (prev && !now) emit('refresh')
+})
+
+// Background removal
+const bgBusy = ref(false)
+const bgLabel = computed(() => localBgJob.value ? 'Removing background…' : '🧼 Remove BG')
+
+async function onRemoveBgClick() {
+  if (bgBusy.value || localBgJob.value) return
+  bgBusy.value = true
+  message.value = 'Removing background…'
+  try {
+    const r = await fetch(`/api/v1/remove-background/${props.entityId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_id: props.imageId }),
+    })
+    const d = await r.json()
+    message.value = d.accepted ? 'Background removal started — check gallery when complete' : (d.detail || 'Failed')
+  } catch {
+    message.value = 'Request failed'
+  } finally {
+    bgBusy.value = false
+  }
+}
 
 const statusInfo = computed(() => {
   const j = localJob.value || props.animateJob
@@ -227,6 +260,11 @@ async function onDelete() {
 .animate-btn.cancelling { background: var(--danger-strong); }
 .animate-btn .btn-label { padding: 4px 8px; }
 .animate-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
+
+.bg-remove-row { display: flex; justify-content: center; margin-top: 6px; }
+.bg-btn { background: var(--overlay-10); color: var(--text); font-size: 11px; padding: 0; border-radius: 4px; border: 1px solid var(--overlay-16); cursor: pointer; display: inline-flex; overflow: hidden; white-space: nowrap; }
+.bg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.bg-btn .btn-label { padding: 4px 8px; }
 
 .role-assign { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
 .section-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }

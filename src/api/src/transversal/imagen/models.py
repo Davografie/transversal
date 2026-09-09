@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 class GenerationType(str, Enum):
     IMAGEN = "imagen"
     ANIMATE = "animate"
+    REMOVE_BG = "remove_bg"
 
 
 class GenerationStatus(str, Enum):
@@ -42,6 +43,11 @@ class AnimateRequest(BaseModel):
     lora_strength: float = 0.95
     image_id: str = ""  # if set, skip Flux gen — animate this existing image
     motion_hint: str = ""  # user hint to guide gemma3 motion description
+
+
+class RemoveBackgroundRequest(BaseModel):
+    """Remove the background from an existing static image."""
+    image_id: str = ""  # the static EntityImage to cut out
 
 
 class GenerationProgress(BaseModel):

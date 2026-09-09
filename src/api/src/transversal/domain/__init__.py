@@ -1067,6 +1067,7 @@ class ImageType(str, Enum):
     UPLOADED = "uploaded"
     IMAGEN = "imagen"
     ANIMATED = "animated"
+    CUTOUT = "cutout"  # background-removed transparent variant of a static image
 
 
 class EntityImage(BaseModel):
