@@ -428,45 +428,37 @@ onMounted(() => {
 })
 onUnmounted(() => sceneRO?.disconnect())
 
-const sceneDims = () => ({ cw: sceneW.value, ch: sceneH.value })
-
-// Where the self character lands in the container, in container %.
-function anchorPct() {
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
-  return props.camera ? { x: 50, y: 50 } : { x: mx, y: my }
-}
-
-// Scene pan shift in px (positive = scene shifted left/up) so the self
-// character sits at the anchor point.
-function panShift() {
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
-  const { cw, ch } = sceneDims()
-  const { w, h } = sceneSize()
-  const a = anchorPct()
-  return { x: (mx / 100) * w - (a.x / 100) * cw, y: (my / 100) * h - (a.y / 100) * ch }
-}
-
-// Rendered px size of the current scene: covers the viewport, overscanned by
-// PAN_OVERSCAN on both axes so panning works horizontally AND vertically.
-// Camera mode covers a TEASER_ZOOM×-larger virtual viewport — a zoomed crop.
-function sceneSize() {
-  const { cw, ch } = sceneDims()
+// ── Single camera source ──────────────────────────────────────────────────
+// One object derives everything: container dims, scene size (cover + overscan,
+// TEASER_ZOOM in teaser-camera mode), and the pan that anchors the self
+// character (center-anchored in teaser mode). All pan/size derivations and the
+// image↔viewport conversions read from this — nothing recomputes independently,
+// so the math can't drift.
+const sceneCamera = computed(() => {
+  const cw = sceneW.value
+  const ch = sceneH.value
   const zoom = props.camera ? TEASER_ZOOM : 1
-  if (imageAspect.value) return coverOverscan(cw * zoom, ch * zoom, imageAspect.value)
-  return { w: cw * zoom * 1.8, h: ch * zoom * 1.8 }  // unknown aspect: 180% fallback
-}
+  const self = occupants.value.find(o => o.id === props.entityId)
+  const mx = self?.map_x ?? 50
+  const my = self?.map_y ?? 50
+  const anchor = props.camera ? { x: 50, y: 50 } : { x: mx, y: my }
+  const { w, h } = imageAspect.value
+    ? coverOverscan(cw * zoom, ch * zoom, imageAspect.value)
+    : { w: cw * zoom * 1.8, h: ch * zoom * 1.8 }  // unknown aspect: 180% fallback
+  // Pan shift in px (positive = scene shifted left/up) so the self character
+  // sits at the anchor point.
+  return {
+    cw, ch, zoom, w, h,
+    panX: (mx / 100) * w - (anchor.x / 100) * cw,
+    panY: (my / 100) * h - (anchor.y / 100) * ch,
+  }
+})
 
-// Convert image-relative position to viewport position based on pan offset
+// Convert image-relative position to viewport position based on the camera
 function toViewportPos(imgX, imgY) {
-  const { cw, ch } = sceneDims()
-  const { w, h } = sceneSize()
-  const s = panShift()
-  const viewX = (((imgX / 100) * w - s.x) / cw) * 100
-  const viewY = (((imgY / 100) * h - s.y) / ch) * 100
+  const c = sceneCamera.value
+  const viewX = (((imgX / 100) * c.w - c.panX) / c.cw) * 100
+  const viewY = (((imgY / 100) * c.h - c.panY) / c.ch) * 100
   return { left: viewX.toFixed(1) + '%', top: viewY.toFixed(1) + '%' }
 }
 
@@ -475,18 +467,17 @@ function toViewportPos(imgX, imgY) {
 // opposite to the current scene's shift, like looking through a hole in the
 // world at a distant scene. Returns the offset in destination-image % units.
 const navDotPerspective = computed(() => {
-  const { cw, ch } = sceneDims()
-  const s = panShift()
+  const c = sceneCamera.value
   const out = {}
   for (const nd of navDots.value) {
     const destAspect = destNavCache.value[nd.target.id]?.destAspect
     if (!destAspect) continue
-    const dest = coverOverscan(cw, ch, destAspect)
-    const overX = dest.w - cw
-    const overY = dest.h - ch
+    const dest = coverOverscan(c.cw, c.ch, destAspect)
+    const overX = dest.w - c.cw
+    const overY = dest.h - c.ch
     out[nd.key] = {
-      panX: overX > 0 ? -(s.x / overX) * 100 * INVERSE_PAN_STRENGTH : 0,
-      panY: overY > 0 ? -(s.y / overY) * 100 * INVERSE_PAN_STRENGTH : 0,
+      panX: overX > 0 ? -(c.panX / overX) * 100 * INVERSE_PAN_STRENGTH : 0,
+      panY: overY > 0 ? -(c.panY / overY) * 100 * INVERSE_PAN_STRENGTH : 0,
     }
   }
   return out
@@ -498,19 +489,17 @@ const navDotPerspective = computed(() => {
 // arrival point, and (c) adds the inverse-parallax shift from navDotPerspective.
 function holeStyleFor(imgX, imgY, arriveX, arriveY, destAspect, panX, panY) {
   if (arriveX == null || arriveY == null || !destAspect) return null
-  const { cw, ch } = sceneDims()
-  const { w, h } = coverOverscan(cw, ch, destAspect)
-  const { w: wCur, h: hCur } = sceneSize()
-  const s = panShift()
-  const overX = w - cw
-  const overY = h - ch
+  const c = sceneCamera.value
+  const { w, h } = coverOverscan(c.cw, c.ch, destAspect)
+  const overX = w - c.cw
+  const overY = h - c.ch
   // Clamp the alignment point to [0, 100]: beyond the image there is nothing
   // to show, so the parallax shift is limited by the remaining image space in
   // each direction (asymmetric when the arrival point sits near an edge).
   const alignX = Math.min(100, Math.max(0, arriveX + (panX || 0)))
   const alignY = Math.min(100, Math.max(0, arriveY + (panY || 0)))
-  const x = (-(alignX / 100) * overX) + s.x - ((imgX / 100) * wCur)
-  const y = (-(alignY / 100) * overY) + s.y - ((imgY / 100) * hCur)
+  const x = (-(alignX / 100) * overX) + c.panX - ((imgX / 100) * c.w)
+  const y = (-(alignY / 100) * overY) + c.panY - ((imgY / 100) * c.h)
   return {
     width: `${w}px`,
     height: `${h}px`,
@@ -555,12 +544,10 @@ function occupantY(index, occupant) {
 const dragging = ref(null)  // { zoneIndex, startX, startY, origX, origY }
 
 function toImagePos(viewX, viewY) {
-  const { cw, ch } = sceneDims()
-  const { w, h } = sceneSize()
-  const s = panShift()
+  const c = sceneCamera.value
   return {
-    x: (((viewX / 100) * cw + s.x) / w) * 100,
-    y: (((viewY / 100) * ch + s.y) / h) * 100,
+    x: (((viewX / 100) * c.cw + c.panX) / c.w) * 100,
+    y: (((viewY / 100) * c.ch + c.panY) / c.h) * 100,
   }
 }
 
@@ -673,12 +660,11 @@ const imageAspect = ref(null)  // width/height ratio of current image, or null i
 // moved by a single translate3d. Panning is one compositor operation; the dots
 // inside never move individually (no per-dot layout/paint during pan).
 const sceneLayerStyle = computed(() => {
-  const { w, h } = sceneSize()
-  const s = panShift()
+  const c = sceneCamera.value
   return {
-    width: `${w}px`,
-    height: `${h}px`,
-    transform: `translate3d(${-s.x}px, ${-s.y}px, 0)`,
+    width: `${c.w}px`,
+    height: `${c.h}px`,
+    transform: `translate3d(${-c.panX}px, ${-c.panY}px, 0)`,
   }
 })
 
@@ -749,11 +735,11 @@ const armedDot = ref('')   // reactive: travel is armed on this dot (drop → tr
 // radius plus the self dot's radius, converted through the current image scale.
 // Travel only triggers when the character is dropped on the bubble.
 function travelProximity() {
-  const cw = sceneW.value
-  const bubbleW = Math.min(260, Math.max(120, cw * 0.14))
-  const selfW = Math.min(88, Math.max(60, cw * 0.055))
+  const c = sceneCamera.value
+  const bubbleW = Math.min(260, Math.max(120, c.cw * 0.14))
+  const selfW = Math.min(88, Math.max(60, c.cw * 0.055))
   const radiusPx = bubbleW / 2 + selfW / 2
-  const pxPerPct = sceneSize().w / 100  // image-% ↔ px on the X axis
+  const pxPerPct = c.w / 100  // image-% ↔ px on the X axis
   return (radiusPx / pxPerPct) * TRAVEL_PROXIMITY_FACTOR
 }
 
@@ -766,7 +752,6 @@ function onOccupantDragStart(e, occupant, index) {
   if (realIndex === -1) return
   const el = viewerEl.value
   if (!el) return
-  const rect = el.getBoundingClientRect()
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
 
@@ -828,8 +813,9 @@ async function applyOccDragFrame() {
   const { clientX, clientY } = occDragPending
   occDragPending = null
   const start = occDragging.value
-  const dx = ((clientX - start.startX) / sceneW.value) * 100
-  const dy = ((clientY - start.startY) / sceneH.value) * 100
+  const c = sceneCamera.value
+  const dx = ((clientX - start.startX) / c.cw) * 100
+  const dy = ((clientY - start.startY) / c.ch) * 100
   const occ = occupants.value[start.index]
   if (occ) {
     const viewX = occDragging.value.origX + dx
