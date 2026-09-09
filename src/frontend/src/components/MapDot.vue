@@ -57,11 +57,20 @@ const props = defineProps({
   destAspect: { type: Number, default: null },
   panX: { type: Number, default: 0 },
   panY: { type: Number, default: 0 },
+  expandLevel: { type: Number, default: 0 },  // 0..1 — proximity-driven size
 })
 
 const emit = defineEmits(['click', 'overlay-click', 'drag-start'])
 
 const isVideoImage = computed(() => isVideoUrl(props.image))
+
+// 0 (collapsed) .. 1 (fully expanded). Tap/edit/self/occupant are always 1;
+// zone/nav dots scale continuously with expandLevel during a drag.
+const effectiveLevel = computed(() => {
+  if (props.expanded) return 1
+  const l = props.expandLevel || 0
+  return l > 1 ? 1 : l < 0 ? 0 : l
+})
 
 const dotClasses = computed(() => [
   props.type === 'zone' ? 'zone-dot' : '',
@@ -70,15 +79,23 @@ const dotClasses = computed(() => [
   props.type === 'self' ? 'occ-dot self' : '',
   props.variant ? `occ-${props.variant}` : '',
   props.variant && props.type === 'nav' ? `nav-${props.variant}` : '',
-  { expanded: props.expanded, draggable: props.draggable, lerping: props.lerping },
+  { expanded: effectiveLevel.value > 0, draggable: props.draggable, lerping: props.lerping },
 ].filter(Boolean))
 
-const dotStyle = computed(() => ({
-  left: props.x.toFixed(1) + '%',
-  top: props.y.toFixed(1) + '%',
-}))
+const dotStyle = computed(() => {
+  const style = { left: props.x.toFixed(1) + '%', top: props.y.toFixed(1) + '%' }
+  if (props.type === 'zone' || props.type === 'nav') {
+    const full = Math.min(260, Math.max(120, window.innerWidth * 0.14))
+    const size = 16 + (full - 16) * effectiveLevel.value
+    style.width = size + 'px'
+    style.height = size + 'px'
+    style.marginLeft = -(size / 2) + 'px'
+    style.marginTop = -(size / 2) + 'px'
+  }
+  return style
+})
 
-const overlayVisible = computed(() => props.expanded || props.type === 'self' || props.type === 'occupant')
+const overlayVisible = computed(() => effectiveLevel.value > 0 || props.type === 'self' || props.type === 'occupant')
 
 const overlayBgStyle = computed(() => {
   if (props.arrivalX == null || props.arrivalY == null || props.destAspect == null) return null
@@ -131,15 +148,11 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 .nav-dot.nav-parent { background: rgba(200,170,60,0.8); box-shadow: 0 0 6px rgba(200,170,60,0.4); }
 .nav-dot.nav-portal { background: rgba(160,80,200,0.8); box-shadow: 0 0 6px rgba(160,80,200,0.4); }
 .nav-dot.expanded {
-  width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
-  margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
   background: rgba(10,10,20,0.85); backdrop-filter: blur(8px); border: none;
   box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
   z-index: 10; overflow: hidden;
 }
 .map-dot.expanded {
-  width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
-  margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
   background: rgba(10,10,20,0.85); backdrop-filter: blur(8px); border: none;
   box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
   z-index: 10; overflow: hidden;

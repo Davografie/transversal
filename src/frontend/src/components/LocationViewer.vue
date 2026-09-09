@@ -49,12 +49,13 @@
       :x="parallaxX(z.x)" :y="parallaxY(z.y)"
       :image="childImage(z)"
       :label="z.name"
-      :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || hoveredDot === 'zone-' + z.name"
+      :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || (expandLevels['zone-' + z.name] || 0) > 0"
       :draggable="editZones"
       :title="z.name"
       :arrival-x="zoneCache(z)?.arriveX"
       :arrival-y="zoneCache(z)?.arriveY"
       :dest-aspect="zoneCache(z)?.destAspect"
+      :expand-level="expandLevels['zone-' + z.name] || 0"
       :class="{ armed: armedDot === 'zone-' + z.name }"
       @click="onDotClick('zone', z)"
       @overlay-click="onExpandedClick('zone', z)"
@@ -100,7 +101,7 @@
       :x="parallaxX(nd.x)" :y="parallaxY(nd.y)"
       :image="nd.image"
       :label="nd.name"
-      :expanded="editZones || (activeElement?.type === 'nav' && activeElement?.key === nd.key) || hoveredDot === 'nav-' + nd.key"
+      :expanded="editZones || (activeElement?.type === 'nav' && activeElement?.key === nd.key) || (expandLevels['nav-' + nd.key] || 0) > 0"
       :draggable="editZones"
       :title="nd.name"
       :arrival-x="destNavCache[nd.target.id]?.arriveX"
@@ -108,6 +109,7 @@
       :dest-aspect="destNavCache[nd.target.id]?.destAspect"
       :pan-x="navDotPerspective[nd.key]?.panX"
       :pan-y="navDotPerspective[nd.key]?.panY"
+      :expand-level="expandLevels['nav-' + nd.key] || 0"
       :class="{ armed: armedDot === 'nav-' + nd.key }"
       @click="onDotClick('nav', nd)"
       @overlay-click="onExpandedClick('nav', nd)"
@@ -710,7 +712,7 @@ let occDragMoved = false       // pointer moved past the tap threshold
 let draggingEmitted = false    // emitted 'dragging' so the HUD hides during a real drag
 let occSuppressClick = false   // suppress the synthesized click after a real drag
 let dragTarget = null  // non-reactive: nearest travel target during self-drag
-const hoveredDot = ref('')  // reactive: CSS class for proximity highlight (e.g. 'zone-Verdant Dominion')
+const expandLevels = ref({})  // reactive: 'zone-<name>'/'nav-<key>' → 0..1 proximity level
 const armedDot = ref('')   // reactive: travel is armed on this dot (drop → travel)
 
 const EXPAND_PROXIMITY = 24  // image-% — the bubble pops out within this distance
@@ -797,29 +799,30 @@ function onOccDragMove(e) {
     occ.map_y = Math.max(2, Math.min(98, Math.round(img.y)))
   }
 
-  // Track nearest targets — all positions image-relative. Two radii:
-  // EXPAND_PROXIMITY pops the bubble out; travelProximity() arms travel
-  // (drop must land on the expanded bubble to travel).
+  // Track targets — all positions image-relative. EXPAND_PROXIMITY opens
+  // every nearby bubble (size coupled to distance, quick near the dot);
+  // travelProximity() arms travel on the single nearest bubble.
   if (occ && occ.id === props.entityId) {
     const px = occ.map_x, py = occ.map_y
     const travelDist = travelProximity()
 
-    let expandNearest = null, expandNearestDist = EXPAND_PROXIMITY
+    const levels = {}
     let travelNearest = null, travelNearestDist = travelDist
 
-    for (const z of zones.value) {
-      const dist = Math.sqrt((z.x - px) ** 2 + (z.y - py) ** 2)
-      if (dist < expandNearestDist) { expandNearest = { type: 'zone', name: z.name }; expandNearestDist = dist }
-      if (dist < travelNearestDist) { travelNearest = { type: 'zone', name: z.name }; travelNearestDist = dist }
+    const scan = (type, key, name, tx, ty) => {
+      const dist = Math.sqrt((tx - px) ** 2 + (ty - py) ** 2)
+      if (dist < travelNearestDist) { travelNearest = { type, key, name }; travelNearestDist = dist }
+      if (dist < EXPAND_PROXIMITY) {
+        const t = dist / EXPAND_PROXIMITY
+        levels[`${type}-${key || name}`] = 1 - t * t  // quadratic: expands fast
+      }
     }
-    for (const nd of navDots.value) {
-      const dist = Math.sqrt((nd.x - px) ** 2 + (nd.y - py) ** 2)
-      if (dist < expandNearestDist) { expandNearest = { type: 'nav', key: nd.key }; expandNearestDist = dist }
-      if (dist < travelNearestDist) { travelNearest = { type: 'nav', key: nd.key }; travelNearestDist = dist }
-    }
+    for (const z of zones.value) scan('zone', null, z.name, z.x, z.y)
+    for (const nd of navDots.value) scan('nav', nd.key, null, nd.x, nd.y)
+
     dragTarget = travelNearest
-    hoveredDot.value = expandNearest ? `${expandNearest.type}-${expandNearest.name || expandNearest.key}` : ''
-    armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.name || travelNearest.key}` : ''
+    expandLevels.value = levels
+    armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.key || travelNearest.name}` : ''
   }
 }
 
@@ -828,7 +831,7 @@ async function onOccDragEnd() {
   document.removeEventListener('mouseup', onOccDragEnd)
   document.removeEventListener('touchmove', onOccDragMove)
   document.removeEventListener('touchend', onOccDragEnd)
-  hoveredDot.value = ''
+  expandLevels.value = {}
   armedDot.value = ''
   if (draggingEmitted) { draggingEmitted = false; emit('dragging', false) }
   if (!occDragging.value) return
