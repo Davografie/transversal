@@ -198,11 +198,13 @@ shift. The dot's own `border-radius` + `overflow: hidden` clips it; the img must
 not clip itself (`border-radius: 0`). `destNavCache` supplies
 `arrivalX`/`arrivalY`/`destAspect` so that preview shows the exact arrival point.
 
-Transparent navdot images (media pipeline's `EntityImage.transparent`, exposed
-as `image_transparent` on occupants and `navdot_image_transparent` on
-destinations) bypass the hole: they render as **floating cutouts** — no filled
-bubble, no inset vignette, no circular crop (`object-fit: contain`), the
-image's own alpha is the shape.
+Transparent **occupant/self portraits** (media pipeline's
+`EntityImage.transparent`, exposed as `image_transparent` on occupants) render
+as **floating cutouts emerging from a portal ring**: the dot becomes a
+see-through circle outline (no fill, no vignette) and the bottom-anchored
+cutout's head sticks out above the ring — `object-fit: contain`, no circular
+crop, the image's own alpha is the shape. Location images are assumed never
+transparent, so the hole path is unaffected.
 
 ## Interactions
 

@@ -22,7 +22,7 @@
       :src="image"
       class="dot-overlay"
       :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self', 'dot-hole': holeStyle, 'img-transparent': imageTransparent }"
-      :style="holeStyle || { width: '100%', height: '100%', objectFit: imageTransparent ? 'contain' : 'cover' }"
+      :style="holeStyle || overlayImgStyle"
       alt=""
       draggable="false"
       @click.stop="onOverlayClick"
@@ -96,6 +96,14 @@ const dotStyle = computed(() => {
 })
 
 const overlayVisible = computed(() => effectiveLevel.value > 0 || props.type === 'self' || props.type === 'occupant')
+
+// Non-hole image layout. Transparent cutouts are owned entirely by the
+// .img-transparent CSS (emerging-from-the-ring composition); everything else
+// is a plain cover fill.
+const overlayImgStyle = computed(() => {
+  if (props.imageTransparent) return null
+  return { width: '100%', height: '100%', objectFit: 'cover' }
+})
 
 function onClick() { emit('click', { type: props.type, x: props.x, y: props.y }) }
 function onOverlayClick() { emit('overlay-click', { type: props.type, x: props.x, y: props.y }) }
@@ -201,15 +209,25 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   outline-offset: 3px;
 }
 
-/* Transparent (background-removed) navdot images: floating cutout — no filled
-   bubble, no inset vignette, no circular crop. The image's own alpha is the
-   shape. (No drop-shadow filter — filters force repaints on the drag path.) */
+/* Transparent (background-removed) occupant portraits: floating cutout
+   emerging from a "portal ring" — transparent circle outline, no fill, and
+   the image bottom-anchored so a tall portrait's head sticks out above the
+   ring. The image's own alpha is the shape. */
 .map-dot.dot-transparent {
   background: transparent;
   box-shadow: none;
-  border: none !important;  /* beats .occ-dot.self's white ring */
+  border: 2px solid rgba(255,255,255,0.4) !important;
+  overflow: visible !important;  /* the cutout may stick out above the ring */
 }
 .dot-overlay.img-transparent {
   border-radius: 0;
+  object-fit: contain;
+  top: auto;
+  right: auto;
+  left: 50%;
+  bottom: 0;
+  width: 96%;
+  height: auto;
+  transform: translateX(-50%);
 }
 </style>
