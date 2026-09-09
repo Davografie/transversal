@@ -155,10 +155,13 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 }
 /* "Hole" destination preview: an overscan-sized <img> positioned by the parent
    (cancel scene pan + align arrival point + inverse parallax), clipped by the
-   dot's border-radius + overflow. Replaces background-attachment: fixed. */
+   dot's border-radius + overflow. Replaces background-attachment: fixed.
+   No border-radius of its own — 50% on an oversized box would clip the image
+   to an inscribed ellipse whose edge cuts through the hole near screen corners. */
 .dot-hole {
   position: absolute;
   left: 50%; top: 50%;
+  border-radius: 0;
   will-change: transform;
 }
 .map-dot.expanded .dot-overlay { opacity: 1; pointer-events: auto; }
