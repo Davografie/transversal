@@ -11,7 +11,7 @@ tags:
 aliases:
   - Scene Camera Rework
   - Parallax Rework
-status: planned
+status: complete
 ---
 
 # Location Parallax Rework
@@ -104,6 +104,29 @@ Highest leverage, self-contained.
 - Main residual risk: keeping self dot / pool rings / labels screen-space while
   world dots move with the scene.
 - Each slice is a small `navigation` commit; any slice reverts independently.
+
+## Outcome
+
+All four slices landed (2026-09-09). Deviations from the plan:
+
+- **Slice 2 kept negative-margin centering** instead of switching dots to
+  `transform: translate(-50%,-50%)` — the margins are static during panning, so
+  they no longer cost anything, and skipping the centering change kept the
+  slice small.
+- **rAF coalescing (Slice 4's second half) landed early**, as a standalone fix:
+  the frame profiler showed ~6 fps during drags (a high-polling mouse starved
+  rAF with per-event re-renders). Coalescing + the scene layer took drags to
+  the display's full refresh rate (~144 fps, 0 dropped frames on a
+  hardware-accelerated display; the earlier ~25 fps numbers were a
+  software-composited Pixelbook).
+- **Bonus fixes found along the way**: removed `backdrop-filter: blur` from
+  dots (nearly invisible, costly on high-DPI), hole alignment clamped to image
+  bounds (parallax proportional to remaining space), hole img
+  `border-radius: 0` (an overscan-sized img must not clip itself to an
+  inscribed ellipse), and a tunable-constants block at the top of the script.
+- **Temporary instrumentation**: `composables/frameProfile.js` + its call sites
+  (drag frame profiler, `FRAME_PROFILE` toggle) — removable now that the
+  measurement is done.
 
 ## Related
 

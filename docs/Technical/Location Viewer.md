@@ -25,12 +25,14 @@ by `App.vue`. It is the immersive projection of the player's current location:
 a background scene with interactive dots for zones, navigation destinations,
 other occupants, and the player's own character.
 
-> [!note] Current state & pending rework
-> Parallax is now **2D overscan** (scene rendered ~10% larger than the viewport
-> on both axes, panning both axes), and navdot destination images pan inversely
-> through the "hole". A planned rework — [[Location Parallax Rework]] — will move
-> panning from `background-position`/`left/top`/`background-attachment: fixed`
-> onto GPU transforms to remove drag lag.
+> [!note] Rework complete (2026-09-09)
+> Parallax is **2D overscan** (scene rendered ~10% larger than the viewport on
+> both axes). The [[Location Parallax Rework]] is done: everything that moves is
+> a GPU `transform` driven by a single `sceneCamera` object — the background and
+> world dots live in one transformed scene layer, navdot "hole" previews are
+> inner `<img>`s moved by an explicit (clamped) transform, and
+> `background-attachment: fixed` is gone entirely. Drags measure ~144 fps with
+> zero dropped frames on a hardware-accelerated display.
 
 ## Responsibilities
 
@@ -149,18 +151,32 @@ On mount (and whenever `locationId` changes while not mid-travel),
 
 ### Background & parallax
 
-The scene renders relative to the viewer container (`sceneW`/`sceneH` via
-ResizeObserver → `sceneDims()`), sized to `sceneSize()` — the cover fit,
-overscanned by `PAN_OVERSCAN` (1.1) on **both** axes so it pans horizontally and
-vertically at once. `panShift()` positions it so the self character sits at
-`anchorPct()` (50/50 in the mobile `camera`/teaser mode, otherwise its
-`map_x`/`map_y`). The background is a CSS `background` (image) or `<video>`.
+A single `sceneCamera` computed derives everything — container dims
+(`cw`/`ch` via ResizeObserver), scene size (`w`/`h` — the cover fit, overscanned
+by `PAN_OVERSCAN` (1.1) on **both** axes so it pans horizontally and vertically),
+and the pan (`panX`/`panY`) that anchors the self character (50/50 in the mobile
+`camera`/teaser mode, otherwise its `map_x`/`map_y`, with `TEASER_ZOOM` scaling
+the scene in teaser mode).
 
-Dots are positioned in **image-space** (0–100) and converted to viewport
-percentages with `toViewportPos()`; the inverse `toImagePos()` is used during
-drags so a dot's stored `map_x`/`map_y` stays correct even as the background
-pans under it. Navdot destination images pan inversely through the "hole"
-(`navDotPerspective`).
+```
+<viewer (overflow:hidden)>
+  <scene-layer transform:translate3d(-panX,-panY,0)>
+    <bg img/video (overscan-sized)>
+    <zone/nav/occupant dots + pool rings (image-space, transform-centered)>
+  </scene-layer>
+  <self dot + arrival rings + HUD (screen-space)>
+  <travel overlay>
+</viewer>
+```
+
+The background is a plain `<img>`/`<video>` filling the scene layer. World dots
+sit at **image-space** coordinates inside the layer, so panning never moves them
+individually — one compositor operation moves everything. `toViewportPos()`
+(image → viewport) and `toImagePos()` (viewport → image) are thin wrappers over
+`sceneCamera`; they stay in lock-step so a dragged dot's `map_x`/`map_y` stays
+correct as the scene pans under it. Navdot destination images pan inversely
+through the "hole" (`navDotPerspective`), clamped to the image bounds (see
+gotchas).
 
 ### Dot types
 
@@ -175,10 +191,12 @@ pans under it. Navdot destination images pan inversely through the "hole"
 | `self` | `character` | pulsing blue | The player's own character |
 
 Zones and nav dots show the destination's background as their expanded image
-(the `navdot_image` role), with `background-attachment: fixed` so the image stays
-glued to the viewport while the dot itself moves — a preview of where you'd land.
-`destNavCache` supplies `arrivalX`/`arrivalY`/`destAspect` so that preview pans to
-show the exact arrival point.
+(the `navdot_image` role) — the "hole": an overscan-sized inner `<img>` moved by
+an explicit px transform that cancels the scene layer's pan (screen-fixed
+content), aligns the destination's arrival point, and adds the inverse-parallax
+shift. The dot's own `border-radius` + `overflow: hidden` clips it; the img must
+not clip itself (`border-radius: 0`). `destNavCache` supplies
+`arrivalX`/`arrivalY`/`destAspect` so that preview shows the exact arrival point.
 
 ## Interactions
 
@@ -205,7 +223,11 @@ live and persists the whole `nav_positions` object on end via the
 - `canDragOccupant`: GM (arrange mode) can drag anyone; the player can drag
   self; the GM (outside arrange mode) can drag GMCs/assets directly.
 - A 6px threshold separates a tap (inspect) from a real drag (`occDragMoved`).
-- While dragging self, `onOccDragMove` computes two proximity sets:
+- Pointer moves are **coalesced to one update per animation frame**:
+  `onOccDragMove` buffers the latest pointer position and schedules a single
+  `requestAnimationFrame` (`applyOccDragFrame`), so a high-polling mouse can't
+  starve rAF with per-event re-renders.
+- While dragging self, the drag frame computes two proximity sets:
   - **`expandLevels`** — every zone/nav bubble within `EXPAND_PROXIMITY` (24 image-%)
     opens, sized continuously by distance (`1 - (d/EXPAND_PROXIMITY)²`, quick ramp).
   - **`armedDot`** — the single nearest bubble within `travelProximity()` (the
@@ -289,9 +311,19 @@ border), and the overlay/particle system below — run continuously.
 
 ## Key design decisions & gotchas
 
-- **Negative margins, not `transform`.** Dots center themselves with negative
-  `margin` rather than `translate(-50%, -50%)` to preserve
-  `background-attachment: fixed` on the zone/nav image previews.
+- **One `sceneCamera` source.** All pan/size math (`sceneLayerStyle`,
+  `toViewportPos`/`toImagePos`, `navDotPerspective`, `holeStyleFor`,
+  `travelProximity`, the drag frame) reads from the single `sceneCamera`
+  computed — never re-derive the pan independently or the math will drift.
+- **The scene layer is `pointer-events: none`.** Background taps must fall
+  through to the viewer (`onBgClick`); dots opt back in with
+  `pointer-events: auto`.
+- **Hole alignment is clamped to [0, 100].** The destination image is aligned
+  at `arriveX/Y` + the inverse-pan shift; clamping keeps the shift proportional
+  to the remaining image space, so the image never runs out and shows an edge.
+- **Tunable constants live together** at the top of `LocationViewer.vue`'s
+  `<script>`: `INVERSE_PAN_STRENGTH`, `TEASER_ZOOM`, `EXPAND_PROXIMITY`,
+  `TRAVEL_PROXIMITY_FACTOR` (`PAN_OVERSCAN` is in `composables/media.js`).
 - **One source of truth.** The viewer re-renders from `navigate_from` state; it
   does not keep a local world graph. `moveTo`/`relocate` update the entity and
   the UI re-fetches.
