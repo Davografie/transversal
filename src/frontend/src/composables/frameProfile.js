@@ -8,7 +8,7 @@
 // Toggle off with FRAME_PROFILE=false, or delete this file and its call sites
 // in LocationViewer.vue once we've measured.
 
-export const FRAME_PROFILE = true
+export const FRAME_PROFILE = false
 
 let _running = false
 let _rafId = null
