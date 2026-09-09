@@ -179,6 +179,7 @@ import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { isVideoUrl, coverOverscan } from '@/composables/media.js'
 import { perfMark } from '@/composables/perfLog.js'
+import { startFrameProfile, stopFrameProfile, notePointerEvent } from '@/composables/frameProfile.js'
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -781,9 +782,12 @@ function onOccDragMove(e) {
   if (!occDragMoved) {
     if (Math.hypot(clientX - start.startX, clientY - start.startY) < 6) return
     occDragMoved = true
+    const isSelf = occupants.value[start.index]?.id === props.entityId
+    startFrameProfile(isSelf ? 'self' : 'occupant')
     if (!draggingEmitted) { draggingEmitted = true; emit('dragging', true) }
   }
   e.preventDefault()
+  notePointerEvent()
   const rect = el.getBoundingClientRect()
   const dx = ((clientX - start.startX) / rect.width) * 100
   const dy = ((clientY - start.startY) / rect.height) * 100
@@ -834,6 +838,7 @@ async function onOccDragEnd() {
   if (!occDragging.value) return
   const occ = occupants.value[occDragging.value.index]
   const wasMoved = occDragMoved
+  if (wasMoved) stopFrameProfile()
   occDragging.value = null
   occDragMoved = false
   if (!occ) return
