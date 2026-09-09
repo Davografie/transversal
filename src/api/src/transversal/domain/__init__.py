@@ -863,6 +863,16 @@ def derive_placement(trigger: str) -> str:
     return "menu"
 
 
+def derive_arming_scope(trigger: str) -> str:
+    """The listener scope implied by a trigger (``self``/``global``).
+
+    ``on_session_start`` → ``global`` (a passive rule that listens to every
+    entity's rolls); any other trigger → ``self`` (listen to the triggering
+    entity). This is the default when an SFX declares no explicit scope.
+    """
+    return "global" if trigger == "on_session_start" else "self"
+
+
 class SFX(BaseModel):
     """SFX registry entry.
 
@@ -882,6 +892,15 @@ class SFX(BaseModel):
     # Activation surface: ``auto`` (event-driven), ``sheet`` (owner card),
     # ``menu`` (post-roll consequence menu). ``None`` = derive from ``trigger``.
     placement: Optional[str] = None
+    # Listener scope: who the armed SFX listens to — ``self`` (the triggering
+    # entity), ``global`` (every entity's rolls), or ``listener_spec`` (a set
+    # resolved from ``listener_spec``). ``None`` = derive from ``trigger``
+    # (``on_session_start`` → global, else self).
+    arming_scope: Optional[str] = None
+    # Targeting path resolving the listener *set* when ``arming_scope`` is
+    # ``listener_spec`` (e.g. ``select self → navigate relationships → filter
+    # type == curse_bind → navigate target``).
+    listener_spec: Optional[TargetSpec] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
     # How long the SFX stays in effect once triggered (the in-memory effective
@@ -928,6 +947,11 @@ class SFX(BaseModel):
     def effective_placement(self) -> str:
         """The activation surface, derived from ``trigger`` when unset."""
         return self.placement or derive_placement(self.trigger)
+
+    @property
+    def effective_arming_scope(self) -> str:
+        """The listener scope, derived from ``trigger`` when unset."""
+        return self.arming_scope or derive_arming_scope(self.trigger)
 
 
 class SfxOwner(BaseModel):

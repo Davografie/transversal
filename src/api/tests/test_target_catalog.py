@@ -96,11 +96,16 @@ def test_source_kinds_are_declared_and_consistent():
     from transversal.services import target_catalog as tc
 
     assert {s.value for s in tc.SOURCE_KINDS} == {
-        "trait_setting", "traitset_setting", "entity", "projection",
+        "trait_setting", "traitset_setting", "entity", "projection", "table", "gm",
     }
     for s in tc.SOURCE_KINDS:
-        assert s.element in tc.ELEMENT_TYPES, s.value
-        assert s.owner_surface in ("trait_instance", "trait_set", "entity", "projection")
+        assert s.owner_surface in ("trait_instance", "trait_set", "entity", "projection", "table", "gm")
+        # Typed sources resolve to a catalog element; bucket sources (table/gm)
+        # are non-resolving (empty element).
+        if s.element:
+            assert s.element in tc.ELEMENT_TYPES, s.value
+        else:
+            assert s.value in ("table", "gm")
 
 
 def test_traitsetsetting_element_and_polarity_field_exist():

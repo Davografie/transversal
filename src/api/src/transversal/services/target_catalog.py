@@ -292,6 +292,12 @@ SOURCE_KINDS: tuple[SourceKind, ...] = (
     SourceKind("traitset_setting", "Trait set setting", "traitsetsetting", "traitset_setting", "trait_set"),
     SourceKind("entity", "Entity", "entity", "entity", "entity"),
     SourceKind("projection", "Projection", "projection", "projection", "projection"),
+    # Bucket sources: attached to the table/GM owner buckets, not a typed
+    # instance. Non-resolving — empty element/variable, so ``source_element``
+    # and ``source_variable`` return None and there is no ``select source`` /
+    # ``{variable}`` / ``source_rating`` for them.
+    SourceKind("table", "Table", "", "", "table"),
+    SourceKind("gm", "GM", "", "", "gm"),
 )
 
 _SOURCE_KINDS_BY_VALUE: dict[str, SourceKind] = {s.value: s for s in SOURCE_KINDS}
@@ -303,15 +309,15 @@ def source_kind(value: str) -> SourceKind | None:
 
 
 def source_variable(value: str) -> str | None:
-    """The ``{variable}`` token a ``source_kind`` exposes (None when unset)."""
+    """The ``{variable}`` token a ``source_kind`` exposes (None when unset/non-resolving)."""
     sk = _SOURCE_KINDS_BY_VALUE.get(value)
-    return sk.variable if sk else None
+    return sk.variable if sk and sk.variable else None
 
 
 def source_element(value: str) -> str | None:
-    """The catalog element type a ``source_kind``'s source resolves to."""
+    """The catalog element type a ``source_kind``'s source resolves to (None when unset/non-resolving)."""
     sk = _SOURCE_KINDS_BY_VALUE.get(value)
-    return sk.element if sk else None
+    return sk.element if sk and sk.element else None
 
 
 def bind_source(source_kind: str, source_id: str | None, context: dict) -> dict:
@@ -410,7 +416,8 @@ def validate() -> list[str]:
             problems.append(f"collection {c.name}: unknown element {c.element!r}")
 
     for sk in SOURCE_KINDS:
-        if sk.element not in ELEMENT_TYPES:
+        # Bucket sources (``table``/``gm``) are non-resolving: empty element.
+        if sk.element and sk.element not in ELEMENT_TYPES:
             problems.append(f"source_kind {sk.value}: unknown element {sk.element!r}")
 
     return problems

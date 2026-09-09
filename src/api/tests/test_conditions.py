@@ -482,3 +482,17 @@ def test_derive_placement():
     assert SFX(id="b", name="b", trigger="on_contest_win").effective_placement == "auto"
     assert SFX(id="c", name="c", trigger="contest_win").effective_placement == "menu"
     assert SFX(id="d", name="d", trigger="manual", placement="menu").effective_placement == "menu"
+
+
+def test_derive_arming_scope():
+    from transversal.domain import SFX, derive_arming_scope
+
+    assert derive_arming_scope("on_session_start") == "global"
+    assert derive_arming_scope("manual") == "self"
+    assert derive_arming_scope("on_roll") == "self"
+    # None → derived from trigger.
+    assert SFX(id="a", name="a", trigger="on_session_start").effective_arming_scope == "global"
+    assert SFX(id="b", name="b", trigger="manual").effective_arming_scope == "self"
+    # Explicit scope wins.
+    assert SFX(id="c", name="c", trigger="manual", arming_scope="global").effective_arming_scope == "global"
+    assert SFX(id="d", name="d", trigger="on_session_start", arming_scope="self").effective_arming_scope == "self"
