@@ -73,13 +73,32 @@ What kind of thing *carries* the SFX — its activation origin. This determines 
 
 | Source | Meaning | `select source` resolves to |
 |--------|---------|------------------------------|
-| *(none)* | Bucket/passive — no meaningful origin | — |
+| *(none)* | Not yet attached (orphan) | — |
 | **Trait setting** | A trait instance on the entity (e.g. Phaos' *Medicine*) | the trait instance |
 | **Trait set setting** | A trait-set instance | the set instance |
 | **Entity** | The character/entity itself | the entity |
 | **Projection** | The active projection | the projection |
+| **Table** | Available to every entity (the table bucket) | — (non-resolving) |
+| **GM** | GM-only contexts | — (non-resolving) |
 
-Set **Trait setting** when the SFX is granted by and scales with a trait (so `source_rating` conditions can gate on that trait's rating).
+Set **Trait setting** when the SFX is granted by and scales with a trait (so `source_rating` conditions can gate on that trait's rating). **Table**/**GM** are *bucket* sources — they have no single instance, so `select source` / `source_rating` don't apply to them.
+
+### Arming scope
+
+Who the armed SFX **listens to** once it fires its delayed (roll/outcome-timed) effects. **Auto (from trigger)** derives it:
+
+- `on_session_start` → **global** (a passive rule — listens to every entity's rolls)
+- anything else → **self** (listens to the triggering entity)
+
+The **Listens to** control overrides it:
+
+| Scope | Listens to |
+|-------|-----------|
+| **Self** | The triggering entity |
+| **Global** | Every entity's rolls |
+| **A targeting path** | The entity set resolved from a targeting path (`select self → navigate relationships → filter type == curse_bind → navigate target`) |
+
+You only need this for cross-entity listening (e.g. a curse that binds two entities). Normal SFX leave it on **Auto**. See [[SFX Activation Model Plan]] for the design.
 
 ### Conditions
 
