@@ -1,7 +1,11 @@
 <template>
-  <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" :style="bgStyle" @click="onBgClick">
-    <!-- Video background for animated/webm formats -->
-    <video v-if="isVideoBg" ref="videoBgEl" :src="currentImage" class="video-bg" :style="videoStyle" autoplay loop muted playsinline />
+  <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" @click="onBgClick">
+    <!-- Background scene: static <img> or animated <video>, sized to the
+         overscanned scene and moved by a single GPU transform (no repaint). -->
+    <div v-if="currentImage" class="scene-bg">
+      <video v-if="isVideoBg" ref="videoBgEl" :src="currentImage" class="scene-media" :style="sceneMediaStyle" autoplay loop muted playsinline />
+      <img v-else :src="currentImage" class="scene-media" :style="sceneMediaStyle" alt="" />
+    </div>
     <!-- Visual overlay layer (CSS effects) -->
     <div v-if="effectsEnabled && optimisticOverlay" class="overlay-layer" :class="optimisticOverlay" />
 
@@ -631,29 +635,22 @@ const navDots = computed(() => {
 
 const imageAspect = ref(null)  // width/height ratio of current image, or null if unknown
 
-const bgStyle = computed(() => {
-  if (!currentImage.value) return ''
-  if (isVideoBg.value) return ''  // video element handles the visual
-
-  const { w, h } = sceneSize()
-  const s = panShift()
-  return {
-    backgroundImage: `url(${currentImage.value})`,
-    backgroundSize: `${w}px ${h}px`,
-    backgroundPosition: `${-s.x}px ${-s.y}px`,
+// Scene media layer: the background <img>/<video> is sized to the overscanned
+// scene and moved with a single translate3d, so panning composites on the GPU
+// instead of repainting a large background-position bitmap every drag frame.
+const sceneMediaStyle = computed(() => {
+  if (!currentImage.value) return {}
+  // Aspect not known yet (image/video metadata still loading): cover the
+  // container without panning, then snap into the scene layer once we know it.
+  if (!imageAspect.value) {
+    return { width: '100%', height: '100%', objectFit: 'cover', transform: 'none' }
   }
-})
-
-const videoStyle = computed(() => {
-  if (!isVideoBg.value || !currentImage.value) return {}
-  if (!imageAspect.value) return {}  // aspect unknown yet: fall back to CSS cover
   const { w, h } = sceneSize()
   const s = panShift()
   return {
     width: `${w}px`,
     height: `${h}px`,
-    left: `${-s.x}px`,
-    top: `${-s.y}px`,
+    transform: `translate3d(${-s.x}px, ${-s.y}px, 0)`,
   }
 })
 
@@ -1349,24 +1346,25 @@ onMounted(() => {
 .location-viewer {
   position: fixed;
   inset: 0;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   background-color: #0a0a0f;
   background-image: radial-gradient(ellipse at 40% 40%, #1a1a2e 0%, #0a0a0f 70%);
-  transition: background-image 0.8s ease, background-position 0.3s ease-out;
   z-index: 0;
 }
-/* No background fade during portal travel — portal handles the transition */
-.location-viewer.portal-active {
-  transition: none;
+
+/* Background scene: an overscanned <img>/<video> layer, panned by transform.
+   pointer-events: none so the viewer's own click handling stays intact. */
+.scene-bg {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
 }
 
-.video-bg {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
+.scene-media {
+  position: absolute; top: 0; left: 0;
   object-fit: cover;
-  z-index: 0; pointer-events: none;
+  will-change: transform;
+  pointer-events: none;
 }
 
 .loc-label {
