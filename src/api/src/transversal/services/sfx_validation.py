@@ -92,12 +92,16 @@ def _missing_required(effect: Effect) -> list[str]:
     return missing
 
 
-def validate_sfx(sfx: SFX) -> list[str]:
+def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     """Return authoring warnings for unknown ``{variables}`` (empty = valid).
 
     Context dict values are intentionally skipped — they are free-form and can
     hold mechanism tokens (projection policies, step counts) that are not
     trigger variables.
+
+    When ``repo`` is provided and the SFX is already persisted, also warns on a
+    declared ``source_kind`` that matches no actual owner (a silent no-op at
+    fire time) and on a ``listener_spec`` arming scope without a listener path.
     """
     warnings: list[str] = []
     known = {v.name for v in trigger_variables(sfx.trigger)}
@@ -134,5 +138,24 @@ def validate_sfx(sfx: SFX) -> list[str]:
         for token in _tokens(condition.subject, condition.target):
             if token not in known and not _reserved(token):
                 warnings.append(f"Condition {i + 1}: unknown variable {{{token}}}")
+
+    # Arming scope consistency: a listener_spec scope needs a resolvable path.
+    if sfx.arming_scope == "listener_spec" and not (sfx.listener_spec and sfx.listener_spec.steps):
+        warnings.append("Arming scope is 'listener_spec' but no listener path is set")
+
+    # source_kind ↔ ownership: a declared source that no surface actually owns
+    # makes ``select source`` / ``source_rating`` resolve to nothing at fire time.
+    if repo is not None and sfx.id and sfx.source_kind:
+        from transversal.services.target_catalog import source_kind as source_kind_def
+        sk = source_kind_def(sfx.source_kind)
+        if sk is not None and sk.owner_surface:
+            from transversal.services.sfx_owner import owned_surfaces
+            surfaces = owned_surfaces(repo, sfx.id)
+            if surfaces and sk.owner_surface not in surfaces:
+                owned = ", ".join(sorted(surfaces))
+                warnings.append(
+                    f"Source is '{sfx.source_kind}' but this SFX is owned by {owned}, "
+                    f"not '{sk.owner_surface}' — select source / source rating will resolve to nothing"
+                )
 
     return warnings

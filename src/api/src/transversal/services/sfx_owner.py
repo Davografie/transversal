@@ -624,6 +624,24 @@ def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_
 _BUCKET_TYPES = ("table", "gm")
 _BUCKET_LABELS = {"table": "Table", "gm": "GM"}
 
+# Every owner surface an SFX can be attached to (mirrors SfxOwnerKind).
+_OWNER_SURFACES = ("table", "gm", "entity", "projection", "trait", "trait_instance", "trait_set")
+
+
+def owned_surfaces(repo, sfx_id: str) -> set[str]:
+    """The owner-surface names that actively carry ``sfx_id`` (empty = unowned).
+
+    Used by authoring validation to catch a declared ``source_kind`` that does
+    not match where the SFX is actually attached (a silent no-op at fire time).
+    """
+    surfaces: set[str] = set()
+    for owner_type in _OWNER_SURFACES:
+        for ref in list_owner_refs(repo, owner_type):
+            if sfx_id in (ref.get("sfx_ids") or []):
+                surfaces.add(owner_type)
+                break  # one matching ref is enough per surface type
+    return surfaces
+
 
 def _entity_name(repo, entity_id: str) -> str:
     entity = repo.get_entity(entity_id)

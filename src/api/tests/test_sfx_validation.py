@@ -156,3 +156,36 @@ def test_each_source_kind_exposes_its_variable():
     assert source_variable("projection") == "projection"
     assert source_variable("bogus") is None
     assert source_variable("") is None
+
+
+def test_listener_spec_scope_without_path_warns():
+    sfx = _sfx()
+    sfx.arming_scope = "listener_spec"
+    assert validate_sfx(sfx) == ["Arming scope is 'listener_spec' but no listener path is set"]
+
+
+def test_source_kind_ownership_mismatch_warns(monkeypatch):
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: {"entity"})
+    sfx = _sfx()
+    sfx.source_kind = "trait_setting"
+    assert validate_sfx(sfx, repo=object()) == [
+        "Source is 'trait_setting' but this SFX is owned by entity, not 'trait_instance' — select source / source rating will resolve to nothing"
+    ]
+
+
+def test_source_kind_matching_owner_no_warning(monkeypatch):
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: {"trait_instance"})
+    sfx = _sfx()
+    sfx.source_kind = "trait_setting"
+    assert validate_sfx(sfx, repo=object()) == []
+
+
+def test_ownership_guard_skipped_when_unowned_or_no_repo(monkeypatch):
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: set())
+    sfx = _sfx()
+    sfx.source_kind = "trait_setting"
+    assert validate_sfx(sfx, repo=object()) == []  # unowned → skip
+    assert validate_sfx(sfx) == []  # no repo → skip

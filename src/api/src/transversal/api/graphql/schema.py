@@ -906,7 +906,7 @@ class Query:
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
             duration=_duration_input_to_domain(input.duration),
         )
-        return validate_sfx(draft)
+        return validate_sfx(draft, repo=_em(info).repo)
 
     @strawberry.field
     def target_candidates(

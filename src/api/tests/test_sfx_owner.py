@@ -684,3 +684,19 @@ def test_resolve_sfx_source_entity():
     obj, element = out
     assert element == "entity"
     assert obj is repo.entity
+
+
+def test_owned_surfaces_collects_across_surfaces(monkeypatch):
+    import transversal.services.sfx_owner as sfo
+
+    def fake_list_owner_refs(repo, owner_type):
+        if owner_type == "table":
+            return [{"sfx_ids": ["sfx-x"]}]
+        if owner_type == "entity":
+            return [{"sfx_ids": ["sfx-y"]}]
+        return []
+
+    monkeypatch.setattr(sfo, "list_owner_refs", fake_list_owner_refs)
+    assert sfo.owned_surfaces(None, "sfx-x") == {"table"}
+    assert sfo.owned_surfaces(None, "sfx-y") == {"entity"}
+    assert sfo.owned_surfaces(None, "sfx-z") == set()
