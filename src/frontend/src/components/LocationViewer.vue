@@ -1,11 +1,89 @@
 <template>
   <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" @click="onBgClick">
-    <!-- Background scene: static <img> or animated <video>, sized to the
-         overscanned scene and moved by a single GPU transform (no repaint). -->
-    <div v-if="currentImage" class="scene-bg">
-      <video v-if="isVideoBg" ref="videoBgEl" :src="currentImage" class="scene-media" :style="sceneMediaStyle" autoplay loop muted playsinline />
-      <img v-else :src="currentImage" class="scene-media" :style="sceneMediaStyle" alt="" />
+    <!-- Scene layer: background + world dots, all panned by ONE transform.
+         Dots sit at image-space coordinates inside the layer, so panning
+         never moves them individually (compositor-only, no per-dot paint). -->
+    <div class="scene-layer" :style="sceneLayerStyle">
+      <video v-if="currentImage && isVideoBg" ref="videoBgEl" :src="currentImage" class="scene-media" autoplay loop muted playsinline />
+      <img v-else-if="currentImage" :src="currentImage" class="scene-media" alt="" />
+
+      <!-- Zone dots -->
+      <template v-for="(z, i) in zones" :key="'z-' + z.name">
+      <MapDot
+        v-if="showElements"
+        type="zone"
+        :x="z.x" :y="z.y"
+        :image="childImage(z)"
+        :label="z.name"
+        :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || (expandLevels['zone-' + z.name] || 0) > 0"
+        :draggable="editZones"
+        :title="z.name"
+        :arrival-x="zoneCache(z)?.arriveX"
+        :arrival-y="zoneCache(z)?.arriveY"
+        :dest-aspect="zoneCache(z)?.destAspect"
+        :expand-level="expandLevels['zone-' + z.name] || 0"
+        :class="{ armed: armedDot === 'zone-' + z.name }"
+        @click="onDotClick('zone', z)"
+        @overlay-click="onExpandedClick('zone', z)"
+        @drag-start="(e) => onZoneDragStart(e, z, i)"
+      />
+      </template>
+
+      <!-- Occupant dots (non-self only, always expanded) -->
+      <template v-for="(o, i) in occupantDots" :key="'o-' + o.id">
+      <MapDot
+        v-if="!travelAnim.active && showElements"
+        type="occupant"
+        :variant="o.type"
+        :class="{ 'dot-draft': o.unpublished }"
+        :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
+        :image="o.image"
+        :initials="occupantInitials(o.name)"
+        :expanded="true"
+        :draggable="canDragOccupant(o)"
+        :lerping="lerpActive"
+        :title="canDragOccupant(o) ? 'Drag to reposition' : (o.unpublished ? o.name + ' (draft)' : o.name)"
+        @click="onDotClick('occupant', o)"
+        @overlay-click="onExpandedClick('occupant', o)"
+        @drag-start="(e) => onOccupantDragStart(e, o, i)"
+      />
+      <!-- Pool dice ring around occupant dot -->
+      <PoolDiceRing
+        v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || (poolPhaseFor(o.id) === 'resolved' && remoteResults[o.id]))"
+        :dice="poolDiceFor(o.id)"
+        :phase="poolPhaseFor(o.id)"
+        :cx="o.map_x ?? occupantX(i, o)"
+        :cy="o.map_y ?? occupantY(i, o)"
+        :resolved="remoteResults[o.id] || null"
+      />
+      </template>
+
+      <!-- Navigation dots -->
+      <template v-for="nd in navDots" :key="'nav-' + nd.key">
+      <MapDot
+        v-if="showElements"
+        type="nav"
+        :variant="nd.type"
+        :x="nd.x" :y="nd.y"
+        :image="nd.image"
+        :label="nd.name"
+        :expanded="editZones || (activeElement?.type === 'nav' && activeElement?.key === nd.key) || (expandLevels['nav-' + nd.key] || 0) > 0"
+        :draggable="editZones"
+        :title="nd.name"
+        :arrival-x="destNavCache[nd.target.id]?.arriveX"
+        :arrival-y="destNavCache[nd.target.id]?.arriveY"
+        :dest-aspect="destNavCache[nd.target.id]?.destAspect"
+        :pan-x="navDotPerspective[nd.key]?.panX"
+        :pan-y="navDotPerspective[nd.key]?.panY"
+        :expand-level="expandLevels['nav-' + nd.key] || 0"
+        :class="{ armed: armedDot === 'nav-' + nd.key }"
+        @click="onDotClick('nav', nd)"
+        @overlay-click="onExpandedClick('nav', nd)"
+        @drag-start="(e) => onNavDragStart(e, nd)"
+      />
+      </template>
     </div>
+
     <!-- Visual overlay layer (CSS effects) -->
     <div v-if="effectsEnabled && optimisticOverlay" class="overlay-layer" :class="optimisticOverlay" />
 
@@ -44,82 +122,6 @@
         @click="effectsEnabled = !effectsEnabled"
       >{{ effectsEnabled ? '✨' : '🌑' }}</button>
     </div>
-
-    <!-- Zone dots -->
-    <template v-for="(z, i) in zones" :key="'z-' + z.name">
-    <MapDot
-      v-if="showElements"
-      type="zone"
-      :x="parallaxX(z.x)" :y="parallaxY(z.y)"
-      :image="childImage(z)"
-      :label="z.name"
-      :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || (expandLevels['zone-' + z.name] || 0) > 0"
-      :draggable="editZones"
-      :title="z.name"
-      :arrival-x="zoneCache(z)?.arriveX"
-      :arrival-y="zoneCache(z)?.arriveY"
-      :dest-aspect="zoneCache(z)?.destAspect"
-      :expand-level="expandLevels['zone-' + z.name] || 0"
-      :class="{ armed: armedDot === 'zone-' + z.name }"
-      @click="onDotClick('zone', z)"
-      @overlay-click="onExpandedClick('zone', z)"
-      @drag-start="(e) => onZoneDragStart(e, z, i)"
-    />
-    </template>
-
-    <!-- Occupant dots (non-self only, always expanded) -->
-    <template v-for="(o, i) in occupantDots" :key="'o-' + o.id">
-    <MapDot
-      v-if="!travelAnim.active && showElements"
-      type="occupant"
-      :variant="o.type"
-      :class="{ 'dot-draft': o.unpublished }"
-      :x="parallaxX(o.map_x ?? occupantX(i, o))" :y="parallaxY(o.map_y ?? occupantY(i, o))"
-      :image="o.image"
-      :initials="occupantInitials(o.name)"
-      :expanded="true"
-      :draggable="canDragOccupant(o)"
-      :lerping="lerpActive"
-      :title="canDragOccupant(o) ? 'Drag to reposition' : (o.unpublished ? o.name + ' (draft)' : o.name)"
-      @click="onDotClick('occupant', o)"
-      @overlay-click="onExpandedClick('occupant', o)"
-      @drag-start="(e) => onOccupantDragStart(e, o, i)"
-    />
-    <!-- Pool dice ring around occupant dot -->
-    <PoolDiceRing
-      v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || (poolPhaseFor(o.id) === 'resolved' && remoteResults[o.id]))"
-      :dice="poolDiceFor(o.id)"
-      :phase="poolPhaseFor(o.id)"
-      :cx="parallaxX(o.map_x ?? occupantX(i, o))"
-      :cy="parallaxY(o.map_y ?? occupantY(i, o))"
-      :resolved="remoteResults[o.id] || null"
-    />
-    </template>
-
-    <!-- Navigation dots -->
-    <template v-for="nd in navDots" :key="'nav-' + nd.key">
-    <MapDot
-      v-if="showElements"
-      type="nav"
-      :variant="nd.type"
-      :x="parallaxX(nd.x)" :y="parallaxY(nd.y)"
-      :image="nd.image"
-      :label="nd.name"
-      :expanded="editZones || (activeElement?.type === 'nav' && activeElement?.key === nd.key) || (expandLevels['nav-' + nd.key] || 0) > 0"
-      :draggable="editZones"
-      :title="nd.name"
-      :arrival-x="destNavCache[nd.target.id]?.arriveX"
-      :arrival-y="destNavCache[nd.target.id]?.arriveY"
-      :dest-aspect="destNavCache[nd.target.id]?.destAspect"
-      :pan-x="navDotPerspective[nd.key]?.panX"
-      :pan-y="navDotPerspective[nd.key]?.panY"
-      :expand-level="expandLevels['nav-' + nd.key] || 0"
-      :class="{ armed: armedDot === 'nav-' + nd.key }"
-      @click="onDotClick('nav', nd)"
-      @overlay-click="onExpandedClick('nav', nd)"
-      @drag-start="(e) => onNavDragStart(e, nd)"
-    />
-    </template>
 
     <!-- Arrival animation rings -->
     <div
@@ -467,12 +469,6 @@ function toViewportPos(imgX, imgY) {
   return { left: viewX.toFixed(1) + '%', top: viewY.toFixed(1) + '%' }
 }
 
-function parallaxedStyle(imgX, imgY) {
-  return toViewportPos(imgX, imgY)
-}
-
-function parallaxX(imgX) { return parseFloat(toViewportPos(imgX, 0).left) || imgX }
-function parallaxY(imgY) { return parseFloat(toViewportPos(0, imgY).top) || imgY }
 
 // Inverse parallax for navdot "hole" images: the destination scene pans
 // opposite to the current scene's shift, like looking through a hole in the
@@ -636,16 +632,10 @@ const navDots = computed(() => {
 
 const imageAspect = ref(null)  // width/height ratio of current image, or null if unknown
 
-// Scene media layer: the background <img>/<video> is sized to the overscanned
-// scene and moved with a single translate3d, so panning composites on the GPU
-// instead of repainting a large background-position bitmap every drag frame.
-const sceneMediaStyle = computed(() => {
-  if (!currentImage.value) return {}
-  // Aspect not known yet (image/video metadata still loading): cover the
-  // container without panning, then snap into the scene layer once we know it.
-  if (!imageAspect.value) {
-    return { width: '100%', height: '100%', objectFit: 'cover', transform: 'none' }
-  }
+// Scene layer: background + world dots, sized to the overscanned scene and
+// moved by a single translate3d. Panning is one compositor operation; the dots
+// inside never move individually (no per-dot layout/paint during pan).
+const sceneLayerStyle = computed(() => {
   const { w, h } = sceneSize()
   const s = panShift()
   return {
@@ -1371,24 +1361,28 @@ onMounted(() => {
 .location-viewer {
   position: fixed;
   inset: 0;
+  overflow: hidden;
   background-color: #0a0a0f;
   background-image: radial-gradient(ellipse at 40% 40%, #1a1a2e 0%, #0a0a0f 70%);
   z-index: 0;
 }
 
-/* Background scene: an overscanned <img>/<video> layer, panned by transform.
-   pointer-events: none so the viewer's own click handling stays intact. */
-.scene-bg {
-  position: absolute; inset: 0;
-  overflow: hidden;
+/* Scene layer: the overscanned background + world dots, sized and panned by
+   sceneLayerStyle (one transform). pointer-events: none so background clicks
+   fall through to the viewer; the dots re-enable events with auto. */
+.scene-layer {
+  position: absolute;
+  top: 0; left: 0;
   z-index: 0;
   pointer-events: none;
+  will-change: transform;
 }
 
 .scene-media {
-  position: absolute; top: 0; left: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  will-change: transform;
   pointer-events: none;
 }
 

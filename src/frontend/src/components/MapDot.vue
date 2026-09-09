@@ -118,6 +118,7 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 <style>
 .map-dot {
   position: absolute;
+  pointer-events: auto; /* parent scene-layer is pointer-events:none — dots opt back in */
   margin-left: -8px; margin-top: -8px;
   border-radius: 50%;
   border: none;
