@@ -1398,6 +1398,10 @@ let closeTimer = null
 const currentPoolSources = ref([])
 const viewingEntityId = ref(null)
 const actingEntityId = ref(null)  // GM: entity being acted as (null = difficulty/free-roam)
+// When the GM switches which entity they're acting as, re-seed the pool tabs
+// from the server so entities acted as earlier (with dice still saved) keep a
+// tab — the GM's own pool edits don't reach remotePools via the SSE echo.
+watch(actingEntityId, seedRemotePools)
 const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')
