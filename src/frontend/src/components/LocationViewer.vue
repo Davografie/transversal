@@ -710,6 +710,11 @@ let occDragMoved = false       // pointer moved past the tap threshold
 let draggingEmitted = false    // emitted 'dragging' so the HUD hides during a real drag
 let occSuppressClick = false   // suppress the synthesized click after a real drag
 let dragTarget = null  // non-reactive: nearest travel target during self-drag
+// Coalesce high-frequency pointermove into one update per animation frame: a
+// high-polling mouse otherwise triggers a full re-render + layout on every
+// event and starves requestAnimationFrame (measured ~6 fps during drags).
+let occDragRafId = null
+let occDragPending = null  // { clientX, clientY } — latest unapplied pointer position
 const expandLevels = ref({})  // reactive: 'zone-<name>'/'nav-<key>' → 0..1 proximity level
 const armedDot = ref('')   // reactive: travel is armed on this dot (drop → travel)
 
@@ -774,8 +779,6 @@ function onOccupantDragStart(e, occupant, index) {
 
 function onOccDragMove(e) {
   if (!occDragging.value) return
-  const el = viewerEl.value
-  if (!el) return
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
   const start = occDragging.value
@@ -788,9 +791,20 @@ function onOccDragMove(e) {
   }
   e.preventDefault()
   notePointerEvent()
-  const rect = el.getBoundingClientRect()
-  const dx = ((clientX - start.startX) / rect.width) * 100
-  const dy = ((clientY - start.startY) / rect.height) * 100
+  occDragPending = { clientX, clientY }
+  if (occDragRafId == null) occDragRafId = requestAnimationFrame(applyOccDragFrame)
+}
+
+// Apply the latest buffered pointer position once per frame (not per event),
+// so a high-polling mouse can't saturate the main thread with re-renders.
+function applyOccDragFrame() {
+  occDragRafId = null
+  if (!occDragging.value || !occDragPending) return
+  const { clientX, clientY } = occDragPending
+  occDragPending = null
+  const start = occDragging.value
+  const dx = ((clientX - start.startX) / sceneW.value) * 100
+  const dy = ((clientY - start.startY) / sceneH.value) * 100
   const occ = occupants.value[start.index]
   if (occ) {
     const viewX = occDragging.value.origX + dx
@@ -839,6 +853,8 @@ async function onOccDragEnd() {
   const occ = occupants.value[occDragging.value.index]
   const wasMoved = occDragMoved
   if (wasMoved) stopFrameProfile()
+  if (occDragRafId != null) { cancelAnimationFrame(occDragRafId); occDragRafId = null }
+  occDragPending = null
   occDragging.value = null
   occDragMoved = false
   if (!occ) return
