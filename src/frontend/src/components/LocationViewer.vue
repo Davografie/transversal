@@ -376,11 +376,25 @@ async function setOverlay(value) {
   } catch { optimisticOverlay.value = props.overlay }  // rollback on error
 }
 
-const selfOccupant = computed(() => occupants.value.find(o => o.id === props.entityId) || { map_x: 50, map_y: 50, name: '', image: null })
-const selfX = computed(() => selfOccupant.value.map_x ?? 50)
-const selfY = computed(() => selfOccupant.value.map_y ?? 50)
+// Self position in image space. With a perspective entity it's that occupant's
+// map position; without one (GM free-roam, entityId == null) it's the GM dot's
+// local position, else centre.
+const gmSelfPos = ref(null)  // { x, y } image % — GM free-roam dot (local, not persisted)
+const selfPos = computed(() => {
+  const o = occupants.value.find(o => o.id === props.entityId)
+  const g = gmSelfPos.value
+  return { x: o?.map_x ?? g?.x ?? 50, y: o?.map_y ?? g?.y ?? 50 }
+})
+
+const selfOccupant = computed(() => occupants.value.find(o => o.id === props.entityId) || { name: '', image: null })
+const selfX = computed(() => selfPos.value.x)
+const selfY = computed(() => selfPos.value.y)
 const selfImage = computed(() => selfOccupant.value.image || null)
-const selfInitials = computed(() => occupantInitials(selfOccupant.value.name || 'You'))
+const selfInitials = computed(() => {
+  const o = occupants.value.find(o => o.id === props.entityId)
+  if (o) return occupantInitials(o.name || 'You')
+  return props.gmMode ? 'GM' : occupantInitials('You')
+})
 
 const arrivalRings = [
   // Phase 1 — Reverse ripple (energy coalescing inward)
@@ -396,20 +410,14 @@ const arrivalRings = [
 
 function onSelfDragStart(e) {
   const idx = occupants.value.findIndex(o => o.id === props.entityId)
-  if (idx === -1) return
-  onOccupantDragStart(e, occupants.value[idx], idx)
+  if (idx !== -1) { onOccupantDragStart(e, occupants.value[idx], idx); return }
+  onGmDotDragStart(e)  // GM free-roam: local, non-persisted dot
 }
 
 function onSelfClick() {
   if (occSuppressClick) { occSuppressClick = false; return }
+  if (!props.entityId) return  // GM free-roam dot — nothing to inspect
   emit('inspectEntity', props.entityId)
-}
-
-function parallaxOffset() {
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
-  return { x: mx, y: my }
 }
 
 // ── Scene canvas tracking ────────────────────────────────────────────
@@ -447,9 +455,7 @@ const sceneCamera = computed(() => {
   const h1 = refH * CAMERA_FULL
   const p = ch >= h0 ? 0 : ch <= h1 ? 1 : (h0 - ch) / (h0 - h1)
   const zoom = 1 + (TEASER_ZOOM - 1) * p
-  const self = occupants.value.find(o => o.id === props.entityId)
-  const mx = self?.map_x ?? 50
-  const my = self?.map_y ?? 50
+  const { x: mx, y: my } = selfPos.value
   // The character glides from its natural map position to the center.
   const anchor = { x: mx + (50 - mx) * p, y: my + (50 - my) * p }
   const { w, h } = imageAspect.value
@@ -617,6 +623,10 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', onDragEnd)
   document.removeEventListener('touchmove', onDragMove)
   document.removeEventListener('touchend', onDragEnd)
+  document.removeEventListener('mousemove', onGmDotDragMove)
+  document.removeEventListener('mouseup', onGmDotDragEnd)
+  document.removeEventListener('touchmove', onGmDotDragMove)
+  document.removeEventListener('touchend', onGmDotDragEnd)
 })
 
 const UNIVERSE_NAMES = { earth: 'Earth', three_realms: 'Three Realms' }
@@ -924,6 +934,74 @@ async function onOccDragEnd() {
       body: JSON.stringify({ map_x: occ.map_x, map_y: occ.map_y }),
     })
   } catch { /* silent */ }
+}
+
+// ── GM free-roam dot drag ──────────────────────────
+// With no perspective entity (entityId == null) there is nothing to persist, so
+// the GM dot moves locally and the camera pans with it. Coalesced to one update
+// per frame, like the occupant drag.
+
+let gmDrag = null          // { startX, startY, origX, origY } — client px + image %
+let gmDragMoved = false
+let gmDragRafId = null
+let gmDragPending = null
+
+function onGmDotDragStart(e) {
+  if (!viewerEl.value) return
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  const p = selfPos.value
+  gmDrag = { startX: clientX, startY: clientY, origX: p.x, origY: p.y }
+  gmDragMoved = false
+  document.addEventListener('mousemove', onGmDotDragMove)
+  document.addEventListener('mouseup', onGmDotDragEnd)
+  document.addEventListener('touchmove', onGmDotDragMove, { passive: false })
+  document.addEventListener('touchend', onGmDotDragEnd)
+}
+
+function onGmDotDragMove(e) {
+  if (!gmDrag) return
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  if (!gmDragMoved) {
+    if (Math.hypot(clientX - gmDrag.startX, clientY - gmDrag.startY) < 6) return
+    gmDragMoved = true
+    if (!draggingEmitted) { draggingEmitted = true; emit('dragging', true) }
+  }
+  e.preventDefault()
+  gmDragPending = { clientX, clientY }
+  if (gmDragRafId == null) gmDragRafId = requestAnimationFrame(applyGmDotDragFrame)
+}
+
+function applyGmDotDragFrame() {
+  gmDragRafId = null
+  if (!gmDrag || !gmDragPending) return
+  const { clientX, clientY } = gmDragPending
+  gmDragPending = null
+  const c = sceneCamera.value
+  // The self dot is the camera anchor, so its image % and viewport % coincide —
+  // add the pointer delta in viewport % and convert back to image space.
+  const viewX = gmDrag.origX + ((clientX - gmDrag.startX) / c.cw) * 100
+  const viewY = gmDrag.origY + ((clientY - gmDrag.startY) / c.ch) * 100
+  const img = toImagePos(viewX, viewY)
+  gmSelfPos.value = {
+    x: Math.max(2, Math.min(98, Math.round(img.x))),
+    y: Math.max(2, Math.min(98, Math.round(img.y))),
+  }
+}
+
+function onGmDotDragEnd() {
+  document.removeEventListener('mousemove', onGmDotDragMove)
+  document.removeEventListener('mouseup', onGmDotDragEnd)
+  document.removeEventListener('touchmove', onGmDotDragMove)
+  document.removeEventListener('touchend', onGmDotDragEnd)
+  if (gmDragRafId != null) { cancelAnimationFrame(gmDragRafId); gmDragRafId = null }
+  gmDragPending = null
+  const wasMoved = gmDragMoved
+  gmDrag = null
+  gmDragMoved = false
+  if (draggingEmitted) { draggingEmitted = false; emit('dragging', false) }
+  if (wasMoved) occSuppressClick = true  // a drag must not fire the click handler
 }
 
 // ── Fetch nav data ─────────────────────────────────
