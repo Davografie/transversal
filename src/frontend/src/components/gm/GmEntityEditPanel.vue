@@ -49,6 +49,7 @@
           class="gallery-item"
           :data-img-path="img.path_animated || img.path_large"
           draggable="true"
+          @contextmenu.prevent
           @dragstart="dragStart($event, img.id)"
           @dragend="dragEnd"
           @touchstart="touchStart($event, img.id)"
@@ -94,6 +95,7 @@
               class="gallery-item"
               :data-img-path="img.path_animated || img.path_large"
               draggable="true"
+              @contextmenu.prevent
               @dragstart="dragStart($event, img.id)"
               @dragend="dragEnd"
               @touchstart="touchStart($event, img.id)"
@@ -606,8 +608,8 @@ defineExpose({ refresh: loadImages })
 }
 .gallery-empty { font-size: 10px; color: var(--text-dim); padding: 12px 0; text-align: center; }
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
-.gallery-item { display: block; border: 1px solid var(--overlay-8); border-radius: 4px; overflow: hidden; cursor: pointer; }
-.gallery-item img { width: 100%; height: auto; display: block; }
+.gallery-item { display: block; border: 1px solid var(--overlay-8); border-radius: 4px; overflow: hidden; cursor: pointer; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.gallery-item img { width: 100%; height: auto; display: block; -webkit-user-drag: none; }
 .gallery-thumb, .gallery-thumb-video { width: 100%; height: auto; display: block; }
 .gallery-label { display: block; font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 4px; background: rgba(0,0,0,0.3); }
 .universe-badge { display: inline-block; font-size: 7px; background: var(--resource-32); color: var(--violet-pale); padding: 0 3px; border-radius: 2px; margin-left: 3px; }

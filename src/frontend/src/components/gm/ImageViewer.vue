@@ -21,10 +21,11 @@
       <label class="role-check" title="Use as character sheet portrait"><input type="checkbox" :checked="hasRole('sheet')" @change="toggleRole('sheet')" /> Sheet</label>
       <label class="role-check" title="Use as navigation dot"><input type="checkbox" :checked="hasRole('navdot')" @change="toggleRole('navdot')" /> Nav</label>
     </div>
-    <div class="universe-assign">
-      <label class="universe-label">Universe</label>
-      <select v-model="imageUniverse" class="universe-select" @change="onUniverseChange">
-        <option v-for="u in availableUniverses" :key="u.key" :value="u.key">{{ u.name }}</option>
+    <div class="body-assign">
+      <label class="body-label">Body</label>
+      <select v-model="imageProjection" class="body-select" @change="onProjectionChange">
+        <option value="">Entity (default)</option>
+        <option v-for="p in entityProjections" :key="p.id" :value="p.id">{{ projectionLabel(p) }}</option>
       </select>
     </div>
     <div class="image-meta">{{ alt }}<span v-if="fileExt" class="meta-ext"> · {{ fileExt }}</span><span v-if="sizeBytes" class="meta-size"> · {{ formatBytes(sizeBytes) }}</span></div>
@@ -79,43 +80,54 @@ async function fetchRoles() {
     }
   } catch {}
 }
-onMounted(() => { fetchRoles(); fetchUniverses(); fetchImageUniverse() })
+onMounted(() => { fetchRoles(); fetchEntityProjections(); fetchImageProjection() })
 
-// Universe assignment
-const imageUniverse = ref('')
-const availableUniverses = ref([])
+// Body (projection) assignment — the tap-friendly alternative to drag-and-drop.
+const imageProjection = ref('')
+const entityProjections = ref([])
 
-async function fetchUniverses() {
+async function fetchEntityProjections() {
+  if (!props.entityId) return
   try {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: '{ entities(type: UNIVERSE) { id name currentUniverse } }' }),
+      body: JSON.stringify({
+        query: `query($id: ID!) { entity(id: $id) { projections { id name universe originUniverse } } }`,
+        variables: { id: props.entityId },
+      }),
     })
     if (r.ok) {
       const data = await r.json()
-      availableUniverses.value = (data.data?.entities || []).map(e => ({ key: e.currentUniverse, name: e.name }))
+      entityProjections.value = data.data?.entity?.projections || []
     }
   } catch {}
 }
 
-async function fetchImageUniverse() {
+async function fetchImageProjection() {
   if (!props.entityId || !props.imageId) return
   try {
     const r = await fetch(`/api/v1/imagen/${props.entityId}`)
     if (r.ok) {
       const data = await r.json()
       const img = (data.images || []).find(i => i.id === props.imageId)
-      if (img) imageUniverse.value = img.universe || ''
+      if (img) imageProjection.value = img.projection_id || ''
     }
   } catch {}
 }
 
-async function onUniverseChange() {
+function projectionLabel(p) {
+  const uni = p.universe || p.originUniverse || ''
+  const name = p.name || ''
+  if (name && uni) return `${name} · ${uni}`
+  return name || uni || p.id
+}
+
+async function onProjectionChange() {
   try {
     await fetch(`/api/v1/imagen/${props.imageId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ universe: imageUniverse.value }),
+      body: JSON.stringify({ projection_id: imageProjection.value || null }),
     })
     emit('refresh')
   } catch {}
@@ -271,9 +283,9 @@ async function onDelete() {
 .role-check { font-size: 10px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 2px; }
 .role-check input { margin: 0; cursor: pointer; }
 
-.universe-assign { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 4px; }
-.universe-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
-.universe-select { font-size: 10px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--overlay-10); background: var(--overlay-4); color: var(--text); }
+.body-assign { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 4px; }
+.body-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
+.body-select { font-size: 10px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--overlay-10); background: var(--overlay-4); color: var(--text); }
 
 .image-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
 .meta-size { color: var(--accent); }
