@@ -6,7 +6,30 @@
     <template v-else-if="entity">
       <div class="header">
         <div class="header-top">
-          <h2>{{ activeProjection?.name || entity.name }}</h2>
+          <div class="header-title">
+            <h2>{{ entity.name }}</h2>
+            <div v-if="projectionSubtitle || canEditProjectionName" class="projection-subtitle">
+              <input
+                v-if="editingProjectionName"
+                ref="projectionNameInput"
+                v-model="projectionNameValue"
+                class="projection-name-input"
+                placeholder="Name this projection…"
+                @keyup.enter="commitProjectionName"
+                @keyup.escape="editingProjectionName = false"
+                @blur="commitProjectionName"
+              />
+              <Button
+                v-else-if="canEditProjectionName"
+                class="projection-name-btn"
+                variant="link"
+                :class="{ unset: !projectionSubtitle }"
+                title="Rename this projection"
+                @click.stop="startProjectionNameEdit"
+              >{{ projectionSubtitle || 'Name this projection…' }}</Button>
+              <span v-else class="projection-name">{{ projectionSubtitle }}</span>
+            </div>
+          </div>
           <div class="razmerit-anchor">
             <button class="razmerit-chip" :title="showRazmeritWidget ? 'Close' : 'Adjust razmerit'" @click.stop="showRazmeritWidget = !showRazmeritWidget">
               ⚡{{ entity.razmerit }}
@@ -602,6 +625,45 @@ const ownsCharacter = computed(() => {
   if (!props.playerOwnedEntityIds?.length) return false
   return props.playerOwnedEntityIds.includes(id)
 })
+
+// ── Projection (body) name — the sheet's undertitle ──────────────
+// The title is always the character's name; the body they're currently in is
+// named underneath it. Only your own sheet edits it — on a foreign sheet the
+// name is read-only (the GM panel owns projection editing).
+const editingProjectionName = ref(false)
+const projectionNameValue = ref('')
+const projectionNameInput = ref(null)
+const savingProjectionName = ref(false)
+const projectionSubtitle = computed(() => (activeProjection.value?.name || '').trim())
+const canEditProjectionName = computed(() => !isForeignSheet.value && !!activeProjection.value)
+
+function startProjectionNameEdit() {
+  projectionNameValue.value = projectionSubtitle.value
+  editingProjectionName.value = true
+  nextTick(() => projectionNameInput.value?.focus())
+}
+
+async function commitProjectionName() {
+  if (!editingProjectionName.value) return
+  editingProjectionName.value = false          // also guards double-commit on blur+enter
+  const projection = activeProjection.value
+  if (!projection || savingProjectionName.value) return
+  const name = projectionNameValue.value.trim()
+  if (name === projectionSubtitle.value) return
+  savingProjectionName.value = true
+  try {
+    await graphql(
+      `mutation($id: ID!, $name: String) { updateProjection(projectionId: $id, name: $name) { id name } }`,
+      { id: projection.id, name },
+    )
+    await fetchEntity()
+  } catch (e) {
+    console.error('updateProjection failed:', e)
+    alert('Could not rename this projection.')
+  } finally {
+    savingProjectionName.value = false
+  }
+}
 
 
 // Resolved human-readable names
@@ -2329,6 +2391,33 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 20px;
   font-weight: 700;
   margin-bottom: 4px;
+}
+/* Title + projection undertitle. The wrapper takes the flex slot the h2
+   used to; the body name sits under the character's name. */
+.header-title { flex: 1; min-width: 0; }
+.header-title h2 { margin-bottom: 2px; }
+.projection-subtitle {
+  display: flex;
+  align-items: center;
+  min-height: 17px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.projection-name { color: var(--text-dim); }
+/* Scoped to .projection-subtitle so the override beats the primitive's
+   .btn-md padding in the child component's stylesheet. */
+.projection-subtitle .projection-name-btn { padding: 0; font-size: 12px; font-weight: 400; }
+.projection-subtitle .projection-name-btn.unset { color: var(--text-dim); opacity: 0.7; }
+.projection-name-input {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--overlay-8);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  width: 100%;
+  max-width: 220px;
 }
 .meta {
   display: flex;
