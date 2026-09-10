@@ -125,6 +125,10 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
   }
 
   // ── Flatten ────────────────────────────────────────
+  // Synthetic key for the virtual root, so the top level can be stubbed like
+  // any other level ("… N more universes").
+  const ROOT_KEY = '__root__'
+
   function flattenTree(nodes, occupants, depth = 0) {
     const result = []
     const filterMode = hasOccupantFilter.value
@@ -132,6 +136,13 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     const curUniverse = currentUniverse?.value || ''
     const focusSet = focusPathIds.value
     const focusMode = focusSet.size > 0
+    // At the root level, focus mode keeps only the focused universe on screen
+    // and stubs the others, until the level is expanded (the stub click).
+    const rootStubbed = depth === 0 && focusMode && expandedNodes.value[ROOT_KEY] !== true
+    if (rootStubbed) {
+      const onChain = nodes.filter((n) => focusSet.has(n.id))
+      if (onChain.length) nodes = onChain
+    }
     for (const node of nodes) {
       const kind = node.kind || (node.node_type === 'universe' ? 'universe' : 'location')
       if (activeUniverseFilters.value.size > 0) {
@@ -213,6 +224,16 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
             })
           }
         }
+      }
+    }
+    // Root-level stub: the universes focus mode is hiding.
+    if (depth === 0 && focusMode && expandedNodes.value[ROOT_KEY] !== true) {
+      const hidden = locationTree.value.length - nodes.length
+      if (hidden > 0) {
+        result.push({
+          id: 'more:' + ROOT_KEY, kind: 'more', parentId: ROOT_KEY, count: hidden,
+          name: `… ${hidden} more universes`, depth: 0, hasChildren: false,
+        })
       }
     }
     return result
