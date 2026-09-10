@@ -48,8 +48,8 @@
 
       <!-- Browse: Places | Factions (both read the focus filter). -->
       <div class="browse-tabs">
-        <Button variant="neutral" size="sm" :active="browseTab === 'tree'" @click="browseTab = 'tree'">Places</Button>
-        <Button variant="neutral" size="sm" :active="browseTab === 'factions'" @click="browseTab = 'factions'">
+        <Button variant="neutral" :active="browseTab === 'tree'" @click="browseTab = 'tree'">Places</Button>
+        <Button variant="neutral" :active="browseTab === 'factions'" @click="browseTab = 'factions'">
           Factions<span v-if="filteredFactions.length" class="tab-count">{{ filteredFactions.length }}</span>
         </Button>
       </div>
@@ -460,7 +460,17 @@ onUnmounted(() => {
 }
 /* The Play tab scrolls as one block; Prep pins its chrome and scrolls only the
    browsing zone (see .browse-zone) so the focus bar stays visible. */
-.gm-tab-body { flex: 1; min-height: 0; overflow-y: auto; }
+/* ── Panel zones ─────────────────────────────────
+   Pinned chrome rows never shrink (they are the panel's controls); only the
+   scrolling zones flex. Without this the Play|Prep row — the one item whose
+   `overflow: hidden` lets it shrink past its content — absorbs any margin
+   overflow and collapses to a sliver. */
+.gm-content > .mode-tabs,
+.gm-content > .gm-tools,
+.gm-content > .focus-bar,
+.gm-content > .browse-tabs,
+.gm-content > .gm-footer { flex: 0 0 auto; }
+.gm-tab-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .gm-tools { display: flex; gap: 6px; margin-bottom: 8px; }
 .gm-tools .create-btn { flex: 1; margin-bottom: 0; }
 
@@ -469,7 +479,7 @@ onUnmounted(() => {
   margin-left: 5px; font-size: 9px; padding: 0 5px; border-radius: 8px;
   background: var(--overlay-12); color: var(--text-dim);
 }
-.browse-zone { flex: 1; min-height: 0; overflow-y: auto; }
+.browse-zone { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
 /* Sticky breadcrumb: the way up is always on screen, even after scrolling. */
 .tree-crumbs {
@@ -491,7 +501,7 @@ onUnmounted(() => {
 .gm-footer .canvas-btn { margin-bottom: 0; }
 
 .mode-tabs { display: flex; gap: 0; margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--overlay-8); }
-.mode-tabs button { flex: 1; font-size: 12px; padding: 6px 0; border: none; background: var(--overlay-4); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
+.mode-tabs button { flex: 1; font-size: 12px; line-height: 1.4; padding: 7px 0; border: none; background: var(--overlay-4); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
 .mode-tabs button.active { background: var(--accent); color: var(--text-on-accent); }
 .mode-tabs button:hover:not(.active) { background: var(--overlay-8); }
 
