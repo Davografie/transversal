@@ -20,8 +20,8 @@
 
     <h4 class="ps-section-title">Traits</h4>
     <div class="trait-head-actions">
-      <button class="ps-add-btn" @click="onNewTrait">+ New Trait</button>
-      <button class="ps-add-btn" @click="openBatchEdit">Batch Edit</button>
+      <Button class="ps-add-btn" @click="onNewTrait" variant="secondary" block>+ New Trait</Button>
+      <Button class="ps-add-btn" @click="openBatchEdit" variant="secondary" block>Batch Edit</Button>
     </div>
     <GmList
       :items="traits"
@@ -59,6 +59,7 @@ import GmTraitEditPanel from '@/components/gm/GmTraitEditPanel.vue'
 import GmTraitBatchEditPanel from '@/components/gm/GmTraitBatchEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
+import Button from '@/components/ui/Button.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()

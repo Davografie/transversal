@@ -21,7 +21,7 @@
     </div>
 
     <div class="actions">
-      <button class="save-btn" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save' }}</button>
+      <Button class="save-btn" :disabled="saving" @click="save" variant="success" solid>{{ saving ? 'Saving…' : 'Save' }}</Button>
       <button class="cancel-btn" @click="panel.close()">Cancel</button>
     </div>
   </div>
@@ -33,6 +33,7 @@ import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   projection: { type: Object, required: true },
@@ -130,20 +131,6 @@ async function save() {
   display: flex;
   gap: 6px;
   margin-top: 14px;
-}
-.save-btn {
-  background: var(--success);
-  color: var(--text-invert);
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-}
-.save-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .cancel-btn {
   padding: 6px 14px;

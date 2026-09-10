@@ -71,12 +71,12 @@
     </div>
 
     <!-- Action buttons: differ by mode -->
-    <button v-if="sfx" class="save-btn save-main" @click="onSave" :disabled="saving">
+    <Button v-if="sfx" class="save-btn save-main" @click="onSave" :disabled="saving" variant="success" solid>
       {{ saving ? 'Saving…' : (savedAt ? 'Saved ✓' : 'Save now') }}
-    </button>
-    <button v-else class="save-btn save-main" @click="onCreate" :disabled="saving || !draft.name.trim()">
+    </Button>
+    <Button v-else class="save-btn save-main" @click="onCreate" :disabled="saving || !draft.name.trim()" variant="success" solid>
       {{ saving ? 'Creating…' : 'Create SFX' }}
-    </button>
+    </Button>
 
     <div v-if="sfx" class="danger-zone">
       <DangerButton
@@ -104,6 +104,7 @@ import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
+import Button from '@/components/ui/Button.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()
@@ -285,8 +286,6 @@ async function onDelete() {
 .sfx-var { font-size: 10px; font-family: monospace; padding: 2px 6px; background: var(--accent-12); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); }
 .sfx-var-type { font-style: normal; font-family: inherit; font-size: 8px; color: var(--text-dim); margin-left: 3px; }
 .hint { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 9px; }
-.save-btn { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
-.save-btn:disabled { opacity: 0.5; cursor: default; }
 .save-main { margin-top: 10px; width: 100%; }
 .error-msg { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }
 .success-msg { font-size: 11px; color: var(--success); background: var(--success-8); padding: 6px 10px; border-radius: 4px; margin-top: 8px; }

@@ -86,9 +86,9 @@
           <option value="CLEAR">Inherit traitset</option>
         </select>
       </div>
-      <button class="ps-add-btn" :disabled="applying || selectedIds.length === 0" @click="applyBatch">
+      <Button class="ps-add-btn" :disabled="applying || selectedIds.length === 0" @click="applyBatch" variant="secondary" block>
         {{ applying ? 'Applying…' : `Apply to ${selectedIds.length} selected` }}
-      </button>
+      </Button>
       <p v-if="status" class="status" :class="{ 'status-err': statusIsError }">{{ status }}</p>
     </div>
   </div>
@@ -98,6 +98,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   initialTraitsetId: { type: String, default: '' },

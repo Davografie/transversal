@@ -2,7 +2,7 @@
   <button
     :type="type"
     class="btn"
-    :class="[`btn-${variant}`, `btn-${size}`, { 'is-loading': loading, 'is-active': active, 'is-block': block }]"
+    :class="[`btn-${variant}`, `btn-${size}`, { 'is-loading': loading, 'is-active': active, 'is-block': block, 'is-solid': solid }]"
     :disabled="disabled || loading"
     :aria-busy="loading ? 'true' : undefined"
     @click="onClick"
@@ -26,12 +26,14 @@
 // per-universe palettes) automatically. Loading implies disabled; the label
 // stays visible so the button doesn't change width mid-action.
 const props = defineProps({
-  // primary   — the one action a surface wants (accent fill)
-  // secondary — default actions (neutral fill)
-  // ghost     — low-emphasis / icon buttons (transparent until hover)
-  // danger    — destructive (danger tint)
-  // success   — confirm/commit (success tint)
-  // link      — inline text action (no chrome)
+  // primary      — the one action a surface wants (accent fill)
+  // secondary    — default actions (accent-dim fill, the app default)
+  // neutral      — neutral fill (list/form chrome)
+  // ghost        — low-emphasis / icon buttons (transparent until hover)
+  // danger       — destructive (danger tint)
+  // danger-ghost — subtle row-remove (dim until hovered, then danger)
+  // success      — confirm/commit (success tint)
+  // link         — inline text action (no chrome)
   variant: { type: String, default: 'secondary' },
   size: { type: String, default: 'md' },        // 'sm' | 'md' | 'lg' | 'icon'
   type: { type: String, default: 'button' },    // 'button' | 'submit' | 'reset'
@@ -40,6 +42,9 @@ const props = defineProps({
   // Toggle/selected state (e.g. an active mode tab) — `is-active` styling.
   active: { type: Boolean, default: false },
   block: { type: Boolean, default: false },     // full width
+  // Filled treatment for the tinted variants (success/danger): solid hue
+  // fill with contrast text, matching the app's save/commit buttons.
+  solid: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['click'])
@@ -87,12 +92,19 @@ function onClick(e) {
 .btn-primary:active:not(:disabled) { background: color-mix(in srgb, var(--accent) 78%, var(--text)); }
 
 .btn-secondary {
-  background: var(--overlay-8);
+  background: var(--accent-dim);
+  color: var(--text);
+}
+.btn-secondary:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); }
+.btn-secondary:active:not(:disabled) { background: var(--accent-active); color: var(--text-on-accent); }
+
+.btn-neutral {
+  background: var(--overlay-6);
   border-color: var(--overlay-12);
   color: var(--text);
 }
-.btn-secondary:hover:not(:disabled) { background: var(--overlay-12); }
-.btn-secondary:active:not(:disabled) { background: var(--overlay-15); }
+.btn-neutral:hover:not(:disabled) { background: var(--overlay-12); }
+.btn-neutral:active:not(:disabled) { background: var(--overlay-15); }
 
 .btn-ghost {
   background: transparent;
@@ -108,6 +120,22 @@ function onClick(e) {
 }
 .btn-danger:hover:not(:disabled) { background: var(--danger-20); }
 .btn-danger:active:not(:disabled) { background: var(--danger-32); }
+
+.btn-danger-ghost {
+  background: transparent;
+  color: var(--text-dim);
+}
+.btn-danger-ghost:hover:not(:disabled) { color: var(--danger); background: var(--danger-12); }
+.btn-danger-ghost:active:not(:disabled) { background: var(--danger-20); }
+
+/* Filled treatment (save/commit buttons) */
+.btn-success.is-solid { background: var(--success); border-color: transparent; color: var(--text-invert); }
+.btn-success.is-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--success) 88%, var(--text)); color: var(--text-invert); }
+.btn-success.is-solid:active:not(:disabled) { background: color-mix(in srgb, var(--success) 78%, var(--text)); }
+.btn-success.is-solid.is-active { background: var(--success); border-color: transparent; color: var(--text-invert); }
+.btn-danger.is-solid { background: var(--danger); border-color: transparent; color: var(--text-on-accent); }
+.btn-danger.is-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, var(--text)); color: var(--text-on-accent); }
+.btn-danger.is-solid:active:not(:disabled) { background: color-mix(in srgb, var(--danger) 78%, var(--text)); }
 
 .btn-success {
   background: var(--success-12);
@@ -147,6 +175,11 @@ function onClick(e) {
   color: var(--success);
 }
 .btn-secondary.is-active {
+  background: var(--accent-12);
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.btn-neutral.is-active {
   background: var(--accent-12);
   border-color: var(--accent-dim);
   color: var(--accent);

@@ -16,7 +16,7 @@
       </template>
     </GmList>
 
-    <button class="ps-add-btn" @click="onNewSfx">+ New SFX</button>
+    <Button class="ps-add-btn" @click="onNewSfx" variant="secondary" block>+ New SFX</Button>
   </div>
 </template>
 
@@ -26,6 +26,7 @@ import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmList from '@/components/ui/GmList.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
+import Button from '@/components/ui/Button.vue'
 
 const panel = usePanel()
 const { allSfxs, fetchTraitsConfig, patchData } = useTraitsConfig()

@@ -15,7 +15,7 @@
       />
     </div>
     <div class="actions">
-      <button class="save-btn" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save' }}</button>
+      <Button class="save-btn" :disabled="saving" @click="save" variant="success" solid>{{ saving ? 'Saving…' : 'Save' }}</Button>
       <button class="cancel-btn" @click="panel.close()">Cancel</button>
     </div>
   </div>
@@ -25,6 +25,7 @@
 import { ref } from 'vue'
 import { usePanel } from '@/composables/usePanel.js'
 import EffectEditor from './EffectEditor.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   fromId: { type: String, required: true },
@@ -80,20 +81,6 @@ async function save() {
 .actions {
   display: flex;
   gap: 6px;
-}
-.save-btn {
-  background: var(--success);
-  color: var(--text-invert);
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-}
-.save-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .cancel-btn {
   padding: 6px 14px;

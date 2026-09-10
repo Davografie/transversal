@@ -1,6 +1,6 @@
 <template>
   <div>
-    <button class="ps-add-btn batch-btn" @click="openBatchEdit">Batch Edit Traits</button>
+    <Button class="ps-add-btn batch-btn" @click="openBatchEdit" variant="secondary" block>Batch Edit Traits</Button>
     <input v-model="search" class="filter-input" placeholder="Search…" style="margin-bottom:8px" />
     <GmList
       :items="filtered"
@@ -30,6 +30,7 @@ import { usePanel } from '@/composables/usePanel.js'
 import GmList from '@/components/ui/GmList.vue'
 import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 import GmTraitBatchEditPanel from '@/components/gm/GmTraitBatchEditPanel.vue'
+import Button from '@/components/ui/Button.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()

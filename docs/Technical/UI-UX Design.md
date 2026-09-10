@@ -44,9 +44,12 @@ state, size) comes from props, and colors come from the theme tokens, so
 buttons follow light/dark automatically.
 
 - **Variants** — `primary` (the one action a surface wants, accent fill),
-  `secondary` (default actions, neutral fill), `ghost` (low emphasis / icon
-  buttons), `danger` (destructive, danger tint), `success` (confirm/commit),
-  `link` (inline text action).
+  `secondary` (default actions, accent-dim fill — the app default),
+  `neutral` (neutral list/form chrome), `ghost` (low emphasis / icon buttons),
+  `danger` (destructive, danger tint), `danger-ghost` (subtle row-remove: dim
+  until hovered, then danger), `success` (confirm/commit), `link` (inline
+  text action). Add `solid` for the filled treatment of the tinted variants
+  (save/commit buttons).
 - **Sizes** — `sm` · `md` (default) · `lg` · `icon` (square, for glyph
   buttons).
 - **States** — idle, hover, pressed (`:active`), `:focus-visible` (2px accent
@@ -65,6 +68,14 @@ Notes: hover/press mix the fill with `--text`, so they brighten in dark mode
 and darken in light mode ("intensify" either way). `prefers-reduced-motion`
 drops transitions and slows the spinner. `DangerButton` is built on `Button`
 (`variant="danger"` + `active` for the armed confirm state).
+
+**Migration (in progress, surface by surface).** Migrated so far: the GM
+list/form button patterns — `save-btn` (→ `success solid`), `ps-add-btn`
+(→ `secondary block`), `row-del-btn` (→ `danger-ghost sm`), 20 sites across 10
+GM panels; their local rules were deleted and only layout hooks (margins,
+`width`) kept. Remaining: player surfaces (login/settings overlay, dice
+roller, character sheet) and the GM action rails (`.section-btn`,
+`.cancel-btn`, `.shortcut-btn`).
 
 ## Character sheet
 

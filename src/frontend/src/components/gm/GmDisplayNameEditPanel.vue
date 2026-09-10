@@ -28,7 +28,7 @@
             @click="showDiePicker = showDiePicker === ri ? null : ri"
           >+</button>
         </span>
-        <button class="row-del-btn" @click="removeRating(ri)" title="Remove rating">✕</button>
+        <Button class="row-del-btn" @click="removeRating(ri)" title="Remove rating" variant="danger-ghost" size="sm">✕</Button>
         <div v-if="showDiePicker === ri" class="die-options">
           <button
             v-for="d in DICE"
@@ -38,7 +38,7 @@
           >{{ d }}</button>
         </div>
       </div>
-      <button class="ps-add-btn" @click="addRating">+ Add Rating</button>
+      <Button class="ps-add-btn" @click="addRating" variant="secondary" block>+ Add Rating</Button>
     </div>
 
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
@@ -50,6 +50,7 @@
 import { reactive, ref, computed, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import Button from '@/components/ui/Button.vue'
 
 const { graphql } = useApi()
 const { patchData } = useTraitsConfig()

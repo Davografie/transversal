@@ -55,10 +55,10 @@
               <span v-if="ri < dn.ratings.length - 1" class="dn-sep">|</span>
             </span>
           </span>
-          <button class="row-del-btn" @click.stop="deleteDisplayName(dn._originalIndex)" title="Delete">✕</button>
+          <Button class="row-del-btn" @click.stop="deleteDisplayName(dn._originalIndex)" title="Delete" variant="danger-ghost" size="sm">✕</Button>
         </template>
       </GmList>
-      <button class="ps-add-btn" @click="openDisplayNameEditor(null)">+ Add Display Name</button>
+      <Button class="ps-add-btn" @click="openDisplayNameEditor(null)" variant="secondary" block>+ Add Display Name</Button>
 
       <!-- SFX assignment -->
       <h4 class="ps-section-title">Possible SFXs</h4>
@@ -79,10 +79,10 @@
           >{{ form.defaultSfxIds.includes(s.id) ? '✓' : '✗' }}</button>
           <span class="sfx-name">{{ s.name }}</span>
           <span class="sfx-trigger">{{ s.trigger || '' }}</span>
-          <button class="row-del-btn" @click.stop="removePossibleSfx(s.id)" title="Remove from trait">✕</button>
+          <Button class="row-del-btn" @click.stop="removePossibleSfx(s.id)" title="Remove from trait" variant="danger-ghost" size="sm">✕</Button>
         </template>
       </GmList>
-      <button class="ps-add-btn" @click="openSfxPicker">+ Add SFX</button>
+      <Button class="ps-add-btn" @click="openSfxPicker" variant="secondary" block>+ Add SFX</Button>
 
       <!-- Sub-trait assignment -->
       <h4 class="ps-section-title">Possible Sub-traits</h4>
@@ -96,7 +96,7 @@
           <span class="subtarget-kind" :class="st.kind">{{ st.kind === 'set' ? 'set' : 'trait' }}</span>
           <span class="sfx-name">{{ st.name }}</span>
           <span class="sfx-trigger">{{ st.traitsetName || '' }}</span>
-          <button class="row-del-btn" @click.stop="removePossibleSubtarget(st.key)" title="Remove">✕</button>
+          <Button class="row-del-btn" @click.stop="removePossibleSubtarget(st.key)" title="Remove" variant="danger-ghost" size="sm">✕</Button>
         </template>
       </GmList>
       <div class="subtrait-add">
@@ -109,7 +109,7 @@
             <option v-for="st in unassignedSubtraitOptions(ts)" :key="st.id" :value="'trait:' + st.id">{{ st.name }}</option>
           </optgroup>
         </select>
-        <button class="save-btn" @click="addSubtarget" :disabled="!newSubtarget">Add</button>
+        <Button class="save-btn" @click="addSubtarget" :disabled="!newSubtarget" variant="success" solid>Add</Button>
       </div>
 
       <div class="danger-zone">
@@ -177,10 +177,10 @@
           >{{ createForm.defaultSfxIds.includes(s.id) ? '✓' : '✗' }}</button>
           <span class="sfx-name">{{ s.name }}</span>
           <span class="sfx-trigger">{{ s.trigger || '' }}</span>
-          <button class="row-del-btn" @click.stop="createRemovePossibleSfx(s.id)" title="Remove from trait">✕</button>
+          <Button class="row-del-btn" @click.stop="createRemovePossibleSfx(s.id)" title="Remove from trait" variant="danger-ghost" size="sm">✕</Button>
         </template>
       </GmList>
-      <button class="ps-add-btn" @click="createOpenSfxPicker">+ Add SFX</button>
+      <Button class="ps-add-btn" @click="createOpenSfxPicker" variant="secondary" block>+ Add SFX</Button>
 
       <h4 class="ps-section-title">Possible Sub-traits</h4>
       <p class="section-hint">Add a whole sub-trait set (e.g. "elements") to make every trait in it nestable, or add individual traits.</p>
@@ -193,7 +193,7 @@
           <span class="subtarget-kind" :class="st.kind">{{ st.kind === 'set' ? 'set' : 'trait' }}</span>
           <span class="sfx-name">{{ st.name }}</span>
           <span class="sfx-trigger">{{ st.traitsetName || '' }}</span>
-          <button class="row-del-btn" @click.stop="createRemovePossibleSubtarget(st.key)" title="Remove">✕</button>
+          <Button class="row-del-btn" @click.stop="createRemovePossibleSubtarget(st.key)" title="Remove" variant="danger-ghost" size="sm">✕</Button>
         </template>
       </GmList>
       <div class="subtrait-add">
@@ -206,11 +206,11 @@
             <option v-for="st in createUnassignedSubtraitOptions(ts)" :key="st.id" :value="'trait:' + st.id">{{ st.name }}</option>
           </optgroup>
         </select>
-        <button class="save-btn" @click="createAddSubtarget" :disabled="!newSubtargetCreate">Add</button>
+        <Button class="save-btn" @click="createAddSubtarget" :disabled="!newSubtargetCreate" variant="success" solid>Add</Button>
       </div>
 
       <div class="create-actions">
-        <button class="save-btn" @click="onCreate" :disabled="saving || !createForm.name.trim()">{{ saving ? 'Creating…' : 'Create Trait' }}</button>
+        <Button class="save-btn" @click="onCreate" :disabled="saving || !createForm.name.trim()" variant="success" solid>{{ saving ? 'Creating…' : 'Create Trait' }}</Button>
       </div>
       <p v-if="createError" class="switch-error">{{ createError }}</p>
     </template>
@@ -227,6 +227,7 @@ import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
+import Button from '@/components/ui/Button.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()
@@ -763,8 +764,6 @@ async function onDelete() {
 .subtarget-kind.set { border-color: var(--accent); color: var(--accent); }
 
 .create-actions { display: flex; gap: 6px; margin-top: 4px; }
-.save-btn { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
-.save-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* Display Names (read-only list) */
 .dn-name { font-weight: 500; min-width: 120px; }

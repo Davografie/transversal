@@ -35,15 +35,16 @@
       ></button>
     </div>
 
-    <button class="save-btn" @click="onSubmit" :disabled="saving || !form.name.trim()">
+    <Button class="save-btn" block @click="onSubmit" :disabled="saving || !form.name.trim()" variant="success" solid>
       {{ saving ? 'Creating…' : 'Create' }}
-    </button>
+    </Button>
   </div>
 </template>
 
 <script setup>
 import { reactive, computed, watch } from 'vue'
 import { ENTITY_TYPES } from '@/constants/entityTypes.js'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   defaultUniverse: { type: String, default: 'earth' },
@@ -127,6 +128,5 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 .raz-dot:active { transform: scale(0.92); }
 optgroup { font-weight: 600; color: var(--text); }
-.save-btn { background: var(--success); color: var(--text-invert); font-weight: 600; margin-top: 8px; padding: 8px; border-radius: 6px; border: none; cursor: pointer; width: 100%; }
-.save-btn:disabled { opacity: 0.5; cursor: default; }
+.save-btn { margin-top: 8px; }
 </style>
