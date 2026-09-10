@@ -428,6 +428,9 @@ DIAG.mark('app-setup-start', { entityId: localStorage.getItem('entityId'), playe
 // ── GM panel root spec for PanelStack ──
 const gmRootPanel = computed(() => ({
   component: GmPanel,
+  // The GM panel pins its own chrome (tools, filter, tabs) and scrolls only
+  // the browsing zone — see Panel's `bodyScroll`.
+  bodyScroll: false,
   props: {
     universe: universe.value,
     currentLocationId: currentLocationId.value,

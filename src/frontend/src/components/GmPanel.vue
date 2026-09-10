@@ -6,18 +6,28 @@
     </div>
 
     <template v-if="mode === 'play'">
-      <div class="gm-shortcuts">
-        <Button class="shortcut-btn beat-btn" variant="neutral" @click="nextBeat">◆ Next Beat</Button>
-        <Button class="shortcut-btn scene-btn" variant="neutral" @click="advanceScene">◈ Scene</Button>
-        <Button v-if="!inSession" class="shortcut-btn session-btn" variant="neutral" title="Start the session" @click="startSession">▶ Start</Button>
-        <Button v-else class="shortcut-btn session-btn" variant="danger" title="End the session" @click="endSession">■ End</Button>
+      <div class="gm-tab-body">
+        <div class="gm-shortcuts">
+          <Button class="shortcut-btn beat-btn" variant="neutral" @click="nextBeat">◆ Next Beat</Button>
+          <Button class="shortcut-btn scene-btn" variant="neutral" @click="advanceScene">◈ Scene</Button>
+          <Button v-if="!inSession" class="shortcut-btn session-btn" variant="neutral" title="Start the session" @click="startSession">▶ Start</Button>
+          <Button v-else class="shortcut-btn session-btn" variant="danger" title="End the session" @click="endSession">■ End</Button>
+        </div>
+        <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntitiesInScope" @inspect="inspectEntity" />
+        <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" @go-to-location="goToLocation" />
       </div>
-      <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntitiesInScope" @inspect="inspectEntity" />
-      <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" @go-to-location="goToLocation" />
     </template>
 
     <template v-if="mode === 'prep'">
-      <div class="filter-bar">
+      <!-- Authoring tools first: they open their own child panels and are not
+           touched by the focus filter below. -->
+      <div class="gm-tools">
+        <Button class="create-btn" variant="secondary" block @click="openTraitsConfig">Manage Traits</Button>
+        <Button class="create-btn" variant="secondary" block @click="openSfxManager">Manage SFX</Button>
+      </div>
+
+      <!-- Focus: shapes what the Places tree and the Factions list show. -->
+      <div class="focus-bar">
         <div class="chip-bar">
           <span v-for="(f, i) in activeFilters" :key="i" class="filter-chip">
             <span class="chip-label">{{ f.label }}</span>
@@ -35,28 +45,53 @@
           </div>
         </div>
       </div>
-      <div class="canvas-btn-row">
-        <Button class="create-btn canvas-btn" variant="secondary" block @click="openLocationTreeCanvas">🗺 Canvas</Button>
+
+      <!-- Browse: Places | Factions (both read the focus filter). -->
+      <div class="browse-tabs">
+        <Button variant="neutral" size="sm" :active="browseTab === 'tree'" @click="browseTab = 'tree'">Places</Button>
+        <Button variant="neutral" size="sm" :active="browseTab === 'factions'" @click="browseTab = 'factions'">
+          Factions<span v-if="filteredFactions.length" class="tab-count">{{ filteredFactions.length }}</span>
+        </Button>
       </div>
-      <Button class="create-btn" variant="secondary" block @click="openTraitsConfig">Manage Traits</Button>
-      <Button class="create-btn" variant="secondary" block @click="openSfxManager">Manage SFX</Button>
-      <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
-      <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
-      <GmList
-        v-if="filteredFactions.length"
-        :items="filteredFactions"
-        item-key="id"
-        :selected-ids="selectedId ? [selectedId] : []"
-        @click="toggleEntity"
-      >
-        <template #item="{ item: e }">
-          <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
-          <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
-          <Button class="faction-canvas-btn" variant="ghost" size="sm" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</Button>
+
+      <div class="browse-zone">
+        <template v-if="browseTab === 'tree'">
+          <div v-if="focusPath.length" class="tree-crumbs">
+            <div class="crumbs">
+              <template v-for="(c, i) in focusPath" :key="c.id">
+                <span v-if="i" class="crumb-sep">▸</span>
+                <button class="crumb" :class="{ current: i === focusPath.length - 1 }" @click="scrollToNode(c.id)">{{ c.name }}</button>
+              </template>
+            </div>
+            <Button class="crumb-action" variant="ghost" size="icon" title="Collapse all levels" @click="collapseTree">⌃</Button>
+            <Button class="crumb-action" variant="ghost" size="icon" title="Jump to the current location" @click="scrollToNode(props.currentLocationId)">⊙</Button>
+          </div>
+          <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @select-more="expandLevel" @move-entity="onMoveEntity" />
+          <div v-if="flatTree.length === 0" class="empty">No entities found</div>
         </template>
-      </GmList>
+        <template v-else>
+          <GmList
+            v-if="filteredFactions.length"
+            :items="filteredFactions"
+            item-key="id"
+            :selected-ids="selectedId ? [selectedId] : []"
+            @click="toggleEntity"
+          >
+            <template #item="{ item: e }">
+              <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
+              <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
+              <Button class="faction-canvas-btn" variant="ghost" size="sm" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</Button>
+            </template>
+          </GmList>
+          <div v-else class="empty">No factions match the focus</div>
+        </template>
+      </div>
+
+      <div class="gm-footer">
+        <Button class="canvas-btn" variant="secondary" block @click="openLocationTreeCanvas">🗺 Canvas</Button>
+      </div>
+
       <Button class="fab-create" variant="primary" size="icon" @click="startCreate" title="New Entity" aria-label="New Entity">＋</Button>
-      <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
   </div>
 </template>
@@ -116,6 +151,9 @@ const {
 // real state — e.g. after a refresh or when another device toggles it.
 const mode = ref('play')
 const viewSceneSummary = ref(true)
+// Prep's browsing surface: the Places tree or the Factions list (both read the
+// focus filter above them).
+const browseTab = ref('tree')
 
 function nextBeat() { emit('next-beat') }
 function advanceScene() { viewSceneSummary.value = true; emit('advance-scene') }
@@ -141,6 +179,7 @@ watch(() => props.entityId, (id) => {
 const {
   locationTree, expandedNodes,
   fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds, sceneLocationIds,
+  focusPath, setFocus, collapseAll,
 } = useLocationTree({ filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
 
 // ── Free-roam drill-down ────────────────────────────
@@ -165,17 +204,44 @@ function scrollLocationIntoView(locationId) {
     // 'center' keeps the ancestor chain visible above the location, instead of
     // parking the row flush against the panel's bottom edge ('nearest').
     document
-      .querySelector(`.gm-content [data-node-id="${locationId}"][data-node-kind="location"]`)
+      .querySelector(`.gm-content [data-node-id="${locationId}"]`)
       ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   })
+}
+
+// Reveal a focused level's hidden siblings (the "… N more" stub).
+function expandLevel(parentId) {
+  expandedNodes.value = { ...expandedNodes.value, [parentId]: true }
+}
+
+function collapseTree() {
+  collapseAll()
+}
+
+// Breadcrumb / locate: make sure the target is on screen (and its level open).
+function scrollToNode(nodeId) {
+  if (!nodeId) return
+  const expanded = { ...expandedNodes.value }
+  const path = []
+  if (findAncestorIds(locationTree.value, nodeId, path)) {
+    path.forEach((id) => { if (expanded[id] === false) delete expanded[id] })
+    expandedNodes.value = expanded
+  }
+  scrollLocationIntoView(nodeId)
 }
 
 watch(
   [() => props.entityId, () => props.currentLocationId, locationTree],
   ([entityId, locationId]) => {
-    if (entityId || !locationId) return
-    if (!expandPathTo(locationId)) return
-    scrollLocationIntoView(locationId)
+    // An acting entity means the tree is driven by the name-filter chip; no
+    // focus chain. Free-roam: focus the GM's current location (the chain
+    // expands by default in focus mode, so there is nothing to expand here).
+    if (entityId || !locationId) { setFocus(''); return }
+    setFocus(locationId)
+    nextTick(() => {
+      if (!focusPath.value.length) return  // location is not in the tree
+      scrollLocationIntoView(locationId)
+    })
   },
   { immediate: true },
 )
@@ -385,6 +451,45 @@ onUnmounted(() => {
 <style scoped>
 
 
+.gm-content {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* The Play tab scrolls as one block; Prep pins its chrome and scrolls only the
+   browsing zone (see .browse-zone) so the focus bar stays visible. */
+.gm-tab-body { flex: 1; min-height: 0; overflow-y: auto; }
+.gm-tools { display: flex; gap: 6px; margin-bottom: 8px; }
+.gm-tools .create-btn { flex: 1; margin-bottom: 0; }
+
+.browse-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.tab-count {
+  margin-left: 5px; font-size: 9px; padding: 0 5px; border-radius: 8px;
+  background: var(--overlay-12); color: var(--text-dim);
+}
+.browse-zone { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* Sticky breadcrumb: the way up is always on screen, even after scrolling. */
+.tree-crumbs {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 0 6px; margin-bottom: 2px;
+  background: var(--bg-panel);
+}
+.crumbs { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; white-space: nowrap; }
+.crumb {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 10px; color: var(--text-dim); text-overflow: ellipsis; overflow: hidden;
+}
+.crumb:hover { color: var(--accent); text-decoration: underline; }
+.crumb.current { color: var(--text); font-weight: 600; }
+.crumb-sep { font-size: 9px; color: var(--text-dim); opacity: 0.7; }
+
+.gm-footer { padding-top: 8px; }
+.gm-footer .canvas-btn { margin-bottom: 0; }
+
 .mode-tabs { display: flex; gap: 0; margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--overlay-8); }
 .mode-tabs button { flex: 1; font-size: 12px; padding: 6px 0; border: none; background: var(--overlay-4); color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
 .mode-tabs button.active { background: var(--accent); color: var(--text-on-accent); }
@@ -400,8 +505,7 @@ onUnmounted(() => {
 .gm-shortcuts .session-btn { border-color: var(--warn-32); }
 .gm-shortcuts .session-btn:hover { border-color: var(--warn); }
 
-.filter-bar { margin-bottom: 8px; }
-.chip-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.focus-bar { margin-bottom: 8px; }.chip-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .filter-chip { display: flex; align-items: center; gap: 2px; font-size: 11px; padding: 3px 8px; background: var(--accent-16); border: 1px solid var(--accent-dim); border-radius: 10px; color: var(--text); }
 .chip-label { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .filter-chip .chip-remove { font-size: 14px; padding: 0 2px; line-height: 1; }
@@ -415,8 +519,6 @@ onUnmounted(() => {
 
 .gm-content .create-btn { padding: 8px; margin-bottom: 8px; }
 .gm-content .canvas-btn { border: 1px dashed var(--accent-dim); }
-.canvas-btn-row { display: flex; gap: 6px; }
-.canvas-btn-row .create-btn { flex: 1; }
 
 .draft-badge {
   flex: 0 0 auto; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -426,16 +528,14 @@ onUnmounted(() => {
 }
 
 .gm-content .fab-create {
-  position: sticky; bottom: 16px; z-index: 20;
+  position: absolute; right: 12px; bottom: 62px; z-index: 20;
   width: 56px; height: 56px;
-  margin-left: auto; margin-top: 12px;
   border-radius: 50%;
   font-size: 26px; font-weight: 700; line-height: 1;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
 .entity-row { margin-bottom: 4px; }
-.factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--overlay-8); }
 
 .form-actions { display: flex; gap: 6px; }
 .top-actions { justify-content: space-between; margin-bottom: 4px; }

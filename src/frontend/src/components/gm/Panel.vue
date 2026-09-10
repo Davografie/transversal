@@ -13,7 +13,7 @@
           <Button v-if="id && !isCollapsed" type="button" class="panel-id-btn" variant="neutral" size="sm" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</Button>
         </slot>
       </header>
-      <div class="panel-body" v-show="!isCollapsed">
+      <div class="panel-body" :class="{ 'is-flush': !bodyScroll }" v-show="!isCollapsed">
         <slot />
       </div>
     </div>
@@ -73,6 +73,10 @@ const props = defineProps({
   id: { type: String, default: '' },
   closable: { type: Boolean, default: false },
   nested: { type: Boolean, default: false },
+  // Whether the panel body scrolls as one block (default) or the slot content
+  // manages its own scrolling (e.g. a pinned filter bar above a scrolling
+  // list). `false` makes the body a non-scrolling flex column.
+  bodyScroll: { type: Boolean, default: true },
   depth: { type: Number, default: 0 },
   minVisibleDepth: { type: Number, default: 0 },
   // Controlled collapse. null = uncontrolled (panel owns its own local state,
@@ -645,5 +649,14 @@ provide(panelKey, {
 
 .panel-body {
   flex: 1; overflow-y: auto; padding: 10px;
+}
+
+/* Content owns its scrolling: the body becomes a flex column that fills the
+   panel, so inner zones (and only they) can set overflow-y: auto. */
+.panel-body.is-flush {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>

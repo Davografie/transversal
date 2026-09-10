@@ -8,6 +8,7 @@
       :anchor="anchorRect"
       :direction="'left'"
       :min-visible-depth="minVisibleDepth"
+      :body-scroll="w.spec?.bodyScroll !== false"
       :title="w.spec?.title"
       :id="w.spec?.id"
       closable

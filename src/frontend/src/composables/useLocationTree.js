@@ -3,12 +3,20 @@ import { ref, computed } from 'vue'
 // ── Module-level singleton state ─────────────────────
 const locationTree = ref([])
 const expandedNodes = ref({})
+// The node the tree focuses on (the GM's current location in free-roam). While
+// set, the tree renders the ancestor chain and collapses each level's other
+// children into a single "… N more" stub row — see flattenTree.
+const focusId = ref('')
 
 // ── Constants ────────────────────────────────────────
 const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
 const OCCUPANT_TYPES = new Set(['CHARACTER', 'GMC', 'ASSET'])
 
 export function useLocationTree({ filteredEntities, activeFilters, currentUniverse }) {
+  // The focused node: its ancestor chain stays expanded, its siblings stub.
+  function setFocus(id) {
+    focusId.value = id || ''
+  }
   // ── Fetch ──────────────────────────────────────────
   async function fetchLocationTree() {
     try {
@@ -88,12 +96,42 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     return set
   })
 
+  // ── Focus: the breadcrumb chain (root → focused node) ──
+  // While a focus is set, flattenTree renders this chain and stubs the
+  // off-chain siblings at each level instead of expanding the whole level.
+  function _findTrail(nodes, targetId, trail) {
+    for (const n of nodes) {
+      trail.push(n)
+      if (n.id === targetId) return true
+      if (n.children && _findTrail(n.children, targetId, trail)) return true
+      trail.pop()
+    }
+    return false
+  }
+
+  const focusPath = computed(() => {
+    if (!focusId.value || !locationTree.value.length) return []
+    const trail = []
+    if (!_findTrail(locationTree.value, focusId.value, trail)) return []
+    return trail.map((n) => ({
+      id: n.id, name: n.name,
+      kind: n.kind || (n.node_type === 'universe' ? 'universe' : 'location'),
+    }))
+  })
+  const focusPathIds = computed(() => new Set(focusPath.value.map((n) => n.id)))
+
+  function collapseAll() {
+    expandedNodes.value = {}
+  }
+
   // ── Flatten ────────────────────────────────────────
   function flattenTree(nodes, occupants, depth = 0) {
     const result = []
     const filterMode = hasOccupantFilter.value
     const populated = populatedLocations.value
     const curUniverse = currentUniverse?.value || ''
+    const focusSet = focusPathIds.value
+    const focusMode = focusSet.size > 0
     for (const node of nodes) {
       const kind = node.kind || (node.node_type === 'universe' ? 'universe' : 'location')
       if (activeUniverseFilters.value.size > 0) {
@@ -104,22 +142,40 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
       // sibling locations and unrelated universes.
       const onPath = filterMode && populated.has(node.id)
       if (filterMode && !onPath) continue
-      const hasChildren = (node.children && node.children.length > 0) ||
-        (occupants[node.id] && occupants[node.id].length > 0)
+      const onFocus = focusMode && focusSet.has(node.id)
+
+      // Focus mode: a level of the chain shows its on-chain child(ren) and
+      // collapses every other child into one "… N more" stub, until that
+      // level is explicitly expanded (which renders all of its children).
+      const kids = node.children || []
+      const showAllKids = !focusMode || !onFocus || expandedNodes.value[node.id] === true
+      const visibleKids = showAllKids ? kids : kids.filter((c) => focusSet.has(c.id))
+
       let expanded
       if (expandedNodes.value[node.id] !== undefined) {
         expanded = expandedNodes.value[node.id]
       } else if (filterMode) {
         expanded = false
+      } else if (focusMode) {
+        expanded = onFocus
       } else {
         expanded = depth === 0 && node.universe === curUniverse
       }
+      const hasChildren = kids.length > 0 ||
+        (occupants[node.id] && occupants[node.id].length > 0)
       result.push({
         id: node.id, name: node.name, universe: node.universe,
-        depth, hasChildren, kind, expanded,
+        depth, hasChildren, kind,
+        // The glyph reflects what is on screen: a chain level that shows its
+        // child renders as expanded even though it is not fully expanded.
+        expanded: expanded || (focusMode && onFocus && visibleKids.length > 0),
       })
-      // In filter mode also reveal the occupant on a collapsed leaf.
-      if (expanded || (filterMode && occupants[node.id] && occupants[node.id].length)) {
+      // In filter mode also reveal the occupant on a collapsed leaf. In focus
+      // mode only the focused place itself (and levels the GM expanded by hand)
+      // lists occupants — otherwise every ancestor's roster would bloat the
+      // chain.
+      const revealOccupants = !focusMode || expandedNodes.value[node.id] === true || node.id === focusId.value
+      if ((expanded && revealOccupants) || (filterMode && occupants[node.id] && occupants[node.id].length)) {
         for (const e of occupants[node.id] || []) {
           result.push({
             id: e.id, name: e.name, universe: e.currentUniverse || '',
@@ -128,7 +184,7 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
           })
         }
       }
-      if (expanded && kind === 'universe' && node.universe) {
+      if (expanded && kind === 'universe' && node.universe && revealOccupants) {
         const unplaced = unplacedByUniverse.value[node.universe]
         if (unplaced) {
           for (const e of unplaced) {
@@ -140,13 +196,22 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
           }
         }
       }
-      if (node.children && node.children.length) {
+      if (kids.length) {
         if (expanded) {
-          result.push(...flattenTree(node.children, occupants, depth + 1))
+          result.push(...flattenTree(visibleKids, occupants, depth + 1))
         } else if (filterMode && onPath) {
           // Collapsed but on the focus path: render only the on-path child.
-          const next = node.children.filter((c) => populated.has(c.id))
+          const next = kids.filter((c) => populated.has(c.id))
           if (next.length) result.push(...flattenTree(next, occupants, depth + 1))
+        }
+        if (focusMode && onFocus && expanded && !showAllKids) {
+          const hidden = kids.length - visibleKids.length
+          if (hidden > 0) {
+            result.push({
+              id: 'more:' + node.id, kind: 'more', parentId: node.id, count: hidden,
+              name: `… ${hidden} more`, depth: depth + 1, hasChildren: false,
+            })
+          }
         }
       }
     }
@@ -208,6 +273,10 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
 
   return {
     locationTree,
+    focusPath,
+    focusId,
+    setFocus,
+    collapseAll,
     expandedNodes,
     fetchLocationTree,
     toggleTreeNode,
