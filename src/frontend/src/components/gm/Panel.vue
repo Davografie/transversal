@@ -54,6 +54,8 @@
         :bridge-bottom="childBridgeBottom"
         :bridge-left="childBridgeLeft"
         :bridge-right="childBridgeRight"
+        :origin-top="wrapperTopPx"
+        :origin-left="wrapperLeftPx"
         :on-size="(w, h) => recordChildSize(c.key, w, h)"
         closable
         :on-close="() => closeChild(c.key)"
@@ -116,6 +118,12 @@ const props = defineProps({
   // (button-drift: vertical span for lateral chains, horizontal for up/down).
   bridgeLeft: { type: Number, default: null },
   bridgeRight: { type: Number, default: null },
+  // The parent's *node* origin in viewport coordinates. Offsets (top/left) are
+  // relative to it, so this is how a child resolves its own viewport position
+  // without measuring itself (which would feed its own clamp back into the
+  // measurement).
+  originTop: { type: Number, default: null },
+  originLeft: { type: Number, default: null },
   // Report this panel's measured size up to the parent (children only).
   onSize: { type: Function, default: null },
   // Callbacks supplied by the parent Panel so this Panel can close/replace
@@ -259,7 +267,7 @@ function computeRootPosition() {
   if (!a) return
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const MARGIN = 12
+  const MARGIN = VIEWPORT_MARGIN
   let top, left
   if (props.direction === 'down') {
     // Vertical chains grow away from the anchor's edge: the panel's inner edge
@@ -421,11 +429,38 @@ const placed = computed(() =>
   effectiveTop.value != null && effectiveLeft.value != null &&
   nodeSize.w > 0 && nodeSize.h > 0
 )
-const nodeStyle = computed(() => ({
-  top: ((effectiveTop.value ?? 0) + (isVertical.value ? 0 : slideOffset.value)) + 'px',
-  left: ((effectiveLeft.value ?? 0) + (isVertical.value ? slideOffset.value : 0)) + 'px',
-  visibility: placed.value ? 'visible' : 'hidden',
-}))
+// ── Viewport clamp ────────────────────────────────────
+// No panel may sit outside the viewport: children are placed by their parent's
+// offsets, and a large panel centred on a small parent (or a long chain) can
+// otherwise poke past an edge and become unreachable. Roots clamp themselves in
+// computeRootPosition; a child resolves its intended viewport position from its
+// parent's node origin + its own offsets and nudges back inside by the smallest
+// shift. Deliberately *not* derived from this panel's own measured rect — that
+// rect already contains the correction, so reading it back would flip-flop.
+const VIEWPORT_MARGIN = 12
+
+const viewportFix = computed(() => {
+  if (isRoot.value) return { x: 0, y: 0 }
+  const oy = props.originTop
+  const ox = props.originLeft
+  if (oy == null || ox == null || !nodeSize.w || !nodeSize.h) return { x: 0, y: 0 }
+  const vw = viewWidth.value
+  const vh = viewHeight.value
+  const intendedTop = oy + (effectiveTop.value ?? 0) + (isVertical.value ? 0 : slideOffset.value)
+  const intendedLeft = ox + (effectiveLeft.value ?? 0) + (isVertical.value ? slideOffset.value : 0)
+  const top = Math.min(Math.max(intendedTop, VIEWPORT_MARGIN), Math.max(VIEWPORT_MARGIN, vh - nodeSize.h - VIEWPORT_MARGIN))
+  const left = Math.min(Math.max(intendedLeft, VIEWPORT_MARGIN), Math.max(VIEWPORT_MARGIN, vw - nodeSize.w - VIEWPORT_MARGIN))
+  return { x: left - intendedLeft, y: top - intendedTop }
+})
+
+const nodeStyle = computed(() => {
+  const fix = viewportFix.value
+  return {
+    top: ((effectiveTop.value ?? 0) + (isVertical.value ? 0 : slideOffset.value) + fix.y) + 'px',
+    left: ((effectiveLeft.value ?? 0) + (isVertical.value ? slideOffset.value : 0) + fix.x) + 'px',
+    visibility: placed.value ? 'visible' : 'hidden',
+  }
+})
 
 // The scope children clamp their rail to (the parent's panel box). When THIS
 // panel is depth-hidden its own bounds are meaningless, so pass the inherited
