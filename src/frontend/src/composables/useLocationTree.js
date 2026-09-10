@@ -68,16 +68,21 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
   const populatedLocations = computed(() => {
     const occ = occupantsByLocation.value
     const set = new Set(Object.keys(occ))
+    // Mark every node that holds (or contains, at any depth) a matching
+    // occupant. Must visit ALL siblings — an early `return true` here leaves
+    // later branches unmarked, and `flattenTree` only descends into marked
+    // nodes, so their occupants silently vanish in filter mode.
     function markAncestors(nodes, targetSet) {
+      let anyMarked = false
       for (const n of nodes) {
         let hasOccupiedDescendant = false
         if (n.children) hasOccupiedDescendant = markAncestors(n.children, targetSet)
         if (targetSet.has(n.id) || hasOccupiedDescendant) {
           set.add(n.id)
-          return true
+          anyMarked = true
         }
       }
-      return false
+      return anyMarked
     }
     markAncestors(locationTree.value, set)
     return set
