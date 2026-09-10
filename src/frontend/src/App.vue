@@ -470,6 +470,15 @@ const locationOverlay = ref(null)
 async function initLocation() {
   DIAG.mark('initLocation-start', { entityId: entityId.value })
   locationName.value = 'LOADING...'
+  // A free-roaming GM has no entity, so there is nothing to resolve a location
+  // from — and a null id fails this query's non-null `$id`. Skip the round trip
+  // and fall through to the existing no-entity state.
+  if (!entityId.value) {
+    DIAG.mark('initLocation-no-entity', { reason: 'no entityId (GM free-roam)' })
+    locationName.value = 'no entity'
+    DIAG.mark('initLocation-done', { locationName: locationName.value })
+    return
+  }
   try {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -924,14 +933,14 @@ async function initSession() {
   if (sessions.value.length > 0) {
     const s = sessions.value[0]
     sessionId.value = s.id
-    const joined = await joinSession(s.id, entityId.value, playerId.value)
+    const joined = await joinSession(s.id, entityId.value || playerId.value, playerId.value)
     inSession.value = !!joined?.in_session
     DIAG.mark('initSession-joined', { sessionId: sessionId.value, inSession: inSession.value })
   } else {
     const s = await createSession('Default Session', 'earth')
     if (s) {
       sessionId.value = s.id
-      const joined = await joinSession(s.id, entityId.value, playerId.value)
+      const joined = await joinSession(s.id, entityId.value || playerId.value, playerId.value)
       inSession.value = !!joined?.in_session
       DIAG.mark('initSession-created', { sessionId: sessionId.value, inSession: inSession.value })
     } else {

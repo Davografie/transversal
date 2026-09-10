@@ -195,7 +195,7 @@ const props = defineProps({
   universe: { type: String, default: 'earth' },
   backgroundImage: { type: String, default: '' },
   rawBackgroundImage: { type: String, default: '' },  // pre-quality URL, used as load-error fallback
-  entityId: { type: String, required: true },
+  entityId: { type: String, default: null },  // null = GM free-roam (B95)
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
   gmMode: { type: Boolean, default: false },
