@@ -26,10 +26,10 @@
     </div>
 
     <div class="select-bar">
-      <button type="button" class="select-all" @click="toggleAllMatching">
+      <Button type="button" class="select-all" @click="toggleAllMatching" variant="secondary" size="sm">
         <span class="select-all-pick" :class="{ selected: allMatchingSelected }">{{ allMatchingSelected ? '✓' : '+' }}</span>
         <span>All matching ({{ filtered.length }})</span>
-      </button>
+      </Button>
       <span class="selected-count">{{ selectedIds.length }} selected</span>
     </div>
 
@@ -229,7 +229,6 @@ onMounted(() => {
 .filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .filter-select { width: 100%; font-size: 12px; padding: 6px 8px; box-sizing: border-box; }
 .select-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.select-all { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; background: none; border: none; padding: 0; }
 .select-all-pick { font-weight: 700; font-size: 12px; width: 16px; text-align: center; color: var(--text-dim); }
 .select-all-pick.selected { color: var(--success); }
 .selected-count { font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums; }

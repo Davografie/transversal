@@ -5,15 +5,21 @@
     <div class="animate-section" v-if="imageType !== 'animated'">
       <div class="motion-hint-row">
         <input v-if="!statusInfo.cancelling" v-model="motionHint" type="text" placeholder="Motion hint (optional) — e.g. 'hair blowing in wind'" />
-        <button class="animate-btn" :class="{ cancelling: statusInfo.cancelling }" @click="onAnimateClick">
+        <Button
+          class="animate-btn"
+          :class="{ cancelling: statusInfo.cancelling }"
+          :loading="animating"
+          @click="onAnimateClick"
+          variant="secondary"
+        >
           <span class="btn-label">{{ statusInfo.label }}</span>
           <span v-if="statusInfo.status" class="btn-status">{{ statusInfo.status }}</span>
-        </button>
+        </Button>
       </div>
       <div class="bg-remove-row" v-if="imageType !== 'cutout'">
-        <button class="bg-btn" @click="onRemoveBgClick" :disabled="bgBusy || !!localBgJob">
+        <Button class="bg-btn" :loading="bgBusy" :disabled="bgBusy || !!localBgJob" @click="onRemoveBgClick" variant="neutral">
           <span class="btn-label">{{ bgLabel }}</span>
-        </button>
+        </Button>
       </div>
     </div>
     <div class="role-assign">
@@ -34,7 +40,7 @@
     <div class="danger-zone">
       <h4>Danger Zone</h4>
       <div class="danger-actions">
-        <button class="delete-btn" @click="onDelete" :disabled="deleting">🗑 Delete</button>
+        <Button class="delete-btn" :loading="deleting" :disabled="deleting" @click="onDelete" variant="danger" solid>🗑 Delete</Button>
       </div>
     </div>
   </div>
@@ -43,6 +49,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import MediaImage from '@/components/MediaImage.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -268,14 +275,15 @@ async function onDelete() {
 .animate-section { margin-top: 8px; }
 .motion-hint-row { display: flex; gap: 6px; align-items: center; }
 .motion-hint-row input { flex: 1; font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--overlay-12); background: var(--overlay-6); color: var(--text); }
-.animate-btn { background: var(--amber); color: var(--text-on-accent); font-size: 11px; padding: 0; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; overflow: hidden; white-space: nowrap; }
-.animate-btn.cancelling { background: var(--danger-strong); }
+/* Split button: label + status segments sit flush, so the button itself keeps
+   zero padding/gap and clips the status segment's corners. */
+.motion-hint-row .animate-btn { padding: 0; gap: 0; overflow: hidden; white-space: nowrap; }
+.motion-hint-row .animate-btn.cancelling { background: var(--danger-strong); color: var(--text-on-accent); }
 .animate-btn .btn-label { padding: 4px 8px; }
 .animate-btn .btn-status { padding: 4px 8px; background: rgba(0,0,0,0.25); font-weight: 600; }
 
 .bg-remove-row { display: flex; justify-content: center; margin-top: 6px; }
-.bg-btn { background: var(--overlay-10); color: var(--text); font-size: 11px; padding: 0; border-radius: 4px; border: 1px solid var(--overlay-16); cursor: pointer; display: inline-flex; overflow: hidden; white-space: nowrap; }
-.bg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.bg-remove-row .bg-btn { padding: 0; overflow: hidden; white-space: nowrap; }
 .bg-btn .btn-label { padding: 4px 8px; }
 
 .role-assign { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
@@ -302,6 +310,4 @@ async function onDelete() {
   margin: 0 0 8px 0;
 }
 .danger-actions { display: flex; gap: 6px; }
-.delete-btn { background: var(--danger); color: var(--text-on-accent); font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
-.delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

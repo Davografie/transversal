@@ -13,11 +13,11 @@
         <span class="ee-cat" :class="'cat-' + effectCategory(eff)">{{ categorySign(effectCategory(eff)) }}</span>
         <span class="ee-summary">{{ effectSummary(eff) }}</span>
         <span class="ee-timing">{{ eff.timing }}</span>
-        <button class="ee-del" @click.stop="removeEffect(i)" title="Remove">✕</button>
+        <Button class="ee-del" variant="danger-ghost" size="sm" @click.stop="removeEffect(i)" title="Remove">✕</Button>
       </template>
     </GmList>
 
-    <button class="ee-add" @click="emit('add')">+ Add effect</button>
+    <Button class="ee-add" variant="secondary" block @click="emit('add')">+ Add effect</Button>
   </div>
 </template>
 
@@ -25,6 +25,7 @@
 import { computed } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -76,6 +77,7 @@ function rowClassFn(eff) {
 .cat-either { color: var(--text-dim); }
 .ee-summary { flex: 1; font-family: monospace; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ee-timing { font-size: 9px; color: var(--text-dim); }
-.ee-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
-.ee-add { font-size: 10px; padding: 3px 8px; background: var(--overlay-4); border: 1px dashed var(--overlay-15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
+/* "+ Add effect" keeps its deliberate dashed accent (the row is full width via
+   the column flex parent); fill/radius/padding/hover come from ui/Button. */
+.ee-root > .ee-add { border-style: dashed; border-color: var(--overlay-15); }
 </style>

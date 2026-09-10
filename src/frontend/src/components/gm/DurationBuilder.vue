@@ -10,9 +10,9 @@
         <option value="trait_updated">Trait updated</option>
       </select>
       <input v-model.number="t.remaining" type="number" min="0" placeholder="count" class="db-count" />
-      <button class="db-del" @click="removeTimer(i)" title="Remove">✕</button>
+      <Button class="db-del" variant="danger-ghost" size="sm" title="Remove" @click="removeTimer(i)">✕</Button>
     </div>
-    <button class="db-add" @click="addTimer">+ Add timer</button>
+    <Button class="db-add" variant="secondary" size="sm" block @click="addTimer">+ Add timer</Button>
 
     <div class="db-combine">
       <label>Expire when</label>
@@ -26,6 +26,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ timers: [], combine: 'FIRST_TO_FIRE' }) },
@@ -66,9 +67,9 @@ function removeTimer(i) {
 }
 .db-event { flex: 2; }
 .db-count { flex: 1; min-width: 0; }
-.db-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
-.db-add { font-size: 10px; padding: 3px 8px; background: var(--overlay-4); border: 1px dashed var(--overlay-15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
-.db-add:hover { color: var(--text); }
+/* "+ Add timer" keeps its deliberate dashed accent (full width via the column
+   flex parent); fill/radius/padding/hover come from ui/Button. */
+.db-root > .db-add { border-style: dashed; border-color: var(--overlay-15); }
 .db-combine { display: flex; align-items: center; gap: 6px; }
 .db-combine label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .db-combine select { font-size: 11px; padding: 4px 6px; background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 4px; font-family: inherit; }

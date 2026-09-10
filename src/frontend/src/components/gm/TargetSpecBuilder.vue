@@ -7,16 +7,17 @@
     <template v-else>
       <div v-if="!steps.length" class="tsb-empty">
         <span>No steps yet — build a path from a context collection to the target type.</span>
-        <button type="button" class="tsb-plus" title="Add first step" @click="toggleInsert(-1)">＋</button>
+        <Button class="tsb-plus" title="Add first step" variant="secondary" size="sm" @click="toggleInsert(-1)">＋</Button>
         <div v-if="insertingAt === -1" class="tsb-insert-picker">
-          <button
+          <Button
             v-for="k in STEP_KINDS"
             :key="k.kind"
-            type="button"
             class="tsb-add-btn"
+            variant="secondary"
+            size="sm"
             :disabled="!canInsertAfter(-1, k.kind)"
             @click="insert(-1, k.kind)"
-          >{{ k.label }}</button>
+          >{{ k.label }}</Button>
         </div>
       </div>
 
@@ -159,7 +160,7 @@
         </div>
         </div>
         <div class="tsb-step-rail">
-          <button type="button" class="tsb-btn tsb-remove" title="Remove" @click="remove(i)">✕</button>
+          <Button class="tsb-btn tsb-remove" title="Remove" variant="danger-ghost" size="sm" @click="remove(i)">✕</Button>
           <button
             type="button"
             class="tsb-lightbulb"
@@ -167,19 +168,20 @@
             :title="step.output != null ? 'Exposed as variable' : 'Expose as variable'"
             @click="toggleOutput(i)"
           >💡</button>
-          <button type="button" class="tsb-plus" title="Add step after" @click="toggleInsert(i)">＋</button>
+          <Button class="tsb-plus" title="Add step after" variant="secondary" size="sm" @click="toggleInsert(i)">＋</Button>
         </div>
         </div>
         <div v-if="insertingAt === i" class="tsb-insert-picker">
           <span class="tsb-add-label">Add after:</span>
-          <button
+          <Button
             v-for="k in STEP_KINDS"
             :key="k.kind"
-            type="button"
             class="tsb-add-btn"
+            variant="secondary"
+            size="sm"
             :disabled="!canInsertAfter(i, k.kind)"
             @click="insert(i, k.kind)"
-          >{{ k.label }}</button>
+          >{{ k.label }}</Button>
         </div>
         </div>
         </template>
@@ -201,6 +203,7 @@ import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import DiePicker from '../DiePicker.vue'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
@@ -503,15 +506,12 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-step-row { display: flex; gap: 6px; }
 .tsb-step-main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .tsb-step-rail { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
-.tsb-btn {
-  display: inline-flex; align-items: center; justify-content: center; padding: 0;
-  width: 22px; height: 22px; line-height: 1; cursor: pointer; font-size: 10px;
-  background: var(--overlay-6); border: 1px solid var(--overlay-12);
-  border-radius: 3px; color: var(--text-dim);
+/* Rail buttons keep their 22px square geometry and the first-step "＋" keeps
+   its compact box; the primitive owns fill/border/radius/color/hover/disabled,
+   so the kept width+padding overrides are scoped to the container. */
+.tsb-empty .tsb-plus, .tsb-step-rail .tsb-plus, .tsb-step-rail .tsb-btn {
+  width: 22px; height: 22px; padding: 0;
 }
-.tsb-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
-.tsb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.tsb-remove:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
 .tsb-err { font-size: 9px; color: var(--danger); }
 .tsb-config { display: flex; gap: 4px; flex-wrap: wrap; }
 .tsb-config select, .tsb-config input {
@@ -530,19 +530,6 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 .tsb-check input { width: auto; }
 .tsb-add { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .tsb-add-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.tsb-add-btn {
-  font-size: 9px; padding: 2px 8px; border-radius: 3px; cursor: pointer;
-  background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text);
-}
-.tsb-add-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
-.tsb-add-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.tsb-plus {
-  display: inline-flex; align-items: center; justify-content: center; padding: 0;
-  width: 22px; height: 22px; line-height: 1; font-size: 13px; cursor: pointer;
-  background: var(--overlay-6); border: 1px solid var(--overlay-12);
-  border-radius: 3px; color: var(--text-dim);
-}
-.tsb-plus:hover { color: var(--accent); border-color: var(--accent); }
 .tsb-insert-picker { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-start; margin-top: 4px; }
 .tsb-lightbulb {
   display: inline-flex; align-items: center; justify-content: center; padding: 0;

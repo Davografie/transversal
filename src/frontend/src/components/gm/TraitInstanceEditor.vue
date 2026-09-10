@@ -3,8 +3,8 @@
     <div class="tie-field">
       <label>Die</label>
       <div v-if="allowVariable" class="tie-die-mode">
-        <button type="button" :class="{ active: !isVariable }" @click="setVariableMode(false)">Die</button>
-        <button type="button" :class="{ active: isVariable }" @click="setVariableMode(true)">Variable</button>
+        <Button type="button" :active="!isVariable" @click="setVariableMode(false)" variant="neutral">Die</Button>
+        <Button type="button" :active="isVariable" @click="setVariableMode(true)" variant="neutral">Variable</Button>
       </div>
       <DiePicker v-if="!isVariable" :model-value="die" @update:model-value="emit('update:die', $event)" />
       <select v-else :value="die" @change="emit('update:die', $event.target.value)">
@@ -14,9 +14,16 @@
 
     <div class="tie-field">
       <label>Type</label>
-      <button type="button" class="polarity-toggle" :class="{ 'is-positive': !negative }" @click="emit('update:negative', !negative)">
+      <Button
+        type="button"
+        class="polarity-toggle"
+        :class="{ 'is-positive': !negative }"
+        :active="negative"
+        @click="emit('update:negative', !negative)"
+        variant="neutral"
+      >
         {{ negative ? 'negative' : 'positive' }}
-      </button>
+      </Button>
     </div>
 
     <div class="tie-field">
@@ -44,6 +51,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import DiePicker from '@/components/DiePicker.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   die: { type: String, default: '' },
@@ -108,27 +116,17 @@ function setVariableMode(variable) {
 }
 .tie-field textarea { min-height: 48px; resize: vertical; }
 .tie-die-mode { display: flex; gap: 4px; }
-.tie-die-mode button {
-  font-size: 10px;
-  padding: 3px 9px;
-  border-radius: 4px;
-  background: var(--overlay-4);
-  border: 1px solid var(--overlay-12);
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.tie-die-mode button.active { background: var(--accent-20); border-color: var(--accent); color: var(--accent); }
-.polarity-toggle {
+/* Polarity toggle: typography/layout only — the primitive owns the chrome and
+   the neutral/active fills. The positive skin (accent outline) is kept because
+   it carries the positive/negative meaning. */
+.tie-field .polarity-toggle {
   align-self: flex-start;
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--text-dim);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  cursor: pointer;
 }
-.polarity-toggle.is-positive { border-color: var(--accent); color: var(--accent); background: var(--overlay-6); }
+.tie-field .polarity-toggle.is-positive {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--overlay-6);
+}
 </style>

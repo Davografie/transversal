@@ -2,7 +2,7 @@
   <div class="chip-input" @click="focusInput">
     <span v-for="(item, i) in modelValue" :key="i" class="chip">
       {{ displayLabel(item) }}
-      <button class="chip-x" @click.stop="remove(i)">×</button>
+      <Button class="chip-x" @click.stop="remove(i)" variant="danger-ghost" size="sm">×</Button>
     </span>
     <input
       ref="inputEl"
@@ -25,6 +25,7 @@
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -97,8 +98,6 @@ function onBlur() {
   background: var(--accent-dim); color: var(--accent);
   border-radius: 4px;
 }
-.chip-x { font-size: 12px; padding: 0 2px; background: none; border: none; color: var(--accent); cursor: pointer; }
-.chip-x:hover { color: var(--text-on-accent); }
 .chip-text {
   flex: 1; min-width: 80px; font-size: 12px;
   background: none; border: none; outline: none; color: var(--text);

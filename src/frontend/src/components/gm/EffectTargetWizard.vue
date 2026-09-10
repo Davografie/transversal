@@ -40,10 +40,10 @@
     </div>
     <div v-else class="etw-empty">No targets to resolve.</div>
     <div class="etw-actions">
-      <button class="etw-btn" :disabled="stepIndex === 0" @click="back">Back</button>
-      <button v-if="!isLast" class="etw-btn etw-primary" :disabled="!hasSelection" @click="next">Next</button>
-      <button v-else class="etw-btn etw-primary" :disabled="!hasSelection" @click="apply">Apply</button>
-      <button class="etw-btn etw-cancel" @click="$emit('cancel')">Cancel</button>
+      <Button class="etw-btn" variant="neutral" :disabled="stepIndex === 0" @click="back">Back</Button>
+      <Button v-if="!isLast" class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="next">Next</Button>
+      <Button v-else class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="apply">Apply</Button>
+      <Button class="etw-btn etw-cancel" variant="neutral" @click="$emit('cancel')">Cancel</Button>
     </div>
   </div>
 </template>
@@ -52,6 +52,7 @@
 import { ref, computed, watch } from 'vue'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import DieIcon from '../DieIcon.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   entityId: { type: String, required: true },
@@ -155,8 +156,4 @@ function apply() {
 .etw-cand-rating :deep(.die-icon) { width: 18px; height: 20px; }
 .etw-multi-hint { font-size: 9px; color: var(--text-dim); }
 .etw-actions { display: flex; gap: 6px; }
-.etw-btn { font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text); }
-.etw-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.etw-primary { background: var(--success); color: var(--text-invert); border-color: transparent; font-weight: 600; }
-.etw-cancel { color: var(--text-dim); }
 </style>

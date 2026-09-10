@@ -203,8 +203,8 @@
         </label>
       </div>
       <div class="ee-form-actions">
-        <button class="ee-cancel" type="button" @click="emit('cancel')">Cancel</button>
-        <button class="ee-save" type="button" @click="commit">{{ editing ? 'Update' : 'Add' }}</button>
+        <Button class="ee-cancel" variant="neutral" @click="emit('cancel')">Cancel</Button>
+        <Button class="ee-save" variant="success" solid @click="commit">{{ editing ? 'Update' : 'Add' }}</Button>
       </div>
     </template>
   </div>
@@ -225,6 +225,7 @@ import TraitInstanceEditor from './TraitInstanceEditor.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
 import ReturnMapEditor from './ReturnMapEditor.vue'
 import DiePicker from '@/components/DiePicker.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   value: { type: Object, default: null },
@@ -730,6 +731,4 @@ async function copyVariable(v) {
 .ee-check input { width: auto; }
 .ee-preview { font-size: 10px; color: var(--accent); font-style: italic; margin-top: 2px; }
 .ee-form-actions { display: flex; gap: 6px; margin-top: 4px; }
-.ee-save { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; }
-.ee-cancel { background: var(--overlay-6); color: var(--text-dim); padding: 5px 10px; border-radius: 4px; border: 1px solid var(--overlay-10); cursor: pointer; font-size: 11px; }
 </style>

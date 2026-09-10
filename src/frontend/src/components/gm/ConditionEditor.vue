@@ -54,9 +54,9 @@
         </template>
         <input v-if="c.type === 'NARRATIVE'" v-model="c.narrative" placeholder="narrative text" class="ce-target" />
       </template>
-      <button class="ce-del" @click="remove(i)">✕</button>
+      <Button class="ce-del" variant="danger-ghost" size="sm" @click="remove(i)">✕</Button>
     </div>
-    <button class="ce-add" @click="add">＋ Add condition</button>
+    <Button class="ce-add" variant="secondary" block @click="add">＋ Add condition</Button>
   </div>
 </template>
 
@@ -66,6 +66,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import UniversePicker from './UniversePicker.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -156,9 +157,9 @@ function remove(i) {
 .ce-value { flex: 1 !important; }
 .ce-operator { flex: none !important; width: 58px; }
 .ce-picker { min-width: 0; }
-.ce-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
-.ce-add { font-size: 10px; padding: 3px 8px; background: var(--overlay-4); border: 1px dashed var(--overlay-15); border-radius: 4px; color: var(--text-dim); cursor: pointer; }
-.ce-add:hover { color: var(--text); }
+/* "＋ Add condition" keeps its deliberate dashed accent (full width via the
+   column flex parent); fill/radius/padding/hover come from ui/Button. */
+.ce-root > .ce-add { border-style: dashed; border-color: var(--overlay-15); }
 .ce-row-spec { flex-wrap: wrap; align-items: flex-start; }
 .ce-row-spec > select { flex: none; width: 140px; }
 .ce-spec { flex: 1 1 100%; min-width: 0; }
