@@ -150,6 +150,32 @@ class ContestTracker:
         """Return all contest states at a location."""
         return dict(self._contests.get(location_id, {}))
 
+    def list_all_contests(self) -> list[dict]:
+        """Return one entry per active contest across all locations.
+
+        A contest is identified by its challenger's ``opposition_entity_id``.
+        Multi-party-ready: ``parties`` holds every competitor (today always
+        two — resolution remains 1v1 — but the shape doesn't assume a pair).
+        """
+        result: list[dict] = []
+        for location_id, states in self._contests.items():
+            for entity_id, state in states.items():
+                opponent = state.opposition_entity_id
+                if not opponent:
+                    continue
+                defendant = states.get(opponent)
+                result.append({
+                    "location_id": location_id,
+                    "challenger_id": entity_id,
+                    "defendant_id": opponent,
+                    "parties": [entity_id, opponent],
+                    "pending": state.pending_decision,
+                    "high_stakes": state.high_stakes,
+                    "challenger_committed": state.committed is not None,
+                    "defendant_committed": bool(defendant and defendant.committed is not None),
+                })
+        return result
+
     def get_contestants(
         self, location_id: str, entity_id: str
     ) -> tuple[Optional[ContestState], Optional[ContestState]]:

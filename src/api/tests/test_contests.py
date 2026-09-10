@@ -431,6 +431,33 @@ class TestContestTrackerAssembly:
         # Other locations unaffected
         assert ct.get("loc-2", "kael") is not None
 
+    def test_list_all_contests_empty(self):
+        assert ContestTracker().list_all_contests() == []
+
+    def test_list_all_contests_one_contest_with_parties(self):
+        ct = ContestTracker()
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        contests = ct.list_all_contests()
+        assert len(contests) == 1
+        c = contests[0]
+        assert c["location_id"] == "loc-1"
+        assert c["challenger_id"] == "kael"
+        assert c["defendant_id"] == "guard-1"
+        assert set(c["parties"]) == {"kael", "guard-1"}
+        assert c["high_stakes"] is False
+        assert c["challenger_committed"] is False
+        assert c["defendant_committed"] is False
+
+    def test_list_all_contests_multiple_locations_and_contests(self):
+        ct = ContestTracker()
+        ct.set_opposition("loc-1", "kael", "guard-1", "earth")
+        ct.set_opposition("loc-1", "mara", "guard-2", "earth")
+        ct.set_opposition("loc-2", "kael", "guard-3", "earth")
+        contests = ct.list_all_contests()
+        assert len(contests) == 3
+        by_key = {(c["location_id"], c["challenger_id"]) for c in contests}
+        assert by_key == {("loc-1", "kael"), ("loc-1", "mara"), ("loc-2", "kael")}
+
 
 class TestContestTrackerResolution:
     """Resolving contests through the tracker (dice from the scene store)."""

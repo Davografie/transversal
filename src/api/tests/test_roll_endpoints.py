@@ -123,3 +123,17 @@ def test_list_all_pools_is_global(client):
     r = client.get("/api/v1/pools")
     assert r.status_code == 200, r.text
     assert set(r.json()["pools"].keys()) == {"a", "b"}
+
+
+def test_activity_returns_grouped_pools_and_difficulties(client):
+    _save(client, "loc-1", "a", [_die("d8")])
+    _save(client, "loc-2", "b", [_die("d6")])
+    client.put("/api/v1/locations/loc-1/difficulty", json={"difficulty": 12})
+    r = client.get("/api/v1/activity")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert set(data["pools"].keys()) == {"loc-1", "loc-2"}
+    assert data["pools"]["loc-1"]["a"][0]["die"] == "d8"
+    assert data["pools"]["loc-2"]["b"][0]["die"] == "d6"
+    assert data["difficulties"] == {"loc-1": 12}
+    assert data["contests"] == []

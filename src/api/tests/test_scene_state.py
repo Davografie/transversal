@@ -54,6 +54,22 @@ class TestSceneStateStore:
         assert all_pools["kael-1"][0]["die"] == "d8"
         assert all_pools["guard-1"][0]["die"] == "d6"
 
+    def test_list_all_pools_grouped_preserves_location(self, store):
+        store.save_pool("loc-1", "kael-1", [_die()])
+        store.save_pool("loc-1", "guard-1", [_die(die="d6")])
+        store.save_pool("loc-2", "guard-1", [_die(die="d10")])
+        grouped = store.list_all_pools_grouped()
+        assert set(grouped.keys()) == {"loc-1", "loc-2"}
+        assert set(grouped["loc-1"].keys()) == {"kael-1", "guard-1"}
+        assert set(grouped["loc-2"].keys()) == {"guard-1"}
+        assert grouped["loc-2"]["guard-1"][0]["die"] == "d10"
+
+    def test_list_difficulties(self, store):
+        assert store.list_difficulties() == {}
+        store.set_difficulty("loc-1", 11)
+        store.set_difficulty("loc-2", 7)
+        assert store.list_difficulties() == {"loc-1": 11, "loc-2": 7}
+
     def test_clear_pool(self, store):
         store.save_pool("loc-1", "kael-1", [_die()])
         store.clear_pool("loc-1", "kael-1")

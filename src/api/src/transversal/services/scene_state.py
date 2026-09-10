@@ -101,12 +101,29 @@ class SceneStateStore:
         }
 
     def list_all_pools(self) -> dict[str, list[dict]]:
-        """Return {entity_id: dice} for every saved pool across all locations."""
+        """Return {entity_id: dice} for every saved pool across all locations.
+
+        Lossy by design (the location is dropped) — kept for backward
+        compatibility.  Prefer ``list_all_pools_grouped`` when the location
+        dimension matters (e.g. the GM activity view).
+        """
         result: dict[str, list[dict]] = {}
         for pools in self._pools.values():
             for eid, dice in pools.items():
                 result[eid] = list(dice)
         return result
+
+    def list_all_pools_grouped(self) -> dict[str, dict[str, list[dict]]]:
+        """Return {location_id: {entity_id: dice}} for every saved pool.
+
+        Preserves the location dimension so the GM activity view can group
+        pools by where they are happening (a location's own difficulty pool
+        is keyed by the location id, so it lands under its own location).
+        """
+        return {
+            location_id: {eid: list(dice) for eid, dice in pools.items()}
+            for location_id, pools in self._pools.items()
+        }
 
     # ── Difficulty ────────────────────────────────────
 
@@ -115,6 +132,10 @@ class SceneStateStore:
 
     def get_difficulty(self, location_id: str) -> Optional[int]:
         return self._difficulty.get(location_id)
+
+    def list_difficulties(self) -> dict[str, int]:
+        """Return {location_id: difficulty} for every location with one set."""
+        return dict(self._difficulty)
 
     def clear_difficulty(self, location_id: str) -> None:
         """Clear the test difficulty for a location (end of beat)."""

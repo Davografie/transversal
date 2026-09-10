@@ -23,7 +23,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from transversal.domain import DieSpec, DieType, DicePoolRequest, RollResult
-from transversal.services.contest_tracker import broadcast_pool_change
+from transversal.services.contest_tracker import broadcast_pool_change, get_contest_tracker
 from transversal.services.dice_resolver import (
     determine_tier,
     is_botch,
@@ -225,3 +225,20 @@ async def resolve_pool(location_id: str, entity_id: str):
 async def list_all_pools():
     """Return every saved dice pool across all locations (tabs are global)."""
     return {"pools": get_scene_store().list_all_pools()}
+
+
+@router.get("/activity")
+async def get_activity():
+    """Return the full in-memory activity snapshot for the GM activity view.
+
+    - ``pools``: {location_id: {entity_id: dice}} — location dimension intact.
+    - ``difficulties``: {location_id: difficulty} — set test difficulties.
+    - ``contests``: one entry per active contest, each with its ``parties``
+      (multi-party-ready), location, pending decision, and stakes.
+    """
+    store = get_scene_store()
+    return {
+        "pools": store.list_all_pools_grouped(),
+        "difficulties": store.list_difficulties(),
+        "contests": get_contest_tracker().list_all_contests(),
+    }
