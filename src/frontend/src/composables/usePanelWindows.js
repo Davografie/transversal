@@ -74,6 +74,14 @@ function move(id, x, y) {
   }
 }
 
+// Which way this window's chain opens. Derived from the window's own anchor
+// (same edge bands + keep-last rule as the main stack), so a floating window
+// reorients as it is moved — independently of the root stack.
+function setDirection(id, direction) {
+  const w = windows.value.find((w) => w.id === id)
+  if (w && w.direction !== direction) w.direction = direction
+}
+
 export function usePanelWindows() {
-  return { windows, spawn, close, replace, toggleCollapse, setDock, move }
+  return { windows, spawn, close, replace, toggleCollapse, setDock, move, setDirection }
 }

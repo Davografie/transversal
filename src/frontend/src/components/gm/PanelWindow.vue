@@ -28,13 +28,18 @@
 // follows the same layout rules via Panel.vue: the window's root panel is
 // simply the chain root whose anchor happens to be here.
 //
+// Its chain direction is its **own**, derived from where the window sits (same
+// edge bands + keep-last rule as the main stack) rather than inherited: drag a
+// window to the left edge and its chain opens rightwards, to the top and it
+// opens downwards — with no effect on the root stack.
+//
 // It shadows the stack's panel registry with no-ops so a window's chain never
 // participates in the main stack's depth-hiding fit loop, and provides its own
 // drag/pulse so the rail's ⠿ handle moves *this* window.
-import { computed, ref, provide } from 'vue'
+import { computed, ref, provide, watch, onMounted, onUnmounted } from 'vue'
 import Panel from './Panel.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
-import { clampAnchor } from '@/composables/usePanelAnchor.js'
+import { clampAnchor, deriveDirection } from '@/composables/usePanelAnchor.js'
 
 const props = defineProps({
   win: { type: Object, required: true },
@@ -43,7 +48,7 @@ const props = defineProps({
 
 defineEmits(['close', 'dock'])
 
-const { move: moveWindow } = usePanelWindows()
+const { move: moveWindow, setDirection: setWindowDirection } = usePanelWindows()
 
 const viewportWidth = ref(window.innerWidth)
 const viewportHeight = ref(window.innerHeight)
@@ -54,6 +59,26 @@ const anchorCenter = computed(() => {
   const y = w.y == null ? viewportHeight.value / 2 : w.y
   return clampAnchor(x, y, viewportWidth.value, viewportHeight.value)
 })
+
+// Which way this window's chain opens. In an edge band the window takes that
+// edge's direction; away from every edge it keeps the one it has (which starts
+// as the direction of the chain the panel was detached from).
+function syncDirection() {
+  const p = anchorCenter.value
+  const next = deriveDirection(p.x, p.y, viewportWidth.value, viewportHeight.value)
+  if (next && next !== props.win.direction) setWindowDirection(props.win.id, next)
+}
+
+onMounted(syncDirection)
+watch(anchorCenter, syncDirection)
+
+function onViewportResize() {
+  viewportWidth.value = window.innerWidth
+  viewportHeight.value = window.innerHeight
+  syncDirection()
+}
+onMounted(() => window.addEventListener('resize', onViewportResize))
+onUnmounted(() => window.removeEventListener('resize', onViewportResize))
 
 const anchorRect = computed(() => {
   const { x, y } = anchorCenter.value
@@ -90,17 +115,11 @@ function startDrag(e) {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', finish)
     window.removeEventListener('pointercancel', finish)
-    window.removeEventListener('resize', onResize)
-  }
-  function onResize() {
-    viewportWidth.value = window.innerWidth
-    viewportHeight.value = window.innerHeight
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', finish)
   window.addEventListener('pointercancel', finish)
-  window.addEventListener('resize', onResize)
-  onResize()
+  onViewportResize()
 }
 
 provide('panelAnchorDrag', { begin: startDrag })
