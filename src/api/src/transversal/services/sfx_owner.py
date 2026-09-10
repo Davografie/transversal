@@ -16,6 +16,7 @@ context (e.g. buy-hitch, P3.3), not derived from an entity.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from transversal.domain import SfxOwner
@@ -525,24 +526,100 @@ def remove_legacy_contest_complication_sfx(repo) -> None:
         repo.update_sfx_owner(owner)
 
 
-def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
-    """Return the sorted SFX ids available to ``entity_id`` in ``universe``."""
+@dataclass
+class SfxAvailabilityPrefetch:
+    """Bulk-loaded per-entity data for :func:`get_available_sfx_ids`.
+
+    A global boundary fan-out (``on_beat`` / ``on_scene`` / ``on_session_end``)
+    visits every entity; resolving availability the per-entity way costs 4-6 DB
+    round-trips each, and one of them (the ``table`` bucket, and the SFX docs)
+    is the same record re-read every time. This holds those in bulk so the walk
+    costs a handful of queries regardless of entity count.
+    """
+
+    entities: dict[str, Any] = field(default_factory=dict)           # entity_id → Entity
+    projections: dict[str, Any] = field(default_factory=dict)        # projection_id → Projection
+    table_bucket: Any = None                                         # shared "table" SfxOwner
+    traitsettings: dict[str, list] = field(default_factory=dict)     # entity_id → [TraitSetting]
+    traitsetsettings: dict[str, list] = field(default_factory=dict)  # entity_id → [TraitSetSetting]
+    sfx_by_id: dict[str, Any] = field(default_factory=dict)          # sfx_id → SFX
+
+
+def build_sfx_availability_prefetch(
+    repo,
+    entities: list,
+    universes: list[str] | None = None,
+    sfx_docs: list | None = None,
+) -> SfxAvailabilityPrefetch:
+    """Bulk-fetch everything :func:`get_available_sfx_ids` reads, for many entities.
+
+    ``entities`` are already-loaded ``Entity`` objects (callers generally have
+    them from ``list_all_entities``), so no entity is re-fetched. Trait grants
+    are universe-gated, so they're fetched once per distinct entity universe.
+    ``sfx_docs`` reuses an already-fetched SFX list (e.g. from the caller's
+    trigger short-circuit) instead of re-reading the collection.
+    """
+    entity_ids = [e.id for e in entities]
+
+    projections: dict[str, Any] = {}
+    for projs in repo.get_projections_for_entities(entity_ids).values():
+        for p in projs:
+            projections[p.id] = p
+
+    traitsettings: dict[str, list] = {}
+    traitsetsettings: dict[str, list] = {}
+    by_universe: dict[str, list[str]] = {}
+    for e in entities:
+        by_universe.setdefault(e.current_universe or "", []).append(e.id)
+    for uni, eids in by_universe.items():
+        scoped = universes or [uni]
+        traitsettings.update(repo.get_effective_traitsettings_bulk(eids, scoped))
+        traitsetsettings.update(repo.get_effective_traitsetsettings_bulk(eids, scoped))
+
+    return SfxAvailabilityPrefetch(
+        entities={e.id: e for e in entities},
+        projections=projections,
+        table_bucket=repo.get_sfx_owner("table"),
+        traitsettings=traitsettings,
+        traitsetsettings=traitsetsettings,
+        sfx_by_id={s.id: s for s in (sfx_docs if sfx_docs is not None else repo.get_all_sfxs())},
+    )
+
+
+def get_available_sfx_ids(
+    entity_id: str,
+    universe: str,
+    repo,
+    prefetch: SfxAvailabilityPrefetch | None = None,
+) -> list[str]:
+    """Return the sorted SFX ids available to ``entity_id`` in ``universe``.
+
+    ``prefetch`` (optional) supplies bulk-loaded per-entity data so a fan-out
+    over many entities avoids the per-entity round-trips; see
+    :func:`build_sfx_availability_prefetch`.
+    """
     ids: set[str] = set()
     # Map each trait-granted SFX id to its source trait-setting, so source-aware
     # conditions (SOURCE_RATING) can resolve "the trait this SFX is on".
     sfx_sources: dict[str, Any] = {}
 
     # Direct entity + active projection ownership.
-    entity = repo.get_entity(entity_id)
+    if prefetch is not None:
+        entity = prefetch.entities.get(entity_id)
+    else:
+        entity = repo.get_entity(entity_id)
     if entity is not None:
         ids.update(entity.sfx_ids or [])
         if entity.current_projection:
-            proj = repo.get_projection(entity.current_projection)
+            if prefetch is not None:
+                proj = prefetch.projections.get(entity.current_projection)
+            else:
+                proj = repo.get_projection(entity.current_projection)
             if proj is not None:
                 ids.update(proj.sfx_ids or [])
 
     # Table-wide ownership (available to every entity).
-    bucket = repo.get_sfx_owner("table")
+    bucket = prefetch.table_bucket if prefetch is not None else repo.get_sfx_owner("table")
     if bucket is not None:
         ids.update(bucket.sfx_ids or [])
 
@@ -550,13 +627,20 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
     # are already materialized onto the instance's ``sfx_ids`` at grant time
     # (see ``EntityRepository.create_traitsetting``), so this reads the instance
     # list directly rather than re-unioning ``Trait.default_sfx_ids``.
-    for ts in repo.get_effective_traitsettings(entity_id, [universe]):
+    if prefetch is not None:
+        trait_settings = prefetch.traitsettings.get(entity_id, [])
+        traitset_settings = prefetch.traitsetsettings.get(entity_id, [])
+    else:
+        trait_settings = repo.get_effective_traitsettings(entity_id, [universe])
+        traitset_settings = repo.get_effective_traitsetsettings(entity_id, [universe])
+
+    for ts in trait_settings:
         for sid in (ts.sfx_ids or []):
             ids.add(sid)
             sfx_sources.setdefault(sid, ts)
 
     # Trait-set-as-unit grants, universe-gated via effective set settings.
-    for tss in repo.get_effective_traitsetsettings(entity_id, [universe]):
+    for tss in traitset_settings:
         ids.update(tss.sfx_ids or [])
 
     # Filter by context-free conditions so listing matches fireability
@@ -565,7 +649,10 @@ def get_available_sfx_ids(entity_id: str, universe: str, repo) -> list[str]:
     if entity is not None:
         from transversal.services.conditions import evaluate_conditions, static_conditions
         for sfx_id in list(ids):
-            sfx = repo.get_sfx(sfx_id)
+            if prefetch is not None:
+                sfx = prefetch.sfx_by_id.get(sfx_id)
+            else:
+                sfx = repo.get_sfx(sfx_id)
             if sfx is None:
                 continue
             static = static_conditions(sfx.conditions or [])

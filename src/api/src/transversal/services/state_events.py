@@ -96,19 +96,36 @@ def broadcast_presence_changed() -> None:
 def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
     """Fire automatic SFX for a global (non-entity-scoped) boundary event.
 
-    Beat/scene advances tick every entity's timers and should also fire their
-    matching ``on_beat``/``on_scene`` SFX. Iterates every entity; non-owners
-    resolve to an empty SFX set and no-op.
+    Beat/scene/session-end ticks every entity's timers and should also fire
+    their matching ``on_beat``/``on_scene``/``on_session_end`` SFX. Iterates
+    every entity; non-owners resolve to an empty SFX set and no-op.
+
+    Short-circuits when no SFX carries the trigger at all, and bulk-loads the
+    per-entity availability data once instead of re-querying per entity — the
+    walk used to cost 4-6 DB round-trips per entity.
     """
     from transversal.main import _get_engine, _get_repo
     from transversal.services.effects_engine import GameEvent
     from transversal.services.roll_orchestrator import _emit_pending_choices
-    from transversal.services.sfx_owner import get_available_sfx_ids
+    from transversal.services.sfx_owner import (
+        build_sfx_availability_prefetch,
+        get_available_sfx_ids,
+    )
+
+    repo = _get_repo()
+
+    # Nothing can fire if no SFX declares this trigger — skip the whole walk.
+    sfx_docs = repo.get_all_sfxs()
+    if not any(s.trigger == event_type for s in sfx_docs):
+        return
 
     engine = _get_engine()
-    repo = _get_repo()
-    for entity in repo.list_all_entities():
-        sfx_ids = get_available_sfx_ids(entity.id, entity.current_universe, repo)
+    entities = repo.list_all_entities()
+    prefetch = build_sfx_availability_prefetch(repo, entities, sfx_docs=sfx_docs)
+    for entity in entities:
+        sfx_ids = get_available_sfx_ids(
+            entity.id, entity.current_universe, repo, prefetch=prefetch
+        )
         event = GameEvent(
             type=event_type,
             entity_id=entity.id,

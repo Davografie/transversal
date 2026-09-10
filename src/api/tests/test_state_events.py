@@ -60,16 +60,23 @@ def test_fire_global_state_sfx_iterates_entities(monkeypatch):
     """Beat/scene advance fires the matching trigger for every entity."""
     import transversal.main as main
 
-    repo = SimpleNamespace(list_all_entities=lambda: [
-        SimpleNamespace(id="a", current_universe="earth", razmerit=2),
-        SimpleNamespace(id="b", current_universe="three_realms", razmerit=0),
-    ])
+    repo = SimpleNamespace(
+        list_all_entities=lambda: [
+            SimpleNamespace(id="a", current_universe="earth", razmerit=2),
+            SimpleNamespace(id="b", current_universe="three_realms", razmerit=0),
+        ],
+        get_all_sfxs=lambda: [SimpleNamespace(id="sfx-beat", trigger="on_beat")],
+    )
     engine = CaptureEngine()
     monkeypatch.setattr(main, "_repo", repo)
     monkeypatch.setattr(main, "_effects_engine", engine)
     monkeypatch.setattr(
+        "transversal.services.sfx_owner.build_sfx_availability_prefetch",
+        lambda repo, entities, universes=None, sfx_docs=None: None,
+    )
+    monkeypatch.setattr(
         "transversal.services.sfx_owner.get_available_sfx_ids",
-        lambda entity_id, universe, repo: [],
+        lambda entity_id, universe, repo, prefetch=None: [],
     )
     monkeypatch.setattr(
         "transversal.services.roll_orchestrator._emit_pending_choices",
@@ -82,6 +89,22 @@ def test_fire_global_state_sfx_iterates_entities(monkeypatch):
         ("a", "on_beat", "earth"),
         ("b", "on_beat", "three_realms"),
     ]
+
+
+def test_fire_global_state_sfx_short_circuits_when_trigger_has_no_sfx(monkeypatch):
+    """No SFX declares the trigger → skip the whole entity walk."""
+    import transversal.main as main
+
+    listed = []
+    repo = SimpleNamespace(
+        list_all_entities=lambda: listed.append(1) or [],
+        get_all_sfxs=lambda: [SimpleNamespace(id="sfx-beat", trigger="on_beat")],
+    )
+    monkeypatch.setattr(main, "_repo", repo)
+
+    se.fire_global_state_sfx("on_session_end")
+
+    assert listed == []
 
 
 def test_fire_session_start_arms_passive_rules(monkeypatch):

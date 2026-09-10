@@ -154,6 +154,61 @@ def test_missing_entity_still_collects_other_surfaces():
     assert get_available_sfx_ids("ghost", "earth", repo) == ["sfx-table", "sfx-trait"]
 
 
+class PrefetchRepo(Repo):
+    """Double exposing the bulk read paths the prefetch builder uses."""
+
+    def __init__(self):
+        super().__init__()
+        self.get_entity_calls = 0
+
+    def get_entity(self, entity_id):
+        self.get_entity_calls += 1
+        return self.entity
+
+    def get_projections_for_entities(self, entity_ids):
+        out = {eid: [] for eid in entity_ids}
+        if self.projection is not None:
+            for eid in entity_ids:
+                out[eid] = [self.projection]
+        return out
+
+    def get_effective_traitsettings_bulk(self, entity_ids, universes):
+        return {eid: list(self.trait_settings) for eid in entity_ids}
+
+    def get_effective_traitsetsettings_bulk(self, entity_ids, universes):
+        return {eid: list(self.traitset_settings) for eid in entity_ids}
+
+    def get_all_sfxs(self):
+        return []
+
+
+def test_prefetch_matches_per_entity_resolution():
+    """The bulk path resolves the same SFX set as the per-entity path."""
+    from transversal.services.sfx_owner import build_sfx_availability_prefetch
+
+    repo = PrefetchRepo()
+    repo.entity = SimpleNamespace(sfx_ids=["sfx-a"], current_projection="proj-1")
+    repo.projection = SimpleNamespace(id="proj-1", sfx_ids=["sfx-proj"])
+    repo.owners["table"] = SimpleNamespace(sfx_ids=["sfx-table"])
+    repo.trait_settings = [SimpleNamespace(sfx_ids=["sfx-trait"])]
+    repo.traitset_settings = [SimpleNamespace(sfx_ids=["sfx-set"])]
+
+    without = get_available_sfx_ids("e1", "earth", repo)
+
+    entity = SimpleNamespace(
+        id="e1", current_universe="earth",
+        sfx_ids=["sfx-a"], current_projection="proj-1",
+    )
+    prefetch = build_sfx_availability_prefetch(repo, [entity])
+    calls_before = repo.get_entity_calls
+    with_prefetch = get_available_sfx_ids("e1", "earth", repo, prefetch=prefetch)
+
+    assert with_prefetch == without
+    assert with_prefetch == ["sfx-a", "sfx-proj", "sfx-set", "sfx-table", "sfx-trait"]
+    # The prefetch path must not fall back to per-entity fetches.
+    assert repo.get_entity_calls == calls_before
+
+
 class SetupRepo:
     """Minimal in-memory double for the owner/SFX setup functions."""
 

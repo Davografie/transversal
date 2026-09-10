@@ -1347,6 +1347,45 @@ class EntityRepository:
             )
         ]
 
+    def get_effective_traitsetsettings_bulk(
+        self, entity_ids: list[str], universes: list[str]
+    ) -> dict[str, list[TraitSetSetting]]:
+        """Batch variant of :meth:`get_effective_traitsetsettings` (one AQL query).
+
+        Returns ``{entity_id: [TraitSetSetting]}`` with an entry for every
+        requested id (empty list when the entity has none). Used by global
+        boundary fan-outs so they don't pay a per-entity round-trip.
+        """
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR tss IN {TRAITSETSETTINGS}
+            FILTER tss.entity_id IN @eids
+            LET is_projection = (tss.from_type == 'projection')
+            LET proj = is_projection ? DOCUMENT(tss._from) : null
+            LET origin = proj != null
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[1])
+                : null
+            LET set_doc = DOCUMENT(CONCAT('{TRAITSETS}/', tss.traitset_id))
+            FILTER (
+                NOT is_projection
+                AND (set_doc == null OR LENGTH(INTERSECTION(set_doc.universes, @universes)) > 0)
+            )
+            OR (
+                is_projection AND proj != null
+                AND origin IN @universes
+                AND (set_doc == null OR origin IN set_doc.universes)
+            )
+            RETURN tss
+        """
+        grouped: dict[str, list[TraitSetSetting]] = {eid: [] for eid in entity_ids}
+        for doc in self.db.aql.execute(
+            query, bind_vars={"eids": list(entity_ids), "universes": universes}
+        ):
+            tss = TraitSetSetting.model_validate({**doc, "id": doc["_key"]})
+            grouped.setdefault(tss.entity_id, []).append(tss)
+        return grouped
+
     def update_traitsetsetting(self, tss: TraitSetSetting) -> TraitSetSetting:
         doc = tss.model_dump()
         doc["_key"] = tss.id
@@ -1763,6 +1802,45 @@ class EntityRepository:
                 query, bind_vars={"eid": entity_id, "universes": universes}
             )
         ]
+
+    def get_effective_traitsettings_bulk(
+        self, entity_ids: list[str], universes: list[str]
+    ) -> dict[str, list[TraitSetting]]:
+        """Batch variant of :meth:`get_effective_traitsettings` (one AQL query).
+
+        Returns ``{entity_id: [TraitSetting]}`` with an entry for every
+        requested id (empty list when the entity has none). Used by global
+        boundary fan-outs so they don't pay a per-entity round-trip.
+        """
+        if not entity_ids:
+            return {}
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.entity_id IN @eids
+            LET is_projection = (ts.from_type == 'projection')
+            LET proj = is_projection ? DOCUMENT(ts._from) : null
+            LET origin = proj != null
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[1])
+                : null
+            LET trait = DOCUMENT(ts._to)
+            LET set_doc = (trait.traitset_id != null)
+                ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
+            FILTER ts.from_type == 'entity'
+                OR (
+                    is_projection AND proj != null
+                    AND origin IN @universes
+                    AND origin IN trait.universes
+                    AND (set_doc == null OR origin IN set_doc.universes)
+                )
+            RETURN ts
+        """
+        grouped: dict[str, list[TraitSetting]] = {eid: [] for eid in entity_ids}
+        for doc in self.db.aql.execute(
+            query, bind_vars={"eids": list(entity_ids), "universes": universes}
+        ):
+            ts = TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            grouped.setdefault(ts.entity_id, []).append(ts)
+        return grouped
 
     # ── Queries ───────────────────────────────────────
 
