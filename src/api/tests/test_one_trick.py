@@ -40,6 +40,11 @@ class OneTrickRepo:
     def get_sfx(self, sid):
         return self.sfxs.get(sid)
 
+    def list_all_entities(self):
+        # The session-start fan-out walks entities; this double exercises the
+        # arming pass only, so the walk sees none.
+        return []
+
     def create_sfx(self, sfx):
         self.sfxs[sfx.id] = sfx
 

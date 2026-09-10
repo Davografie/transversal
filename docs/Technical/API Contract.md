@@ -563,9 +563,9 @@ Response: `{ "id": "...", "name": "...", "gm_id": "...", "universe": "...", "ent
 
 **`POST /api/v1/sessions/{session_id}/leave`** — leave a session. Same request shape as `join`.
 
-**`POST /api/v1/sessions/{session_id}/start`** — arm passive `on_session_start` rules; publishes `session_started`. Idempotent.
+**`POST /api/v1/sessions/{session_id}/start`** — arm passive `on_session_start` rules (their deferred effects, once and globally) and fire their non-deferred effects per entity; publishes `session_started`. Idempotent.
 
-**`POST /api/v1/sessions/{session_id}/end`** — drop passive rules and clear armed roll-deferrals; publishes `session_ended`.
+**`POST /api/v1/sessions/{session_id}/end`** — drop passive rules and clear armed roll-deferrals, then fire `on_session_end` for every entity; publishes `session_ended`.
 
 **`POST /api/v1/sessions/{session_id}/publish`** — publish a custom event to all subscribers of a session (clients share dice pools / roll results without server persistence). Request `{"event": "...", "data": {...}}`.
 

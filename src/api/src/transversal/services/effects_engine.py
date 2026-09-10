@@ -226,6 +226,7 @@ class EffectsEngine:
         available_sfx_ids: list[str],
         razmerit_balance: int,
         repo=None,
+        arm_deferred: bool = True,
     ) -> EventOutcome:
         """Process a game event, returning applied + pending effects.
 
@@ -235,6 +236,12 @@ class EffectsEngine:
 
         When ``repo`` is provided, SFX with ``conditions`` are gated on the
         entity's current state (evaluate_conditions).
+
+        ``arm_deferred=False`` skips queueing this SFX's deferred (roll/outcome
+        -timing) effects; the caller owns arming. The session-start fan-out uses
+        it so the per-entity walk applies only non-deferred effects while a
+        single global pass arms the passives once (``arm_passive`` appends, so
+        arming inside the walk would stack N copies of the same rule).
         """
         outcome = EventOutcome()
 
@@ -294,10 +301,10 @@ class EffectsEngine:
                 }
             roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]
             log.info(
-                "[process_event] sfx=%s trigger=%s deferred_effects=%s",
-                sfx.id, sfx.trigger, [e.timing.value for e in roll_effects],
+                "[process_event] sfx=%s trigger=%s deferred_effects=%s arm_deferred=%s",
+                sfx.id, sfx.trigger, [e.timing.value for e in roll_effects], arm_deferred,
             )
-            if roll_effects:
+            if roll_effects and arm_deferred:
                 # Arm the SFX's roll-timing effects as a unit for its duration,
                 # routed by the SFX's declared (or trigger-derived) listener scope.
                 from transversal.services.roll_deferral import arm_passive, arm_sfx

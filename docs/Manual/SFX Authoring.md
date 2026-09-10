@@ -150,6 +150,13 @@ When this effect fires **relative to the SFX's trigger**:
 > [!tip] Trigger vs timing
 > The SFX **trigger** says *when the SFX wakes up*; the effect **timing** says *when this effect lands*. A `manual` SFX usually has `immediate` effects. A passive rule like *One Trick* uses `on_session_start` trigger + an `on_roll` effect (armed at session start, fired on every later roll).
 
+> [!note] Session-start and session-end SFX have two halves
+> `on_session_start` fans out in two directions, decided per effect by its timing:
+> - **Timed effects** (`on_roll`, `on_set`, `on_result`, `on_contest_win`/`loss`, `on_success`/`failure`) arm **once, globally** for the session — a passive rule listening to every entity, including characters who join mid-session. These carry no per-entity stamp.
+> - **Non-timed effects** (`immediate`, `end_of_beat`/`scene`/`session`, `after_beats`) fire **per entity** when the session starts — "every character gains X".
+>
+> `on_session_end` fires its effects **per entity** at the session's far boundary, after the session's armed passives are dropped.
+
 ### Target
 
 What the effect points at. Five modes:
@@ -238,6 +245,7 @@ Any step can declare an `output` name, binding its resolved value into the activ
 | `on_character_create` / `on_projection_create` | A character / projection is created | — | `{entity_created}` / `{projection_created}`, `{universe}` |
 | `on_beat` / `on_scene` | Beat / scene advances | auto | — |
 | `on_session_start` | A session starts | auto | — |
+| `on_session_end` | A session ends | auto | — |
 | `on_challenge_completed` | A challenge completes | — | `{entity_id}`, `{trait_setting_id}` |
 
 ---

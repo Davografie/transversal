@@ -408,6 +408,19 @@ Roll/outcome-timed effects (`on_roll`/`on_set`/`on_result`/`on_contest_*`/`on_su
 
 `SFX.arming_scope` declares this; `None` derives it from trigger (`on_session_start` → `global`, else `self`). `fire_armed` honors the `rolls` budget for **both** registers — a `rolls:N` entry fires N times then drops; `rolls=None` stays armed until a boundary expires it. This makes session-scoped passives (e.g. `sfx-one-trick`) *declare* their lifetime instead of relying on the global path silently ignoring the roll budget.
 
+### Session boundaries
+
+`state_events.fire_session_start()` / `fire_session_end()` are the two global boundaries.
+
+**Session start** splits an `on_session_start` SFX by effect timing, and the two halves fan out differently:
+
+- **Deferred effects** (`DEFERRED_TIMINGS` = roll + outcome timings) arm **once, globally** via `arm_passive`, in a pass that iterates *SFX, not entities*. This is deliberately ownership-independent, so a passive armed for the session still covers characters who join mid-session.
+- **Non-deferred effects** (`immediate`, `end_of_beat`/`scene`/`session`, `after_beats`) fire **per entity** through `fire_global_state_sfx("on_session_start", arm_deferred=False)` — each entity applies its own immediate effect or schedules its own persisted timer.
+
+`arm_deferred=False` is load-bearing: `process_event_outcome` otherwise arms the SFX's deferred effects itself, and `arm_passive` **appends without dedupe** — so a global passive owned by N entities would be armed N+1 times (the global pass plus once per entity) and roll its effect N+1 times. Keeping arming in the single global pass makes the two halves non-overlapping. Regression-guarded by `test_fire_session_start_fans_out_non_deferred_effects` (two entities must leave exactly one armed copy).
+
+**Session end** (`fire_session_end`) drops the session's armed passives (`clear_global_armed`) and then fires `on_session_end` per entity — a global boundary like `on_beat`/`on_scene`, so its effects fire for every entity that has the SFX available.
+
 ## SFX ownership and seeding
 
 `src/api/src/transversal/services/sfx_owner.py`.

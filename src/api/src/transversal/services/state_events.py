@@ -93,7 +93,11 @@ def broadcast_presence_changed() -> None:
         ))
 
 
-def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
+def fire_global_state_sfx(
+    event_type: str,
+    context: dict | None = None,
+    arm_deferred: bool = True,
+) -> None:
     """Fire automatic SFX for a global (non-entity-scoped) boundary event.
 
     Beat/scene/session-end ticks every entity's timers and should also fire
@@ -103,6 +107,10 @@ def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
     Short-circuits when no SFX carries the trigger at all, and bulk-loads the
     per-entity availability data once instead of re-querying per entity — the
     walk used to cost 4-6 DB round-trips per entity.
+
+    ``arm_deferred=False`` passes through to :meth:`EffectsEngine.process_event_
+    outcome`: the walk applies only non-deferred effects. Session start uses it
+    because its arming is a single global pass, not a per-entity one.
     """
     from transversal.main import _get_engine, _get_repo
     from transversal.services.effects_engine import GameEvent
@@ -119,8 +127,11 @@ def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
     if not any(s.trigger == event_type for s in sfx_docs):
         return
 
-    engine = _get_engine()
     entities = repo.list_all_entities()
+    if not entities:  # a per-entity fan-out has nothing to fire
+        return
+
+    engine = _get_engine()
     prefetch = build_sfx_availability_prefetch(repo, entities, sfx_docs=sfx_docs)
     for entity in entities:
         sfx_ids = get_available_sfx_ids(
@@ -132,7 +143,9 @@ def fire_global_state_sfx(event_type: str, context: dict | None = None) -> None:
             universe=entity.current_universe,
             context=context or {},
         )
-        outcome = engine.process_event_outcome(event, sfx_ids, entity.razmerit, repo=repo)
+        outcome = engine.process_event_outcome(
+            event, sfx_ids, entity.razmerit, repo=repo, arm_deferred=arm_deferred,
+        )
         _emit_pending_choices(entity.id, entity.current_universe, outcome.pending, outcome.structured)
 
 
@@ -150,30 +163,45 @@ def fire_projection_created(entity_id: str, universe: str, projection_id: str) -
 
 
 def fire_session_start() -> None:
-    """Arm every ``on_session_start`` passive rule's roll-timing effects globally.
+    """Fire every entity's ``on_session_start`` SFX; arm its deferred half once.
 
-    Passive rules (e.g. One Trick) arm once for the session with scope
-    ``global`` — not per-entity — so characters joining mid-session are still
-    covered. Re-arming clears the previous set first, so [Session] Start is
-    idempotent.
+    A session-start SFX has two halves, and they fan out differently:
+
+    * **Deferred effects** (roll/outcome timings) arm once, globally — not per
+      entity — so characters joining mid-session are still covered. Re-arming
+      clears the previous set first, so [Session] Start is idempotent.
+    * **Non-deferred effects** (``immediate``, ``end_of_beat``/``scene``/
+      ``session``, ``after_beats``) fire per entity: "at session start, every
+      character gains X". Timings are persisted per entity by the applier.
+
+    The fan-out runs with ``arm_deferred=False`` so arming stays with the global
+    pass above. Letting it arm too would stack N+1 copies of the same rule,
+    because ``arm_passive`` appends without dedupe — the passive would then roll
+    its effect once per owning entity plus once for the pass.
     """
     from transversal.main import _get_repo
-    from transversal.services.roll_deferral import ROLL_TIMINGS, arm_passive, clear_global_armed
+    from transversal.services.roll_deferral import (
+        DEFERRED_TIMINGS,
+        arm_passive,
+        clear_global_armed,
+    )
 
     repo = _get_repo()
     clear_global_armed()
     for sfx in repo.get_all_sfxs():
         if sfx.trigger != "on_session_start":
             continue
-        roll_effects = [e for e in sfx.effects if e.timing in ROLL_TIMINGS]
-        if roll_effects:
+        deferred_effects = [e for e in sfx.effects if e.timing in DEFERRED_TIMINGS]
+        if deferred_effects:
             arm_passive(
-                roll_effects,
+                deferred_effects,
                 duration=sfx.duration,
                 source_sfx_id=sfx.id,
                 source_kind=sfx.source_kind,
                 source_id=None,
             )
+
+    fire_global_state_sfx("on_session_start", arm_deferred=False)
 
 
 def fire_session_end() -> None:

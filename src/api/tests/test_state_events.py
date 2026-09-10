@@ -17,9 +17,11 @@ class FakeRepo:
 class CaptureEngine:
     def __init__(self):
         self.events = []
+        self.arm_deferred = []
 
-    def process_event_outcome(self, event, sfx_ids, razmerit, repo=None):
+    def process_event_outcome(self, event, sfx_ids, razmerit, repo=None, arm_deferred=True):
         self.events.append(event)
+        self.arm_deferred.append(arm_deferred)
         return EventOutcome()
 
 
@@ -118,10 +120,102 @@ def test_fire_session_start_arms_passive_rules(monkeypatch):
         id="sfx-one-trick", name="One Trick", trigger="on_session_start",
         effects=[Effect(timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down", target="self")],
     )
-    repo = SimpleNamespace(get_all_sfxs=lambda: [sfx])
+    repo = SimpleNamespace(get_all_sfxs=lambda: [sfx], list_all_entities=lambda: [])
     monkeypatch.setattr(main, "_get_repo", lambda: repo)
 
     se.fire_session_start()
 
+    assert len(roll_deferral.list_global_armed()) == 1
+    roll_deferral.reset()
+
+
+def test_fire_session_start_fans_out_non_deferred_effects(monkeypatch):
+    """Session start walks entities for its non-deferred half — and arms once.
+
+    The walk arms nothing; the global pass arms the passive. Letting the walk
+    arm too would stack N+1 copies (``arm_passive`` appends without dedupe), so
+    two owning entities would leave three armed copies instead of one.
+    """
+    import transversal.main as main
+    import transversal.services.roll_deferral as roll_deferral
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.effects_engine import EffectsEngine
+
+    roll_deferral.reset()
+
+    sfx = SFX(
+        id="sfx-session-passive", name="Passive", trigger="on_session_start",
+        effects=[
+            # Deferred half: arms once, globally.
+            Effect(timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down", target="self"),
+            # Non-deferred half: fires per entity.
+            Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit", action="earn", target="self", result="1"),
+        ],
+    )
+    repo = SimpleNamespace(
+        get_all_sfxs=lambda: [sfx],
+        list_all_entities=lambda: [
+            SimpleNamespace(id="a", current_universe="earth", razmerit=2),
+            SimpleNamespace(id="b", current_universe="earth", razmerit=0),
+        ],
+    )
+    engine = EffectsEngine()
+    engine.register(sfx)
+
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append((effect.type, effect.action, entity_id))
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+    monkeypatch.setattr(main, "_repo", repo)
+    monkeypatch.setattr(main, "_effects_engine", engine)
+    monkeypatch.setattr(
+        "transversal.services.sfx_owner.build_sfx_availability_prefetch",
+        lambda repo, entities, universes=None, sfx_docs=None: None,
+    )
+    monkeypatch.setattr(
+        "transversal.services.sfx_owner.get_available_sfx_ids",
+        lambda entity_id, universe, repo, prefetch=None: [sfx.id],
+    )
+    monkeypatch.setattr(
+        "transversal.services.roll_orchestrator._emit_pending_choices",
+        lambda *a, **k: None,
+    )
+    monkeypatch.setattr("transversal.services.effects_engine._emit_sfx_triggered", lambda *a, **k: None)
+
+    se.fire_session_start()
+
+    # The immediate half fired once per entity ...
+    assert applied == [
+        ("transfer_razmerit", "earn", "a"),
+        ("transfer_razmerit", "earn", "b"),
+    ]
+    # ... and the passive armed exactly once, not once per owning entity.
+    assert len(roll_deferral.list_global_armed()) == 1
+    roll_deferral.reset()
+
+
+def test_process_event_outcome_arm_deferred_false_skips_arming(monkeypatch):
+    """``arm_deferred=False`` suppresses queueing, leaving effects unarmed."""
+    import transversal.services.roll_deferral as roll_deferral
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.effects_engine import EffectsEngine, GameEvent
+
+    roll_deferral.reset()
+
+    sfx = SFX(
+        id="sfx-global-passive", name="Global", trigger="manual", arming_scope="global",
+        effects=[Effect(timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down", target="self")],
+    )
+    engine = EffectsEngine()
+    engine._sfx_registry = {sfx.id: sfx}
+    event = GameEvent(type="manual", entity_id="a", universe="earth", context={})
+
+    engine.process_event_outcome(event, [sfx.id], 0, arm_deferred=False)
+    assert roll_deferral.list_global_armed() == []
+
+    engine.process_event_outcome(event, [sfx.id], 0)
     assert len(roll_deferral.list_global_armed()) == 1
     roll_deferral.reset()
