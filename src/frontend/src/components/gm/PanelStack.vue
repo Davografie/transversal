@@ -11,56 +11,76 @@
 
   <div v-if="show" class="panel-viewport">
     <Panel
-      v-for="w in allWindows"
-      :key="w.id"
       :anchor="anchorRect"
       :direction="direction"
       :min-visible-depth="minVisibleDepth"
-      :body-scroll="w.spec?.bodyScroll !== false"
-      :title="w.spec?.title"
-      :id="w.spec?.id"
+      :body-scroll="props.rootPanel?.bodyScroll !== false"
+      :title="props.rootPanel?.title"
+      :id="props.rootPanel?.id"
+      :spec="props.rootPanel"
+      :window-id="'root'"
       closable
-      :on-close="w.id === 'root' ? null : () => closeWindow(w.id)"
-      :on-replace="w.id === 'root' ? null : (spec) => replaceWindow(w.id, spec)"
-      @close="onWindowClose(w)"
+      @close="show = false"
     >
-      <template v-if="w.spec" #default>
-        <component :is="w.spec.component" v-bind="w.spec.props || {}" v-on="w.spec.listeners || {}" />
+      <template v-if="props.rootPanel" #default>
+        <component :is="props.rootPanel.component" v-bind="props.rootPanel.props || {}" v-on="props.rootPanel.listeners || {}" />
       </template>
     </Panel>
+  </div>
+
+  <!-- Floating windows are independent of the stack: switching the 🛠 off hides
+       the chain, not the windows. -->
+  <div v-if="windows.length" class="panel-viewport">
+    <PanelWindow
+      v-for="w in windows"
+      :key="w.id"
+      :win="w"
+      :dockable="isDockable(w)"
+      @close="closeWindow(w.id)"
+      @dock="dockWindow(w.id)"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, provide, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import Panel from './Panel.vue'
+import PanelWindow from './PanelWindow.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { usePanelAnchor } from '@/composables/usePanelAnchor.js'
+import { lookupPanelIdentity } from '@/composables/usePanel.js'
 
 const props = defineProps({
   rootPanel: { type: Object, default: null },
 })
 
-const { windows, close: closeWindow, replace: replaceWindow } = usePanelWindows()
+const { windows, close: closeWindow } = usePanelWindows()
 const { direction, resolveAnchor, deriveDirection, snapToEdge, setAnchor } = usePanelAnchor()
 
 const show = ref(false)
 
-// ── Top-level windows ────────────────────────────────
-// The root window is derived from the reactive `rootPanel` prop so its props
-// (universe, currentLocationId, …) stay live. Extra windows come from the
-// window registry (spawned/detached). Collapse/dock rendering is added in a
-// later step; for now all windows render expanded and the single-root behavior
-// is preserved.
-const allWindows = computed(() => [
-  { id: 'root', spec: props.rootPanel },
-  ...windows.value,
-])
-
-function onWindowClose(w) {
-  if (w.id === 'root') show.value = false
-  else closeWindow(w.id)
+// ── Floating windows ─────────────────────────────────
+// A window docks back into the panel it was detached from — matched by what
+// that panel *was* (component + spec id), so a parent that was closed and
+// re-opened is a valid target again. While no such panel is open, the window
+// has no dock target and the affordance is hidden.
+function isDockable(w) {
+  return !!(w.sourceParentKey && lookupPanelIdentity(w.sourceParentKey))
 }
+
+function dockWindow(id) {
+  const w = windows.value.find((x) => x.id === id)
+  if (!w) return
+  const target = w.sourceParentKey ? lookupPanelIdentity(w.sourceParentKey) : null
+  if (!target) return
+  // openChild makes the returning panel the parent's active child.
+  target.openChild(w.spec)
+  closeWindow(id)
+}
+
+// ── Top-level windows ────────────────────────────────
+// The root window's spec is a prop (its props stay live from App.vue); extra
+// windows come from the window registry (detached panels).
 
 // ── Anchor: the 🛠 toggle / the rail's ⠿ handle ────────
 // The chain derives its position from one point: the toggle's spot when the

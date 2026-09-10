@@ -60,11 +60,18 @@ function defaultAnchor(vw, vh) {
   return { x: vw - 12 - EDGE_X, y: vh / 2 }
 }
 
+// Clamp an anchor point into the viewport (the toggle *and* the whole rail must
+// stay reachable — the rail is taller than the button, so the vertical bound is
+// its half-height). Used by the stack anchor and by floating windows alike.
+export function clampAnchor(x, y, vw, vh) {
+  return { x: clamp(x, EDGE_X, vw - EDGE_X), y: clamp(y, EDGE_Y, vh - EDGE_Y) }
+}
+
 // The live anchor point, clamped into the viewport.
 export function resolveAnchor(vw, vh) {
   const a = anchor.value
   const base = a.x == null ? defaultAnchor(vw, vh) : { x: a.x, y: a.y }
-  return { x: clamp(base.x, EDGE_X, vw - EDGE_X), y: clamp(base.y, EDGE_Y, vh - EDGE_Y) }
+  return clampAnchor(base.x, base.y, vw, vh)
 }
 
 // The viewport edge the anchor belongs to (within the band), or null when it is

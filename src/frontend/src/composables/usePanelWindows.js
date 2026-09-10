@@ -33,6 +33,14 @@ function spawn(spec, opts = {}) {
       collapsed: opts.collapsed ?? false,
       x: opts.x ?? null,
       y: opts.y ?? null,
+      // Which way this window's chain opens. Fixed at spawn: a floating window
+      // is free-standing, so it never re-derives from an edge the way the main
+      // stack's anchor does.
+      direction: opts.direction ?? 'left',
+      // What the window's parent *was* — a panel identity key (`component:id`).
+      // Dock-back looks up a live panel with that identity, so a parent that was
+      // closed and re-opened accepts the window again.
+      sourceParentKey: opts.sourceParentKey ?? null,
       z: windows.value.length,
     },
   ]

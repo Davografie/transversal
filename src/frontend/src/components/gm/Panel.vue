@@ -5,6 +5,12 @@
            (the anchor); on any other rail it slides this panel along its
            parent's edge (button-drift's manual override). -->
       <Button class="panel-action-btn panel-drag-handle" variant="ghost" size="icon" :title="isShallowestVisible ? 'Move the panel anchor' : 'Slide along the parent'" @pointerdown="onHandleDown">⠿</Button>
+      <!-- Detach: leave the chain and float as its own window (the window parks
+           exactly where the panel is, so nothing jumps). -->
+      <Button v-if="!isRoot && onDetach" class="panel-action-btn" variant="neutral" size="icon" title="Detach into a floating window" @click="onDetach(detachAnchor())">⤢</Button>
+      <!-- Dock: only while a live panel matching the window's remembered parent
+           identity is open (a re-opened parent counts). -->
+      <Button v-if="canDock" class="panel-action-btn" variant="neutral" size="icon" title="Dock back into its parent" @click="$emit('dock')">⤓</Button>
       <Button v-if="closable" class="panel-action-btn" title="Close" variant="neutral" size="icon" @click="$emit('close')">×</Button>
       <Button type="button" class="panel-action-btn" variant="neutral" size="icon" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</Button>
     </div>
@@ -57,6 +63,7 @@
         :origin-top="wrapperTopPx"
         :origin-left="wrapperLeftPx"
         :on-size="(w, h) => recordChildSize(c.key, w, h)"
+        :on-detach="(point) => detachChild(c.key, point)"
         closable
         :on-close="() => closeChild(c.key)"
         :on-replace="(spec) => replaceChild(c.key, spec)"
@@ -74,12 +81,23 @@
 <script setup>
 import { shallowRef, ref, reactive, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
-import { panelKey } from '@/composables/usePanel.js'
+import { panelKey, panelIdentityKey, registerPanelIdentity, unregisterPanelIdentity } from '@/composables/usePanel.js'
+import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
   id: { type: String, default: '' },
+  // This panel's own spec — `{ component, title, id, props, listeners }`.
+  // Needed to register its identity (dock targets are found by component + id)
+  // and to spawn the same panel as a floating window when it detaches.
+  spec: { type: Object, default: null },
+  // The stack's root window id ('root') or the floating window this panel
+  // belongs to (used only for logging/diagnostics so far).
+  windowId: { type: String, default: 'root' },
+  // A floating window whose parent identity currently resolves to a live panel
+  // gets a dock button.
+  canDock: { type: Boolean, default: false },
   closable: { type: Boolean, default: false },
   nested: { type: Boolean, default: false },
   // Whether the panel body scrolls as one block (default) or the slot content
@@ -130,9 +148,16 @@ const props = defineProps({
   // itself in the parent's children list.
   onClose: { type: Function, default: null },
   onReplace: { type: Function, default: null },
+  // Called with `{ x, y, direction }` when this panel detaches: the parent
+  // spawns the floating window and drops the child.
+  onDetach: { type: Function, default: null },
 })
 
-const emit = defineEmits(['close', 'toggle-collapse'])
+const emit = defineEmits(['close', 'toggle-collapse', 'dock'])
+
+// Detaching spawns a floating window from the panel-window registry (a module
+// singleton — any panel can spawn one, not just PanelStack).
+const { spawn: spawnWindow } = usePanelWindows()
 
 // Copy-ID helper — the header shows a # button that copies the panel id.
 // legacy:true enables the execCommand fallback so copying works on plain-HTTP
@@ -779,10 +804,62 @@ function replaceChild(key, spec) {
   )
 }
 
+// Detach a child into its own floating window: the window is parked where the
+// child already is (so nothing visibly moves), it remembers this panel's
+// identity as its parent, and the child leaves the chain.
+function detachChild(key, point) {
+  const c = children.value.find((x) => x.key === key)
+  if (!c) return
+  spawnWindow({ ...c.spec }, {
+    x: point.x,
+    y: point.y,
+    direction: point.direction,
+    sourceParentKey: panelIdentityKey(props.spec?.component, props.spec?.id),
+  })
+  children.value = children.value.filter((x) => x.key !== key)
+  if (activeKey.value === key) {
+    activeKey.value = children.value[children.value.length - 1]?.key ?? null
+  }
+  panelLog('detach-child', { key, point })
+}
+
 // Closes THIS panel (removes it from the parent's children list).
 function closeSelf() {
   if (props.onClose) props.onClose()
 }
+
+// Where the floating window's anchor goes so detaching doesn't move the panel:
+// the anchor-facing edge it already has (the window's chain then opens the same
+// way, from the same spot).
+function detachAnchor() {
+  const r = panelEl.value?.getBoundingClientRect()
+  if (!r) return { x: null, y: null, direction: props.direction }
+  const cx = r.left + r.width / 2
+  const cy = r.top + r.height / 2
+  if (props.direction === 'right') return { x: r.left - 1, y: cy, direction: props.direction }
+  if (props.direction === 'down') return { x: cx, y: r.top - 1, direction: props.direction }
+  if (props.direction === 'up') return { x: cx, y: r.bottom + 1, direction: props.direction }
+  return { x: r.right + 1, y: cy, direction: props.direction }
+}
+
+// ── Identity registration (dock targets) ──────────────
+// The panel registers itself under "component + spec id" so a floating window
+// that used to live inside it can find it again after a close/re-open.
+const selfKey = computed(() => panelIdentityKey(props.spec?.component, props.spec?.id))
+let identityHandle = null
+
+onMounted(() => {
+  if (!selfKey.value) return
+  identityHandle = { openChild, close: closeSelf }
+  registerPanelIdentity(selfKey.value, identityHandle)
+})
+watch(selfKey, (key, prev) => {
+  if (prev && identityHandle) unregisterPanelIdentity(prev, identityHandle)
+  if (key && identityHandle) registerPanelIdentity(key, identityHandle)
+})
+onUnmounted(() => {
+  if (selfKey.value && identityHandle) unregisterPanelIdentity(selfKey.value, identityHandle)
+})
 
 // Replaces THIS panel with another spec in the parent's children list.
 function replaceSelf(spec) {
