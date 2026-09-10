@@ -108,7 +108,7 @@
             v-model="newEffect.entitySpec"
             :destination="{ element: 'entity' }"
             :source-element="sourceElement"
-            :variables="outputVariables"
+            :variables="scopedVariables"
           />
           <div v-else class="ee-field">
             <label>Entity scope</label>
@@ -140,7 +140,7 @@
           v-model="newEffect.refs[r.name].spec"
           :destination="{ element: r.element }"
           :source-element="sourceElement"
-          :variables="outputVariables"
+          :variables="scopedVariables"
         />
       </div>
       <TraitInstanceEditor
@@ -219,6 +219,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
+import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
 import TraitInstanceEditor from './TraitInstanceEditor.vue'
@@ -241,10 +242,46 @@ const props = defineProps({
 })
 const emit = defineEmits(['save', 'cancel'])
 
+
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
 const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, conditions: [] })
+
+// Variables the effect's *own* earlier paths expose. The engine walks an
+// effect's paths in order — target, then its references — so a name that path 1
+// outputs (its terminal step's `output`) is in scope for `select variable` in
+// path 2. Traced from the in-progress effect, which also makes it work in the
+// Add flow where the parent has no draft effect yet.
+const { collectVariables } = useTargetCatalog()
+const innerVariables = ref({})
+let _innerTimer = null
+watch(
+  () => [newEffect.targetSpec, newEffect.entitySpec, newEffect.refs,
+         newEffect.targetMode, newEffect.entityMode],
+  () => {
+    clearTimeout(_innerTimer)
+    _innerTimer = setTimeout(async () => {
+      const meta = selectedAction.value
+      if (!meta) return
+      try {
+        innerVariables.value = await collectVariables(
+          [buildEffect(meta)], props.sourceElement || null, null,
+        )
+      } catch {
+        innerVariables.value = {}
+      }
+    }, 250)
+  },
+  { deep: true, immediate: true },
+)
+
+// Prior effects' outputs (from the panel) plus this effect's own — what the
+// later builders inside this effect may start from.
+const scopedVariables = computed(() => ({
+  ...(props.outputVariables || {}),
+  ...innerVariables.value,
+}))
 const resultMode = ref('die')
 const effectDieMode = ref('variable')  // effect_die context field: Die dropdown vs {variable}
 const copiedVar = ref('')
