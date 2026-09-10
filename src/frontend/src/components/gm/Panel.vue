@@ -22,7 +22,7 @@
          Panels stay mounted (v-show) so their drafts survive collapse; the strip
          shows lightweight tab buttons that reference them. -->
     <div class="panel-children" v-show="!isCollapsed">
-      <div ref="tabsEl" class="panel-tabs" :style="tabsStyle" v-show="collapsedChildren.length">
+      <div ref="tabsEl" class="panel-tabs" :style="tabsStyle" v-show="collapsedChildren.length && !isDepthHidden">
         <div v-for="c in collapsedChildren" :key="c.key" class="panel-chip" @click="toggleChildCollapse(c.key)">
           <span class="chip-expand">▸</span>
           <span class="chip-title">{{ c.spec.title }}</span>
@@ -278,9 +278,15 @@ const activePosition = computed(() => {
   const c = activeChild.value
   if (!c) return { top: null, left: null }
   const top = columnTop.value + tabsHeight.value + stripGap.value
-  const left = props.direction === 'left'
-    ? -(activeSize.value.w + props.gap)
-    : nodeSize.w + props.gap // TODO(Phase 2)
+  // Depth-hiding: a hidden panel contributes neither width nor gap to the
+  // chain, so the shallowest visible child takes the root's anchor position
+  // (right edge at the toggle minus the root gap). A hidden active child
+  // reports width 0, so -(0) collapses it onto this panel's node.
+  const left = isDepthHidden.value
+    ? -(activeSize.value.w)
+    : (props.direction === 'left'
+      ? -(activeSize.value.w + props.gap)
+      : nodeSize.w + props.gap) // TODO(Phase 2)
   return { top, left }
 })
 
