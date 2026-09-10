@@ -1,11 +1,9 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle" :data-panel-uid="diagId" :data-panel-depth="depth" :data-panel-window="windowId">
-    <!-- v-show="!isDepthHidden && (!isCollapsed || isRoot)": the rail hides when a
-         *chain* panel collapses — its parent's chip strip carries the expand/close
-         controls then. A root panel (the stack's, or a floating window's) has no
-         strip, so its rail must survive the collapse or the panel is stranded with
-         no way to expand, move or close it. -->
-    <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up' }" :style="actionsStyle" v-show="!isDepthHidden && (!isCollapsed || isRoot)">
+    <!-- v-show="!isDepthHidden && !isCollapsed": the rail hides when a panel
+         collapses — chain panels hand their controls to the parent's chip strip,
+         and a collapsed root carries them in its own header ([▸] title [×]). -->
+    <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up' }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
       <!-- Drag handle (drag-only): on the anchor rail it moves the whole stack
            (the anchor); on any other rail it slides this panel along its
            parent's edge (button-drift's manual override). -->
@@ -22,10 +20,15 @@
     <!-- ⚠ Depth hiding uses visibility/display via :style (see panelVisibilityStyle).
          A depth-hidden panel is removed from layout so the chain re-anchors. -->
     <div ref="panelEl" class="panel" :class="{ 'is-collapsed': isCollapsed, 'has-title': !!title }" :style="panelVisibilityStyle">
-      <header v-if="title" class="panel-header" :class="{ 'is-collapsed': isCollapsed }">
+      <header v-if="title || (isRoot && isCollapsed)" class="panel-header" :class="{ 'is-collapsed': isCollapsed }" @pointerdown="onHeaderPointerDown">
         <slot name="header">
-          <span class="panel-title">{{ title }}</span>
+          <!-- Collapsed: a compact [▸] title (draggable) [×] chip — a full rail
+               would be overkill beside a 34px panel. The header itself is the drag
+               surface, so a title-less root (the GM panel) still moves. -->
+          <Button v-if="isCollapsed" class="panel-header-btn" variant="ghost" size="sm" title="Expand" @pointerdown.stop @click.stop="toggleCollapse()">▸</Button>
+          <span v-if="title" class="panel-title" :title="isCollapsed ? 'Drag to move' : ''">{{ title }}</span>
           <Button v-if="id && !isCollapsed" type="button" class="panel-id-btn" variant="neutral" size="sm" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</Button>
+          <Button v-if="isCollapsed" class="panel-header-btn" variant="ghost" size="sm" title="Close" @pointerdown.stop @click.stop="$emit('close')">×</Button>
         </slot>
       </header>
       <div class="panel-body" :class="{ 'is-flush': !bodyScroll }" v-show="!isCollapsed">
@@ -593,6 +596,13 @@ function onHandleDown(e) {
   beginSlide(e)
 }
 
+// A collapsed root panel is dragged by its header (the [▸] title [×] chip): the
+// same gesture as the ⠿ handle — it moves the window / the stack anchor. The two
+// buttons stop the pointerdown so pressing them never starts a drag.
+function onHeaderPointerDown(e) {
+  if (isCollapsed.value) onHandleDown(e)
+}
+
 function beginSlide(e) {
   if (typeof e.button === 'number' && e.button !== 0) return
   e.preventDefault()
@@ -1063,6 +1073,21 @@ provide(panelKey, {
   flex: none;
   white-space: nowrap;
 }
+
+/* Collapsed panels are chips: the panel's own 16px padding (global .panel rule)
+   is dead space around a single header row, so it goes — the header's own
+   padding is the chip's inset. */
+.panel.is-collapsed { padding: 0; }
+
+/* Collapsed root chip: [▸] title (draggable) [×]. The header is the drag
+   surface; the two buttons sit at the ends. */
+.panel-header.is-collapsed {
+  gap: 6px;
+  cursor: grab;
+  touch-action: none;
+}
+.panel-header.is-collapsed:active { cursor: grabbing; }
+.panel-header-btn { flex-shrink: 0; }
 .panel-title {
   flex: 1; min-width: 0;
   font-size: 12px; font-weight: 600; color: var(--text-dim);
