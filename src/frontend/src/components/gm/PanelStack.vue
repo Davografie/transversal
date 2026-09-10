@@ -1,5 +1,13 @@
 <template>
-  <button v-if="!show" ref="toggleEl" class="gm-toggle" @click="onToggleClick">🛠</button>
+  <button
+    v-if="!show"
+    ref="toggleEl"
+    class="gm-toggle"
+    :class="{ 'is-dragging': dragging }"
+    :style="toggleStyle"
+    @pointerdown="onTogglePointerDown"
+    @click="onToggleClick"
+  >🛠</button>
 
   <div v-if="show" class="panel-viewport">
     <Panel
@@ -27,12 +35,14 @@
 import { ref, computed, provide, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import Panel from './Panel.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
+import { usePanelAnchor } from '@/composables/usePanelAnchor.js'
 
 const props = defineProps({
   rootPanel: { type: Object, default: null },
 })
 
 const { windows, close: closeWindow, replace: replaceWindow } = usePanelWindows()
+const { resolveAnchor, setAnchor } = usePanelAnchor()
 
 const show = ref(false)
 
@@ -52,38 +62,119 @@ function onWindowClose(w) {
   else closeWindow(w.id)
 }
 
-// ── Anchor: the 🛠 toggle ─────────────────────────────
-// The root panel is anchored to the toggle, centered on it as much as possible
-// but always clamped inside the viewport (see Panel.vue `computeRootPosition`).
-//
-// Phase 1 derives the anchor arithmetically from the toggle's fixed CSS
-// (`position: fixed; top: 50%; right: 12px; 42×42`). When the toggle becomes
-// draggable (Phase 3), replace this with a live getBoundingClientRect() of the
-// toggle element + its remembered edge/anchor.
+// ── Anchor: the 🛠 toggle / the rail's ⠿ handle ────────
+// The chain derives its position from one point: the toggle's spot when the
+// stack is closed, the shallowest visible panel's rail when it is open (the
+// two occupy the same spot — the button “becomes” the rail). The point is
+// draggable: the 🛠 itself (with a click/drag threshold, so a tap still opens)
+// and the rail's ⠿ handle (drag-only). Every panel re-derives from the anchor,
+// so the whole chain follows the drag. See usePanelAnchor.js for the position.
 const TOGGLE_SIZE = 42
-const TOGGLE_RIGHT = 12
 
 const viewportWidth = ref(window.innerWidth)
 const viewportHeight = ref(window.innerHeight)
 
+const anchorCenter = computed(() => resolveAnchor(viewportWidth.value, viewportHeight.value))
+
 const anchorRect = computed(() => {
-  const left = viewportWidth.value - TOGGLE_RIGHT - TOGGLE_SIZE
-  const top = viewportHeight.value / 2 - TOGGLE_SIZE / 2
+  const { x, y } = anchorCenter.value
+  const half = TOGGLE_SIZE / 2
   return {
-    left,
-    right: left + TOGGLE_SIZE,
-    top,
-    bottom: top + TOGGLE_SIZE,
-    centerX: left + TOGGLE_SIZE / 2,
-    centerY: viewportHeight.value / 2,
+    left: x - half,
+    right: x + half,
+    top: y - half,
+    bottom: y + half,
+    centerX: x,
+    centerY: y,
   }
 })
+
+const toggleStyle = computed(() => ({
+  left: (anchorCenter.value.x - TOGGLE_SIZE / 2) + 'px',
+  top: (anchorCenter.value.y - TOGGLE_SIZE / 2) + 'px',
+}))
+
+// ── Dragging the anchor ───────────────────────────────
+// Pointer-driven; the anchor follows and the panels re-derive, so the chain
+// moves with the pointer. A threshold keeps the 🛠's click intact: below it the
+// press is a click, above it a drag — and the click that follows the drag is
+// swallowed so releasing doesn't also open/close the stack.
+const DRAG_THRESHOLD = 4
+const dragging = ref(false)
+let suppressToggleClick = false
+
+function startDrag(e, { threshold = 0 } = {}) {
+  if (typeof e.button === 'number' && e.button !== 0) return
+  // The ⠿ handle is drag-only, so it can claim the gesture immediately; the 🛠
+  // must not, or it would eat its own click.
+  if (threshold <= 0) e.preventDefault()
+  const startX = e.clientX
+  const startY = e.clientY
+  const start = anchorCenter.value
+  let moved = threshold <= 0
+  suppressToggleClick = false
+
+  function onMove(ev) {
+    const dx = ev.clientX - startX
+    const dy = ev.clientY - startY
+    if (!moved && Math.hypot(dx, dy) < threshold) return
+    moved = true
+    dragging.value = true
+    setAnchor(start.x + dx, start.y + dy)
+  }
+  function finish() {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', finish)
+    window.removeEventListener('pointercancel', finish)
+    if (moved) logAnchor('drag-end')
+    dragging.value = false
+    if (moved && threshold > 0) {
+      // Swallow the click the browser fires right after this drag (browsers
+      // dispatch it synchronously behind pointerup). The flag must not outlive
+      // that click: if the pointerup landed off the button there is no click at
+      // all, and the *next* real click would be eaten — so clear on the next
+      // task, which is still after the drag's own click.
+      suppressToggleClick = true
+      setTimeout(() => { suppressToggleClick = false }, 0)
+    }
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', finish)
+  window.addEventListener('pointercancel', finish)
+}
+
+function onTogglePointerDown(e) {
+  startDrag(e, { threshold: DRAG_THRESHOLD })
+}
+
+// Panels consume this through `inject` (the rail's ⠿ handle).
+provide('panelAnchorDrag', { begin: startDrag })
+// The live anchor point — the anchor rail pins itself to it.
+provide('panelAnchorPoint', anchorCenter)
+// Bumped on every anchor move so *all* panels re-measure (a child's rail is
+// viewport-pinned too when it is the shallowest visible one).
+const anchorVersion = ref(0)
+watch(anchorCenter, () => { anchorVersion.value++ })
+provide('anchorVersion', anchorVersion)
+
+function logAnchor(reason) {
+  if (typeof window === 'undefined' || !window.__PANEL_DEBUG__) return
+  const c = anchorCenter.value
+  console.log('[panel-stack] anchor', JSON.stringify({
+    reason, x: Math.round(c.x), y: Math.round(c.y),
+  }))
+}
 
 // Diagnostic: the REAL toggle button rect vs the arithmetic anchor, so the two
 // can be compared (window.__PANEL_DEBUG__ = true).
 const toggleEl = ref(null)
 
 function onToggleClick() {
+  if (suppressToggleClick) {
+    // The press that just ended was a drag, not a click.
+    suppressToggleClick = false
+    return
+  }
   logToggleAnchor('open-click')
   show.value = true
 }
@@ -206,14 +297,16 @@ onUnmounted(() => {
 
 <style scoped>
 .gm-toggle {
-  position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 26;
+  position: fixed; z-index: 26;
   width: 42px; height: 42px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 20px; padding: 0;
   background: var(--bg-panel); backdrop-filter: blur(12px);
   border: 1px solid var(--overlay-10);
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
 }
+.gm-toggle.is-dragging { cursor: grabbing; }
 
 /* Full-viewport, pointer-transparent coordinate space. Panels position
    themselves absolutely inside it; the root's offsets are viewport coords

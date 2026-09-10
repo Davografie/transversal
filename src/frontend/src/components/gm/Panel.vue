@@ -1,6 +1,9 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle">
     <div ref="actionsEl" class="panel-actions" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
+      <!-- The anchor rail's drag handle (drag-only). Only the shallowest visible
+           panel's rail sits at the anchor, so only that rail can move the stack. -->
+      <Button v-if="isShallowestVisible" class="panel-action-btn panel-drag-handle" variant="ghost" size="icon" title="Drag panels" @pointerdown="onAnchorDragStart">⠿</Button>
       <Button v-if="closable" class="panel-action-btn" title="Close" variant="neutral" size="icon" @click="$emit('close')">×</Button>
       <Button type="button" class="panel-action-btn" variant="neutral" size="icon" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</Button>
     </div>
@@ -350,9 +353,33 @@ const railCenterLocal = computed(() => {
   return rcv - wt
 })
 
+// The rail's icon buttons are 36px circles, so the rail is one column wide.
+const RAIL_W = 36
+
+// The anchor rail (shallowest visible panel) — the 🛠 button's successor. It is
+// pinned to the anchor point, exactly where the 🛠 sits when the stack is
+// closed, so the closed button and the open rail occupy the same spot. Move the
+// anchor (drag the handle / the 🛠) and the rail moves with it.
+const anchorPoint = inject('panelAnchorPoint', null)
+const anchorDrag = inject('panelAnchorDrag', null)
+const anchorVersion = inject('anchorVersion', null)
+if (anchorVersion) watch(anchorVersion, () => nextTick(measureSelf))
+
+function onAnchorDragStart(e) {
+  if (anchorDrag) anchorDrag.begin(e)
+}
+
 const actionsStyle = computed(() => {
   if (isShallowestVisible.value) {
-    // Fixed to the viewport right edge — the same spot the 🛠 toggle occupies.
+    const p = anchorPoint ? anchorPoint.value : null
+    if (p) {
+      return {
+        position: 'fixed', right: 'auto',
+        left: (p.x - RAIL_W / 2) + 'px',
+        top: p.y + 'px',
+      }
+    }
+    // No anchor context (defensive): the historical fixed spot.
     const top = railCenterViewport.value
     return top == null
       ? { position: 'fixed', right: '12px' }
@@ -616,6 +643,16 @@ provide(panelKey, {
   width: 36px; height: 36px; border-radius: 50%;
   backdrop-filter: blur(12px);
 }
+
+/* The anchor rail's ⠿ handle: drag-only, so it can grab the pointer without
+   the click/drag threshold the 🛠 needs. Same glyph as GmListItem's handle. */
+.panel-actions .panel-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.panel-actions .panel-drag-handle:active { cursor: grabbing; }
 
 .panel-header {
   display: flex;
