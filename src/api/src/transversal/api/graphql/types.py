@@ -617,6 +617,9 @@ class EffectFieldDef:
     required: bool = True
     default: Optional[str] = None
     options: list[str] = strawberry.field(default_factory=list)
+    # Parallel to ``options`` when the option *value* is not what a person should
+    # read (a universe key like ``three_realms`` vs the name "Three Realms").
+    option_labels: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.type

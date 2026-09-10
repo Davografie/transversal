@@ -25,6 +25,11 @@ class EffectFieldDef:
     required: bool = True
     default: str | None = None
     options: list[str] | None = None   # for select / die_select
+    # Dynamic option source for fields whose values are *content*, not an enum
+    # ("universes" today). The editor asks the server to fill these from the DB;
+    # ``options`` stays as the fallback when the source yields nothing.
+    # Recognised by the GraphQL layer — see ``_field_options`` in schema.py.
+    options_from: str = ""
 
 
 @dataclass
@@ -630,7 +635,9 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="result", label="Target Universe", field_type="select",
-                          required=True, options=["three_realms", "earth"]),
+                          required=True, options_from="universes",
+                          # Fallback only — the editor lists the universes in the DB.
+                          options=["three_realms", "earth"]),
             EffectFieldDef(name="target", label="Target Entity", field_type="text",
                           required=False, default="self"),
         ],

@@ -577,6 +577,47 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
     )
 
 
+def _universe_options(repo) -> tuple[list[str], list[str]]:
+    """``(values, labels)`` for the universes in the database.
+
+    Content keys a universe by its ``current_universe`` handle (``three_realms``),
+    falling back to the entity id — that handle is what an ``attune`` effect
+    stores, so it must be the option *value*; the entity's name is the label.
+    """
+    pairs = []
+    for entity in repo.list_all_entities():
+        if getattr(entity, "type", "") != "universe":
+            continue
+        key = getattr(entity, "current_universe", "") or entity.id
+        pairs.append((key, entity.name or key))
+    pairs.sort(key=lambda p: p[1].lower())
+    return [p[0] for p in pairs], [p[1] for p in pairs]
+
+
+def _field_options(fdef, repo) -> tuple[list[str], list[str]]:
+    """A field's options: dynamic when it declares a source, else its own list."""
+    source = _OPTION_SOURCES.get(fdef.options_from)
+    if source is not None:
+        values, labels = source(repo)
+        if values:
+            return values, labels
+    return list(fdef.options or []), []
+
+
+# Every ``EffectFieldDef.options_from`` value the editor can resolve. A field
+# naming a source that is not here falls back to its static ``options`` — and a
+# guard test fails, so a typo cannot silently empty a dropdown.
+_OPTION_SOURCES = {"universes": _universe_options}
+
+
+def _gql_field_def(fdef, repo) -> GqlEffectFieldDef:
+    """One effect-action field, with its options resolved."""
+    options, labels = _field_options(fdef, repo)
+    return GqlEffectFieldDef(name=fdef.name, label=fdef.label, field_type=fdef.field_type,
+                             required=fdef.required, default=fdef.default,
+                             options=options, option_labels=labels)
+
+
 @strawberry.type
 class Query:
     @strawberry.field
@@ -860,13 +901,14 @@ class Query:
     @strawberry.field
     def effect_actions(self, info: strawberry.Info) -> list[GqlEffectActionMeta]:
         from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
+        repo = _em(info).repo
         return [
             GqlEffectActionMeta(
                 action_id=m.action_id, label=m.label, description=m.description,
                 category=m.category, group=m.group, effect_type=m.effect_type, effect_action=m.effect_action,
                 valid_timings=m.valid_timings,
-                fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.fields],
-                context_fields=[GqlEffectFieldDef(name=f.name, label=f.label, field_type=f.field_type, required=f.required, default=f.default, options=f.options or []) for f in m.context_fields],
+                fields=[_gql_field_def(f, repo) for f in m.fields],
+                context_fields=[_gql_field_def(f, repo) for f in m.context_fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
                 requires_choice=m.requires_choice, target_kind=m.target_kind, supports_duration=m.supports_duration,
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,

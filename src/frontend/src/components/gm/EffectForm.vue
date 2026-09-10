@@ -63,7 +63,7 @@
                   {{ ff.label }}
                   <select :value="newEffect.targetFilter[ff.field] || ''" @change="setFilterValue(ff.field, $event.target.value)">
                     <option value="">—</option>
-                    <option v-for="o in (ff.options || [])" :key="o" :value="o">{{ o }}</option>
+                    <option v-for="(o, i) in (ff.options || [])" :key="o" :value="o">{{ (ff.optionLabels || [])[i] || o }}</option>
                   </select>
                 </label>
               </template>
@@ -123,12 +123,12 @@
               <button type="button" :class="{ active: resultMode === 'variable' }" @click="resultMode = 'variable'">Variable</button>
             </div>
             <select v-if="resultMode === 'die'" v-model="newEffect.fields[f.name]">
-              <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+              <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
             </select>
             <input v-else v-model="newEffect.fields[f.name]" type="text" placeholder="{effect_die}" />
           </template>
           <select v-else-if="f.fieldType === 'die_select' || f.fieldType === 'select'" v-model="newEffect.fields[f.name]">
-            <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+            <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
           </select>
           <input v-else-if="f.fieldType === 'number'" v-model.number="newEffect.fields[f.name]" type="number" />
           <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
@@ -167,12 +167,12 @@
             <button type="button" :class="{ active: effectDieMode === 'variable' }" @click="effectDieMode = 'variable'">Variable</button>
           </div>
           <select v-if="effectDieMode === 'die'" v-model="newEffect.context[f.name]">
-            <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+            <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
           </select>
           <input v-else v-model="newEffect.context[f.name]" type="text" :placeholder="f.default || ''" />
         </template>
         <select v-else-if="f.fieldType === 'select'" v-model="newEffect.context[f.name]">
-          <option v-for="o in (f.options || [])" :key="o" :value="o">{{ o }}</option>
+          <option v-for="(o, i) in (f.options || [])" :key="o" :value="o">{{ (f.optionLabels || [])[i] || o }}</option>
         </select>
         <ReturnMapEditor
           v-else-if="f.fieldType === 'return_map'"
