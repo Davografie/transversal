@@ -1,9 +1,10 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle">
     <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up', 'is-anchored': isShallowestVisible }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
-      <!-- The anchor rail's drag handle (drag-only). Only the shallowest visible
-           panel's rail sits at the anchor, so only that rail can move the stack. -->
-      <Button v-if="isShallowestVisible" class="panel-action-btn panel-drag-handle" variant="ghost" size="icon" title="Drag panels" @pointerdown="onAnchorDragStart">⠿</Button>
+      <!-- Drag handle (drag-only): on the anchor rail it moves the whole stack
+           (the anchor); on any other rail it slides this panel along its
+           parent's edge (button-drift's manual override). -->
+      <Button class="panel-action-btn panel-drag-handle" variant="ghost" size="icon" :title="isShallowestVisible ? 'Move the panel anchor' : 'Slide along the parent'" @pointerdown="onHandleDown">⠿</Button>
       <Button v-if="closable" class="panel-action-btn" title="Close" variant="neutral" size="icon" @click="$emit('close')">×</Button>
       <Button type="button" class="panel-action-btn" variant="neutral" size="icon" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</Button>
     </div>
@@ -421,8 +422,8 @@ const placed = computed(() =>
   nodeSize.w > 0 && nodeSize.h > 0
 )
 const nodeStyle = computed(() => ({
-  top: (effectiveTop.value ?? 0) + 'px',
-  left: (effectiveLeft.value ?? 0) + 'px',
+  top: ((effectiveTop.value ?? 0) + (isVertical.value ? 0 : slideOffset.value)) + 'px',
+  left: ((effectiveLeft.value ?? 0) + (isVertical.value ? slideOffset.value : 0)) + 'px',
   visibility: placed.value ? 'visible' : 'hidden',
 }))
 
@@ -484,6 +485,58 @@ if (anchorVersion) watch(anchorVersion, () => queueMeasure())
 
 function onAnchorDragStart(e) {
   if (anchorDrag) anchorDrag.begin(e)
+}
+
+// ── Sliding a panel along its parent's edge ───────────
+// Dragging the ⠿ handle of a non-anchor panel moves that panel along the edge
+// it shares with its parent — vertically on left/right chains, horizontally on
+// up/down ones — clamped so the panel's rail centre stays within the parent's
+// span (prefer-own-center becomes a manual override once dragged).
+const slideOffset = ref(0)
+
+function onHandleDown(e) {
+  if (isShallowestVisible.value) {
+    onAnchorDragStart(e)
+    return
+  }
+  beginSlide(e)
+}
+
+function beginSlide(e) {
+  if (typeof e.button === 'number' && e.button !== 0) return
+  e.preventDefault()
+  const vertical = isVertical.value
+  const startOffset = slideOffset.value
+  const startX = e.clientX
+  const startY = e.clientY
+  const startCenter = vertical ? ownCenterX.value : ownCenter.value
+  const lo = vertical ? props.bridgeLeft : props.bridgeTop
+  const hi = vertical ? props.bridgeRight : props.bridgeBottom
+  // The measured centre already includes the current offset — clamp in offset
+  // space (bounded by the parent's span), not against the measured centre, or a
+  // second drag would mix a stale centre with a fresh offset and overshoot.
+  const baseCenter = startCenter == null ? null : startCenter - startOffset
+  const minOffset = baseCenter == null || lo == null ? null : lo - baseCenter
+  const maxOffset = baseCenter == null || hi == null ? null : hi - baseCenter
+
+  function onMove(ev) {
+    const delta = vertical ? ev.clientX - startX : ev.clientY - startY
+    let next = startOffset + delta
+    if (minOffset != null && next < minOffset) next = minOffset
+    if (maxOffset != null && next > maxOffset) next = maxOffset
+    slideOffset.value = next
+    // A slide is a *position* change, which the ResizeObserver never reports —
+    // keep the measured centre fresh, or the next drag clamps against a stale one.
+    queueMeasure()
+  }
+  function finish() {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', finish)
+    window.removeEventListener('pointercancel', finish)
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', finish)
+  window.addEventListener('pointercancel', finish)
 }
 
 const actionsStyle = computed(() => {
