@@ -102,6 +102,7 @@ optimisticOverlay   // immediate UI overlay value, synced from props.overlay (SS
 navDotPositions     // { parent: {x,y}, portal: {x,y}, 'portal:N': {x,y} }
 destNavCache        // lazy cache: destination_id → { arriveX, arriveY, destAspect }
 lerpActive          // true while non-self occupant dots ease to new SSE positions
+gmSelfPos           // GM free-roam dot { x, y } (local, unpersisted) when entityId is null
 ```
 
 Drag state is kept separately:
@@ -197,6 +198,11 @@ content), aligns the destination's arrival point, and adds the inverse-parallax
 shift. The dot's own `border-radius` + `overflow: hidden` clips it; the img must
 not clip itself (`border-radius: 0`). `destNavCache` supplies
 `arrivalX`/`arrivalY`/`destAspect` so that preview shows the exact arrival point.
+
+`self` is the camera anchor: the scene pans so this dot keeps its image position,
+and it is always draggable. With no perspective entity (`entityId == null` — the
+GM free-roam view) it becomes a **local GM dot**: draggable, unpersisted, labelled
+`GM`, and the camera pans with it.
 
 Transparent **occupant/self portraits** (media pipeline's
 `EntityImage.transparent`, exposed as `image_transparent` on occupants) render
