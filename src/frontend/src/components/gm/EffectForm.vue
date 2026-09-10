@@ -425,6 +425,12 @@ const visibleFields = computed(() => {
     if (f.name === 'target' && selectedAction.value.implicitTarget) return false
     if (f.name === 'result' && selectedAction.value.implicitResult) return false
     if (f.name === 'result' && isGainAction.value) return false
+    // A field a reference supersedes is the fallback form: once the reference is
+    // authored the field steps aside (its stored value is still kept).
+    if (f.hiddenWhenRef) {
+      const ref = newEffect.refs?.[f.hiddenWhenRef]
+      if (ref?.spec?.steps?.length) return false
+    }
     return true
   })
 })

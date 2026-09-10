@@ -30,6 +30,10 @@ class EffectFieldDef:
     # ``options`` stays as the fallback when the source yields nothing.
     # Recognised by the GraphQL layer — see ``_field_options`` in schema.py.
     options_from: str = ""
+    # Name of an ``EffectActionMeta.refs`` entry that supersedes this field. When
+    # that reference is authored the editor hides the field (it is the fallback
+    # form) while keeping its stored value, so existing content keeps working.
+    hidden_when_ref: str = ""
 
 
 @dataclass
@@ -635,12 +639,21 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         effect_action="enable",
         valid_timings=["IMMEDIATE"],
         fields=[
+            # The fallback form: a universe named directly. Superseded by the
+            # ``projection`` reference below — the intended way to source a
+            # capability is from a resolved life, whose universe it takes.
             EffectFieldDef(name="result", label="Target Universe", field_type="select",
-                          required=True, options_from="universes",
+                          required=False, options_from="universes",
+                          hidden_when_ref="projection",
                           # Fallback only — the editor lists the universes in the DB.
                           options=["three_realms", "earth"]),
-            EffectFieldDef(name="target", label="Target Entity", field_type="text",
+            EffectFieldDef(name="target", label="Who It Applies To", field_type="text",
                           required=False, default="self"),
+        ],
+        refs=[
+            # A path that starts at each entity the target resolved to and walks
+            # to that entity's projection counterpart.
+            RefDef(name="projection", label="Attunes To (projection)", element="projection"),
         ],
         supports_duration=True,
         inverse=("attune", "disable"),

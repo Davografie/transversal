@@ -615,7 +615,8 @@ def _gql_field_def(fdef, repo) -> GqlEffectFieldDef:
     options, labels = _field_options(fdef, repo)
     return GqlEffectFieldDef(name=fdef.name, label=fdef.label, field_type=fdef.field_type,
                              required=fdef.required, default=fdef.default,
-                             options=options, option_labels=labels)
+                             options=options, option_labels=labels,
+                             hidden_when_ref=fdef.hidden_when_ref)
 
 
 @strawberry.type

@@ -386,3 +386,33 @@ def TargetSpec_of(payload: dict):
     from transversal.services.target_spec import TargetSpec
 
     return TargetSpec.model_validate(payload)
+
+
+class TestTwoPathAttune:
+    """Attune carries two paths: who it applies to, and where it comes from."""
+
+    def test_the_capability_comes_from_the_second_path(self):
+        from transversal.domain import TargetRef
+
+        effect = Effect(
+            type="attune", action="enable",
+            target_spec=spec(
+                {"kind": "select", "collection": "occupants"},
+                {"kind": "choose", "count": 1},
+            ),
+            refs={"projection": TargetRef(name="projection", spec=spec(
+                {"kind": "select", "collection": "variable", "variable": "their_counterpart"},
+                {"kind": "navigate", "edge": "projections"},
+            ))},
+        )
+        text = effect_text(effect)
+        # The who (path 1) renders as the effect's target...
+        assert text.startswith("attune one of the entities here")
+        # ...and the capability (path 2) is what it attunes them to, not a universe.
+        assert "their counterpart" in text
+        assert "three_realms" not in text
+
+    def test_the_universe_fallback_still_reads(self):
+        effect = Effect(type="attune", action="enable", target="loc-rusted-gate",
+                        result="three_realms")
+        assert effect_text(effect, resolve=resolve) == "attune Rusted Gate to three_realms"

@@ -247,6 +247,7 @@ Read it as a sanity check. If the card line does not say what you meant, the SFX
 - **Then the effects**, in authored order, each with its timing: *whenever a roll is resolved, step down each static trait instance you rolled by one step*.
 - **Effect-level conditions gate that effect**: *if this trait is rated d6, increase the dice limit by 2*. A narrative condition on an effect trails in parentheses instead (flavour, like the SFX-level one).
 - **Effects scoped to a subset of dice say so**: an effect with a die-role filter reads *for each unchosen die, …* — the dice a player didn't assign. Inside such an effect the die being processed **is** the roll, so a path seeded from `rolled_dice` reads *that die* rather than *each die in your roll*. That is what makes "for each unchosen die, give its owner's location a hazard" land once per die.
+- **Attune carries two paths.** *Who it applies to* is the effect's target; *attunes to* is a reference that starts at each of those entities and finds their projection counterpart — name that step for the reader, because its name is what the card shows.
 - **An effect that lands somewhere other than its target says where**: *gain the environmental hazard trait **on the location of each owner of each trait instance you rolled*** — that clause comes from the effect's subject (`entity_spec`), so if you author a subject, expect to see it.
 - **Effects that share framing are grouped.** Consecutive effects with the same timing, die scope and duration read as one list with the framing stated once:
 
@@ -381,7 +382,7 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 |--------|--------------|------|
 | Create Asset | Create an asset/GMC | benefit |
 | Temporary Projection (Disguise) | Create a temporary projection | benefit |
-| Attune | Temporarily add a universe to the target (a path resolving to many entities attunes each of them) | benefit |
+| Attune | Give the target temporary use of another universe's capabilities. Two paths: **Who It Applies To**, and **Attunes To (projection)** — which walks from each of them to their counterpart life, and takes the universe from it. A path resolving to many entities attunes each of them. | benefit |
 | Travel | Cross a universal boundary | benefit |
 | Set Location | Move to a location | either |
 | Create Relationship | Add a relationship edge | either |

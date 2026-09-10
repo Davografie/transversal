@@ -2024,3 +2024,60 @@ def test_attune_honours_the_authored_scope():
     attunements = {a.universe: a.scope for a in repo.entities["shrine"].attunements}
     assert attunements["three_realms"] == AttunementScope.DOMAIN
     assert attunements["emberline"] == AttunementScope.SELF
+
+
+def test_attune_takes_its_universe_from_the_resolved_projection():
+    """A projection reference supersedes the authored universe string.
+
+    The author's model: a capability comes from a *life*, so the universe is read
+    off the projection the reference resolved to. Content written before the
+    reference existed keeps working through the fallback.
+    """
+    from types import SimpleNamespace
+    import transversal.services.effects_applier as applier
+    from transversal.services.effects_applier import EffectRegistry
+    from transversal.domain import TargetRef
+
+    class Repo:
+        def __init__(self):
+            self.entities = {"wielder": SimpleNamespace(id="wielder", attunements=[])}
+            self.projections = {
+                "wielder:dreamlands": SimpleNamespace(id="wielder:dreamlands", universe="the-dreamlands"),
+            }
+
+        def get_entity(self, eid):
+            return self.entities.get(eid)
+
+        def get_projection(self, pid):
+            return self.projections.get(pid)
+
+        def update_entity(self, e):
+            self.entities[e.id] = e
+
+    repo = Repo()
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        raz = SimpleNamespace(spend=lambda *a, **k: None, earn=lambda *a, **k: None, transfer=lambda *a, **k: None)
+        em = SimpleNamespace(repo=repo, create=lambda *a, **k: None)
+        applier._register_core_handlers(em, raz)
+
+        effect = Effect(
+            timing=EffectTiming.IMMEDIATE, type="attune", action="enable", target="wielder",
+            result="three_realms",  # the fallback, superseded below
+            refs={"projection": TargetRef(name="projection", value="wielder:dreamlands")},
+        )
+        applier.effect_registry.apply(effect, "wielder", "earth", {})
+
+        # A reference that resolves to nothing keeps the authored fallback.
+        fallback = Effect(
+            timing=EffectTiming.IMMEDIATE, type="attune", action="enable", target="wielder",
+            result="three_realms",
+            refs={"projection": TargetRef(name="projection", value="")},
+        )
+        applier.effect_registry.apply(fallback, "wielder", "earth", {})
+    finally:
+        applier.effect_registry = original
+
+    attuned = {a.universe for a in repo.entities["wielder"].attunements}
+    assert attuned == {"the-dreamlands", "three_realms"}

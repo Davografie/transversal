@@ -85,6 +85,23 @@ effect_registry = EffectRegistry()
 
 # ── Core handlers (registered at import time) ────────
 
+def _apply_attune_universe(a, em, universe_fallback: str) -> str:
+    """The universe an attune effect grants.
+
+    Prefers the resolved ``projection`` reference — the intended model, where the
+    capability is sourced from a *life* and takes its universe. Falls back to the
+    authored universe string so content written before the reference existed
+    keeps working.
+    """
+    ref = (getattr(a, "refs", None) or {}).get("projection")
+    projection_id = getattr(ref, "value", "") if ref is not None else ""
+    if projection_id:
+        projection = em.repo.get_projection(projection_id)
+        if projection is not None and projection.universe:
+            return projection.universe
+    return a.result or universe_fallback
+
+
 def _register_core_handlers(em, raz):
     """Register handlers for the core service operations.
 
@@ -166,7 +183,7 @@ def _register_core_handlers(em, raz):
             scope = AttunementScope(raw_scope)
         except ValueError:
             scope = AttunementScope.SELF
-        universe = a.result or u
+        universe = _apply_attune_universe(a, em, u)
         if a.action == "enable":
             if not any(x.universe == universe and x.scope == scope for x in entity.attunements):
                 entity.attunements.append(Attunement(

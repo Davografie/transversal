@@ -53,6 +53,19 @@ from transversal.services.target_spec import (
 NameResolver = Callable[[str], Optional[str]]
 
 
+#: Words that already determine a noun phrase, so the renderer must not add one
+#: (an author's step name like ``their_counterpart`` reads as-is).
+_LEADING_DETERMINERS = (
+    "the ", "a ", "an ", "your ", "their ", "his ", "her ", "its ", "our ", "my ",
+    "each ", "every ", "any ", "one of ", "that ", "this ", "some ",
+)
+
+
+def _has_own_determiner(body: str) -> bool:
+    """Whether a rendered body already opens with its own determiner."""
+    return body.lower().startswith(_LEADING_DETERMINERS)
+
+
 # ── Vocabulary helpers ────────────────────────────────────────
 
 _OP_WORDS = {
@@ -228,6 +241,8 @@ def render_phrase(p: Phrase, determiner: str = "") -> str:
     singular = p.cardinality == "one" or determiner in ("each", "every", "any")
     head = p.noun if singular else (p.plural or pluralize(p.noun))
     body = " ".join([*p.adjectives, head]).strip()
+    if determiner and _has_own_determiner(body):
+        determiner = ""
     out = f"{determiner} {body}".strip() if determiner else body
     if p.origin:
         out = f"{out} {p.origin}".strip()
@@ -239,6 +254,8 @@ def _determiner(p: Phrase) -> str:
     if p.fixed_determiner:
         return p.fixed_determiner
     if p.scalar or p.predicate or p.pronoun or p.possessive or p.prefix or not p.noun:
+        return ""
+    if _has_own_determiner(" ".join([*p.adjectives, p.noun])):
         return ""
     return "the" if p.cardinality == "one" else "each"
 
@@ -744,21 +761,44 @@ def _die_scope(effect: Effect) -> str:
     return f"for each {' and '.join(parts)}"
 
 
+def _ref_result(effect: Effect, *, resolve: NameResolver | None = None,
+                source_element: str | None = None, variables=None) -> str:
+    """A rendered reference path — the object an effect resolves for itself.
+
+    Attune's ``projection`` reference is the case this exists for: the capability
+    is sourced from a *life*, so the card says "… to their counterpart" rather
+    than naming a universe. The reference path starts from the effect's target
+    path, so the author's own name for that step is what reads here.
+    """
+    for ref in (effect.refs or {}).values():
+        spec = getattr(ref, "spec", None)
+        if spec is None or not spec.steps:
+            continue
+        phrase = path_phrase(spec, source_element=source_element, variables=variables,
+                             resolve=resolve)
+        text = render_phrase(phrase, _determiner(phrase))
+        if text:
+            return text
+    return ""
+
+
 def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
                  source_element: str | None = None, variables=None) -> str:
     """An effect's clause, without timing/scope/duration (those group)."""
     target, subject = _effect_parts(effect, resolve=resolve, source_element=source_element,
                                     variables=variables)
     result = _effect_result(effect)
+    ref_result = _ref_result(effect, resolve=resolve, source_element=source_element,
+                             variables=variables)
     template = reg.effect_card(effect.type, effect.action)
     if not target and "{target}" in template:
         target = _target_placeholder(effect)
     if subject:
         target = f"{target} {subject}" if target else subject
-    if not result:
+    if not result and not ref_result:
         # Drop a clause the empty placeholder leaves dangling ("… as {result}").
         template = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s+\{result\}", "", template)
-    text = template.format(target=target, result=display_value(result, resolve))
+    text = template.format(target=target, result=ref_result or display_value(result, resolve))
     if effect.negative and "complication" not in text:
         text = f"{text} as a complication"
 
@@ -775,8 +815,8 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
         # longer exposes it — reach is meant to come from how many targets the
         # "who" path resolves to.
         text = f"{text}, reaching everyone there"
-    if "{result}" not in template and result:
-        text = f"{text} ({display_value(result, resolve)})"
+    if "{result}" not in template and (result or ref_result):
+        text = f"{text} ({ref_result or display_value(result, resolve)})"
 
     text = _tidy(text)
     gates, flavour = [], []

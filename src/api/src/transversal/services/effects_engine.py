@@ -367,15 +367,40 @@ class EffectsEngine:
                     blocked = False
                     if effect.refs:
                         before = len(outcome.structured)
-                        resolved_list = resolve_refs(effect, _fire_context(event, sfx, repo, bindings=bindings), outcome.structured, source_sfx_id=sfx.id)
+                        fire_ctx = _fire_context(event, sfx, repo, bindings=bindings)
+                        # An effect may carry both a primary target path and named
+                        # references — "attune *these people* to *their projection*".
+                        # Walk the target path first: its named outputs join the
+                        # activation scope in place, so a reference path can start
+                        # (`select variable`) from where the target path landed.
+                        targets: list[Optional[str]] = [None]
+                        if effect.target_spec is not None and effect.target_spec.steps:
+                            targets, target_blocked = _resolve_primary_targets(
+                                effect, fire_ctx, outcome.structured, sfx,
+                                source_id=event.context.get("source_id") or "",
+                            )
+                            if target_blocked:
+                                blocked = True
+                        # Nothing found on the target path → nothing to apply for this
+                        # activation (fail closed; creating the missing thing is a
+                        # separate, deliberate feature).
+                        resolved_list = (
+                            [] if blocked
+                            else resolve_refs(effect, fire_ctx, outcome.structured,
+                                              source_sfx_id=sfx.id)
+                        )
                         if len(outcome.structured) > before:
                             blocked = True
                         else:
                             for resolved in resolved_list:
-                                _effects_applier.effect_registry.apply(resolved, event.entity_id, event.universe, effect_context)
-                                outcome.applied.append(resolved)
-                                sfx_applied = True
-                                log.info("[process_event] applied sfx=%s effect=%s/%s via refs", sfx.id, resolved.type, resolved.action)
+                                for target in targets:
+                                    concrete = resolved if target is None else resolved.model_copy(
+                                        update={"target": target, "target_spec": None})
+                                    _effects_applier.effect_registry.apply(
+                                        concrete, event.entity_id, event.universe, effect_context)
+                                    outcome.applied.append(concrete)
+                                    sfx_applied = True
+                                    log.info("[process_event] applied sfx=%s effect=%s/%s target=%s via refs", sfx.id, concrete.type, concrete.action, concrete.target)
                     elif effect.target_spec is not None:
                         before = len(outcome.structured)
                         applied = _apply_immediate_spec(
@@ -616,6 +641,32 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
         source=source, source_element=source_element,
         bindings=bindings if bindings is not None else {},
     )
+
+
+def _resolve_primary_targets(effect: Effect, context, structured, sfx: SFX,
+                             source_id: str = "") -> tuple[list[str], bool]:
+    """Resolve an effect's ``target_spec`` to concrete ids (immediate path).
+
+    Returns ``(ids, blocked)``. ``blocked`` is True when the spec stopped at a
+    ``choose`` step — the choice is appended to ``structured`` for the caller to
+    resume from — and ``ids`` is empty. Resolving here (rather than inside
+    :func:`resolve_refs`) is what lets an effect carry *both* a target path and
+    named references: the resolution binds the path's named outputs into
+    ``context.bindings`` in place, so a reference path can start from them.
+    """
+    from transversal.services.target_resolver import resolve
+
+    resolution = resolve(effect.target_spec, context)
+    if resolution.pending_choices:
+        if structured is not None:
+            for pc in resolution.pending_choices:
+                structured.append(_structured_choice(
+                    pc, effect, "target", sfx,
+                    source_kind=sfx.source_kind or "", source_id=source_id,
+                    source_sfx_id=sfx.id, repo=getattr(context, "repo", None),
+                ))
+        return [], True
+    return [rid for value in resolution.values if (rid := _resolved_id(value))], False
 
 
 def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None,
