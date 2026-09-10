@@ -234,6 +234,41 @@ Any step can declare an `output` name, binding its resolved value into the activ
 
 ---
 
+## How your SFX reads
+
+The editor shows a **card line** under the name field — the SFX in plain language: *"Whenever a roll happens, if there is at least one d4 trait: gain 1 razmerit."* It is derived from what you authored (trigger → conditions → effects), not from the Description field, and it is recomputed as you edit.
+
+Read it as a sanity check. If the card line does not say what you meant, the SFX probably does not do what you meant.
+
+### What it says
+
+- **The trigger** first: *Whenever a roll happens* / *Activated* / *At the start of each session*.
+- **Then the gates**: *if you are not at a location yet and you are in Earth*.
+- **Then the effects**, in authored order, each with its timing: *whenever a roll is resolved, step down each static trait instance you rolled by one step*.
+- **A narrative condition trails in parentheses.** It is flavour the engine never checks, so it is kept visually apart from the rules text.
+- **Effect durations** read as *reverts at the end of the scene* — the **undo timer**. This is a different thing from the SFX's own listening window, and the two are phrased differently on purpose (see [[SFX and Effects]]).
+
+### Naming a step is how you keep it readable
+
+Long paths make long sentences. The fix is naming: **any step with an `output` name contributes that name to the card line instead of the pipeline behind it.**
+
+| Step output | Reads as |
+|---|---|
+| `d4_traits` | *…at least one d4 trait* |
+| `gritty_dice` | *each gritty die* |
+
+So `d4_traits` is not just a variable for later effects — it is what the reader sees. Name steps for the person reading the card, not for the machine: `d4_traits` reads better than `filtered_1`, and either can be referenced by later effects.
+
+> **Rule of thumb:** if the card line has grown into a paragraph, name the step where the meaning becomes clear and the sentence will shorten itself.
+
+### What it does not say
+
+- It is a rendering of the *machine* reading, not a rules interpretation. A `NARRATIVE` condition appears as flavour because that is all it is.
+- Unresolved ids show raw (`trait-environmental-hazard-58be`). If you see one, the effect points at something that no longer exists — worth fixing.
+- It describes effects in authored order, even when they are grouped by timing on the card.
+
+---
+
 ## Trigger reference
 
 | Trigger | Fires when… | Group | Notable variables |
