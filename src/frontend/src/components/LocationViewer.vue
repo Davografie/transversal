@@ -184,6 +184,8 @@ import { startFrameProfile, stopFrameProfile, notePointerEvent, noteFrameWork } 
 // default 1.1) lives in composables/media.js next to coverOverscan.
 const INVERSE_PAN_STRENGTH = 2   // hole "see-through" parallax strength (>1 = stronger)
 const TEASER_ZOOM = 2            // mobile teaser-camera zoom factor
+const CAMERA_START = 0.6         // window-height fraction where the zoom-in begins
+const CAMERA_FULL = 0.2          // window-height fraction where the zoom is full
 const EXPAND_PROXIMITY = 24      // image-% — distance at which bubbles pop out
 const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop-to-travel zone
 
@@ -196,7 +198,6 @@ const props = defineProps({
   entityId: { type: String, required: true },
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
-  camera: { type: Boolean, default: false },  // teaser mode: zoom in on the self character
   gmMode: { type: Boolean, default: false },
   remotePools: { type: Object, default: () => ({}) },  // entity_id → { dice: [...], player_id, phase }
   remoteResults: { type: Object, default: () => ({}) },  // entity_id → { total, effect_die, rolls, ... }
@@ -415,9 +416,10 @@ function parallaxOffset() {
 // The whole scene renders relative to the viewer's CONTAINER (the location
 // band on mobile, the window on desktop) so dots and background share one
 // coherent coordinate space when the band shrinks — no squeezing, no drift.
-// `camera` (mobile teaser states) zooms in on the self character instead of
-// showing the full map: the character is centered, dots keep their
-// image-relative positions, and anything outside the crop clips.
+// The camera is SIZE-DRIVEN, a pure function of the band height: full map
+// down to CAMERA_START, then a continuous zoom toward the self character
+// (centered at CAMERA_FULL). The band's own focus animation drives the zoom
+// — no recalculation jump, no discrete camera flag.
 const sceneW = ref(typeof window !== 'undefined' ? window.innerWidth : 1000)
 const sceneH = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
 let sceneRO = null
@@ -439,11 +441,17 @@ onUnmounted(() => sceneRO?.disconnect())
 const sceneCamera = computed(() => {
   const cw = sceneW.value
   const ch = sceneH.value
-  const zoom = props.camera ? TEASER_ZOOM : 1
+  // Size-driven camera: 0 at CAMERA_START (full map) → 1 at CAMERA_FULL.
+  const refH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const h0 = refH * CAMERA_START
+  const h1 = refH * CAMERA_FULL
+  const p = ch >= h0 ? 0 : ch <= h1 ? 1 : (h0 - ch) / (h0 - h1)
+  const zoom = 1 + (TEASER_ZOOM - 1) * p
   const self = occupants.value.find(o => o.id === props.entityId)
   const mx = self?.map_x ?? 50
   const my = self?.map_y ?? 50
-  const anchor = props.camera ? { x: 50, y: 50 } : { x: mx, y: my }
+  // The character glides from its natural map position to the center.
+  const anchor = { x: mx + (50 - mx) * p, y: my + (50 - my) * p }
   const { w, h } = imageAspect.value
     ? coverOverscan(cw * zoom, ch * zoom, imageAspect.value)
     : { w: cw * zoom * 1.8, h: ch * zoom * 1.8 }  // unknown aspect: 180% fallback
