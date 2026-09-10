@@ -251,6 +251,14 @@ export function useApi() {
     } catch (e) { console.error('[API] listAllPools', e.message); return null }
   }
 
+  async function getActivity() {
+    try {
+      const r = await fetch(`${API_BASE}/activity`)
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) { console.error('[API] getActivity', e.message); return null }
+  }
+
   // ── Contest actions ──
   async function setOpposition(locationId, entityId, opponentId, universe = 'earth') {
     try {
@@ -372,5 +380,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

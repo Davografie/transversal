@@ -337,7 +337,7 @@
         <div v-if="mobileStackActive && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
       </div>
       <div class="roller-band" :style="{ '--roller-h': rollerContentH + 'px' }">
-        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :entity-names="entityNames" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
+        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @click="setMobileFocus('dice')"></div>
       </div>
     </div>
@@ -384,7 +384,7 @@ import { useTroupe } from './composables/useTroupe.js'
 import ToastBar from './components/ToastBar.vue'
 import RollTableMenu from './components/gm/RollTableMenu.vue'
 
-const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools } = useApi()
+const { graphql, getDifficulty: apiGetDifficulty, setDifficulty: apiSetDifficulty, nextBeat: apiNextBeat, advanceScene: apiAdvanceScene, listAllPools: apiListAllPools, getActivity: apiGetActivity } = useApi()
 const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
@@ -954,7 +954,22 @@ async function refreshDifficulty() {
 }
 
 async function seedRemotePools() {
-  // Tabs are global — seed every active pool across all locations.
+  // Tabs are global — seed every active pool across all locations, plus the
+  // activity grouping metadata (per-pool location + active contests).
+  const act = await apiGetActivity()
+  if (act) {
+    for (const [locId, entityPools] of Object.entries(act.pools || {})) {
+      for (const [eid, dice] of Object.entries(entityPools)) {
+        poolLocations.value = { ...poolLocations.value, [eid]: locId }
+        if (eid !== entityId.value && dice && dice.length) {
+          remotePools.value = { ...remotePools.value, [eid]: { dice, player_id: eid, phase: 'adding' } }
+        }
+      }
+    }
+    contests.value = act.contests || []
+    return
+  }
+  // Fallback (older backend without /activity): flat list, no location.
   const res = await apiListAllPools()
   const pools = res?.pools || {}
   for (const [eid, dice] of Object.entries(pools)) {
@@ -975,12 +990,13 @@ function onPoolChange(s) {
   sheetRef.value?.setPoolSources(s)
 }
 
-function onPoolSaved({ key, dice }) {
+function onPoolSaved({ key, locationId, dice }) {
   // The DiceRoller saved its own pool (GM editing an entity's pool directly).
   // Record it so the entity keeps a tab after the GM switches away — self-edits
   // don't reach remotePools via the SSE echo, and solo play has no SSE at all.
   if (!key) return
   remotePools.value = { ...remotePools.value, [key]: { dice: dice || [], player_id: key, phase: 'adding' } }
+  poolLocations.value = { ...poolLocations.value, [key]: locationId || currentLocationId.value }
 }
 
 async function switchPerspective(id) {
@@ -1162,6 +1178,8 @@ function isGmcEntity(id) {
 
 const remotePools = ref({})  // entity_id → { dice: [...], player_id, phase }
 const remoteResults = ref({})  // entity_id → { result, rolls, kept, total, effect_die }
+const poolLocations = ref({})  // entity_id → location_id (for the grouped activity view)
+const contests = ref([])       // [{ location_id, challenger_id, defendant_id, parties }]
 
 const ssePulse = ref(false)
 watch(lastEvent, (evt) => {
@@ -1191,6 +1209,8 @@ watch(lastEvent, (evt) => {
       diceRef.value?.clearPool()
       remotePools.value = {}
       remoteResults.value = {}
+      poolLocations.value = {}
+      contests.value = []
       currentDifficulty.value = null
       if (gmMode.value) addToast('Beat ended', 'dice')
       break
@@ -1262,6 +1282,8 @@ watch(lastEvent, (evt) => {
       diceRef.value?.clearPool()
       remotePools.value = {}
       remoteResults.value = {}
+      poolLocations.value = {}
+      contests.value = []
       diceRef.value?.loadTargetingBans()
       break
     case 'pool_updated':
@@ -1277,6 +1299,9 @@ watch(lastEvent, (evt) => {
           dice: hasDice ? evt.data.dice : (remotePools.value[eid]?.dice || []),
           player_id: pid, phase,
         }}
+        if (evt.data.location_id) {
+          poolLocations.value = { ...poolLocations.value, [eid]: evt.data.location_id }
+        }
         // Reflect backend 'bought' flags into the resolved-rolls view (hitch menu).
         const rolls = remoteResults.value[eid]?.rolls
         if (hasDice && Array.isArray(rolls)) {
@@ -1341,6 +1366,18 @@ watch(lastEvent, (evt) => {
       }
       break
     case 'contest_challenged':
+      if (evt.data?.challenger_id && evt.data?.opponent_id) {
+        const c = {
+          location_id: evt.data?.location_id || currentLocationId.value,
+          challenger_id: evt.data.challenger_id,
+          defendant_id: evt.data.opponent_id,
+          parties: [evt.data.challenger_id, evt.data.opponent_id],
+        }
+        contests.value = [
+          ...contests.value.filter(x => !(x.challenger_id === c.challenger_id && x.defendant_id === c.defendant_id)),
+          c,
+        ]
+      }
       if (gmMode.value) {
         addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
         // Auto-switch to a challenged GMC so the GM can roll its side at once.
@@ -1387,6 +1424,10 @@ watch(lastEvent, (evt) => {
       break
     case 'contest_resolved':
       diceRef.value?.setContestOutcome(evt.data)
+      if (evt.data?.challenger_id && evt.data?.defendant_id) {
+        contests.value = contests.value.filter(c =>
+          !(c.challenger_id === evt.data.challenger_id && c.defendant_id === evt.data.defendant_id))
+      }
       addToast('Contest resolved', 'roll')
       break
     case 'traits_revealed':
@@ -1800,6 +1841,8 @@ async function onNextBeat() {
   // Clear remote pools and results
   remotePools.value = {}
   remoteResults.value = {}
+  poolLocations.value = {}
+  contests.value = []
   currentDifficulty.value = null
   // Clear every pool + difficulty at the location server-side (broadcasts beat_end to all)
   if (currentLocationId.value) {
@@ -1820,6 +1863,8 @@ function onStartSession() {
 function onEndSession() {
   remotePools.value = {}
   remoteResults.value = {}
+  poolLocations.value = {}
+  contests.value = []
   if (sessionId.value && sessionId.value !== 'session-default') {
     endSession(sessionId.value)
   }

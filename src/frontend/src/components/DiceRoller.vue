@@ -1,15 +1,18 @@
 <template>
   <div class="dice-roller panel" :class="[{ open: panelOpen }, `kind-${rollKind}`]" @touchstart="onRollerTouchStart">
     <div class="pool-tabs" v-if="tabEntities.length > 1">
-      <button
-        v-for="e in tabEntities"
-        :key="e.id"
-        class="pool-tab"
-        :class="{ active: activeId === e.id, self: e.id === selfTabId, blink: (e.id === selfTabId && youTabBlink) || (e.id === DIFFICULTY_TAB && difficultyTabBlink) }"
-        @click="switchTab(e.id)"
-      >
-        {{ e.name }}
-      </button>
+      <template v-for="g in tabGroups" :key="g.key">
+        <div v-if="g.label && tabGroups.length > 1" class="pool-tab-group-label">{{ g.label }}</div>
+        <button
+          v-for="e in g.members"
+          :key="e.id"
+          class="pool-tab"
+          :class="{ active: activeId === e.id, self: e.id === selfTabId, blink: (e.id === selfTabId && youTabBlink) || (e.id === DIFFICULTY_TAB && difficultyTabBlink) }"
+          @click="switchTab(e.id)"
+        >
+          {{ e.name }}
+        </button>
+      </template>
     </div>
 
     <div v-if="contestResult && (!gmMode || actingEntityId)" class="contest-result-widget">
@@ -386,6 +389,9 @@ const props = defineProps({
   difficulty: { type: Number, default: null }, // received difficulty (player mode)
   playerId: { type: String, default: '' },
   locationId: { type: String, default: '' },
+  locationName: { type: String, default: '' }, // current location's display name (difficulty-pool label)
+  poolLocations: { type: Object, default: () => ({}) }, // entity_id → location_id (for test grouping)
+  contests: { type: Array, default: () => [] }, // [{ location_id, challenger_id, defendant_id, parties }]
   sfxChoiceRequest: { type: Array, default: () => [] }, // pending {choose_*} auto-fired SFX choices
   peers: { type: Array, default: () => [] }, // [{ id, name }] other entities at the location
   entityNames: { type: Object, default: () => ({}) }, // id → name (all entities, for tab labels)
@@ -469,7 +475,7 @@ const difficultyFlash = ref('')
 const tabEntities = computed(() => {
   // Difficulty/You tab always present; peers only when they have an active pool.
   const list = props.gmMode
-    ? [{ id: DIFFICULTY_TAB, name: 'Difficulty' }]
+    ? [{ id: DIFFICULTY_TAB, name: props.locationName || 'Difficulty' }]
     : [{ id: props.entityId, name: 'You' }]
   const seen = new Set(list.map(e => e.id))
   const pushEntity = (id) => {
@@ -492,6 +498,59 @@ const tabEntities = computed(() => {
     pushEntity(eid)
   }
   return list
+})
+
+// Tabs grouped by event for the GM activity view: each location with activity
+// is a "test" event (labeled by its location name — the location is what rolls
+// the difficulty), and each contest is a group of its competing parties. Only
+// surfaces group headers when there is more than one event; a single event
+// stays a flat list.
+const tabGroups = computed(() => {
+  const members = tabEntities.value
+  if (!members.length || !props.gmMode) {
+    return [{ key: 'flat', label: '', members }]
+  }
+  const nameOf = (id) => props.entityNames?.[id] || (props.peers || []).find(p => p.id === id)?.name || id
+
+  // Contest party → its contest, so we can group the parties together.
+  const partyContest = new Map()
+  const contestLabels = new Map()
+  for (const c of (props.contests || [])) {
+    const key = `${c.location_id}:${c.challenger_id}`
+    const label = `${nameOf(c.challenger_id)} vs ${nameOf(c.defendant_id)}`
+    contestLabels.set(key, label)
+    for (const p of (c.parties || [c.challenger_id, c.defendant_id])) {
+      partyContest.set(p, key)
+    }
+  }
+
+  const groups = new Map()
+  const order = []
+  const groupOf = (key, label) => {
+    if (!groups.has(key)) { groups.set(key, { key, label, members: [] }); order.push(key) }
+    return groups.get(key)
+  }
+
+  for (const m of members) {
+    let key, label
+    if (m.id === DIFFICULTY_TAB) {
+      // The difficulty pool is the current location's own test event.
+      key = `loc:${props.locationId}`
+      label = props.locationName || 'Difficulty'
+    } else {
+      const contestKey = partyContest.get(m.id)
+      if (contestKey) {
+        key = `contest:${contestKey}`
+        label = contestLabels.get(contestKey)
+      } else {
+        const loc = props.poolLocations?.[m.id] || props.locationId
+        key = `loc:${loc}`
+        label = nameOf(loc)
+      }
+    }
+    groupOf(key, label).members.push(m)
+  }
+  return order.map((k) => groups.get(k))
 })
 const editingEntityId = computed(() => props.actingEntityId || props.fallbackEntityId || props.entityId)
 const decisionPending = computed(() => !!contestCompare.value && contestCompare.value.pending === editingEntityId.value)
@@ -1041,7 +1100,7 @@ function notifyPool() {
   // tab persists after the GM switches away (self-edits don't reach the SSE
   // echo, and solo play has no SSE broadcast at all).
   const key = poolEntityKey()
-  if (key) emit('poolSaved', { key, dice: buildPoolDice() })
+  if (key) emit('poolSaved', { key, locationId: props.locationId, dice: buildPoolDice() })
 }
 
 function addDie(die) {
@@ -1962,6 +2021,11 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .dice-stage { display: flex; flex-direction: column; gap: var(--gap); min-height: 48px; }
 
 .pool-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.pool-tab-group-label {
+  flex-basis: 100%; text-align: center; font-size: 11px; font-weight: 700;
+  color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase;
+  margin: 2px 0 -2px;
+}
 .pool-tab {
   padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 8px;
   cursor: pointer; border: 1px solid transparent; background: var(--overlay-6);

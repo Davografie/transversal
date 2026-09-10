@@ -126,6 +126,8 @@ def test_list_all_pools_is_global(client):
 
 
 def test_activity_returns_grouped_pools_and_difficulties(client):
+    from transversal.services.contest_tracker import get_contest_tracker
+    get_contest_tracker().clear_all()
     _save(client, "loc-1", "a", [_die("d8")])
     _save(client, "loc-2", "b", [_die("d6")])
     client.put("/api/v1/locations/loc-1/difficulty", json={"difficulty": 12})
