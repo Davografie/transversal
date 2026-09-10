@@ -81,3 +81,17 @@ def test_fallback_to_static_options_when_the_source_is_empty():
     values, labels = _field_options(field, _Repo([]))
     assert values == ["three_realms", "earth"]
     assert labels == []
+
+
+def test_attune_declares_its_scope():
+    """`scope` decides whether an attunement stays on the carrier or radiates."""
+    attune = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "attune")
+    scope = next(f for f in attune.context_fields if f.name == "scope")
+    assert scope.options == ["self", "domain"]
+    assert scope.default == "self"
+
+
+def test_entity_targeted_actions_offer_a_targeting_path():
+    """`target_kind` is what puts the path builder on an action's target field."""
+    transfer = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "transfer_razmerit")
+    assert transfer.target_kind == "entity"

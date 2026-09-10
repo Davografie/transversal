@@ -256,6 +256,15 @@ class TestEffects:
         assert text.startswith("gain the Fire trait on")
         assert "location" in text and "owner" in text
 
+    def test_domain_attunement_says_it_reaches_past_its_carrier(self):
+        self_scope = Effect(type="attune", action="enable", target="loc-rusted-gate",
+                            result="three_realms")
+        assert effect_text(self_scope, resolve=resolve) == \
+            "attune Rusted Gate to three_realms"
+        domain = self_scope.model_copy(update={"context": {"scope": "domain"}})
+        assert effect_text(domain, resolve=resolve) == \
+            "attune Rusted Gate to three_realms, reaching everyone there"
+
     def test_narrative_effect_condition_is_flavour(self):
         effect = Effect(type="modify_trait", action="step_down", target="trait-fire",
                         conditions=[Condition(type=ConditionType.NARRATIVE,

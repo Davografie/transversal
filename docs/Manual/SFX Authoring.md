@@ -381,7 +381,7 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 |--------|--------------|------|
 | Create Asset | Create an asset/GMC | benefit |
 | Temporary Projection (Disguise) | Create a temporary projection | benefit |
-| Attune | Temporarily add a universe | benefit |
+| Attune | Temporarily add a universe — **Scope** `self` attunes only the carrier, `domain` reaches everyone in its location subtree | benefit |
 | Travel | Cross a universal boundary | benefit |
 | Set Location | Move to a location | either |
 | Create Relationship | Add a relationship edge | either |

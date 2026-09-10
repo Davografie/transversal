@@ -770,6 +770,11 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
             text = f"{text} by {steps} steps"
         else:
             text = f"{text} by a number of steps equal to {steps}"
+    if effect.type == "attune" and (effect.context or {}).get("scope") == "domain":
+        # A domain attunement reaches past its carrier
+        # (``repository._domain_attunement_universes``); the card must not imply
+        # it stops at one entity.
+        text = f"{text}, reaching everyone there"
     if "{result}" not in template and result:
         text = f"{text} ({display_value(result, resolve)})"
 

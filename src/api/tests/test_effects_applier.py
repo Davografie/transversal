@@ -1976,3 +1976,51 @@ def test_entity_spec_resolves_subject_to_location():
     result = apply_effects(entity, [effect], repo)
     assert len(result.updated_trait_settings) == 1
     assert result.updated_trait_settings[0].id == "loc-1:martial"
+
+
+def test_attune_honours_the_authored_scope():
+    """An authored scope decides who the attunement reaches.
+
+    ``self`` (the default) attunes only the carrier; ``domain`` radiates to
+    everyone in the carrier's location subtree. Before this the scope came only
+    from the *event* context, so an authored scope was silently ignored and every
+    attunement was self-scoped.
+    """
+    from types import SimpleNamespace
+    import transversal.services.effects_applier as applier
+    from transversal.services.effects_applier import EffectRegistry
+    from transversal.domain import AttunementScope
+
+    class Repo:
+        def __init__(self):
+            self.entities = {"shrine": SimpleNamespace(id="shrine", attunements=[])}
+            self.updated = []
+
+        def get_entity(self, eid):
+            return self.entities.get(eid)
+
+        def update_entity(self, e):
+            self.updated.append(e)
+            self.entities[e.id] = e
+
+    repo = Repo()
+    original = applier.effect_registry
+    applier.effect_registry = EffectRegistry()
+    try:
+        raz = SimpleNamespace(spend=lambda *a, **k: None, earn=lambda *a, **k: None, transfer=lambda *a, **k: None)
+        em = SimpleNamespace(repo=repo, create=lambda *a, **k: None)
+        applier._register_core_handlers(em, raz)
+
+        domain = Effect(timing=EffectTiming.IMMEDIATE, type="attune", action="enable",
+                        target="shrine", result="three_realms", context={"scope": "domain"})
+        applier.effect_registry.apply(domain, "shrine", "earth", {})
+
+        default = Effect(timing=EffectTiming.IMMEDIATE, type="attune", action="enable",
+                         target="shrine", result="emberline")
+        applier.effect_registry.apply(default, "shrine", "earth", {})
+    finally:
+        applier.effect_registry = original
+
+    attunements = {a.universe: a.scope for a in repo.entities["shrine"].attunements}
+    assert attunements["three_realms"] == AttunementScope.DOMAIN
+    assert attunements["emberline"] == AttunementScope.SELF

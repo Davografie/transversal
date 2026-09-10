@@ -158,7 +158,14 @@ def _register_core_handlers(em, raz):
         entity = em.repo.get_entity(target_id)
         if entity is None:
             return
-        scope = AttunementScope(ctx.get("scope", "self"))
+        # Scope is authored on the effect ("self" = only the carrier, "domain" =
+        # everyone in its location subtree); fall back to the event context so
+        # callers that set scope at fire time keep working.
+        raw_scope = (a.context or {}).get("scope") or ctx.get("scope") or "self"
+        try:
+            scope = AttunementScope(raw_scope)
+        except ValueError:
+            scope = AttunementScope.SELF
         universe = a.result or u
         if a.action == "enable":
             if not any(x.universe == universe and x.scope == scope for x in entity.attunements):
