@@ -186,7 +186,6 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 .dot-initials { font-size: 18px; font-weight: 800; color: #fff; }
 .map-dot.draggable { cursor: grab; border: 2px dashed var(--map-accent); animation: dot-pulse 2s ease-in-out infinite; }
 .zone-dot.draggable { width: 240px !important; height: 240px !important; margin-left: -120px; margin-top: -120px; background: rgba(10,10,20,0.85); z-index: 10; overflow: hidden; }
-.occ-dot.draggable:not(.self) { width: 96px !important; height: 96px !important; margin-left: -48px; margin-top: -48px; background: rgba(10,10,20,0.85); z-index: 10; overflow: hidden; --dot-r: 48px; }
 .nav-dot.draggable { width: 240px !important; height: 240px !important; margin-left: -120px; margin-top: -120px; background: rgba(10,10,20,0.85); z-index: 10; overflow: hidden; }
 .map-dot.draggable .dot-overlay, .map-dot.draggable .dot-label, .map-dot.draggable .dot-initials { opacity: 1; }
 @keyframes dot-pulse {

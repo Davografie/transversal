@@ -1603,14 +1603,6 @@ onMounted(() => {
   z-index: 10;
   overflow: hidden;
 }
-/* Occupants full-size when editing (self stays same) */
-.occ-dot.draggable:not(.self) {
-  width: 96px !important; height: 96px !important;
-  margin-left: -48px; margin-top: -48px;
-  background: rgba(10,10,20,0.85);
-  z-index: 10;
-  overflow: hidden;
-}
 /* Nav dots full-size when editing */
 .nav-dot.draggable {
   width: 240px !important; height: 240px !important;
