@@ -89,12 +89,14 @@ export function edgeOf(x, y, vw, vh) {
 }
 
 // Direction for an anchor position — or null, meaning "keep the current one".
-// Only left/right stacks exist so far, so the top/bottom bands stay neutral;
-// they start claiming the direction when up/down stacks land (slice 3).
+// A vertical chain opens downwards from a top-edge anchor and upwards from a
+// bottom-edge anchor.
 export function deriveDirection(x, y, vw, vh) {
   const edge = edgeOf(x, y, vw, vh)
   if (edge === 'right') return 'left'
   if (edge === 'left') return 'right'
+  if (edge === 'top') return 'down'
+  if (edge === 'bottom') return 'up'
   return null
 }
 

@@ -226,43 +226,50 @@ function logToggleAnchor(reason = '') {
 // levels re-anchor the chain rightward (see Panel.vue's display:none + bridge
 // pass-through).
 const GAP = 8
-const depthWidths = reactive(new Map()) // depth -> Map(uid -> width)
+// Per-depth measured sizes. Both axes are tracked: lateral chains fit by width,
+// vertical chains by height (the extent the chain grows along).
+const depthSizes = reactive(new Map()) // depth -> Map(uid -> { w, h })
 let panelSeq = 0
 
 function registerPanel(depth) {
   const uid = `p${++panelSeq}`
-  if (!depthWidths.has(depth)) depthWidths.set(depth, new Map())
-  depthWidths.get(depth).set(uid, 0)
+  if (!depthSizes.has(depth)) depthSizes.set(depth, new Map())
+  depthSizes.get(depth).set(uid, { w: 0, h: 0 })
   return uid
 }
-function setPanelWidth(depth, uid, width) {
-  const m = depthWidths.get(depth)
-  if (m) m.set(uid, width)
+function setPanelSize(depth, uid, w, h) {
+  const m = depthSizes.get(depth)
+  if (m) m.set(uid, { w, h })
 }
 function unregisterPanel(depth, uid) {
-  const m = depthWidths.get(depth)
+  const m = depthSizes.get(depth)
   if (m) {
     m.delete(uid)
-    if (m.size === 0) depthWidths.delete(depth)
+    if (m.size === 0) depthSizes.delete(depth)
   }
 }
 provide('registerPanel', registerPanel)
-provide('setPanelWidth', setPanelWidth)
+provide('setPanelSize', setPanelSize)
 provide('unregisterPanel', unregisterPanel)
 
 const minVisibleDepth = computed(() => {
-  const depths = [...depthWidths.keys()].sort((a, b) => b - a)
+  const vertical = direction.value === 'up' || direction.value === 'down'
+  const depths = [...depthSizes.keys()].sort((a, b) => b - a)
   if (depths.length === 0) return 0
-  // Usable span for the visible chain: panels' right edge sits at vw-34 (under
-  // the action rail), left margin 12 → vw-46; the fit loop adds a gap per
-  // depth, so the budget is vw-46 + 8 = vw-38.
-  const available = viewportWidth.value - 38
+  // Usable span for the visible chain, plus one gap for the fit loop. Lateral:
+  // the panel's right edge sits at vw-34 (under the action rail), left margin
+  // 12 → vw-46 (+8 = vw-38). Vertical: the anchor is clamped to EDGE_Y = 58 of
+  // the edge, the panel's inner edge ~1 past it, opposite margin 12 → vh-71
+  // (+8 = vh-63).
+  const available = vertical ? viewportHeight.value - 63 : viewportWidth.value - 38
   let total = 0
   let visibleFrom = null
   for (const d of depths) {
-    let maxW = 0
-    for (const w of depthWidths.get(d).values()) maxW = Math.max(maxW, w)
-    total += maxW + GAP
+    let maxExtent = 0
+    for (const s of depthSizes.get(d).values()) {
+      maxExtent = Math.max(maxExtent, vertical ? s.h : s.w)
+    }
+    total += maxExtent + GAP
     if (total <= available) {
       visibleFrom = d
     } else {
@@ -277,13 +284,16 @@ const minVisibleDepth = computed(() => {
 // can be inspected live (window.__PANEL_DEBUG__ = true).
 watch(minVisibleDepth, (to, from) => {
   if (typeof window === 'undefined' || !window.__PANEL_DEBUG__) return
+  const vertical = direction.value === 'up' || direction.value === 'down'
   const summary = {}
-  for (const [d, m] of depthWidths) summary[d] = Math.max(0, ...m.values())
+  for (const [d, m] of depthSizes) {
+    summary[d] = Math.max(0, ...[...m.values()].map((s) => (vertical ? s.h : s.w)))
+  }
   console.log('[panel-stack] min-visible-depth', JSON.stringify({
-    from, to,
-    viewportWidth: viewportWidth.value,
-    available: viewportWidth.value - 38,
-    depthWidths: summary,
+    from, to, direction: direction.value,
+    viewport: vertical ? viewportHeight.value : viewportWidth.value,
+    available: vertical ? viewportHeight.value - 63 : viewportWidth.value - 38,
+    extents: summary,
   }))
 })
 
