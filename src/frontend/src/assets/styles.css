@@ -418,32 +418,6 @@ select option {
   color: var(--text-on-accent);
   border-color: var(--accent);
 }
-.lab-btn {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 16px);
-  right: 58px;
-  z-index: 25;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bg-panel);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--overlay-8);
-  color: var(--text-dim);
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  padding: 0;
-}
-.lab-btn:hover {
-  background: var(--accent-active);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
-}
-
 /* Settings panel */
 .settings-hint {
   margin-top: -8px;
@@ -495,6 +469,32 @@ select option {
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--text-dim);
+}
+.settings-section.settings-lab {
+  width: min(560px, calc(100vw - 32px));
+}
+.name-entry .settings-lab-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--overlay-8);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.name-entry .settings-lab-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.settings-lab-caret {
+  font-size: 12px;
+  letter-spacing: 0;
 }
 .mode-toggle {
   display: flex;

@@ -1,6 +1,5 @@
 <template>
   <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
-  <button v-if="playerId && !showLoginOverlay" class="lab-btn" @click="showResonanceLab = true" title="Resonance Lab">🧪</button>
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
@@ -258,6 +257,14 @@
           </div>
           <p v-if="charSearchError" class="switch-error">{{ charSearchError }}</p>
         </div>
+
+        <div v-if="gmMode" class="settings-section settings-lab">
+          <button class="settings-lab-toggle" @click="showLab = !showLab">
+            <span>🧪 Resonance Lab</span>
+            <span class="settings-lab-caret">{{ showLab ? '▾' : '▸' }}</span>
+          </button>
+          <ResonanceLab v-if="showLab" embedded />
+        </div>
       </template>
 
       <p v-if="switchError" class="switch-error">{{ switchError }}</p>
@@ -265,7 +272,6 @@
     </template>
     </div>
   </div>
-  <ResonanceLab v-if="showResonanceLab" @close="showResonanceLab = false" />
   <RollTableMenu
     v-if="supportCastMenu"
     :entity-id="supportCastMenu.mainEntityId"
@@ -626,7 +632,7 @@ const sfxChoiceRequest = ref(null) // pending {choose_*} auto-fired SFX choices 
 const playerId = ref(localStorage.getItem('playerId') || '')
 const playerName = ref(localStorage.getItem('playerName') || '')
 const showLoginOverlay = ref(!playerId.value)
-const showResonanceLab = ref(false)
+const showLab = ref(false)
 const checking = ref(false)
 const nameStatus = ref('')
 const nameFound = ref(false)

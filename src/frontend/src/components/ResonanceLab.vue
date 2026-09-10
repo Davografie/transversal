@@ -5,7 +5,14 @@ import { RESONANCE, signatureOf } from '@/composables/resonance.js'
 import { drawResonanceFrame } from '@/composables/renderResonance.js'
 import WaveformDivider from '@/components/WaveformDivider.vue'
 
+const props = defineProps({
+  embedded: { type: Boolean, default: false },
+})
 const emit = defineEmits(['close'])
+
+function onBackdropClick() {
+  if (!props.embedded) emit('close')
+}
 
 const mode = ref(RESONANCE.mode)
 const layout = ref(RESONANCE.layout)
@@ -162,12 +169,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="reslab-backdrop" @click.self="emit('close')">
-    <div class="reslab panel">
+  <div :class="embedded ? 'reslab-embed' : 'reslab-backdrop'" @click.self="onBackdropClick">
+    <div class="reslab panel" :class="{ 'reslab--embedded': embedded }">
       <div class="reslab-head">
         <h3>Resonance Lab</h3>
         <span class="reslab-pair">{{ fromLabel }} → {{ toLabel }}</span>
-        <button class="reslab-close" @click="emit('close')">✕</button>
+        <button v-if="!embedded" class="reslab-close" @click="emit('close')">✕</button>
       </div>
 
       <div v-if="loading" class="reslab-loading">Loading signatures…</div>
@@ -292,6 +299,24 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.reslab-embed {
+  width: 100%;
+}
+.reslab--embedded {
+  width: 100%;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+/* The settings overlay styles inputs/buttons broadly; restore the Lab's own
+   control sizing when it is embedded inside that overlay. */
+.reslab--embedded .reslab-play {
+  padding: 0;
+}
+.reslab--embedded .reslab-knob input[type='range'] {
+  padding: 0;
+  font-size: inherit;
+  text-align: left;
+}
 .reslab-backdrop {
   position: fixed;
   inset: 0;
