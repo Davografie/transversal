@@ -1327,16 +1327,18 @@ class Player:
 
         Resolves ``last_main_entity_id`` (recency — the main last taken control
         of) when set; otherwise falls back to the player's *designated* main
-        (first agency edge flagged ``main``). Only null when the player truly
-        has no designated main.
+        (first agency edge flagged ``main``). Null when the player has neither
+        — including when a remembered main's entity has since been deleted
+        (the stale stamp must not fail the whole ``spotlightRecency`` query).
         """
         em = info.context["entity_manager"]
+        # ``repo.get_entity`` returns Optional; ``em.get`` would raise on a
+        # deleted entity (see B55/spotlightRecency stale-reference bug).
         main_id = str(self.last_main_entity_id) if self.last_main_entity_id else None
-        if not main_id:
-            main_id = em.repo.get_designated_main(str(self.id))
-        if not main_id:
-            return None
-        entity = em.get(main_id)
+        entity = em.repo.get_entity(main_id) if main_id else None
+        if entity is None:
+            designated = em.repo.get_designated_main(str(self.id))
+            entity = em.repo.get_entity(designated) if designated else None
         if entity is None:
             return None
         from transversal.api.graphql.schema import _entity_to_gql
