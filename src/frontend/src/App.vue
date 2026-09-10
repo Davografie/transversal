@@ -338,7 +338,7 @@
         <div v-if="mobileStackActive && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
       </div>
       <div class="roller-band" :style="{ '--roller-h': rollerContentH + 'px' }">
-        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
+        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :peers="peers" :entity-names="entityNames" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @click="setMobileFocus('dice')"></div>
       </div>
     </div>
@@ -542,6 +542,7 @@ async function fetchPeers(force = false) {
   }`)
   if (data?.entities) {
     peersCache = { entities: data.entities, at: Date.now() }
+    entityNames.value = Object.fromEntries(data.entities.map(e => [e.id, e.name]).filter(([id]) => id))
     applyPeers(data.entities)
     resolvePeerSheetImages()
     DIAG.mark('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
@@ -910,6 +911,7 @@ DIAG.mark('initSession-called')
 const initSessionPromise = initSession()
 DIAG.mark('initLocation-called')
 const peers = ref([])
+const entityNames = ref({})  // id → name for every entity (all locations, for tab labels)
 const initLocationPromise = initLocation()
 
 // Mark play-ready once the initial pipeline (session + location + background +
@@ -972,6 +974,14 @@ function onPoolChange(s) {
   const labels = s.map(d => d.label || '').filter(Boolean)
   currentPoolSources.value = labels
   sheetRef.value?.setPoolSources(s)
+}
+
+function onPoolSaved({ key, dice }) {
+  // The DiceRoller saved its own pool (GM editing an entity's pool directly).
+  // Record it so the entity keeps a tab after the GM switches away — self-edits
+  // don't reach remotePools via the SSE echo, and solo play has no SSE at all.
+  if (!key) return
+  remotePools.value = { ...remotePools.value, [key]: { dice: dice || [], player_id: key, phase: 'adding' } }
 }
 
 async function switchPerspective(id) {

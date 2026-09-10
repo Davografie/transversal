@@ -388,13 +388,14 @@ const props = defineProps({
   locationId: { type: String, default: '' },
   sfxChoiceRequest: { type: Array, default: () => [] }, // pending {choose_*} auto-fired SFX choices
   peers: { type: Array, default: () => [] }, // [{ id, name }] other entities at the location
+  entityNames: { type: Object, default: () => ({}) }, // id → name (all entities, for tab labels)
   actingEntityId: { type: String, default: '' }, // entity being acted on (GM switchable; player = self)
   fallbackEntityId: { type: String, default: '' }, // GM's stable identity for difficulty/free-roam rolls
   remotePools: { type: Object, default: () => ({}) }, // entity_id → { dice, phase } from SSE
   remoteResults: { type: Object, default: () => ({}) }, // entity_id → { rolls, committed, ... } from SSE
 })
 
-const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change'])
+const emit = defineEmits(['update:universe', 'rolled', 'poolChange', 'phaseChange', 'picked', 'panelOpen', 'panelDragStart', 'panelDrag', 'panelDragEnd', 'difficulty', 'sfx-choice-resolved', 'actingEntityChange', 'offered-change', 'poolSaved'])
 
 const { loading, error, graphql, cortexRoll: apiCortexRoll, simplifiedRoll: apiSimplifiedRoll, difficultyRoll: apiDifficultyRoll, selectDice: apiSelectDice, resolvePool: apiResolvePool, markHitchesBought: apiMarkHitchesBought, savePool: apiSavePool, offerNegative: apiOfferNegative, getPool: apiGetPool, setOpposition: apiSetOpposition, setResult: apiSetResult, setStakes: apiSetStakes, giveIn: apiGiveIn, preventTakenOut: apiPreventTakenOut, push: apiPush, getTargetingBans: apiGetTargetingBans, getContest: apiGetContest } = useApi()
 const { resolveEffectTargets } = useEffectApplication()
@@ -474,7 +475,7 @@ const tabEntities = computed(() => {
   const pushEntity = (id) => {
     if (!id || seen.has(id)) return
     seen.add(id)
-    const name = (props.peers || []).find(p => p.id === id)?.name || id
+    const name = props.entityNames?.[id] || (props.peers || []).find(p => p.id === id)?.name || id
     list.push({ id, name })
   }
   if (props.actingEntityId) pushEntity(props.actingEntityId)
@@ -1015,11 +1016,8 @@ function poolEntityKey() {
   return editingEntityId.value
 }
 
-function persistPool() {
-  if (!props.locationId) return
-  const key = poolEntityKey()
-  if (!key) return
-  const dice = pool.map(d => ({
+function buildPoolDice() {
+  return pool.map(d => ({
     die: d.die,
     source_kind: d.sourceKind || 'manual',
     source_id: d.tsId || d.source || '',
@@ -1027,12 +1025,23 @@ function persistPool() {
     ts_id: d.tsId || null,
     armed_sfx_ids: d.armedSfxIds || [],
   }))
-  apiSavePool(props.locationId, key, dice)
+}
+
+function persistPool() {
+  if (!props.locationId) return
+  const key = poolEntityKey()
+  if (!key) return
+  apiSavePool(props.locationId, key, buildPoolDice())
 }
 
 function notifyPool() {
   persistPool()
   emit('poolChange', pool.map(d => ({ die: d.die, label: d.label || d.source || d.die, tsId: d.tsId })).filter(d => d.label))
+  // Mirror the saved pool into the App's tab registry so the acting entity's
+  // tab persists after the GM switches away (self-edits don't reach the SSE
+  // echo, and solo play has no SSE broadcast at all).
+  const key = poolEntityKey()
+  if (key) emit('poolSaved', { key, dice: buildPoolDice() })
 }
 
 function addDie(die) {
