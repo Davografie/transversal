@@ -279,6 +279,12 @@
     @close="supportCastMenu = null"
   />
   <div class="stage" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '']">
+    <ArmedSfxRail
+      v-if="playerId && !showLoginOverlay && !fullCanvas"
+      :entity-id="gmMode ? actingEntityId : entityId"
+      :phase="phase"
+      :refresh-key="armedSfxRefresh"
+    />
     <div class="loc-band">
       <LocationViewer
         v-if="!fullCanvas"
@@ -364,6 +370,7 @@ import { useColorMode } from '@vueuse/core'
 import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
+import ArmedSfxRail from './components/ArmedSfxRail.vue'
 import GmPanel from './components/GmPanel.vue'
 import PanelStack from './components/gm/PanelStack.vue'
 import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
@@ -598,6 +605,7 @@ async function refreshDiceBonuses() {
   }
 }
 const phase = ref('adding')
+const armedSfxRefresh = ref(0)  // bump to re-query armed SFX (trigger/roll lifecycle)
 const rollerMode = ref('cortex') // 'cortex' | 'roll_table' (driven by CharacterSheet tab)
 const currentDifficulty = ref(null) // GM-set test difficulty (ephemeral, session-scoped)
 const sfxChoiceRequest = ref(null) // pending {choose_*} auto-fired SFX choices for this player
@@ -1442,6 +1450,7 @@ watch(lastEvent, (evt) => {
         const who = evt.data?.entity_id === entityId.value ? '' : ` (${name})`
         addToast(`SFX: ${sfxLabel}${who}`, 'sfx')
       }
+      armedSfxRefresh.value++  // an SFX just (de)activated → refresh the armed rail
       break
     case 'sfx_choice_required':
       if (evt.data?.entity_id === entityId.value || gmMode.value) {
@@ -1467,6 +1476,7 @@ function onPhaseChange(p) {
     sprayNprayActive.value = false
     refreshDiceBonuses()
     sheetRef.value?.resetSfxCounts()
+    armedSfxRefresh.value++  // roll/contest resolved → re-query armed SFX
   }
   sharePhase()
 }
