@@ -18,28 +18,31 @@ status: draft
 # Perspective Model
 
 > [!note] Status
-> Draft — ground truth from `App.vue` (2026-09-10), written for review before any role
-> touches the variables. **Persistence is device-local** per the human's steer; server-side
-> perspective (per-player session state) is a noted future option, not this design.
+> Draft v2 — after the human's steer: **collapse to one `entityId`** (the 3-variable split
+> was speculative; see below). Ground truth from `App.vue` (2026-09-10). Persistence is
+> **device-local**; server-side identity is a future note, not this design.
 
 ## Goal
 
-One clear model for "who is the user looking at, who are they acting as, and who are
-they", replacing the current tangle of overlapping frontend variables — and one rule for
-what survives a refresh, so the GM no longer snaps back to their starter entity.
+One variable for "who am I", one transient variable for "whose sheet am I peeking at",
+and one rule for what survives a refresh — so the GM never snaps back to their starter
+entity, and the codebase stops carrying three overlapping perspective values.
 
 ## Why now (grounded problems)
 
 1. **Refresh snaps the GM back.** `entityId` is persisted only when *not* in GM mode —
-   the watcher is guarded by `if (!entityId.value || gmMode.value) return`. So every GM
+   the watcher is guarded by `if (!entityId.value || gmMode.value) return`. Every GM
    perspective switch is ephemeral by design, and on refresh `entityId` re-initializes from
    `selfEntityId` (the last persisted value = the starter entity).
-2. **Too many variables with overlapping meanings.** Six values track perspective today;
-   three of them (`entityId`, `actingEntityId`, `viewingEntityId`) answer nearly the same
-   question.
-3. **"Self" is ambiguous for the GM.** `selfEntityId` is the persisted *player* identity;
-   for a roaming GM it is "not a main entity" (source comment), yet it is also the
-   return-to-self target and the refresh fallback.
+2. **Six variables, three overlapping.** `entityId`, `actingEntityId`, `viewingEntityId`
+   answer nearly the same question; plus `selfEntityId`, `currentSupport`, and a switch-undo
+   bookmark.
+3. **The identity/perspective/acting split is speculative.** In the current code
+   `actingEntityId` *never* genuinely diverges from `entityId` — every mutation runs through
+   `switchPerspective`/`returnToSelf`/`switchViewLocation`, which keep them in lockstep, and
+   the DiceRoller receives `acting-entity-id="gmMode ? actingEntityId : entityId"` (always
+   equal). "View A while acting as B" was scaffolded but never built. So one variable
+   suffices.
 
 ## Current state (`App.vue`)
 
@@ -47,7 +50,7 @@ what survives a refresh, so the GM no longer snaps back to their starter entity.
 |---|---|---|
 | `selfEntityId` | stable identity (`localStorage['entityId']`, fallback `kael-1`) | yes |
 | `entityId` | current perspective; `null` = GM free-roam view | players only (GM guard) |
-| `actingEntityId` | GM: entity being *acted as* (`null` = difficulty / free-roam) | no |
+| `actingEntityId` | GM: entity being *acted as* (lockstep with `entityId`) | no |
 | `viewingEntityId` | read-only location inspect (cleared on switch) | no |
 | `currentSupport` | computed: perspective IS an owned SC (assume-support) | derived |
 | `charSwitchPreviousEntityId` | one-step switch-undo bookmark | no |
@@ -56,81 +59,91 @@ Plus `currentLocationId`, which *is* persisted and already survives refresh.
 
 ## Target model
 
-Three **persisted** concepts, three **transient** ones.
+### One persisted variable: `entityId`
 
-### Persisted (device-local, one key each)
+`entityId` = **who you are** — the entity whose sheet, location, and dice context the UI
+shows, and who your rolls act as. One value, no sibling.
 
-- **Identity** (`identityEntityId`, today `selfEntityId`) — who the human *is* on this
-  device. Players: their main entity. GM: their return-to-self target (a character they
-  own, or a default); not conflated with perspective.
-- **Perspective** (`perspectiveEntityId`, today `entityId`) — who they are *looking at*:
-  whose sheet, location, and dice context the UI shows. `null` = free-roam view.
-  **Persisted in all modes** — this is the refresh fix.
-- **Acting** (`actingEntityId`) — GM-only: who the GM's rolls act as. `null` = rolling
-  against difficulty. *(Persistence: open question Q2.)*
+- **Player:** their main, or their assumed support character.
+- **GM:** the entity they are currently being; **`null` = free-roam** (the god view).
 
-### Transient (never persisted)
+Persisted **in all modes** — the `gmMode` guard is removed. Refresh restores `entityId`
+(plus the already-persisted `currentLocationId`).
 
-- **Inspect** (`viewingEntityId`) — read-only peek (e.g. inspecting an occupant) that must
-  not disturb perspective; cleared on any switch.
-- **Support** (`currentSupport`) — derived, never stored: perspective is an SC owned by the
-  player (`agency`, `main: false` + `support` edge).
-- **Switch-undo** (`charSwitchPreviousEntityId`) — one-step bookmark, cleared on refresh.
+### One transient variable: `viewingEntityId`
+
+`viewingEntityId` = the read-only **inspect** — "character A looking at character B's
+sheet" without becoming B. Never persisted; cleared on any real switch. (Today it is used
+for the location-inspect path; it becomes the *only* sheet-peek mechanism.)
+
+### Derived — no variables
+
+- **"Self" / return-to-main target:** the player's own main (`agency.main`, already in the
+  troupe data model). For the GM: their own main if they have one, else free-roam. No
+  stored `selfEntityId` — `entityId` itself is the memory across refresh.
+- **Support:** when `entityId` is a support character the player owns (`agency`,
+  `main: false` + `support` edge), they are "supporting" — the return-to-main target is the
+  main, and availability rules read from the `support` edge. A pure computed, no state.
+- **Free-roam presence:** with `entityId = null` the GM still *exists* on the map — a
+  movable mapdot using the **architect icon** (the same role icon used in the player
+  settings overlay). New requirement; also feeds [[Tickets#B34]] (role icon instead of
+  "Y").
+
+### Deleted plumbing
+
+`actingEntityId`, `selfEntityId` (as a separate value), and the switch-undo bookmark
+(transient at most — a one-step undo stack or drop it). Consumers that took
+`acting-entity-id` / `fallback-entity-id` props take `entityId` + the derived main instead.
 
 ## Rules
 
-- **Player mode:** perspective = identity, acting = `null`, support derived. Assume-SC sets
-  perspective = SC and "return to main" sets perspective = identity.
-- **GM mode:** perspective freely switchable; acting = entity acted as; free-roam =
-  perspective `null` + persisted `currentLocationId` restores the roam view.
-- **Refresh:** restore identity → perspective → acting; inspect and undo reset. No mode
-  guard — GM restores like anyone else.
-- **Return-to-self:** perspective := identity. For a GM with no identity entity, return to
-  the last free-roam location instead.
+- **Player:** `entityId` = main or assumed SC; inspect via `viewingEntityId`; "return to
+  main" sets `entityId` := own main.
+- **GM:** `entityId` freely switchable; `null` = free-roam with the architect mapdot;
+  "return to self" := own main if any, else free-roam.
+- **Refresh:** restore `entityId` + `currentLocationId` (all modes); `viewingEntityId`
+  resets.
+- **Assume-SC:** `entityId` := SC; support derived; availability from the `support` edge.
 
 ## Persistence
 
-Device-local `localStorage` keys: keep `entityId` for identity (backward compatible),
-add `perspectiveEntityId` and (per Q2) `actingEntityId`. Each device remembers its own
-perspective — accepted for now; server-side perspective (per-player session state, built
-on the existing session/presence services) is the future upgrade if multi-device
-consistency ever matters.
+Device-local `localStorage`: keep the existing `entityId` key, now written in every mode
+(remove the `gmMode.value` guard). Each device remembers its own perspective — accepted.
+Server-side perspective/identity (per-player session state, on the existing session /
+presence services) is a **future** upgrade if multi-device consistency ever matters.
 
 ## Consumers & ownership
 
-The variables live in `App.vue` but are consumed everywhere:
+- [[navigation]] — `LocationViewer` (`:entity-id`) + the free-roam architect mapdot.
+- [[character-sheet]] — `CharacterSheet` active entity; inspect via `viewingEntityId`.
+- [[applied-mechanics]] — `DiceRoller`: drop `acting-entity-id`/`fallback-entity-id`,
+  use `entityId` + derived main.
+- [[gm-panels]] — `GmPanel` assume/roam UI; scene-overview assume = `entityId` switch.
+- [[Effects]] / troupe — support availability, derived from `entityId`.
 
-- [[navigation]] — `LocationViewer` (`:entity-id`).
-- [[character-sheet]] — `CharacterSheet` (`:main-entity-id`, sheet `activeEntity`).
-- [[applied-mechanics]] — `DiceRoller` (`:entity-id` / `:acting-entity-id` / `:fallback-entity-id`).
-- [[gm-panels]] — `GmPanel` `currentEntityId`, assume/roam UI.
-- [[Effects]] / troupe — `currentSupport` availability.
-
-**Steward: [[ui-ux]]** (cross-cutting interaction conventions) owns this model doc; the
+**Steward: [[ui-ux]]** (cross-cutting interaction conventions) owns this doc; the
 implementing roles take their consumer slices. [[Tickets#B68]] (GM assume & roaming
-semantics) absorbs the GM behavior; the persistence fix + variable split is new work.
+semantics) absorbs the GM behavior.
 
 ## Open questions
 
-- **Q1** — free-roam (`perspective = null`): restore on refresh via the persisted location?
-  (Leaning: yes.)
-- **Q2** — acting entity: persist across refresh in GM mode, or reset to `null` each
-  session? (Leaning: persist — the GM picks up where they were.)
-- **Q3** — rename the variables (`identity` / `perspective` / `acting`) or keep legacy
-  names and change semantics only? (Leaning: rename once, with a mechanical refactor.)
-- **Q4** — should the GM's `identityEntityId` be server-side (the GM is one person across
-  devices) even while perspective stays device-local?
+- **Q1** — the GM's "self": derive from the GM's own `agency.main` (else free-roam), or
+  allow pinning a self entity?
+- **Q2** — rename `entityId` → `perspectiveId` for clarity, or keep the legacy name?
+- **Q3** — the free-roam architect mapdot: confirm it should be *movable* by the GM (drag
+  it around the map like any occupant).
 
 ## Decomposition (pending review)
 
-- **Perspective persistence + model split** — drop the GM guard, split identity vs
-  perspective keys, persist acting per Q2, rename per Q3. (ui-ux primary + gm-panels.)
-- **B68** — GM assume/roam behavior, now defined against this model.
-- **Sheet perspective cleanup** — character-sheet's `activeEntity` handling, aligned with
-  the model.
+- **Perspective collapse + persistence fix** — remove the GM guard, delete
+  `actingEntityId`/`selfEntityId` plumbing, persist `entityId` in all modes. (ui-ux primary
+  + gm-panels, applied-mechanics, character-sheet as consumers.)
+- **Free-roam architect mapdot** — movable GM presence at `entityId = null`. (navigation;
+  overlaps [[Tickets#B34]].)
+- **B68** — GM assume/roam behavior, defined against this model.
 
 ## Related
 
 - [[SFX Activation Model Plan]] — the same convergence treatment for a tangled area.
 - [[UI-UX Design]], [[Location Viewer]], [[GM Panel Development]], [[System Architecture]].
-- [[Tickets#B68]], [[Division of Labor]].
+- [[Tickets#B68]], [[Tickets#B34]], [[Division of Labor]].
