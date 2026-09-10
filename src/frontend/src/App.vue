@@ -433,6 +433,7 @@ const gmRootPanel = computed(() => ({
     currentLocationId: currentLocationId.value,
     currentLocationName: locationName.value,
     entityId: entityId.value,
+    inSession: inSession.value,
   },
   listeners: {
     'next-beat': () => onNextBeat(),
@@ -911,6 +912,10 @@ ensurePlayer()
 // Session management
 const { sessions, currentSession, listSessions, createSession, joinSession, publishEvent, startSession, endSession } = useSessions()
 const sessionId = ref('session-default')
+// Session truth for the GM panel's [Session] button: the session dict
+// (`in_session`) at join, plus the session_started/session_ended SSE
+// broadcasts — so a refresh or another device converges on the same state.
+const inSession = ref(false)
 
 async function initSession() {
   DIAG.mark('initSession-start')
@@ -919,14 +924,16 @@ async function initSession() {
   if (sessions.value.length > 0) {
     const s = sessions.value[0]
     sessionId.value = s.id
-    await joinSession(s.id, entityId.value, playerId.value)
-    DIAG.mark('initSession-joined', { sessionId: sessionId.value })
+    const joined = await joinSession(s.id, entityId.value, playerId.value)
+    inSession.value = !!joined?.in_session
+    DIAG.mark('initSession-joined', { sessionId: sessionId.value, inSession: inSession.value })
   } else {
     const s = await createSession('Default Session', 'earth')
     if (s) {
       sessionId.value = s.id
-      await joinSession(s.id, entityId.value, playerId.value)
-      DIAG.mark('initSession-created', { sessionId: sessionId.value })
+      const joined = await joinSession(s.id, entityId.value, playerId.value)
+      inSession.value = !!joined?.in_session
+      DIAG.mark('initSession-created', { sessionId: sessionId.value, inSession: inSession.value })
     } else {
       DIAG.mark('initSession-FAILED', { error: 'createSession returned null' })
     }
@@ -1250,9 +1257,11 @@ watch(lastEvent, (evt) => {
       if (gmMode.value) addToast('Beat ended', 'dice')
       break
     case 'session_started':
+      inSession.value = evt.data?.in_session !== false
       addToast('Session started', 'session')
       break
     case 'session_ended':
+      inSession.value = false
       addToast('Session ended', 'session')
       break
     case 'main_active':
@@ -1900,17 +1909,20 @@ async function onAdvanceScene() {
 
 function onStartSession() {
   if (sessionId.value && sessionId.value !== 'session-default') {
-    startSession(sessionId.value)
+    startSession(sessionId.value).then((res) => {
+      if (res?.in_session) inSession.value = true
+    })
   }
 }
 
-function onEndSession() {
+async function onEndSession() {
   remotePools.value = {}
   remoteResults.value = {}
   poolLocations.value = {}
   contests.value = []
   if (sessionId.value && sessionId.value !== 'session-default') {
-    endSession(sessionId.value)
+    const res = await endSession(sessionId.value)
+    if (res && res.in_session === false) inSession.value = false
   }
 }
 

@@ -9,8 +9,8 @@
       <div class="gm-shortcuts">
         <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
         <button class="shortcut-btn scene-btn" @click="advanceScene">◈ Scene</button>
-        <button v-if="!sessionActive" class="shortcut-btn session-btn" @click="startSession">▶ Start</button>
-        <button v-else class="shortcut-btn session-btn active" @click="endSession">■ End</button>
+        <button v-if="!inSession" class="shortcut-btn session-btn" title="Start the session" @click="startSession">▶ Start</button>
+        <button v-else class="shortcut-btn session-btn active" title="End the session" @click="endSession">■ End</button>
       </div>
       <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntitiesInScope" @inspect="inspectEntity" />
       <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" @go-to-location="goToLocation" />
@@ -92,6 +92,7 @@ const props = defineProps({
   currentLocationId: { type: String, default: '' },
   currentLocationName: { type: String, default: '' },
   entityId: { type: String, default: '' },
+  inSession: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['next-beat', 'advance-scene', 'start-session', 'end-session', 'add-to-pool'])
@@ -109,14 +110,16 @@ const {
 } = useTraitsConfig()
 
 // ── Session UI ──────────────────────────────────────
+// The session's in_session flag is owned by App.vue (session join + the
+// session_started/session_ended SSE broadcasts) so this button reflects the
+// real state — e.g. after a refresh or when another device toggles it.
 const mode = ref('play')
 const viewSceneSummary = ref(true)
-const sessionActive = ref(false)
 
 function nextBeat() { emit('next-beat') }
 function advanceScene() { viewSceneSummary.value = true; emit('advance-scene') }
-function startSession() { sessionActive.value = true; emit('start-session') }
-function endSession() { sessionActive.value = false; emit('end-session') }
+function startSession() { emit('start-session') }
+function endSession() { emit('end-session') }
 
 // ── Filtering (entities) ────────────────────────────
 const {
