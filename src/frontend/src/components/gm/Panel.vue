@@ -576,9 +576,10 @@ provide(panelKey, {
   border: 1px solid var(--overlay-8);
   border-radius: 8px;
   /* Variable width: content-driven, floored and capped. The cap is also
-     viewport-bound so a single panel always fits the screen (mobile). */
-  min-width: min(260px, calc(100vw - 24px));
-  max-width: min(var(--gm-panel-max-w, 440px), calc(100vw - 24px));
+     viewport-bound so a single panel always fits the space left of the toggle
+     (toggle 42 + right margin 12 + gap 8 + left margin 12 = 74px). */
+  min-width: min(260px, calc(100vw - 74px));
+  max-width: min(var(--gm-panel-max-w, 440px), calc(100vw - 74px));
   max-height: calc(100vh - 40px);
   overflow: auto;
 }
