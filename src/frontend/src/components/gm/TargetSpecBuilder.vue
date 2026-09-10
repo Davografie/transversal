@@ -70,7 +70,7 @@
             <option value="">—</option>
             <option v-for="o in fieldOptionsFor(i)" :key="o" :value="o">{{ o }}</option>
           </select>
-          <span v-if="isTokenValue(step.value)" class="tsb-value-token">
+          <span v-else-if="isTokenValue(step.value)" class="tsb-value-token">
             <select v-if="variableChoicesFor(i).length" :value="step.value" @change="onFilterValue(i, $event)">
               <option v-for="[name, entry] in variableChoicesFor(i)" :key="name" :value="`{${name}}`">
                 {{ name }} <em>({{ elementLabel(entry.element) }})</em>
