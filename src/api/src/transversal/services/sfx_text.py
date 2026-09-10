@@ -205,6 +205,7 @@ class Phrase:
     possessive: bool = False  # renders as "your {noun}"
     pronoun: bool = False     # the bare pronoun "you"
     modal: bool = False       # a choose/random step made this interactive
+    fixed_determiner: str = ""  # a determiner the phrase supplies ("that die")
 
 
 def render_phrase(p: Phrase, determiner: str = "") -> str:
@@ -215,6 +216,8 @@ def render_phrase(p: Phrase, determiner: str = "") -> str:
         return p.scalar
     if p.possessive:
         determiner = "your"
+    elif p.fixed_determiner:
+        determiner = p.fixed_determiner
     if p.pronoun and not p.noun:
         return "you" if not determiner else f"{determiner} you"
     if p.prefix:
@@ -233,6 +236,8 @@ def render_phrase(p: Phrase, determiner: str = "") -> str:
 
 def _determiner(p: Phrase) -> str:
     """The default determiner for a phrase in an effect/target position."""
+    if p.fixed_determiner:
+        return p.fixed_determiner
     if p.scalar or p.predicate or p.pronoun or p.possessive or p.prefix or not p.noun:
         return ""
     return "the" if p.cardinality == "one" else "each"
@@ -320,7 +325,8 @@ def id_phrase(value: str, element: str = "", resolve: NameResolver | None = None
 
 # ── Step composition ──────────────────────────────────────────
 
-def _select_phrase(step: SelectStep, source_element: str | None = None) -> Phrase:
+def _select_phrase(step: SelectStep, source_element: str | None = None,
+                   die_scoped: bool = False) -> Phrase:
     if step.collection == "variable":
         # The author named it — their name *is* the card phrase.
         named = humanize(step.variable) or "value"
@@ -333,6 +339,10 @@ def _select_phrase(step: SelectStep, source_element: str | None = None) -> Phras
                 plural=f"{element_plural(source_element)} this SFX sits on",
             )
         return Phrase(noun="source", plural="sources")
+    if step.collection == "rolled_dice" and die_scoped:
+        # This effect runs once per die: to the path, that die *is* the roll.
+        return Phrase(element="die", cardinality="one", noun="die", plural="dice",
+                      fixed_determiner="that")
     col = tc.collection(step.collection)
     if col is None:
         return Phrase(noun=step.collection.replace("_", " "))
@@ -497,7 +507,8 @@ def _named_phrase(output: str, value_type: ValueType | None) -> Phrase:
 
 
 def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
-                variables=None, resolve: NameResolver | None = None) -> Phrase:
+                variables=None, resolve: NameResolver | None = None,
+                die_scoped: bool = False) -> Phrase:
     """Render a targeting path as a single noun phrase.
 
     A path is a pipeline; English wants a head noun with qualifiers. Each step
@@ -517,7 +528,7 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
 
     for step, step_type in zip(spec.steps, types):
         if isinstance(step, SelectStep):
-            phrase = _select_phrase(step, source_element)
+            phrase = _select_phrase(step, source_element, die_scoped)
         elif isinstance(step, FilterStep):
             phrase = _filter_phrase(phrase, step, resolve)
         elif isinstance(step, NavigateStep):
@@ -535,7 +546,10 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
 
         if not isinstance(step, EvaluateStep) and step_type is not None:
             phrase.element = step_type.element
-            phrase.cardinality = step_type.cardinality
+            # A die-scoped path reads one die, so its own composition decides the
+            # cardinality; the roll-wide trace would say "many" at every hop.
+            if not die_scoped:
+                phrase.cardinality = step_type.cardinality
 
         output = getattr(step, "output", None)
         if output and not isinstance(step, EvaluateStep):
@@ -646,10 +660,16 @@ def _effect_parts(effect: Effect, *, resolve: NameResolver | None = None,
     from what it acts on — a trait granted **to a location**, say — which is what
     ``entity_spec``/``entity`` carry.
     """
+    # True when the applier will iterate this effect once per matching die, which
+    # makes the die the path's subject rather than the whole roll. `_apply_armed`
+    # checks refs, then target_spec, before the die filter — an effect carrying
+    # either never reaches the per-die loop.
+    per_die = bool(effect.die_filter) and effect.target_spec is None and not effect.refs
+
     subject = ""
     if effect.entity_spec is not None and effect.entity_spec.steps:
         phrase = path_phrase(effect.entity_spec, source_element=source_element,
-                             variables=variables, resolve=resolve)
+                             variables=variables, resolve=resolve, die_scoped=per_die)
         subject = render_phrase(phrase, _determiner(phrase))
 
     target = ""
@@ -705,8 +725,15 @@ def _target_placeholder(effect: Effect) -> str:
 
 
 def _die_scope(effect: Effect) -> str:
-    """The dice an effect runs for, when it is scoped to a subset (e.g. unchosen)."""
+    """The dice an effect runs for, when it is scoped to a subset (e.g. unchosen).
+
+    Empty when the applier will *not* iterate per die — ``_apply_armed`` checks
+    ``refs`` and ``target_spec`` first, so a die filter on such an effect never
+    runs and the card must not claim it does.
+    """
     if not effect.die_filter:
+        return ""
+    if effect.target_spec is not None or effect.refs:
         return ""
     parts = []
     for key, value in effect.die_filter.items():

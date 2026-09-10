@@ -96,6 +96,14 @@ machinery rather than adding a parallel system.
     `context["rolls"]`. `fire_roll_sfx` and `fire_result_sfx` both supply it; a
     path selecting `rolled_dice` on a trigger without dice resolves empty and
     fails closed.
+11. **Armed subjects resolve per die** — `_apply_armed` now resolves an armed
+    effect's `entity_spec` before dispatch (`resolve_armed_subject`), on the
+    per-die loop, the plain branch, and the `refs`/`target_spec` branches. It
+    seeds `rolled_dice` with **the die being processed** in the per-die loop
+    (the die *is* the roll that path should read) and with the whole roll
+    otherwise. Before this, an armed effect's subject was silently dropped and
+    the effect landed on the acting entity — e.g. a hazard authored for the
+    die's owner's location landed on the roller.
 
 ## Open / deferred
 
@@ -109,6 +117,12 @@ machinery rather than adding a parallel system.
   immediate effect).
 - **`{name}` substitution vs `select variable`** — a `many` binding still can't
   be referenced from a flat field (array re-use goes through `select variable`).
+- **`die_filter` + `target_spec`** — `_apply_armed` checks `refs` then
+  `target_spec` *before* the die filter, so an effect carrying a target path
+  never reaches the per-die loop: its `die_filter` is inert. The card text
+  deliberately stays silent about a scope the applier ignores (see
+  [[sfx_text]]'s `_die_scope`); giving such effects per-die semantics is a
+  design decision, not a bug fix.
 
 ## Related
 

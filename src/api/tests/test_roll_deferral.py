@@ -554,3 +554,57 @@ def test_rearming_refreshes_the_roll_budget(monkeypatch):
     assert len(fired) == 1  # fires once, not twice
 
     roll_deferral.reset()
+
+
+def test_die_scoped_entity_spec_reads_that_die(monkeypatch):
+    """A per-die effect's ``entity_spec`` reads *that* die, not the whole roll.
+
+    The live `sfx-crimson-scars` shape: for each unchosen die, grant a hazard to
+    the location of the pool owner of that die. Two unchosen dice must mean two
+    hazards — a path read against the whole roll would instead resolve the first
+    die's owner twice.
+    """
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.services.target_spec import TargetSpec
+
+    roll_deferral.reset()
+    world = {
+        "roller": SimpleNamespace(id="roller", name="Roller", current_location="loc-kael"),
+        "kael": SimpleNamespace(id="kael", name="Kael", current_location="loc-kael"),
+        "neya": SimpleNamespace(id="neya", name="Neya", current_location="loc-neya"),
+        "loc-kael": SimpleNamespace(id="loc-kael", name="Rusted Gate", current_location=""),
+        "loc-neya": SimpleNamespace(id="loc-neya", name="Salt Flats", current_location=""),
+    }
+    repo = SimpleNamespace(get_entity=lambda eid: world.get(eid))
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    roll_deferral.arm_sfx("roller", [
+        Effect(
+            timing=EffectTiming.ON_RESULT, type="modify_trait", action="gain",
+            target="trait-hazard", result="d6", die_filter={"role": None},
+            entity_spec=TargetSpec.model_validate({"steps": [
+                {"kind": "select", "collection": "rolled_dice"},
+                {"kind": "navigate", "edge": "owner"},
+                {"kind": "navigate", "edge": "location"},
+            ]}),
+        ),
+    ], duration=_rolls_duration(1))
+
+    rolls = [
+        {"die": "d8", "result": 7, "role": None, "ts_id": "ts-crimson", "owner_id": "kael"},
+        {"die": "d8", "result": 5, "role": None, "ts_id": "ts-crimson", "owner_id": "neya"},
+        {"die": "d6", "result": 3, "role": "total", "ts_id": "ts-other", "owner_id": "kael"},
+    ]
+    fired = roll_deferral.fire_armed("roller", "on_result", "earth", {"rolls": rolls})
+
+    assert [e.entity for e in fired] == ["loc-kael", "loc-neya"]
+    assert len(applied) == 2

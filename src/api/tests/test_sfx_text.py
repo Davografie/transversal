@@ -22,6 +22,7 @@ from transversal.services.sfx_text import (
 NAMES = {
     "trait-fire": "Fire",
     "trait-qi": "Qi Condensation",
+    "trait-environmental-hazard": "Environmental Hazard",
     "ts-fire-kael": "Fire",
     "loc-rusted-gate": "Rusted Gate",
 }
@@ -214,6 +215,32 @@ class TestEffects:
                         result="d6", die_filter={"role": None}, timing=EffectTiming.ON_RESULT)
         assert effect_text(effect, resolve=resolve) == \
             "whenever a roll is resolved, for each unchosen die, gain the Fire trait (d6)"
+
+    def test_die_scoped_path_reads_that_die(self):
+        """In a per-die effect the die *is* the roll, so the path says "that die"."""
+        effect = Effect(
+            type="modify_trait", action="gain", target="trait-environmental-hazard",
+            result="d6", die_filter={"role": None}, timing=EffectTiming.ON_RESULT,
+            entity_spec=spec(
+                {"kind": "select", "collection": "rolled_dice"},
+                {"kind": "navigate", "edge": "owner"},
+                {"kind": "navigate", "edge": "location"},
+            ),
+        )
+        assert effect_text(effect, resolve=resolve) == (
+            "whenever a roll is resolved, for each unchosen die, gain the Environmental "
+            "Hazard trait on the location of the pool owner of that die (d6)"
+        )
+
+    def test_die_scope_is_not_claimed_when_the_applier_ignores_it(self):
+        """`_apply_armed` checks target_spec first, so a die filter there is inert."""
+        effect = Effect(
+            type="modify_trait", action="step_down", die_filter={"role": None},
+            target_spec=spec({"kind": "select", "collection": "rolled_dice"}),
+        )
+        text = effect_text(effect)
+        assert "unchosen" not in text
+        assert "each die in your roll" in text
 
     def test_entity_spec_reads_as_where_it_lands(self):
         effect = Effect(

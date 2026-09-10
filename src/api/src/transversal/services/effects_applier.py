@@ -1850,7 +1850,8 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
     return result
 
 
-def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | None = None) -> Effect:
+def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | None = None,
+                          collections: dict | None = None) -> Effect:
     """Rewrite ``effect`` so its entity is a concrete id, resolving ``entity_spec``.
 
     ``entity_spec`` is resolved against the activation's variable scope (carried
@@ -1859,6 +1860,10 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
     navigated on to their owning entities. Effects without a spec pass through
     untouched, and a spec that resolves to nothing leaves the effect as authored
     so the existing "resolved to nothing" report still fires.
+
+    ``collections`` seeds the path's event-scoped collections. Callers that are
+    already iterating one die should pass ``{"rolled_dice": [die]}`` — inside a
+    per-die effect, the die being processed *is* the roll the path should read.
     """
     if effect.entity_spec is None or not effect.entity_spec.steps:
         return effect
@@ -1866,11 +1871,12 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
     if entity is None:
         return effect
     bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
-    resolved = _resolve_entity_spec(effect, entity, repo, bindings)
+    resolved = _resolve_entity_spec(effect, entity, repo, bindings, collections)
     return resolved if resolved is not None else effect
 
 
-def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict) -> Effect | None:
+def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,
+                         collections: dict | None = None) -> Effect | None:
     """Resolve ``effect.entity_spec`` to a concrete id, or None if it resolves nothing.
 
     ``bindings`` is the activation scope (condition + earlier-effect outputs), so a
@@ -1881,7 +1887,8 @@ def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict) -
 
     resolution = resolve(
         effect.entity_spec,
-        TargetContext(subject=entity, repo=repo, bindings=bindings),
+        TargetContext(subject=entity, repo=repo, bindings=bindings,
+                      collections=dict(collections or {})),
     )
     for value in resolution.values:
         rid = getattr(value, "id", None)

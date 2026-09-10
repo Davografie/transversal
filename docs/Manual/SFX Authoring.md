@@ -246,7 +246,7 @@ Read it as a sanity check. If the card line does not say what you meant, the SFX
 - **Then the gates**: *if you are not at a location yet and you are in Earth*.
 - **Then the effects**, in authored order, each with its timing: *whenever a roll is resolved, step down each static trait instance you rolled by one step*.
 - **Effect-level conditions gate that effect**: *if this trait is rated d6, increase the dice limit by 2*. A narrative condition on an effect trails in parentheses instead (flavour, like the SFX-level one).
-- **Effects scoped to a subset of dice say so**: an effect with a die-role filter reads *for each unchosen die, …* — the dice a player didn't assign.
+- **Effects scoped to a subset of dice say so**: an effect with a die-role filter reads *for each unchosen die, …* — the dice a player didn't assign. Inside such an effect the die being processed **is** the roll, so a path seeded from `rolled_dice` reads *that die* rather than *each die in your roll*. That is what makes "for each unchosen die, give its owner's location a hazard" land once per die.
 - **An effect that lands somewhere other than its target says where**: *gain the environmental hazard trait **on the location of each owner of each trait instance you rolled*** — that clause comes from the effect's subject (`entity_spec`), so if you author a subject, expect to see it.
 - **Effects that share framing are grouped.** Consecutive effects with the same timing, die scope and duration read as one list with the framing stated once:
 
@@ -272,9 +272,10 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 ### What it does not say
 
 - It is a rendering of the *machine* reading, not a rules interpretation. A `NARRATIVE` condition appears as flavour because that is all it is.
+- **A die filter is silently inert on an effect that also has a target path.** The applier checks `refs` and `target_spec` before the die filter, so such an effect runs once for the whole roll and its dice scope never applies. The card text stays silent about that scope rather than claiming it — so if you filter dice and see no *"for each \u2026 die"* clause, that is the reason, and the fix is to move the dice logic into the path.
 - Unresolved ids show raw (`trait-environmental-hazard-58be`). If you see one, the effect points at something that no longer exists — worth fixing.
 - It describes effects in authored order, even when they are grouped by timing on the card.
-- It does not currently read an effect's `context` (e.g. which dice-limit variant it modifies), so two effects that differ only there will read the same.
+- It does not currently read an effect's `context` (e.g. `limit: total` vs `limit: effect` on the dice-limit actions), so two effects that differ only there will read the same.
 
 ---
 

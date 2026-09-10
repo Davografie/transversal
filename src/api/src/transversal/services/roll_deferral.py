@@ -292,8 +292,9 @@ def _apply_armed(
     structured: list | None = None,
 ) -> list[Effect]:
     """Apply one armed entry's matching effects to ``rolls``; return them."""
-    from transversal.services.effects_applier import effect_registry
+    from transversal.services.effects_applier import BINDINGS_CONTEXT_KEY, effect_registry, resolve_effect_entity
     from transversal.services.effects_engine import _substitute_effect_context
+    from transversal.main import _get_repo
 
     bindings: dict = dict(armed.bindings)
     source = source_element = None
@@ -327,10 +328,14 @@ def _apply_armed(
             for die in dice:
                 resolved = _substitute_die_context(effect, die, context or {})
                 resolved = _substitute_effect_context(resolved, context or {}, bindings)
+                # Inside a per-die effect the die *is* the roll the path reads,
+                # so "the pool owner of that die" resolves to this die's owner.
+                resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": [die]})
                 effect_registry.apply(resolved, entity_id, universe, effect_context)
                 applied.append(resolved)
         else:
             resolved = _substitute_effect_context(effect, context or {}, bindings)
+            resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": rolls})
             effect_registry.apply(resolved, entity_id, universe, effect_context)
             applied.append(resolved)
     armed.bindings = bindings
@@ -355,6 +360,29 @@ def _source_context(context: dict | None, source, source_element: str | None) ->
         return context or {}
     from transversal.services.effects_applier import SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY
     return {**(context or {}), SOURCE_CONTEXT_KEY: source, SOURCE_ELEMENT_CONTEXT_KEY: source_element}
+
+
+def resolve_armed_subject(effect: Effect, entity_id: str, bindings: dict,
+                          collections: dict) -> Effect:
+    """Resolve an armed effect's ``entity_spec`` before it is dispatched.
+
+    The armed path bypasses ``process_event_outcome``, so without this an
+    authored subject is silently ignored and the effect lands on the acting
+    entity — e.g. a hazard meant for the die's owner's location would land on the
+    roller instead. ``collections`` seeds the path: a per-die effect passes
+    ``{"rolled_dice": [die]}``, because the die being processed *is* the roll
+    that path should read.
+    """
+    if effect.entity_spec is None or not effect.entity_spec.steps:
+        return effect
+    from transversal.main import _get_repo
+    from transversal.services.effects_applier import BINDINGS_CONTEXT_KEY, resolve_effect_entity
+
+    repo = _get_repo()
+    if repo is None:
+        return effect
+    return resolve_effect_entity(effect, entity_id, repo,
+                                 {BINDINGS_CONTEXT_KEY: bindings}, collections)
 
 
 def _apply_refs_roll(
@@ -382,7 +410,8 @@ def _apply_refs_roll(
     effect_context = _source_context(context, source, source_element)
     before = len(structured) if structured is not None else 0
     resolved_list = resolve_refs(
-        _substitute_effect_context(effect, context or {}, bindings),
+        resolve_armed_subject(_substitute_effect_context(effect, context or {}, bindings),
+                              entity_id, bindings or {}, {"rolled_dice": rolls}),
         TargetContext(
             subject=entity, repo=repo, collections={"rolled_dice": rolls},
             source=source, source_element=source_element, bindings=bindings if bindings is not None else {},
@@ -427,6 +456,7 @@ def _apply_spec_target(
     # Substitute roll-context variables (e.g. ``{effect_die}``) before applying,
     # mirroring ``_apply_refs_roll``.
     effect = _substitute_effect_context(effect, context or {}, bindings)
+    effect = resolve_armed_subject(effect, entity_id, bindings or {}, {"rolled_dice": rolls})
     resolution = resolve(
         effect.target_spec,
         TargetContext(
