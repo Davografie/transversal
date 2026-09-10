@@ -9,6 +9,7 @@
     :spec="win.spec"
     :window-id="win.id"
     :can-dock="dockable"
+    :on-size="(w, h) => { panelSize.w = w; panelSize.h = h }"
     closable
     @close="$emit('close')"
     @dock="$emit('dock')"
@@ -39,7 +40,7 @@
 import { computed, ref, provide, watch, onMounted, onUnmounted } from 'vue'
 import Panel from './Panel.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
-import { clampAnchor, deriveDirection } from '@/composables/usePanelAnchor.js'
+import { clampAnchor, deriveDirection, VIEWPORT_MARGIN } from '@/composables/usePanelAnchor.js'
 import { dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 
 const props = defineProps({
@@ -61,17 +62,43 @@ const anchorCenter = computed(() => {
   return clampAnchor(x, y, viewportWidth.value, viewportHeight.value)
 })
 
-// Which way this window's chain opens. In an edge band the window takes that
-// edge's direction; away from every edge it keeps the one it has (which starts
-// as the direction of the chain the panel was detached from).
+// Which way this window's chain opens. Inside an edge band the window takes that
+// edge's direction; away from every edge it keeps the one it has — *unless* the
+// chain's panel can no longer fit on that side while the other side fits, in
+// which case it switches, so a window dragged across the screen opens into the
+// room it has instead of being shoved off its own anchor by the viewport clamp.
+// (Measured by Panel.vue and reported through onSize.)
+const panelSize = ref({ w: 0, h: 0 })
+
+function fitsOnSide(dir, p) {
+  const w = panelSize.value.w
+  const h = panelSize.value.h
+  if (!w || !h) return true // not measured yet: don't second-guess
+  if (dir === 'left') return p.x - 1 - w >= VIEWPORT_MARGIN
+  if (dir === 'right') return p.x + 1 + w <= viewportWidth.value - VIEWPORT_MARGIN
+  if (dir === 'down') return p.y + 1 + h <= viewportHeight.value - VIEWPORT_MARGIN
+  if (dir === 'up') return p.y - 1 - h >= VIEWPORT_MARGIN
+  return true
+}
+
+const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' }
+
 function syncDirection() {
   const p = anchorCenter.value
-  const next = deriveDirection(p.x, p.y, viewportWidth.value, viewportHeight.value)
-  if (next && next !== props.win.direction) setWindowDirection(props.win.id, next)
+  const band = deriveDirection(p.x, p.y, viewportWidth.value, viewportHeight.value)
+  if (band) {
+    if (band !== props.win.direction) setWindowDirection(props.win.id, band)
+    return
+  }
+  const cur = props.win.direction
+  if (cur && !fitsOnSide(cur, p) && fitsOnSide(OPPOSITE[cur], p)) {
+    setWindowDirection(props.win.id, OPPOSITE[cur])
+  }
 }
 
 onMounted(syncDirection)
 watch(anchorCenter, syncDirection)
+watch(panelSize, syncDirection, { deep: true })
 
 function onViewportResize() {
   viewportWidth.value = window.innerWidth
@@ -85,9 +112,6 @@ const anchorRect = computed(() => {
   const { x, y } = anchorCenter.value
   return { left: x - 21, right: x + 21, top: y - 21, bottom: y + 21, centerX: x, centerY: y }
 })
-
-// The window's rail sits at its anchor.
-provide('panelAnchorPoint', anchorCenter)
 
 // Bumped on every window move so the window's panels re-measure (their rails are
 // viewport-pinned when they are the shallowest visible one).

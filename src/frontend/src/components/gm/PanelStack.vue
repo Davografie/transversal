@@ -195,8 +195,6 @@ function onTogglePointerDown(e) {
 
 // Panels consume this through `inject` (the rail's ⠿ handle).
 provide('panelAnchorDrag', { begin: startDrag })
-// The live anchor point — the anchor rail pins itself to it.
-provide('panelAnchorPoint', anchorCenter)
 // Bumped on every anchor move so *all* panels re-measure (a child's rail is
 // viewport-pinned too when it is the shallowest visible one).
 const anchorVersion = ref(0)

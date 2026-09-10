@@ -47,11 +47,15 @@ const direction = ref('left')
 const EDGE_X = 21
 const EDGE_Y = 58
 
+// The app's standard viewport margin: how far a floating panel / the anchor
+// keeps from an edge. Also the budget the window direction-fit test uses.
+export const VIEWPORT_MARGIN = 12
+
 // Breathing room the anchor keeps from the edge it rests on — the same inset the
 // default spot uses (`right: 12px`), so snapping to the right edge lands exactly
 // on the default position. Applied to the drag clamp as well, so the anchor
 // never touches the edge and the drop-snap can't pop it outwards.
-const SNAP_MARGIN = 12
+const SNAP_MARGIN = VIEWPORT_MARGIN
 
 // The band (fraction of the viewport, per axis) inside which an edge claims the
 // anchor — for the direction and for the drop snap alike.

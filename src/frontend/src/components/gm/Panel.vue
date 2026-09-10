@@ -1,6 +1,6 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle" :data-panel-uid="diagId" :data-panel-depth="depth" :data-panel-window="windowId">
-    <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up', 'is-anchored': isShallowestVisible }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
+    <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up' }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
       <!-- Drag handle (drag-only): on the anchor rail it moves the whole stack
            (the anchor); on any other rail it slides this panel along its
            parent's edge (button-drift's manual override). -->
@@ -83,6 +83,7 @@ import { shallowRef, ref, reactive, computed, markRaw, inject, provide, onMounte
 import { useClipboard } from '@vueuse/core'
 import { panelKey, panelIdentityKey, registerPanelIdentity, unregisterPanelIdentity } from '@/composables/usePanel.js'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
+import { VIEWPORT_MARGIN } from '@/composables/usePanelAnchor.js'
 import { nextPanelDiagId, registerPanelReporter, unregisterPanelReporter, dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 import Button from '@/components/ui/Button.vue'
 
@@ -473,8 +474,6 @@ const placed = computed(() =>
 // parent's node origin + its own offsets and nudges back inside by the smallest
 // shift. Deliberately *not* derived from this panel's own measured rect — that
 // rect already contains the correction, so reading it back would flip-flop.
-const VIEWPORT_MARGIN = 12
-
 const viewportFix = computed(() => {
   if (isRoot.value) return { x: 0, y: 0 }
   const oy = props.originTop
@@ -508,9 +507,20 @@ const childBridgeLeft = computed(() => (isDepthHidden.value ? props.bridgeLeft :
 const childBridgeRight = computed(() => (isDepthHidden.value ? props.bridgeRight : panelRightPx.value))
 
 // ── Button-drift: prefer own center, clamp within the parent's bounds ──
-// Lateral chains clamp the rail's vertical center to the parent's vertical
-// span; vertical chains clamp its horizontal center to the parent's span.
+// Every rail hugs its **own panel's** edge (the CSS places it there; only the
+// slide along that edge is computed here). Nested rails slide within the
+// parent's span; the anchor rail (shallowest visible panel) prefers the anchor's
+// own line but is clamped to *its own* panel — so a panel that the viewport
+// clamp has shifted can never leave its rail stranded inside the panel box.
 const railCenterViewport = computed(() => {
+  if (isShallowestVisible.value) {
+    const anchorY = props.anchor ? props.anchor.centerY : null
+    const top = panelTopPx.value
+    const bottom = panelBottomPx.value
+    if (anchorY != null && top != null && bottom != null) {
+      return Math.min(Math.max(anchorY, top), bottom)
+    }
+  }
   const c = ownCenter.value
   if (c == null) return null
   if (props.bridgeTop == null || props.bridgeBottom == null) return c
@@ -518,6 +528,14 @@ const railCenterViewport = computed(() => {
 })
 
 const railCenterViewportX = computed(() => {
+  if (isShallowestVisible.value) {
+    const anchorX = props.anchor ? props.anchor.centerX : null
+    const left = panelLeftPx.value
+    const right = panelRightPx.value
+    if (anchorX != null && left != null && right != null) {
+      return Math.min(Math.max(anchorX, left), right)
+    }
+  }
   const c = ownCenterX.value
   if (c == null) return null
   if (props.bridgeLeft == null || props.bridgeRight == null) return c
@@ -539,14 +557,11 @@ const railCenterLocalX = computed(() => {
   return rcx - wl
 })
 
-// The rail's icon buttons are 36px circles, so the rail is one column wide.
-const RAIL_W = 36
-
-// The anchor rail (shallowest visible panel) — the 🛠 button's successor. It is
-// pinned to the anchor point, exactly where the 🛠 sits when the stack is
-// closed, so the closed button and the open rail occupy the same spot. Move the
-// anchor (drag the handle / the 🛠) and the rail moves with it.
-const anchorPoint = inject('panelAnchorPoint', null)
+// The anchor rail (shallowest visible panel) — the 🛠 button's successor. It
+// hugs that panel's edge (it is the same rail as a nested one, positioned
+// locally); its handle drags the stack anchor.
+// The anchor rail is simply the rail of the shallowest visible panel — it hugs
+// that panel's edge (see actionsStyle); no anchor-point positioning needed.
 const anchorDrag = inject('panelAnchorDrag', null)
 const anchorVersion = inject('anchorVersion', null)
 // Coalesce to one measure per frame: the anchor moves on every pointermove, and
@@ -612,32 +627,9 @@ function beginSlide(e) {
 }
 
 const actionsStyle = computed(() => {
-  if (isShallowestVisible.value) {
-    const p = anchorPoint ? anchorPoint.value : null
-    if (p) {
-      if (isVertical.value) {
-        // Row rail at the anchor point (centred by CSS translate(-50%,-50%)).
-        return {
-          position: 'fixed', right: 'auto', bottom: 'auto',
-          left: p.x + 'px',
-          top: p.y + 'px',
-        }
-      }
-      return {
-        position: 'fixed', right: 'auto',
-        left: (p.x - RAIL_W / 2) + 'px',
-        top: p.y + 'px',
-      }
-    }
-    // No anchor context (defensive): the historical fixed spot.
-    const top = railCenterViewport.value
-    return top == null
-      ? { position: 'fixed', right: '12px' }
-      : { position: 'fixed', right: '12px', top: top + 'px' }
-  }
   if (isVertical.value) {
-    // Row rail: CSS places it on the child's top/bottom edge (the one facing
-    // the parent); only the slide along the parent's span is set here.
+    // Row rail: CSS places it on the edge facing the parent (or the anchor for
+    // the anchor rail); only the slide along that edge is set here.
     const localX = railCenterLocalX.value
     return localX == null ? {} : { left: localX + 'px' }
   }
@@ -1032,8 +1024,6 @@ provide(panelKey, {
 }
 .panel-actions.is-row.is-down { bottom: auto; top: -22px; }
 .panel-actions.is-row.is-up { top: auto; bottom: -22px; }
-/* The anchor rail sits *on* the anchor point, both axes centred. */
-.panel-actions.is-row.is-anchored { transform: translate(-50%, -50%); }
 .panel-actions .panel-action-btn {
   width: 36px; height: 36px; border-radius: 50%;
   backdrop-filter: blur(12px);
