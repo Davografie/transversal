@@ -117,6 +117,11 @@ viewer hide too, leaving a clean design workspace (CSS-only via `:has`).
   moment a die enters the pool or a roll starts. The roller stays reachable
   through the sheet teaser. (CSS-only via `:has(.roller-band
   .kind-empty-pool)` — no JS state.)
+- **Empty sheet collapses (GM).** A GM with no acting/viewed entity has no
+  sheet content — the band is removed entirely (`.sheet-empty`, peers bar is
+  enough), the sheet focus state is unreachable, and location/dice states
+  redistribute (loc 84% / roller 16%; dice focus drops the 56px sheet
+  reservation). It returns the moment the GM acts as or inspects an entity.
 - **Empty pool + sheet focused** — the roller teaser shrinks to a slim 7%
   strip (≈ the 56px sheet teaser of dice focus) and the [+] add-die toggle is
   hidden (dice come from the sheet anyway): 20% / 73% / 7%. Both return once

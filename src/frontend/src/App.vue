@@ -278,7 +278,7 @@
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
-  <div class="stage" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '']">
+  <div class="stage" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '']">
     <div class="loc-band">
       <LocationViewer
         v-if="!fullCanvas"
@@ -334,7 +334,7 @@
           @stamp-sfx="(d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId)"
           @sheet-view-change="onSheetViewChange"
         />
-        <div v-if="mobileStackActive && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
+        <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
       </div>
       <div class="roller-band" :style="{ '--roller-h': rollerContentH + 'px' }">
         <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
@@ -1595,8 +1595,16 @@ onUnmounted(() => mobileMq.removeEventListener('change', syncIsMobile))
 
 const mobileStackActive = computed(() => isMobile.value)
 
+// GM with no acting/viewed entity has an empty sheet band on mobile — it is
+// fully collapsed (peers bar is enough) and the sheet focus is unreachable.
+const sheetEmpty = computed(() => mobileStackActive.value && gmMode.value && !actingEntityId.value && !viewingEntityId.value)
+watch(sheetEmpty, (v) => { if (v && mobileFocus.value === 'sheet') mobileFocus.value = 'location' })
+
 function setMobileFocus(f) {
-  if (f === 'location' || f === 'sheet' || f === 'dice') mobileFocus.value = f
+  if (f === 'location' || f === 'sheet' || f === 'dice') {
+    if (f === 'sheet' && sheetEmpty.value) return
+    mobileFocus.value = f
+  }
 }
 
 // Focus is tap-driven only — no auto-focus on phase changes. (An earlier
