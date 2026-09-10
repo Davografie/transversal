@@ -12,7 +12,7 @@
               ⚡{{ entity.razmerit }}
             </button>
             <div v-if="showRazmeritWidget" class="razmerit-popover" @click.stop>
-              <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(-1)">−</button>
+              <Button v-if="!overrideEntityId" variant="ghost" size="icon" title="Decrease razmerit" @click.stop="adjustRazmerit(-1)">−</Button>
               <input
                 v-if="editingRazmerit"
                 ref="razmeritInput"
@@ -30,7 +30,7 @@
                 :class="{ editable: !overrideEntityId }"
                 @click="!overrideEntityId && startRazmeritEdit()"
               >{{ entity.razmerit }}</span>
-              <button v-if="!overrideEntityId" class="razmerit-btn" @click.stop="adjustRazmerit(1)">+</button>
+              <Button v-if="!overrideEntityId" variant="ghost" size="icon" title="Increase razmerit" @click.stop="adjustRazmerit(1)">+</Button>
             </div>
           </div>
           <MediaImage v-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" :class="{ transparent: sheetPortraitTransparent }" />
@@ -39,13 +39,13 @@
           <div v-if="isForeignSheet" class="rel-widget">
             <template v-if="relationship">
               <span class="rel-desc" @click.stop="showRelEditor = true" :title="'Click to edit'">{{ relationship.description || 'related' }}</span>
-              <button class="rel-btn rel-del" @click.stop="removeRelationship" title="Remove relationship">✕</button>
-              <button class="rel-btn rel-send" @click.stop="openBlueBookLetter" title="Send letter">✉</button>
+              <Button variant="danger-ghost" size="sm" title="Remove relationship" @click.stop="removeRelationship">✕</Button>
+              <Button variant="ghost" size="icon" title="Send letter" @click.stop="openBlueBookLetter">✉</Button>
             </template>
             <div v-if="showRelEditor" class="rel-editor" @click.stop>
               <input ref="relInput" v-model="relDescription" placeholder="Describe relationship…" @keyup.enter="saveRelationship" @keyup.escape="showRelEditor = false" />
-              <button class="rel-btn rel-save" @click="saveRelationship">✓</button>
-              <button class="rel-btn rel-cancel" @click="showRelEditor = false">✕</button>
+              <Button variant="primary" size="icon" title="Save relationship" @click="saveRelationship">✓</Button>
+              <Button variant="ghost" size="icon" title="Cancel" @click="showRelEditor = false">✕</Button>
             </div>
           </div>
           <div class="sheet-pills">
@@ -56,8 +56,8 @@
               <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
               <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
             </div>
-            <button v-if="!gmMode && !isForeignSheet" class="sheet-settings-btn" @click.stop="$emit('openSettings')" title="Player settings">↩</button>
-            <button v-if="isForeignSheet && !relationship" class="sheet-settings-btn" @click.stop="createImmediateRelationship()" title="Add relationship">+</button>
+            <Button v-if="!gmMode && !isForeignSheet" variant="ghost" size="icon" title="Player settings" @click.stop="$emit('openSettings')">↩</Button>
+            <Button v-if="isForeignSheet && !relationship" variant="ghost" size="icon" title="Add relationship" @click.stop="createImmediateRelationship()">+</Button>
           </div>
         </div>
         <div v-if="entitySfxIds.length || projectionSfxIds.length" class="entity-sfx-cards">
@@ -104,7 +104,7 @@
         <div class="sheet-scroll">
         <!-- Full-panel trait edit -->
         <div v-if="editingTrait && !showAddTrait" class="trait-edit-panel">
-          <button class="set-back" @click="cancelEdit">← Back</button>
+          <Button class="set-back" variant="link" @click="cancelEdit">← Back</Button>
           <h4 class="edit-title">{{ displayName(editingTrait.name) }}</h4>
 
           <div class="edit-field">
@@ -203,7 +203,7 @@
               <div v-for="st in editingTrait.subTraitSettings" :key="st.id" class="edit-subtrait-row">
                 <span class="edit-subtrait-name">{{ displayName(st.name) }}</span>
                 <span v-if="st.statement" class="edit-subtrait-statement">{{ st.statement }}</span>
-                <button class="edit-subtrait-remove" @click="removeSubTrait(st.id)" title="Remove sub-trait">✕</button>
+                <Button class="edit-subtrait-remove" variant="danger-ghost" size="sm" title="Remove sub-trait" @click="removeSubTrait(st.id)">✕</Button>
               </div>
             </div>
             <div v-if="availableSubtraits.length" class="edit-subtraits-add">
@@ -214,10 +214,15 @@
           </div>
 
           <div class="edit-actions">
-            <button class="edit-done-btn" @click="cancelEdit">Done</button>
-            <button class="edit-delete-btn" :class="{ counting: deleteCountdown > 0 && deletingTraitId === editingTrait.id }" @click="onDeleteClick(editingTrait)">
+            <Button class="edit-done-btn" variant="primary" @click="cancelEdit">Done</Button>
+            <Button
+              class="edit-delete-btn"
+              variant="danger"
+              :active="deleteCountdown > 0 && deletingTraitId === editingTrait.id"
+              @click="onDeleteClick(editingTrait)"
+            >
               {{ deleteCountdown > 0 && deletingTraitId === editingTrait.id ? `Cancel (${deleteCountdown})` : 'Delete' }}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -328,15 +333,17 @@
                     <span v-if="!(t.dice || []).length" class="trait-die depleted">empty</span>
                   </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
-                  <button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.teachable"
-                    class="transfer-btn teach-btn" @click.stop="showTeachPicker(t)"
-                    title="Teach this trait">🎓</button>
-                  <button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.giftable"
-                    class="transfer-btn gift-btn" @click.stop="giftTraitAction(t)"
-                    title="Gift this trait">🎁</button>
-                  <button v-if="isForeignSheet && t.transferFlags?.takable"
-                    class="transfer-btn take-btn" @click.stop="takeTraitAction(t)"
-                    title="Take this trait">🫳</button>
+                  <Button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.teachable"
+                    variant="ghost" size="sm" @click.stop="showTeachPicker(t)"
+                    title="Teach this trait">🎓</Button>
+                  <Button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.giftable"
+                    variant="ghost" size="sm" :loading="pendingTransferId === t.id"
+                    @click.stop="giftTraitAction(t)"
+                    title="Gift this trait">🎁</Button>
+                  <Button v-if="isForeignSheet && t.transferFlags?.takable"
+                    variant="ghost" size="sm" :loading="pendingTransferId === t.id"
+                    @click.stop="takeTraitAction(t)"
+                    title="Take this trait">🫳</Button>
                 </div>
               </div>
               <div v-else class="trait-row unknown-trait">
@@ -377,15 +384,16 @@
                 </div>
               </div>
             </template>
-          <button
+          <Button
             v-if="activeSheetView === 'traits' && nextSet"
             class="next-set-btn"
+            variant="neutral"
             @click="goToNextSet"
-          >Next: {{ nextSet.name }} →</button>
+          >Next: {{ nextSet.name }} →</Button>
         </div> <!-- .trait-list -->
       <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
-      <button v-if="(!overrideEntityId || gmMode) && !showAddTrait" class="add-trait-btn" @click="openAddTrait">+ Add Trait</button>
-      <button v-if="isForeignSheet && !showAddTrait" class="add-trait-btn" @click="openAddRelationshipTrait">+ Add relationship trait</button>
+      <Button v-if="(!overrideEntityId || gmMode) && !showAddTrait" class="add-trait-btn" variant="secondary" block @click="openAddTrait">+ Add Trait</Button>
+      <Button v-if="isForeignSheet && !showAddTrait" class="add-trait-btn" variant="secondary" block @click="openAddRelationshipTrait">+ Add relationship trait</Button>
       <!-- 2-phase trait picker -->
       <div v-if="showAddTrait" class="trait-picker">
         <template v-if="addPhase === 'sets'">
@@ -393,26 +401,26 @@
           <button v-for="ts in availableTraitSets" :key="ts.id" class="picker-item" @click="selectSet(ts)">{{ ts.name }}</button>
         </template>
         <template v-if="addPhase === 'traits'">
-          <button class="picker-back" @click="addPhase = 'sets'">← {{ selectedTraitSet?.name }}</button>
+          <Button class="picker-back" variant="link" @click="addPhase = 'sets'">← {{ selectedTraitSet?.name }}</Button>
           <button v-for="t in filteredTraits" :key="t.id" class="picker-item" @click="addTrait(t)">
             {{ t.name }}
             <span v-if="t.defaultRatingType !== 'EMPTY'" class="picker-die">{{ t.defaultDieType }}</span>
           </button>
           <div v-if="!filteredTraits.length" class="empty">{{ emptySetMessage }}</div>
         </template>
-        <button class="picker-cancel" @click="showAddTrait = false">Cancel</button>
+        <Button class="picker-cancel" variant="neutral" block @click="showAddTrait = false">Cancel</Button>
       </div>
       </div> <!-- .sheet-scroll -->
       </template>
     </template>
     <div v-else class="empty empty-no-entity">
       <span>No entity loaded</span>
-      <button
+      <Button
         v-if="!gmMode && !isForeignSheet"
-        class="empty-settings-btn"
+        variant="neutral"
         @click="$emit('openSettings')"
         title="Choose a character"
-      >↩ Player settings</button>
+      >↩ Player settings</Button>
     </div>
 
     <Teleport to="body">
@@ -444,6 +452,7 @@ import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
 import DieIcon from './DieIcon.vue'
 import MediaImage from './MediaImage.vue'
+import Button from '@/components/ui/Button.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
 
 const props = defineProps({
@@ -1498,6 +1507,9 @@ function cancelEdit() {
 
 const deleteCountdown = ref(0)
 const deletingTraitId = ref(null)
+// Trait id whose teach/gift/take mutation is in flight — drives :loading on
+// that row's transfer button so the click visibly lands.
+const pendingTransferId = ref(null)
 let deleteTimer = null
 
 function onDeleteClick(t) {
@@ -1900,6 +1912,7 @@ function showTeachPicker(t) {
 async function giftTraitAction(t) {
   const targetId = prompt('Enter recipient entity ID to gift this trait to:')
   if (!targetId || targetId === props.entityId) return
+  pendingTransferId.value = t.id
   const query = `
     mutation($giver: ID!, $recipient: ID!, $tsId: ID!) {
       giftTrait(giverId: $giver, recipientId: $recipient, traitSettingId: $tsId) {
@@ -1917,11 +1930,14 @@ async function giftTraitAction(t) {
   } catch (e) {
     console.error('giftTrait failed:', e)
     alert('Gift failed. Both characters must be in the same location.')
+  } finally {
+    pendingTransferId.value = null
   }
 }
 
 async function takeTraitAction(t) {
   const method = prompt('Take method? (stealth, combat, social, technical)', 'stealth') || 'stealth'
+  pendingTransferId.value = t.id
   const query = `
     mutation($taker: ID!, $victim: ID!, $tsId: ID!, $method: String!) {
       takeTrait(takerId: $taker, victimId: $victim, traitSettingId: $tsId, method: $method) {
@@ -1945,6 +1961,8 @@ async function takeTraitAction(t) {
     }
   } catch (e) {
     console.error('takeTrait failed:', e)
+  } finally {
+    pendingTransferId.value = null
   }
 }
 
@@ -2079,35 +2097,10 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-list-wrap .trait-left {
   flex: 0 1 auto;
 }
-.set-back {
-  align-self: flex-start;
-  background: transparent;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 4px 0;
-  margin-bottom: 6px;
-}
-.set-back:hover {
-  text-decoration: underline;
-}
-.next-set-btn {
-  align-self: flex-end;
-  background: transparent;
-  border: 1px dashed var(--overlay-12);
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 6px 10px;
-  margin-top: 6px;
-  border-radius: 6px;
-  transition: border-color 0.15s, color 0.15s;
-}
-.next-set-btn:hover {
-  border-color: var(--accent-dim);
-  color: var(--accent);
-}
+  .set-back { align-self: flex-start;
+    margin-bottom: 6px; }
+  .next-set-btn { align-self: flex-end;
+    margin-top: 6px; }
 
 .limit-dots {
   font-size: 10px;
@@ -2320,17 +2313,8 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .edit-subtrait-name { font-weight: 500; }
 .edit-subtrait-statement { font-size: 11px; opacity: 0.7; flex: 1; }
-.edit-subtrait-remove {
-  margin-left: auto;
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0 2px;
-}
-.edit-subtrait-remove:hover { color: var(--danger); }
+  .edit-subtrait-remove { margin-left: auto;
+    flex-shrink: 0; }
 .edit-subtraits-add {
   display: flex;
   flex-wrap: wrap;
@@ -2384,56 +2368,10 @@ watch(() => props.externalPoolSources, (sources) => {
   padding-top: 12px;
   border-top: 1px solid var(--overlay-8);
 }
-.edit-done-btn {
-  flex: 1;
-  font-size: 12px;
-  padding: 6px;
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.edit-delete-btn {
-  flex: 1;
-  font-size: 12px;
-  padding: 6px;
-  background: var(--danger-12);
-  color: var(--danger);
-  border: 1px solid var(--danger-20);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.edit-delete-btn:hover {
-  background: var(--danger-20);
-}
-.edit-delete-btn.counting {
-  background: var(--danger-32);
-  color: var(--text-on-accent);
-  animation: deletePulse 1s ease-in-out infinite;
-}
-@keyframes deletePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
+  .edit-done-btn { flex: 1; }
+  .edit-delete-btn { flex: 1; }
 
-.add-trait-btn {
-  width: 100%;
-  padding: 8px;
-  margin-top: 8px;
-  font-size: 13px;
-  background: transparent;
-  color: var(--text-dim);
-  border: 1px dashed var(--overlay-12);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.add-trait-btn:hover {
-  border-color: var(--accent-dim);
-  color: var(--accent);
-}
+  .add-trait-btn { margin-top: 8px; }
 
 .trait-picker {
   margin-top: 8px;
@@ -2472,30 +2410,8 @@ watch(() => props.externalPoolSources, (sources) => {
   font-size: 12px;
   color: var(--text-dim);
 }
-.picker-back {
-  font-size: 12px;
-  padding: 4px 0;
-  margin-bottom: 6px;
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-}
-.picker-cancel {
-  width: 100%;
-  margin-top: 6px;
-  padding: 6px;
-  font-size: 12px;
-  background: transparent;
-  color: var(--text-dim);
-  border: 1px solid var(--overlay-8);
-  border-radius: 6px;
-  cursor: pointer;
-}
-.picker-cancel:hover {
-  color: var(--text);
-  border-color: var(--overlay-15);
-}
+  .picker-back { margin-bottom: 6px; }
+  .picker-cancel { margin-top: 6px; }
 
 .header-top {
   display: flex;
@@ -2530,27 +2446,6 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .header-top h2 {
   flex: 1;
-}
-.sheet-settings-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: transparent;
-  border: 1px solid var(--overlay-10);
-  color: var(--text-dim);
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  flex-shrink: 0;
-  transition: all 0.2s;
-}
-.sheet-settings-btn:hover {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
 }
 
 .header {
@@ -2718,26 +2613,6 @@ watch(() => props.externalPoolSources, (sources) => {
   border-radius: 6px;
   padding: 2px 4px;
   text-align: center;
-}
-.razmerit-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--overlay-12);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: border-color 0.15s, color 0.15s;
-}
-.razmerit-btn:hover {
-  border-color: var(--accent-dim);
-  color: var(--accent);
 }
 
 .trait-sets {
@@ -2971,21 +2846,6 @@ watch(() => props.externalPoolSources, (sources) => {
   align-items: center;
   gap: 12px;
 }
-.empty-settings-btn {
-  background: transparent;
-  border: 1px solid var(--overlay-15);
-  color: var(--text-dim);
-  border-radius: var(--radius);
-  padding: 6px 14px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-.empty-settings-btn:hover {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
-}
 
 .sfx-cards {
   display: flex;
@@ -3062,37 +2922,6 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--text);
   background: var(--bg-hover);
 }
-.rel-btn {
-  font-size: 12px;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  transition: background 0.15s, color 0.15s;
-}
-.rel-del {
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 10px;
-}
-.rel-del:hover {
-  background: var(--danger);
-  color: var(--text-on-accent);
-}
-.rel-send {
-  background: transparent;
-  color: var(--accent);
-  font-size: 12px;
-}
-.rel-send:hover {
-  background: var(--accent);
-  color: var(--text-on-accent);
-}
 .rel-editor {
   position: absolute;
   top: 100%;
@@ -3119,20 +2948,6 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .rel-editor input:focus {
   border-color: var(--accent);
-}
-.rel-save {
-  background: var(--accent);
-  color: var(--text-on-accent);
-}
-.rel-save:hover {
-  opacity: 0.8;
-}
-.rel-cancel {
-  background: var(--bg-hover);
-  color: var(--text-dim);
-}
-.rel-cancel:hover {
-  color: var(--text);
 }
 .sheet-pills { display: flex; gap: 0; margin-bottom: 10px; border-radius: 20px; overflow: hidden; border: 1px solid var(--overlay-8); }
 .pill { padding: 5px 14px; font-size: 11px; border: none; cursor: pointer; background: var(--overlay-2); color: var(--text-dim); transition: background 0.15s, color 0.15s; }
