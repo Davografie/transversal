@@ -102,7 +102,7 @@ optimisticOverlay   // immediate UI overlay value, synced from props.overlay (SS
 navDotPositions     // { parent: {x,y}, portal: {x,y}, 'portal:N': {x,y} }
 destNavCache        // lazy cache: destination_id → { arriveX, arriveY, destAspect }
 lerpActive          // true while non-self occupant dots ease to new SSE positions
-gmSelfPos           // GM free-roam dot { x, y } (local, unpersisted) when entityId is null
+gmDotPositions      // { [locationId]: {x, y} } — GM free-roam dot, device-local
 ```
 
 Drag state is kept separately:
@@ -201,9 +201,13 @@ not clip itself (`border-radius: 0`). `destNavCache` supplies
 
 `self` is the camera anchor: the scene pans so this dot keeps its image position,
 and it is always draggable. With no perspective entity (`entityId == null` — the
-GM free-roam view) it becomes a **local GM dot**: draggable, unpersisted,
-labelled with the role glyph (🏛 Architect / 🎭 Player — the same icons as the
-player settings overlay), and the camera pans with it.
+GM free-roam view) it becomes a **GM free-roam dot**: draggable, labelled with the
+role glyph (🏛 Architect / 🎭 Player — the same icons as the player settings
+overlay), with its position per location persisted on the device
+(`gmDotPositions` in localStorage) so a refresh restores it. Dropping it on a
+zone/navdot travels the **view only** — no entity is moved: `relocate` emits a
+view-only `moved` (name/id + universe) and the dot lands at the destination's
+arrival point.
 
 Transparent **occupant/self portraits** (media pipeline's
 `EntityImage.transparent`, exposed as `image_transparent` on occupants) render
