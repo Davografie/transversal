@@ -245,6 +245,14 @@ Read it as a sanity check. If the card line does not say what you meant, the SFX
 - **The trigger** first: *Whenever a roll happens* / *Activated* / *At the start of each session*.
 - **Then the gates**: *if you are not at a location yet and you are in Earth*.
 - **Then the effects**, in authored order, each with its timing: *whenever a roll is resolved, step down each static trait instance you rolled by one step*.
+- **Effect-level conditions gate that effect**: *if this trait is rated d6, increase the dice limit by 2*. A narrative condition on an effect trails in parentheses instead (flavour, like the SFX-level one).
+- **Effects scoped to a subset of dice say so**: an effect with a die-role filter reads *for each unchosen die, …* — the dice a player didn't assign.
+- **An effect that lands somewhere other than its target says where**: *gain the environmental hazard trait **on the location of each owner of each trait instance you rolled*** — that clause comes from the effect's subject (`entity_spec`), so if you author a subject, expect to see it.
+- **Effects that share framing are grouped.** Consecutive effects with the same timing, die scope and duration read as one list with the framing stated once:
+
+  > *…if this trait is rated d4, increase the dice limit by 1; if this trait is rated d6, increase the dice limit by 2; … (each reverts at the next roll).*
+
+  So five rating-gated bumps revert *together*, and the card says so once rather than five times.
 - **A narrative condition trails in parentheses.** It is flavour the engine never checks, so it is kept visually apart from the rules text.
 - **Effect durations** read as *reverts at the end of the scene* — the **undo timer**. This is a different thing from the SFX's own listening window, and the two are phrased differently on purpose (see [[SFX and Effects]]).
 
@@ -266,6 +274,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 - It is a rendering of the *machine* reading, not a rules interpretation. A `NARRATIVE` condition appears as flavour because that is all it is.
 - Unresolved ids show raw (`trait-environmental-hazard-58be`). If you see one, the effect points at something that no longer exists — worth fixing.
 - It describes effects in authored order, even when they are grouped by timing on the card.
+- It does not currently read an effect's `context` (e.g. which dice-limit variant it modifies), so two effects that differ only there will read the same.
 
 ---
 

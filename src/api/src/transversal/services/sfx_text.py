@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field, replace
+from types import SimpleNamespace
 from typing import Callable, Optional
 
 from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
@@ -575,7 +576,8 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
     if ctype == ConditionType.HAS_RELATIONSHIP:
         return f"you are related to {target}"
     if ctype == ConditionType.TRAIT_RATING:
-        return f"{target} is rated {op} {value}"
+        return f"{target} is rated {value}" if condition.operator == "==" \
+            else f"{target} is rated {op} {value}"
     if ctype == ConditionType.HAS_RAZMERIT:
         return f"you have {op} {value} razmerit"
     if ctype == ConditionType.ENTITY_TYPE:
@@ -597,7 +599,12 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
     if ctype == ConditionType.TEST_OUTCOME:
         return "the test succeeds" if target == "success" else "the test fails"
     if ctype == ConditionType.SOURCE_RATING:
-        return f"this SFX's source is rated {op} {value}"
+        # The source is the instance the SFX sits on, so "this trait" reads shorter
+        # than "this SFX's source" — and is closer to how a card would say it.
+        subject = {"traitsetting": "this trait", "traitsetsetting": "this trait set"}.get(
+            source_element or "", "this SFX's source")
+        return f"{subject} is rated {value}" if condition.operator == "==" \
+            else f"{subject} is rated {op} {value}"
     return (condition.narrative or "").strip()
 
 
@@ -631,19 +638,55 @@ def _target_element(effect: Effect) -> str:
     return ""
 
 
-def effect_target(effect: Effect, *, resolve: NameResolver | None = None,
-                  source_element: str | None = None, variables=None) -> str:
-    """Render an effect's target: a path phrase, a placeholder, or a named id."""
+def _effect_parts(effect: Effect, *, resolve: NameResolver | None = None,
+                  source_element: str | None = None, variables=None) -> tuple[str, str]:
+    """``(target phrase, subject clause)`` for an effect.
+
+    Most effects have one. An effect may also say *who it lands on* separately
+    from what it acts on — a trait granted **to a location**, say — which is what
+    ``entity_spec``/``entity`` carry.
+    """
+    subject = ""
+    if effect.entity_spec is not None and effect.entity_spec.steps:
+        phrase = path_phrase(effect.entity_spec, source_element=source_element,
+                             variables=variables, resolve=resolve)
+        subject = render_phrase(phrase, _determiner(phrase))
+
+    target = ""
     if effect.target_spec is not None and effect.target_spec.steps:
         phrase = path_phrase(effect.target_spec, source_element=source_element,
                              variables=variables, resolve=resolve)
-        return render_phrase(phrase, _determiner(phrase))
-    raw = (effect.target or "").strip()
-    if raw in ("", "self"):
-        if effect.entity and effect.entity not in ("self",):
-            return id_phrase(effect.entity, "entity", resolve)
-        return ""
-    return id_phrase(raw, _target_element(effect), resolve)
+        target = render_phrase(phrase, _determiner(phrase))
+    else:
+        raw = (effect.target or "").strip()
+        if raw not in ("", "self"):
+            target = id_phrase(raw, _target_element(effect), resolve)
+        elif effect.entity and effect.entity not in ("self",):
+            target = id_phrase(effect.entity, "entity", resolve)
+
+    if target:
+        if subject:
+            prep = _EFFECT_SUBJECT_PREPOSITIONS.get(effect.type, "on")
+            return target, f"{prep} {subject}"
+        return target, ""
+    # No primary target: the subject *is* what the effect acts on.
+    return subject, ""
+
+
+def effect_target(effect: Effect, *, resolve: NameResolver | None = None,
+                  source_element: str | None = None, variables=None) -> str:
+    """Render an effect's target: a path phrase, a placeholder, or a named id."""
+    return _effect_parts(effect, resolve=resolve, source_element=source_element,
+                         variables=variables)[0]
+
+
+# Prepositions for the "lands on" clause, by effect type.
+_EFFECT_SUBJECT_PREPOSITIONS = {
+    "modify_trait": "on",
+    "transfer_razmerit": "to",
+    "attune": "to",
+    "location": "to",
+}
 
 
 def _target_placeholder(effect: Effect) -> str:
@@ -661,15 +704,30 @@ def _target_placeholder(effect: Effect) -> str:
     return f"the {element_noun(_target_element(effect))}" if _target_element(effect) else ""
 
 
-def effect_text(effect: Effect, *, resolve: NameResolver | None = None,
-                source_element: str | None = None, variables=None) -> str:
-    """Render one effect as a clause ("step down each static trait instance you rolled")."""
-    target = effect_target(effect, resolve=resolve, source_element=source_element,
-                           variables=variables)
+def _die_scope(effect: Effect) -> str:
+    """The dice an effect runs for, when it is scoped to a subset (e.g. unchosen)."""
+    if not effect.die_filter:
+        return ""
+    parts = []
+    for key, value in effect.die_filter.items():
+        if key == "role":
+            parts.append("unchosen die" if value is None else f"{value} die")
+        else:
+            parts.append(f"{key.replace('_', ' ')} {display_value(value)}")
+    return f"for each {' and '.join(parts)}"
+
+
+def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
+                 source_element: str | None = None, variables=None) -> str:
+    """An effect's clause, without timing/scope/duration (those group)."""
+    target, subject = _effect_parts(effect, resolve=resolve, source_element=source_element,
+                                    variables=variables)
     result = _effect_result(effect)
     template = reg.effect_card(effect.type, effect.action)
     if not target and "{target}" in template:
         target = _target_placeholder(effect)
+    if subject:
+        target = f"{target} {subject}" if target else subject
     if not result:
         # Drop a clause the empty placeholder leaves dangling ("… as {result}").
         template = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s+\{result\}", "", template)
@@ -689,24 +747,88 @@ def effect_text(effect: Effect, *, resolve: NameResolver | None = None,
         text = f"{text} ({display_value(result, resolve)})"
 
     text = _tidy(text)
-    lead = _LEADING_TIMINGS.get(effect.timing)
-    if lead:
-        text = f"{lead}, {text}"
-    elif effect.timing in _TRAILING_TIMINGS:
-        text = f"{text}, {_TRAILING_TIMINGS[effect.timing]}"
-    if effect.duration is not None and effect.duration.timers:
-        text = f"{text} ({_duration_text(effect.duration)})"
+    gates, flavour = [], []
+    for cond in effect.conditions:
+        clause = condition_text(cond, resolve=resolve, source_element=source_element,
+                                variables=variables)
+        if not clause:
+            continue
+        (flavour if cond.type == ConditionType.NARRATIVE else gates).append(clause)
+    if gates:
+        text = f"if {' and '.join(gates)}, {text}"
+    if flavour:
+        text = f"{text} ({'; '.join(flavour)})"
     return text
 
 
-def _duration_text(duration) -> str:
-    """Effect duration = the *undo* timer (distinct from the SFX listening window)."""
+def effect_text(effect: Effect, *, resolve: NameResolver | None = None,
+                source_element: str | None = None, variables=None) -> str:
+    """Render one effect as a clause ("step down each static trait instance you rolled")."""
+    return _effects_text([effect], resolve=resolve, source_element=source_element,
+                         variables=variables)
+
+
+def _effect_key(effect: Effect) -> tuple:
+    """What two effects must share to be read as one sentence."""
+    duration = effect.duration
+    timers = tuple((t.event, t.remaining) for t in duration.timers) if duration else ()
+    combine = getattr(duration.combine, "value", duration.combine) if duration else ""
+    return (effect.timing, timers, combine, _die_scope(effect))
+
+
+def _effects_text(effects: list[Effect], *, resolve: NameResolver | None = None,
+                  source_element: str | None = None, variables=None) -> str:
+    """Render an effect sequence, grouping consecutively-shared framing.
+
+    Effects that share a timing, a die scope and a duration read as one clause
+    list with the framing stated once — five rating-gated dice-limit bumps
+    revert at the next roll *together*, so the card says so once.
+    """
+    groups: list[tuple[tuple, list[Effect]]] = []
+    for effect in effects:
+        key = _effect_key(effect)
+        if groups and groups[-1][0] == key:
+            groups[-1][1].append(effect)
+        else:
+            groups.append((key, [effect]))
+
+    rendered = []
+    for (timing, timers, combine, die_scope), group in groups:
+        body = "; ".join(
+            c for c in (_effect_core(e, resolve=resolve, source_element=source_element,
+                                     variables=variables) for e in group) if c
+        )
+        if not body:
+            continue
+        lead = _LEADING_TIMINGS.get(timing)
+        if lead and die_scope:
+            body = f"{lead}, {die_scope}, {body}"
+        elif die_scope:
+            body = f"{die_scope}, {body}"
+        elif lead:
+            body = f"{lead}, {body}"
+        if timing in _TRAILING_TIMINGS:
+            body = f"{body}, {_TRAILING_TIMINGS[timing]}"
+        if timers:
+            duration = SimpleNamespace(timers=[SimpleNamespace(event=e, remaining=n)
+                                               for e, n in timers], combine=combine)
+            body = f"{body} ({_duration_text(duration, count=len(group))})"
+        rendered.append(body)
+    return "; ".join(rendered)
+
+
+def _duration_text(duration, count: int = 1) -> str:
+    """Effect duration = the *undo* timer (distinct from the SFX listening window).
+
+    ``count`` is how many effects share it — a group states the revert once.
+    """
     parts = [_timer_phrase(t) for t in duration.timers] or ["1 scene"]
+    subject = "each reverts" if count > 1 else "reverts"
     if len(parts) == 1:
-        return f"reverts {parts[0]}"
+        return f"{subject} {parts[0]}"
     if getattr(duration.combine, "value", duration.combine) == "all_transpired":
-        return f"reverts once {', '.join(parts)} have all passed"
-    return f"reverts as soon as any of {', '.join(parts)} passes"
+        return f"{subject} once {', '.join(parts)} have all passed"
+    return f"{subject} as soon as any of {', '.join(parts)} passes"
 
 
 def _timer_phrase(timer) -> str:
@@ -747,13 +869,12 @@ def sfx_text(sfx: SFX, *, resolve: NameResolver | None = None,
             continue
         (narrative if cond.type == ConditionType.NARRATIVE else rules).append(clause)
 
-    effects = [t for t in (effect_text(e, resolve=resolve, source_element=source_element)
-                           for e in sfx.effects) if t]
+    effects = _effects_text(sfx.effects, resolve=resolve, source_element=source_element)
 
     head = mc.trigger_card(sfx.trigger)
     if rules:
         head = f"{head}, if {' and '.join(rules)}"
-    text = f"{head}: {'; '.join(effects)}." if effects else f"{head}."
+    text = f"{head}: {effects}." if effects else f"{head}."
     if narrative and include_narrative:
         text = f"{text} ({'; '.join(narrative)})"
     return text

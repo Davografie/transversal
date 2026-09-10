@@ -200,6 +200,42 @@ class TestEffects:
         assert effect_text(effect, resolve=resolve) == \
             "step down the Fire trait by one step, at the end of the session"
 
+    def test_effect_conditions_gate_the_clause(self):
+        """An effect-level condition is a gate, not decoration."""
+        effect = Effect(type="modify_dice_limit", action="increase", result="2",
+                        conditions=[Condition(type=ConditionType.SOURCE_RATING,
+                                              operator="==", value="d6")])
+        assert effect_text(effect, source_element="traitsetting") == \
+            "if this trait is rated d6, increase the dice limit by 2"
+
+    def test_die_scope_names_the_subset(self):
+        """``die_filter {role: None}`` is the codebase's "left unchosen"."""
+        effect = Effect(type="modify_trait", action="gain", target="trait-fire",
+                        result="d6", die_filter={"role": None}, timing=EffectTiming.ON_RESULT)
+        assert effect_text(effect, resolve=resolve) == \
+            "whenever a roll is resolved, for each unchosen die, gain the Fire trait (d6)"
+
+    def test_entity_spec_reads_as_where_it_lands(self):
+        effect = Effect(
+            type="modify_trait", action="gain", target="trait-fire", result="d6",
+            entity_spec=spec(
+                {"kind": "select", "collection": "rolled_dice"},
+                {"kind": "navigate", "edge": "traitsetting"},
+                {"kind": "navigate", "edge": "entity"},
+                {"kind": "navigate", "edge": "location"},
+            ),
+        )
+        text = effect_text(effect, resolve=resolve)
+        assert text.startswith("gain the Fire trait on")
+        assert "location" in text and "owner" in text
+
+    def test_narrative_effect_condition_is_flavour(self):
+        effect = Effect(type="modify_trait", action="step_down", target="trait-fire",
+                        conditions=[Condition(type=ConditionType.NARRATIVE,
+                                              narrative="Only in a storm")])
+        assert effect_text(effect, resolve=resolve) == \
+            "step down the Fire trait by one step (Only in a storm)"
+
 
 class TestSfx:
     def test_d4_bonus(self):
@@ -254,6 +290,30 @@ class TestSfx:
             "When a character is created, if you are not at a location yet and you are in "
             "earth: move to a random location."
         )
+
+    def test_shared_framing_is_stated_once(self):
+        """Rating-gated effects revert together, so the card says so once.
+
+        The live `sfx-qi-condensation` shape: five dice-limit bumps, each gated on
+        the source's rating, all sharing one undo timer.
+        """
+        ratings = ["d4", "d6", "d8", "d10", "d12"]
+        sfx = SFX(
+            id="sfx-qi-condensation", name="Cultivation Stage", trigger="on_roll",
+            source_kind="trait_setting",
+            effects=[
+                Effect(type="modify_dice_limit", action="increase", result=str(i + 1),
+                       duration={"timers": [{"event": "rolls", "remaining": 1}]},
+                       conditions=[Condition(type=ConditionType.SOURCE_RATING,
+                                             operator="==", value=rating)])
+                for i, rating in enumerate(ratings)
+            ],
+        )
+        text = sfx_text(sfx)
+        assert text.count("reverts") == 1
+        assert "each reverts at the next roll" in text
+        assert "if this trait is rated d4, increase the dice limit by 1" in text
+        assert "if this trait is rated d12, increase the dice limit by 5" in text
 
 
 class TestVocabularyGuards:
