@@ -1,5 +1,5 @@
 <template>
-  <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle">
+  <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle" :data-panel-uid="diagId" :data-panel-depth="depth" :data-panel-window="windowId">
     <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up', 'is-anchored': isShallowestVisible }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
       <!-- Drag handle (drag-only): on the anchor rail it moves the whole stack
            (the anchor); on any other rail it slides this panel along its
@@ -83,6 +83,7 @@ import { shallowRef, ref, reactive, computed, markRaw, inject, provide, onMounte
 import { useClipboard } from '@vueuse/core'
 import { panelKey, panelIdentityKey, registerPanelIdentity, unregisterPanelIdentity } from '@/composables/usePanel.js'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
+import { nextPanelDiagId, registerPanelReporter, unregisterPanelReporter, dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
@@ -158,6 +159,11 @@ const emit = defineEmits(['close', 'toggle-collapse', 'dock'])
 // Detaching spawns a floating window from the panel-window registry (a module
 // singleton — any panel can spawn one, not just PanelStack).
 const { spawn: spawnWindow } = usePanelWindows()
+
+// Drag-release diagnostics: this panel reports its own layout state (measured
+// rects, bridges, offsets, rail geometry) so a dump can be compared against the
+// live DOM — see usePanelDiagnostics.js.
+const diagId = nextPanelDiagId()
 
 // Copy-ID helper — the header shows a # button that copies the panel id.
 // legacy:true enables the execCommand fallback so copying works on plain-HTTP
@@ -242,10 +248,15 @@ const viewHeight = ref(window.innerHeight)
 let lastReportedWidth = 0
 let lastReportedHeight = 0
 
+let measureCount = 0
+let lastMeasureAt = 0
+
 function measureSelf() {
   const p = panelEl.value?.getBoundingClientRect()
   const w = wrapperEl.value?.getBoundingClientRect()
   if (!p) return
+  measureCount++
+  lastMeasureAt = Math.round(performance.now())
   const pw = Math.round(p.width)
   const ph = Math.round(p.height)
   const sizeChanged = nodeSize.w !== pw || nodeSize.h !== ph
@@ -593,6 +604,7 @@ function beginSlide(e) {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', finish)
     window.removeEventListener('pointercancel', finish)
+    dumpPanelLayoutSoon('panel-slide-release', { key: props.id || props.title, windowId: props.windowId })
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', finish)
@@ -860,6 +872,54 @@ watch(selfKey, (key, prev) => {
 onUnmounted(() => {
   if (selfKey.value && identityHandle) unregisterPanelIdentity(selfKey.value, identityHandle)
 })
+
+// ── Layout snapshot for the drag-release diagnostics ──
+// Everything the DOM can't answer: cached measurements (compare with the dump's
+// live rects to spot staleness), bridges, offsets, and the rail's own geometry.
+onMounted(() => {
+  registerPanelReporter(diagId, () => ({
+    uid: diagId,
+    windowId: props.windowId,
+    depth: props.depth,
+    title: props.title,
+    id: props.id,
+    isRoot: isRoot.value,
+    direction: props.direction,
+    isVertical: isVertical.value,
+    isDepthHidden: isDepthHidden.value,
+    isShallowestVisible: isShallowestVisible.value,
+    collapsed: isCollapsed.value,
+    nodeSize: { w: nodeSize.w, h: nodeSize.h },
+    measured: {
+      panelTopPx: panelTopPx.value, panelBottomPx: panelBottomPx.value,
+      panelLeftPx: panelLeftPx.value, panelRightPx: panelRightPx.value,
+      wrapperTopPx: wrapperTopPx.value, wrapperLeftPx: wrapperLeftPx.value,
+      ownCenter: ownCenter.value, ownCenterX: ownCenterX.value,
+      measureCount, lastMeasureAt,
+    },
+    props: {
+      top: props.top, left: props.left, maxHeight: props.maxHeight, maxWidth: props.maxWidth,
+      bridgeTop: props.bridgeTop, bridgeBottom: props.bridgeBottom,
+      bridgeLeft: props.bridgeLeft, bridgeRight: props.bridgeRight,
+      originTop: props.originTop, originLeft: props.originLeft,
+      minVisibleDepth: props.minVisibleDepth,
+    },
+    layout: {
+      effectiveTop: effectiveTop.value, effectiveLeft: effectiveLeft.value,
+      slideOffset: slideOffset.value, viewportFix: viewportFix.value,
+      chainOffset: chainOffset.value, crossStart: crossStart.value,
+      crossTotal: crossTotal.value, tabExtent: tabExtent.value, activeExtent: activeExtent.value,
+      tabsHeight: tabsHeight.value, tabsWidth: tabsWidth.value,
+      childCount: children.value.length, activeKey: activeKey.value,
+    },
+    rail: {
+      centerViewport: railCenterViewport.value, centerLocal: railCenterLocal.value,
+      centerViewportX: railCenterViewportX.value, centerLocalX: railCenterLocalX.value,
+      style: actionsStyle.value,
+    },
+  }))
+})
+onUnmounted(() => unregisterPanelReporter(diagId))
 
 // Replaces THIS panel with another spec in the parent's children list.
 function replaceSelf(spec) {

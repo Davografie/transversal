@@ -40,6 +40,7 @@ import { computed, ref, provide, watch, onMounted, onUnmounted } from 'vue'
 import Panel from './Panel.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { clampAnchor, deriveDirection } from '@/composables/usePanelAnchor.js'
+import { dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 
 const props = defineProps({
   win: { type: Object, required: true },
@@ -115,10 +116,16 @@ function startDrag(e) {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', finish)
     window.removeEventListener('pointercancel', finish)
+    dumpPanelLayoutSoon('window-drag-release', {
+      windowId: props.win.id,
+      anchor: { ...anchorCenter.value },
+      direction: props.win.direction,
+    })
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', finish)
   window.addEventListener('pointercancel', finish)
+  dumpPanelLayoutSoon('window-drag-start', { windowId: props.win.id, anchor: { ...anchorCenter.value } })
   onViewportResize()
 }
 

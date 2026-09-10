@@ -49,6 +49,7 @@ import PanelWindow from './PanelWindow.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { usePanelAnchor } from '@/composables/usePanelAnchor.js'
 import { lookupPanelIdentity } from '@/composables/usePanel.js'
+import { dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 
 const props = defineProps({
   rootPanel: { type: Object, default: null },
@@ -142,6 +143,7 @@ function startDrag(e, { threshold = 0 } = {}) {
   const start = anchorCenter.value
   let moved = threshold <= 0
   suppressToggleClick = false
+  dumpPanelLayoutSoon('anchor-drag-start', { source: threshold > 0 ? 'toggle' : 'rail' })
 
   function onMove(ev) {
     const dx = ev.clientX - startX
@@ -165,6 +167,13 @@ function startDrag(e, { threshold = 0 } = {}) {
       logAnchor('drag-end-snap')
     }
     dragging.value = false
+    dumpPanelLayoutSoon('anchor-drag-release', {
+      source: threshold > 0 ? 'toggle' : 'rail',
+      moved,
+      anchor: { ...anchorCenter.value },
+      direction: direction.value,
+      minVisibleDepth: minVisibleDepth.value,
+    })
     if (moved && threshold > 0) {
       // Swallow the click the browser fires right after this drag (browsers
       // dispatch it synchronously behind pointerup). The flag must not outlive
