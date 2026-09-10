@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, toRef, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, toRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -141,6 +141,50 @@ const {
   locationTree, expandedNodes,
   fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds, sceneLocationIds,
 } = useLocationTree({ filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
+
+// ── Free-roam drill-down ────────────────────────────
+// With no acting entity there is no name filter focusing the tree, so expand
+// the path from its universe root down to the GM's current location (and bring
+// the row into view) whenever the location or the acting entity changes.
+function expandPathTo(locationId) {
+  if (!locationId || !locationTree.value.length) return false
+  const path = []
+  if (!findAncestorIds(locationTree.value, locationId, path)) return false
+  const next = { ...expandedNodes.value }
+  let changed = false
+  for (const id of path) {
+    if (!next[id]) { next[id] = true; changed = true }
+  }
+  if (changed) expandedNodes.value = next
+  return true
+}
+
+function scrollLocationIntoView(locationId) {
+  nextTick(() => {
+    // 'center' keeps the ancestor chain visible above the location, instead of
+    // parking the row flush against the panel's bottom edge ('nearest').
+    document
+      .querySelector(`.gm-content [data-node-id="${locationId}"][data-node-kind="location"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  })
+}
+
+watch(
+  [() => props.entityId, () => props.currentLocationId, locationTree],
+  ([entityId, locationId]) => {
+    if (entityId || !locationId) return
+    if (!expandPathTo(locationId)) return
+    scrollLocationIntoView(locationId)
+  },
+  { immediate: true },
+)
+
+// The panel opens on Play, where the tree isn't rendered — the drill above can
+// run before its rows exist. Re-scroll when the GM switches to Prep.
+watch(() => mode.value, (m) => {
+  if (m !== 'prep' || props.entityId || !props.currentLocationId) return
+  scrollLocationIntoView(props.currentLocationId)
+})
 
 // Scene summary scope: current location + its ancestors + descendants.
 const sceneEntitiesInScope = computed(() => {
