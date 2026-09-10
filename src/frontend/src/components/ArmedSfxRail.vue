@@ -67,6 +67,7 @@ function labelize(str) {
   return String(str)
     .replace(/^sfx-/, '')
     .replace(/[_-]+/g, ' ')
+    .toLowerCase()  // GraphQL enums arrive screaming (IMMEDIATE, ON_ROLL)
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
@@ -96,7 +97,7 @@ async function loadCatalog() {
     const data = await graphql(
       `query {
         sfxs {
-          id name description trigger placement arming_scope
+          id name description trigger placement armingScope
           duration { timers { event remaining } }
           effects { timing type action target entity result }
         }
@@ -104,7 +105,7 @@ async function loadCatalog() {
     )
     const map = {}
     for (const s of data?.sfxs || []) {
-      map[s.id] = { ...s, armingScope: s.arming_scope }
+      map[s.id] = { ...s, armingScope: s.armingScope }
     }
     catalog.value = map
   } catch (e) {
