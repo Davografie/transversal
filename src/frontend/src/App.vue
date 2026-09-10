@@ -314,7 +314,7 @@
     </div>
     <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, dragging: occupantDragging && !isMobile }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <div v-if="(wrapperOpen || mobileStackActive) && peers.length" class="peers-bar">
-        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ active: isPeerActive(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
+        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ assumed: isPeerAssumed(p), viewing: isPeerViewed(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
           <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
           <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
           <span class="peer-label">{{ p.name }}</span>
@@ -1090,36 +1090,42 @@ function onInspectEntity(id) {
   }
 }
 
-function isPeerActive(p) {
-  const viewed = viewingEntityId.value
-  const acted = gmMode.value ? entityId.value : null
-  if (viewed && viewed === p.id) return true
-  if (acted && acted === p.id) return true
-  if (!viewed && !acted && entityId.value === p.id) return true
-  return false
-}
+// Peer-chip styling states, deliberately distinct:
+//   assumed — you ARE this entity (entityId) → solid fill
+//   viewing — you are peeking at it (viewingEntityId) → outlined
+function isPeerAssumed(p) { return !!entityId.value && p.id === entityId.value }
+function isPeerViewed(p) { return !!viewingEntityId.value && p.id === viewingEntityId.value }
 
 async function onPeerClick(id) {
   if (gmMode.value) {
     const isLocation = peers.value.find(p => p.id === id)?.type === 'LOCATION'
     if (isLocation) {
-      // View the location's read-only sheet instead of assuming it.
+      // Locations are never assumed — view their read-only sheet (toggle).
       viewingEntityId.value = viewingEntityId.value === id ? null : id
       forceSheet.value = true
       if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
       return
     }
-    if (entityId.value === id) returnToSelf()
-    else await switchPerspective(id)
-    // switchPerspective sets entityId after its fetch — focus then.
-    if (mobileStackActive.value && entityId.value === id) setMobileFocus('sheet')
-  } else {
-    // Clicking our own character returns to self-view (no override), keeping the header tabs visible.
-    viewingEntityId.value = (id === entityId.value || id === ownMainId.value)
-      ? null
-      : (viewingEntityId.value === id ? null : id)
-    if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
+    // Clicking the entity you already act as returns to free-roam.
+    if (entityId.value === id) { returnToSelf(); forceSheet.value = true; return }
+    // Second click on the peer you are viewing → assume it.
+    if (viewingEntityId.value === id) {
+      await switchPerspective(id)   // clears viewingEntityId
+      forceSheet.value = true
+      if (mobileStackActive.value && entityId.value === id) setMobileFocus('sheet')
+      return
+    }
+    // First click → view only (inspect), don't assume.
+    viewingEntityId.value = id
+    forceSheet.value = true
+    if (mobileStackActive.value) setMobileFocus('sheet')
+    return
   }
+  // Clicking our own character returns to self-view (no override), keeping the header tabs visible.
+  viewingEntityId.value = (id === entityId.value || id === ownMainId.value)
+    ? null
+    : (viewingEntityId.value === id ? null : id)
+  if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
   forceSheet.value = true
 }
 
@@ -2419,9 +2425,16 @@ watch(gmMode, (v) => {
   transition: border-color 0.15s, background 0.15s;
 }
 .peer-chip:hover { border-color: var(--overlay-20); }
-.peer-chip.active {
+/* You ARE this entity — solid fill. */
+.peer-chip.assumed {
   border-color: var(--accent);
-  background: var(--bg-panel);
+  background: var(--accent-dim);
+}
+/* You are peeking at this entity (inspect) — outlined, no fill. */
+.peer-chip.viewing {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: transparent;
 }
 .peer-img, .peer-avatar {
   width: 20px;
@@ -2444,7 +2457,8 @@ watch(gmMode, (v) => {
   white-space: nowrap;
   color: var(--text-dim);
 }
-.peer-chip.active .peer-label { color: var(--text); }
+.peer-chip.assumed .peer-label { color: var(--text); }
+.peer-chip.viewing .peer-label { color: var(--text-dim); }
 
 .support-chip.support-unavailable { opacity: 0.45; cursor: not-allowed; }
 .support-chip.support-current { border-color: var(--accent); }
