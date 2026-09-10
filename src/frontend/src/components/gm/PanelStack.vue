@@ -1,5 +1,5 @@
 <template>
-  <button v-if="!show" class="gm-toggle" @click="show = true">🛠</button>
+  <button v-if="!show" ref="toggleEl" class="gm-toggle" @click="onToggleClick">🛠</button>
 
   <div v-if="show" class="panel-viewport">
     <Panel
@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, reactive, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, provide, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import Panel from './Panel.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 
@@ -77,6 +77,37 @@ const anchorRect = computed(() => {
     centerY: viewportHeight.value / 2,
   }
 })
+
+// Diagnostic: the REAL toggle button rect vs the arithmetic anchor, so the two
+// can be compared (window.__PANEL_DEBUG__ = true).
+const toggleEl = ref(null)
+
+function onToggleClick() {
+  logToggleAnchor('open-click')
+  show.value = true
+}
+
+function toggleRect() {
+  const el = toggleEl.value
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  return {
+    top: Math.round(r.top), bottom: Math.round(r.bottom),
+    left: Math.round(r.left), right: Math.round(r.right),
+    w: Math.round(r.width), h: Math.round(r.height),
+    centerX: Math.round(r.left + r.width / 2),
+    centerY: Math.round(r.top + r.height / 2),
+  }
+}
+
+function logToggleAnchor(reason = '') {
+  if (typeof window === 'undefined' || !window.__PANEL_DEBUG__) return
+  console.log('[panel-stack] toggle-anchor', JSON.stringify({
+    reason,
+    rect: toggleRect(),
+    computedAnchor: { ...anchorRect.value },
+  }))
+}
 
 // ── Horizontal fit (viewport-aware panel limit) ─────
 // Track each mounted panel's width per depth. The deepest chain's horizontal
@@ -148,6 +179,7 @@ watch(minVisibleDepth, (to, from) => {
 function onResize() {
   viewportWidth.value = window.innerWidth
   viewportHeight.value = window.innerHeight
+  nextTick(() => logToggleAnchor('resize'))
 }
 
 let resizeTimer = null
@@ -158,6 +190,11 @@ function debouncedResize() {
 
 onMounted(() => {
   window.addEventListener('resize', debouncedResize)
+  nextTick(() => logToggleAnchor('mount'))
+})
+// Log the toggle's rect when it reappears after the panels close.
+watch(show, (v) => {
+  if (!v) nextTick(() => logToggleAnchor('closed'))
 })
 onUnmounted(() => {
   window.removeEventListener('resize', debouncedResize)
