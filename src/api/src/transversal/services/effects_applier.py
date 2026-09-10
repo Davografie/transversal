@@ -27,6 +27,23 @@ EffectHandler = Callable[[Effect, str, str, dict], None]
 # conditions resolve against the trait (etc.) that owns the SFX.
 SOURCE_CONTEXT_KEY = "_source"
 SOURCE_ELEMENT_CONTEXT_KEY = "_source_element"
+# The activation's shared variable scope (condition + effect step outputs). Carried
+# in the effect context so ``entity_spec`` can resolve ``select variable``.
+BINDINGS_CONTEXT_KEY = "_bindings"
+
+
+def _razmerit_entity(effect: Effect, acting_entity_id: str) -> str:
+    """Who a razmerit effect acts on.
+
+    The engine resolves an authored ``entity_spec`` into ``effect.entity`` before
+    dispatch, and a substituted ``{variable}`` (e.g. ``{buying_entity}``) lands
+    there too — so a concrete value means "this entity", while blank / ``self`` /
+    an unresolved placeholder means the acting entity.
+    """
+    subject = (effect.entity or "").strip()
+    if not subject or subject == "self" or subject.startswith("{"):
+        return acting_entity_id
+    return subject
 
 
 class EffectRegistry:
@@ -76,13 +93,15 @@ def _register_core_handlers(em, raz):
     from transversal.services.entity_manager import EntityManager
     from transversal.services.razmerit import RazmeritService
 
-    # Razmerit operations
+    # Razmerit operations. Who it acts on is explicit: the effect's ``entity``
+    # (already resolved from any ``entity_spec`` by the engine), falling back to
+    # the acting entity only when the field is blank/``self``.
     effect_registry.register("transfer_razmerit", "spend",
-        lambda a, eid, u, ctx: raz.spend(eid, int(a.result or "0"), reason="sfx_cost"))
+        lambda a, eid, u, ctx: raz.spend(_razmerit_entity(a, eid), int(a.result or "0"), reason="sfx_cost"))
     effect_registry.register("transfer_razmerit", "earn",
-        lambda a, eid, u, ctx: raz.earn(eid, int(a.result or "0"), reason="effect"))
+        lambda a, eid, u, ctx: raz.earn(_razmerit_entity(a, eid), int(a.result or "0"), reason="effect"))
     effect_registry.register("transfer_razmerit", "transfer",
-        lambda a, eid, u, ctx: raz.transfer(eid, a.target, int(a.result or "0")))
+        lambda a, eid, u, ctx: raz.transfer(_razmerit_entity(a, eid), a.target, int(a.result or "0")))
 
     # Trait, rank, and life-path state mutations route through the shared applier.
     def _commit(a, eid, u, ctx):
@@ -1810,9 +1829,15 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
     passthrough. An effect whose ``conditions`` fail against ``context`` is skipped.
     """
     result = EffectsResult()
-    for effect in effects:
+    bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
+    for raw_effect in effects:
+        effect = raw_effect
         if effect.conditions and not evaluate_conditions(entity, effect.conditions, repo, context, source=source, source_element=source_element):
             continue
+        # Resolve an ``entity_spec`` here too when this list was applied directly
+        # (the engine resolves first on its own path); handlers then see a
+        # concrete ``entity`` id, matching the engine's ``target_spec`` rewrite.
+        effect = resolve_effect_entity(effect, entity.id, repo, context)
         scope_choice = _scope_choice(effect)
         if scope_choice is not None:
             result.pending_choices.append(scope_choice)
@@ -1823,3 +1848,45 @@ def apply_effects(entity: Entity, effects: list[Effect], repo, context: dict | N
             continue
         handler(entity, effect, repo, result)
     return result
+
+
+def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | None = None) -> Effect:
+    """Rewrite ``effect`` so its entity is a concrete id, resolving ``entity_spec``.
+
+    ``entity_spec`` is resolved against the activation's variable scope (carried
+    in ``context`` under :data:`BINDINGS_CONTEXT_KEY`), so an authored path can
+    pick up a variable a condition bound — e.g. "the d4 traits this roll matched,"
+    navigated on to their owning entities. Effects without a spec pass through
+    untouched, and a spec that resolves to nothing leaves the effect as authored
+    so the existing "resolved to nothing" report still fires.
+    """
+    if effect.entity_spec is None or not effect.entity_spec.steps:
+        return effect
+    entity = repo.get_entity(entity_id) if repo is not None else None
+    if entity is None:
+        return effect
+    bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
+    resolved = _resolve_entity_spec(effect, entity, repo, bindings)
+    return resolved if resolved is not None else effect
+
+
+def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict) -> Effect | None:
+    """Resolve ``effect.entity_spec`` to a concrete id, or None if it resolves nothing.
+
+    ``bindings`` is the activation scope (condition + earlier-effect outputs), so a
+    path can pick up a variable a condition named — e.g. the d4 traits this roll
+    matched, navigated on to their owning entities.
+    """
+    from transversal.services.target_resolver import TargetContext, resolve
+
+    resolution = resolve(
+        effect.entity_spec,
+        TargetContext(subject=entity, repo=repo, bindings=bindings),
+    )
+    for value in resolution.values:
+        rid = getattr(value, "id", None)
+        if rid is None and isinstance(value, dict):
+            rid = value.get("id") or value.get("ts_id")
+        if rid:
+            return effect.model_copy(update={"entity": rid, "entity_spec": None})
+    return None

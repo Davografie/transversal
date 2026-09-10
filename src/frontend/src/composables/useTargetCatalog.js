@@ -20,8 +20,8 @@ const TRACE_QUERY = `query($input: TargetSpecInput!, $element: String, $cardinal
   }
 }`
 
-const VARIABLES_QUERY = `query($effects: [EffectInput!]!, $sourceElement: String) {
-  effectVariables(effects: $effects, sourceElement: $sourceElement) { name element cardinality }
+const VARIABLES_QUERY = `query($effects: [EffectInput!]!, $sourceElement: String, $conditions: [ConditionInput!]) {
+  effectVariables(effects: $effects, sourceElement: $sourceElement, conditions: $conditions) { name element cardinality }
 }`
 
 // Module-level singleton: the catalog is shared domain data.
@@ -63,10 +63,16 @@ export function useTargetCatalog() {
   }
 
   // Compute the typed output variables (name -> {element, cardinality}) exposed
-  // by a list of effects, for cross-effect `select variable` type-hinting.
-  async function collectVariables(effects, sourceElement = null) {
-    if (!effects || !effects.length) return {}
-    const data = await graphql(VARIABLES_QUERY, { effects, sourceElement: sourceElement || null })
+  // to a list of effects, for cross-effect `select variable` type-hinting. The
+  // SFX's conditions are traced first: their targeting paths run before any
+  // effect, so the names they output are in scope for every effect.
+  async function collectVariables(effects, sourceElement = null, conditions = null) {
+    if ((!effects || !effects.length) && (!conditions || !conditions.length)) return {}
+    const data = await graphql(VARIABLES_QUERY, {
+      effects: effects || [],
+      sourceElement: sourceElement || null,
+      conditions: (conditions && conditions.length) ? conditions : null,
+    })
     const map = {}
     for (const v of (data?.effectVariables || [])) {
       if (v?.name && v?.element) map[v.name] = { element: v.element, cardinality: v.cardinality || 'one' }

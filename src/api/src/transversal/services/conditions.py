@@ -53,13 +53,19 @@ def _compare(a: int, op: str, b: int) -> bool:
     return a >= b
 
 
-def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "EntityRepository", context: dict | None = None, source=None, source_element: str | None = None) -> bool:
+def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "EntityRepository", context: dict | None = None, source=None, source_element: str | None = None, out_bindings: dict | None = None) -> bool:
     """Evaluate a single condition against the resolved subject's current state.
 
     ``source`` is the SFX's resolved activation/owner source (e.g. a
     ``TraitSetting``), so source-aware conditions (``SOURCE_RATING``,
     ``TARGET_PATH``) can gate on "the trait that owns/triggered this SFX".
     ``source_element`` is its catalog element type (drives ``select source``).
+
+    ``out_bindings`` is the activation's shared variable scope. A
+    ``TARGET_PATH`` condition both *reads* it (earlier conditions' outputs can be
+    selected) and *writes* to it, so the things the gate found stay live for the
+    SFX's effects — e.g. a condition naming the d4 traits in the roll, then an
+    effect that walks those traits to their owning entity.
     """
     if condition.type in (ConditionType.ALWAYS, ConditionType.NARRATIVE):
         return True  # narrative limits are not auto-blocking
@@ -129,10 +135,25 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
             return False
         from transversal.services.target_resolver import TargetContext, resolve
 
-        resolution = resolve(
-            condition.spec,
-            TargetContext(subject=entity, repo=repo, source=source, source_element=source_element),
+        # Event-scoped seeds: a roll-bearing trigger (on_roll / on_result) carries
+        # its dice in the context, so a path can inspect *this* roll.
+        collections: dict = {}
+        rolls = (context or {}).get("rolls")
+        if rolls:
+            collections["rolled_dice"] = rolls
+
+        target_context = TargetContext(
+            subject=entity, repo=repo, source=source,
+            source_element=source_element,
+            collections=collections,
+            bindings=out_bindings if out_bindings is not None else {},
         )
+        resolution = resolve(condition.spec, target_context)
+        # Publish the path's named outputs into the activation scope, so effects
+        # can target what the gate matched (not just that it matched something).
+        # Step outputs land on the resolution *context*, not the resolution.
+        if out_bindings is not None and target_context.bindings:
+            out_bindings.update(target_context.bindings)
         if resolution.errors:
             return False
         # An `evaluate` step yields an explicit boolean; otherwise the condition
@@ -209,13 +230,20 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     return False
 
 
-def evaluate_conditions(entity: "Entity | None", conditions: list[Condition], repo: "EntityRepository", context: dict | None = None, source=None, source_element: str | None = None) -> bool:
+def evaluate_conditions(entity: "Entity | None", conditions: list[Condition], repo: "EntityRepository", context: dict | None = None, source=None, source_element: str | None = None, out_bindings: dict | None = None) -> bool:
     """All conditions must pass (empty list is always true).
 
     ``source``/``source_element`` are threaded to each condition so source-aware
     conditions resolve against the SFX's activation/owner source.
+
+    ``out_bindings`` is the activation's shared variable scope; each condition may
+    read it and publish its own named outputs into it (see
+    :func:`evaluate_condition`).
     """
-    return all(evaluate_condition(entity, c, repo, context, source, source_element) for c in conditions)
+    return all(
+        evaluate_condition(entity, c, repo, context, source, source_element, out_bindings)
+        for c in conditions
+    )
 
 
 def _has_variable(value) -> bool:

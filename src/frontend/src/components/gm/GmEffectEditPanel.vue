@@ -40,8 +40,9 @@ const sourceElement = computed(() => {
   return found ? found.element : ''
 })
 
-// Typed output variables emitted by effects *before* the one being edited,
-// available to `select variable` (cross-effect), traced with the SFX source.
+// Typed output variables emitted by the SFX's conditions and by effects
+// *before* the one being edited, available to `select variable` (cross-effect),
+// traced with the SFX source.
 const outputVariables = ref({})
 
 function priorEffects() {
@@ -50,9 +51,11 @@ function priorEffects() {
 }
 
 watch(
-  () => [draft.effects, props.index, sourceElement.value],
+  () => [draft.effects, draft.conditions, props.index, sourceElement.value],
   async () => {
-    outputVariables.value = await collectVariables(priorEffects(), sourceElement.value || null)
+    outputVariables.value = await collectVariables(
+      priorEffects(), sourceElement.value || null, draft.conditions || null,
+    )
   },
   { immediate: true, deep: true },
 )

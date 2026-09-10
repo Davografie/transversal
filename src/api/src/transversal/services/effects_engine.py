@@ -265,10 +265,20 @@ class EffectsEngine:
             # activation); else ownership resolution (automatic triggers).
             source, source_element, source_id = _resolve_activation_source(sfx, event, repo)
 
+            # Per-activation variable scope. Sealed *before* the gate because a
+            # condition's targeting path can publish named outputs into it ("the
+            # d4 traits in this roll"), which the SFX's effects may then target.
+            # Effect outputs extend the same scope, so later effects see them.
+            bindings: dict = {}
+
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:
                 entity = repo.get_entity(event.entity_id)
-                if entity is None or not evaluate_conditions(entity, sfx.conditions, repo, event.context, source=source, source_element=source_element):
+                if entity is None or not evaluate_conditions(
+                    entity, sfx.conditions, repo, event.context,
+                    source=source, source_element=source_element,
+                    out_bindings=bindings,
+                ):
                     continue
 
             # Cost check: sum razmerit costs from spend effects
@@ -281,8 +291,6 @@ class EffectsEngine:
 
             # Execute each effect with its own timing
             sfx_applied = False
-            # Per-activation output bindings (effect outputs -> later effects).
-            bindings: dict = {}
             # Bind the declared source variable: if the SFX states a source kind
             # and the activation resolved a source, map it to the typed
             # ``{variable}`` so effect fields resolve to the concrete id.
@@ -299,6 +307,13 @@ class EffectsEngine:
                     _effects_applier.SOURCE_CONTEXT_KEY: source,
                     _effects_applier.SOURCE_ELEMENT_CONTEXT_KEY: source_element,
                 }
+            # Carry the activation's variable scope to the applier, so an effect's
+            # ``entity_spec`` can resolve ``select variable`` against what the SFX's
+            # conditions (and any earlier effect) bound.
+            effect_context = {
+                **(effect_context or {}),
+                _effects_applier.BINDINGS_CONTEXT_KEY: bindings,
+            }
             roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]
             log.info(
                 "[process_event] sfx=%s trigger=%s deferred_effects=%s arm_deferred=%s",
@@ -341,6 +356,13 @@ class EffectsEngine:
                     continue  # armed above (raw; substituted at fire time)
 
                 effect = _substitute_effect_context(effect, effect_context, bindings)
+                # Resolve any authored ``entity_spec`` against this activation's
+                # variable scope before dispatch, so every handler — the razmerit
+                # service included — receives a concrete entity id rather than a
+                # spec it would silently ignore.
+                effect = _effects_applier.resolve_effect_entity(
+                    effect, event.entity_id, repo, effect_context,
+                )
                 if effect.timing == EffectTiming.IMMEDIATE:
                     blocked = False
                     if effect.refs:

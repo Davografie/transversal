@@ -220,6 +220,18 @@ Resolution modes **choose** (interactive pick) and **random** (non-interactive s
 
 Any step can declare an `output` name, binding its resolved value into the activation scope so a later effect references it as `{name}` (scalar) or `select variable {name}` (a `many` collection). This is how one effect hands a result to the next.
 
+**Conditions share that scope, and are traced first.** A **Targeting path** condition runs before any effect, so the names its steps output are offered in the effect editor's variable picker alongside the effects' own outputs. That lets a gate do the finding and the effect do the acting on it:
+
+> **Worked example — "When rolling a d4 trait, gain 1 razmerit"** (`sfx-d4-bonus`)
+>
+> *Condition* (Targeting path): `select rolled_dice` → `navigate traitsetting (dedup)` → `filter rating == d4`, **output `d4_traits`** → `evaluate count >= 1`.
+>
+> *Effect*: `earn razmerit 1`, entity targeting path `select variable d4_traits` → `navigate entity`.
+>
+> The condition decides *whether* (and names what it matched); the effect walks those trait instances to their owning entities and credits one. Neither step is implicit: the entity the razmerit lands on comes from the path, not from a hidden default.
+>
+> Two things to know: a roll-inspecting path only resolves on a roll-bearing trigger (`on_roll`/`on_result`), which is what puts the dice in context — and a condition seeded from `rolled_dice` is skipped when availability is computed for *listing*, so it still shows up as available and only gates at fire time.
+
 ---
 
 ## Trigger reference

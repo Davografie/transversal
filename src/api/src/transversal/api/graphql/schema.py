@@ -1034,17 +1034,24 @@ class Query:
         self, info: strawberry.Info,
         effects: list[EffectInput],
         source_element: Optional[str] = None,
+        conditions: Optional[list[ConditionInput]] = None,
     ) -> list[EffectVariable]:
-        """The typed output variables exposed by a list of effects (in order).
+        """The typed output variables exposed to a list of effects (in order).
 
-        Traces each effect's ``target_spec``/``entity_spec``/``refs.*.spec`` in
-        sequence and accumulates step ``outputs`` typed by their resolved element,
-        so the targeting wizard can offer them as ``select variable`` across
-        effects.
+        Traces the SFX's ``conditions`` first — they are evaluated before any
+        effect, so the names their targeting paths output (e.g. ``d4_traits``) are
+        in scope for every effect — then each effect's ``target_spec``/
+        ``entity_spec``/``refs.*.spec`` in sequence, accumulating step ``outputs``
+        typed by their resolved element. The targeting wizard offers the result as
+        ``select variable`` candidates.
         """
         from transversal.services import target_spec as ts
 
         scope = {}
+        for c in (conditions or []):
+            cd = _condition_input_to_domain(c)
+            if cd.spec is not None:
+                scope = ts.spec_variables(cd.spec, source_element, scope)
         for e in (effects or []):
             d = _effect_input_to_domain(e)
             specs = [d.target_spec, d.entity_spec]

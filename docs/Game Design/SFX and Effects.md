@@ -408,6 +408,23 @@ Roll/outcome-timed effects (`on_roll`/`on_set`/`on_result`/`on_contest_*`/`on_su
 
 `SFX.arming_scope` declares this; `None` derives it from trigger (`on_session_start` → `global`, else `self`). `fire_armed` honors the `rolls` budget for **both** registers — a `rolls:N` entry fires N times then drops; `rolls=None` stays armed until a boundary expires it. This makes session-scoped passives (e.g. `sfx-one-trick`) *declare* their lifetime instead of relying on the global path silently ignoring the roll budget.
 
+### Activation variable scope
+
+Each SFX activation carries one shared **variable scope** — a dict of typed `Binding`s threaded through the whole run. Two things write to it, in order:
+
+1. **Conditions.** `evaluate_condition`'s `TARGET_PATH` branch resolves its path with the scope as `TargetContext.bindings`, then publishes the path's `output` names into the caller's `out_bindings`. So a gate can *name what it matched* (e.g. `d4_traits` = the d4 trait instances in this roll), not just answer yes/no. Step outputs live on the resolution **context**, not the `Resolution` (which carries only `values`/`errors`/`pending_choices`).
+2. **Effects.** Effect step outputs extend the same dict, so later effects see both.
+
+The scope reaches the applier via `BINDINGS_CONTEXT_KEY` (`_bindings`) in the effect context — the same pattern as `_source`/`_source_element`. `apply_effects` and `resolve_effect_entity` resolve an effect's `entity_spec` against it before dispatch, so by the time a handler runs it sees a concrete `entity` id with `entity_spec` cleared (mirroring the engine's `target_spec` rewrite).
+
+Roll data reaches conditions the same way it reaches armed effects: roll-bearing triggers put the dice in the event context, and `TARGET_PATH` seeds `collections["rolled_dice"]` from `context["rolls"]`. `fire_roll_sfx` and `fire_result_sfx` both do this; a path selecting `rolled_dice` on any other trigger resolves empty and fails closed.
+
+`effectVariables(effects, sourceElement, conditions)` mirrors this for the editor: it traces the SFX's conditions first, then the effects, and returns the accumulated typed scope so the targeting wizard can offer the names in `select variable`.
+
+### Razmerit effects honour their entity
+
+`earn`/`spend`/`transfer` act on `_razmerit_entity(effect, acting_id)`: a concrete `effect.entity` (a literal, a substituted `{variable}`, or one the engine resolved from an `entity_spec`) wins; blank / `self` / an unresolved placeholder falls back to the acting entity. Before this the razmerit handlers credited the passed-in entity id unconditionally, so an authored `entity`/`entity_spec` on a razmerit effect was silently ignored.
+
 ### Session boundaries
 
 `state_events.fire_session_start()` / `fire_session_end()` are the two global boundaries.
