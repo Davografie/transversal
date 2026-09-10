@@ -470,13 +470,24 @@ const locationOverlay = ref(null)
 async function initLocation() {
   DIAG.mark('initLocation-start', { entityId: entityId.value })
   locationName.value = 'LOADING...'
-  // A free-roaming GM has no entity, so there is nothing to resolve a location
-  // from — and a null id fails this query's non-null `$id`. Skip the round trip
-  // and fall through to the existing no-entity state.
+  // A free-roaming GM has no entity to resolve a location from — and a null id
+  // fails this query's non-null `$id`. currentLocationId is persisted on the
+  // device though, so still resolve the label + background + peers for it;
+  // otherwise a refresh in free-roam shows no background image (and "no entity"
+  // as the location name).
   if (!entityId.value) {
     DIAG.mark('initLocation-no-entity', { reason: 'no entityId (GM free-roam)' })
-    locationName.value = 'no entity'
-    DIAG.mark('initLocation-done', { locationName: locationName.value })
+    locationName.value = currentLocationId.value
+    try {
+      const r2 = await fetch(`/api/v1/locations/${currentLocationId.value}/navigate`)
+      const nav = await r2.json()
+      locationName.value = nav.location?.name || currentLocationId.value
+    } catch (e) {
+      DIAG.mark('initLocation-free-roam-nav-err', { error: e.message })
+    }
+    fetchLocationBg()
+    fetchPeers(true)
+    DIAG.mark('initLocation-done', { locationName: locationName.value, freeRoam: true })
     return
   }
   try {
