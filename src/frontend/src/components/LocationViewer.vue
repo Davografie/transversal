@@ -390,10 +390,12 @@ const selfOccupant = computed(() => occupants.value.find(o => o.id === props.ent
 const selfX = computed(() => selfPos.value.x)
 const selfY = computed(() => selfPos.value.y)
 const selfImage = computed(() => selfOccupant.value.image || null)
+// No portrait and no character name → show the role glyph used by the player
+// settings overlay (🏛 Architect / 🎭 Player) instead of a bare "Y" (B34).
 const selfInitials = computed(() => {
   const o = occupants.value.find(o => o.id === props.entityId)
-  if (o) return occupantInitials(o.name || 'You')
-  return props.gmMode ? 'GM' : occupantInitials('You')
+  if (o?.name) return occupantInitials(o.name)
+  return props.gmMode ? '🏛' : '🎭'
 })
 
 const arrivalRings = [

@@ -201,8 +201,9 @@ not clip itself (`border-radius: 0`). `destNavCache` supplies
 
 `self` is the camera anchor: the scene pans so this dot keeps its image position,
 and it is always draggable. With no perspective entity (`entityId == null` — the
-GM free-roam view) it becomes a **local GM dot**: draggable, unpersisted, labelled
-`GM`, and the camera pans with it.
+GM free-roam view) it becomes a **local GM dot**: draggable, unpersisted,
+labelled with the role glyph (🏛 Architect / 🎭 Player — the same icons as the
+player settings overlay), and the camera pans with it.
 
 Transparent **occupant/self portraits** (media pipeline's
 `EntityImage.transparent`, exposed as `image_transparent` on occupants) render
