@@ -447,7 +447,7 @@ import MediaImage from './MediaImage.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
 
 const props = defineProps({
-  entityId: { type: String, required: true },
+  entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
   universe: { type: String, default: 'earth' },
   phase: { type: String, default: 'adding' },
   embedded: { type: Boolean, default: false },
