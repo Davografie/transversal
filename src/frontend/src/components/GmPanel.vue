@@ -91,7 +91,7 @@ const props = defineProps({
   universe: { type: String, default: 'earth' },
   currentLocationId: { type: String, default: '' },
   currentLocationName: { type: String, default: '' },
-  currentEntityId: { type: String, default: '' },
+  entityId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['next-beat', 'advance-scene', 'start-session', 'end-session', 'add-to-pool'])
@@ -127,7 +127,7 @@ const {
 
 // Default the entity filter to the acted character so the tree focuses on
 // that character's location path instead of the whole hierarchy.
-watch(() => props.currentEntityId, (id) => {
+watch(() => props.entityId, (id) => {
   if (!id) { activeFilters.value = []; return }
   const ent = entities.value.find((e) => e.id === id)
   activeFilters.value = [{ type: 'name', value: id, label: ent?.name || id }]
@@ -171,7 +171,7 @@ function openEntityEdit() {
     component: GmEntityEditPanel,
     title: selected.value.name || 'Edit Entity',
     id: selectedId.value,
-    props: { entityId: selectedId.value, currentEntityId: props.currentEntityId },
+    props: { entityId: selectedId.value, currentEntityId: props.entityId },
     listeners: {
       'switch-to-sheet': switchToSheet,
       'image-open': onImageOpen,
