@@ -651,8 +651,13 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
                           required=False, default="self"),
         ],
         refs=[
+            # Declared *before* ``projection``: a reference is in scope for the
+            # references that follow it, so the world is decided first and the
+            # projection path can filter on it (``universe == {universe}``).
+            RefDef(name="universe", label="Universe (which world)", element="universe"),
             # A path that starts at each entity the target resolved to and walks
-            # to that entity's projection counterpart.
+            # to that entity's projection counterpart — optionally constrained to
+            # the universe above.
             RefDef(name="projection", label="Attunes To (projection)", element="projection"),
         ],
         supports_duration=True,

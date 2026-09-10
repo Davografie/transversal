@@ -698,6 +698,33 @@ def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None
     )
 
 
+def _bind_ref_value(context, name: str, value: str) -> None:
+    """Publish a resolved reference value into the activation scope.
+
+    A step's comparison value may be a ``{name}`` reference (see the resolver's
+    ``_bound_value``), so binding each ref as it resolves is what lets one path
+    join to a choice made in another — *the who's projection whose universe is
+    the one just chosen*. References resolve in declaration order, so a ref that
+    another depends on must be declared first.
+
+    A universe resolves to its *entity*, but content identifies a world by its
+    handle (``three_realms``, not ``universe-three_realms``) — and a projection's
+    ``universe`` field holds the handle. So a universe-valued binding stores the
+    handle, which is what makes ``filter universe == {universe}`` line up.
+    """
+    from transversal.services.target_resolver import Binding
+
+    bindings = getattr(context, "bindings", None)
+    if bindings is None or not value:
+        return
+    handle = value
+    repo = getattr(context, "repo", None)
+    entity = repo.get_entity(value) if repo is not None else None
+    if entity is not None and getattr(entity, "type", "") == "universe":
+        handle = getattr(entity, "current_universe", "") or value
+    bindings[name] = Binding(value=handle, element="", cardinality="one")
+
+
 def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
                  answers: dict[int, list[str]] | None = None,
                  source_kind: str = "", source_id: str = "",
@@ -727,6 +754,7 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
     for name, ref in effect.refs.items():
         if ref.spec is None:
             resolved_values[name] = [ref.value]
+            _bind_ref_value(context, name, ref.value)
             continue
         resolution = resolve(ref.spec, context, answers=answers)
         if resolution.pending_choices:
@@ -745,6 +773,11 @@ def resolve_refs(effect: Effect, context, structured: Optional[list] = None,
             if rid is not None:
                 ids.append(rid)
         resolved_values[name] = ids
+        # Publish the ref so a *later* ref's path can compare against it. The
+        # declaration order defines the dependency: an Attune declares its
+        # chosen universe before the projection path that filters on it.
+        if len(ids) == 1:
+            _bind_ref_value(context, name, ids[0])
 
     names = list(effect.refs.keys())
     out: list[Effect] = []

@@ -769,17 +769,21 @@ def _ref_result(effect: Effect, *, resolve: NameResolver | None = None,
     is sourced from a *life*, so the card says "… to their counterpart" rather
     than naming a universe. The reference path starts from the effect's target
     path, so the author's own name for that step is what reads here.
+    The last reference with a path is the one rendered: references are declared in
+    dependency order (the universe decided first, the life drawn from it second),
+    so the most-derived one is what the effect's object actually is.
     """
+    text = ""
     for ref in (effect.refs or {}).values():
         spec = getattr(ref, "spec", None)
         if spec is None or not spec.steps:
             continue
         phrase = path_phrase(spec, source_element=source_element, variables=variables,
                              resolve=resolve)
-        text = render_phrase(phrase, _determiner(phrase))
-        if text:
-            return text
-    return ""
+        rendered = render_phrase(phrase, _determiner(phrase))
+        if rendered:
+            text = rendered
+    return text
 
 
 def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,

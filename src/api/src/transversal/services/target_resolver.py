@@ -261,9 +261,36 @@ def _coerce(value: Any, field_type: str | None) -> Any:
     return value
 
 
-def _match(element: Any, step: FilterStep, field_type: str | None = None) -> bool:
+#: Distinguishes "no override" from a legitimate ``None`` in :func:`_match`.
+_UNSET: Any = object()
+
+
+def _bound_value(value: Any, context: TargetContext | None) -> Any:
+    """A step's comparison value, resolving a ``{name}`` reference to its binding.
+
+    This is what lets a step compare against something decided elsewhere in the
+    activation — e.g. *the who's projection whose universe is the one just
+    chosen* (``filter universe == {chosen_universe}``). Without it a step's value
+    could only ever be a literal, so a path could not be joined to a choice made
+    in another path. Names come from the activation scope: a condition's or
+    earlier step's ``output``, or a reference value (see ``resolve_refs``).
+    """
+    if not isinstance(value, str) or not (value.startswith("{") and value.endswith("}")):
+        return value
+    name = value[1:-1].strip()
+    bindings = getattr(context, "bindings", None) or {}
+    binding = bindings.get(name)
+    if binding is None:
+        return value  # unknown name: leave it, so the step plainly matches nothing
+    return getattr(binding, "value", binding)
+
+
+def _match(element: Any, step: FilterStep, field_type: str | None = None,
+           expected: Any = _UNSET) -> bool:
     actual = _get_field(element, step.field)
-    op, expected = step.operator, step.value
+    op = step.operator
+    if expected is _UNSET:
+        expected = step.value
     if op == "==":
         return actual == _coerce(expected, field_type)
     if op == "!=":
@@ -366,7 +393,8 @@ def _bind_step_outputs(step, values: list[Any], current_type: ValueType | None, 
     )
 
 
-def _evaluate_step(values: list[Any], current_type: ValueType | None, step: EvaluateStep) -> bool:
+def _evaluate_step(values: list[Any], current_type: ValueType | None, step: EvaluateStep,
+                   context: TargetContext | None = None) -> bool:
     """Terminal boolean test for an ``evaluate`` step.
 
     ``exists`` = non-empty. A comparison tests a named left-hand side
@@ -384,18 +412,19 @@ def _evaluate_step(values: list[Any], current_type: ValueType | None, step: Eval
     field = (step.field or "").strip()
 
     if field == "count":
-        lhs, rhs = len(values), _to_number(step.value)
+        lhs, rhs = len(values), _to_number(_bound_value(step.value, context))
     elif field:
         # Named field: scalar element → the scalar itself; single object → its field.
         if current_type.element in ("int", "number", "die"):
-            lhs, rhs = (_to_number(values[0]) if values else None), _to_number(step.value)
+            lhs = _to_number(values[0]) if values else None
+            rhs = _to_number(_bound_value(step.value, context))
         elif current_type.cardinality == "one" and values:
             f = tc.field(current_type.element, field)
             raw = _get_field(values[0], field)
             if step.operator in ("==", "!="):
-                expected = _coerce(step.value, f.type if f else None)
+                expected = _coerce(_bound_value(step.value, context), f.type if f else None)
                 return (raw == expected) if step.operator == "==" else (raw != expected)
-            lhs, rhs = _to_number(raw), _to_number(step.value)
+            lhs, rhs = _to_number(raw), _to_number(_bound_value(step.value, context))
             if lhs is None or rhs is None:
                 return False
             if step.operator == ">":
@@ -408,13 +437,14 @@ def _evaluate_step(values: list[Any], current_type: ValueType | None, step: Eval
         else:
             return False
     elif current_type.cardinality == "many":
-        lhs, rhs = len(values), _to_number(step.value)
+        lhs, rhs = len(values), _to_number(_bound_value(step.value, context))
     elif current_type.element in ("int", "number", "die"):
-        lhs, rhs = (_to_number(values[0]) if values else None), _to_number(step.value)
+        lhs = _to_number(values[0]) if values else None
+        rhs = _to_number(_bound_value(step.value, context))
     else:
         # Legacy identity comparison for a single object.
         rid = _candidate_id(current_type.element, values[0]) if values else ""
-        target = str(step.value or "")
+        target = str(_bound_value(step.value, context) or "")
         if step.operator == "==":
             return bool(values) and rid == target
         if step.operator == "!=":
@@ -499,7 +529,8 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 errors.append(TraceError(i, f"cannot filter on {src}.{step.field}"))
                 values, current_type = [], None
             else:
-                values = [v for v in values if _match(v, step, f.type)]
+                values = [v for v in values
+                          if _match(v, step, f.type, _bound_value(step.value, context))]
                 # type unchanged
 
         elif isinstance(step, NavigateStep):
@@ -601,7 +632,7 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 break
 
         elif isinstance(step, EvaluateStep):
-            values = [_evaluate_step(values, current_type, step)]
+            values = [_evaluate_step(values, current_type, step, context)]
             current_type = ValueType("boolean", "one")
 
         _bind_step_outputs(step, values, current_type, context)
