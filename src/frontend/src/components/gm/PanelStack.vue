@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, computed, provide, reactive, onMounted, onUnmounted, watch } from 'vue'
 import Panel from './Panel.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 
@@ -129,6 +129,20 @@ const minVisibleDepth = computed(() => {
   }
   // If even the deepest alone doesn't fit, keep only the deepest visible.
   return visibleFrom === null ? depths[0] : visibleFrom
+})
+
+// Diagnostic: log the visibility threshold and per-depth widths so the chain
+// can be inspected live (window.__PANEL_DEBUG__ = true).
+watch(minVisibleDepth, (to, from) => {
+  if (typeof window === 'undefined' || !window.__PANEL_DEBUG__) return
+  const summary = {}
+  for (const [d, m] of depthWidths) summary[d] = Math.max(0, ...m.values())
+  console.log('[panel-stack] min-visible-depth', JSON.stringify({
+    from, to,
+    viewportWidth: viewportWidth.value,
+    available: viewportWidth.value - 72,
+    depthWidths: summary,
+  }))
 })
 
 function onResize() {

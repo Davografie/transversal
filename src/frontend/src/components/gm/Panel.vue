@@ -428,6 +428,18 @@ watch(childSizes, () => nextTick(() => {
 }), { deep: true })
 watch(() => props.anchor, () => { if (isRoot.value) computeRootPosition() })
 
+// Diagnostic: log each panel's depth-hide/show transition with its resolved
+// position so the visible chain can be read from the console
+// (window.__PANEL_DEBUG__ = true).
+watch(isDepthHidden, (hidden) => {
+  nextTick(() => {
+    panelLog(hidden ? 'depth-hide' : 'depth-show', {
+      minVisibleDepth: props.minVisibleDepth,
+      panel: rectOf(panelEl.value),
+    })
+  })
+})
+
 // ── Width reporting for horizontal fit (viewport-aware panel limit) ──
 const registerPanel = inject('registerPanel', null)
 const setPanelWidth = inject('setPanelWidth', null)
