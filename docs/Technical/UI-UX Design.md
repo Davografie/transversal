@@ -30,6 +30,42 @@ Living interaction-design reference for the Transversal frontend. Captures the c
 3. **Follow the finger.** Drag gestures track 1:1 while active and settle with a spring-like snap; nothing teleports on release.
 4. **Consistent selection semantics.** The same concept (e.g. "select a character") must behave identically across surfaces (see [[#Peer selection]]).
 
+## Shared primitives
+
+The reusable UI set lives in `src/frontend/src/components/gm/` (the folder name
+is historical — these are cross-app primitives, not GM-specific): `Panel`,
+`GmList`/`GmListItem`, `TargetPicker`/`SearchDropdown`, `DangerButton`, and
+`Button`. New surfaces should compose these instead of re-styling raw elements.
+
+### Button
+
+`Button.vue` is the standardized button: every visual decision (fill, border,
+state, size) comes from props, and colors come from the theme tokens, so
+buttons follow light/dark automatically.
+
+- **Variants** — `primary` (the one action a surface wants, accent fill),
+  `secondary` (default actions, neutral fill), `ghost` (low emphasis / icon
+  buttons), `danger` (destructive, danger tint), `success` (confirm/commit),
+  `link` (inline text action).
+- **Sizes** — `sm` · `md` (default) · `lg` · `icon` (square, for glyph
+  buttons).
+- **States** — idle, hover, pressed (`:active`), `:focus-visible` (2px accent
+  ring), `loading` (spinner + `aria-busy`, implies disabled, label stays put
+  so the width doesn't jump), `disabled` (dimmed, inert), `active` (toggle /
+  selected, variant-tinted so an armed danger button stays dangerous), plus
+  `block` for full width.
+
+```vue
+<Button variant="primary" :loading="saving" @click="save">Save</Button>
+<Button variant="ghost" size="icon" title="Close">×</Button>
+<Button variant="danger" block :disabled="!canDelete">Delete</Button>
+```
+
+Notes: hover/press mix the fill with `--text`, so they brighten in dark mode
+and darken in light mode ("intensify" either way). `prefers-reduced-motion`
+drops transitions and slows the spinner. `DangerButton` is built on `Button`
+(`variant="danger"` + `active` for the armed confirm state).
+
 ## Character sheet
 
 Navigation lives in the header **pills**: 👤 profile · 🎲 traits · 📘 bluebook · 🛤️ lifepath (GM also gets 🌍 show-all-traits).

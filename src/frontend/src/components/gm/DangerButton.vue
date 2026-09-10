@@ -1,18 +1,21 @@
 <template>
-  <button
-    type="button"
+  <Button
     class="danger-button"
-    :class="{ confirming }"
+    variant="danger"
+    :active="confirming"
     :disabled="disabled"
+    block
     @click="onClick"
-  >
-    {{ displayLabel }}
-  </button>
+  >{{ displayLabel }}</Button>
 </template>
 
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
+import Button from './Button.vue'
 
+// Destructive action with a two-step confirm. Built on the shared Button
+// primitive — the danger look comes from `variant="danger"`, the armed state
+// from `active`.
 const props = defineProps({
   label: { type: String, default: 'Delete' },
   confirmLabel: { type: String, default: 'Confirm?' },
@@ -59,26 +62,17 @@ onUnmounted(clearTimer)
 </script>
 
 <style scoped>
-.danger-button {
-  width: 100%;
-  font-size: 12px; padding: 6px;
-  background: var(--danger-12); color: var(--danger);
-  border: 1px solid var(--danger-20); border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
-}
-.danger-button:hover { background: var(--danger-20); }
-
-.danger-button:disabled { opacity: 0.4; cursor: default; }
-
-.danger-button.confirming {
-  background: var(--danger-32); border-color: var(--danger-45);
-  font-weight: 600;
-  animation: pulse-confirm 0.6s ease-in-out infinite alternate;
-}
+/* Squarer than the default radius (matches the old danger-button look) and a
+   pulse while armed, so the confirm step reads as a distinct state. */
+.danger-button.btn-md { border-radius: 6px; font-size: 12px; padding: 6px; }
+.danger-button.is-active { font-weight: 600; animation: pulse-confirm 0.6s ease-in-out infinite alternate; }
 
 @keyframes pulse-confirm {
   from { opacity: 0.85; }
   to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .danger-button.is-active { animation: none; }
 }
 </style>
