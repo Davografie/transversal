@@ -57,8 +57,8 @@ import { usePanel } from '@/composables/usePanel.js'
 import ChipInput from './ChipInput.vue'
 import GmTraitEditPanel from '@/components/gm/GmTraitEditPanel.vue'
 import GmTraitBatchEditPanel from '@/components/gm/GmTraitBatchEditPanel.vue'
-import GmList from './GmList.vue'
-import DangerButton from '@/components/gm/DangerButton.vue'
+import GmList from '@/components/ui/GmList.vue'
+import DangerButton from '@/components/ui/DangerButton.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()

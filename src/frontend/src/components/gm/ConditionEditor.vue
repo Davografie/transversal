@@ -63,7 +63,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
-import TargetPicker from './TargetPicker.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
 import UniversePicker from './UniversePicker.vue'
 import TargetSpecBuilder from './TargetSpecBuilder.vue'
 

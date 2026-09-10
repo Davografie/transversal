@@ -198,9 +198,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
-import TargetPicker from './TargetPicker.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
 import DiePicker from '../DiePicker.vue'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },

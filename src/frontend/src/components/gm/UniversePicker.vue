@@ -13,7 +13,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import SearchDropdown from './SearchDropdown.vue'
+import SearchDropdown from '@/components/ui/SearchDropdown.vue'
 import { useApi } from '@/composables/useApi.js'
 
 // Universe picker that emits a universe *key* (current_universe), not the

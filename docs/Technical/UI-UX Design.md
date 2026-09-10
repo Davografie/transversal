@@ -32,10 +32,10 @@ Living interaction-design reference for the Transversal frontend. Captures the c
 
 ## Shared primitives
 
-The reusable UI set lives in `src/frontend/src/components/gm/` (the folder name
-is historical — these are cross-app primitives, not GM-specific): `Panel`,
-`GmList`/`GmListItem`, `TargetPicker`/`SearchDropdown`, `DangerButton`, and
-`Button`. New surfaces should compose these instead of re-styling raw elements.
+The reusable UI set lives in `src/frontend/src/components/ui/`: `GmList`/
+`GmListItem`, `TargetPicker`/`SearchDropdown`, `Button`, `DangerButton`. (The
+`gm/` folder keeps the GM-specific panels, which compose these primitives.)
+New surfaces should compose the primitives instead of re-styling raw elements.
 
 ### Button
 

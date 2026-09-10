@@ -32,7 +32,7 @@ import { ref, onMounted } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
-import TargetPicker from './TargetPicker.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
 
 const props = defineProps({
   projection: { type: Object, required: true },

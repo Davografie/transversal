@@ -104,7 +104,7 @@ import UniverseNode from '@/components/canvas/nodes/UniverseNode.vue'
 import GradientEdge from '@/components/canvas/edges/GradientEdge.vue'
 import LifePathEdge from '@/components/canvas/edges/LifePathEdge.vue'
 import GmRollTableDetailPanel from '@/components/gm/GmRollTableDetailPanel.vue'
-import TargetPicker from '@/components/gm/TargetPicker.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
 
 const props = defineProps({
   locationId: { type: String, default: '' },

@@ -116,7 +116,7 @@ import { useApi } from '@/composables/useApi.js'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 import GmScopePicker from './GmScopePicker.vue'
 
 const panel = usePanel()

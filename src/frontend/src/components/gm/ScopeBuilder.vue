@@ -45,7 +45,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
-import TargetPicker from './TargetPicker.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },

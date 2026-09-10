@@ -67,7 +67,7 @@ import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import { useSfxOwners } from '@/composables/useSfxOwners.js'
 import { usePanel } from '@/composables/usePanel.js'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 import GmSfxEditPanel from './GmSfxEditPanel.vue'
 import GmSfxPickerPanel from './GmSfxPickerPanel.vue'
 

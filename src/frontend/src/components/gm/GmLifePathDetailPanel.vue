@@ -56,7 +56,7 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()

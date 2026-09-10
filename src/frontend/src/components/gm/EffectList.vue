@@ -24,7 +24,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useEffectActions } from '@/composables/useEffectActions.js'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },

@@ -27,7 +27,7 @@ import { computed, ref } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 import GmTraitsetDetail from '@/components/gm/GmTraitsetDetail.vue'
 import GmTraitBatchEditPanel from '@/components/gm/GmTraitBatchEditPanel.vue'
 

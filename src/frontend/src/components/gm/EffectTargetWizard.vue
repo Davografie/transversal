@@ -50,7 +50,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import TargetPicker from './TargetPicker.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
 import DieIcon from '../DieIcon.vue'
 
 const props = defineProps({

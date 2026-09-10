@@ -24,7 +24,7 @@
 import { ref, computed } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 
 const panel = usePanel()

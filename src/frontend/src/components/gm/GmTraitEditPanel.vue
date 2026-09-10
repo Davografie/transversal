@@ -225,8 +225,8 @@ import { usePanel } from '@/composables/usePanel.js'
 import GmSfxEditPanel from '@/components/gm/GmSfxEditPanel.vue'
 import GmSfxPickerPanel from '@/components/gm/GmSfxPickerPanel.vue'
 import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
-import GmList from './GmList.vue'
-import DangerButton from '@/components/gm/DangerButton.vue'
+import GmList from '@/components/ui/GmList.vue'
+import DangerButton from '@/components/ui/DangerButton.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()

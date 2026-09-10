@@ -196,8 +196,8 @@ import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
 import GmRollTablesPanel from '@/components/gm/GmRollTablesPanel.vue'
 import GmProjectionEditPanel from '@/components/gm/GmProjectionEditPanel.vue'
 import GmPortalConfigPanel from '@/components/gm/GmPortalConfigPanel.vue'
-import TargetPicker from '@/components/gm/TargetPicker.vue'
-import DangerButton from '@/components/gm/DangerButton.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
+import DangerButton from '@/components/ui/DangerButton.vue'
 import MediaImage from '@/components/MediaImage.vue'
 
 const panel = usePanel()

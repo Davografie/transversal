@@ -19,7 +19,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi.js'
-import TargetPicker from './TargetPicker.vue'
+import TargetPicker from '@/components/ui/TargetPicker.vue'
 
 // Editor for a next_step "return map": a shared roll table declares named
 // exits (entries whose next_step target is "{return:<name>}"), and the caller

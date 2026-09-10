@@ -21,7 +21,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 

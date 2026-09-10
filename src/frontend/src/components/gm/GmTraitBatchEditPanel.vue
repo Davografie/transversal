@@ -97,7 +97,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
-import GmList from './GmList.vue'
+import GmList from '@/components/ui/GmList.vue'
 
 const props = defineProps({
   initialTraitsetId: { type: String, default: '' },
