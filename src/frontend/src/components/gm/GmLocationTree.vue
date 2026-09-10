@@ -149,14 +149,14 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
 .entity-row { margin-bottom: 4px; }
 
 /* "… N more" stub — collapsed siblings of a focused level. */
-.entity-row.more { opacity: 0.75; }
-.entity-row.more:hover { opacity: 1; }
+/* "… N more" stub — a first-class affordance (you click it to look for
+   something else), not a footnote: full-contrast text, hover goes accent. */
 .tree-toggle.more { cursor: default; }
 .entity-name.more-name {
-  font-style: italic; color: var(--text-dim); font-size: 11px;
+  font-style: normal; color: var(--text); font-size: 12px;
   cursor: pointer; border-bottom: 1px dashed var(--overlay-25);
 }
-.entity-row.more:hover .more-name { color: var(--text); }
+.entity-row.more:hover .more-name { color: var(--accent); border-bottom-color: var(--accent); }
 
 .tree-enter-active, .tree-leave-active { transition: all 0.2s ease; }
 .tree-enter-from, .tree-leave-to { opacity: 0; transform: translateY(-8px); }
