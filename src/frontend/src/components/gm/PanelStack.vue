@@ -144,8 +144,10 @@ provide('unregisterPanel', unregisterPanel)
 const minVisibleDepth = computed(() => {
   const depths = [...depthWidths.keys()].sort((a, b) => b - a)
   if (depths.length === 0) return 0
-  // Space left of the toggle: viewport − (toggle 42 + right 12 + gap 8) − margin.
-  const available = viewportWidth.value - 72
+  // Usable span for the visible chain: panels' right edge sits at vw-34 (under
+  // the action rail), left margin 12 → vw-46; the fit loop adds a gap per
+  // depth, so the budget is vw-46 + 8 = vw-38.
+  const available = viewportWidth.value - 38
   let total = 0
   let visibleFrom = null
   for (const d of depths) {
@@ -171,7 +173,7 @@ watch(minVisibleDepth, (to, from) => {
   console.log('[panel-stack] min-visible-depth', JSON.stringify({
     from, to,
     viewportWidth: viewportWidth.value,
-    available: viewportWidth.value - 72,
+    available: viewportWidth.value - 38,
     depthWidths: summary,
   }))
 })

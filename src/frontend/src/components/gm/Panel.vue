@@ -211,6 +211,13 @@ function measureSelf() {
 // Root placement: anchor the panel to the toggle, centered on it as much as
 // possible, but always clamped inside the viewport. Frozen afterwards — children
 // are out of flow, so they never move the parent.
+//
+// The action rail replaces the 🛠 toggle (fixed at right:12px, 36px wide → its
+// left edge sits at vw-48). The panel's right edge overlaps the rail by 14px,
+// as it did before the rail became viewport-fixed: right edge = vw-48+14 =
+// anchor.left + 20.
+const RAIL_OVERHANG = 20
+
 function computeRootPosition() {
   const a = props.anchor
   // A depth-hidden root measures 0×0 but must still resolve a position so its
@@ -221,7 +228,7 @@ function computeRootPosition() {
   const MARGIN = 12
   let top, left
   if (props.direction === 'left') {
-    left = a.left - props.gap - nodeSize.w
+    left = a.left + RAIL_OVERHANG - nodeSize.w
     top = a.centerY - nodeSize.h / 2
   } else {
     // TODO(Phase 2): other directions.
@@ -588,10 +595,10 @@ provide(panelKey, {
   border: 1px solid var(--overlay-8);
   border-radius: 8px;
   /* Variable width: content-driven, floored and capped. The cap is also
-     viewport-bound so a single panel always fits the space left of the toggle
-     (toggle 42 + right margin 12 + gap 8 + left margin 12 = 74px). */
-  min-width: min(260px, calc(100vw - 74px));
-  max-width: min(var(--gm-panel-max-w, 440px), calc(100vw - 74px));
+     viewport-bound: the panel's right edge sits at vw-34 (under the action
+     rail), leaving a 12px left margin, so width ≤ vw-46. */
+  min-width: min(260px, calc(100vw - 46px));
+  max-width: min(var(--gm-panel-max-w, 440px), calc(100vw - 46px));
   max-height: calc(100vh - 40px);
   overflow: auto;
 }
