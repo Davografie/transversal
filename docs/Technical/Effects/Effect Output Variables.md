@@ -110,11 +110,6 @@ machinery rather than adding a parallel system.
 - **`select source`-dependent types** — a step whose element comes from
   `select source` now resolves in the SFX editor (it threads `sourceElement`);
   noted for completeness.
-- **Armed-path `entity_spec`** — an effect carrying an `entity_spec` resolves on
-  the immediate path and in `apply_effects`; the roll-deferred path
-  (`_apply_armed`) does not resolve it yet, so such an effect falls back to the
-  acting entity. No live SFX is affected (the only `entity_spec` in the DB is an
-  immediate effect).
 - **`{name}` substitution vs `select variable`** — a `many` binding still can't
   be referenced from a flat field (array re-use goes through `select variable`).
 - **`die_filter` + `target_spec`** — `_apply_armed` checks `refs` then
