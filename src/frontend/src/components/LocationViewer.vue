@@ -378,8 +378,20 @@ async function setOverlay(value) {
 
 // Self position in image space. With a perspective entity it's that occupant's
 // map position; without one (GM free-roam, entityId == null) it's the GM dot's
-// local position, else centre.
-const gmSelfPos = ref(null)  // { x, y } image % — GM free-roam dot (local, not persisted)
+// position for THIS location, else centre. The GM dot is device-local and
+// persisted per location, so a refresh — or a return — restores it.
+const GM_DOT_KEY = 'gmDotPositions'
+function loadGmDots() {
+  try { return JSON.parse(localStorage.getItem(GM_DOT_KEY) || '{}') || {} } catch { return {} }
+}
+const gmDotPositions = ref(loadGmDots())  // { [locationId]: { x, y } }
+const gmSelfPos = computed(() => gmDotPositions.value[props.locationId] || null)
+function setGmDotPos(x, y) {
+  gmDotPositions.value = { ...gmDotPositions.value, [props.locationId]: { x, y } }
+}
+function persistGmDots() {
+  try { localStorage.setItem(GM_DOT_KEY, JSON.stringify(gmDotPositions.value)) } catch { /* storage unavailable */ }
+}
 const selfPos = computed(() => {
   const o = occupants.value.find(o => o.id === props.entityId)
   const g = gmSelfPos.value
@@ -847,34 +859,64 @@ async function applyOccDragFrame() {
     occ.map_y = Math.max(2, Math.min(98, Math.round(img.y)))
   }
 
-  // Track targets — all positions image-relative. EXPAND_PROXIMITY opens
-  // every nearby bubble (size coupled to distance, quick near the dot);
-  // travelProximity() arms travel on the single nearest bubble.
-  if (occ && occ.id === props.entityId) {
-    const px = occ.map_x, py = occ.map_y
-    const travelDist = travelProximity()
-
-    const levels = {}
-    let travelNearest = null, travelNearestDist = travelDist
-
-    const scan = (type, key, name, tx, ty) => {
-      const dist = Math.sqrt((tx - px) ** 2 + (ty - py) ** 2)
-      if (dist < travelNearestDist) { travelNearest = { type, key, name }; travelNearestDist = dist }
-      if (dist < EXPAND_PROXIMITY) {
-        const t = dist / EXPAND_PROXIMITY
-        levels[`${type}-${key || name}`] = 1 - t * t  // quadratic: expands fast
-      }
-    }
-    for (const z of zones.value) scan('zone', null, z.name, z.x, z.y)
-    for (const nd of navDots.value) scan('nav', nd.key, null, nd.x, nd.y)
-
-    dragTarget = travelNearest
-    expandLevels.value = levels
-    armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.key || travelNearest.name}` : ''
-  }
+  if (occ && occ.id === props.entityId) updateTravelTargets(occ.map_x, occ.map_y)
 
   await nextTick() // wait for Vue to flush the reactive re-render
   noteFrameWork(performance.now() - t0)
+}
+
+// Proximity feedback for a dot at (px, py) in image space: EXPAND_PROXIMITY opens
+// every nearby bubble (size coupled to distance, quick near the dot);
+// travelProximity() arms travel on the single nearest bubble.
+function updateTravelTargets(px, py) {
+  const travelDist = travelProximity()
+  const levels = {}
+  let travelNearest = null, travelNearestDist = travelDist
+  const scan = (type, key, name, tx, ty) => {
+    const dist = Math.sqrt((tx - px) ** 2 + (ty - py) ** 2)
+    if (dist < travelNearestDist) { travelNearest = { type, key, name }; travelNearestDist = dist }
+    if (dist < EXPAND_PROXIMITY) {
+      const t = dist / EXPAND_PROXIMITY
+      levels[`${type}-${key || name}`] = 1 - t * t  // quadratic: expands fast
+    }
+  }
+  for (const z of zones.value) scan('zone', null, z.name, z.x, z.y)
+  for (const nd of navDots.value) scan('nav', nd.key, null, nd.x, nd.y)
+  dragTarget = travelNearest
+  expandLevels.value = levels
+  armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.key || travelNearest.name}` : ''
+}
+
+// Drop-on-target travel, shared by the occupant self-drag and the GM dot drag.
+function travelToTarget(t) {
+  if (!t) return false
+  if (t.type === 'zone') {
+    const zone = zones.value.find(z => z.name === t.name)
+    if (!zone) return false
+    const child = childForZone(zone)
+    if (child) {
+      travelWithAnimation(zone, child)
+    } else if (props.entityId) {
+      moveTo(zone.location_id || '', '')
+    } else {
+      return false
+    }
+    return true
+  }
+  if (t.type === 'nav') {
+    const nd = navDots.value.find(d => d.key === t.key)
+    if (!nd) return false
+    activeElement.value = { type: 'nav', key: nd.key }
+    // Destination display name, for the view-only move's location label
+    const destName = nd.type === 'parent'
+      ? nav.value.parent?.name
+      : (nav.value.transversal || []).find(x => x._key === nd.target.id)?.name
+    const fakeZone = { x: nd.x, y: nd.y }
+    const fakeChild = { _key: nd.target.id, name: destName, current_universe: nd.target.universe, transversal_type: nd.type === 'portal' ? nd.transversal_type : null }
+    travelWithAnimation(fakeZone, fakeChild, nd.image)
+    return true
+  }
+  return false
 }
 
 async function onOccDragEnd() {
@@ -898,32 +940,11 @@ async function onOccDragEnd() {
 
   occSuppressClick = true
 
-  // If player dropped near a target, trigger interaction
+  // If the player dropped near a target, travel there
   if (occ.id === props.entityId && dragTarget && !props.editZones) {
     const t = dragTarget
     dragTarget = null
-    if (t.type === 'zone') {
-      const zone = zones.value.find(z => z.name === t.name)
-      if (zone) {
-        const child = childForZone(zone)
-        if (child) {
-          travelWithAnimation(zone, child)
-        } else {
-          moveTo(zone.location_id || child?._key || '', '')
-        }
-        return
-      }
-    }
-    if (t.type === 'nav') {
-      const nd = navDots.value.find(d => d.key === t.key)
-      if (nd) {
-        activeElement.value = { type: 'nav', key: nd.key }
-        const fakeZone = { x: nd.x, y: nd.y }
-        const fakeChild = { _key: nd.target.id, current_universe: nd.target.universe, transversal_type: nd.type === 'portal' ? nd.transversal_type : null }
-        travelWithAnimation(fakeZone, fakeChild, nd.image)
-        return
-      }
-    }
+    if (travelToTarget(t)) return
   }
   dragTarget = null
   // Keep self popped
@@ -986,10 +1007,11 @@ function applyGmDotDragFrame() {
   const viewX = gmDrag.origX + ((clientX - gmDrag.startX) / c.cw) * 100
   const viewY = gmDrag.origY + ((clientY - gmDrag.startY) / c.ch) * 100
   const img = toImagePos(viewX, viewY)
-  gmSelfPos.value = {
-    x: Math.max(2, Math.min(98, Math.round(img.x))),
-    y: Math.max(2, Math.min(98, Math.round(img.y))),
-  }
+  setGmDotPos(
+    Math.max(2, Math.min(98, Math.round(img.x))),
+    Math.max(2, Math.min(98, Math.round(img.y)))
+  )
+  updateTravelTargets(gmSelfPos.value.x, gmSelfPos.value.y)
 }
 
 function onGmDotDragEnd() {
@@ -1002,8 +1024,16 @@ function onGmDotDragEnd() {
   const wasMoved = gmDragMoved
   gmDrag = null
   gmDragMoved = false
+  expandLevels.value = {}
+  armedDot.value = ''
   if (draggingEmitted) { draggingEmitted = false; emit('dragging', false) }
-  if (wasMoved) occSuppressClick = true  // a drag must not fire the click handler
+  const t = dragTarget
+  dragTarget = null
+  if (!wasMoved) return
+  occSuppressClick = true  // a drag must not fire the click handler
+  persistGmDots()
+  // Dropped on a location → travel the view there
+  if (t && !props.editZones) travelToTarget(t)
 }
 
 // ── Fetch nav data ─────────────────────────────────
@@ -1064,7 +1094,13 @@ async function moveTo(locationId, universe) {
   } catch { /* silent */ }
 }
 
-async function relocate(locationId, universe, consciousness, effects) {
+async function relocate(locationId, universe, consciousness, effects, name) {
+  // GM free-roam (no perspective entity): there is nothing to move — travel
+  // just switches the viewed location. Nothing is persisted.
+  if (!props.entityId) {
+    emit('moved', { location: name || locationId, location_id: locationId, universe })
+    return
+  }
   if (effects && effects.length) {
     try {
       const r = await fetch(`/api/v1/locations/${props.locationId}/portal/${locationId}/fire`, {
@@ -1213,7 +1249,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   const img = imageUrl || childImage(zone)
   const sourceId = props.locationId  // remember where we came from
   if (!img) {
-    relocate(child._key, child.current_universe, child.transversal_type === 'consciousness', child.effects)
+    relocate(child._key, child.current_universe, child.transversal_type === 'consciousness', child.effects, child.name)
     return
   }
 
@@ -1270,7 +1306,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     imageAspect.value = preload.naturalWidth / preload.naturalHeight
   }
 
-  relocate(child._key, child.current_universe, child.transversal_type === 'consciousness', child.effects)
+  relocate(child._key, child.current_universe, child.transversal_type === 'consciousness', child.effects, child.name)
 
   setTimeout(async () => {
     await fetchNav()
@@ -1281,6 +1317,7 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     // Lock position, switch background, and remove portal — all in one frame
     const so = occupants.value.find(o => o.id === props.entityId)
     if (so) { so.map_x = arriveX; so.map_y = arriveY }
+    else { setGmDotPos(arriveX, arriveY); persistGmDots() }  // free-roam dot lands here
     currentImage.value = img
 
     // Force-disable transitions on the viewer element to prevent any cross-frame animation
