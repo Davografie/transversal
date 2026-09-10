@@ -9,7 +9,7 @@
         @input="open = true"
         class="gsp-input"
       />
-      <button v-if="modelValue" class="gsp-clear" title="Clear" @mousedown.prevent="clear">×</button>
+      <Button v-if="modelValue" class="gsp-clear" variant="ghost" size="icon" title="Clear" @mousedown.prevent="clear">×</Button>
       <div v-if="open" class="gsp-drop">
         <div v-if="!filtered.length" class="gsp-empty">No matches</div>
         <div
@@ -27,6 +27,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import Button from '@/components/ui/Button.vue'
 
 // Searchable single-select for a small id→label list with an explicit
 // "empty" option (e.g. universe "Fundamental (all universes)" = '').
@@ -89,11 +90,13 @@ watch(() => props.modelValue, () => { search.value = '' })
   box-sizing: border-box;
 }
 .gsp-input::placeholder { color: var(--text-dim); }
-.gsp-clear {
-  position: absolute; right: 4px; top: 4px; font-size: 12px; line-height: 1;
-  padding: 0 2px; cursor: pointer; background: none; border: none; color: var(--text-dim);
+/* Placement + compact box only: the clear glyph lives inside a ~24px input
+   row, so the primitive's 32px icon box is trimmed back to fit it. Scoped to
+   the wrapper so it wins over `.btn-icon`'s own size. */
+.gsp-input-wrap .gsp-clear {
+  position: absolute; right: 4px; top: 4px;
+  width: 16px; height: 16px; font-size: 12px; line-height: 1;
 }
-.gsp-clear:hover { color: var(--danger-soft); }
 .gsp-drop {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
   max-height: 160px; overflow-y: auto;

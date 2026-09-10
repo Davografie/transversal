@@ -18,7 +18,7 @@
       <span class="lpe-hint">The first roll table of this path.</span>
     </div>
 
-    <button class="lpe-save" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save life path' }}</button>
+    <Button class="lpe-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save life path' }}</Button>
     <div v-if="error" class="lpe-error">{{ error }}</div>
   </div>
 </template>
@@ -28,6 +28,7 @@ import { reactive, ref } from 'vue'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
+import Button from '@/components/ui/Button.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -83,7 +84,5 @@ async function save() {
 }
 .lpe-field textarea { resize: vertical; min-height: 48px; }
 .lpe-hint { font-size: 9px; color: var(--text-dim); }
-.lpe-save { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
-.lpe-save:disabled { opacity: 0.5; cursor: default; }
 .lpe-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

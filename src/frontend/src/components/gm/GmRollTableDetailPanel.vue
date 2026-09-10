@@ -3,7 +3,7 @@
     <div class="rtd-header">
       <span class="rtd-name">{{ table?.name || name }}</span>
       <span class="rtd-type">{{ table?.universe }}</span>
-      <button class="rtd-edit" @click="editTable">✎ Edit</button>
+      <Button class="rtd-edit" variant="neutral" @click="editTable">✎ Edit</Button>
     </div>
 
     <div class="rtd-meta">
@@ -60,6 +60,7 @@ import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmRollTableEntryEditPanel from './GmRollTableEntryEditPanel.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   tableId: { type: String, required: true },
@@ -120,7 +121,7 @@ function conditionSummary(c) {
 .rtd-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .rtd-name { font-weight: 600; font-size: 14px; }
 .rtd-type { font-size: 9px; color: var(--text-dim); text-transform: uppercase; background: var(--overlay-6); padding: 1px 5px; border-radius: 3px; }
-.rtd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: var(--overlay-6); border: 1px solid var(--overlay-10); color: var(--text); border-radius: 4px; cursor: pointer; }
+.rtd-edit { margin-left: auto; }
 .rtd-meta { display: flex; gap: 6px; margin-bottom: 8px; }
 .rtd-chip { font-size: 9px; color: var(--text-dim); background: var(--overlay-4); padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
 .rtd-subsection { margin-top: 10px; }

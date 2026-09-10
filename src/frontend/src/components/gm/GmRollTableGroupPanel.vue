@@ -12,7 +12,7 @@
         <span class="entity-id">{{ t.id }}</span>
       </template>
     </GmList>
-    <button class="rtg-add-btn" @click="addTable">＋ Add roll table</button>
+    <Button class="rtg-add-btn" variant="secondary" block @click="addTable">＋ Add roll table</Button>
   </div>
 </template>
 
@@ -22,6 +22,7 @@ import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 
@@ -64,10 +65,5 @@ function addTable() {
 
 <style scoped>
 .rtg-root { padding: 0; }
-.rtg-add-btn {
-  width: 100%; margin-top: 8px; font-size: 11px; padding: 6px 0;
-  background: var(--resonance-8); border: 1px dashed var(--resonance-25);
-  border-radius: 4px; color: var(--accent); cursor: pointer;
-}
-.rtg-add-btn:hover { background: var(--resonance-12); }
+.rtg-add-btn { margin-top: 8px; }
 </style>

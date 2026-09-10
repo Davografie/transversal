@@ -77,7 +77,7 @@
             <div class="rte-entry-head">
               <span class="rte-entry-index">#{{ i + 1 }}</span>
               <span class="rte-spacer"></span>
-              <button class="rte-mini rte-del" @click.stop="removeEntry(i)">✕</button>
+              <Button class="rte-mini rte-del" variant="danger-ghost" size="sm" @click.stop="removeEntry(i)">✕</Button>
             </div>
             <input v-model="e.label" placeholder="Entry label" />
             <div class="rte-row">
@@ -102,10 +102,10 @@
           </div>
         </template>
       </GmList>
-      <button class="rte-add" @click="addEntry">＋ Add entry</button>
+      <Button class="rte-add" variant="secondary" @click="addEntry">＋ Add entry</Button>
     </div>
 
-    <button class="rte-save" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save roll table' }}</button>
+    <Button class="rte-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save roll table' }}</Button>
     <div v-if="error" class="rte-error">{{ error }}</div>
   </div>
 </template>
@@ -117,6 +117,7 @@ import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 import GmScopePicker from './GmScopePicker.vue'
 
 const panel = usePanel()
@@ -256,11 +257,6 @@ async function save() {
 .rte-entry-head { display: flex; align-items: center; gap: 4px; }
 .rte-entry-index { font-size: 9px; color: var(--text-dim); }
 .rte-spacer { flex: 1; }
-.rte-mini { background: var(--overlay-6); border: 1px solid var(--overlay-10); color: var(--text); border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 6px; }
-.rte-del { color: var(--danger); }
 .rte-num { width: 70px; }
-.rte-add { font-size: 11px; padding: 5px 10px; background: var(--resonance-8); border: 1px dashed var(--resonance-25); border-radius: 4px; color: var(--accent); cursor: pointer; }
-.rte-save { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
-.rte-save:disabled { opacity: 0.5; cursor: default; }
 .rte-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

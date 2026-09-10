@@ -16,7 +16,7 @@
     </div>
     <div class="actions">
       <Button class="save-btn" :loading="saving" :disabled="saving" @click="save" variant="success" solid>{{ saving ? 'Saving…' : 'Save' }}</Button>
-      <button class="cancel-btn" @click="panel.close()">Cancel</button>
+      <Button class="cancel-btn" variant="neutral" @click="panel.close()">Cancel</Button>
     </div>
   </div>
 </template>
@@ -82,16 +82,7 @@ async function save() {
   display: flex;
   gap: 6px;
 }
-.cancel-btn {
+.actions .cancel-btn {
   padding: 6px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--overlay-10);
-  background: var(--overlay-2);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-}
-.cancel-btn:hover {
-  background: var(--overlay-6);
 }
 </style>

@@ -5,18 +5,21 @@
         <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
       </div>
       <div class="panel-top-actions">
-        <button
+        <Button
           v-if="(form.type === 'CHARACTER' || form.type === 'GMC') && entityId !== currentEntityId"
           class="assume-btn"
+          variant="secondary"
+          size="sm"
           title="Act as this character"
           @click="assumeCharacter"
-        >🎭 Assume</button>
-        <button
+        >🎭 Assume</Button>
+        <Button
           class="publish-btn"
-          :class="{ 'is-published': !form.unpublished }"
+          :variant="form.unpublished ? 'neutral' : 'success'"
+          size="sm"
           :title="form.unpublished ? 'Publish — make visible to players' : 'Unpublish — GM-only again'"
           @click="form.unpublished = !form.unpublished"
-        >{{ form.unpublished ? '⬆ Publish' : '⬇ Unpublish' }}</button>
+        >{{ form.unpublished ? '⬆ Publish' : '⬇ Unpublish' }}</Button>
       </div>
     </div>
     <GmEntityForm
@@ -24,8 +27,8 @@
       :entity-id="entityId"
     />
     <div v-if="form.type === 'LOCATION' || form.type === 'GMC'" class="canvas-open-row">
-      <button class="section-btn" @click="openCanvas">🗺 Open in Canvas</button>
-      <button v-if="form.type === 'LOCATION'" class="section-btn" @click="emit('go-to-location')">📍 Go to this location</button>
+      <Button class="section-btn" variant="neutral" @click="openCanvas">🗺 Open in Canvas</Button>
+      <Button v-if="form.type === 'LOCATION'" class="section-btn" variant="neutral" @click="emit('go-to-location')">📍 Go to this location</Button>
     </div>
     <div class="image-gallery">
       <div class="gallery-header">
@@ -85,8 +88,8 @@
             <span class="proj-name">{{ p.name || form?.name }}</span>
             <span class="proj-universe">{{ universeName(p.originUniverse) }}<template v-if="p.universe !== p.originUniverse"> → {{ universeName(p.universe) }}</template></span>
             <span class="proj-type" :class="{ active: p.id === currentProjection }">{{ p.transversalType.toLowerCase() }}<template v-if="p.id === currentProjection"> · active</template></span>
-            <button class="proj-imagen" :class="{ cancelling: projectionGenBusy(p) }" :title="projectionGenBusy(p) ? 'Cancel generation' : 'Generate image for this body'" @click.stop="onImagenClick(p.id)">{{ projectionGenBusy(p) ? '✕' : '🖼' }}</button>
-            <button class="proj-remove" @click.stop="removeProjection(p.id)" title="Remove projection">✕</button>
+            <Button class="proj-imagen" variant="ghost" size="sm" :class="{ cancelling: projectionGenBusy(p) }" :title="projectionGenBusy(p) ? 'Cancel generation' : 'Generate image for this body'" @click.stop="onImagenClick(p.id)">{{ projectionGenBusy(p) ? '✕' : '🖼' }}</Button>
+            <Button class="proj-remove" variant="danger-ghost" size="sm" @click.stop="removeProjection(p.id)" title="Remove projection">✕</Button>
           </div>
           <div v-if="projectionImages(p).length" class="gallery-grid projection-gallery">
             <div
@@ -117,7 +120,7 @@
           <option value="CONSCIOUSNESS">consciousness</option>
           <option value="INAPPOSITE">inapposite</option>
         </select>
-        <button class="section-btn proj-add-btn" @click="addProjectionLocal">+ Add</button>
+        <Button class="section-btn proj-add-btn" variant="neutral" @click="addProjectionLocal">+ Add</Button>
       </div>
     </div>
     <div v-if="form.type === 'LOCATION'" class="transversal-links">
@@ -128,17 +131,17 @@
       <div v-else class="transversal-list">
         <div v-for="link in transversalLinks" :key="link._key" class="transversal-row">
           <span class="transversal-name">{{ link.name }}</span>
-          <button class="transversal-effects" :class="{ has: (link.effects || []).length }" title="Edit portal effects" @click="openPortalConfig(link)">
+          <Button class="transversal-effects" variant="neutral" size="sm" :active="(link.effects || []).length > 0" title="Edit portal effects" @click="openPortalConfig(link)">
             ⚙{{ (link.effects || []).length || '' }}
-          </button>
-          <button class="transversal-toggle" :class="link.transversal_type || 'inapposite'" @click="toggleLinkType(link)">
+          </Button>
+          <Button class="transversal-toggle" variant="neutral" size="sm" :class="link.transversal_type || 'inapposite'" @click="toggleLinkType(link)">
             {{ link.transversal_type || 'inapposite' }}
-          </button>
+          </Button>
         </div>
       </div>
       <div class="transversal-add">
         <TargetPicker v-model="newTransversalLocationId" kind="location" placeholder="Add link to location…" class="proj-picker" @select="onTransversalLocationSelect" />
-        <button class="section-btn proj-add-btn" @click="createTransversalLinkLocal">+ Add</button>
+        <Button class="section-btn proj-add-btn" variant="neutral" @click="createTransversalLinkLocal">+ Add</Button>
       </div>
     </div>
     <div v-if="form.type === 'LOCATION' || form.type === 'UNIVERSE'" class="zones-section">
@@ -153,14 +156,14 @@
       </div>
       <div class="zones-add">
         <input v-model="newZoneName" class="zone-input" placeholder="New sub-location name…" @keyup.enter="createZone" />
-        <button class="section-btn zone-add-btn" :disabled="!newZoneName.trim() || creatingZone" @click="createZone">
+        <Button class="section-btn zone-add-btn" variant="neutral" :loading="creatingZone" :disabled="!newZoneName.trim() || creatingZone" @click="createZone">
           {{ creatingZone ? '…' : '+ Add' }}
-        </button>
+        </Button>
       </div>
     </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
-      <button class="section-btn" @click="openLoraConfig">🖼 LoRA Configuration</button>
-      <button class="section-btn" @click="openRollTables">🎲 Roll Tables</button>
+      <Button class="section-btn" variant="neutral" @click="openLoraConfig">🖼 LoRA Configuration</Button>
+      <Button class="section-btn" variant="neutral" @click="openRollTables">🎲 Roll Tables</Button>
     </div>
     <div class="danger-zone">
       <h4>Danger Zone</h4>
@@ -190,6 +193,7 @@ import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
 import { useDragDrop } from '@/composables/useDragDrop.js'
+import Button from '@/components/ui/Button.vue'
 import GmEntityForm from '@/components/gm/GmEntityForm.vue'
 import ImageViewer from '@/components/gm/ImageViewer.vue'
 import GmLoRAConfigPanel from '@/components/gm/GmLoRAConfigPanel.vue'
@@ -574,18 +578,6 @@ defineExpose({ refresh: loadImages })
 .panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .panel-top-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .panel-top-actions { display: flex; align-items: center; gap: 6px; }
-.assume-btn {
-  padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
-  border: 1px solid var(--accent-dim); background: var(--accent-12); color: var(--accent);
-}
-.assume-btn:hover { background: var(--accent-20); }
-.publish-btn {
-  font-size: 11px; padding: 4px 10px; border-radius: 4px;
-  border: 1px solid var(--overlay-12); background: var(--overlay-4);
-  color: var(--text-dim); cursor: pointer; transition: all 0.15s;
-}
-.publish-btn:hover { border-color: var(--accent); color: var(--text); }
-.publish-btn.is-published { background: var(--success-12); border-color: var(--success-45); color: var(--success-pale); }
 .danger-zone {
   margin-top: 12px; padding: 10px;
   border: 1px solid var(--danger-20); border-radius: 6px;
@@ -619,13 +611,7 @@ defineExpose({ refresh: loadImages })
   margin-top: 12px; display: flex; gap: 6px;
 }
 .canvas-open-row { margin-top: 12px; display: flex; gap: 6px; }
-.section-btn {
-  flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--overlay-8);
-  background: var(--overlay-2); color: var(--text); cursor: pointer;
-  font-size: 12px; text-align: center;
-  transition: border-color 0.15s;
-}
-.section-btn:hover { border-color: var(--overlay-15); background: var(--overlay-4); }
+.section-btn { flex: 1; }
 .section-count { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
 
 .projections-section { margin-top: 12px; }
@@ -636,15 +622,11 @@ defineExpose({ refresh: loadImages })
 .proj-universe { font-size: 11px; color: var(--text-dim); }
 .proj-type { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: var(--overlay-4); }
 .proj-type.active { color: var(--accent-pale); background: var(--accent-16); }
-.proj-remove { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; }
-.proj-remove:hover { color: var(--danger-soft); }
-.proj-imagen { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; }
-.proj-imagen:hover { color: var(--accent); }
 .proj-imagen.cancelling { color: var(--danger-strong); }
 .projection-add { display: flex; gap: 6px; margin-top: 8px; }
 .proj-input { flex: 1; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .proj-type-select { padding: 6px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
-.proj-add-btn { flex: 0 0 auto; padding: 6px 10px; }
+.section-btn.proj-add-btn { flex: 0 0 auto; padding: 6px 10px; }
 .proj-picker { flex: 1; min-width: 0; }
 .proj-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid var(--overlay-12); flex: 0 0 auto; }
 .proj-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-dim); background: var(--overlay-4); }
@@ -655,12 +637,8 @@ defineExpose({ refresh: loadImages })
 .transversal-list { display: flex; flex-direction: column; gap: 4px; }
 .transversal-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); }
 .transversal-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.transversal-toggle { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--overlay-10); cursor: pointer; }
-.transversal-toggle.inapposite { background: rgba(139,92,246,0.18); color: var(--violet-pale); }
-.transversal-toggle.consciousness { background: var(--warn-20); color: var(--gold); }
-.transversal-effects { background: transparent; border: 1px solid var(--overlay-10); border-radius: 4px; color: var(--text-dim); cursor: pointer; font-size: 10px; padding: 2px 7px; }
-.transversal-effects.has { color: var(--accent); border-color: var(--accent-dim); }
-.transversal-effects:hover { color: var(--accent); border-color: var(--accent); }
+.transversal-list .inapposite { background: rgba(139,92,246,0.18); color: var(--violet-pale); }
+.transversal-list .consciousness { background: var(--warn-20); color: var(--gold); }
 .transversal-add { display: flex; gap: 6px; margin-top: 8px; }
 .zones-section { margin-top: 12px; }
 .zones-list { display: flex; flex-direction: column; gap: 4px; }
@@ -668,5 +646,5 @@ defineExpose({ refresh: loadImages })
 .zone-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zones-add { display: flex; gap: 6px; margin-top: 8px; }
 .zone-input { flex: 1; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
-.zone-add-btn { flex: 0 0 auto; padding: 6px 10px; }
+.section-btn.zone-add-btn { flex: 0 0 auto; padding: 6px 10px; }
 </style>

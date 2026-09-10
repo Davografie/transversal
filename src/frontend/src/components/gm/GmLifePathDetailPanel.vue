@@ -3,8 +3,8 @@
     <div class="lpd-header">
       <span class="lpd-name">{{ lp.name }}</span>
       <span class="lpd-type">{{ lp.universe }}</span>
-      <button class="lpd-canvas" title="Open in canvas" @click="openFullCanvas">🗺</button>
-      <button class="lpd-edit" @click="editPath">✎ Edit</button>
+      <Button class="lpd-canvas" variant="neutral" title="Open in canvas" @click="openFullCanvas">🗺</Button>
+      <Button class="lpd-edit" variant="neutral" @click="editPath">✎ Edit</Button>
     </div>
     <p class="lpd-desc">{{ lp.description || 'No description' }}</p>
 
@@ -40,10 +40,10 @@
           <span class="entity-id">{{ t.id }}</span>
         </template>
       </GmList>
-      <button class="lpd-add-btn" @click="addTable">＋ Add roll table</button>
+      <Button class="lpd-add-btn" variant="secondary" block @click="addTable">＋ Add roll table</Button>
     </div>
 
-    <button class="lpd-delete" @click="onDeleteConfirmed">Delete life path</button>
+    <Button class="lpd-delete" variant="danger-ghost" size="sm" block @click="onDeleteConfirmed">Delete life path</Button>
   </div>
 </template>
 
@@ -57,6 +57,7 @@ import GmRollTableDetailPanel from './GmRollTableDetailPanel.vue'
 import GmRollTableEditPanel from './GmRollTableEditPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -134,19 +135,8 @@ const discoveryRows = computed(() => {
 .lpd-table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; font-size: 10px; }
 .lpd-table td { padding: 2px 6px; border-bottom: 1px solid var(--overlay-2); color: var(--text); }
 .lpd-key { color: var(--text-dim); width: 130px; }
-.lpd-add-btn {
-  width: 100%; margin-top: 4px; font-size: 11px; padding: 6px 0;
-  background: var(--resonance-8); border: 1px dashed var(--resonance-25);
-  border-radius: 4px; color: var(--accent); cursor: pointer;
-}
-.lpd-add-btn:hover { background: var(--resonance-12); }
-.lpd-edit { margin-left: auto; font-size: 10px; padding: 2px 8px; background: var(--overlay-6); border: 1px solid var(--overlay-10); color: var(--text); border-radius: 4px; cursor: pointer; }
-.lpd-canvas { font-size: 12px; padding: 2px 6px; background: var(--resonance-8); border: 1px solid var(--resonance-25); color: var(--accent); border-radius: 4px; cursor: pointer; }
-.lpd-canvas:hover { background: var(--resonance-16); }
-.lpd-delete {
-  width: 100%; margin-top: 12px; font-size: 11px; padding: 6px 0;
-  background: var(--danger-8); border: 1px solid var(--danger-20);
-  border-radius: 4px; color: var(--danger); cursor: pointer;
-}
-.lpd-delete:hover { background: var(--danger-12); }
+/* Layout hooks only — fill/border/typography/state come from Button. */
+.lpd-add-btn { margin-top: 4px; }
+.lpd-edit { margin-left: auto; }
+.lpd-delete { margin-top: 12px; }
 </style>

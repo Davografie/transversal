@@ -3,7 +3,7 @@
     <!-- Search + create -->
     <div class="top-row">
       <input v-model="search" class="filter-input" placeholder="Search SFX…" />
-      <button type="button" class="new-btn" @click="newSfx">+ New SFX</button>
+      <Button type="button" class="new-btn" variant="secondary" @click="newSfx">+ New SFX</Button>
     </div>
 
     <!-- Primitive filters -->
@@ -36,7 +36,7 @@
         <option value="">-- pick owner --</option>
         <option v-for="o in ownersOfType" :key="o.ownerId" :value="o.ownerId">{{ o.label }}</option>
       </select>
-      <button v-if="ownerRef" type="button" class="add-btn" @click="openPicker">+ Add SFX</button>
+      <Button v-if="ownerRef" type="button" class="add-btn" variant="secondary" @click="openPicker">+ Add SFX</Button>
     </div>
 
     <!-- SFX list -->
@@ -51,7 +51,7 @@
       <template #item="{ item: s }">
         <span class="sfx-name">{{ s.name }}</span>
         <span class="sfx-trigger">{{ triggerLabel(s.trigger) }}</span>
-        <button v-if="ownerRef" type="button" class="row-del" title="Remove from owner" @click.stop="removeSfx(s.id)">✕</button>
+        <Button v-if="ownerRef" type="button" class="row-del" variant="danger-ghost" size="sm" title="Remove from owner" @click.stop="removeSfx(s.id)">✕</Button>
       </template>
     </GmList>
     <div class="count">Showing {{ filteredSfxs.length }} of {{ allSfxs.length }} SFX</div>
@@ -68,6 +68,7 @@ import { useEffectActions } from '@/composables/useEffectActions.js'
 import { useSfxOwners } from '@/composables/useSfxOwners.js'
 import { usePanel } from '@/composables/usePanel.js'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 import GmSfxEditPanel from './GmSfxEditPanel.vue'
 import GmSfxPickerPanel from './GmSfxPickerPanel.vue'
 
@@ -183,15 +184,12 @@ async function removeSfx(id) {
   background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 6px; }
 .top-row { display: flex; gap: 6px; }
 .top-row .filter-input { flex: 1; min-width: 0; }
-.new-btn { flex: none; background: var(--success); color: var(--text-invert); font-weight: 600; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; cursor: pointer; }
+.new-btn { flex: none; }
 .filter-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .filter-select { flex: 1; min-width: 110px; font-size: 11px; padding: 5px 6px;
   background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 6px; }
-.add-btn { background: var(--accent-16); color: var(--accent); border: 1px solid var(--accent-dim);
-  border-radius: 6px; padding: 5px 10px; font-size: 11px; cursor: pointer; }
 .sfx-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sfx-trigger { font-size: 9px; color: var(--text-dim); white-space: nowrap; }
-.row-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; padding: 0 2px; }
 .count { font-size: 10px; color: var(--text-dim); }
 .error-msg { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

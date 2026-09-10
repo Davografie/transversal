@@ -44,7 +44,7 @@
         <EffectEditor v-model="form.effects" :universe="table?.universe" :life-path="table?.lifePath" />
       </div>
 
-      <button class="eep-save" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save entry' }}</button>
+      <Button class="eep-save" variant="success" solid :loading="saving" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save entry' }}</Button>
       <div v-if="error" class="eep-error">{{ error }}</div>
     </template>
   </div>
@@ -57,6 +57,7 @@ import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import ConditionEditor from './ConditionEditor.vue'
 import EffectEditor from './EffectEditor.vue'
+import Button from '@/components/ui/Button.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
@@ -170,7 +171,5 @@ async function save() {
 .eep-row { display: flex; gap: 8px; }
 .eep-subsection { margin-top: 2px; }
 .eep-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.eep-save { background: var(--success); color: var(--text-invert); font-weight: 600; padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; }
-.eep-save:disabled { opacity: 0.5; cursor: default; }
 .eep-error { font-size: 11px; color: var(--danger); background: var(--danger-8); padding: 6px 10px; border-radius: 4px; }
 </style>

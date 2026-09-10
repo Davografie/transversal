@@ -2,15 +2,15 @@
   <div class="rtp-root">
     <p class="rtp-hint">Roll tables grouped by scope. Click a group to see its tables.</p>
 
-    <button class="rtp-group" @click="openFundamental">
+    <Button class="rtp-group" variant="neutral" block @click="openFundamental">
       <span class="entity-name">Fundamental</span>
       <span class="entity-universe">{{ fundamentalCount }} tables · all universes</span>
-    </button>
+    </Button>
 
-    <button class="rtp-group" @click="openShared">
+    <Button class="rtp-group" variant="neutral" block @click="openShared">
       <span class="entity-name">Shared</span>
       <span class="entity-universe">{{ sharedCount }} tables · this universe</span>
-    </button>
+    </Button>
 
     <div class="rtp-section">
       <span class="rtp-subtitle">Life paths</span>
@@ -25,7 +25,7 @@
           <span class="entity-universe">{{ pathTableCount(lp.id) }} tables</span>
         </template>
       </GmList>
-      <button class="rtp-add-btn" @click="addNew">＋ Add life path</button>
+      <Button class="rtp-add-btn" variant="secondary" block @click="addNew">＋ Add life path</Button>
     </div>
   </div>
 </template>
@@ -37,6 +37,7 @@ import { useRollTables } from '@/composables/useRollTables.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import GmList from '@/components/ui/GmList.vue'
+import Button from '@/components/ui/Button.vue'
 import GmLifePathDetailPanel from './GmLifePathDetailPanel.vue'
 import GmLifePathEditPanel from './GmLifePathEditPanel.vue'
 import GmRollTableGroupPanel from './GmRollTableGroupPanel.vue'
@@ -102,19 +103,14 @@ function addNew() {
 <style scoped>
 .rtp-root { padding: 0; }
 .rtp-hint { font-size: 10px; color: var(--text-dim); margin: 0 0 8px 0; }
-.rtp-group {
-  width: 100%; display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; margin-bottom: 4px; border-radius: 6px; cursor: pointer;
-  font-size: 13px; text-align: left; color: var(--text);
-  background: var(--overlay-4); border: 1px solid transparent;
+/* Layout hooks only — the primitive supplies fill/border/typography. */
+.rtp-group { margin-bottom: 4px; text-align: left; }
+/* The row label is the primitive's own wrapper: make it span the button so
+   `.entity-name`'s flex:1 still flushes the meta text to the right. */
+.rtp-group :deep(.btn-label) {
+  display: flex; align-items: center; gap: 8px; width: 100%;
 }
-.rtp-group:hover { background: var(--overlay-8); }
 .rtp-section { margin-top: 12px; }
 .rtp-subtitle { display: block; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.rtp-add-btn {
-  width: 100%; margin-top: 8px; font-size: 11px; padding: 6px 0;
-  background: var(--resonance-8); border: 1px dashed var(--resonance-25);
-  border-radius: 4px; color: var(--accent); cursor: pointer;
-}
-.rtp-add-btn:hover { background: var(--resonance-12); }
+.rtp-add-btn { margin-top: 8px; }
 </style>
