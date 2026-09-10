@@ -89,10 +89,13 @@ Shared semantics (both route through the same toggle):
 
 ## Mobile focus stack
 
-Player phones/portraits (≤ 820px, non-GM) replace the desktop bottom-sheet
+Player phones/portraits (≤ 820px) replace the desktop bottom-sheet
 with three first-class vertical bands: **location** (top) · **character
 sheet** (middle) · **dice roller** (bottom). The desktop layout is untouched
-above the breakpoint.
+above the breakpoint. **Architect (GM) mode gets the same stack**; while a GM
+panel is open (`PanelStack`'s `.panel-viewport` exists) the sheet and roller
+bands hide and the map takes the whole stage — the overlay controls in the
+viewer hide too, leaving a clean design workspace (CSS-only via `:has`).
 
 - **Focus = height.** The focused band grows; teaser bands keep a tappable
   strip. Bands size directly against the stage (explicit heights) so every

@@ -1593,7 +1593,7 @@ syncIsMobile()
 mobileMq.addEventListener('change', syncIsMobile)
 onUnmounted(() => mobileMq.removeEventListener('change', syncIsMobile))
 
-const mobileStackActive = computed(() => isMobile.value && !gmMode.value)
+const mobileStackActive = computed(() => isMobile.value)
 
 function setMobileFocus(f) {
   if (f === 'location' || f === 'sheet' || f === 'dice') mobileFocus.value = f

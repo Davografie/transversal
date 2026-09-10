@@ -1050,4 +1050,12 @@ select option {
     flex-basis: clamp(148px, var(--roller-h, 148px), 42dvh);
     overflow: hidden auto;
   }
+
+  /* GM panels open (PanelStack .panel-viewport exists): the map takes the
+     whole stage, the sheet/roller bands and the location-viewer overlay
+     controls step aside — a clean workspace for designing/managing. */
+  body:has(.panel-viewport) .stage.mobile-stack .sheet-band,
+  body:has(.panel-viewport) .stage.mobile-stack .roller-band { display: none; }
+  body:has(.panel-viewport) .stage.mobile-stack .loc-band { flex-basis: 100% !important; }
+  body:has(.panel-viewport) .stage.mobile-stack .overlay-switcher { display: none; }
 }
