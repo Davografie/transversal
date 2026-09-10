@@ -73,9 +73,50 @@ drops transitions and slows the spinner. `DangerButton` is built on `Button`
 list/form button patterns — `save-btn` (→ `success solid`), `ps-add-btn`
 (→ `secondary block`), `row-del-btn` (→ `danger-ghost sm`), 20 sites across 10
 GM panels; their local rules were deleted and only layout hooks (margins,
-`width`) kept. Remaining: player surfaces (login/settings overlay, dice
-roller, character sheet) and the GM action rails (`.section-btn`,
-`.cancel-btn`, `.shortcut-btn`).
+`width`) kept.
+
+### Migration guide (for surface owners)
+
+Each surface owner migrates their own buttons — ui-ux owns the primitive and
+this mapping, not the surfaces. Take your surface in one pass and verify it in
+both themes.
+
+1. **Replace the markup**, keep the layout class if the component styles
+   margins/width through it:
+
+   | Old pattern | Use |
+   |---|---|
+   | `.save-btn`, `.commit-btn` (filled success) | `<Button variant="success" solid>` |
+   | `.ps-add-btn`, `button` default (accent-dim fill) | `<Button variant="secondary" block>` |
+   | `.row-del-btn`, row removes | `<Button variant="danger-ghost" size="sm">` |
+   | `.cancel-btn`, `.section-btn`, neutral chrome | `<Button variant="neutral">` |
+   | icon-only glyph buttons | `<Button variant="ghost" size="icon">` |
+   | inline text actions | `<Button variant="link">` |
+
+2. **Delete the local rules** that the primitive now provides (fill, border,
+   radius, padding, hover/disabled). Keep only layout declarations.
+
+3. **Wire the loading state — always.** If the handler awaits anything
+   (save, create, apply, roll, submit), pass `:loading` and keep it true until
+   the work settles. The spinner + `aria-busy` + implied disabled is how the
+   user knows the click landed; a button that silently waits reads as broken.
+   A label swap (`{{ saving ? 'Saving…' : 'Save' }}`) may stay on top of
+   `:loading` — the label keeps its width either way.
+
+   ```vue
+   <Button variant="success" solid block :loading="saving" @click="save">
+     {{ saving ? 'Saving…' : 'Save' }}
+   </Button>
+   ```
+
+4. **Don't** hand-roll a spinner, disable via CSS opacity, or leave a
+   double-submit window open — `:loading` implies `disabled`.
+
+Still un-migrated: player surfaces (login/settings overlay, dice roller,
+character sheet, blue book), the GM action rails (`.section-btn`,
+`.cancel-btn`, `.shortcut-btn`), canvas and location-viewer buttons.
+Segmented controls (mode/media-quality toggles) are not buttons — a
+`SegmentedControl` primitive is the right follow-up for those.
 
 ## Character sheet
 
