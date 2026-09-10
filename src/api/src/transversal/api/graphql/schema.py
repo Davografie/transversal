@@ -577,6 +577,16 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
     )
 
 
+def _action_meta_for(effect_type: str, effect_action: str):
+    """The registry entry for an effect (type, action), or None."""
+    from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
+
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.effect_type == effect_type and meta.effect_action == effect_action:
+            return meta
+    return None
+
+
 def _universe_options(repo) -> tuple[list[str], list[str]]:
     """``(values, labels)`` for the universes in the database.
 
@@ -1119,6 +1129,15 @@ class Query:
             for spec in specs:
                 if spec is not None:
                     scope = ts.spec_variables(spec, source_element, scope)
+            # A named reference is itself in scope for whatever follows it — the
+            # engine binds each resolved ref into the activation scope (see
+            # ``effects_engine._bind_ref_value``), which is what lets a later path
+            # compare against it (``filter universe == {universe}``). Typed by the
+            # reference's declared element so the wizard can offer it, and filter
+            # it, by type.
+            meta = _action_meta_for(d.type, d.action)
+            for ref in (meta.refs if meta is not None else []):
+                scope[ref.name] = ts.ValueType(ref.element, "one")
         return [
             EffectVariable(name=k, element=v.element, cardinality=v.cardinality)
             for k, v in scope.items() if v.element

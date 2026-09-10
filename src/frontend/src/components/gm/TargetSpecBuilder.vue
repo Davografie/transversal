@@ -71,8 +71,10 @@
             <option v-for="o in fieldOptionsFor(i)" :key="o" :value="o">{{ o }}</option>
           </select>
           <span v-if="isTokenValue(step.value)" class="tsb-value-token">
-            <select v-if="variableNames.length" :value="step.value" @change="onFilterValue(i, $event)">
-              <option v-for="name in variableNames" :key="name" :value="`{${name}}`">{{ name }}</option>
+            <select v-if="variableChoicesFor(i).length" :value="step.value" @change="onFilterValue(i, $event)">
+              <option v-for="[name, entry] in variableChoicesFor(i)" :key="name" :value="`{${name}}`">
+                {{ name }} <em>({{ elementLabel(entry.element) }})</em>
+              </option>
             </select>
             <input v-else :value="step.value" placeholder="{name}" @input="onFilterValue(i, $event)" />
             <button type="button" class="tsb-token-btn active" title="Pick a value instead" @click="useToken(i, false)">{ }</button>
@@ -354,10 +356,23 @@ function isTokenValue(v) {
 
 const variableNames = computed(() => Object.keys(props.variables || {}))
 
+// Names offered as a `{name}` value, filtered by what the field expects: a
+// field that points at an element (a universe) offers variables of *that*
+// element. When nothing matches, the whole list is shown with each name's type
+// rather than a dead end — a name may be bound later by a condition.
+function variableChoicesFor(i) {
+  const entries = Object.entries(props.variables || {})
+  const want = fieldReferences(i)
+  if (!want) return entries
+  const matching = entries.filter(([, entry]) => !entry?.element || entry.element === want)
+  return matching.length ? matching : entries
+}
+
 // Swap a filter value between a picked value and a bound name. Entering token
-// mode pre-selects the first available name so the step is never left blank.
+// mode pre-selects the first offered name so the step is never left blank.
 function useToken(i, on) {
-  steps.value[i].value = on ? `{${variableNames.value[0] || ''}}` : ''
+  const first = variableChoicesFor(i)[0]
+  steps.value[i].value = on ? `{${first ? first[0] : ''}}` : ''
 }
 
 // A picked candidate stores what the *field* holds: a universe's handle, not
