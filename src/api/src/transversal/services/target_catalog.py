@@ -131,11 +131,12 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
     },
     "projection": {
         "type": ScalarField("projection", "type", "string"),
-        # The world a life lives in. Plain string (not a `references` picker) so
-        # the value can also be a bound name — `universe == {chosen_universe}` —
-        # which is how a path joins to a universe chosen elsewhere.
-        "universe": ScalarField("projection", "universe", "string"),
-        "origin_universe": ScalarField("projection", "origin_universe", "string"),
+        # The world a life lives in — an autosuggest picker over the universes,
+        # storing the *handle* (`three_realms`) because that is what a projection
+        # holds. The builder also allows a bound name instead (`{universe}`), so a
+        # path can join to a world chosen elsewhere.
+        "universe": ScalarField("projection", "universe", "string", references="universe"),
+        "origin_universe": ScalarField("projection", "origin_universe", "string", references="universe"),
         "entity_id": ScalarField("projection", "entity_id", "string", references="entity"),
         "current_location": ScalarField("projection", "current_location", "string", references="location"),
     },

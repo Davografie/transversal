@@ -70,14 +70,26 @@
             <option value="">—</option>
             <option v-for="o in fieldOptionsFor(i)" :key="o" :value="o">{{ o }}</option>
           </select>
-          <TargetPicker
-            v-else-if="fieldReferences(i)"
-            :kind="fieldReferences(i)"
-            :model-value="step.value"
-            :clearable="false"
-            placeholder="Pick…"
-            @update:model-value="(v) => onFilterPickerValue(i, v)"
-          />
+          <span v-if="isTokenValue(step.value)" class="tsb-value-token">
+            <select v-if="variableNames.length" :value="step.value" @change="onFilterValue(i, $event)">
+              <option v-for="name in variableNames" :key="name" :value="`{${name}}`">{{ name }}</option>
+            </select>
+            <input v-else :value="step.value" placeholder="{name}" @input="onFilterValue(i, $event)" />
+            <button type="button" class="tsb-token-btn active" title="Pick a value instead" @click="useToken(i, false)">{ }</button>
+          </span>
+          <span v-else-if="fieldReferences(i)" class="tsb-value-token">
+            <!-- Autosuggest by name; a universe stores its *handle* (`earth`),
+                 which is what a projection's `universe` holds. -->
+            <TargetPicker
+              :kind="fieldReferences(i)"
+              :model-value="step.value"
+              :clearable="false"
+              placeholder="Pick…"
+              @select="(opt) => onFilterPicked(i, opt)"
+              @update:model-value="(v) => onFilterPickerValue(i, v)"
+            />
+            <button type="button" class="tsb-token-btn" title="Compare against a bound value" @click="useToken(i, true)">{ }</button>
+          </span>
           <input v-else :value="step.value" placeholder="value" @input="onFilterValue(i, $event)" />
         </div>
 
@@ -335,6 +347,25 @@ function onFilterPickerValue(i, val) {
   steps.value[i].value = val
 }
 
+// A value that names a bound variable rather than holding a literal.
+function isTokenValue(v) {
+  return typeof v === 'string' && v.startsWith('{') && v.endsWith('}')
+}
+
+const variableNames = computed(() => Object.keys(props.variables || {}))
+
+// Swap a filter value between a picked value and a bound name. Entering token
+// mode pre-selects the first available name so the step is never left blank.
+function useToken(i, on) {
+  steps.value[i].value = on ? `{${variableNames.value[0] || ''}}` : ''
+}
+
+// A picked candidate stores what the *field* holds: a universe's handle, not
+// its entity id (a projection's `universe` is `earth`, not `universe-earth`).
+function onFilterPicked(i, opt) {
+  steps.value[i].value = opt?.universe || opt?.id || ''
+}
+
 // Operators valid for the current field (from the catalog; falls back to the
 // full set while the field/trace is still resolving).
 function operatorsFor(i) {
@@ -514,6 +545,15 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
 }
 .tsb-err { font-size: 9px; color: var(--danger); }
 .tsb-config { display: flex; gap: 4px; flex-wrap: wrap; }
+/* A filter value: a picked thing, or a bound name ({universe}). */
+.tsb-value-token { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+.tsb-value-token > :first-child { flex: 1; min-width: 0; }
+.tsb-token-btn {
+  flex: none; font-size: 9px; font-family: monospace; padding: 2px 5px; cursor: pointer;
+  border: 1px solid var(--overlay-12); border-radius: 4px;
+  background: var(--overlay-6); color: var(--text-dim);
+}
+.tsb-token-btn.active { border-color: var(--accent); color: var(--text); }
 .tsb-config select, .tsb-config input {
   font-size: 10px; padding: 3px 5px; background: var(--overlay-6);
   color: var(--text); border: 1px solid var(--overlay-10); border-radius: 3px;
