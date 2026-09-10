@@ -11,8 +11,29 @@ import { ref } from 'vue'
 // floating in the middle of the screen.
 //
 // Module singleton: closing and re-opening the stack keeps the anchor where the
-// user put it. Floating stacks (Phase 4) will get one anchor each.
-const anchor = ref({ x: null, y: null })
+// user put it, and the position is remembered per device (localStorage) so it
+// survives reloads. Floating stacks (Phase 4) will get one anchor each.
+const STORAGE_KEY = 'gmPanelAnchor'
+
+// Only the explicit position is stored — the default spot (null) is resolved
+// from the live viewport, so it never needs persisting. Anything unreadable or
+// out of shape falls back to the default; `resolveAnchor` clamps stale
+// coordinates (e.g. saved on a larger screen) into the current viewport.
+function loadAnchor() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return { x: null, y: null }
+    const parsed = JSON.parse(raw)
+    return {
+      x: Number.isFinite(parsed?.x) ? parsed.x : null,
+      y: Number.isFinite(parsed?.y) ? parsed.y : null,
+    }
+  } catch {
+    return { x: null, y: null }
+  }
+}
+
+const anchor = ref(loadAnchor())
 
 // Which way the chain opens. Derived from the anchor's edge, and only updated
 // while the anchor is inside an edge band — away from every edge it keeps the
@@ -108,6 +129,21 @@ export function snapToEdge(x, y, vw, vh) {
 
 export function setAnchor(x, y) {
   anchor.value = { x, y }
+  persistAnchor()
+}
+
+// Debounced so a drag writes once (per move would write on every pointermove).
+let persistTimer = null
+function persistAnchor() {
+  clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(anchor.value))
+    } catch {
+      // Storage unavailable (private mode, quota) — the anchor still works this
+      // session, it just won't be remembered.
+    }
+  }, 250)
 }
 
 export function usePanelAnchor() {
