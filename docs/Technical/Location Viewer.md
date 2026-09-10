@@ -201,10 +201,12 @@ not clip itself (`border-radius: 0`). `destNavCache` supplies
 Transparent **occupant/self portraits** (media pipeline's
 `EntityImage.transparent`, exposed as `image_transparent` on occupants) render
 as **floating cutouts emerging from a portal ring**: the dot becomes a
-see-through circle outline (no fill, no vignette) and the bottom-anchored
-cutout's head sticks out above the ring — `object-fit: contain`, no circular
-crop, the image's own alpha is the shape. Location images are assumed never
-transparent, so the hole path is unaffected.
+see-through circle outline (no fill, no vignette), the bottom-anchored cutout
+is cropped to the ring's bottom radius (`--dot-r`) with a matching bottom
+border, and the head sticks out above the rim — `object-fit: contain`, no
+circular crop, the image's own alpha is the shape. The video branch (transparent
+WEBM) uses the same path. Occupants share one size (60–88px). Location images
+are assumed never transparent, so the hole path is unaffected.
 
 ## Interactions
 
