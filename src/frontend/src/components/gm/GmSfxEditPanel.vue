@@ -110,7 +110,7 @@ const { graphql } = useApi()
 const panel = usePanel()
 const { traitNameMap, traitsets, allSfxs, fetchTraitsConfig } = useTraitsConfig()
 const {
-  draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables,
+  draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables, cardText,
   open, reset, save, create, remove,
 } = useSfxEdit()
 
@@ -220,7 +220,11 @@ function resolveName(id) {
   return id
 }
 
+// Derived rules text. The backend owns the phrasing (so the editor, the player
+// sheet, the canvas and MCP all say the same thing); the local summary is only
+// a fallback for when the query fails.
 const sfxSummary = computed(() => {
+  if (cardText.value) return cardText.value
   let out = triggerPhrase(draft.trigger)
   const conds = (draft.conditions || []).map(conditionPhrase).filter(Boolean)
   if (conds.length) out += ` · if ${conds.join(', ')}`

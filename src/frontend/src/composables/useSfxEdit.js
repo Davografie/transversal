@@ -25,10 +25,14 @@ const successMsg = ref('')
 const savedAt = ref(null)
 const validationWarnings = ref([])
 const scopeVariables = ref([])
+// Derived rules text for the current draft ([[SFX Natural Language Plan]]).
+const cardText = ref('')
 
 const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
+// Derived rules text for an *unsaved* draft — the SFX editor's live card preview.
+const SFX_TEXT_QUERY = `query($sfx: SfxInput!) { sfxText(sfx: $sfx) }`
 const SCOPE_VARS_QUERY = `query($trigger: String, $sourceKind: String) { scopeVariables(trigger: $trigger, sourceKind: $sourceKind) { name type } }`
 
 export function generateSfxId(name) {
@@ -97,6 +101,7 @@ export function useSfxEdit() {
     validationWarnings.value = []
     _suppressEdits = false
     fetchScopeVariables(draft.trigger, draft.source_kind)
+    previewText()
   }
 
   function reset() {
@@ -110,6 +115,7 @@ export function useSfxEdit() {
     draft.conditions = []
     draft.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
     draft.effects = []
+    cardText.value = ''
   }
 
   async function fetchScopeVariables(trigger = '', sourceKind = null) {
@@ -121,24 +127,37 @@ export function useSfxEdit() {
     }
   }
 
+  // The stateless payload both draft queries send (validate + card text).
+  function draftInput() {
+    return {
+      id: sfxId.value || 'sfx-draft',
+      name: draft.name || 'Draft',
+      trigger: draft.trigger,
+      sourceKind: draft.source_kind || null,
+      placement: draft.placement || null,
+      armingScope: draft.arming_scope || null,
+      listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
+      conditions: draft.conditions || [],
+      effects: draft.effects || [],
+      duration: draft.duration,
+    }
+  }
+
   async function validate() {
     try {
-      const input = {
-        id: sfxId.value || generateSfxId(draft.name) || 'sfx-draft',
-        name: draft.name || 'Draft',
-        trigger: draft.trigger,
-        sourceKind: draft.source_kind || null,
-        placement: draft.placement || null,
-        armingScope: draft.arming_scope || null,
-        listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
-        conditions: draft.conditions || [],
-        effects: draft.effects || [],
-        duration: draft.duration,
-      }
-      const data = await graphql(VALIDATE_QUERY, { input })
+      const data = await graphql(VALIDATE_QUERY, { input: draftInput() })
       validationWarnings.value = data?.validateSfx || []
     } catch {
       validationWarnings.value = []
+    }
+  }
+
+  async function previewText() {
+    try {
+      const data = await graphql(SFX_TEXT_QUERY, { sfx: draftInput() })
+      cardText.value = data?.sfxText || ''
+    } catch {
+      cardText.value = ''
     }
   }
 
@@ -226,7 +245,7 @@ export function useSfxEdit() {
     watch(() => [draft.trigger, draft.source_kind, draft.arming_scope, draft.listener_spec, draft.conditions, draft.effects], () => {
       if (_suppressEdits) return
       clearTimeout(_validationTimer)
-      _validationTimer = setTimeout(validate, 400)
+      _validationTimer = setTimeout(() => { validate(); previewText() }, 400)
     }, { deep: true, flush: 'sync' })
     watch(
       () => [draft.name, draft.description, draft.trigger, draft.source_kind, draft.placement, draft.arming_scope, draft.listener_spec, draft.conditions, draft.duration, draft.effects],
@@ -242,7 +261,7 @@ export function useSfxEdit() {
   }
 
   return {
-    sfxId, draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables,
-    open, reset, save, create, remove, validate, fetchScopeVariables,
+    sfxId, draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables, cardText,
+    open, reset, save, create, remove, validate, previewText, fetchScopeVariables,
   }
 }

@@ -477,6 +477,8 @@ class SfxRef:
     conditions: list[Condition] = strawberry.field(default_factory=list)
     effects: list[Effect] = strawberry.field(default_factory=list)
     duration: Optional[EffectDuration] = None
+    # Derived natural-language rules text — see [[SFX Natural Language Plan]].
+    card_text: str = ""
 
 
 @strawberry.input

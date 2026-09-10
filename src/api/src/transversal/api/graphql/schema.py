@@ -5,6 +5,7 @@ import strawberry
 from typing import Optional
 
 from transversal.api.graphql.extensions import ResolverTimingExtension
+from transversal.services.sfx_text import repo_name_resolver
 
 from transversal.api.graphql.types import (
     CharacterView,
@@ -562,6 +563,23 @@ def _historical_record_to_gql(r: DomainHistoricalRecord) -> HistoricalRecord:
 
 # ── Queries ──────────────────────────────────────────
 
+def _sfx_ref(sfx, resolve=None) -> SfxRef:
+    """Build the GraphQL SFX ref, including its derived card text
+    ([[SFX Natural Language Plan]])."""
+    from transversal.services.sfx_text import sfx_text
+
+    return SfxRef(
+        id=sfx.id, name=sfx.name, description=sfx.description,
+        trigger=sfx.trigger, limit=sfx.limit, source_kind=sfx.source_kind,
+        placement=sfx.placement, arming_scope=sfx.arming_scope,
+        listener_spec=sfx.listener_spec.model_dump() if sfx.listener_spec else None,
+        conditions=[_condition_to_gql(c) for c in sfx.conditions],
+        effects=[_effect_to_gql(e) for e in sfx.effects],
+        duration=_duration_to_gql(sfx.duration),
+        card_text=sfx_text(sfx, resolve=resolve),
+    )
+
+
 @strawberry.type
 class Query:
     @strawberry.field
@@ -721,37 +739,39 @@ class Query:
         ]
 
     @strawberry.field
+    def sfx_text(self, info: strawberry.Info, sfx: SfxInput) -> str:
+        """Derived rules text for an SFX payload.
+
+        Stateless on purpose: the SFX editor renders an *unsaved* draft, so the
+        text must come from the payload, not from the stored SFX.
+        """
+        from transversal.domain import SFX as DomainSFX
+        from transversal.services.sfx_text import sfx_text as render
+
+        domain = DomainSFX(
+            id=sfx.id, name=sfx.name, description=sfx.description,
+            trigger=sfx.trigger, limit=sfx.limit,
+            source_kind=sfx.source_kind, placement=sfx.placement,
+            arming_scope=sfx.arming_scope,
+            conditions=[_condition_input_to_domain(c) for c in (sfx.conditions or [])],
+            effects=[_effect_input_to_domain(e) for e in (sfx.effects or [])],
+            duration=_duration_input_to_domain(sfx.duration),
+        )
+        return render(domain, resolve=repo_name_resolver(_em(info).repo))
+
+    @strawberry.field
     def sfxs(self, info: strawberry.Info) -> list[SfxRef]:
         # Prefer DB-persisted SFXs; fall back to in-memory engine
         repo = _em(info).repo
         db_sfxs = repo.get_all_sfxs()
         if db_sfxs:
-            return [
-                SfxRef(
-                    id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind, placement=s.placement,
-                    arming_scope=s.arming_scope,
-                    listener_spec=s.listener_spec.model_dump() if s.listener_spec else None,
-                    conditions=[_condition_to_gql(c) for c in s.conditions],
-                    effects=[_effect_to_gql(e) for e in s.effects],
-                    duration=_duration_to_gql(s.duration),
-                )
-                for s in db_sfxs
-            ]
+            resolve = repo_name_resolver(repo)
+            return [_sfx_ref(s, resolve) for s in db_sfxs]
         from transversal.services.effects_engine import EffectsEngine
         engine = info.context.get("effects_engine")
         if engine:
-            return [
-                SfxRef(
-                    id=s.id, name=s.name, description=s.description,
-                    trigger=s.trigger, limit=s.limit, source_kind=s.source_kind, placement=s.placement,
-                    arming_scope=s.arming_scope,
-                    listener_spec=s.listener_spec.model_dump() if s.listener_spec else None,
-                    conditions=[_condition_to_gql(c) for c in s.conditions],
-                    effects=[_effect_to_gql(e) for e in s.effects],
-                    duration=_duration_to_gql(s.duration),
-                ) for s in engine.get_all()
-            ]
+            resolve = repo_name_resolver(repo)
+            return [_sfx_ref(s, resolve) for s in engine.get_all()]
         return []
 
     @strawberry.field
@@ -1722,15 +1742,7 @@ class Mutation:
         if engine:
             engine.register(created)
         _maybe_rearm_passives(created.trigger)
-        return SfxRef(
-            id=created.id, name=created.name, description=created.description,
-            trigger=created.trigger, limit=created.limit, source_kind=created.source_kind, placement=created.placement,
-            arming_scope=created.arming_scope,
-            listener_spec=created.listener_spec.model_dump() if created.listener_spec else None,
-            conditions=[_condition_to_gql(c) for c in created.conditions],
-            effects=[_effect_to_gql(e) for e in created.effects],
-            duration=_duration_to_gql(created.duration),
-        )
+        return _sfx_ref(created, repo_name_resolver(_em(info).repo))
 
     @strawberry.mutation
     def update_sfx(self, info: strawberry.Info, input: SfxUpdateInput) -> SfxRef:
@@ -1779,15 +1791,7 @@ class Mutation:
         if engine:
             engine.register(updated)
         _maybe_rearm_passives(old_trigger, updated.trigger)
-        return SfxRef(
-            id=updated.id, name=updated.name, description=updated.description,
-            trigger=updated.trigger, limit=updated.limit, source_kind=updated.source_kind, placement=updated.placement,
-            arming_scope=updated.arming_scope,
-            listener_spec=updated.listener_spec.model_dump() if updated.listener_spec else None,
-            conditions=[_condition_to_gql(c) for c in updated.conditions],
-            effects=[_effect_to_gql(e) for e in updated.effects],
-            duration=_duration_to_gql(updated.duration),
-        )
+        return _sfx_ref(updated, repo_name_resolver(_em(info).repo))
 
     @strawberry.mutation
     def delete_sfx(self, info: strawberry.Info, id: strawberry.ID) -> bool:

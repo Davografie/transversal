@@ -670,6 +670,9 @@ def effect_text(effect: Effect, *, resolve: NameResolver | None = None,
     template = reg.effect_card(effect.type, effect.action)
     if not target and "{target}" in template:
         target = _target_placeholder(effect)
+    if not result:
+        # Drop a clause the empty placeholder leaves dangling ("… as {result}").
+        template = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s+\{result\}", "", template)
     text = template.format(target=target, result=display_value(result, resolve))
     if effect.negative and "complication" not in text:
         text = f"{text} as a complication"
@@ -698,19 +701,29 @@ def effect_text(effect: Effect, *, resolve: NameResolver | None = None,
 
 def _duration_text(duration) -> str:
     """Effect duration = the *undo* timer (distinct from the SFX listening window)."""
-    parts = []
-    for timer in duration.timers:
-        unit = (timer.event or "scene").replace("_", " ")
-        parts.append(f"{timer.remaining} {unit}" if timer.remaining != 1 else unit)
-    joined = " and ".join(parts) if parts else "the next scene"
-    return f"reverts after {joined}"
+    parts = [_timer_phrase(t) for t in duration.timers] or ["1 scene"]
+    if len(parts) == 1:
+        return f"reverts {parts[0]}"
+    if getattr(duration.combine, "value", duration.combine) == "all_transpired":
+        return f"reverts once {', '.join(parts)} have all passed"
+    return f"reverts as soon as any of {', '.join(parts)} passes"
+
+
+def _timer_phrase(timer) -> str:
+    """One timer as a card phrase ("at the end of the scene", "after 2 beats")."""
+    event = (timer.event or "scene").replace("_", " ")
+    boundary = {"beat": "the end of the beat", "scene": "the end of the scene",
+                "session": "the end of the session", "rolls": "the next roll"}
+    if timer.remaining == 1 and event in boundary:
+        return f"at {boundary[event]}"
+    unit = pluralize(event) if timer.remaining != 1 else event
+    return f"after {timer.remaining} {unit}"
 
 
 def _tidy(text: str) -> str:
     """Collapse the seams left by empty placeholders."""
     out = re.sub(r"\s{2,}", " ", text)
     out = re.sub(r"\s+([,.;:])", r"\1", out)
-    out = re.sub(r"\s+\b(at|to|by|as|on|with|from|of)\s*$", "", out)
     return out.strip().rstrip(",").strip()
 
 
@@ -744,3 +757,59 @@ def sfx_text(sfx: SFX, *, resolve: NameResolver | None = None,
     if narrative and include_narrative:
         text = f"{text} ({'; '.join(narrative)})"
     return text
+
+
+# ── DB glue (optional) ────────────────────────────────────────
+#
+# The renderer above is pure; this factory supplies it with real display names
+# so a card shows "the Fire trait" rather than "trait-fire". Kept here (rather
+# than in the GraphQL layer) so every consumer resolves names identically.
+
+_NAME_LOOKUPS = ("get_entity", "get_trait", "get_traitset_by_id", "get_lifepath", "get_roll_table")
+
+
+def repo_name_resolver(repo) -> NameResolver:
+    """A memoized ``id → display name`` resolver over the repository.
+
+    Covers entities (including locations and universes), registry traits, trait
+    sets, life paths, roll tables, and *universe keys* — the short handles
+    (``earth``, ``three_realms``) that universe entities carry in
+    ``current_universe`` rather than as their id.
+
+    Duck-typed on purpose: a caller holding only part of the repository surface
+    (a narrow test double, say) resolves what it can — the renderer falls back to
+    raw ids for the rest.
+    """
+    lookups = [getattr(repo, name) for name in _NAME_LOOKUPS
+               if callable(getattr(repo, name, None))]
+    cache: dict[str, str | None] = {}
+    universes: dict[str, str] = {}
+    universes_loaded = False
+
+    def resolve(ident: str) -> str | None:
+        nonlocal universes, universes_loaded
+        if not ident:
+            return None
+        if ident in cache:
+            return cache[ident]
+
+        name: str | None = None
+        for lookup in lookups:
+            found = lookup(ident)
+            if found is not None and getattr(found, "name", ""):
+                name = found.name
+                break
+        if name is None and not universes_loaded:
+            universes_loaded = True
+            list_entities = getattr(repo, "list_all_entities", None)
+            for candidate in (list_entities() if callable(list_entities) else []):
+                if getattr(candidate, "type", "") != "universe":
+                    continue
+                key = getattr(candidate, "current_universe", "") or candidate.id
+                universes.setdefault(key, candidate.name or candidate.id)
+            name = universes.get(ident)
+
+        cache[ident] = name
+        return name
+
+    return resolve
