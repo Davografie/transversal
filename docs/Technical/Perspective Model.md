@@ -144,3 +144,13 @@ semantics) absorbs the GM behavior.
 - [[SFX Activation Model Plan]] — the same convergence treatment for a tangled area.
 - [[UI-UX Design]], [[Location Viewer]], [[GM Panel Development]], [[System Architecture]].
 - [[Tickets#B68]], [[Tickets#B34]], [[Division of Labor]].
+
+## Implementation status
+
+- **[[Tickets#B95]] done (2026-09-10, ui-ux).** `entityId` persists in all modes;
+  `actingEntityId`/`fallbackEntityId`/`selfEntityId` removed; `ownMainId` derived
+  from `activeMains`; SSE free-roam falls back to `playerId`. The switch-undo
+  bookmark was kept (transient cancel-revert UX, not a perspective variable).
+  GmPanel's `currentEntityId` prop remains but is fed by `entityId` — a rename
+  is open to gm-panels.
+- **[[Tickets#B96]]** (navigation) and **[[Tickets#B68]]** pending.

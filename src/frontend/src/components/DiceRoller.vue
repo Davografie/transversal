@@ -15,7 +15,7 @@
       </template>
     </div>
 
-    <div v-if="contestResult && (!gmMode || actingEntityId)" class="contest-result-widget">
+    <div v-if="contestResult && (!gmMode || entityId)" class="contest-result-widget">
       <div class="contest-sides">
         <div class="contest-side" :class="sideClasses('challenger')">
           <span class="side-icon">{{ sideIcon('challenger') }}</span>
@@ -84,7 +84,7 @@
       Target difficulty: <strong>{{ difficulty }}</strong>
     </div>
     <div v-if="!gmMode && difficultyFlash" class="difficulty-flash">{{ difficultyFlash }}</div>
-    <div v-if="isAdding() && mode !== 'roll_table' && gmMode && !actingEntityId" class="difficulty-presets">
+    <div v-if="isAdding() && mode !== 'roll_table' && gmMode && !entityId" class="difficulty-presets">
       <button
         v-for="p in difficultyPresets"
         :key="p.die"
@@ -131,7 +131,7 @@
         </template>
         <span class="sel-value">= <strong class="result-num">{{ computedTotal }}</strong></span>
       </div>
-      <div class="selection-row" v-if="!gmMode || actingEntityId">
+      <div class="selection-row" v-if="!gmMode || entityId">
         <span class="sel-label" @click="assignBestEffect">Effect:</span>
         <span
           v-for="(idx, i) in selection.effect" :key="'e'+i"
@@ -283,15 +283,15 @@
       <button v-if="!gmMode" @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
     </div>
 
-    <div class="controls" v-if="contestResult && iWon && (!gmMode || actingEntityId)">
+    <div class="controls" v-if="contestResult && iWon && (!gmMode || entityId)">
       <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide consequences' : 'Consequences' }}</button>
     </div>
 
-    <div class="controls" v-if="contestResult && iGaveIn && (!gmMode || actingEntityId)">
+    <div class="controls" v-if="contestResult && iGaveIn && (!gmMode || entityId)">
       <button @click="showConsequences = !showConsequences" class="roll-btn">{{ showConsequences ? 'Hide' : 'Take complication' }}</button>
     </div>
 
-    <div class="controls" v-if="iAmTakenOut && razmerit >= 1 && (!gmMode || actingEntityId)">
+    <div class="controls" v-if="iAmTakenOut && razmerit >= 1 && (!gmMode || entityId)">
       <button @click="doPreventTakenOut" class="roll-btn prevent-taken-out-btn">Prevent take out (1 razmerit)</button>
     </div>
 
@@ -395,8 +395,6 @@ const props = defineProps({
   sfxChoiceRequest: { type: Array, default: () => [] }, // pending {choose_*} auto-fired SFX choices
   peers: { type: Array, default: () => [] }, // [{ id, name }] other entities at the location
   entityNames: { type: Object, default: () => ({}) }, // id → name (all entities, for tab labels)
-  actingEntityId: { type: String, default: '' }, // entity being acted on (GM switchable; player = self)
-  fallbackEntityId: { type: String, default: '' }, // GM's stable identity for difficulty/free-roam rolls
   remotePools: { type: Object, default: () => ({}) }, // entity_id → { dice, phase } from SSE
   remoteResults: { type: Object, default: () => ({}) }, // entity_id → { rolls, committed, ... } from SSE
 })
@@ -431,7 +429,7 @@ const DIFFICULTY_TAB = '__difficulty__'
 const poolPurpose = ref(null) // GM mode: 'difficulty' | 'gmc' | null
 const activeId = ref(props.gmMode ? DIFFICULTY_TAB : props.entityId)
 // The entity on whose behalf a hitch is being bought (GM acts as another entity).
-const hitchBuyerId = computed(() => props.gmMode ? (props.actingEntityId || props.fallbackEntityId || '') : (props.entityId || ''))
+const hitchBuyerId = computed(() => props.entityId || '')
 const viewPool = ref([])
 // Live remote view for the read-only peer tab: prefer rolled/committed state,
 // then the live assembled pool, then the fetched snapshot.
@@ -484,7 +482,7 @@ const tabEntities = computed(() => {
     const name = props.entityNames?.[id] || (props.peers || []).find(p => p.id === id)?.name || id
     list.push({ id, name })
   }
-  if (props.actingEntityId) pushEntity(props.actingEntityId)
+  if (props.entityId) pushEntity(props.entityId)
   if (challenged.value) pushEntity(opponentId.value)
   for (const [eid, rp] of Object.entries(props.remotePools || {})) {
     // The GM difficulty pool is keyed by the location id; it already has its
@@ -552,19 +550,19 @@ const tabGroups = computed(() => {
   }
   return order.map((k) => groups.get(k))
 })
-const editingEntityId = computed(() => props.actingEntityId || props.fallbackEntityId || props.entityId)
+const editingEntityId = computed(() => props.entityId)
 const decisionPending = computed(() => !!contestCompare.value && contestCompare.value.pending === editingEntityId.value)
 const isWaitingForDecision = computed(() => !!contestCompare.value && contestCompare.value.pending !== editingEntityId.value)
 const isEditing = computed(() => {
   if (props.gmMode) {
-    return props.actingEntityId
-      ? activeId.value === props.actingEntityId
+    return props.entityId
+      ? activeId.value === props.entityId
       : activeId.value === DIFFICULTY_TAB
   }
   return activeId.value === props.entityId
 })
 const activeName = computed(() => tabEntities.value.find(e => e.id === activeId.value)?.name || activeId.value)
-const selfTabId = computed(() => props.gmMode ? (props.actingEntityId || DIFFICULTY_TAB) : props.entityId)
+const selfTabId = computed(() => props.gmMode ? (props.entityId || DIFFICULTY_TAB) : props.entityId)
 const opponentName = computed(() =>
   (props.peers || []).find(p => p.id === opponentId.value)?.name ||
   tabEntities.value.find(e => e.id === opponentId.value)?.name ||
@@ -633,7 +631,7 @@ const consequenceMenuContext = computed(() => {
   return 'test_success'
 })
 const sumLabel = computed(() =>
-  (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) ? 'difficulty' : 'result'
+  (props.gmMode && !props.entityId && activeId.value === DIFFICULTY_TAB) ? 'difficulty' : 'result'
 )
 
 // ── Roll kind (P2.11: visual pool styling per roll kind) ───────────
@@ -649,7 +647,7 @@ const ROLL_KIND_LABELS = {
 const rollKind = computed(() => {
   if (props.mode === 'roll_table') return 'roll-table'
   if (challenged.value) return isChallenger.value ? 'challenger-contest' : 'defendant-contest'
-  if (props.gmMode && !props.actingEntityId && activeId.value === DIFFICULTY_TAB) return 'difficulty'
+  if (props.gmMode && !props.entityId && activeId.value === DIFFICULTY_TAB) return 'difficulty'
   if (isAdding() && pool.length === 0) return 'empty-pool'
   // Test: use the rolled pipeline when known, else predict from assembled size.
   // A resource die or a set test difficulty forces the Cortex pipeline even for
@@ -663,12 +661,12 @@ const rollKindLabel = computed(() => ROLL_KIND_LABELS[rollKind.value] || '')
 // The set test difficulty is the target for any entity roll (player or GM
 // acting as an entity); it is not shown while the GM is setting it.
 const showDifficultyTarget = computed(() =>
-  props.difficulty != null && !(props.gmMode && !props.actingEntityId)
+  props.difficulty != null && !(props.gmMode && !props.entityId)
 )
 
 // Contest UI is relevant for players (or a GM acting as an entity) at a
 // location with at least one peer, during assembly/picking or once challenged.
-const showContest = computed(() => (!props.gmMode || props.actingEntityId) && props.mode !== 'roll_table' && props.peers.length > 1 && (challenged.value || isAdding() || isPicking()))
+const showContest = computed(() => (!props.gmMode || props.entityId) && props.mode !== 'roll_table' && props.peers.length > 1 && (challenged.value || isAdding() || isPicking()))
 
 function markPurpose(kind) {
   if (pool.length === 0) poolPurpose.value = kind
@@ -676,7 +674,7 @@ function markPurpose(kind) {
 
 function ensureSelfTab() {
   if (props.mode === 'roll_table') return
-  const selfId = props.gmMode ? (props.actingEntityId || DIFFICULTY_TAB) : props.entityId
+  const selfId = props.gmMode ? (props.entityId || DIFFICULTY_TAB) : props.entityId
   if (activeId.value !== selfId) activeId.value = selfId
 }
 
@@ -687,7 +685,7 @@ async function switchTab(id) {
     // so they can roll the difficulty dice.
     if (id === DIFFICULTY_TAB) {
       difficultyTabBlink.value = false
-      if (props.actingEntityId) emit('actingEntityChange', null)
+      if (props.entityId) emit('actingEntityChange', null)
       return
     }
     // Otherwise, GM tabs are a pool viewer only — never switch the acting entity.
@@ -706,22 +704,21 @@ async function switchTab(id) {
   viewPool.value = res?.dice || []
 }
 
-watch(() => props.entityId, (id) => {
-  if (!props.gmMode) activeId.value = id
-})
-
-watch(() => props.actingEntityId, async (id) => {
-  if (!props.gmMode) return
-  if (id) {
-    activeId.value = id
-    await loadPoolIntoEditor(id)
-    await syncContestState()
-    await loadTargetingBans()
+watch(() => props.entityId, async (id) => {
+  if (props.gmMode) {
+    if (id) {
+      activeId.value = id
+      await loadPoolIntoEditor(id)
+      await syncContestState()
+      await loadTargetingBans()
+    } else {
+      activeId.value = DIFFICULTY_TAB
+      // The GM difficulty pool is keyed by the location id (unified pool
+      // concept); load it so dice added by SFX (e.g. sfx-heal) show up here.
+      await loadPoolIntoEditor(props.locationId)
+    }
   } else {
-    activeId.value = DIFFICULTY_TAB
-    // The GM difficulty pool is keyed by the location id (unified pool
-    // concept); load it so dice added by SFX (e.g. sfx-heal) show up here.
-    await loadPoolIntoEditor(props.locationId)
+    activeId.value = id
   }
 })
 
@@ -957,7 +954,7 @@ async function applyHitchOption(opt) {
       number_of_hitches: selectedHitches.value.length,
       hitch_entity: rollerId,
       buying_entity: props.gmMode
-        ? (props.actingEntityId || props.fallbackEntityId || '')
+        ? (props.entityId || '')
         : (props.entityId || ''),
     }
     const result = await applyHitchEffect(rollerId, opt, vars)
@@ -1071,7 +1068,7 @@ function setUniverse(u) {
 function poolEntityKey() {
   // Entity pools use the acting entity; the GM difficulty pool uses the
   // location id as its key (unified pool concept).
-  if (props.gmMode && !props.actingEntityId) return props.locationId
+  if (props.gmMode && !props.entityId) return props.locationId
   return editingEntityId.value
 }
 
@@ -1150,7 +1147,7 @@ function addFromSheet(payload) {
   // A die added from a sheet in GM free-roam joins the location-keyed
   // difficulty pool (so it rolls as a difficulty, no hitches); otherwise it
   // joins the acting entity's pool.
-  markPurpose(props.gmMode && !props.actingEntityId ? 'difficulty' : 'gmc')
+  markPurpose(props.gmMode && !props.entityId ? 'difficulty' : 'gmc')
   for (const die of dice) {
     pool.push({ die, source, label: label || source, tsId: tsId ?? null, sourceKind: 'trait', resource: !!resource, armedSfxIds: armedSfxIds || [] })
   }
@@ -1230,7 +1227,7 @@ function isHitch(idx) {
   if (!result.value) return false
   // When the GM is rolling to set difficulty, a 1 is an ordinary die —
   // hitches only apply to actual rolls, not difficulty determination.
-  if (props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty') return false
+  if (props.gmMode && !props.entityId && poolPurpose.value === 'difficulty') return false
   const r = result.value.rolls[idx]
   return r ? r.result === 1 : false
 }
@@ -1686,7 +1683,7 @@ async function doRoll() {
     return spec
   })
   const hasResource = dice.some(d => d.resource)
-  const isDifficulty = props.gmMode && !props.actingEntityId && poolPurpose.value === 'difficulty'
+  const isDifficulty = props.gmMode && !props.entityId && poolPurpose.value === 'difficulty'
   // A set test difficulty (player or GM-as-entity) or an active contest must
   // resolve as a full Cortex test (keep-2 + effect die), never the simplified
   // 1-2 die pipeline.
@@ -1741,7 +1738,7 @@ async function doRoll() {
 
 function commitPicks() {
   setPhase(Phase.RESOLVED)
-  if (props.gmMode && !props.actingEntityId) {
+  if (props.gmMode && !props.entityId) {
     // GM difficulty roll: the picked total is the difficulty.
     emit('difficulty', computedTotal.value)
     return
@@ -1768,7 +1765,7 @@ async function syncSelection() {
   if (!props.locationId || !key) return
   const total = selection.total.filter(i => i !== null)
   const effect = selection.effect.find(i => i !== null)
-  const isDifficulty = props.gmMode && !props.actingEntityId
+  const isDifficulty = props.gmMode && !props.entityId
   await apiSelectDice(props.locationId, key, total, isDifficulty ? null : (effect ?? null))
 }
 
@@ -1957,7 +1954,7 @@ async function toggleStakes() {
 }
 
 async function restorePool() {
-  if (props.gmMode && !props.actingEntityId) {
+  if (props.gmMode && !props.entityId) {
     // GM difficulty mode: load the location-keyed difficulty pool.
     await loadPoolIntoEditor(props.locationId)
     return

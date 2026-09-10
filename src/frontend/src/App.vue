@@ -281,7 +281,7 @@
   <div class="stage" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '']">
     <ArmedSfxRail
       v-if="playerId && !showLoginOverlay && !fullCanvas"
-      :entity-id="gmMode ? actingEntityId : entityId"
+      :entity-id="entityId"
       :phase="phase"
       :refresh-key="armedSfxRefresh"
     />
@@ -316,7 +316,7 @@
       </div>
       <div class="sheet-band">
         <CharacterSheet
-          v-show="(mobileStackActive || (sheetVisible && (phase === 'adding' || forceSheet))) && (!gmMode || actingEntityId || viewingEntityId)"
+          v-show="(mobileStackActive || (sheetVisible && (phase === 'adding' || forceSheet))) && (!gmMode || entityId || viewingEntityId)"
           ref="sheetRef"
           class="embedded-sheet"
           :class="{ 'sheet-hidden': !sheetVisible && !mobileStackActive }"
@@ -325,7 +325,7 @@
           :viewer-entity-id="entityId"
           :player-owned-entity-ids="ownedEntityIds"
           :player-id="playerId"
-          :main-entity-id="selfEntityId"
+          :main-entity-id="ownMainId"
           :universe="universe"
           :phase="phase"
           :visible="sheetVisible || mobileStackActive"
@@ -343,7 +343,7 @@
         <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
       </div>
       <div class="roller-band" :style="{ '--roller-h': rollerContentH + 'px' }">
-        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :acting-entity-id="gmMode ? actingEntityId : entityId" :fallback-entity-id="selfEntityId" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
+        <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @click="setMobileFocus('dice')"></div>
       </div>
     </div>
@@ -426,7 +426,7 @@ const gmRootPanel = computed(() => ({
     universe: universe.value,
     currentLocationId: currentLocationId.value,
     currentLocationName: locationName.value,
-    currentEntityId: actingEntityId.value,
+    currentEntityId: entityId.value,
   },
   listeners: {
     'next-beat': () => onNextBeat(),
@@ -576,17 +576,29 @@ function onMoved(data) {
   fetchPeers(true)
 }
 
-const selfEntityId = ref(localStorage.getItem('entityId') || 'kael-1')  // stable identity (SSE/login); for GM this is not a "main" entity
-const entityId = ref(selfEntityId.value)  // perspective entity; null = GM free-roam view
+// One persisted perspective: `entityId` = who you are (player: main/assumed SC;
+// GM: acting entity, null = free-roam). "Self" is derived — the player's own
+// main from troupe data, free-roam for the GM. See [[Perspective Model]].
+const entityId = ref(localStorage.getItem('entityId') || null)  // perspective entity; null = GM free-roam
 const editZones = ref(false)
+
+// The player's own main entity (perspective-neutral). GM has no main: they
+// return to free-roam instead.
+const ownMainId = computed(() => {
+  if (gmMode.value) return entityId.value || ''
+  const mine = activeMains.value.find((m) => m.playerId === playerId.value)
+  return mine?.main?.id || ''
+})
 
 let locationInitPromise = null
 
-// When switching entities, update location (players only — for GM, entityId
-// is a freely-switchable perspective and must not re-init location or persist).
+// entityId persists in every mode (refresh restores the GM's perspective too);
+// only the player flow re-inits location/bonuses on switch — the GM switch
+// path (switchPerspective) handles its own location load.
 watch(entityId, () => {
-  if (!entityId.value || gmMode.value) return
-  localStorage.setItem('entityId', entityId.value)
+  if (entityId.value) localStorage.setItem('entityId', entityId.value)
+  else localStorage.removeItem('entityId')
+  if (gmMode.value || !entityId.value) return
   locationInitPromise = initLocation()
   refreshDiceBonuses()
 }, { flush: 'sync' })
@@ -1016,7 +1028,6 @@ async function switchPerspective(id) {
   } catch {}
   const sameLocation = targetLoc != null && targetLoc === currentLocationId.value
   entityId.value = id
-  actingEntityId.value = id
   viewingEntityId.value = null  // clear any read-only location inspect
   if (!sameLocation) await initLocation()
 }
@@ -1037,13 +1048,11 @@ async function setViewLocation(locId) {
 async function switchViewLocation(locId) {
   if (!locId) return
   entityId.value = null
-  actingEntityId.value = null
   await setViewLocation(locId)
 }
 
 function returnToSelf() {
-  entityId.value = selfEntityId.value
-  actingEntityId.value = null
+  entityId.value = gmMode.value ? null : ownMainId.value
   viewingEntityId.value = null  // clear any read-only location inspect
 }
 
@@ -1056,7 +1065,7 @@ function onInspectEntity(id) {
   // Map-dot semantics (deliberately NOT the peer-chip toggle):
   //   self dot    → own sheet
   //   foreign dot → open if closed/different; close if already open & showing it
-  const isSelf = id === entityId.value || id === selfEntityId.value
+  const isSelf = id === entityId.value || id === ownMainId.value
   if (isSelf) {
     viewingEntityId.value = null
     forceSheet.value = true
@@ -1077,7 +1086,7 @@ function onInspectEntity(id) {
 
 function isPeerActive(p) {
   const viewed = viewingEntityId.value
-  const acted = gmMode.value ? actingEntityId.value : null
+  const acted = gmMode.value ? entityId.value : null
   if (viewed && viewed === p.id) return true
   if (acted && acted === p.id) return true
   if (!viewed && !acted && entityId.value === p.id) return true
@@ -1094,13 +1103,13 @@ async function onPeerClick(id) {
       if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
       return
     }
-    if (actingEntityId.value === id) returnToSelf()
+    if (entityId.value === id) returnToSelf()
     else await switchPerspective(id)
-    // switchPerspective sets actingEntityId after its fetch — focus then.
-    if (mobileStackActive.value && actingEntityId.value === id) setMobileFocus('sheet')
+    // switchPerspective sets entityId after its fetch — focus then.
+    if (mobileStackActive.value && entityId.value === id) setMobileFocus('sheet')
   } else {
     // Clicking our own character returns to self-view (no override), keeping the header tabs visible.
-    viewingEntityId.value = (id === entityId.value || id === selfEntityId.value)
+    viewingEntityId.value = (id === entityId.value || id === ownMainId.value)
       ? null
       : (viewingEntityId.value === id ? null : id)
     if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
@@ -1155,7 +1164,9 @@ let offSwitchPerspective = null
 let offSwitchViewLocation = null
 
 // SSE — live state sync (subscribe with the stable identity; free-roam has no perspective entity)
-const { connected, lastEvent, error } = useSSE(sessionId, computed(() => entityId.value || selfEntityId.value), playerId)
+// The SSE stream is session-wide server-side (entity_id is a legacy log-only
+// param); a free-roaming GM keeps the connection alive on their playerId.
+const { connected, lastEvent, error } = useSSE(sessionId, computed(() => entityId.value || playerId.value), playerId)
 
 // Architect toast notifications
 const { toasts, addToast, dismissToast } = useToasts()
@@ -1394,7 +1405,7 @@ watch(lastEvent, (evt) => {
         addToast(`${entName(evt.data?.challenger_id)} challenged ${entName(evt.data?.opponent_id)}`, 'dice')
         // Auto-switch to a challenged GMC so the GM can roll its side at once.
         const oppId = evt.data?.opponent_id
-        if (oppId && isGmcEntity(oppId) && actingEntityId.value !== oppId) {
+        if (oppId && isGmcEntity(oppId) && entityId.value !== oppId) {
           switchPerspective(oppId)
         }
       }
@@ -1497,11 +1508,10 @@ let closeTimer = null
 
 const currentPoolSources = ref([])
 const viewingEntityId = ref(null)
-const actingEntityId = ref(null)  // GM: entity being acted as (null = difficulty/free-roam)
 // When the GM switches which entity they're acting as, re-seed the pool tabs
 // from the server so entities acted as earlier (with dice still saved) keep a
 // tab — the GM's own pool edits don't reach remotePools via the SSE echo.
-watch(actingEntityId, seedRemotePools)
+watch(entityId, seedRemotePools)
 const forceSheet = ref(false)
 
 const wrapperEl = useTemplateRef('wrapperEl')
@@ -1611,7 +1621,7 @@ const mobileStackActive = computed(() => isMobile.value)
 
 // GM with no acting/viewed entity has an empty sheet band on mobile — it is
 // fully collapsed (peers bar is enough) and the sheet focus is unreachable.
-const sheetEmpty = computed(() => mobileStackActive.value && gmMode.value && !actingEntityId.value && !viewingEntityId.value)
+const sheetEmpty = computed(() => mobileStackActive.value && gmMode.value && !entityId.value && !viewingEntityId.value)
 watch(sheetEmpty, (v) => { if (v && mobileFocus.value === 'sheet') mobileFocus.value = 'location' })
 
 function setMobileFocus(f) {
