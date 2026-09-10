@@ -22,14 +22,37 @@ renderers that wire composable state to the DOM.**
 
 ## Architecture
 
-- `src/components/gm/PanelStack.vue` — root container (fixed, right-aligned,
-  viewport-aware). Renders one root `Panel`.
+- `src/components/gm/PanelStack.vue` — the stack: the 🛠 toggle, the root
+  `Panel`, and the floating-window layer. Owns the stack anchor's drag and the
+  depth-hiding fit loop.
 - `src/components/gm/Panel.vue` — self-referential wrapper. Provides the
-  `panelKey` navigation context to its slot content and renders a nested child
-  `Panel` when `child` is set.
+  `panelKey` navigation context to its slot content, renders nested child
+  `Panel`s (tab-group: one active + a chip strip), and carries the per-panel
+  geometry: anchor-derived placement, viewport clamp, action rail, drag handle.
+- `src/components/gm/PanelWindow.vue` — one detached/floating window: its own
+  anchor, its own chain direction, and the dock plumbing. Renders a root `Panel`.
+- `src/composables/usePanelAnchor.js` — the anchor model: position (persisted
+  per device as `gmPanelAnchor`), edge snap, direction derivation, viewport
+  clamps.
+- `src/composables/usePanelWindows.js` — the window registry (`spawn/close/
+  replace/toggleCollapse/setDock/move/setDirection`), each window carrying
+  `{ id, spec, x, y, direction, sourceParentKey }`.
+- `src/composables/usePanelDiagnostics.js` — drag-release dumps: every drag
+  start/release records the live DOM geometry *and* each panel's internal layout
+  state into `window.__PANEL_DUMPS__` (silent unless `window.__PANEL_DEBUG__`).
 - A **panel** is the content component rendered inside a `Panel` slot
   (e.g. `GmEntityEditPanel`, `GmTraitEditPanel`). `GmPanel.vue` is the L0 root
   content (modes, entity list, filter bar) — not the wrapper.
+
+Positioning in one paragraph: the chain derives from a draggable **anchor**
+(🛠 closed, the shallowest visible panel's rail open — drag the rail's `⠿` or
+the 🛠 itself; the anchor snaps to the nearest viewport edge on drop and is
+remembered per device). Panels open away from the anchor's edge (left/right/up/
+down), are clamped inside the viewport, slide along their parents' edges, and
+each rail hugs **its own** panel's edge. Any child panel can detach (`⤢`) into a
+floating window, which keeps its own anchor and direction and docks back (`⤓`)
+into the panel it came from, matched by `component + spec.id`. See
+[[GM Panel Positioning Plan]].
 
 ## Rule 1 — Data and mutations live in composables
 
@@ -127,7 +150,7 @@ tree that a parent assembled specifically to pass down.
 ## Reference panels
 
 - Thin consumer panels: `GmPanel.vue` (root), `GmEntityEditPanel.vue`, `GmTraitEditPanel.vue`.
-- Infrastructure: `PanelStack.vue`, `Panel.vue`, `usePanel.js`, `usePanelBus.js`.
+- Infrastructure: `PanelStack.vue`, `Panel.vue`, `PanelWindow.vue`, `usePanel.js`, `usePanelBus.js`, `usePanelAnchor.js`, `usePanelWindows.js`, `usePanelDiagnostics.js`.
 - Troupe play: `GmTroupeOverview.vue` (recency + active-main groups), `RollTableMenu.vue` (roll-table-as-menu picker), `useRollTableMenu.js`.
 
 ## Migration backlog — complete
