@@ -14,7 +14,7 @@
       v-for="w in allWindows"
       :key="w.id"
       :anchor="anchorRect"
-      :direction="'left'"
+      :direction="direction"
       :min-visible-depth="minVisibleDepth"
       :body-scroll="w.spec?.bodyScroll !== false"
       :title="w.spec?.title"
@@ -42,7 +42,7 @@ const props = defineProps({
 })
 
 const { windows, close: closeWindow, replace: replaceWindow } = usePanelWindows()
-const { resolveAnchor, setAnchor } = usePanelAnchor()
+const { direction, resolveAnchor, deriveDirection, snapToEdge, setAnchor } = usePanelAnchor()
 
 const show = ref(false)
 
@@ -75,6 +75,15 @@ const viewportWidth = ref(window.innerWidth)
 const viewportHeight = ref(window.innerHeight)
 
 const anchorCenter = computed(() => resolveAnchor(viewportWidth.value, viewportHeight.value))
+
+// The chain's open direction follows the anchor's edge — but only while the
+// anchor is inside an edge band; away from every edge it keeps the direction it
+// had, so a mid-screen drag doesn't flip the stack back and forth. At rest the
+// anchor is always snapped to an edge, so the direction is stable there.
+watch(anchorCenter, (a) => {
+  const next = deriveDirection(a.x, a.y, viewportWidth.value, viewportHeight.value)
+  if (next) direction.value = next
+}, { immediate: true })
 
 const anchorRect = computed(() => {
   const { x, y } = anchorCenter.value
@@ -126,7 +135,15 @@ function startDrag(e, { threshold = 0 } = {}) {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', finish)
     window.removeEventListener('pointercancel', finish)
-    if (moved) logAnchor('drag-end')
+    if (moved) {
+      // Come to rest on the nearest viewport edge: the button stays findable,
+      // and the edge it lands on settles the stack's direction.
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const snapped = snapToEdge(anchorCenter.value.x, anchorCenter.value.y, vw, vh)
+      setAnchor(snapped.x, snapped.y)
+      logAnchor('drag-end-snap')
+    }
     dragging.value = false
     if (moved && threshold > 0) {
       // Swallow the click the browser fires right after this drag (browsers

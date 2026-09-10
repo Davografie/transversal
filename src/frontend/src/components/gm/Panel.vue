@@ -1,6 +1,6 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle">
-    <div ref="actionsEl" class="panel-actions" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
+    <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right' }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
       <!-- The anchor rail's drag handle (drag-only). Only the shallowest visible
            panel's rail sits at the anchor, so only that rail can move the stack. -->
       <Button v-if="isShallowestVisible" class="panel-action-btn panel-drag-handle" variant="ghost" size="icon" title="Drag panels" @pointerdown="onAnchorDragStart">⠿</Button>
@@ -25,7 +25,7 @@
          Panels stay mounted (v-show) so their drafts survive collapse; the strip
          shows lightweight tab buttons that reference them. -->
     <div class="panel-children" v-show="!isCollapsed">
-      <div ref="tabsEl" class="panel-tabs" :style="tabsStyle" v-show="collapsedChildren.length && !isDepthHidden">
+      <div ref="tabsEl" class="panel-tabs" :class="{ 'is-flipped': direction === 'right' }" :style="tabsStyle" v-show="collapsedChildren.length && !isDepthHidden">
         <div v-for="c in collapsedChildren" :key="c.key" class="panel-chip" @click="toggleChildCollapse(c.key)">
           <span class="chip-expand">▸</span>
           <span class="chip-title">{{ c.spec.title }}</span>
@@ -93,8 +93,8 @@ const props = defineProps({
   bridgeTop: { type: Number, default: null },
   bridgeBottom: { type: Number, default: null },
   // ── Positioning (anchor + out-of-flow model) ──────────
-  // Open direction: 'left' (right-to-left) is implemented; right/up/down come
-  // with the per-anchor direction work (Phase 2).
+  // Open direction: 'left' (right-to-left) and 'right' (left-to-right) are
+  // implemented; up/down stacks come with the axis work (slice 3).
   direction: { type: String, default: 'left' },
   gap: { type: Number, default: 8 },
   // Assigned offset (children only): absolute top/left within the parent's
@@ -223,7 +223,8 @@ function measureSelf() {
 // The action rail replaces the 🛠 toggle (fixed at right:12px, 36px wide → its
 // left edge sits at vw-48). The panel's right edge overlaps the rail by 14px,
 // as it did before the rail became viewport-fixed: right edge = vw-48+14 =
-// anchor.left + 20.
+// anchor.left + 20. Direction 'right' mirrors it: the panel's left edge tucks
+// under the rail at anchor.right - 20.
 const RAIL_OVERHANG = 20
 
 function computeRootPosition() {
@@ -235,12 +236,12 @@ function computeRootPosition() {
   const vh = window.innerHeight
   const MARGIN = 12
   let top, left
-  if (props.direction === 'left') {
-    left = a.left + RAIL_OVERHANG - nodeSize.w
+  if (props.direction === 'right') {
+    left = a.right - RAIL_OVERHANG
     top = a.centerY - nodeSize.h / 2
   } else {
-    // TODO(Phase 2): other directions.
-    left = a.right + props.gap
+    // 'left' (default, right-to-left). Up/down are slice 3.
+    left = a.left + RAIL_OVERHANG - nodeSize.w
     top = a.centerY - nodeSize.h / 2
   }
   left = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, vw - nodeSize.w - MARGIN))
@@ -289,8 +290,11 @@ const tabsStyle = computed(() => {
     top: columnTop.value + 'px',
     width: w + 'px',
   }
-  if (props.direction === 'left') style.left = -(w + props.gap) + 'px'
-  else style.left = (nodeSize.w + props.gap) + 'px' // TODO(Phase 2)
+  // The strip shares the child column: to the left of this panel when the
+  // chain grows leftwards, to the right of it when it grows rightwards.
+  style.left = props.direction === 'right'
+    ? (nodeSize.w + props.gap) + 'px'
+    : -(w + props.gap) + 'px'
   return style
 })
 
@@ -299,14 +303,17 @@ const activePosition = computed(() => {
   if (!c) return { top: null, left: null }
   const top = columnTop.value + tabsHeight.value + stripGap.value
   // Depth-hiding: a hidden panel contributes neither width nor gap to the
-  // chain, so the shallowest visible child takes the root's anchor position
-  // (right edge at the toggle minus the root gap). A hidden active child
-  // reports width 0, so -(0) collapses it onto this panel's node.
-  const left = isDepthHidden.value
-    ? -(activeSize.value.w)
-    : (props.direction === 'left'
-      ? -(activeSize.value.w + props.gap)
-      : nodeSize.w + props.gap) // TODO(Phase 2)
+  // chain, so the shallowest visible panel takes the anchor's place. A leftward
+  // chain collapses a hidden level onto this node's origin (its own width
+  // measures 0); a rightward chain anchors on this node's right edge instead.
+  let left
+  if (isDepthHidden.value) {
+    left = props.direction === 'right' ? nodeSize.w : -(activeSize.value.w)
+  } else {
+    left = props.direction === 'right'
+      ? nodeSize.w + props.gap
+      : -(activeSize.value.w + props.gap)
+  }
   return { top, left }
 })
 
@@ -363,7 +370,10 @@ const RAIL_W = 36
 const anchorPoint = inject('panelAnchorPoint', null)
 const anchorDrag = inject('panelAnchorDrag', null)
 const anchorVersion = inject('anchorVersion', null)
-if (anchorVersion) watch(anchorVersion, () => nextTick(measureSelf))
+// Coalesce to one measure per frame: the anchor moves on every pointermove, and
+// re-measuring inside the ResizeObserver's own notification window is what
+// provokes "ResizeObserver loop completed with undelivered notifications".
+if (anchorVersion) watch(anchorVersion, () => queueMeasure())
 
 function onAnchorDragStart(e) {
   if (anchorDrag) anchorDrag.begin(e)
@@ -433,14 +443,29 @@ function panelLog(reason, detail = {}) {
 // ── Observers + watchers ──────────────────────────────
 let driftObserver = null
 let tabsObserver = null
+// Coalesced re-measure: one pass per frame, never inside a ResizeObserver's own
+// notification (mutating reactive state there re-triggers the observer in the
+// same delivery and provokes "ResizeObserver loop completed with undelivered
+// notifications").
+let measureQueued = false
+function queueMeasure() {
+  if (measureQueued) return
+  measureQueued = true
+  requestAnimationFrame(() => {
+    measureQueued = false
+    measureSelf()
+    measureTabs()
+  })
+}
+
 function setupObserver() {
   if (typeof ResizeObserver === 'undefined') return
   if (panelEl.value) {
-    driftObserver = new ResizeObserver(() => measureSelf())
+    driftObserver = new ResizeObserver(() => queueMeasure())
     driftObserver.observe(panelEl.value)
   }
   if (tabsEl.value) {
-    tabsObserver = new ResizeObserver(() => measureTabs())
+    tabsObserver = new ResizeObserver(() => queueMeasure())
     tabsObserver.observe(tabsEl.value)
   }
   measureSelf()
@@ -583,7 +608,8 @@ provide(panelKey, {
   /* static; children are out of flow */
 }
 
-/* Chip strip: collapsed siblings as compact tabs, wrapping right-to-left. */
+/* Chip strip: collapsed siblings as compact tabs, wrapping right-to-left
+   (leftward chains) or left-to-right (rightward chains). */
 .panel-tabs {
   position: absolute;
   display: flex;
@@ -592,6 +618,7 @@ provide(panelKey, {
   gap: 4px;
   pointer-events: auto;
 }
+.panel-tabs.is-flipped { justify-content: flex-start; }
 .panel-chip {
   display: inline-flex;
   align-items: center;
@@ -634,11 +661,13 @@ provide(panelKey, {
 }
 
 /* Panel action rail: vertical column of icon buttons outside the panel's
-   right edge (close, collapse/expand, and later detach/drag). */
+   right edge (close, collapse/expand, and the anchor drag handle). For a
+   rightward chain the rail faces the parent on the panel's left edge. */
 .panel-actions {
   position: absolute; top: 50%; right: -22px; transform: translateY(-50%); z-index: 2;
   display: flex; flex-direction: column; gap: 4px;
 }
+.panel-actions.is-flipped { right: auto; left: -22px; }
 .panel-actions .panel-action-btn {
   width: 36px; height: 36px; border-radius: 50%;
   backdrop-filter: blur(12px);
