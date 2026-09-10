@@ -47,6 +47,12 @@ const direction = ref('left')
 const EDGE_X = 21
 const EDGE_Y = 58
 
+// Breathing room the anchor keeps from the edge it rests on — the same inset the
+// default spot uses (`right: 12px`), so snapping to the right edge lands exactly
+// on the default position. Applied to the drag clamp as well, so the anchor
+// never touches the edge and the drop-snap can't pop it outwards.
+const SNAP_MARGIN = 12
+
 // The band (fraction of the viewport, per axis) inside which an edge claims the
 // anchor — for the direction and for the drop snap alike.
 const BAND = 0.2
@@ -57,14 +63,18 @@ function clamp(v, lo, hi) {
 
 // Where the toggle has always been: `right: 12px`, 42px box, vertically centered.
 function defaultAnchor(vw, vh) {
-  return { x: vw - 12 - EDGE_X, y: vh / 2 }
+  return { x: vw - EDGE_X - SNAP_MARGIN, y: vh / 2 }
 }
 
-// Clamp an anchor point into the viewport (the toggle *and* the whole rail must
-// stay reachable — the rail is taller than the button, so the vertical bound is
-// its half-height). Used by the stack anchor and by floating windows alike.
+// Clamp an anchor point into the viewport, keeping SNAP_MARGIN from every edge
+// (the toggle *and* the whole rail must stay reachable — the rail is taller than
+// the button, so the vertical bound is its half-height). Used by the stack
+// anchor and by floating windows alike.
 export function clampAnchor(x, y, vw, vh) {
-  return { x: clamp(x, EDGE_X, vw - EDGE_X), y: clamp(y, EDGE_Y, vh - EDGE_Y) }
+  return {
+    x: clamp(x, EDGE_X + SNAP_MARGIN, vw - EDGE_X - SNAP_MARGIN),
+    y: clamp(y, EDGE_Y + SNAP_MARGIN, vh - EDGE_Y - SNAP_MARGIN),
+  }
 }
 
 // The live anchor point, clamped into the viewport.
@@ -129,10 +139,10 @@ export function snapToEdge(x, y, vw, vh) {
     }
   }
   const out = { x, y }
-  if (target === 'right') out.x = vw - EDGE_X
-  else if (target === 'left') out.x = EDGE_X
-  else if (target === 'bottom') out.y = vh - EDGE_Y
-  else out.y = EDGE_Y
+  if (target === 'right') out.x = vw - EDGE_X - SNAP_MARGIN
+  else if (target === 'left') out.x = EDGE_X + SNAP_MARGIN
+  else if (target === 'bottom') out.y = vh - EDGE_Y - SNAP_MARGIN
+  else out.y = EDGE_Y + SNAP_MARGIN
   return out
 }
 
