@@ -7,28 +7,58 @@
       <div class="header">
         <div class="header-top">
           <div class="header-title">
-            <h2>{{ entity.name }}</h2>
-            <div v-if="projectionSubtitle || canEditProjectionName" class="projection-subtitle">
+            <!-- A named body takes over the title; the character's name shrinks
+                 to an overline above it. Unnamed: the character keeps the title
+                 and the naming action sits underneath. The edit input always
+                 swaps into the slot of the level it edits, so the header
+                 doesn't reflow when you click. -->
+            <div v-if="projectionSubtitle" class="name-overline">{{ entity.name }}</div>
+
+            <template v-if="projectionSubtitle">
               <input
                 v-if="editingProjectionName"
                 ref="projectionNameInput"
                 v-model="projectionNameValue"
-                class="projection-name-input"
+                class="projection-name-input is-primary"
                 placeholder="Name this projection…"
                 @keyup.enter="commitProjectionName"
                 @keyup.escape="editingProjectionName = false"
                 @blur="commitProjectionName"
               />
-              <Button
-                v-else-if="canEditProjectionName"
-                class="projection-name-btn"
-                variant="link"
-                :class="{ unset: !projectionSubtitle }"
-                title="Rename this projection"
-                @click.stop="startProjectionNameEdit"
-              >{{ projectionSubtitle || 'Name this projection…' }}</Button>
-              <span v-else class="projection-name">{{ projectionSubtitle }}</span>
-            </div>
+              <h2 v-else class="name-primary">
+                <Button
+                  v-if="canEditProjectionName"
+                  variant="link"
+                  class="name-primary-btn"
+                  title="Rename this projection"
+                  @click.stop="startProjectionNameEdit"
+                >{{ projectionSubtitle }}</Button>
+                <span v-else>{{ projectionSubtitle }}</span>
+              </h2>
+            </template>
+
+            <template v-else>
+              <h2 class="name-primary">{{ entity.name }}</h2>
+              <div v-if="canEditProjectionName" class="name-secondary">
+                <input
+                  v-if="editingProjectionName"
+                  ref="projectionNameInput"
+                  v-model="projectionNameValue"
+                  class="projection-name-input"
+                  placeholder="Name this projection…"
+                  @keyup.enter="commitProjectionName"
+                  @keyup.escape="editingProjectionName = false"
+                  @blur="commitProjectionName"
+                />
+                <Button
+                  v-else
+                  variant="link"
+                  class="projection-name-btn unset"
+                  title="Name this projection"
+                  @click.stop="startProjectionNameEdit"
+                >＋ Name this projection</Button>
+              </div>
+            </template>
           </div>
           <div class="razmerit-anchor">
             <button class="razmerit-chip" :title="showRazmeritWidget ? 'Close' : 'Adjust razmerit'" @click.stop="showRazmeritWidget = !showRazmeritWidget">
@@ -2392,22 +2422,35 @@ watch(() => props.externalPoolSources, (sources) => {
   font-weight: 700;
   margin-bottom: 4px;
 }
-/* Title + projection undertitle. The wrapper takes the flex slot the h2
-   used to; the body name sits under the character's name. */
+/* Title + projection name. The character name stays the title until the body
+   is named; then the body name takes the title and the character name shrinks
+   to an overline above it. */
 .header-title { flex: 1; min-width: 0; }
 .header-title h2 { margin-bottom: 2px; }
-.projection-subtitle {
-  display: flex;
-  align-items: center;
-  min-height: 17px;
-  font-size: 12px;
+.name-overline {
+  font-size: 11px;
   line-height: 1.3;
+  margin-bottom: 1px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.projection-name { color: var(--text-dim); }
-/* Scoped to .projection-subtitle so the override beats the primitive's
-   .btn-md padding in the child component's stylesheet. */
-.projection-subtitle .projection-name-btn { padding: 0; font-size: 12px; font-weight: 400; }
-.projection-subtitle .projection-name-btn.unset { color: var(--text-dim); opacity: 0.7; }
+.name-primary { font-size: 20px; font-weight: 700; }
+.name-secondary { display: flex; align-items: center; min-height: 17px; }
+/* These overrides must beat the primitive's .btn-md/.btn-link rules from the
+   child stylesheet, hence the .header-title descendant prefix. */
+.header-title .name-primary-btn {
+  padding: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+  color: var(--text);
+}
+.header-title .projection-name-btn { padding: 0; font-size: 12px; font-weight: 400; }
+.header-title .projection-name-btn.unset { color: var(--text-dim); }
+.header-title .projection-name-btn.unset:hover { color: var(--accent); }
 .projection-name-input {
   font: inherit;
   font-size: 12px;
@@ -2419,6 +2462,7 @@ watch(() => props.externalPoolSources, (sources) => {
   width: 100%;
   max-width: 220px;
 }
+.projection-name-input.is-primary { font-size: 20px; font-weight: 700; padding: 2px 8px; }
 .meta {
   display: flex;
   gap: 8px;
