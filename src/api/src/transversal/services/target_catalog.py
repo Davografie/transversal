@@ -58,6 +58,12 @@ class ScalarField:
     options: tuple[str, ...] = ()
     operators: tuple[str, ...] = ()
     references: str = ""
+    label: str = ""  # card-facing name; "" → humanized ``name``
+
+
+def field_label(field: ScalarField) -> str:
+    """The card-facing name of a field (explicit label, else humanized)."""
+    return field.label or field.name.replace("_", " ")
 
 
 # Operators valid per field type. Ordering operators only make sense on
@@ -85,19 +91,20 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "tier": ScalarField("die", "tier", "string", ("fail", "marginal", "success", "exceptional", "perfect")),
         "role": ScalarField("die", "role", "string"),
         "source_kind": ScalarField("die", "source_kind", "string", ("trait", "difficulty", "manual", "entity", "projection", "location", "resource", "challenge")),
-        "ts_id": ScalarField("die", "ts_id", "string"),
+        "ts_id": ScalarField("die", "ts_id", "string", label="trait instance"),
         # A list of SFX ids stamped on the die; filtered via the `contains` operator.
-        "armed_sfx_ids": ScalarField("die", "armed_sfx_ids", "string", operators=("contains", "==", "!=")),
+        "armed_sfx_ids": ScalarField("die", "armed_sfx_ids", "string",
+                                      operators=("contains", "==", "!="), label="armed SFX"),
     },
     "traitsetting": {
         "rating": ScalarField("traitsetting", "rating", "die", ("d4", "d6", "d8", "d10", "d12")),
         "rating_type": ScalarField("traitsetting", "rating_type", "string", ("static", "resource", "challenge", "empty")),
         "polarity": ScalarField("traitsetting", "polarity", "string", ("positive", "negative")),
-        "trait_id": ScalarField("traitsetting", "trait_id", "string", references="trait"),
-        "traitset_id": ScalarField("traitsetting", "traitset_id", "string", references="traitset"),
-        "entity_id": ScalarField("traitsetting", "entity_id", "string", references="entity"),
-        "projection_id": ScalarField("traitsetting", "projection_id", "string", references="projection"),
-        "from_type": ScalarField("traitsetting", "from_type", "string", ("entity", "projection")),
+        "trait_id": ScalarField("traitsetting", "trait_id", "string", references="trait", label="trait"),
+        "traitset_id": ScalarField("traitsetting", "traitset_id", "string", references="traitset", label="trait set"),
+        "entity_id": ScalarField("traitsetting", "entity_id", "string", references="entity", label="entity"),
+        "projection_id": ScalarField("traitsetting", "projection_id", "string", references="projection", label="projection"),
+        "from_type": ScalarField("traitsetting", "from_type", "string", ("entity", "projection"), label="owner type"),
     },
     "traitsetsetting": {
         "entity_id": ScalarField("traitsetsetting", "entity_id", "string", references="entity"),
@@ -155,43 +162,73 @@ class Edge:
     target: tuple[str, ...]
     cardinality: str  # "one" (1→1) or "many" (1→N)
     label: str = ""
+    # Card vocabulary (see [[SFX Natural Language Plan]]): the singular/plural
+    # noun a path step lands on, and the phrase replacing "of {source}" when the
+    # source is a *bare* collection (no filters applied), e.g. "you rolled".
+    noun: str = ""
+    plural: str = ""
+    card_origin: str = ""
+
+
+def edge_noun(e: Edge) -> tuple[str, str]:
+    """The edge's card noun as ``(singular, plural)``."""
+    singular = e.noun or e.label.lower() or e.name
+    return singular, (e.plural or pluralize(singular))
+
+
+def pluralize(word: str) -> str:
+    """Naive English plural (the catalog supplies explicit forms where it matters)."""
+    if not word:
+        return word
+    if word.endswith(("s", "x", "ch", "sh")):
+        return word + "es"
+    if word.endswith("y") and word[-2:-1] not in "aeiou":
+        return word[:-1] + "ies"
+    if word == "die":
+        return "dice"
+    return word + "s"
 
 
 EDGES: tuple[Edge, ...] = (
     # die → its trait instance (ts_id) and its pool/roll owner
-    Edge("traitsetting", "die", ("traitsetting",), "one", "Owning trait instance"),
-    Edge("owner", "die", ("entity",), "one", "Pool owner"),
+    Edge("traitsetting", "die", ("traitsetting",), "one", "Owning trait instance",
+         noun="trait instance", plural="trait instances", card_origin="you rolled"),
+    Edge("owner", "die", ("entity",), "one", "Pool owner", noun="pool owner"),
 
     # traitsetting → registry trait / traitset / owners
     # (the polymorphic `_from` anchor is split into already-distinct fields)
-    Edge("trait", "traitsetting", ("trait",), "one", "Registry trait"),
+    Edge("trait", "traitsetting", ("trait",), "one", "Registry trait", noun="trait"),
     Edge("traitset", "traitsetting", ("traitset",), "one", "Trait set"),
-    Edge("entity", "traitsetting", ("entity",), "one", "Owning entity"),
+    Edge("entity", "traitsetting", ("entity",), "one", "Owning entity", noun="owner"),
     Edge("projection", "traitsetting", ("projection",), "one", "Owning projection"),
 
     # entity → location / universe / projections / its trait instances
-    Edge("location", "entity", ("location",), "one", "Current location"),
-    Edge("universe", "entity", ("universe",), "one", "Current universe"),
-    Edge("projection", "entity", ("projection",), "one", "Current projection"),
-    Edge("projections", "entity", ("projection",), "many", "All projections"),
-    Edge("traitsettings", "entity", ("traitsetting",), "many", "Trait instances"),
+    Edge("location", "entity", ("location",), "one", "Current location", noun="location"),
+    Edge("universe", "entity", ("universe",), "one", "Current universe", noun="universe"),
+    Edge("projection", "entity", ("projection",), "one", "Current projection",
+         noun="projection"),
+    Edge("projections", "entity", ("projection",), "many", "All projections",
+         noun="projection"),
+    Edge("traitsettings", "entity", ("traitsetting",), "many", "Trait instances",
+         noun="trait instance", plural="trait instances"),
 
     # projection → owning entity / current location
-    Edge("entity", "projection", ("entity",), "one", "Owning entity"),
-    Edge("location", "projection", ("location",), "one", "Current location"),
+    Edge("entity", "projection", ("entity",), "one", "Owning entity", noun="owner"),
+    Edge("location", "projection", ("location",), "one", "Current location", noun="location"),
 
     # location → universe / occupants
-    Edge("universe", "location", ("universe",), "one", "Universe"),
-    Edge("occupants", "location", ("entity",), "many", "Occupants"),
+    Edge("universe", "location", ("universe",), "one", "Universe", noun="universe"),
+    Edge("occupants", "location", ("entity",), "many", "Occupants", noun="occupant"),
 
     # entity / location → their dice pool (pool-assembly target for add_dice)
     Edge("pool", "entity", ("pool",), "one", "Dice pool"),
-    Edge("difficulty_pool", "location", ("pool",), "one", "GM difficulty pool"),
+    Edge("difficulty_pool", "location", ("pool",), "one", "GM difficulty pool",
+         noun="GM difficulty pool", plural="GM difficulty pools"),
 
     # traitset ↔ trait, trait → universes
-    Edge("traits", "traitset", ("trait",), "many", "Traits"),
+    Edge("traits", "traitset", ("trait",), "many", "Traits", noun="trait"),
     Edge("traitset", "trait", ("traitset",), "one", "Trait set"),
-    Edge("universes", "trait", ("universe",), "many", "Universes"),
+    Edge("universes", "trait", ("universe",), "many", "Universes", noun="universe"),
 )
 
 
@@ -208,15 +245,27 @@ class Aggregation:
     label: str
     output: str
     needs_field: bool
+    card: str = ""  # template with {field} and {src}; "" → derived
+
+
+def aggregation_card(agg: Aggregation, src: str, field: str) -> str:
+    """The card phrase for collapsing ``src`` with ``agg`` (over ``field``)."""
+    if agg.card:
+        return agg.card.format(field=field, src=src)
+    if agg.name == "count":
+        return f"the number of {src}"
+    return f"the {agg.label.lower()} {field} among {src}"
 
 
 AGGREGATIONS: tuple[Aggregation, ...] = (
-    Aggregation("count", "Count", "int", False),
-    Aggregation("min", "Minimum", "same", True),
-    Aggregation("max", "Maximum", "same", True),
-    Aggregation("mean", "Mean", "number", True),
-    Aggregation("avg_floor", "Average (floor)", "number", True),
-    Aggregation("avg_ceil", "Average (ceil)", "number", True),
+    Aggregation("count", "Count", "int", False, card="the number of {src}"),
+    Aggregation("min", "Minimum", "same", True, card="the lowest {field} among {src}"),
+    Aggregation("max", "Maximum", "same", True, card="the highest {field} among {src}"),
+    Aggregation("mean", "Mean", "number", True, card="the average {field} among {src}"),
+    Aggregation("avg_floor", "Average (floor)", "number", True,
+                card="the average {field} among {src}, rounded down"),
+    Aggregation("avg_ceil", "Average (ceil)", "number", True,
+                card="the average {field} among {src}, rounded up"),
 )
 
 
@@ -229,15 +278,26 @@ class Collection:
     element: str
     label: str
     singular: bool = False  # True for singleton seeds like "self"
+    # Card vocabulary ([[SFX Natural Language Plan]]): the head noun a filter can
+    # qualify, an optional trailing qualifier, and whether the phrase reads in the
+    # possessive ("your trait instances") or as a bare pronoun ("you").
+    noun: str = ""
+    plural: str = ""
+    origin: str = ""
+    possessive: bool = False
+    pronoun: bool = False
 
 
 COLLECTIONS: tuple[Collection, ...] = (
-    Collection("self", "entity", "The acting entity", singular=True),
-    Collection("rolled_dice", "die", "Dice in the current roll"),
-    Collection("occupants", "entity", "Entities at the current location"),
-    Collection("locations", "location", "All locations"),
-    Collection("entities", "entity", "All entities"),
-    Collection("self_traitsettings", "traitsetting", "The acting entity's trait instances"),
+    Collection("self", "entity", "The acting entity", singular=True, pronoun=True),
+    Collection("rolled_dice", "die", "Dice in the current roll",
+               noun="die", plural="dice", origin="in your roll"),
+    Collection("occupants", "entity", "Entities at the current location",
+               noun="entity", origin="here"),
+    Collection("locations", "location", "All locations", noun="location"),
+    Collection("entities", "entity", "All entities", noun="entity"),
+    Collection("self_traitsettings", "traitsetting", "The acting entity's trait instances",
+               noun="trait instance", possessive=True),
 )
 
 

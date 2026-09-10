@@ -935,3 +935,51 @@ def get_inverse(effect_type: str, effect_action: str) -> tuple[tuple[str, str] |
         if meta.effect_type == effect_type and meta.effect_action == effect_action:
             return (meta.inverse, meta.inverse_captures_prior)
     return (None, False)
+
+
+# ── Card templates ([[SFX Natural Language Plan]]) ──────────────────────────
+#
+# How an effect reads in derived rules text. ``{target}`` is the rendered
+# target phrase and ``{result}`` the rendered magnitude/rating; an empty
+# placeholder is tidied away ("… as {result}" with no rating drops the
+# clause). Kept beside the registry for the same reason the trigger cards sit
+# beside [[TRIGGERS]]: the editor label answers "what is this called", the card
+# answers "how does this read". Unlisted actions fall back to the label, so a
+# new action never renders as nothing.
+EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
+    ("modify_roll", "play_as_rating"): "play {target} as {result}",
+    ("modify_roll", "double_die"): "double {target}",
+    ("modify_trait", "step_up"): "step up {target}",
+    ("modify_trait", "step_down"): "step down {target}",
+    ("modify_trait", "gain_or_step_up"): "gain or step up {target}",
+    ("modify_trait", "disable"): "disable {target}",
+    ("modify_trait", "gain"): "gain {target}",
+    ("modify_trait", "cortex_gain"): "gain {target} as a complication at {result}",
+    ("modify_trait", "add_die"): "add a {result} die to {target}",
+    ("modify_trait", "reduce_by_effect"): "reduce {target} by the effect die",
+    ("transfer_razmerit", "earn"): "gain {result} razmerit",
+    ("transfer_razmerit", "spend"): "spend {result} razmerit",
+    ("transfer_razmerit", "transfer"): "transfer {result} razmerit to {target}",
+    ("modify_pool", "add_dice"): "add dice to {target}",
+    ("modify_pool", "add_trait_rating"): "add the trait's rating dice to {target}",
+    ("modify_roll", "remove_die"): "remove a die from the pool",
+    ("modify_pool", "resolve"): "resolve {target}",
+    ("modify_dice_limit", "increase"): "increase the dice limit by {result}",
+    ("modify_dice_limit", "decrease"): "decrease the dice limit by {result}",
+    ("entity", "targeting_ban"): "impose a targeting ban on {target}",
+    ("relationship", "create"): "create a relationship with {target}",
+    ("attune", "enable"): "attune {target} to {result}",
+    ("location", "set"): "move to {target}",
+    ("life_path", "discover"): "discover the {target} life path",
+    ("roll_table", "menu"): "roll on {target}",
+}
+
+
+def effect_card(effect_type: str, effect_action: str) -> str:
+    """The card template for an effect (``{target}``/``{result}`` placeholders)."""
+    templ = EFFECT_ACTION_CARDS.get((effect_type, effect_action))
+    if templ:
+        return templ
+    meta = next((m for m in EFFECT_ACTION_REGISTRY
+                 if m.effect_type == effect_type and m.effect_action == effect_action), None)
+    return (meta.label if meta else f"{effect_type}/{effect_action}").lower()

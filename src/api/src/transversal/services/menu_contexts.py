@@ -72,6 +72,51 @@ class TriggerDef:
     group: str = "auto"  # "manual" | "dicepool" | "auto"
 
 
+# Card-facing trigger phrases ([[SFX Natural Language Plan]]): how the trigger
+# reads in derived rules text ("Whenever a roll happens, …"). Kept beside
+# [[TRIGGERS]] deliberately — the editor label and the card phrase answer
+# different questions. An unlisted trigger falls back to its editor label, so a
+# new trigger never renders as nothing.
+TRIGGER_CARDS: dict[str, str] = {
+    "manual": "Activated",
+    "on_roll": "Whenever a roll happens",
+    "on_result": "When a roll is resolved",
+    "on_complication": "When a complication is rolled",
+    "on_botch": "When you botch",
+    "on_success": "When a roll succeeds",
+    "on_failure": "When a roll fails",
+    "on_contest_win": "When you win a contest",
+    "on_contest_loss": "When you lose a contest",
+    "on_give_in": "When you give in",
+    "on_push": "When you push",
+    "on_taken_out": "When you are taken out",
+    "on_prevent_taken_out": "When you would be taken out",
+    "on_location_change": "When a location changes",
+    "on_trait_change": "When a trait changes",
+    "on_trait_learn": "When a trait is learned",
+    "on_trait_offered": "When a trait is offered",
+    "on_relationship_create": "When a relationship is created",
+    "on_character_create": "When a character is created",
+    "on_projection_create": "When a projection is created",
+    "on_set": "When a die is set",
+    "on_beat": "At the end of each beat",
+    "on_scene": "At the end of each scene",
+    "on_session_start": "At the start of each session",
+    "on_session_end": "At the end of each session",
+    "on_challenge_completed": "When a challenge is completed",
+}
+
+
+def trigger_card(trigger: str) -> str:
+    """The card-facing phrase for a trigger (explicit, else the editor label)."""
+    if trigger in TRIGGER_CARDS:
+        return TRIGGER_CARDS[trigger]
+    for t in TRIGGERS:
+        if t.value == trigger:
+            return t.label
+    return trigger or "Activated"
+
+
 TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("manual", "Manual (player activates)", group="manual"),
     TriggerDef("on_roll", "On Roll", group="dicepool"),
