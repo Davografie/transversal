@@ -642,13 +642,6 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target Entity", field_type="text",
                           required=False, default="self"),
         ],
-        context_fields=[
-            # "domain" radiates the universe to everyone in the target's location
-            # subtree (repository._domain_attunement_universes) — attune a location
-            # and its occupants are attuned.
-            EffectFieldDef(name="scope", label="Scope", field_type="select",
-                          required=True, default="self", options=["self", "domain"]),
-        ],
         supports_duration=True,
         inverse=("attune", "disable"),
         target_kind="entity",

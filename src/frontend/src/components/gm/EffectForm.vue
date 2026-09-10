@@ -39,7 +39,7 @@
       <div v-for="f in visibleFields" :key="f.name" class="ee-field">
         <label>{{ f.label }}</label>
 
-        <template v-if="isScopedTargetField(f)">
+        <div v-if="isScopedTargetField(f)" class="ee-target-group">
           <div class="ee-mode-row">
             <select v-model="newEffect.targetMode">
               <option value="literal">Pick specific</option>
@@ -91,7 +91,7 @@
             :variables="outputVariables"
           />
           <div v-else-if="previewText" class="ee-preview">{{ previewText }}</div>
-        </template>
+        </div>
 
         <template v-else-if="isEntityField(f)">
           <div class="ee-mode-row">
@@ -704,6 +704,14 @@ async function copyVariable(v) {
 .ee-form select, .ee-form input, .ee-form textarea { font-size: 11px; padding: 4px 6px; background: var(--overlay-6); color: var(--text); border: 1px solid var(--overlay-10); border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
 .ee-form textarea { resize: vertical; min-height: 34px; }
 .ee-field { display: flex; flex-direction: column; gap: 2px; }
+/* The target controls (mode + scope + filters + picker) are one idea: box them
+   so they read as "this is the target", not as four loose inputs. */
+.ee-target-group {
+  display: flex; flex-direction: column; gap: 4px;
+  border: 1px solid var(--overlay-12); border-left: 2px solid var(--overlay-30);
+  border-radius: 5px; padding: 6px 8px; margin-top: 2px;
+  background: var(--overlay-6);
+}
 .ee-timing-top { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
 .ee-extra-row { display: flex; align-items: center; gap: 6px; }
 .ee-extra-key { font-size: 9px; color: var(--text-dim); font-family: monospace; flex: none; min-width: 90px; }
