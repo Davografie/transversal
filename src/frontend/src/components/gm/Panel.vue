@@ -1,6 +1,11 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle" :data-panel-uid="diagId" :data-panel-depth="depth" :data-panel-window="windowId">
-    <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up' }" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
+    <!-- v-show="!isDepthHidden && (!isCollapsed || isRoot)": the rail hides when a
+         *chain* panel collapses — its parent's chip strip carries the expand/close
+         controls then. A root panel (the stack's, or a floating window's) has no
+         strip, so its rail must survive the collapse or the panel is stranded with
+         no way to expand, move or close it. -->
+    <div ref="actionsEl" class="panel-actions" :class="{ 'is-flipped': direction === 'right', 'is-row': isVertical, 'is-down': direction === 'down', 'is-up': direction === 'up' }" :style="actionsStyle" v-show="!isDepthHidden && (!isCollapsed || isRoot)">
       <!-- Drag handle (drag-only): on the anchor rail it moves the whole stack
            (the anchor); on any other rail it slides this panel along its
            parent's edge (button-drift's manual override). -->
