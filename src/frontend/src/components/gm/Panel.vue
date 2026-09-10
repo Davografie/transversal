@@ -154,6 +154,11 @@ const isRoot = computed(() => !props.nested)
 // the chain re-anchors rightward toward the toggle. Its children still render and
 // inherit the anchor via the pass-through bridge below.
 const isDepthHidden = computed(() => !!(props.minVisibleDepth && props.depth < props.minVisibleDepth))
+// The shallowest VISIBLE panel — its action rail replaces the 🛠 toggle, so
+// it is pinned to the toggle's viewport position (right: 12px).
+const isShallowestVisible = computed(() =>
+  !isDepthHidden.value && props.depth === (props.minVisibleDepth || 0)
+)
 const panelVisibilityStyle = computed(() => {
   const s = {}
   if (isDepthHidden.value) s.display = 'none'
@@ -334,6 +339,13 @@ const railCenterLocal = computed(() => {
 })
 
 const actionsStyle = computed(() => {
+  if (isShallowestVisible.value) {
+    // Fixed to the viewport right edge — the same spot the 🛠 toggle occupies.
+    const top = railCenterViewport.value
+    return top == null
+      ? { position: 'fixed', right: '12px' }
+      : { position: 'fixed', right: '12px', top: top + 'px' }
+  }
   const local = railCenterLocal.value
   return local == null ? {} : { top: local + 'px' }
 })
