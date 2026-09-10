@@ -1084,22 +1084,26 @@ function isPeerActive(p) {
   return false
 }
 
-function onPeerClick(id) {
+async function onPeerClick(id) {
   if (gmMode.value) {
     const isLocation = peers.value.find(p => p.id === id)?.type === 'LOCATION'
     if (isLocation) {
       // View the location's read-only sheet instead of assuming it.
       viewingEntityId.value = viewingEntityId.value === id ? null : id
       forceSheet.value = true
+      if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
       return
     }
     if (actingEntityId.value === id) returnToSelf()
-    else switchPerspective(id)
+    else await switchPerspective(id)
+    // switchPerspective sets actingEntityId after its fetch — focus then.
+    if (mobileStackActive.value && actingEntityId.value === id) setMobileFocus('sheet')
   } else {
     // Clicking our own character returns to self-view (no override), keeping the header tabs visible.
     viewingEntityId.value = (id === entityId.value || id === selfEntityId.value)
       ? null
       : (viewingEntityId.value === id ? null : id)
+    if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
   }
   forceSheet.value = true
 }
