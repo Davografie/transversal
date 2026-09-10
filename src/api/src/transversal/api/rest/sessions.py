@@ -62,27 +62,32 @@ async def leave_session(session_id: str, req: JoinRequest) -> dict | None:
 
 @router.post("/{session_id}/start")
 async def start_session(session_id: str) -> dict:
-    """Arm passive (``on_session_start``) rules for the session.
+    """Begin the play session: mark in-session and arm passive rules.
 
     Fired by the GM's [Session] Start toggle; idempotent (re-arms cleanly).
     """
     from transversal.services.state_events import fire_session_start
 
+    session_manager.set_in_session(session_id, True)
     fire_session_start()
-    event_bus.publish(StreamEvent(event="session_started", session_id=session_id, data={"session_id": session_id}))
+    event_bus.publish(StreamEvent(event="session_started", session_id=session_id, data={"session_id": session_id, "in_session": True}))
     logger.info(f"[init] start_session id={session_id}")
-    return {"started": True}
+    return {"started": True, "in_session": True}
 
 
 @router.post("/{session_id}/end")
 async def end_session(session_id: str) -> dict:
-    """Drop passive (``on_session_start``) rules; fired by the [Session] End toggle."""
-    from transversal.services.roll_deferral import clear_global_armed
+    """End the play session: fire end-of-session SFX, drop passives, mark out-of-session.
 
-    clear_global_armed()
-    event_bus.publish(StreamEvent(event="session_ended", session_id=session_id, data={"session_id": session_id}))
+    Fired by the [Session] End toggle.
+    """
+    from transversal.services.state_events import fire_session_end
+
+    fire_session_end()
+    session_manager.set_in_session(session_id, False)
+    event_bus.publish(StreamEvent(event="session_ended", session_id=session_id, data={"session_id": session_id, "in_session": False}))
     logger.info(f"[init] end_session id={session_id}")
-    return {"ended": True}
+    return {"ended": True, "in_session": False}
 
 
 def _session_dict(s: Session) -> dict:
@@ -94,4 +99,5 @@ def _session_dict(s: Session) -> dict:
         "entity_ids": sorted(s.entity_ids),
         "player_entities": dict(s.player_entities),
         "active": s.active,
+        "in_session": s.in_session,
     }

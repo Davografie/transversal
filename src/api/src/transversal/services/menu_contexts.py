@@ -149,6 +149,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("on_beat", "On Beat Advance", group="auto"),
     TriggerDef("on_scene", "On Scene Advance", group="auto"),
     TriggerDef("on_session_start", "On Session Start", group="auto"),
+    TriggerDef("on_session_end", "On Session End", group="auto"),
     TriggerDef("on_challenge_completed", "On Challenge Completed", (
         Variable("entity_id", "entity"),
         Variable("trait_setting_id", "trait_setting"),

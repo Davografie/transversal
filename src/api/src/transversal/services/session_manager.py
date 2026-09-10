@@ -26,6 +26,7 @@ class Session:
     entity_ids: set[str] = field(default_factory=set)
     player_entities: dict[str, str] = field(default_factory=dict)  # player_id → entity_id
     active: bool = True
+    in_session: bool = False  # the play period has started (Start/End toggle)
 
 
 class SessionManager:
@@ -50,6 +51,7 @@ class SessionManager:
             "entity_ids": sorted(s.entity_ids),
             "player_entities": dict(s.player_entities),
             "active": s.active,
+            "in_session": s.in_session,
         }
 
     @staticmethod
@@ -62,6 +64,7 @@ class SessionManager:
             entity_ids=set(d.get("entity_ids", [])),
             player_entities=dict(d.get("player_entities", {})),
             active=d.get("active", True),
+            in_session=d.get("in_session", False),
         )
 
     # ── storage primitives ───────────────────────────
@@ -132,6 +135,19 @@ class SessionManager:
         if session:
             session.active = False
             self._put(session)
+
+    def set_in_session(self, session_id: str, in_session: bool) -> Session | None:
+        """Toggle whether the play period is in progress (Start/End boundary).
+
+        Independent of ``active`` (SSE/join membership): a session stays live
+        and receiving events while ``in_session`` is False, so players can still
+        do session setup between sessions.
+        """
+        session = self._get(session_id)
+        if session:
+            session.in_session = in_session
+            self._put(session)
+        return session
 
 
 # Global singleton

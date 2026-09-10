@@ -159,6 +159,20 @@ def fire_session_start() -> None:
             )
 
 
+def fire_session_end() -> None:
+    """Fire ``on_session_end`` SFX globally and drop armed passives.
+
+    The mirror of :func:`fire_session_start` for the session's far boundary:
+    first drop the ``on_session_start`` passives armed at session start, then
+    fire every entity's matching ``on_session_end`` SFX (e.g. Challenge
+    Statement's end-of-session cleanup/reward) as a global boundary event.
+    """
+    from transversal.services.roll_deferral import clear_global_armed
+
+    clear_global_armed()
+    fire_global_state_sfx("on_session_end")
+
+
 def fire_contest_outcome_sfx(
     winner_id: str,
     loser_id: str,
