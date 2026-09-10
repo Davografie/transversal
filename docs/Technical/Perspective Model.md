@@ -18,8 +18,8 @@ status: draft
 # Perspective Model
 
 > [!note] Status
-> Draft v2 — after the human's steer: **collapse to one `entityId`** (the 3-variable split
-> was speculative; see below). Ground truth from `App.vue` (2026-09-10). Persistence is
+> Draft v2 — **collapse to one `entityId`** (the 3-variable split was speculative). Ground
+> truth from `App.vue` (2026-09-10); Q1–Q3 settled with the human. Persistence is
 > **device-local**; server-side identity is a future note, not this design.
 
 ## Goal
@@ -79,15 +79,15 @@ for the location-inspect path; it becomes the *only* sheet-peek mechanism.)
 ### Derived — no variables
 
 - **"Self" / return-to-main target:** the player's own main (`agency.main`, already in the
-  troupe data model). For the GM: their own main if they have one, else free-roam. No
-  stored `selfEntityId` — `entityId` itself is the memory across refresh.
+  troupe data model). For the GM: **free-roam** (settled Q1). No stored `selfEntityId` —
+  `entityId` itself is the memory across refresh.
 - **Support:** when `entityId` is a support character the player owns (`agency`,
   `main: false` + `support` edge), they are "supporting" — the return-to-main target is the
   main, and availability rules read from the `support` edge. A pure computed, no state.
 - **Free-roam presence:** with `entityId = null` the GM still *exists* on the map — a
-  movable mapdot using the **architect icon** (the same role icon used in the player
-  settings overlay). New requirement; also feeds [[Tickets#B34]] (role icon instead of
-  "Y").
+  **draggable** mapdot using the **architect icon** (the same role icon used in the player
+  settings overlay), **visible to the GM only — invisible to players** (settled Q3). New
+  requirement; also feeds [[Tickets#B34]] (role icon instead of "Y").
 
 ### Deleted plumbing
 
@@ -100,7 +100,7 @@ for the location-inspect path; it becomes the *only* sheet-peek mechanism.)
 - **Player:** `entityId` = main or assumed SC; inspect via `viewingEntityId`; "return to
   main" sets `entityId` := own main.
 - **GM:** `entityId` freely switchable; `null` = free-roam with the architect mapdot;
-  "return to self" := own main if any, else free-roam.
+  "return to self" := free-roam.
 - **Refresh:** restore `entityId` + `currentLocationId` (all modes); `viewingEntityId`
   resets.
 - **Assume-SC:** `entityId` := SC; support derived; availability from the `support` edge.
@@ -125,22 +125,19 @@ presence services) is a **future** upgrade if multi-device consistency ever matt
 implementing roles take their consumer slices. [[Tickets#B68]] (GM assume & roaming
 semantics) absorbs the GM behavior.
 
-## Open questions
+## Resolved (2026-09-10)
 
-- **Q1** — the GM's "self": derive from the GM's own `agency.main` (else free-roam), or
-  allow pinning a self entity?
-- **Q2** — rename `entityId` → `perspectiveId` for clarity, or keep the legacy name?
-- **Q3** — the free-roam architect mapdot: confirm it should be *movable* by the GM (drag
-  it around the map like any occupant).
+- **Q1** — GM "self" = free-roam (no pinning, no derived main).
+- **Q2** — keep the name `entityId`.
+- **Q3** — the free-roam mapdot is draggable by the GM and invisible to players.
 
-## Decomposition (pending review)
+## Decomposition
 
-- **Perspective collapse + persistence fix** — remove the GM guard, delete
-  `actingEntityId`/`selfEntityId` plumbing, persist `entityId` in all modes. (ui-ux primary
-  + gm-panels, applied-mechanics, character-sheet as consumers.)
-- **Free-roam architect mapdot** — movable GM presence at `entityId = null`. (navigation;
-  overlaps [[Tickets#B34]].)
-- **B68** — GM assume/roam behavior, defined against this model.
+- **[[Tickets#B95]]** — perspective collapse + persistence fix (remove the GM guard, delete
+  `actingEntityId`/`selfEntityId` plumbing, persist `entityId` in all modes). ui-ux primary
+  + gm-panels, applied-mechanics, character-sheet as consumers.
+- **[[Tickets#B96]]** — free-roam architect mapdot (draggable, GM-only). navigation.
+- **[[Tickets#B68]]** — GM assume/roam behavior, defined against this model.
 
 ## Related
 
