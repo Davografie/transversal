@@ -21,6 +21,9 @@ activation. Outputs are declared **on a targeting step** (a list of names); the
 step's resolved value is bound under each name, typed by the step's resolved
 element (no manual element entry).
 
+One shared scope per activation holds all of it — written by **conditions**
+first, then by **effects** in order.
+
 ## Shape
 
 - `TargetStep.output: Optional[str]` — the single variable name bound at that step.
@@ -68,12 +71,44 @@ machinery rather than adding a parallel system.
 7. **List output variables** — a `many` step binds the full ordered list
    (`Binding.values` + `cardinality="many"`); `select variable` re-seeds a `many`
    collection and fans out (see [[List Output Variables]]).
+8. **Conditions seed the scope** — a `Targeting path` condition runs *before* any
+   effect, so its step `output` names are published into the activation scope and
+   are in scope for every effect. The gate names *what it matched* (e.g. `the d4
+   traits in this roll`), not just yes/no:
+   - `evaluate_condition`'s `TARGET_PATH` branch resolves with the scope as
+     `TargetContext.bindings`, then publishes the path's outputs into the
+     caller's `out_bindings` (step outputs land on the resolution **context**, not
+     on the `Resolution`, which carries only `values`/`errors`/`pending_choices`).
+   - `process_event_outcome` seals one `bindings` dict *before* the condition gate
+     and reuses it for the effect loop, so both halves share it.
+   - The scope reaches the applier via `BINDINGS_CONTEXT_KEY` (`_bindings`) in the
+     effect context — the same pattern as `_source`/`_source_element`.
+   - `effectVariables` takes a `conditions` argument and traces conditions before
+     effects, so the wizard offers those names in `select variable`.
+9. **`entity_spec` resolves against the scope** — `resolve_effect_entity`
+   (`apply_effects`, and the engine before dispatch) rewrites an effect's
+   `entity_spec` into a concrete `entity` id and clears the spec, mirroring the
+   engine's `target_spec` rewrite. The razmerit handlers (`earn`/`spend`/
+   `transfer`) then act on that entity: a concrete `effect.entity` wins, and only
+   blank / `self` / an unresolved placeholder falls back to the acting entity.
+10. **Roll-scoped seeds for conditions** — roll-bearing triggers put the dice in
+    the event context and `TARGET_PATH` seeds `collections["rolled_dice"]` from
+    `context["rolls"]`. `fire_roll_sfx` and `fire_result_sfx` both supply it; a
+    path selecting `rolled_dice` on a trigger without dice resolves empty and
+    fails closed.
 
 ## Open / deferred
 
 - **`select source`-dependent types** — a step whose element comes from
   `select source` now resolves in the SFX editor (it threads `sourceElement`);
   noted for completeness.
+- **Armed-path `entity_spec`** — an effect carrying an `entity_spec` resolves on
+  the immediate path and in `apply_effects`; the roll-deferred path
+  (`_apply_armed`) does not resolve it yet, so such an effect falls back to the
+  acting entity. No live SFX is affected (the only `entity_spec` in the DB is an
+  immediate effect).
+- **`{name}` substitution vs `select variable`** — a `many` binding still can't
+  be referenced from a flat field (array re-use goes through `select variable`).
 
 ## Related
 
