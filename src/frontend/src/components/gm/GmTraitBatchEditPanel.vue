@@ -86,7 +86,7 @@
           <option value="CLEAR">Inherit traitset</option>
         </select>
       </div>
-      <Button class="ps-add-btn" :disabled="applying || selectedIds.length === 0" @click="applyBatch" variant="secondary" block>
+      <Button class="ps-add-btn" :loading="applying" :disabled="applying || selectedIds.length === 0" @click="applyBatch" variant="secondary" block>
         {{ applying ? 'Applying…' : `Apply to ${selectedIds.length} selected` }}
       </Button>
       <p v-if="status" class="status" :class="{ 'status-err': statusIsError }">{{ status }}</p>

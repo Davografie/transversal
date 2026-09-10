@@ -35,7 +35,7 @@
       ></button>
     </div>
 
-    <Button class="save-btn" block @click="onSubmit" :disabled="saving || !form.name.trim()" variant="success" solid>
+    <Button class="save-btn" block @click="onSubmit" :loading="saving" :disabled="saving || !form.name.trim()" variant="success" solid>
       {{ saving ? 'Creating…' : 'Create' }}
     </Button>
   </div>
@@ -44,13 +44,18 @@
 <script setup>
 import { reactive, computed, watch } from 'vue'
 import { ENTITY_TYPES } from '@/constants/entityTypes.js'
+import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import Button from '@/components/ui/Button.vue'
+
+// The create flow runs through the shared entity-CRUD singleton, so read its
+// live `saving` ref — a `saving` prop would be a stale snapshot passed at
+// panel-open time.
+const { saving } = useEntityCrud()
 
 const props = defineProps({
   defaultUniverse: { type: String, default: 'earth' },
   defaultLocationId: { type: String, default: '' },
   locationTree: { type: Array, default: () => [] },
-  saving: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['create'])

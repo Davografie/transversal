@@ -15,7 +15,7 @@
       />
     </div>
     <div class="actions">
-      <Button class="save-btn" :disabled="saving" @click="save" variant="success" solid>{{ saving ? 'Saving…' : 'Save' }}</Button>
+      <Button class="save-btn" :loading="saving" :disabled="saving" @click="save" variant="success" solid>{{ saving ? 'Saving…' : 'Save' }}</Button>
       <button class="cancel-btn" @click="panel.close()">Cancel</button>
     </div>
   </div>

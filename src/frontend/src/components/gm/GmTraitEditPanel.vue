@@ -210,7 +210,7 @@
       </div>
 
       <div class="create-actions">
-        <Button class="save-btn" @click="onCreate" :disabled="saving || !createForm.name.trim()" variant="success" solid>{{ saving ? 'Creating…' : 'Create Trait' }}</Button>
+        <Button class="save-btn" @click="onCreate" :loading="saving" :disabled="saving || !createForm.name.trim()" variant="success" solid>{{ saving ? 'Creating…' : 'Create Trait' }}</Button>
       </div>
       <p v-if="createError" class="switch-error">{{ createError }}</p>
     </template>

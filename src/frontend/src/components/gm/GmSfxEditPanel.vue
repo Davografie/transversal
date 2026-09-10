@@ -71,10 +71,10 @@
     </div>
 
     <!-- Action buttons: differ by mode -->
-    <Button v-if="sfx" class="save-btn save-main" @click="onSave" :disabled="saving" variant="success" solid>
+    <Button v-if="sfx" class="save-btn save-main" @click="onSave" :loading="saving" :disabled="saving" variant="success" solid>
       {{ saving ? 'Saving…' : (savedAt ? 'Saved ✓' : 'Save now') }}
     </Button>
-    <Button v-else class="save-btn save-main" @click="onCreate" :disabled="saving || !draft.name.trim()" variant="success" solid>
+    <Button v-else class="save-btn save-main" @click="onCreate" :loading="saving" :disabled="saving || !draft.name.trim()" variant="success" solid>
       {{ saving ? 'Creating…' : 'Create SFX' }}
     </Button>
 
