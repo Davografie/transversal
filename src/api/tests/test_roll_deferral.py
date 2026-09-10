@@ -479,3 +479,78 @@ def test_one_trick_resolves_spec_and_fans_out(monkeypatch):
     # One apply per *deduped* traitsetting, in roll order.
     assert [e.target for e in applied] == ["char-1:martial", "char-1:qi"]
     assert len(applied) == 2
+
+
+def test_arm_passive_is_idempotent_per_sfx_id():
+    """A global rule arms once, however many times it is activated.
+
+    A per-entity fan-out visits a global-scope SFX once per owning entity; each
+    visit re-arming it must refresh the one entry, not stack another copy.
+    """
+    roll_deferral.reset()
+
+    roll_deferral.arm_passive([_make_effect()], source_sfx_id="sfx-passive")
+    roll_deferral.arm_passive([_make_effect()], source_sfx_id="sfx-passive")
+    assert len(roll_deferral.list_global_armed()) == 1
+
+    # A different SFX is a different rule.
+    roll_deferral.arm_passive([_make_effect()], source_sfx_id="sfx-other")
+    assert len(roll_deferral.list_global_armed()) == 2
+
+    # Anonymous rules have no key to dedupe on, so they stay separate.
+    roll_deferral.arm_passive([_make_effect()])
+    roll_deferral.arm_passive([_make_effect()])
+    assert len(roll_deferral.list_global_armed()) == 4
+
+    roll_deferral.reset()
+
+
+def test_arm_sfx_is_idempotent_per_sfx_id():
+    """The entity-local register follows the same rule: armed is a state."""
+    roll_deferral.reset()
+
+    roll_deferral.arm_sfx("e1", [_make_effect()], source_sfx_id="sfx-local")
+    roll_deferral.arm_sfx("e1", [_make_effect()], source_sfx_id="sfx-local")
+    assert len(roll_deferral.list_armed("e1")) == 1
+
+    # Another entity keeps its own copy of the same rule.
+    roll_deferral.arm_sfx("e2", [_make_effect()], source_sfx_id="sfx-local")
+    assert len(roll_deferral.list_armed("e1")) == 1
+    assert len(roll_deferral.list_armed("e2")) == 1
+
+    # Anonymous entries still stack (no key to dedupe on).
+    roll_deferral.arm_sfx("e1", [_make_effect()])
+    roll_deferral.arm_sfx("e1", [_make_effect()])
+    assert len(roll_deferral.list_armed("e1")) == 3
+
+    roll_deferral.reset()
+
+
+def test_rearming_refreshes_the_roll_budget(monkeypatch):
+    """Re-arming replaces the entry, so its ``rolls`` budget restarts."""
+    roll_deferral.reset()
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    roll_deferral.arm_passive(
+        [_make_effect(timing=EffectTiming.ON_ROLL)],
+        source_sfx_id="sfx-passive", duration=_rolls_duration(1),
+    )
+    roll_deferral.fire_armed("e1", "on_roll", "earth", {})
+    assert roll_deferral.list_global_armed() == []  # one-roll budget spent
+
+    # Re-arming the same rule restores the budget instead of stacking a copy.
+    roll_deferral.arm_passive(
+        [_make_effect(timing=EffectTiming.ON_ROLL)],
+        source_sfx_id="sfx-passive", duration=_rolls_duration(1),
+    )
+    assert len(roll_deferral.list_global_armed()) == 1
+    fired = roll_deferral.fire_armed("e1", "on_roll", "earth", {})
+    assert len(fired) == 1  # fires once, not twice
+
+    roll_deferral.reset()

@@ -417,7 +417,17 @@ Roll/outcome-timed effects (`on_roll`/`on_set`/`on_result`/`on_contest_*`/`on_su
 - **Deferred effects** (`DEFERRED_TIMINGS` = roll + outcome timings) arm **once, globally** via `arm_passive`, in a pass that iterates *SFX, not entities*. This is deliberately ownership-independent, so a passive armed for the session still covers characters who join mid-session.
 - **Non-deferred effects** (`immediate`, `end_of_beat`/`scene`/`session`, `after_beats`) fire **per entity** through `fire_global_state_sfx("on_session_start", arm_deferred=False)` — each entity applies its own immediate effect or schedules its own persisted timer.
 
-`arm_deferred=False` is load-bearing: `process_event_outcome` otherwise arms the SFX's deferred effects itself, and `arm_passive` **appends without dedupe** — so a global passive owned by N entities would be armed N+1 times (the global pass plus once per entity) and roll its effect N+1 times. Keeping arming in the single global pass makes the two halves non-overlapping. Regression-guarded by `test_fire_session_start_fans_out_non_deferred_effects` (two entities must leave exactly one armed copy).
+`arm_deferred=False` keeps the two passes non-overlapping: the walk applies non-deferred effects and never arms, while the single global pass owns arming. (It is no longer load-bearing for correctness — see **Arming is idempotent** below — but it avoids N redundant re-arms and keeps each half with one clear owner.)
+
+### Arming is idempotent
+
+Both registers dedupe on `source_sfx_id` (`roll_deferral._drop_existing`): arming is a **state, not a counter**. Re-arming a named SFX replaces its entry (refreshing the `rolls` budget / expiry) instead of appending a second copy.
+
+This is what makes the per-entity fan-outs safe. `fire_global_state_sfx` visits every entity, and each visit re-arms an SFX the entity carries; before the dedupe, a `global`-scope boundary SFX (`on_beat`/`on_scene`/`on_session_end`) carried by N entities left **N armed copies**, and its roll effect fired N times per roll event. Anonymous entries (`source_sfx_id is None`) are never deduped — with no name to key on they are separate rules by construction, which also preserves the existing multi-duration stacking case.
+
+Regression-guarded by `test_global_boundary_fanout_arms_once_for_n_entities` (three owning entities must leave one armed copy) and the two `*_is_idempotent_per_sfx_id` tests.
+
+Scope note: the **persisted** timer store (`scheduled_events`) is deliberately *not* deduped. Identical rows there are legitimate — two step-downs each need their own step-up revert — and fan-outs never produce duplicates anyway, because each row is keyed to a distinct `target_id`.
 
 **Session end** (`fire_session_end`) drops the session's armed passives (`clear_global_armed`) and then fires `on_session_end` per entity — a global boundary like `on_beat`/`on_scene`, so its effects fire for every entity that has the SFX available.
 

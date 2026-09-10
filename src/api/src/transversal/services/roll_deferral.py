@@ -83,6 +83,27 @@ def _split_duration(duration) -> tuple[Optional[int], list[str]]:
     return rolls, expiry_events
 
 
+def _drop_existing(register: list[ArmedSfx], source_sfx_id: str | None) -> list[ArmedSfx]:
+    """Return ``register`` without any entry armed by the same named SFX.
+
+    Arming is a *state*, not a counter: a named SFX is armed or not. Re-arming
+    it refreshes the entry (new budget/expiry) instead of appending a duplicate,
+    because ``fire_armed`` walks every entry and would apply the effect once per
+    copy.
+
+    This is load-bearing for the global register: a per-entity fan-out (e.g.
+    ``fire_global_state_sfx`` over ``on_beat``/``on_scene``/``on_session_end``)
+    visits a global-scope SFX once per owning entity, and a global rule is a
+    single rule listening to every entity — N visits must leave one entry, not N.
+
+    Anonymous entries (``source_sfx_id is None``) are never deduped: with no name
+    to key on, they are separate rules by construction.
+    """
+    if source_sfx_id is None:
+        return register
+    return [a for a in register if a.source_sfx_id != source_sfx_id]
+
+
 def arm_sfx(
     entity_id: str,
     effects: list[Effect],
@@ -104,6 +125,8 @@ def arm_sfx(
     ``source_kind``/``source_id`` carry the SFX's activation source so a
     ``select source`` spec resolves at fire time. ``scope`` records the listener
     scope (``self``/``global``/``listener_spec``).
+
+    Idempotent per ``source_sfx_id`` for this entity (see ``_drop_existing``).
     """
     rolls, expiry_events = _split_duration(duration)
     log.info(
@@ -112,7 +135,8 @@ def arm_sfx(
         [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
         rolls, expiry_events,
     )
-    _armed.setdefault(entity_id, []).append(
+    _armed[entity_id] = _drop_existing(_armed.get(entity_id, []), source_sfx_id)
+    _armed[entity_id].append(
         ArmedSfx(
             effects=list(effects),
             rolls=rolls,
@@ -140,6 +164,9 @@ def arm_passive(
     ``source_sfx_id``; a manual SFX that explicitly declares ``global`` scope
     does, so ``source_sfx_id``/``source_kind``/``source_id`` are accepted and
     preserved for ``die_filter`` selection and ``select source``.
+
+    Idempotent per ``source_sfx_id`` (see ``_drop_existing``) — a global rule is
+    one rule no matter how many entities carry it or how often it activates.
     """
     rolls, expiry_events = _split_duration(duration)
     log.info(
@@ -148,6 +175,7 @@ def arm_passive(
         [(e.timing.value, e.type, e.action, e.target, e.die_filter) for e in effects],
         rolls, expiry_events,
     )
+    _global_armed[:] = _drop_existing(_global_armed, source_sfx_id)
     _global_armed.append(
         ArmedSfx(
             effects=list(effects),

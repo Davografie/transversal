@@ -219,3 +219,52 @@ def test_process_event_outcome_arm_deferred_false_skips_arming(monkeypatch):
     engine.process_event_outcome(event, [sfx.id], 0)
     assert len(roll_deferral.list_global_armed()) == 1
     roll_deferral.reset()
+
+
+def test_global_boundary_fanout_arms_once_for_n_entities(monkeypatch):
+    """A global-scope boundary SFX arms once, not once per owning entity.
+
+    ``fire_global_state_sfx`` visits every entity, and each visit re-arms the
+    rule. A ``global`` rule listens to all entities, so three visits must leave
+    one armed entry — otherwise its roll effect fires three times per roll.
+    """
+    import transversal.main as main
+    import transversal.services.roll_deferral as roll_deferral
+    from transversal.domain import Effect, EffectTiming, SFX
+    from transversal.services.effects_engine import EffectsEngine
+
+    roll_deferral.reset()
+
+    sfx = SFX(
+        id="sfx-global-beat", name="Global Beat", trigger="on_beat", arming_scope="global",
+        effects=[Effect(timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down", target="self")],
+    )
+    repo = SimpleNamespace(
+        get_all_sfxs=lambda: [sfx],
+        list_all_entities=lambda: [
+            SimpleNamespace(id="a", current_universe="earth", razmerit=0),
+            SimpleNamespace(id="b", current_universe="earth", razmerit=0),
+            SimpleNamespace(id="c", current_universe="earth", razmerit=0),
+        ],
+    )
+    engine = EffectsEngine()
+    engine.register(sfx)
+    monkeypatch.setattr(main, "_repo", repo)
+    monkeypatch.setattr(main, "_effects_engine", engine)
+    monkeypatch.setattr(
+        "transversal.services.sfx_owner.build_sfx_availability_prefetch",
+        lambda repo, entities, universes=None, sfx_docs=None: None,
+    )
+    monkeypatch.setattr(
+        "transversal.services.sfx_owner.get_available_sfx_ids",
+        lambda entity_id, universe, repo, prefetch=None: [sfx.id],
+    )
+    monkeypatch.setattr(
+        "transversal.services.roll_orchestrator._emit_pending_choices",
+        lambda *a, **k: None,
+    )
+
+    se.fire_global_state_sfx("on_beat")
+
+    assert len(roll_deferral.list_global_armed()) == 1
+    roll_deferral.reset()
