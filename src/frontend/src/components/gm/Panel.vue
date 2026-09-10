@@ -1,8 +1,8 @@
 <template>
   <div ref="wrapperEl" class="panel-node" :class="{ nested }" :style="nodeStyle">
     <div ref="actionsEl" class="panel-actions" :style="actionsStyle" v-show="!isDepthHidden && !isCollapsed">
-      <button v-if="closable" class="panel-action-btn" title="Close" @click="$emit('close')">×</button>
-      <button type="button" class="panel-action-btn" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</button>
+      <Button v-if="closable" class="panel-action-btn" title="Close" variant="neutral" size="icon" @click="$emit('close')">×</Button>
+      <Button type="button" class="panel-action-btn" variant="neutral" size="icon" :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse()">{{ isCollapsed ? '▸' : '▾' }}</Button>
     </div>
     <!-- ⚠ Depth hiding uses visibility/display via :style (see panelVisibilityStyle).
          A depth-hidden panel is removed from layout so the chain re-anchors. -->
@@ -10,7 +10,7 @@
       <header v-if="title" class="panel-header" :class="{ 'is-collapsed': isCollapsed }">
         <slot name="header">
           <span class="panel-title">{{ title }}</span>
-          <button v-if="id && !isCollapsed" type="button" class="panel-id-btn" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</button>
+          <Button v-if="id && !isCollapsed" type="button" class="panel-id-btn" variant="neutral" size="sm" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</Button>
         </slot>
       </header>
       <div class="panel-body" v-show="!isCollapsed">
@@ -26,7 +26,7 @@
         <div v-for="c in collapsedChildren" :key="c.key" class="panel-chip" @click="toggleChildCollapse(c.key)">
           <span class="chip-expand">▸</span>
           <span class="chip-title">{{ c.spec.title }}</span>
-          <button type="button" class="chip-btn" title="Close" @click.stop="closeChild(c.key)">×</button>
+          <Button type="button" class="chip-btn" variant="ghost" title="Close" @click.stop="closeChild(c.key)">×</Button>
         </div>
       </div>
       <Panel
@@ -66,6 +66,7 @@
 import { shallowRef, ref, reactive, computed, markRaw, inject, provide, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { panelKey } from '@/composables/usePanel.js'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
@@ -581,11 +582,9 @@ provide(panelKey, {
   font-weight: 600;
   font-size: 11px;
 }
-.chip-btn {
-  background: none; border: none; color: var(--text-dim);
-  cursor: pointer; font-size: 12px; padding: 0 2px; line-height: 1;
+.panel-chip .chip-btn {
+  padding: 0 2px; font-size: 12px; line-height: 1;
 }
-.chip-btn:hover { color: var(--text); }
 
 .panel {
   display: inline-flex;
@@ -609,15 +608,10 @@ provide(panelKey, {
   position: absolute; top: 50%; right: -22px; transform: translateY(-50%); z-index: 2;
   display: flex; flex-direction: column; gap: 4px;
 }
-.panel-action-btn {
+.panel-actions .panel-action-btn {
   width: 36px; height: 36px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; padding: 0;
-  background: var(--bg-panel); backdrop-filter: blur(12px);
-  border: 1px solid var(--overlay-15);
-  cursor: pointer;
+  backdrop-filter: blur(12px);
 }
-.panel-action-btn:hover { background: var(--overlay-10); }
 
 .panel-header {
   display: flex;
@@ -643,20 +637,11 @@ provide(panelKey, {
   font-size: 12px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.5px;
 }
-.panel-id-btn {
+.panel-header .panel-id-btn {
   flex-shrink: 0;
   font-family: monospace;
-  font-size: 11px;
   font-weight: 600;
-  color: var(--text-dim);
-  background: transparent;
-  border: 1px solid var(--overlay-12);
-  border-radius: 4px;
-  padding: 1px 7px;
-  line-height: 1.4;
-  cursor: pointer;
 }
-.panel-id-btn:hover { color: var(--text); border-color: var(--overlay-25); background: var(--overlay-4); }
 
 .panel-body {
   flex: 1; overflow-y: auto; padding: 10px;

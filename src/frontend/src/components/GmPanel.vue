@@ -7,10 +7,10 @@
 
     <template v-if="mode === 'play'">
       <div class="gm-shortcuts">
-        <button class="shortcut-btn beat-btn" @click="nextBeat">◆ Next Beat</button>
-        <button class="shortcut-btn scene-btn" @click="advanceScene">◈ Scene</button>
-        <button v-if="!inSession" class="shortcut-btn session-btn" title="Start the session" @click="startSession">▶ Start</button>
-        <button v-else class="shortcut-btn session-btn active" title="End the session" @click="endSession">■ End</button>
+        <Button class="shortcut-btn beat-btn" variant="neutral" @click="nextBeat">◆ Next Beat</Button>
+        <Button class="shortcut-btn scene-btn" variant="neutral" @click="advanceScene">◈ Scene</Button>
+        <Button v-if="!inSession" class="shortcut-btn session-btn" variant="neutral" title="Start the session" @click="startSession">▶ Start</Button>
+        <Button v-else class="shortcut-btn session-btn" variant="danger" title="End the session" @click="endSession">■ End</Button>
       </div>
       <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntitiesInScope" @inspect="inspectEntity" />
       <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" @go-to-location="goToLocation" />
@@ -21,12 +21,12 @@
         <div class="chip-bar">
           <span v-for="(f, i) in activeFilters" :key="i" class="filter-chip">
             <span class="chip-label">{{ f.label }}</span>
-            <button class="chip-remove" @click="activeFilters.splice(i, 1)">×</button>
+            <Button class="chip-remove" variant="ghost" @click="activeFilters.splice(i, 1)">×</Button>
           </span>
         </div>
         <div class="filter-input-wrap">
           <input v-model="filterInput" class="filter-input" placeholder="Filter…" @focus="showSuggestions = true" @blur="hideSuggestions" @keyup.escape="filterInput = ''" />
-          <button v-if="filterInput" class="filter-clear-inline" @click="filterInput = ''">✕</button>
+          <Button v-if="filterInput" class="filter-clear-inline" variant="ghost" @click="filterInput = ''">✕</Button>
           <div v-if="showSuggestions && suggestions.length" class="filter-suggestions">
             <div v-for="s in suggestions" :key="s.id" class="suggestion-row" @mousedown.prevent="selectSuggestion(s)">
               <span class="entity-type-badge" :class="'type-' + (s.entityType || s.type || '')">{{ s.entityType || s.type || '' }}</span><span>{{ s.name }}</span>
@@ -36,10 +36,10 @@
         </div>
       </div>
       <div class="canvas-btn-row">
-        <button class="create-btn canvas-btn" @click="openLocationTreeCanvas">🗺 Canvas</button>
+        <Button class="create-btn canvas-btn" variant="secondary" block @click="openLocationTreeCanvas">🗺 Canvas</Button>
       </div>
-      <button class="create-btn" @click="openTraitsConfig">Manage Traits</button>
-      <button class="create-btn" @click="openSfxManager">Manage SFX</button>
+      <Button class="create-btn" variant="secondary" block @click="openTraitsConfig">Manage Traits</Button>
+      <Button class="create-btn" variant="secondary" block @click="openSfxManager">Manage SFX</Button>
       <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @move-entity="onMoveEntity" />
       <h4 v-if="filteredFactions.length" class="factions-heading">Factions</h4>
       <GmList
@@ -52,10 +52,10 @@
         <template #item="{ item: e }">
           <span class="entity-type-badge type-FACTION">FAC</span><span class="entity-name">{{ e.name }}</span>
           <span class="entity-universe" v-if="e.currentUniverse !== universe">{{ e.currentUniverse }}</span>
-          <button class="faction-canvas-btn" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</button>
+          <Button class="faction-canvas-btn" variant="ghost" size="sm" title="Show in canvas" @click.stop="openFullFactionCanvas(e.id)">🗺</Button>
         </template>
       </GmList>
-      <button class="fab-create" @click="startCreate" title="New Entity" aria-label="New Entity">＋</button>
+      <Button class="fab-create" variant="primary" size="icon" @click="startCreate" title="New Entity" aria-label="New Entity">＋</Button>
       <div v-if="flatTree.length === 0 && filteredFactions.length === 0" class="empty">No entities found</div>
     </template>
   </div>
@@ -65,6 +65,7 @@
 import { ref, toRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
+import Button from '@/components/ui/Button.vue'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLocationTree } from '@/composables/useLocationTree.js'
 import { useEntityFilter } from '@/composables/useEntityFilter.js'
@@ -390,36 +391,33 @@ onUnmounted(() => {
 .mode-tabs button:hover:not(.active) { background: var(--overlay-8); }
 
 .gm-shortcuts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-.shortcut-btn { flex: 1; font-size: 11px; padding: 8px 6px; border-radius: 6px; border: 1px solid var(--overlay-8); background: var(--overlay-4); color: var(--text-dim); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-.shortcut-btn:hover { background: var(--overlay-8); color: var(--text); }
-.beat-btn { border-color: var(--accent-32); } .beat-btn:hover { border-color: var(--accent); background: var(--accent-12); }
-.scene-btn { border-color: var(--success-32); } .scene-btn:hover { border-color: var(--success); background: var(--success-12); }
-.session-btn { border-color: var(--warn-32); } .session-btn:hover { border-color: var(--warn); background: var(--warn-12); }
-.session-btn.active { border-color: var(--danger); color: var(--danger); } .session-btn.active:hover { background: var(--danger-12); }
+.gm-shortcuts .shortcut-btn { flex: 1; padding: 8px 6px; font-size: 11px; white-space: nowrap; }
+/* Per-action border hues (the primitive owns fill/hover/radius). */
+.gm-shortcuts .beat-btn { border-color: var(--accent-32); }
+.gm-shortcuts .beat-btn:hover { border-color: var(--accent); }
+.gm-shortcuts .scene-btn { border-color: var(--success-32); }
+.gm-shortcuts .scene-btn:hover { border-color: var(--success); }
+.gm-shortcuts .session-btn { border-color: var(--warn-32); }
+.gm-shortcuts .session-btn:hover { border-color: var(--warn); }
 
 .filter-bar { margin-bottom: 8px; }
 .chip-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .filter-chip { display: flex; align-items: center; gap: 2px; font-size: 11px; padding: 3px 8px; background: var(--accent-16); border: 1px solid var(--accent-dim); border-radius: 10px; color: var(--text); }
 .chip-label { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chip-remove { font-size: 14px; padding: 0 2px; background: none; border: none; color: var(--text-dim); cursor: pointer; line-height: 1; }
-.chip-remove:hover { color: var(--danger); }
+.filter-chip .chip-remove { font-size: 14px; padding: 0 2px; line-height: 1; }
 .suggestion-hint { font-size: 9px; color: var(--text-dim); text-transform: uppercase; margin-left: auto; }
 .filter-input-wrap { position: relative; }
 .filter-input { width: 100%; font-size: 12px; padding: 6px 28px 6px 8px; box-sizing: border-box; }
-.filter-clear-inline { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 2px 6px; background: none; color: var(--text-dim); border: none; cursor: pointer; }
-.filter-clear-inline:hover { color: var(--text); }
+.filter-input-wrap .filter-clear-inline { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); padding: 2px 6px; }
 .filter-suggestions { position: absolute; top: 100%; left: 0; right: 0; z-index: 30; background: var(--bg-panel); backdrop-filter: blur(12px); border: 1px solid var(--overlay-10); border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; }
 .suggestion-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
 .suggestion-row:hover { background: var(--overlay-6); }
 
-.create-btn { width: 100%; font-size: 12px; padding: 8px; margin-bottom: 8px; background: var(--accent-dim); color: var(--text); }
-.create-btn:hover { background: var(--accent); }
-.canvas-btn { background: var(--accent-32); border: 1px dashed var(--accent-dim); }
-.canvas-btn:hover { background: var(--accent); border-color: var(--accent); }
+.gm-content .create-btn { padding: 8px; margin-bottom: 8px; }
+.gm-content .canvas-btn { border: 1px dashed var(--accent-dim); }
 .canvas-btn-row { display: flex; gap: 6px; }
 .canvas-btn-row .create-btn { flex: 1; }
-.faction-canvas-btn { background: var(--overlay-6); border: none; border-radius: 4px; padding: 2px 5px; cursor: pointer; font-size: 12px; }
-.faction-canvas-btn:hover { background: var(--accent); }
+
 .draft-badge {
   flex: 0 0 auto; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
   padding: 1px 5px; border-radius: 3px; color: var(--accent-pale);
@@ -427,17 +425,14 @@ onUnmounted(() => {
   margin-left: 6px;
 }
 
-.fab-create {
+.gm-content .fab-create {
   position: sticky; bottom: 16px; z-index: 20;
-  display: flex; align-items: center; justify-content: center;
   width: 56px; height: 56px;
   margin-left: auto; margin-top: 12px;
-  border-radius: 50%; border: none; cursor: pointer;
-  background: var(--accent); color: var(--text-invert);
+  border-radius: 50%;
   font-size: 26px; font-weight: 700; line-height: 1;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
-.fab-create:hover { opacity: 0.9; }
 
 .entity-row { margin-bottom: 4px; }
 .factions-heading { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--overlay-8); }
