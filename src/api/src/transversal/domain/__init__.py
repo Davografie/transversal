@@ -358,13 +358,6 @@ class TraitDisplayName(BaseModel):
     universe: str
     ratings: list[list[DieType]] = Field(default_factory=list)
 
-class TransferFlags(BaseModel):
-    """Declares whether traits in a set or a specific trait can be transferred."""
-    teachable: bool = False
-    giftable: bool = False
-    takable: bool = False
-
-
 class Trait(BaseModel):
     """Registry entry — defines a trait that can exist in a universe.
 
@@ -387,7 +380,6 @@ class Trait(BaseModel):
     explanation: str = ""
     random_weight: int = 0
     display_names: list[TraitDisplayName] = Field(default_factory=list)
-    transfer_flags: Optional[TransferFlags] = None
 
 
 class TraitSet(BaseModel):
@@ -407,7 +399,6 @@ class TraitSet(BaseModel):
     polarity: Optional["Polarity"] = None  # default polarity override (None = global positive)
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
-    transfer_flags: Optional[TransferFlags] = None
 
 
 # ── Dice helpers ──────────────────────────────────────
@@ -507,7 +498,6 @@ class TraitSetting(BaseModel):
     source_trait_setting_id: Optional[str] = None  # original TraitSetting this derived from (teach)
     source_life_path_id: Optional[str] = None  # which life path generated this (life_path_term)
     source_term_number: Optional[int] = None  # which term in that path (life_path_term)
-    stolen: bool = False  # trait was taken — may have narrative consequences
     scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
 
     @property

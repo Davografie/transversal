@@ -797,28 +797,6 @@ class TraitSetting:
         return default
 
     @strawberry.field
-    def transfer_flags(self, info: strawberry.Info) -> strawberry.scalars.JSON:
-        """Resolve transfer flags from trait registry (trait → traitset fallback)."""
-        from transversal.domain import TransferFlags as DomainTransferFlags
-        em = info.context["entity_manager"]
-        trait = em.repo.get_trait(self.trait_id)
-        if trait and trait.transfer_flags:
-            return {
-                "teachable": trait.transfer_flags.teachable,
-                "giftable": trait.transfer_flags.giftable,
-                "takable": trait.transfer_flags.takable,
-            }
-        if trait:
-            ts = em.repo.get_traitset_by_id(trait.traitset_id)
-            if ts and ts.transfer_flags:
-                return {
-                    "teachable": ts.transfer_flags.teachable,
-                    "giftable": ts.transfer_flags.giftable,
-                    "takable": ts.transfer_flags.takable,
-                }
-        return {"teachable": False, "giftable": False, "takable": False}
-
-    @strawberry.field
     def possible_sfx_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
         from transversal.services.entity_manager import EntityManager
         em = info.context["entity_manager"]
@@ -1382,23 +1360,3 @@ class PlayerBody:
     entity: Entity
 
 
-# ── Trait Transfer Result Types ──────────────────────
-
-@strawberry.type
-class TeachResult:
-    student_trait_setting_id: strawberry.ID
-    razmerit_cost: int
-
-
-@strawberry.type
-class GiftResult:
-    transferred_trait_id: strawberry.ID
-    relationship_created: bool
-
-
-@strawberry.type
-class TakeResult:
-    success: bool
-    contest_summary: str  # "Kael rolled 14 vs Elena 9 — success"
-    transferred_trait_id: Optional[strawberry.ID] = None
-    stolen: bool = False

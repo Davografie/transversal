@@ -333,17 +333,6 @@
                     <span v-if="!(t.dice || []).length" class="trait-die depleted">empty</span>
                   </div>
                   <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
-                  <Button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.teachable"
-                    variant="ghost" size="sm" @click.stop="showTeachPicker(t)"
-                    title="Teach this trait">🎓</Button>
-                  <Button v-if="!isForeignSheet && ownsCharacter && t.transferFlags?.giftable"
-                    variant="ghost" size="sm" :loading="pendingTransferId === t.id"
-                    @click.stop="giftTraitAction(t)"
-                    title="Gift this trait">🎁</Button>
-                  <Button v-if="isForeignSheet && t.transferFlags?.takable"
-                    variant="ghost" size="sm" :loading="pendingTransferId === t.id"
-                    @click.stop="takeTraitAction(t)"
-                    title="Take this trait">🫳</Button>
                 </div>
               </div>
               <div v-else class="trait-row unknown-trait">
@@ -1233,7 +1222,6 @@ const QUERY = `
         traitsetLimit
         knownTo
         possibleSfxIds
-        transferFlags
         relationshipContactId
         relationshipContactName
         relationshipContactType
@@ -1281,7 +1269,6 @@ const QUERY = `
         traitsetLimit
         knownTo
         possibleSfxIds
-        transferFlags
         relationshipContactId
         relationshipContactName
         relationshipContactType
@@ -1507,9 +1494,6 @@ function cancelEdit() {
 
 const deleteCountdown = ref(0)
 const deletingTraitId = ref(null)
-// Trait id whose teach/gift/take mutation is in flight — drives :loading on
-// that row's transfer button so the click visibly lands.
-const pendingTransferId = ref(null)
 let deleteTimer = null
 
 function onDeleteClick(t) {
@@ -1880,116 +1864,6 @@ async function removeRelationship() {
   })
   relationship.value = null
   showRelEditor.value = false
-}
-
-// ── Trait Transfer ─────────────────────────────────
-
-const showTransferPicker = ref(false)
-const transferTargetId = ref('')
-const transferTrait = ref(null)
-const transferMode = ref('') // 'teach' | 'gift' | 'take'
-const relatedForTransfer = ref([])
-
-async function loadRelatedForTransfer() {
-  const id = props.overrideEntityId || props.entityId
-  const query = `
-    query($id: ID!, $q: String!) {
-      relatedEntities(entityId: $id, query: $q) { id name }
-    }
-  `
-  const data = await graphql(query, { id, q: '' })
-  relatedForTransfer.value = data?.relatedEntities || []
-}
-
-function showTeachPicker(t) {
-  transferTrait.value = t
-  transferMode.value = 'teach'
-  transferTargetId.value = ''
-  loadRelatedForTransfer()
-  showTransferPicker.value = true
-}
-
-async function giftTraitAction(t) {
-  const targetId = prompt('Enter recipient entity ID to gift this trait to:')
-  if (!targetId || targetId === props.entityId) return
-  pendingTransferId.value = t.id
-  const query = `
-    mutation($giver: ID!, $recipient: ID!, $tsId: ID!) {
-      giftTrait(giverId: $giver, recipientId: $recipient, traitSettingId: $tsId) {
-        transferredTraitId
-      }
-    }
-  `
-  try {
-    await graphql(query, {
-      giver: props.entityId,
-      recipient: targetId,
-      tsId: t.id,
-    })
-    await fetchEntity()
-  } catch (e) {
-    console.error('giftTrait failed:', e)
-    alert('Gift failed. Both characters must be in the same location.')
-  } finally {
-    pendingTransferId.value = null
-  }
-}
-
-async function takeTraitAction(t) {
-  const method = prompt('Take method? (stealth, combat, social, technical)', 'stealth') || 'stealth'
-  pendingTransferId.value = t.id
-  const query = `
-    mutation($taker: ID!, $victim: ID!, $tsId: ID!, $method: String!) {
-      takeTrait(takerId: $taker, victimId: $victim, traitSettingId: $tsId, method: $method) {
-        success contestSummary transferredTraitId
-      }
-    }
-  `
-  try {
-    const data = await graphql(query, {
-      taker: props.viewerEntityId,
-      victim: props.overrideEntityId,
-      tsId: t.id,
-      method,
-    })
-    const result = data?.takeTrait
-    if (result?.success) {
-      alert(`Taken! ${result.contestSummary}`)
-      await fetchEntity()
-    } else {
-      alert(`Failed! ${result?.contestSummary}`)
-    }
-  } catch (e) {
-    console.error('takeTrait failed:', e)
-  } finally {
-    pendingTransferId.value = null
-  }
-}
-
-async function confirmTransfer() {
-  if (!transferTargetId.value || !transferTrait.value) return
-  if (transferMode.value === 'teach') {
-    const query = `
-      mutation($teacher: ID!, $student: ID!, $tsId: ID!) {
-        teachTrait(teacherId: $teacher, studentId: $student, traitSettingId: $tsId) {
-          studentTraitSettingId razmeritCost
-        }
-      }
-    `
-    try {
-      await graphql(query, {
-        teacher: props.entityId,
-        student: transferTargetId.value,
-        tsId: transferTrait.value.id,
-      })
-      await fetchEntity()
-    } catch (e) {
-      console.error('teachTrait failed:', e)
-      alert('Teach failed. Both characters must be in the same location.')
-    }
-  }
-  showTransferPicker.value = false
-  transferTrait.value = null
 }
 
 watch(() => props.overrideEntityId, () => {

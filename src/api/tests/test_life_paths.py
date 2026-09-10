@@ -13,44 +13,10 @@ from transversal.domain import (
     Trait,
     TraitSet,
     TraitSetting,
-    TransferFlags,
 )
 
 
 # ── Domain Model Tests ──────────────────────────────────
-
-
-class TestTransferFlags:
-    def test_defaults_all_false(self):
-        tf = TransferFlags()
-        assert tf.teachable is False
-        assert tf.giftable is False
-        assert tf.takable is False
-
-    def test_selective_enable(self):
-        tf = TransferFlags(teachable=True, takable=True)
-        assert tf.teachable is True
-        assert tf.giftable is False
-        assert tf.takable is True
-
-    def test_on_trait_override_traitset(self):
-        """Trait-level flags override traitset-level flags."""
-        tset = TraitSet(id="ts-assets", name="Assets", transfer_flags=TransferFlags(giftable=True, takable=True))
-        trait = Trait(id="trait-jian", name="Jian", traitset_id="ts-assets",
-                      transfer_flags=TransferFlags(takable=False))
-        # Per-trait flags should override; effective flags come from trait
-        eff = trait.transfer_flags
-        assert eff is not None
-        assert eff.giftable is False  # not set on trait, so False (inheritance is resolved at query time by the service)
-        assert eff.takable is False   # explicitly overridden
-
-    def test_trait_no_flags_inherits(self):
-        """A trait with no transfer_flags uses the traitset's flags (resolved by service)."""
-        tset = TraitSet(id="ts-assets", name="Assets", transfer_flags=TransferFlags(giftable=True))
-        trait = Trait(id="trait-sword", name="Sword", traitset_id="ts-assets", transfer_flags=None)
-        # Trait defers to traitset; the service resolves this
-        assert trait.transfer_flags is None  # no own flags
-        assert tset.transfer_flags.giftable is True  # traitset has it
 
 
 class TestDiscoveryBlock:
@@ -149,7 +115,6 @@ class TestTraitSettingProvenance:
         assert ts.source_trait_setting_id is None
         assert ts.source_life_path_id is None
         assert ts.source_term_number is None
-        assert ts.stolen is False
 
     def test_taught_provenance(self):
         ts = TraitSetting(
@@ -180,7 +145,7 @@ class TestTraitSettingProvenance:
         assert ts.source_life_path_id == "lp-verdant"
         assert ts.source_term_number == 2
 
-    def test_stolen_trait(self):
+    def test_taken_provenance(self):
         ts = TraitSetting(
             id="kael:jian",
             entity_id="kael-1",
@@ -189,7 +154,6 @@ class TestTraitSettingProvenance:
             dice=[DieType.D12],
             source_type="taken",
             source_entity_id="yuan-1",
-            stolen=True,
         )
         assert ts.source_type == "taken"
-        assert ts.stolen is True
+        assert ts.source_entity_id == "yuan-1"

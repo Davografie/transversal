@@ -311,125 +311,44 @@ class LifeTerm(BaseModel):
 
 ---
 
-## Trait Transfer — Teach / Gift / Take
+## Trait Transfer — removed (2026-09-10)
 
-Trait transfer is driven by flags on traits and traitsets, not by fixed procedural rules. A trait (or its parent traitset) declares whether it can be taught, gifted, or taken. The UI surfaces the appropriate button based on context: own sheet shows teach/gift, foreign sheet shows take.
+**Teach / gift / take has been torn out.** The backend service
+(`services/trait_transfer.py`), the `teachTrait`/`giftTrait`/`takeTrait`
+mutations, the `TransferFlags` registry model and its `transfer_flags` fields,
+`TraitSetting.stolen`, and the character sheet's transfer buttons are all gone.
 
-### Flags on Traits and TraitSets
+Why: it was unreachable and unused. **0 of 802 traits** and **0 of 38 traitsets**
+ever had `transfer_flags` set, nothing in the app could set them (only the sheet
+read them), all **9,609** trait settings carried `source_type: null`, and no
+`stolen` was ever true. The three sheet buttons were dead affordances — and the
+teach one opened a picker that had no template at all.
 
-Two levels of declaration:
+**Where the capability goes instead:** the [[Effects]] system, as declarative SFX
+rather than three dedicated mutations — matching the [[Pressure-Test Log]]
+finding that teach/gift/take "may be better routed through the effect system
+(universal mechanism)".
 
-**On `TraitSet`** (broad default):
-```yaml
-traitset:
-  name: "Assets"
-  transfer_flags:
-    teachable: false
-    giftable: true
-    takable: true
-```
-All traits in the set inherit the set's flags unless overridden.
+> [!warning] The primitives do not exist yet
+> The feature was **removed, not relocated**. To rebuild it the effect system
+> needs, first:
+>
+> - **Trait-instance copy / transfer** — move or duplicate a `TraitSetting`
+>   between anchors (entity ↔ entity, entity ↔ projection), carrying `dice`,
+>   `rating_type`, `polarity`, and the `source_*` provenance fields. Today's
+>   `modify_trait` actions (`gain`, `remove`, `step_up`, `step_down`, …) cannot
+>   express a *move*: `gain` + `remove` breaks setting-id continuity and
+>   provenance.
+> - **Contest-start** — `take` was a contest with method matching. The effect
+>   system has contest *triggers* (`contest_win`) but no action that starts one.
+>
+> A teach-style rating reduction (d4→d4, d6→d4, d8→d6, d10→d6, d12→d8) belongs
+> on top of those primitives, as an SFX — not inside them.
 
-**On `Trait`** (registry, per-trait override):
-```yaml
-trait:
-  name: "The Jian of Still Waters"
-  traitset_id: "ts-assets"
-  transfer_flags:
-    teachable: false    # you cannot teach someone to have the jian
-    giftable: true      # you can hand it over
-    takable: true       # it can be stolen
-```
-Per-trait flags override per-traitset flags. A trait with no flags inherits.
-
-### UI Behavior
-
-**Own character sheet** — for each trait with `teachable: true`:
-- A "Teach" button appears. Clicking opens a target selector (who to teach). On confirm, the `teachTrait` mutation fires.
-
-**Own character sheet** — for each trait with `giftable: true`:
-- A "Gift" button appears. Clicking opens a target selector. On confirm, the `giftTrait` mutation fires.
-
-**Foreign character sheet** — for each trait on the viewed character with `takable: true`:
-- A "Take" button appears. Clicking opens a method selector (stealth, combat, social, technical). On confirm, the `takeTrait` mutation fires — a contest against the victim.
-
-### Teach
-
-A character with a trait at rating X teaches it to a student at reduced rating. Teaching does not diminish the teacher's own trait.
-
-| Teacher rating | Student receives |
-|----------------|-----------------|
-| d4 | d4 |
-| d6 | d4 |
-| d8 | d6 |
-| d10 | d6 |
-| d12 | d8 |
-
-The student's new `TraitSetting` carries `source_type: "taught"`, `source_entity_id`, and `source_trait_setting_id`. The student advances the trait normally through life path terms.
-
-Teacher pays 1 razmerit. Teacher and student must be in the same location (or communicating through established narrative means — the system does not enforce this, it's a narrative constraint).
-
-### Gift
-
-The `TraitSetting.entity_id` changes from giver to recipient. Tagged with `source_type: "gifted"` and `source_entity_id`. A `relationships` edge of type `gifted` connects giver and recipient.
-
-Both characters must be in the same location. Giver voluntarily initiates.
-
-### Take
-
-Contested transfer. Covers theft, confiscation, salvage, and hostile acquisition.
-
-1. Taker selects a method (stealth, combat, social, technical)
-2. Taker assembles pool from method-relevant traits; victim assembles opposing pool
-3. Contest resolution determines outcome
-4. On success: trait transfers, tagged `source_type: "taken"`, `source_entity_id`, `stolen: true`
-5. On failure: victim may gain awareness. A `suspects` or `hostile_to` relationship edge may be created.
-
-A `stolen` trait is "hot" — openly using it in certain locations or universes may trigger consequences (faction hostility, legal trouble, bounty hunters). The system tracks the flag; the GM and narrative enforce the consequences.
-
-### Transfer Flags (Trait and TraitSet Registry)
-
-```python
-class TransferFlags(BaseModel):
-    """Declares whether traits in a set or a specific trait can be transferred."""
-    teachable: bool = False
-    giftable: bool = False
-    takable: bool = False
-
-# On TraitSet (broad default for all traits in the set):
-class TraitSet(BaseModel):
-    # ... existing fields ...
-    transfer_flags: Optional[TransferFlags] = None
-
-# On Trait (per-trait override of the set default):
-class Trait(BaseModel):
-    # ... existing fields ...
-    transfer_flags: Optional[TransferFlags] = None
-```
-Resolution: a trait's effective flags are its own `transfer_flags` if set, otherwise the parent traitset's `transfer_flags` if set, otherwise all `false`.
-
-### TraitSetting Provenance Extensions
-
-```python
-class TraitSetting(BaseModel):
-    # ... existing fields ...
-
-    # Provenance — how this trait was acquired
-    source_type: Optional[str] = None
-        # "taught" | "gifted" | "taken" | "life_path_term" | "event" | null
-    source_entity_id: Optional[str] = None
-        # who taught/gifted it, or who it was taken from
-    source_trait_setting_id: Optional[str] = None
-        # the original TraitSetting this was derived from (teach)
-    source_life_path_id: Optional[str] = None
-        # which life path generated this (life_path_term)
-    source_term_number: Optional[int] = None
-        # which term in that path (life_path_term)
-    stolen: bool = False
-        # trait was taken — may have narrative consequences
-```
-
----
+The provenance vocabulary stays in the data model regardless — `source_type`
+(`taught` | `gifted` | `taken` | `life_path_term` | `event`), `source_entity_id`,
+`source_trait_setting_id`, `source_life_path_id`, `source_term_number` — because
+life-path terms and events write the same fields.
 
 ## Relationship Ratings
 
@@ -587,48 +506,6 @@ type MusterOutResult {
 }
 ```
 
-### Teach / Gift / Take
-
-```graphql
-teachTrait(
-  teacherId: ID!
-  studentId: ID!
-  traitSettingId: ID!
-  razmeritSpent: Int = 0
-): TeachResult!
-
-type TeachResult {
-  studentTraitSetting: TraitSetting!
-  razmeritCost: Int!
-}
-
-giftTrait(
-  giverId: ID!
-  recipientId: ID!
-  traitSettingId: ID!
-): GiftResult!
-
-type GiftResult {
-  transferredTrait: TraitSetting!      # now owned by recipient
-  relationshipCreated: Relationship    # "gifted" edge
-}
-
-takeTrait(
-  takerId: ID!
-  victimId: ID!
-  traitSettingId: ID!
-  method: String!
-  razmeritSpent: Int = 0
-): TakeResult!
-
-type TakeResult {
-  success: Boolean!
-  contestResult: ContestResult!
-  transferredTrait: TraitSetting       # null if failed
-  stolen: Boolean!
-}
-```
-
 ---
 
 ## Implementation Order
@@ -640,19 +517,19 @@ The recommended build sequence follows dependency edges:
 | 1 | `life_paths` collection + domain model (LifePath, DiscoveryBlock, LifeTerm) | Nothing |
 | 2 | `Entity` model extensions (terms_served, life_history, discovered_life_paths, current_life_path_id) | Nothing |
 | 3 | Discovery check function — 5-condition check against entity state | 1, 2 |
-| 4 | `TransferFlags` on `Trait` and `TraitSet` + `TraitSetting` provenance extensions | Nothing |
+| 4 | `TraitSetting` provenance extensions (`source_*`) | Nothing |
 | 5 | `takeTerm` mutation — bare loop with qualification + learn + location gate | 1, 2, 3 |
 | 6 | Survive phase — mishap tables, term penalties, complication traits | 5 |
 | 7 | Event phase — event tables, random selection, effect application (incl. path discovery) | 5 |
 | 8 | Advance phase — ranks, benefits, difficulty tracking | 5 |
 | 9 | Muster out — benefits calculation, life_history recording (voluntary vs. mishap) | 5, 8 |
-| 10 | `teachTrait` mutation — target selector, reduced-rating transfer | 4 |
-| 11 | `giftTrait` mutation — entity_id reassignment | 4 |
-| 12 | `takeTrait` mutation — method selector + contest resolution | 4 |
+| 10 | ~~`teachTrait` mutation~~ — removed 2026-09-10 | — |
+| 11 | ~~`giftTrait` mutation~~ — removed 2026-09-10 | — |
+| 12 | ~~`takeTrait` mutation~~ — removed 2026-09-10 | — |
 | 13 | `traitsettings._from` extended to accept relationship edge keys | Nothing |
 | 14 | `relations` traitset + relationship trait creation in UI | 13 |
 | 15 | Dice pool assembly includes relationship traits | 13, 14 |
-| 16 | Transfer buttons on CharacterSheet (own: teach/gift, foreign: take) | 4, 10, 11, 12 |
+| 16 | ~~Transfer buttons on CharacterSheet~~ — removed 2026-09-10 | — |
 | 17 | `takeTerm` — Drifter path (no qualification, no advancement) | 5 |
 | 18 | Term wizard UI — step-wise Vue component flow | 5, 6, 7, 8 |
 

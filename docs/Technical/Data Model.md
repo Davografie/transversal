@@ -238,7 +238,6 @@ Registry of trait groupings. Defines named sets of traits available to entity ty
 | `polarity` | Polarity? | | Default polarity override for traits in this set (null = global positive) |
 | `default_rating_type` | RatingType | | Default rating behaviour for new traits in this set (default `static`) |
 | `default_die_type` | DieType | | Default die for new traits in this set (default `d4`) |
-| `transfer_flags` | TransferFlags? | | teachable/giftable/takable flags |
 
 **ID convention:** `ts-{slug}-{hash4}` — slug is a human-readable name variant (e.g. `attributes`, `cultivation`). The 4-char hex hash is `md5(slug + ":" + joined_universes)[:4]`, ensuring keys are unique even when the same name appears in different universes. Examples: `ts-attributes-8f3a` (Earth), `ts-attributes-9d4e` (Three Realms).
 
@@ -263,7 +262,6 @@ Registry of all possible traits per universe. Shared definitions — not per-ent
 | `explanation` | string | | Flavor or rules explanation text |
 | `random_weight` | int | | Weight for random trait generation (default `0`) |
 | `display_names` | TraitDisplayName[] | | Dynamic display names keyed by dice rating + universe |
-| `transfer_flags` | TransferFlags? | | teachable/giftable/takable flags |
 | `possible_subtraitset_ids` | string[] | | Whole traitsets that can be nested as sub-traits |
 | `default_sfx_ids` | string[] | | SFX granted by default when this trait is taken |
 
@@ -301,7 +299,6 @@ Per-entity trait configuration. The edge connects an anchor (entity, projection,
 | `source_trait_setting_id` | string? | | Original TraitSetting this derived from (teach) |
 | `source_life_path_id` | string? | | Which life path generated this (life_path_term) |
 | `source_term_number` | int? | | Which term in that path (life_path_term) |
-| `stolen` | bool | | Trait was taken — may have narrative consequences (default `false`) |
 | `scheduled_events` | ScheduledEvent[] | | Pending timed reverts |
 
 **ID convention:** `{entity_id}:{trait_id}` for entity/projection anchors; `{anchor_id}:{trait_id}` for relationship anchors; parent + suffix for sub-traits.
