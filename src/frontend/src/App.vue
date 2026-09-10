@@ -2442,11 +2442,9 @@ watch(gmMode, (v) => {
   border-color: var(--accent);
   background: var(--accent-dim);
 }
-/* You are peeking at this entity (inspect) — outlined, no fill. */
+/* You are peeking at this entity (inspect) — highlight border only, no fill. */
 .peer-chip.viewing {
   border-color: var(--accent);
-  border-style: dashed;
-  background: transparent;
 }
 .peer-img, .peer-avatar {
   width: 20px;
