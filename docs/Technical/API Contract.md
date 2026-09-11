@@ -51,6 +51,7 @@ type Entity {
   # Computed
   projections: [Projection!]!
   traitSettings: [TraitSetting!]!
+  attunements: [Attunement!]!
 }
 
 enum EntityType {
@@ -73,6 +74,17 @@ enum TransversalType {
   NATIVE
   CONSCIOUSNESS
   INAPPOSITE
+}
+
+# Projection grants — which bodies are currently live
+# (see Data Model → "Attunement (projection grant)")
+type Attunement {
+  op: String!               # "add" (attune) | "remove" (suppress)
+  universe: String          # target form 1: every body of mine from this universe
+  projectionId: ID          # target form 2: one specific body
+  scope: String!            # "self" | "domain" (location subtree)
+  until: EffectTimingEnum
+  sourceSfxId: String
 }
 
 # Trait Registry — shared definitions
@@ -248,6 +260,12 @@ type Mutation {
 
   # Projection
   addProjection(entityId: ID!, universe: String!, type: TransversalType): Entity!
+
+  # Trait-set registry (GM authoring)
+  createTraitSet(id: String!, name: String!, universes: [String!]!, entityTypes: [EntityType!], description: String, order: Int, limit: Int, allowDuplicates: Boolean, polarity: Polarity): TraitSetRef!
+  updateTraitSet(id: ID!, name: String, universes: [String!], entityTypes: [EntityType!], description: String, order: Int, limit: Int, allowDuplicates: Boolean, polarity: Polarity, clearPolarity: Boolean): TraitSetRef!
+  deleteTraitSet(id: ID!): String!
+  reorderTraitsets(ids: [ID!]!): Boolean!
 
   # Troupe / support cast
   setAgencyMain(input: SetAgencyMainInput!): Player!

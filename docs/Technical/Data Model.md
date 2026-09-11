@@ -180,7 +180,7 @@ Core entity metadata. Every significant thing in Transversal is an entity. Trait
 | `nav_positions` | dict | | Navigation dot positions per edge type (e.g. `{"parent": {"x": 90, "y": 15}}`) |
 | `node_ids` | string[] | | Faction conspyramid node entity IDs |
 | `owned_by` | string? | | Owner entity ID (for assets) |
-| `attunements` | Attunement[] | | Active temporary universe additions (effect-managed) |
+| `attunements` | Attunement[] | | Projection grants — bodies made live (`attune`) or cut off (`suppress`); see [[#Attunement (projection grant)]] |
 | `targeting_bans` | TargetingBan[] | | Directional contest-target bans |
 | `taken_out` | bool | | Scene-scoped: high-stakes contest removed this entity from the scene |
 | `total_dice_bonus` | int | | Delta over the base total-dice keep limit (2); adjusted by `modify_dice_limit` effects (default `0`) |
