@@ -8,7 +8,7 @@
       <span v-if="trait.statement" class="trait-statement">{{ trait.statement }}</span>
       <span v-if="trait.notes" class="trait-notes">{{ trait.notes }}</span>
       <div v-if="trait.sfxIds?.length" class="sfx-cards">
-        <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId)"
+        <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'chip')"
                  @activate="api.activateSfx(sfxId, trait.id)" />
       </div>
     </div>

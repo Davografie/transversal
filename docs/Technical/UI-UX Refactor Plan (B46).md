@@ -70,6 +70,11 @@ All on 2026-09-11, each verified by build + CDP against the running app.
   guard. Its CSS moved including `.detail-section .sfx-card-rules`, a descendant
   rule that would have silently stopped applying once the span left the
   parent's scope — **watch for those when extracting markup with nested rules**.
+  The extraction also flattened one cue the original markup kept: only the trait
+  detail rendered the rules line, but the shared model handed `rules` to every
+  card, so the teasers grew the full text. `sfxCardModel(sfxId, variant)` now
+  owns the distinction again — `'chip'` (trait teaser: name only) · `'card'`
+  (strips: name + description) · `'full'` (trait detail: + the rules text).
 - **`sheet/TraitRow.vue`.** The whole list item — known row, unknown ("???") row
   and the sub-trait list under a trait — as one presentational component fed by
   `trait` + an `api` object of functions, plus plain `phase` / `limitReached` /

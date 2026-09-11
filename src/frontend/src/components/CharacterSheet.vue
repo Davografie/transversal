@@ -1088,12 +1088,17 @@ function sfxTitle(sfxId) {
 // Everything one SFX card needs, resolved once for all five strips (entity,
 // projection, trait row, detail, trait-set). `disabled` reproduces the old
 // inline guard so the card does not fire when the phase or a condition blocks.
-function sfxCardModel(sfxId) {
+// One SFX in a card strip. Where the card sits decides how much it earns:
+//   'chip' — the trait teaser: the name, nothing else;
+//   'card' — the entity / projection / trait-set strips: name + description;
+//   'full' — the trait detail clickthrough: + the natural-language rules text
+//            (the "translation" belongs in the drill-in, not in the teaser).
+function sfxCardModel(sfxId, variant = 'card') {
   const blocked = sfxConditionBlocked(sfxId)
   return {
     name: sfxName(sfxId),
-    description: sfxDescription(sfxId),
-    rules: sfxCardText(sfxId),
+    description: variant === 'chip' ? '' : sfxDescription(sfxId),
+    rules: variant === 'full' ? sfxCardText(sfxId) : '',
     title: sfxTitle(sfxId),
     active: sfxActive(sfxId),
     used: sfxUsed(sfxId),

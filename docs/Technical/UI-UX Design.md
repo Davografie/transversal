@@ -258,6 +258,12 @@ Navigation lives in the header **pills**: 👤 profile · 🎲 traits · 📘 bl
   1. **Trait-set list** — set name + limit dots.
   2. **Trait list** — tap a set to drill in; the set name becomes the click-to-return title.
   3. **Trait editor** — a full-panel view (replaces the trait list) with rating type, dice, polarity, statement, SFX.
+- **SFX cards come in three sizes**, because where a card sits decides how much
+  text it earns: the **trait teaser** (list row) shows the **name only**; the
+  entity / projection / trait-set strips add the description; and only the
+  **trait detail clickthrough** carries the derived natural-language rules line
+  (the "translation"). One `SfxCard`; the text comes from
+  `sfxCardModel(sfxId, variant)` — `'chip'` · `'card'` (default) · `'full'`.
 - **Next set**: a `Next: <name> →` button sits under the trait list (right-aligned), jumping to the next set without picking. When a set fills to its limit, the view **auto-advances to the next set** (and returns to the list on the last set).
 - **Own vs foreign sheet**: your own sheet always shows the pills; a foreign sheet hides them and swaps in the relationship widget + "add relationship" affordance.
 

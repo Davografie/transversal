@@ -15,7 +15,10 @@
 // One SFX in a card strip (entity, projection, trait and trait-set grants all
 // render the same card). Purely presentational: the sheet resolves the labels
 // and the state, and `disabled` reproduces the old click guard — the card does
-// not fire when the phase or a condition blocks it.
+// not fire when the phase or a condition blocks it. How much text the card
+// carries is the host's call, via `sfxCardModel`'s variants: the trait teaser
+// gets the name alone, the strips add the description, and only the trait
+// detail clickthrough passes the natural-language rules line.
 defineProps({
   name: { type: String, default: '' },
   description: { type: String, default: '' },
@@ -72,8 +75,8 @@ defineEmits(['activate'])
 }
 /* The derived natural-language rules line inside a detail SFX card. Brighter
    than the flavour lead-in above it — this is the text that tells you what the
-   SFX actually does. (Was `.detail-section .sfx-card-rules`; only the detail
-   call site passes `rules`, so the nesting is implicit now.) */
+   SFX actually does. (Was `.detail-section .sfx-card-rules`; only the detail's
+   `'full'` variant carries `rules`, so the nesting is implicit now.) */
 .sfx-card-rules {
   margin-top: 2px;
   font-size: 11px;

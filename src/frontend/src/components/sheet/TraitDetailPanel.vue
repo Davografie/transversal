@@ -43,7 +43,7 @@
   <div v-if="trait.sfxIds?.length" class="detail-section">
     <div class="detail-section-head"><span class="detail-label">SFX</span></div>
     <div class="sfx-cards">
-      <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId)"
+      <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'full')"
                @activate="api.activateSfx(sfxId, trait.id)" />
     </div>
   </div>
@@ -90,7 +90,7 @@ defineProps({
   api: {
     type: Object,
     required: true,
-  }, // { canPlayTrait, playTrait, ratingTypeLabel, challengeProgressLabel, detailContext, displayName, sfxCardModel, activateSfx }
+  }, // { canPlayTrait, playTrait, ratingTypeLabel, challengeProgressLabel, detailContext, displayName, sfxCardModel (variant 'full'), activateSfx }
 })
 
 defineEmits(['back', 'edit'])
