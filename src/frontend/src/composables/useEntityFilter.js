@@ -23,13 +23,17 @@ export function useEntityFilter(entities) {
     return false
   }
 
+  // Chips combine with OR: an entity matches when it matches *any* active chip
+  // — the chips are additive ("show me X, plus Y"), not narrowing. With no
+  // chips everything matches.
   function entityMatchesFilters(e) {
-    for (const f of activeFilters.value) {
-      if (f.type === 'universe' && e.currentUniverse !== f.value) return false
-      if (f.type === 'entityType' && e.type !== f.value) return false
-      if (f.type === 'name' && !(fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value))) return false
-    }
-    return true
+    if (!activeFilters.value.length) return true
+    return activeFilters.value.some((f) => {
+      if (f.type === 'universe') return e.currentUniverse === f.value
+      if (f.type === 'entityType') return e.type === f.value
+      if (f.type === 'name') return fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value)
+      return false
+    })
   }
 
   // ── Filtered data ─────────────────────────────────
@@ -58,7 +62,10 @@ export function useEntityFilter(entities) {
         results.push({ id: 'type:' + t, name: t.charAt(0) + t.slice(1).toLowerCase(), entityType: t, hint: 'type', filterType: 'entityType', filterValue: t, filterLabel: t.charAt(0) + t.slice(1).toLowerCase() })
       }
     }
-    for (const e of entities.value.filter(entityMatchesFilters)) {
+    // Candidates are the whole entity list: chips are additive (OR), so they
+    // must not narrow what can be picked — otherwise a name outside the current
+    // matches could never be added.
+    for (const e of entities.value) {
       if ((fuzzyMatch(e.name, q) || fuzzyMatch(e.id, q)) && !seen.has('ent:' + e.id)) {
         seen.add('ent:' + e.id)
         results.push({ id: 'ent:' + e.id, name: e.name, entityType: e.type, hint: 'name', filterType: 'name', filterValue: e.name, filterLabel: e.name })

@@ -145,7 +145,11 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
     }
     for (const node of nodes) {
       const kind = node.kind || (node.node_type === 'universe' ? 'universe' : 'location')
-      if (activeUniverseFilters.value.size > 0) {
+      // Universe chips narrow a universe-only filter to its universes. Once an
+      // occupant chip (name/type) is in play the chips are a union (OR), so
+      // pruning by universe would hide exactly what the other chips bring in;
+      // the populated-path prune below already shows the right paths.
+      if (activeUniverseFilters.value.size > 0 && !hasOccupantFilter.value) {
         if (kind === 'universe' && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
         if (kind === 'location' && depth === 0 && node.universe && !activeUniverseFilters.value.has(node.universe)) continue
       }
