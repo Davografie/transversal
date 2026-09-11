@@ -25,7 +25,6 @@
         <select v-model="form.defaultRatingType">
           <option value="STATIC">Static</option><option value="RESOURCE">Resource</option><option value="CHALLENGE">Challenge</option><option value="EMPTY">Empty</option>
         </select>
-        <label class="checkbox-label"><input type="checkbox" v-model="form.locationRestricted" /> Location Restricted</label>
         <div class="default-ego-row">
           <span class="field-label">Default</span>
           <button type="button" class="ego-toggle" :class="{ 'is-ego': form.defaultEgo }" @click="form.defaultEgo = !form.defaultEgo">{{ form.defaultEgo ? 'ego' : 'morph' }}</button>
@@ -147,7 +146,6 @@
         <select v-model="createForm.defaultRatingType">
           <option value="STATIC">Static</option><option value="RESOURCE">Resource</option><option value="CHALLENGE">Challenge</option><option value="EMPTY">Empty</option>
         </select>
-        <label class="checkbox-label"><input type="checkbox" v-model="createForm.locationRestricted" /> Location Restricted</label>
         <div class="default-ego-row">
           <span class="field-label">Default</span>
           <button type="button" class="ego-toggle" :class="{ 'is-ego': createForm.defaultEgo }" @click="createForm.defaultEgo = !createForm.defaultEgo">{{ createForm.defaultEgo ? 'ego' : 'morph' }}</button>
@@ -275,7 +273,6 @@ const form = reactive({
   universes: [],
   defaultDieType: 'D6',
   defaultRatingType: 'STATIC',
-  locationRestricted: false,
   defaultEgo: false,
   polarity: '',
   possibleSfxIds: [],
@@ -338,7 +335,6 @@ watch(trait, (t) => {
     })
     form.defaultDieType = t.defaultDieType || 'D6'
     form.defaultRatingType = t.defaultRatingType || 'STATIC'
-    form.locationRestricted = t.locationRestricted || false
     form.defaultEgo = t.defaultEgo || false
     form.polarity = t.polarity || ''
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
@@ -352,7 +348,7 @@ watch(trait, (t) => {
 let saveTimer = null
 watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
-  () => form.defaultRatingType, () => form.locationRestricted, () => form.defaultEgo,
+  () => form.defaultRatingType, () => form.defaultEgo,
   () => form.polarity,
   () => [...form.possibleSfxIds], () => [...form.defaultSfxIds], () => [...form.possibleSubtraitIds], () => [...form.possibleSubtraitsetIds],
 ], () => {
@@ -375,11 +371,11 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds, possibleSubtraitsetIds: form.possibleSubtraitsetIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds, possibleSubtraitsetIds: form.possibleSubtraitsetIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
-    defaultRatingType: form.defaultRatingType, locationRestricted: form.locationRestricted, defaultEgo: form.defaultEgo,
+    defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo,
     polarity: form.polarity || null,
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
@@ -431,7 +427,6 @@ const createForm = reactive({
   universes: [],
   defaultDieType: 'D6',
   defaultRatingType: 'STATIC',
-  locationRestricted: false,
   defaultEgo: false,
   polarity: '',
   possibleSfxIds: [],
@@ -479,7 +474,6 @@ async function onCreate() {
       traitsetId: tsId,
       defaultDieType: createForm.defaultDieType,
       defaultRatingType: createForm.defaultRatingType,
-      locationRestricted: createForm.locationRestricted,
       defaultEgo: createForm.defaultEgo,
       polarity: createForm.polarity || null,
       possibleSfxIds: [...createForm.possibleSfxIds],
@@ -689,8 +683,6 @@ async function onDelete() {
 <style scoped>
 .ps-form input, .ps-form select { font-size: 12px; padding: 6px 8px; }
 
-.checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: none; cursor: pointer; }
-.checkbox-label input { width: auto; }
 .default-ego-row { display: flex; align-items: center; gap: 8px; }
 .field-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .section-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.4; }
