@@ -19,7 +19,7 @@ files move.
 
 | File | Started | Now | Landed |
 | --- | --- | --- | --- |
-| `App.vue` | 2559 | 1832 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters`, `usePlayerIdentity`, `useCharacterFinder`, `useCharacterSwitch` |
+| `App.vue` | 2559 | 1666 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters`, `usePlayerIdentity`, `useCharacterFinder`, `useCharacterSwitch`, `app/LoginPrompt`, `app/IdentitySwitchBlock`, `app/CharacterListBlock`, `app/SupportBlock`, `app/FindCharacterBlock`, `app/ModeAndMediaBlock` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
 | `components/CharacterSheet.vue` | 3281 | 2390 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard`, `sheet/TraitDetailPanel` |
