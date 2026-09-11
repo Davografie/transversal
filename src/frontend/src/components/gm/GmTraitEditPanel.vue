@@ -36,13 +36,10 @@
           <option value="NEGATIVE">Negative</option>
         </select>
         <label>Tags</label>
-        <input
-          :value="tagsText"
-          placeholder="violent, social, …"
-          title="Free-form labels — an SFX can select traits by tag (B116)"
-          @input="tagsText = $event.target.value"
-          @change="commitTags"
-          @keyup.enter="commitTags"
+        <TagInput
+          v-model="form.tags"
+          placeholder="Add tag…"
+          aria-label="Trait tags"
         />
       </div>
 
@@ -166,13 +163,10 @@
           <option value="NEGATIVE">Negative</option>
         </select>
         <label>Tags</label>
-        <input
-          :value="createTagsText"
-          placeholder="violent, social, …"
-          title="Free-form labels — an SFX can select traits by tag (B116)"
-          @input="createTagsText = $event.target.value"
-          @change="commitCreateTags"
-          @keyup.enter="commitCreateTags"
+        <TagInput
+          v-model="createForm.tags"
+          placeholder="Add tag…"
+          aria-label="Trait tags"
         />
       </div>
 
@@ -244,6 +238,7 @@ import GmDisplayNameEditPanel from '@/components/gm/GmDisplayNameEditPanel.vue'
 import GmList from '@/components/ui/GmList.vue'
 import DangerButton from '@/components/ui/DangerButton.vue'
 import Button from '@/components/ui/Button.vue'
+import TagInput from '@/components/ui/TagInput.vue'
 
 const { graphql } = useApi()
 const panel = usePanel()
@@ -293,30 +288,12 @@ const form = reactive({
   defaultRatingType: 'STATIC',
   defaultEgo: false,
   polarity: '',
-  tags: [],
+  tags: [],   // free-form labels a condition/target can match on (B116) — edited via TagInput
   possibleSfxIds: [],
   defaultSfxIds: [],
   possibleSubtraitIds: [],
   possibleSubtraitsetIds: [],
 })
-
-// ── Tags (B116) ──
-// Free-form labels a condition/target can match on. The input is a plain
-// comma-separated string; raw text is kept in refs so typing a separator is not
-// normalised away mid-word, and the list is committed on change/blur/enter.
-const tagsText = ref('')
-const createTagsText = ref('')
-function parseTags(raw) {
-  return [...new Set(String(raw || '').split(',').map(s => s.trim()).filter(Boolean))]
-}
-function commitTags() {
-  form.tags = parseTags(tagsText.value)
-  tagsText.value = form.tags.join(', ')
-}
-function commitCreateTags() {
-  createForm.tags = parseTags(createTagsText.value)
-  createTagsText.value = createForm.tags.join(', ')
-}
 
 // Display names — derived from props.trait, kept as local array for display/auto-save
 const displayNames = ref([])
@@ -375,7 +352,6 @@ watch(trait, (t) => {
     form.defaultEgo = t.defaultEgo || false
     form.polarity = t.polarity || ''
     form.tags = [...(t.tags || [])]
-    tagsText.value = form.tags.join(', ')
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
     form.possibleSubtraitIds = [...(t.possibleSubtraitIds || [])]
