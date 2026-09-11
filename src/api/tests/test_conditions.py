@@ -132,6 +132,24 @@ def test_phase_condition_reads_trigger_context():
     assert not evaluate_condition(_entity(), cond, repo)
 
 
+def test_high_stakes_condition_reads_the_contest_flag():
+    repo = FakeRepo()
+    high = Condition(type=ConditionType.HIGH_STAKES, target="high")
+    low = Condition(type=ConditionType.HIGH_STAKES, target="low")
+    assert evaluate_condition(_entity(), high, repo, context={"high_stakes": True})
+    assert not evaluate_condition(_entity(), high, repo, context={"high_stakes": False})
+    assert evaluate_condition(_entity(), low, repo, context={"high_stakes": False})
+    # A blank target means "high", the usual gate.
+    default = Condition(type=ConditionType.HIGH_STAKES)
+    assert evaluate_condition(_entity(), default, repo, context={"high_stakes": True})
+    # No contest, or no flag in context, is not high-stakes.
+    assert not evaluate_condition(_entity(), default, repo)
+
+
+def test_high_stakes_is_not_a_static_condition():
+    assert static_conditions([Condition(type=ConditionType.HIGH_STAKES, target="high")]) == []
+
+
 def test_contest_outcome_condition():
     repo = FakeRepo()
     win = Condition(type=ConditionType.CONTEST_OUTCOME, target="player")

@@ -82,6 +82,14 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         # The hitch-buying menu is active (assembled with context["hitch"]).
         return bool((context or {}).get("hitch"))
 
+    if condition.type == ConditionType.HIGH_STAKES:
+        # Whether the contest in play is high-stakes. ``target`` picks which side
+        # of the flag the gate wants: "high" (default) or "low". The flag reaches
+        # the context from the contest that fired the event, from the contest
+        # tracker on a manual activation, and from the roll context at resolve.
+        stakes = bool((context or {}).get("high_stakes"))
+        return stakes if (condition.target or "high").strip() != "low" else not stakes
+
     if condition.type == ConditionType.ROLL_TIER:
         from transversal.domain import OutcomeTier
 
@@ -274,6 +282,7 @@ _CONTEXT_TYPES = frozenset({
     ConditionType.TEST_OUTCOME,
     ConditionType.USER_ROLE,
     ConditionType.HITCH,
+    ConditionType.HIGH_STAKES,
 })
 
 
@@ -340,6 +349,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved")),
     ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in")),
     ConditionTypeDef(ConditionType.HITCH.name, "Hitch"),
+    ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low")),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<")),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail")),
     ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">")),

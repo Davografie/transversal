@@ -625,6 +625,9 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
         return f'the contest outcome is "{target}"'
     if ctype == ConditionType.HITCH:
         return "a hitch is being resolved"
+    if ctype == ConditionType.HIGH_STAKES:
+        return "the contest is not high stakes" if (condition.target or "high").strip() == "low" \
+            else "the contest is high stakes"
     if ctype == ConditionType.ROLL_TIER:
         return f"the roll is {op} {value}"
     if ctype == ConditionType.TEST_OUTCOME:

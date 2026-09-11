@@ -979,6 +979,7 @@ class ConditionType(str, Enum):
     ROLL_TIER = "roll_tier"              # operator + value against OutcomeTier (e.g. >= success); reads roll_result.tier
     TEST_OUTCOME = "test_outcome"        # target = "success" | "fail" (binary); success = tier != fail
     SOURCE_RATING = "source_rating"      # the source trait-setting's rating (dice) vs a die threshold
+    HIGH_STAKES = "high_stakes"          # target = "high" | "low"; the contest in play is high-stakes
     TARGET_PATH = "target_path"          # a targeting path (spec) resolves non-empty; source-aware predicate
 
 

@@ -206,6 +206,12 @@ async def resolve_pool(location_id: str, entity_id: str):
     universe = entity.current_universe if entity else ""
 
     roll_context = {"effect_die": effect_die, "total": total, "tier": tier, "rolls": dice}
+    # Whether the contest in play is high-stakes, so a roll-timed effect can gate
+    # on it (B97). Read from the tracker: the resolve call carries no stakes.
+    from transversal.services.contest_tracker import get_contest_tracker
+    contest = get_contest_tracker().get(location_id, entity_id)
+    if contest is not None:
+        roll_context["high_stakes"] = bool(contest.high_stakes)
 
     from transversal.services.roll_deferral import fire_armed
     fire_armed(entity_id, "on_set", universe, roll_context)

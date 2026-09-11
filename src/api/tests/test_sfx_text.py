@@ -327,6 +327,18 @@ class TestSfx:
             "earth: move to a random location."
         )
 
+    def test_stakes_condition_reads_as_a_gate(self):
+        sfx = SFX(
+            id="sfx-stakes", name="Stakes", trigger="manual",
+            conditions=[Condition(type=ConditionType.PHASE, target="adding"),
+                        Condition(type=ConditionType.HIGH_STAKES, target="high")],
+            effects=[Effect(type="transfer_razmerit", action="spend", result="1")],
+        )
+        assert sfx_text(sfx) == (
+            "Activated, if the dice pool is in its adding phase and the contest is "
+            "high stakes: spend 1 razmerit."
+        )
+
     def test_shared_framing_is_stated_once(self):
         """Rating-gated effects revert together, so the card says so once.
 

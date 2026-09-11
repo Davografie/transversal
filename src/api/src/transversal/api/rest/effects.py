@@ -39,8 +39,18 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
     # Only activate the specifically requested SFX
     available_sfx_ids: list[str] = [req.sfx_name] if req.sfx_name else []
 
+    # A manual activation happens mid-scene, so the contest in play is not in the
+    # request. Fill the stakes flag from the tracker unless the caller sent one,
+    # so a `high_stakes` condition can gate a sheet move (B97).
+    context = dict(req.context or {})
+    if "high_stakes" not in context and entity.current_location:
+        from transversal.services.contest_tracker import get_contest_tracker
+        contest = get_contest_tracker().get(entity.current_location, req.entity_id)
+        if contest is not None:
+            context["high_stakes"] = bool(contest.high_stakes)
+
     # Reverse: apply the opposite razmerit effect
-    if req.context.get("reverse"):
+    if context.get("reverse"):
         sfx = engine.get(req.sfx_name)
         if sfx is None:
             return {"applied": False, "error": f"SFX '{req.sfx_name}' not found"}
@@ -51,13 +61,13 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
                 effect_registry.apply(
                     Effect(timing=effect.timing, type="transfer_razmerit", action="earn",
                            target="self", result=effect.result or "1"),
-                    req.entity_id, req.universe, req.context)
+                    req.entity_id, req.universe, context)
             # Reverse razmerit earnings (earn → spend)
             elif effect.type == "transfer_razmerit" and effect.action == "earn":
                 effect_registry.apply(
                     Effect(timing=effect.timing, type="transfer_razmerit", action="spend",
                            target="self", result=effect.result or "1"),
-                    req.entity_id, req.universe, req.context)
+                    req.entity_id, req.universe, context)
         return {"applied": True, "effects_applied": 1, "effects": [{"type": "reverse", "action": "reverse"}]}
 
     # Create the event
@@ -65,7 +75,7 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
         type=req.trigger,
         entity_id=req.entity_id,
         universe=req.universe,
-        context=req.context,
+        context=context,
     )
 
     # Process
