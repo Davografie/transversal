@@ -170,6 +170,7 @@ Core entity metadata. Every significant thing in Transversal is an entity. Trait
 | `current_projection` | string? | | Active projection id (occupant types) |
 | `hidden` | bool | | Visibility flag (default `false`) |
 | `unpublished` | bool | | GM draft: real in-world but not yet revealed to players |
+| `support_eligible` | bool | | GMC may be taken over as a support character (default `false`) |
 | `known_to` | string[] | | Entity IDs that know about this entity (faction conspyramid) |
 | `background_image` | string? | | URL path to location background (e.g. `/media/loc-krasnoyarsk.webp`) |
 | `starter_location` | bool | | Location is a valid random-spawn destination |

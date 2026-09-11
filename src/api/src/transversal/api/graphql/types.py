@@ -974,6 +974,7 @@ class Entity:
     current_projection: Optional[str] = None
     hidden: bool = False
     unpublished: bool = False
+    support_eligible: bool = False
     known_to: list[strawberry.ID] = strawberry.field(default_factory=list)
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     _background_image: strawberry.Private[Optional[str]] = None
@@ -1118,6 +1119,7 @@ class UpdateEntityInput:
     current_location: Optional[str] = None
     hidden: Optional[bool] = None
     unpublished: Optional[bool] = None
+    support_eligible: Optional[bool] = None
     known_to: Optional[list[str]] = None
     background_image: Optional[str] = None
     overlay: Optional[str] = None

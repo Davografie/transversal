@@ -36,6 +36,7 @@ type Entity {
   currentLocation: String
   hidden: Boolean!
   knownTo: [ID!]!
+  supportEligible: Boolean!
   # Location
   backgroundImage: String
   zones: [Zone!]!
@@ -288,6 +289,7 @@ input UpdateEntityInput {
   currentLocation: String
   hidden: Boolean
   knownTo: [String!]
+  supportEligible: Boolean
   backgroundImage: String
   navPositions: String
   ownedBy: String

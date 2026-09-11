@@ -174,6 +174,7 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         current_universe=e.current_universe, current_location=e.current_location,
         current_projection=e.current_projection,
         hidden=e.hidden, unpublished=e.unpublished, known_to=e.known_to,
+        support_eligible=e.support_eligible,
         sfx_ids=e.sfx_ids,
         _background_image=e.background_image, overlay=e.overlay,
         starter_location=e.starter_location,
@@ -1554,6 +1555,8 @@ class Mutation:
             e.hidden = input.hidden
         if input.unpublished is not None:
             e.unpublished = input.unpublished
+        if input.support_eligible is not None:
+            e.support_eligible = input.support_eligible
         if input.known_to is not None:
             e.known_to = input.known_to
         if input.background_image is not None:

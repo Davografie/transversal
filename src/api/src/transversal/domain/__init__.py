@@ -608,6 +608,7 @@ class Entity(BaseModel):
     current_projection: Optional[str] = None  # active projection id (occupant types)
     hidden: bool = False
     unpublished: bool = False  # GM draft: real in-world but not yet revealed to players
+    support_eligible: bool = False  # GMC may be taken over as a support character (B86)
     known_to: list[str] = Field(default_factory=list)
     # Location
     background_image: Optional[str] = None
