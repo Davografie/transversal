@@ -164,6 +164,7 @@
           :statement="editStatement"
           :notes="editNotes"
           :sfx-ids="editSfxIds"
+          :acquirable-sfx-ids="acquirableSfxIds"
           :is-ego="editIsEgo"
           :projection-id="editProjectionId"
           :projection-name="editProjectionName"
@@ -760,7 +761,7 @@ const detailApi = {
 const {
   editingTraitId, editingTrait, availableSubtraits,
   editDice, editRatingType, editPolarity, editCapacity, editStatement, editNotes,
-  editSfxIds, editIsEgo, editProjectionId, showProjectionPicker,
+  editSfxIds, editIsEgo, editProjectionId, showProjectionPicker, acquirableSfxIds,
   editProjectionOptions, editProjectionName,
   deleteCountdown, deletingTraitId,
   startEdit, cancelEdit, onDeleteClick, doSave,

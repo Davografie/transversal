@@ -21,15 +21,16 @@
       <template #after-dice>
         <div v-if="trait.possibleSfxIds?.length" class="edit-field">
           <span class="edit-label">SFX</span>
-          <div class="edit-sfx">
+          <div v-if="visibleSfxIds.length" class="edit-sfx">
             <button
-              v-for="sfxId in trait.possibleSfxIds"
+              v-for="sfxId in visibleSfxIds"
               :key="sfxId"
               class="sfx-chip"
               :class="{ assigned: sfxIds.includes(sfxId) }"
               @click="$emit('toggle-sfx', sfxId)"
             >{{ sfxId.replace('sfx-', '') }}</button>
           </div>
+          <span v-else class="edit-sfx-none">none acquirable here</span>
         </div>
       </template>
 
@@ -130,6 +131,13 @@ const props = defineProps({
   showProjectionPicker: { type: Boolean, default: false },
   deleteCountdown: { type: Number, default: 0 },
   deletingTraitId: { type: String, default: null },
+  /**
+   * The instance's possible SFX whose acquire gate holds right now.
+   * `null` = not answered yet — then the full possible list is shown, because a
+   * pending (or failed) query must not hide chips. The attach enforces the gate
+   * server-side regardless.
+   */
+  acquirableSfxIds: { type: Array, default: null },
 })
 
 const emit = defineEmits([
@@ -144,6 +152,19 @@ const diceModel = computed({ get: () => props.dice, set: (v) => emit('update:dic
 const capacityModel = computed({ get: () => props.capacity, set: (v) => emit('update:capacity', v) })
 const statementModel = computed({ get: () => props.statement, set: (v) => emit('update:statement', v) })
 const notesModel = computed({ get: () => props.notes, set: (v) => emit('update:notes', v) })
+
+/**
+ * What the chip list shows: rules acquirable here, plus anything already
+ * assigned. An attached rule has to stay visible after its acquire gate stops
+ * holding, or it could never be toggled off from the sheet.
+ */
+const visibleSfxIds = computed(() => {
+  const possible = props.trait.possibleSfxIds || []
+  if (props.acquirableSfxIds == null) return possible
+  const acquirable = new Set(props.acquirableSfxIds)
+  const assigned = new Set(props.sfxIds || [])
+  return possible.filter((id) => acquirable.has(id) || assigned.has(id))
+})
 
 function displayName(name) {
   return name
@@ -191,6 +212,13 @@ function displayName(name) {
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
+}
+/* Shown only when every possible rule is gated out — better than the field
+   silently vanishing, which reads as a bug. */
+.edit-sfx-none {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
 }
 .sfx-chip {
   font-size: 10px;

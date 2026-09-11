@@ -80,6 +80,30 @@ export function useTraitEditor({
   const editProjectionId = usePersistedRef('sheet.editProjectionId', null)
   const showProjectionPicker = ref(false)
 
+  // The rules this trait instance may actually take *here* — the subset of its
+  // possible SFX whose acquire gate resolves right now (`acquirableSfxIds`).
+  // `null` means "not answered yet", which the panel reads as "show them all";
+  // the attach enforces the gate server-side either way, so a preview must not
+  // be the thing the user relies on.
+  const acquirableSfxIds = ref(null)
+
+  async function fetchAcquirableSfxIds(traitSettingId) {
+    acquirableSfxIds.value = null
+    if (!traitSettingId) return
+    try {
+      const data = await graphql(
+        `query($id: ID!) { acquirableSfxIds(traitSettingId: $id) }`,
+        { id: traitSettingId },
+      )
+      acquirableSfxIds.value = data?.acquirableSfxIds ?? null
+    } catch (e) {
+      // Stay `null` (full list) rather than hide chips on a failed query — the
+      // server still refuses an attach that isn't allowed here.
+      console.error('acquirableSfxIds failed:', e)
+      acquirableSfxIds.value = null
+    }
+  }
+
   const editProjectionOptions = computed(() => entity.value?.projections || [])
   const editProjectionName = computed(() => {
     const p = editProjectionOptions.value.find((p) => p.id === editProjectionId.value)
@@ -100,6 +124,7 @@ export function useTraitEditor({
     }
     editingTraitId.value = t.id
     detailTrait.value = null
+    fetchAcquirableSfxIds(t.id)
     ensureTraitNames()
     editDice.value = (t.dice || []).map(d => d.toLowerCase())
     editCapacity.value = (t.capacity || []).map(d => d.toLowerCase())
@@ -333,6 +358,7 @@ export function useTraitEditor({
     editingTraitId, editingTrait, availableSubtraits,
     editDice, editRatingType, editPolarity, editCapacity, editStatement, editNotes,
     editSfxIds, editIsEgo, editProjectionId, showProjectionPicker,
+    acquirableSfxIds,
     editProjectionOptions, editProjectionName,
     deleteCountdown, deletingTraitId,
     // actions
