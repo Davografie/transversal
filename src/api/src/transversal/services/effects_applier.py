@@ -438,6 +438,22 @@ def _die(result: Optional[str]) -> DieType:
     return DieType(str(result).lower()) if result else DieType.D4
 
 
+def _die_opt(result: Optional[str]) -> Optional[DieType]:
+    """Parse a die rating, or ``None`` when the value is not one.
+
+    Used where an unreadable rating must *skip* rather than default: a
+    substituted roll variable is empty when the die's tier has no effect die
+    (a fail), and a token that never substituted is not a die either.
+    """
+    raw = str(result or "").strip().lower()
+    if not raw:
+        return None
+    try:
+        return DieType(raw)
+    except ValueError:
+        return None
+
+
 def _ctx(effect: Effect, key: str) -> str:
     """Read a string context value (empty when absent)."""
     return str((effect.context or {}).get(key) or "")
@@ -890,6 +906,15 @@ def _apply_add_die(entity, effect, repo, result):
     ``dice`` list. Static/resource/challenge ratings are all a ``dice`` list, so
     this is type-agnostic; the duration revert removes the same die. A positive
     challenge pool is bounded by its ``capacity`` (the completion target).
+
+    When the subject has no such trait yet this **seeds** it — that is how a
+    resource trait accumulates (Crimson Scars: one hazard trait per location,
+    one die per unchosen die). The revert deletes what it made, so a
+    scene-scoped grant leaves nothing behind.
+
+    ``effect.result`` may be a substituted variable, and must be a real die: a
+    die whose tier has no effect die (a fail) substitutes empty, and adding
+    silently as a d4 would invent a hazard the roll did not earn.
     """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
@@ -898,9 +923,22 @@ def _apply_add_die(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "trait", repo)
     if target is None:
         return
+    die = _die_opt(effect.result)
+    if die is None:
+        result.applied.append(AppliedEffect(effect, f"no die rating to add ({effect.result!r})"))
+        return
     existing = _find_traitsetting_by_target(subject, effect, repo, target)
     if not existing:
-        result.applied.append(AppliedEffect(effect, f"no trait {target} to add a die to"))
+        ts = _new_traitsetting(
+            _trait_owner(subject, effect, repo), target, die, repo,
+            negative=bool(effect.negative),
+            rating_type=_rating_type(effect),
+            statement=_ctx(effect, "statement"),
+            notes=_ctx(effect, "notes"),
+        )
+        result.new_trait_settings.append(ts)
+        result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
+        _queue_explicit(repo, subject, effect, "remove", target)
         return
     if (
         existing.rating_type == RatingType.CHALLENGE
@@ -910,7 +948,6 @@ def _apply_add_die(entity, effect, repo, result):
     ):
         result.applied.append(AppliedEffect(effect, f"{target} is already at capacity"))
         return
-    die = _die(effect.result)
     existing.dice.append(die)
     result.updated_trait_settings.append(existing)
     result.applied.append(AppliedEffect(effect, f"added {die.value} to {target}", existing.id))

@@ -242,6 +242,68 @@ def test_add_die_works_on_challenge_rating():
     assert result.updated_trait_settings[0].dice == [DieType.D8, DieType.D6]
 
 
+def test_add_die_seeds_the_trait_when_missing():
+    """A resource trait starts from its first die (Crimson Scars)."""
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-complications")])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="add_die",
+        target="hazard", result="d8", negative=True,
+        context={"rating_type": "resource", "statement": "Crimson Scar"},
+    )
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.new_trait_settings) == 1
+    ts = result.new_trait_settings[0]
+    assert ts.trait_id == "hazard"
+    assert ts.dice == [DieType.D8]
+    assert ts.rating_type == RatingType.RESOURCE
+    assert ts.statement == "Crimson Scar"
+    assert ts.polarity == Polarity.NEGATIVE
+    assert result.applied[0].summary == "gained hazard at d8"
+
+
+def test_add_die_seeded_trait_is_deleted_on_revert():
+    from transversal.domain import EffectDuration, Timer, TimerCombine
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-complications")])
+    entity = _entity()
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="add_die",
+        target="hazard", result="d4",
+        duration=EffectDuration(timers=[Timer(event="scene", remaining=1)], combine=TimerCombine.FIRST_TO_FIRE),
+    )
+    apply_effects(entity, [effect], repo)
+    assert len(repo.scheduled_events) == 1
+    revert = repo.scheduled_events[0]
+    assert revert.effect.action == "remove"
+    assert revert.effect.target == "hazard"
+
+
+def test_add_die_accumulates_into_the_seeded_trait():
+    """The second unchosen die appends to the trait the first one seeded.
+
+    Mirrors the armed per-die loop: each die is applied and committed on its
+    own, so the next one finds the trait its predecessor created.
+    """
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-complications")])
+    entity = _entity()
+    first = _effect("modify_trait", "add_die", "hazard", "d4")
+    second = _effect("modify_trait", "add_die", "hazard", "d8")
+    seeded = apply_effects(entity, [first], repo)
+    repo.traitsettings.append(seeded.new_trait_settings[0])   # what commit_effects does
+    second_result = apply_effects(entity, [second], repo)
+    assert second_result.new_trait_settings == []
+    assert repo.traitsettings[0].dice == [DieType.D4, DieType.D8]
+
+
+def test_add_die_without_a_die_rating_is_skipped():
+    """An unresolved variable (a fail tier has no effect die) adds nothing."""
+    repo = FakeRepo(traits=[FakeTrait("hazard", "ts-complications")])
+    entity = _entity()
+    result = apply_effects(entity, [_effect("modify_trait", "add_die", "hazard", "")], repo)
+    assert result.new_trait_settings == []
+    assert "no die rating" in result.applied[0].summary
+
+
 def test_remove_die_removes_matching_die():
     repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D8, DieType.D6])])
     entity = _entity()
