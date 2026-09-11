@@ -518,27 +518,11 @@ select option {
   font-size: 12px;
   letter-spacing: 0;
 }
-.mode-toggle {
-  display: flex;
-  gap: 0;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--overlay-10);
+/* Segmented controls set their own chrome (components/ui/SegmentedControl.vue);
+   the settings overlay just constrains their width and centres them. */
+.settings-segmented {
   max-width: 320px;
-  width: 100%;
   align-self: center;
-}
-.mode-toggle button {
-  flex: 1;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 13px;
-  padding: 8px 0;
-}
-.mode-toggle button.active {
-  background: var(--accent-active);
-  color: var(--text-on-accent);
 }
 .switch-row {
   display: flex;

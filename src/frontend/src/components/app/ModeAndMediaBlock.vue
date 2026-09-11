@@ -1,24 +1,41 @@
 <template>
   <div class="settings-section">
     <label class="settings-label">Mode</label>
-    <div class="mode-toggle">
-      <button :class="{ active: !gmMode }" @click="$emit('update:gmMode', false)">🎭 Player</button>
-      <button :class="{ active: gmMode }" @click="$emit('update:gmMode', true)">🏛 Architect</button>
-    </div>
+    <SegmentedControl
+      class="settings-segmented"
+      aria-label="Mode"
+      :model-value="gmMode"
+      :options="modeOptions"
+      @update:model-value="$emit('update:gmMode', $event)"
+    />
   </div>
 
   <div class="settings-section">
     <label class="settings-label">Media quality</label>
-    <div class="mode-toggle">
-      <button :class="{ active: mediaQuality === 'auto' }" @click="$emit('set-media-quality', 'auto')">Auto</button>
-      <button :class="{ active: mediaQuality === 'low' }" @click="$emit('set-media-quality', 'low')">Low</button>
-      <button :class="{ active: mediaQuality === 'high' }" @click="$emit('set-media-quality', 'high')">High</button>
-    </div>
+    <SegmentedControl
+      class="settings-segmented"
+      aria-label="Media quality"
+      :model-value="mediaQuality"
+      :options="qualityOptions"
+      @update:model-value="$emit('set-media-quality', $event)"
+    />
     <p class="quality-hint">Low uses smaller images (less data). Auto follows your connection.</p>
   </div>
 </template>
 
 <script setup>
+import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+
+const modeOptions = [
+  { value: false, label: '🎭 Player' },
+  { value: true, label: '🏛 Architect' },
+]
+const qualityOptions = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'low', label: 'Low' },
+  { value: 'high', label: 'High' },
+]
+
 // The two preference toggles at the top of the settings overlay: Player/Architect
 // (the app persists it and re-fetches role-scoped data) and media quality.
 defineProps({

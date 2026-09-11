@@ -34,7 +34,7 @@ Living interaction-design reference for the Transversal frontend. Captures the c
 
 The reusable UI set lives in `src/frontend/src/components/ui/`: `GmList`/
 `GmListItem`, `TargetPicker`/`SearchDropdown`, `Button`, `DangerButton`,
-`TagInput`, `TraitInstanceEditor`. (The `gm/` folder keeps the GM-specific
+`TagInput`, `TraitInstanceEditor`, `SegmentedControl`. (The `gm/` folder keeps the GM-specific
 panels, which compose these primitives.) New surfaces should compose the
 primitives instead of re-styling raw elements.
 
@@ -178,6 +178,30 @@ trait editor) and the effect form's *Gain Trait* action — see
   projection, sub-traits) and `actions` (Done/Delete). Slot markup is compiled in
   the host's scope, so host-scoped styles still apply to it — the sheet's
   `.edit-field` / `.edit-label` rules stay where they are.
+
+### SegmentedControl
+
+A small set of mutually exclusive, always-visible choices — mode, media
+quality, die/variable. **Not a `Button`**: the segments keep an equal width and
+read as one object, so the primitive owns its chrome
+(`components/ui/SegmentedControl.vue`).
+
+```html
+<SegmentedControl
+  v-model="mode"                        <!-- string | number | boolean | null -->
+  :options="[{ value: false, label: '🎭 Player' },
+             { value: true,  label: '🏛 Architect' }]"
+  aria-label="Mode"
+  :class="'settings-segmented'"          <!-- host constrains width/placement -->
+/>
+```
+
+- `role="radiogroup"` + `role="radio"`/`aria-checked`; arrows (←/→/↑/↓) move the
+  selection and wrap, disabled options are skipped.
+- The control fills its container; the host sets `max-width`/alignment (the
+  settings overlay uses `.settings-segmented`).
+- **Remaining migration:** `EffectForm.vue`'s `.ee-result-mode` (Die/Variable)
+  still hand-rolls this — its owner (gm-panels) migrates it (B104).
 
 ## Character sheet
 
