@@ -42,7 +42,7 @@
         <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>).</p>
       </div>
       <label>Conditions</label>
-      <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :context-available="triggerCarriesContext" />
+      <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" />
     </div>
 
     <!-- Effects: list inline; each effect's form opens in a child panel -->
@@ -172,13 +172,18 @@ const triggerGroups = computed(() => {
 })
 const knownTrigger = computed(() => !draft.trigger || triggers.value.some(t => t.value === draft.trigger))
 
-// A beat/scene/session trigger brings no context, so a condition that reads the
-// moment it fires can't be evaluated under it. The flag rides the trigger
-// vocabulary, so the editor and `validate_sfx` use one source of truth.
-const triggerCarriesContext = computed(() => {
-  const t = triggers.value.find(x => x.value === draft.trigger)
-  return t ? t.carriesContext !== false : true
-})
+// A condition that reads the fire-time context can only be offered where the
+// point supplies it. The keys come from the backend capability map (shared with
+// `validate_sfx`), not from a list kept in step by hand.
+const { contextKeysFor } = useSfxMeta()
+const availableKeys = ref(null)
+watch(
+  () => [draft.trigger, draft.placement],
+  async () => {
+    availableKeys.value = await contextKeysFor(draft.trigger, draft.placement, '')
+  },
+  { immediate: true },
+)
 
 // Deferred (roll/outcome-timed) effect timings — the only effects the SFX-level
 // armed window applies to. Immediate effects fire once at trigger time.

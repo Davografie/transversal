@@ -164,8 +164,8 @@ def test_context_condition_on_a_boundary_trigger_warns():
         conditions=[Condition(type=ConditionType.HIGH_STAKES, target="high")],
     )
     assert validate_sfx(sfx) == [
-        "Condition 1: 'High stakes' reads the moment it fires, and 'on_beat' carries "
-        "no context — it can never pass"
+        "Condition 1: 'High stakes' can never pass — it reads 'high_stakes', and a "
+        "boundary supplies no context"
     ]
 
 
@@ -178,7 +178,7 @@ def test_context_condition_on_a_boundary_effect_warns():
             conditions=[Condition(type=ConditionType.PHASE, target="adding")],
         )],
     )
-    assert any("end_of_scene boundary carries no context" in w for w in validate_sfx(sfx))
+    assert any("a boundary supplies no context" in w for w in validate_sfx(sfx))
 
 
 def test_context_condition_on_a_roll_effect_is_fine():
@@ -191,7 +191,76 @@ def test_context_condition_on_a_roll_effect_is_fine():
             conditions=[Condition(type=ConditionType.HIGH_STAKES, target="high")],
         )],
     )
-    assert not any("carries no context" in w for w in validate_sfx(sfx))
+    assert not any("can never pass" in w for w in validate_sfx(sfx))
+
+
+def test_phase_on_a_roll_timed_effect_warns():
+    """The roll context carries no phase — the map's reason for existing."""
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down",
+            target="{choose_trait}",
+            conditions=[Condition(type=ConditionType.PHASE, target="adding")],
+        )],
+    )
+    assert any(
+        "it reads 'phase', and there is no context at this moment" in w
+        for w in validate_sfx(sfx)
+    )
+
+
+def test_roll_reading_path_on_a_non_rolling_trigger_warns():
+    from transversal.domain import TargetSpec
+    spec = TargetSpec(steps=[{"kind": "select", "collection": "rolled_dice"}])
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual",
+        conditions=[Condition(type=ConditionType.TARGET_PATH, spec=spec)],
+    )
+    assert any("it reads 'rolls'" in w for w in validate_sfx(sfx))
+
+
+def test_user_role_needs_no_context():
+    """It prefers context['role'] but falls back to the controlling player."""
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="on_beat",
+        conditions=[Condition(type=ConditionType.USER_ROLE, target="player")],
+    )
+    assert validate_sfx(sfx) == []
+
+
+def test_live_shapes_are_allowed():
+    """The gates the seeded catalogue actually uses must not be flagged."""
+    from transversal.domain import TargetSpec
+    heal = SFX(
+        id="sfx-heal", name="Heal", trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down",
+            target="{choose_trait}",
+            conditions=[Condition(type=ConditionType.TEST_OUTCOME, target="success")],
+        )],
+    )
+    assert not any("can never pass" in w for w in validate_sfx(heal))
+
+    crimson = SFX(
+        id="sfx-crimson-scars", name="Crimson Scars", trigger="manual",
+        conditions=[Condition(type=ConditionType.PHASE, target="adding")],
+    )
+    assert not any("can never pass" in w for w in validate_sfx(crimson))
+
+    # A consequence-menu move: gated by the outcome the menu assembled, and by a
+    # hitch marker for the hitch menu. Both are placement="menu".
+    for condition in (
+        Condition(type=ConditionType.CONTEST_OUTCOME, target="player"),
+        Condition(type=ConditionType.CONTEST_OUTCOME, target="give_in"),
+        Condition(type=ConditionType.HITCH),
+        Condition(type=ConditionType.USER_ROLE, target="architect"),
+    ):
+        menu_sfx = SFX(
+            id="sfx-menu", name="Menu move", trigger="manual", placement="menu",
+            conditions=[condition],
+        )
+        assert not any("can never pass" in w for w in validate_sfx(menu_sfx)), condition
 
 
 def test_source_rating_on_an_entity_sfx_warns():

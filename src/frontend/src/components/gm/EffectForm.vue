@@ -17,7 +17,7 @@
       </div>
       <div class="ee-field ee-conditions">
         <label>Condition</label>
-        <ConditionEditor v-model="newEffect.conditions" :source-element="sourceElement" :context-available="contextAvailable" />
+        <ConditionEditor v-model="newEffect.conditions" :source-element="sourceElement" :available-keys="availableKeys" />
       </div>
       <div v-if="isRollTiming" class="ee-field">
         <label>Roll dice</label>
@@ -233,7 +233,8 @@ const props = defineProps({
   universe: { type: String, default: '' },
   lifePath: { type: String, default: '' },
   variables: { type: Array, default: () => [] },
-  triggerCarriesContext: { type: Boolean, default: true },  // the SFX's trigger brings a context (false at a beat/scene/session boundary)
+  trigger: { type: String, default: '' },     // the SFX's trigger: an immediate effect reads its context
+  placement: { type: String, default: '' },   // "menu" gates on the menu's outcome keys instead
   outputVariables: { type: Object, default: null }, // { name: {element, cardinality} } for `select variable`
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   portalDestination: { type: String, default: '' },
@@ -308,19 +309,21 @@ function timingLabel(t) { return TIMING_LABELS[t] || t }
 const ROLL_TIMINGS = ['ON_RESULT', 'ON_SET', 'ON_ROLL']
 const isRollTiming = computed(() => ROLL_TIMINGS.includes(newEffect.timing))
 
-// Where this effect will be evaluated decides what it can read. A roll or
-// outcome timed effect fires from the roll, so the context comes with it; a
-// boundary timed one is stored and fired from the timer store with nothing; an
-// immediate one reads whatever its trigger brought. Keep the timing list in step
-// with `BOUNDARY_TIMINGS` in conditions.py — `validate_sfx` warns on drift.
-const BOUNDARY_TIMINGS = ['END_OF_BEAT', 'END_OF_SCENE', 'END_OF_SESSION', 'AFTER_BEATS']
-const FIRES_AT_THE_ROLL = ['ON_ROLL', 'ON_SET', 'ON_RESULT', 'ON_CONTEST_WIN',
-  'ON_CONTEST_LOSS', 'ON_SUCCESS', 'ON_FAILURE']
-const contextAvailable = computed(() => {
-  if (FIRES_AT_THE_ROLL.includes(newEffect.timing)) return true
-  if (BOUNDARY_TIMINGS.includes(newEffect.timing)) return false
-  return props.triggerCarriesContext
-})
+// Where this effect will be evaluated decides what a condition on it can read.
+// The answer comes from the backend capability map (one implementation, shared
+// with `validate_sfx`) rather than a list kept in step by hand; `null` means the
+// site isn't modelled, so nothing is forbidden.
+const { contextKeysFor } = useSfxMeta()
+const availableKeys = ref(null)
+watch(
+  () => [props.trigger, props.placement, newEffect.timing],
+  async () => {
+    availableKeys.value = await contextKeysFor(
+      props.trigger, props.placement, (newEffect.timing || '').toLowerCase(),
+    )
+  },
+  { immediate: true },
+)
 
 const ROLL_CONTEXT_VARIABLES = ['effect_die', 'total', 'triggered_die_tier', 'triggered_die_effect_die', 'triggered_die_result', 'triggered_die_die']
 const dieVariables = computed(() => {

@@ -950,8 +950,7 @@ class Query:
     def triggers(self, info: strawberry.Info) -> list[TriggerOption]:
         """The activation-trigger vocabulary for the SFX editor, sourced from the backend."""
         from transversal.services.menu_contexts import TRIGGERS
-        return [TriggerOption(value=t.value, label=t.label, group=t.group,
-                              carries_context=t.carries_context) for t in TRIGGERS]
+        return [TriggerOption(value=t.value, label=t.label, group=t.group) for t in TRIGGERS]
 
     @strawberry.field
     def condition_types(self, info: strawberry.Info) -> list[ConditionTypeOption]:
@@ -964,11 +963,28 @@ class Query:
                 target_kind=c.target_kind, value_kind=c.value_kind,
                 operators=list(c.operators), target_options=list(c.target_options),
                 uses_spec=c.uses_spec,
-                needs_context=c.needs_context,
+                requires_context_any_of=list(c.requires_context_any_of),
                 requires_source_elements=list(c.requires_source_elements),
             )
             for c in CONDITION_TYPES
         ]
+
+    @strawberry.field
+    def condition_context_keys(
+        self, info: strawberry.Info, trigger: str = "", placement: str = "", timing: str = "",
+    ) -> Optional[list[str]]:
+        """The context keys available at an evaluation point (null = unrestricted).
+
+        Answers "what can a condition read here?" for one point — an SFX-level
+        condition (pass the trigger/placement) or an effect's own fire (pass its
+        timing too). ``null`` means the site is not modelled, so nothing is
+        forbidden: the map only ever forbids. The editor keeps an option out of a
+        site that supplies none of the keys it reads; ``validate_sfx`` reports the
+        exact per-condition gap.
+        """
+        from transversal.services.conditions import context_keys_for
+        keys = context_keys_for(trigger, timing, placement or None)
+        return None if keys is None else sorted(keys)
 
     @strawberry.field
     def validate_sfx(self, info: strawberry.Info, input: SfxInput) -> list[str]:

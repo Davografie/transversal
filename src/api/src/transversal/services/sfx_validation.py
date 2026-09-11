@@ -98,6 +98,11 @@ def _condition_meta(condition):
     return next((m for m in CONDITION_TYPES if m.value == condition.type.name), None)
 
 
+def _condition_label(condition) -> str:
+    meta = _condition_meta(condition)
+    return meta.label if meta else condition.type.name
+
+
 def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     """Return authoring warnings for unknown ``{variables}`` (empty = valid).
 
@@ -180,33 +185,38 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                 f"SFX's source is '{sfx.source_kind or 'unset'}'"
             )
 
-    # Boundary fires carry no context at all, so a condition that reads the moment
-    # it fires can never be evaluated there — a beat/scene/session tick, or an
-    # ``on_beat``-style trigger. The editor does not offer them; this catches
-    # drafts authored elsewhere (MCP, API, legacy content).
-    from transversal.services.conditions import BOUNDARY_TIMINGS, BOUNDARY_TRIGGERS
-    if sfx.trigger in BOUNDARY_TRIGGERS:
-        for i, condition in enumerate(sfx.conditions):
-            meta = _condition_meta(condition)
-            if meta and meta.needs_context:
-                warnings.append(
-                    f"Condition {i + 1}: '{meta.label}' reads the moment it fires, and "
-                    f"'{sfx.trigger}' carries no context — it can never pass"
-                )
+    # Fire-time context, from the capability map: a condition that reads a key the
+    # evaluation point never supplies can never pass. One rule for every context
+    # condition and every fire site, so neither needs a special case here.
+    from transversal.services.conditions import (
+        BOUNDARY_TIMINGS, BOUNDARY_TRIGGERS, condition_context_keys, context_keys_for,
+    )
+
+    def _gap(condition, available) -> str:
+        """What this condition reads that the evaluation point lacks ("" = fine)."""
+        if available is None:
+            return ""
+        missing = sorted(condition_context_keys(condition) - available)
+        if not missing:
+            return ""
+        keys = ", ".join(f"'{k}'" for k in missing)
+        if not available:
+            return f"it reads {keys}, and a boundary supplies no context"
+        return f"it reads {keys}, and there is no context at this moment"
+
+    for i, condition in enumerate(sfx.conditions):
+        gap = _gap(condition, context_keys_for(sfx.trigger, "", sfx.placement))
+        if gap:
+            warnings.append(
+                f"Condition {i + 1}: '{_condition_label(condition)}' can never pass — {gap}"
+            )
     for i, effect in enumerate(sfx.effects):
-        timing = effect.timing.value
-        if timing in BOUNDARY_TIMINGS:
-            where = f"a {timing} boundary"
-        elif timing == "immediate" and sfx.trigger in BOUNDARY_TRIGGERS:
-            where = f"'{sfx.trigger}'"
-        else:
-            continue  # a roll/outcome-timed effect brings its own context
+        available = context_keys_for(sfx.trigger, effect.timing.value, sfx.placement)
         for condition in (effect.conditions or []):
-            meta = _condition_meta(condition)
-            if meta and meta.needs_context:
+            gap = _gap(condition, available)
+            if gap:
                 warnings.append(
-                    f"Effect {i + 1}: '{meta.label}' reads the moment it fires, and "
-                    f"{where} carries no context — it can never pass"
+                    f"Effect {i + 1}: '{_condition_label(condition)}' can never pass — {gap}"
                 )
 
     return warnings

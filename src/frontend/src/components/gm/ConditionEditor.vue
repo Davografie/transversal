@@ -72,9 +72,9 @@ import Button from '@/components/ui/Button.vue'
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
-  // False where the condition would be evaluated with no fire-time context at all
-  // (a beat/scene/session boundary, or a boundary-trigger SFX).
-  contextAvailable: { type: Boolean, default: true },
+  // The context keys this point supplies (`null` = not modelled, so nothing is
+  // forbidden). A condition reading a key that isn't here can never pass.
+  availableKeys: { type: Array, default: null },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -120,22 +120,30 @@ function typeUsable(t) {
   return !optionReason(t)
 }
 
+function readsUnavailable(t) {
+  if (props.availableKeys == null) return false
+  const need = t.requiresContextAnyOf || []
+  if (!need.length) return false
+  return !need.some(k => props.availableKeys.includes(k))
+}
+
 function optionReason(t) {
   const need = missingSource(t)
   if (need) return ` — needs a ${need} source`
-  if (!props.contextAvailable && t.needsContext) return ' — nothing to read at a boundary'
+  if (readsUnavailable(t)) return ' — nothing to read here'
   return ''
 }
 
 // What is wrong with the condition that is actually selected (legacy content can
-// hold a gate the vocabulary would no longer offer).
+// hold a gate the vocabulary would no longer offer). The exact per-condition
+// answer — which key is missing — comes from the live `validateSfx` warnings.
 function selectedProblem(type) {
   const meta = selectedMeta(type)
   if (!meta) return ''
   const need = missingSource(meta)
   if (need) return `never passes: needs a ${need} source`
-  if (!props.contextAvailable && meta.needsContext) {
-    return 'never passes: it reads the moment it fires, and a boundary carries no context'
+  if (readsUnavailable(meta)) {
+    return 'never passes: it reads the moment it fires, and there is nothing to read here'
   }
   return ''
 }

@@ -336,37 +336,13 @@ class ConditionTypeDef:
     # silent no-op, so the editor greys the option out with the reason instead of
     # letting a gate that can never fire be authored.
     requires_source_elements: tuple[str, ...] = ()
+    # Context keys this condition may read, as "any of" — one type can read a
+    # different key per configuration (a contest outcome reads `contest_winner`,
+    # or `gave_in` when it targets a give-in). The editor keeps the option out of
+    # a site that supplies none of them; `condition_context_keys` gives the exact
+    # per-condition answer, which is what `validate_sfx` reports.
+    requires_context_any_of: tuple[str, ...] = ()
 
-
-    @property
-    def needs_context(self) -> bool:
-        """True when this condition reads the *fire-time context* (phase, stakes,
-        outcome, hitch …) rather than entity state.
-
-        Boundary fires carry no context at all — a beat/scene/session tick, or an
-        ``on_beat``-style trigger — so such a condition can never be evaluated
-        there and the editor does not offer it. Derived from ``_CONTEXT_TYPES`` so
-        the two can't drift apart.
-        """
-        try:
-            return ConditionType[self.value] in _CONTEXT_TYPES
-        except KeyError:
-            return False
-
-
-def context_is_available(trigger: str = "", timing: str = "") -> bool:
-    """Whether an evaluation point carries any fire-time context.
-
-    False for the two sites that provably carry none: a boundary *timing* (the
-    effect is stored and fires from the timer store with an empty context) and a
-    boundary *trigger* (the beat/scene/session walk passes no context). Roll-timed
-    effects are always fine — they fire from the roll, which brings its own.
-
-    This is deliberately coarse: it answers "is there any context here", not
-    "which keys". A per-key capability map is the finer version (see the open
-    item in [[SFX Authoring]]).
-    """
-    return not (trigger in BOUNDARY_TRIGGERS or timing in BOUNDARY_TIMINGS)
 
 
 # Triggers and effect timings that fire at a time boundary. Both carry no
@@ -376,17 +352,112 @@ BOUNDARY_TRIGGERS = frozenset({"on_beat", "on_scene", "on_session_start", "on_se
 BOUNDARY_TIMINGS = frozenset({"end_of_beat", "end_of_scene", "end_of_session", "after_beats"})
 
 
-def context_is_available(trigger: str = "", timing: str = "") -> bool:
-    """Whether an evaluation point carries any fire-time context at all.
+# ── Fire-time context capability (the map) ──────────
+#
+# The rule that stops a gate being authored into a site that can never satisfy
+# it: every condition declares which context keys it *reads*, every evaluation
+# point which keys it *supplies*. Both are data here, so the editor can keep an
+# option out of a site that lacks its keys and ``validate_sfx`` can say exactly
+# which key is missing — one implementation instead of a list of special cases.
+#
+# The map only ever *forbids*: a site it does not model supplies ``None``
+# (unrestricted), because hiding a working gate is worse than offering a dead
+# one. Keys are read off the fire sites: ``fire_roll_sfx`` / ``fire_result_sfx``
+# (roll_orchestrator), ``fire_state_sfx`` / ``fire_contest_outcome_sfx``
+# (state_events), the manual trigger endpoint, the consequence/hitch menu
+# assembly, and the armed/scheduled paths.
 
-    False for the two sites that provably carry none (a boundary trigger and a
-    boundary timing); roll-timed effects are always true — they fire from the
-    roll, which brings its own context.
+_EMPTY = frozenset()
 
-    Deliberately coarse: it answers *is there any context here*, not *which keys*.
-    A per-key capability map is the finer version and is still open.
+# What the roll brings: ``fire_armed``'s roll context at ``/resolve``, and the
+# contest ``/set`` (which carries the committed scalars).
+_ROLL_KEYS = frozenset({"rolls", "effect_die", "total", "tier", "high_stakes"})
+
+# The consequence / hitch menu: ``_outcome_context`` maps a menu context to its
+# outcome key (``contest_winner`` / ``gave_in`` / ``tier``) plus the acting role,
+# and the hitch assembly adds ``hitch``.
+_MENU_KEYS = frozenset({"role", "contest_winner", "gave_in", "tier", "hitch"})
+
+TRIGGER_CONTEXT_KEYS: dict[str, frozenset[str]] = {
+    # The sheet/button path: the client sends the phase; the endpoint fills the
+    # stakes in from the contest tracker.
+    "manual": frozenset({"phase", "high_stakes"}),
+    "on_roll": frozenset({"rolls"}),
+    "on_result": frozenset({"rolls", "effect_die", "total"}),
+    "on_complication": frozenset({"rolls"}),
+    "on_botch": frozenset({"rolls"}),
+    "on_success": frozenset({"rolls"}),
+    "on_failure": frozenset({"rolls"}),
+    "on_contest_win": frozenset({"contest_winner", "effect_die", "high_stakes"}),
+    "on_contest_loss": frozenset({"contest_winner", "effect_die", "high_stakes"}),
+    "on_give_in": frozenset({"gave_in", "high_stakes"}),
+    "on_beat": _EMPTY,
+    "on_scene": _EMPTY,
+    "on_session_start": _EMPTY,
+    "on_session_end": _EMPTY,
+}
+
+TIMING_CONTEXT_KEYS: dict[str, frozenset[str]] = {
+    "on_roll": frozenset({"rolls"}),
+    "on_set": _ROLL_KEYS,
+    "on_result": _ROLL_KEYS,
+    "on_contest_win": _ROLL_KEYS,
+    "on_contest_loss": _ROLL_KEYS,
+    "on_success": _ROLL_KEYS,
+    "on_failure": _ROLL_KEYS,
+    "end_of_beat": _EMPTY,
+    "end_of_scene": _EMPTY,
+    "end_of_session": _EMPTY,
+    "after_beats": _EMPTY,
+}
+
+
+def context_keys_for(trigger: str = "", timing: str = "",
+                     placement: Optional[str] = None) -> Optional[frozenset[str]]:
+    """The context keys an evaluation point supplies (``None`` = unrestricted).
+
+    ``timing`` is an effect's timing when the point is that effect's own fire:
+    roll/outcome timings bring the roll, boundary timings bring nothing. An
+    immediate effect — and any SFX-level condition — is evaluated at activation,
+    where the trigger decides. A ``placement="menu"`` SFX is gated by the menu
+    assembly instead, which supplies the outcome keys.
     """
-    return not (trigger in BOUNDARY_TRIGGERS or timing in BOUNDARY_TIMINGS)
+    if timing and timing != "immediate":
+        return TIMING_CONTEXT_KEYS.get(timing)
+    if placement == "menu":
+        return _MENU_KEYS
+    return TRIGGER_CONTEXT_KEYS.get(trigger or "")
+
+
+def condition_context_keys(condition: Condition) -> frozenset[str]:
+    """The context keys this condition reads (empty = pure entity state).
+
+    ``USER_ROLE`` reads none: it prefers ``context["role"]`` but falls back to
+    the entity's controlling player, so it works without one. ``TARGET_PATH``
+    reads ``rolls`` only when its path seeds from ``rolled_dice``.
+    ``SOURCE_RATING`` reads the SFX's *source*, not the context — that is
+    ``requires_source_elements``' business.
+    """
+    ctype = condition.type
+    if ctype == ConditionType.CONTEST_OUTCOME:
+        if (condition.target or "").strip() == "give_in":
+            return frozenset({"gave_in"})
+        return frozenset({"contest_winner"})
+    if ctype in (ConditionType.ROLL_TIER, ConditionType.TEST_OUTCOME):
+        return frozenset({"tier"})
+    if ctype == ConditionType.PHASE:
+        return frozenset({"phase"})
+    if ctype == ConditionType.HIGH_STAKES:
+        return frozenset({"high_stakes"})
+    if ctype == ConditionType.HITCH:
+        return frozenset({"hitch"})
+    if ctype == ConditionType.TARGET_PATH:
+        spec = condition.spec
+        if spec is not None and any(
+            step.kind == "select" and step.collection == "rolled_dice" for step in spec.steps
+        ):
+            return frozenset({"rolls"})
+    return frozenset()
 
 
 CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
@@ -402,12 +473,12 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.USER_ROLE.name, "User role", needs_target=True, target_placeholder="role", target_options=("player", "architect")),
     ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),
     ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe"),
-    ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved")),
-    ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in")),
-    ConditionTypeDef(ConditionType.HITCH.name, "Hitch"),
-    ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low")),
-    ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<")),
-    ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail")),
+    ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved"), requires_context_any_of=("phase",)),
+    ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in"), requires_context_any_of=("contest_winner", "gave_in")),
+    ConditionTypeDef(ConditionType.HITCH.name, "Hitch", requires_context_any_of=("hitch",)),
+    ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low"), requires_context_any_of=("high_stakes",)),
+    ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<"), requires_context_any_of=("tier",)),
+    ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",)),
     ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",)),
     ConditionTypeDef(ConditionType.TARGET_PATH.name, "Targeting path", uses_spec=True),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
