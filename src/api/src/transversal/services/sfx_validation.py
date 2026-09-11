@@ -103,6 +103,26 @@ def _condition_label(condition) -> str:
     return meta.label if meta else condition.type.name
 
 
+def _specs_of(sfx: SFX):
+    """Every targeting spec an SFX carries, labelled for warnings."""
+    for i, condition in enumerate(sfx.conditions):
+        if condition.spec is not None:
+            yield f"Condition {i + 1}", condition.spec
+    for i, effect in enumerate(sfx.effects):
+        if effect.target_spec is not None:
+            yield f"Effect {i + 1} target", effect.target_spec
+        if effect.entity_spec is not None:
+            yield f"Effect {i + 1} subject", effect.entity_spec
+        for name, ref in (effect.refs or {}).items():
+            if getattr(ref, "spec", None) is not None:
+                yield f"Effect {i + 1} '{name}' reference", ref.spec
+        for j, condition in enumerate(effect.conditions or []):
+            if condition.spec is not None:
+                yield f"Effect {i + 1} condition {j + 1}", condition.spec
+    if sfx.listener_spec is not None:
+        yield "Listener path", sfx.listener_spec
+
+
 def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     """Return authoring warnings for unknown ``{variables}`` (empty = valid).
 
@@ -184,6 +204,18 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                 f"'{meta.label}' can never pass here: it reads the SFX's source, and this "
                 f"SFX's source is '{sfx.source_kind or 'unset'}'"
             )
+
+    # `select source` resolves only when the SFX declares a source that resolves:
+    # an unset source, or a `table`/`gm` bucket, exposes none. The editor refuses
+    # to offer the seed there; this catches a draft authored any other way (MCP,
+    # the API, or content written before the seed was hidden).
+    if not element:
+        for label, spec in _specs_of(sfx):
+            if any(step.kind == "select" and step.collection == "source" for step in spec.steps):
+                warnings.append(
+                    f"{label}: 'select source' resolves to nothing — this SFX's "
+                    f"source is '{sfx.source_kind or 'unset'}'"
+                )
 
     # Fire-time context, from the capability map: a condition that reads a key the
     # evaluation point never supplies can never pass. One rule for every context

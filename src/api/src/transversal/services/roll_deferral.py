@@ -309,15 +309,11 @@ def _apply_armed(
     for effect in armed.effects:
         if effect.timing.value != event_type:
             continue
-        if effect.refs:
-            resolved_list = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id)
-            applied.extend(resolved_list)
-            continue
-        if effect.target_spec is not None:
-            resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings, source_sfx_id=armed.source_sfx_id)
-            applied.extend(resolved_list)
-            continue
         if bool(effect.die_filter):
+            # A die filter runs the effect once per matching die. Everything the
+            # effect resolves — its subject, its target path, its references —
+            # reads *that die* as the roll, so "for each unchosen die, take the
+            # trait it came from" lands per die rather than once for the pool.
             dice = [d for d in rolls if _selects_die(armed.source_sfx_id, effect, d)]
             log.info(
                 "[roll_deferral._apply_armed] sfx=%s effect=%s/%s candidates=%s matched=%s",
@@ -328,16 +324,35 @@ def _apply_armed(
             for die in dice:
                 resolved = _substitute_die_context(effect, die, context or {})
                 resolved = _substitute_effect_context(resolved, context or {}, bindings)
-                # Inside a per-die effect the die *is* the roll the path reads,
-                # so "the pool owner of that die" resolves to this die's owner.
                 resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": [die]})
+                if resolved.refs:
+                    applied.extend(_apply_refs_roll(
+                        resolved, entity_id, universe, context, [die], armed.source_kind,
+                        armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id,
+                    ))
+                    continue
+                if resolved.target_spec is not None:
+                    applied.extend(_apply_spec_target(
+                        resolved, entity_id, universe, context, [die], armed.source_kind,
+                        armed.source_id, structured, bindings=bindings,
+                        source_sfx_id=armed.source_sfx_id,
+                    ))
+                    continue
                 effect_registry.apply(resolved, entity_id, universe, effect_context)
                 applied.append(resolved)
-        else:
-            resolved = _substitute_effect_context(effect, context or {}, bindings)
-            resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": rolls})
-            effect_registry.apply(resolved, entity_id, universe, effect_context)
-            applied.append(resolved)
+            continue
+        if effect.refs:
+            resolved_list = _apply_refs_roll(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings, source_sfx_id=armed.source_sfx_id)
+            applied.extend(resolved_list)
+            continue
+        if effect.target_spec is not None:
+            resolved_list = _apply_spec_target(effect, entity_id, universe, context, rolls, armed.source_kind, armed.source_id, structured, bindings=bindings, source_sfx_id=armed.source_sfx_id)
+            applied.extend(resolved_list)
+            continue
+        resolved = _substitute_effect_context(effect, context or {}, bindings)
+        resolved = resolve_armed_subject(resolved, entity_id, bindings, {"rolled_dice": rolls})
+        effect_registry.apply(resolved, entity_id, universe, effect_context)
+        applied.append(resolved)
     armed.bindings = bindings
     return applied
 

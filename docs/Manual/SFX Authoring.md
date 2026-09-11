@@ -275,7 +275,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 ### What it does not say
 
 - It is a rendering of the *machine* reading, not a rules interpretation. A `NARRATIVE` condition appears as flavour because that is all it is.
-- **A die filter is silently inert on an effect that also has a target path.** The applier checks `refs` and `target_spec` before the die filter, so such an effect runs once for the whole roll and its dice scope never applies. The card text stays silent about that scope rather than claiming it — so if you filter dice and see no *"for each \u2026 die"* clause, that is the reason, and the fix is to move the dice logic into the path.
+- **A die filter runs the effect once per matching die — including when the effect also has a target path or references.** Inside such an effect the die *is* the roll, so the target, the subject and every reference resolve against *that* die: "for each unchosen die, take the trait it came from" lands per die. The card says so (*"for each unchosen die, …"*), which is your check that the scope took effect.
 - Unresolved ids show raw (`trait-environmental-hazard-58be`). If you see one, the effect points at something that no longer exists — worth fixing.
 - It describes effects in authored order, even when they are grouped by timing on the card.
 - It does not currently read an effect's `context` (e.g. `limit: total` vs `limit: effect` on the dice-limit actions), so two effects that differ only there will read the same.

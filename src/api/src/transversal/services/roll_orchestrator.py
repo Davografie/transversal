@@ -123,6 +123,14 @@ def fire_roll_sfx(
 
     sfx_ids, razmerit = _entity_sfx_context(repo, entity_id, universe)
     rolls = _rolls_as_dicts(roll_result)
+    # Roll-bearing triggers carry the dice *and* the outcome the resolver already
+    # computed. The trigger match reads it (`on_success` / `on_botch`), so a
+    # condition on a matched SFX must be able to read it too — otherwise a
+    # "roll tier" gate on those triggers silently reads nothing.
+    roll_context: dict = {"rolls": rolls}
+    tier = getattr(roll_result, "tier", None)
+    if tier is not None:
+        roll_context["tier"] = getattr(tier, "value", tier)
     event = GameEvent(
         type="on_roll",
         entity_id=entity_id,
@@ -131,14 +139,14 @@ def fire_roll_sfx(
         # Roll-bearing triggers carry the dice in context (as ``on_result`` does),
         # so a TARGET_PATH condition can inspect *this* roll — e.g. "did it include
         # a d4 trait?" — instead of only the entity's sheet.
-        context={"rolls": rolls},
+        context=roll_context,
     )
     outcome = engine.process_event_outcome(event, sfx_ids, razmerit, repo=repo)
     _emit_pending_choices(entity_id, universe, outcome.pending, outcome.structured)
     # Fire roll-scoped deferred effects armed with ``on_roll`` timing, passing
     # the real rolled dice so per-die selection (die_filter / armed_sfx_ids) works.
     from transversal.services.roll_deferral import fire_armed
-    fire_armed(entity_id, "on_roll", universe, {"rolls": rolls})
+    fire_armed(entity_id, "on_roll", universe, roll_context)
     return outcome.applied
 
 

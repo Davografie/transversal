@@ -263,6 +263,28 @@ def test_live_shapes_are_allowed():
         assert not any("can never pass" in w for w in validate_sfx(menu_sfx)), condition
 
 
+def test_select_source_warns_without_a_resolving_source():
+    """The editor hides the seed; nothing stopped a draft carrying it anyway."""
+    from transversal.domain import TargetSpec
+    spec = TargetSpec(steps=[{"kind": "select", "collection": "source"}])
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+            target_spec=spec,
+        )],
+    )
+    assert any("'select source' resolves to nothing" in w for w in validate_sfx(sfx))
+
+    # A bucket source (table/gm) exposes no source either.
+    sfx.source_kind = "table"
+    assert any("'select source' resolves to nothing" in w for w in validate_sfx(sfx))
+
+    # A trait-setting source resolves, so the seed is fine there.
+    sfx.source_kind = "trait_setting"
+    assert not any("select source" in w for w in validate_sfx(sfx))
+
+
 def test_source_rating_on_an_entity_sfx_warns():
     """A source-reading condition with the wrong source can never pass."""
     sfx = SFX(

@@ -382,12 +382,17 @@ TRIGGER_CONTEXT_KEYS: dict[str, frozenset[str]] = {
     # The sheet/button path: the client sends the phase; the endpoint fills the
     # stakes in from the contest tracker.
     "manual": frozenset({"phase", "high_stakes"}),
-    "on_roll": frozenset({"rolls"}),
+    # Roll-match triggers share one event, which carries the dice and — when the
+    # resolver produced one — the roll's outcome tier (``fire_roll_sfx`` passes
+    # it, since the trigger match already reads it). The 3+ die pool path decides
+    # its tier later, so a tier gate there has nothing to read; the map offers it
+    # rather than hiding a gate that works on the common path.
+    "on_roll": frozenset({"rolls", "tier"}),
     "on_result": frozenset({"rolls", "effect_die", "total"}),
-    "on_complication": frozenset({"rolls"}),
-    "on_botch": frozenset({"rolls"}),
-    "on_success": frozenset({"rolls"}),
-    "on_failure": frozenset({"rolls"}),
+    "on_complication": frozenset({"rolls", "tier"}),
+    "on_botch": frozenset({"rolls", "tier"}),
+    "on_success": frozenset({"rolls", "tier"}),
+    "on_failure": frozenset({"rolls", "tier"}),
     "on_contest_win": frozenset({"contest_winner", "effect_die", "high_stakes"}),
     "on_contest_loss": frozenset({"contest_winner", "effect_die", "high_stakes"}),
     "on_give_in": frozenset({"gave_in", "high_stakes"}),

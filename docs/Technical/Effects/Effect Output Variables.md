@@ -112,12 +112,12 @@ machinery rather than adding a parallel system.
   noted for completeness.
 - **`{name}` substitution vs `select variable`** — a `many` binding still can't
   be referenced from a flat field (array re-use goes through `select variable`).
-- **`die_filter` + `target_spec`** — `_apply_armed` checks `refs` then
-  `target_spec` *before* the die filter, so an effect carrying a target path
-  never reaches the per-die loop: its `die_filter` is inert. The card text
-  deliberately stays silent about a scope the applier ignores (see
-  [[sfx_text]]'s `_die_scope`); giving such effects per-die semantics is a
-  design decision, not a bug fix.
+- **Per-die effects resolve everything per die** — a `die_filter` runs an armed
+  effect once per matching die, and its `target_spec`, `entity_spec` and `refs`
+  are each resolved with **that die as the roll** (`{rolled_dice: [die]}`), so
+  "for each unchosen die, take the trait it came from" lands per die. The die
+  filter is checked first, before the spec/ref branches, precisely so a target
+  path can't silently swallow the scope.
 
 ## Related
 

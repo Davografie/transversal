@@ -232,15 +232,18 @@ class TestEffects:
             "Hazard trait on the location of the pool owner of that die (d6)"
         )
 
-    def test_die_scope_is_not_claimed_when_the_applier_ignores_it(self):
-        """`_apply_armed` checks target_spec first, so a die filter there is inert."""
+    def test_die_scope_is_claimed_even_with_a_target_path(self):
+        """A die filter runs the effect per die now, including through a path.
+
+        The applier resolves a die-scoped effect's target path per die with that
+        die as the roll, so the card must say so.
+        """
         effect = Effect(
             type="modify_trait", action="step_down", die_filter={"role": None},
             target_spec=spec({"kind": "select", "collection": "rolled_dice"}),
         )
         text = effect_text(effect)
-        assert "unchosen" not in text
-        assert "each die in your roll" in text
+        assert "for each unchosen die" in text
 
     def test_entity_spec_reads_as_where_it_lands(self):
         effect = Effect(

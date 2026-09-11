@@ -235,6 +235,45 @@ def test_die_filter_iterates_matching_dice(monkeypatch):
     assert roll_deferral.list_armed("e1") == []
 
 
+def test_die_filter_iterates_even_with_a_target_path(monkeypatch):
+    """The die filter decides *which* dice; the target path resolves per die.
+
+    Before this, an effect carrying both ran once for the whole roll and its die
+    filter was silently ignored.
+    """
+    import transversal.main as main
+    from types import SimpleNamespace
+    from transversal.services.target_spec import SelectStep, TargetSpec
+
+    roll_deferral.reset()
+    repo = SimpleNamespace(get_entity=lambda eid: SimpleNamespace(id=eid))
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    applied = []
+
+    class FakeRegistry:
+        def apply(self, effect, entity_id, universe, context):
+            applied.append(effect)
+
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", FakeRegistry())
+
+    effect = Effect(
+        timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down",
+        target_spec=TargetSpec(steps=[SelectStep(collection="rolled_dice")]),
+        die_filter={"role": None},
+    )
+    roll_deferral.arm_sfx("e1", [effect], duration=_rolls_duration(1))
+
+    rolls = [
+        {"die": "d8", "result": 7, "role": None, "ts_id": "ts-a"},
+        {"die": "d8", "result": 5, "role": "total", "ts_id": "ts-b"},
+        {"die": "d6", "result": 3, "role": None, "ts_id": "ts-c"},
+    ]
+    roll_deferral.fire_armed("e1", "on_result", "earth", {"rolls": rolls})
+
+    assert [e.target for e in applied] == ["ts-a", "ts-c"]
+
+
 def test_die_filter_scope_by_ts_id(monkeypatch):
     roll_deferral.reset()
     applied = []

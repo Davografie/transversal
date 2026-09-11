@@ -76,6 +76,29 @@ def test_fire_roll_sfx_fires_matching_trigger():
     assert [a.action for a in applied] == ["step_up_die"]
 
 
+def test_roll_match_trigger_can_gate_on_the_roll_tier():
+    """`on_success` matches on the resolver's tier — its conditions must see it.
+
+    The trigger match already reads `roll_result.tier`; before this the event
+    context carried only the dice, so a `roll tier` gate on those triggers read
+    nothing and silently never passed.
+    """
+    repo = Repo({"e1": SimpleNamespace(razmerit=10, sfx_ids=["sfx-tiered"], current_projection=None)})
+    engine = EffectsEngine()
+    engine.register(SFX(
+        id="sfx-tiered", name="Tiered", trigger="on_success",
+        conditions=[Condition(type=ConditionType.ROLL_TIER, operator="==", value="success")],
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                        action="step_up_die", target="next")],
+    ))
+
+    applied = fire_roll_sfx(engine, repo, "e1", "earth", _simplified(tier=OutcomeTier.SUCCESS))
+    assert [a.action for a in applied] == ["step_up_die"]
+
+    # A failing roll doesn't match the trigger at all.
+    assert fire_roll_sfx(engine, repo, "e1", "earth", _simplified(tier=OutcomeTier.FAIL)) == []
+
+
 def test_fire_roll_sfx_missing_entity_is_noop():
     repo = Repo()
     engine = EffectsEngine()

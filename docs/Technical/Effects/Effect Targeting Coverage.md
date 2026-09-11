@@ -34,9 +34,10 @@ An effect can say three different things, and each is authored differently:
   `EffectActionMeta.refs` entry renders its own path builder.
 
 A fourth thing, **`die_filter`**, scopes *which* dice a roll-deferred effect runs
-for. It is inert on an effect that also carries a `target_spec` or `refs`
-(`_apply_armed` checks those first), and the card text stays silent about a scope
-the applier ignores.
+for. It runs the effect **once per matching die**, and inside that effect the die
+*is* the roll: the effect's `target_spec`, `entity_spec` and `refs` all resolve
+against it (the filter is checked before the spec/ref branches for exactly that
+reason). The card states the scope (*"for each unchosen die, …"*).
 
 ## Coverage today (52 actions)
 

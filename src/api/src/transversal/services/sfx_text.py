@@ -769,13 +769,12 @@ def _target_placeholder(effect: Effect) -> str:
 def _die_scope(effect: Effect) -> str:
     """The dice an effect runs for, when it is scoped to a subset (e.g. unchosen).
 
-    Empty when the applier will *not* iterate per die — ``_apply_armed`` checks
-    ``refs`` and ``target_spec`` first, so a die filter on such an effect never
-    runs and the card must not claim it does.
+    A die filter runs the effect once per matching die — including when the
+    effect also names a target path or resolves references, which are then
+    resolved per die with that die as the roll (so "for each unchosen die, give
+    its owner's location a hazard" happens per die, not once for the pool).
     """
     if not effect.die_filter:
-        return ""
-    if effect.target_spec is not None or effect.refs:
         return ""
     parts = []
     for key, value in effect.die_filter.items():
