@@ -17,12 +17,12 @@ Working plan for [[Tickets#B46 — Split large Vue files]] (owner: [[ui-ux]]).
 Line numbers are from the census below; **re-verify them before slicing** — the
 files move.
 
-| File | Lines | Template | Script | Styles |
-| --- | --- | --- | --- | --- |
-| `components/CharacterSheet.vue` | 3111 | 1–~545 | ~546–2180 | 2183–3111 |
-| `App.vue` | 2560 | 1–371 | 373–2473 | 2475–2560 |
-| `components/DiceRoller.vue` | 2367 | 1–369 | 371–1983 | 1985–2367 |
-| `components/LocationViewer.vue` | 1939 | 1–171 | 173–1505 | 1507–1938 |
+| File | Started | Now | Landed |
+| --- | --- | --- | --- |
+| `App.vue` | 2559 | 2384 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands` |
+| `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
+| `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
+| `components/CharacterSheet.vue` | 3281 | 3111 | `ui/TraitInstanceEditor` (shared with the effect form) |
 
 Census taken 2026-09-11 (three read-only recon passes) against a tree that was
 level with `release-build`; the CharacterSheet numbers moved when the trait
@@ -30,9 +30,26 @@ editor landed (see [[#Slices landed]]).
 
 ## Slices landed
 
-- **Trait-instance editor — done (2026-09-11).** One `ui/TraitInstanceEditor.vue`
-  now serves the sheet and the effect form's *Gain Trait*; `gm/TraitEditor.vue`
-  (unreferenced) retired. See [[UI-UX Design#Trait instance editor]].
+All on 2026-09-11, each verified by build + CDP against the running app.
+
+- **Trait-instance editor.** One `ui/TraitInstanceEditor.vue` now serves the
+  sheet and the effect form's *Gain Trait*; `gm/TraitEditor.vue` (unreferenced)
+  retired. See [[UI-UX Design#Trait instance editor]].
+- **App.vue.** `app/SseIndicator` + `app/PeersBar`; `usePeers` (peer/cache
+  logic, `isEntityType` for the GM test) and `useThemeMode` (colorMode +
+  theme-color meta); `useMobileBands` (media query, focus, empty-sheet rule,
+  roller-content measurement + observers).
+- **LocationViewer.vue.** `location/ArrivalRings` (three-phase arrival),
+  `location/TravelOverlay` (portal wipe), `location/SceneEffectsLayer` (overlay
+  layer + canvas particle engine). The effects toggle and its persisted flag
+  stay in the parent, which now passes `enabled` down.
+- **DiceRoller.vue.** `dice/ContestResultWidget` (scoreboard, step-down arrow,
+  taken-out) and `dice/PoolTabs` (grouped switcher, one `select` emit).
+
+**Deliberately not extracted:** the roller's consequence panel. Its buttons are
+driven by contest state (`iWon` / `iGaveIn` / taken-out / waiting /
+decision-pending) whose actions live in the parent — the split would shuffle
+props without removing complexity. Revisit alongside a contest composable.
 
 ## Conventions for the remaining slices
 
@@ -48,11 +65,13 @@ editor landed (see [[#Slices landed]]).
   calls into `locationRef` / `sheetRef` / `diceRef` and reads
   `.sel-slot` / `.total-slot` at drop time.
 
-## App.vue (2560)
+## App.vue (2384, was 2560)
 
 Shape: one 270-line entangled login/settings overlay (template 4–274, script
 ~700 lines), a `.stage` that serves as both desktop layout and mobile band
-container (287–356), and SSE/session plumbing.
+container, and SSE/session plumbing. The band list below is now spent; the
+remaining high-value work is the settings overlay itself and the `useSSE` +
+`watch(lastEvent)` sink (1266–1538, re-verify).
 
 Bands live at 294 (`loc-band`), 323 (`sheet-band`), 351 (`roller-band`) — all
 inside `.dice-panel-wrapper`. **The `--roller-h` binding (287) and the
@@ -77,7 +96,7 @@ six hand-rolled localStorage refs duplicate the existing `usePersistedRef`;
 at 634 is `flush: 'sync'` and must be registered before anything assigns
 `entityId` during setup.
 
-## LocationViewer.vue (1939)
+## LocationViewer.vue (1654, was 1938)
 
 Template is small (171 lines) and the weight is script: camera math (457–497),
 navdot projection (499–568), zone drag (572–644), image probing (691–726),
@@ -104,7 +123,7 @@ pairing; localStorage `effectsEnabled`, `gmDotPositions`; server writes are
 `updateEntity` (overlay, navPositions). `defineExpose` (1499) is called from
 App.vue on SSE (`fetchNav`, `fetchNavWithLerp`).
 
-## DiceRoller.vue (2367)
+## DiceRoller.vue (2278, was 2367)
 
 Cleanest props-only layer first, contested state and the pool/selection engine
 last. 17 props, 14 emits, and a 17-member `defineExpose` (1224) that App.vue
@@ -128,7 +147,13 @@ with `document.elementFromPoint` + sibling index over `.sel-slot` / `.total-slot
 drag code risks double registration; the 383-line scoped style block must follow
 each template slice.
 
-## CharacterSheet.vue (3111)
+## CharacterSheet.vue (3111, was 3281) — next up
+
+The remaining `usePersistedRef('sheet.*')` refs (ten of them) are the draft
+state behind the editor; `useTraitEditor.js` should take those plus
+`startEdit` / `doSave` / `deleteTrait` / `recomputeTraitSets`, then
+`sheet/TraitEditPanel.vue` can wrap the shared editor with the same
+`change`-event contract the editor already uses.
 
 The heavy drill-in surface: header pills (110–121), trait-set list (342+),
 tab list, trait detail (read-only), and the `#after-*` slot hosts. The trait
