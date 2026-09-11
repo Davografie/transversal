@@ -575,3 +575,18 @@ def test_a_type_filter_retypes_the_phrase():
     ]}), resolve=resolve)
     assert phrase.element == "entity"  # occupants are entities again
     assert render_phrase(phrase, "each") == "each occupant of each location of your trait instances"
+
+
+def test_several_enum_values_read_as_alternatives():
+    """An enum filter that accepts a list says so on the card."""
+    cond = Condition(type=ConditionType.ENTITY_TYPE, targets=["character", "gmc"])
+    assert condition_text(cond, resolve=resolve) == "you are a character or a gmc"
+
+    # ...and a path filter over an enum reads the same way.
+    phrase = path_phrase(TargetSpec_of({"steps": [
+        {"kind": "select", "collection": "rolled_dice"},
+        {"kind": "navigate", "edge": "traitsetting"},
+        {"kind": "filter", "field": "polarity", "operator": "in",
+         "value": ["positive", "negative"]},
+    ]}), resolve=resolve)
+    assert render_phrase(phrase, "each") == "each positive or negative trait instance you rolled"

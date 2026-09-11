@@ -565,3 +565,32 @@ def test_arrival_kind_is_declared_where_it_is_available():
     assert condition_context_keys(cond) == frozenset({"arrival_kind"})
     available = context_keys_for(trigger="on_location_change")
     assert available is not None and "arrival_kind" in available
+
+
+def test_an_enum_condition_accepts_several_values():
+    """One value or several; several means *any of* (the author's ask, uniformly)."""
+    repo = FakeRepo()
+    either = Condition(type=ConditionType.ENTITY_TYPE, targets=["character", "gmc"])
+
+    assert evaluate_condition(_entity(), either, repo)
+    assert evaluate_condition(_entity(type=EntityType.GMC), either, repo)
+    assert not evaluate_condition(_entity(type=EntityType.ASSET), either, repo)
+
+    # The single-value form still behaves exactly as before.
+    only_char = Condition(type=ConditionType.ENTITY_TYPE, target="character")
+    assert evaluate_condition(_entity(), only_char, repo)
+    assert not evaluate_condition(_entity(type=EntityType.GMC), only_char, repo)
+
+    # Phase: "in adding or picking".
+    phases = Condition(type=ConditionType.PHASE, targets=["adding", "picking"])
+    assert evaluate_condition(_entity(), phases, repo, context={"phase": "picking"})
+    assert not evaluate_condition(_entity(), phases, repo, context={"phase": "resolved"})
+
+
+def test_target_values_normalises_single_and_list():
+    """One reader for both shapes, so they can never be read inconsistently."""
+    assert Condition(type=ConditionType.ENTITY_TYPE, target="gmc").target_values() == ["gmc"]
+    assert Condition(type=ConditionType.ENTITY_TYPE, targets=["a", "b"]).target_values() == ["a", "b"]
+    # The list wins when both are set; blanks are dropped.
+    assert Condition(type=ConditionType.ENTITY_TYPE, target="x", targets=["y", " "]).target_values() == ["y"]
+    assert Condition(type=ConditionType.ENTITY_TYPE).target_values() == []

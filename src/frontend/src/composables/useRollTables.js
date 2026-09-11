@@ -14,7 +14,7 @@ const ROLL_TABLE_FIELDS = `
   check { traitIds difficulty freeChoice }
   entries {
     label description minValue maxValue weight tier
-    conditions { type subject target value operator narrative spec }
+    conditions { type subject target targets value operator narrative spec }
     effects { timing type action target result targetScope negative context }
   }
 `

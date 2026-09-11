@@ -7,7 +7,7 @@ import { useEffectApplication } from '@/composables/useEffectApplication.js'
 const EFFECT_FIELDS = `
   timing type action target entity result targetScope entityScope targetFilter dieFilter negative
   context duration { timers { event remaining } combine } targetSpec entitySpec refs
-  conditions { type subject target value operator narrative spec }
+  conditions { type subject target targets value operator narrative spec }
 `
 
 export function useRollTableMenu() {

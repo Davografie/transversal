@@ -211,6 +211,8 @@ The structured way to target. A **path** is an ordered pipeline of steps that re
 
 Resolution modes **choose** (interactive pick) and **random** (non-interactive sample) collapse a many-cardinality collection to one (or a subset when `count > 1`).
 
+Conditions live at the SFX level and the effect level, and **an enum condition takes one value or several** — pick two and it means *either* (the card reads *you are a character or a gmc*).
+
 ### Where rules live
 
 Rules are attached to whatever they are *about*. **Manage SFX** has an owner filter for
@@ -390,7 +392,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 | **Has relationship** | The subject has the given relationship. |
 | **Trait rating** | A trait's rating compares to a die (`rating >= d8`). |
 | **Has razmerit** | The subject's razmerit compares to a number. |
-| **Entity type** | The subject is `character` / `gmc` / `asset`. |
+| **Entity type** | The subject is `character` / `gmc` / `asset` — or several at once (*character or gmc*). |
 | **User role** | The acting user is `player` / `architect`. |
 | **Unplaced (no location)** | The subject has no current location. |
 | **In universe** | The subject is in the given universe. |

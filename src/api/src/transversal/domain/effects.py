@@ -106,7 +106,22 @@ class Condition(BaseModel):
     type: ConditionType = ConditionType.ALWAYS
     subject: str = ""                # "" = current entity; else literal id or {variable}
     target: str = ""                  # trait / location / entity id (or {variable})
+    # Enum filters take *several* values (any-of). `target` stays for one, and for
+    # everything already authored; readers use `target_values()` so the two can
+    # never be read inconsistently.
+    targets: list[str] = Field(default_factory=list)
     value: Optional[str] = None       # threshold, e.g. rank number
     operator: str = ">="              # numeric comparator for HAS_RAZMERIT ("<", "<=", "==", "!=", ">=", ">")
     narrative: str = ""               # human-readable fallback text
     spec: Optional[TargetSpec] = None  # TARGET_PATH: a targeting path (seeded by `select source`) resolved non-empty
+
+    def target_values(self) -> list[str]:
+        """Every value this condition matches on, one or several.
+
+        The single `target` and the list `targets` are one idea: an enum filter
+        accepts one value or several, and several means *any of*.
+        """
+        values = [v.strip() for v in (self.targets or []) if str(v).strip()]
+        if not values and self.target:
+            values = [self.target.strip()]
+        return values

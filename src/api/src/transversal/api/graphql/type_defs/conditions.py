@@ -14,6 +14,7 @@ class Condition:
     type: ConditionType
     subject: str = ""
     target: str = ""
+    targets: list[str] = strawberry.field(default_factory=list)
     value: Optional[str] = None
     operator: str = ">="
     narrative: str = ""
@@ -24,6 +25,7 @@ class ConditionInput:
     type: ConditionType = ConditionType.ALWAYS
     subject: str = ""
     target: str = ""
+    targets: list[str] = strawberry.field(default_factory=list)
     value: Optional[str] = None
     operator: str = ">="
     narrative: str = ""

@@ -17,8 +17,11 @@
           <div v-else-if="targetKind(c.type)" class="ce-target ce-picker">
             <TargetPicker v-model="c.target" :kind="targetKind(c.type)" :placeholder="targetPlaceholder(c.type)" />
           </div>
-          <select v-else-if="targetOptions(c.type).length" v-model="c.target" class="ce-target">
-            <option value="">{{ targetPlaceholder(c.type) }}</option>
+          <!-- An enum filter takes one value or several; several means *any of*.
+               Ctrl/Cmd-click (or plain click) to add — stored in `targets`, which
+               the backend reads as a set of alternatives. -->
+          <select v-else-if="targetOptions(c.type).length" class="ce-target" multiple
+                  :value="selectedTargets(c)" @change="onTargetsChange(c, $event)">
             <option v-for="o in targetOptions(c.type)" :key="o" :value="o">{{ o }}</option>
           </select>
           <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
@@ -174,6 +177,18 @@ function valueKind(type) {
 function operators(type) {
   const meta = conditionTypes.value.find(c => c.value === type)
   return meta?.operators || []
+}
+
+// Several values live in `targets`; one stays in `target`, so anything already
+// authored keeps working and every reader sees the same thing.
+function selectedTargets(c) {
+  return (c.targets && c.targets.length) ? [...c.targets] : (c.target ? [c.target] : [])
+}
+
+function onTargetsChange(c, event) {
+  const picked = Array.from(event.target.selectedOptions || []).map((o) => o.value)
+  c.targets = picked
+  c.target = picked.length === 1 ? picked[0] : ''
 }
 
 function targetOptions(type) {

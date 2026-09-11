@@ -322,6 +322,16 @@ def _placeholder(token: str) -> str:
     return f"the {inner.replace('_', ' ')}"
 
 
+def _or_join(values: list[str], resolve: NameResolver | None = None) -> str:
+    """Several values read as alternatives: "character or gmc"."""
+    rendered = [display_value(v, resolve) for v in values if str(v).strip()]
+    if not rendered:
+        return ""
+    if len(rendered) == 1:
+        return rendered[0]
+    return ", ".join(rendered[:-1]) + f" or {rendered[-1]}"
+
+
 def display_value(value, resolve: NameResolver | None = None) -> str:
     """A card-facing rendering of an authored value (id → name, token → phrase)."""
     if isinstance(value, bool):
@@ -445,20 +455,27 @@ def _filter_phrase(p: Phrase, step: FilterStep, resolve: NameResolver | None = N
         p.origin = f"{p.origin} {clause}".strip()
         return p
 
-    # Enum- or die-valued equality reads as an adjective: "static", "d4".
-    if (step.operator == "==" and field_def is not None and not resolved
+    # Enum- or die-valued equality reads as an adjective: "static", "d4". Several
+    # values (`in …`, or a list) read as alternatives: "static or resource".
+    if (step.operator in ("==", "in") and field_def is not None and not resolved
             and (field_def.type == "die"
                  or (field_def.type == "string" and field_def.options))):
-        p.adjectives.append(display_value(step.value, resolve))
+        values = step.value if isinstance(step.value, list) else [step.value]
+        p.adjectives.append(_or_join([str(v) for v in values], resolve))
         return p
 
     if step.operator == "contains" and step.field in _CONTAINS_WORDS:
-        value_text = resolved or display_value(step.value, resolve)
+        value_text = (_or_join([str(v) for v in step.value], resolve)
+                      if isinstance(step.value, list)
+                      else resolved or display_value(step.value, resolve))
         p.origin = f"{p.origin} {_CONTAINS_WORDS[step.field]} {value_text}".strip()
         return p
 
     field_text = tc.field_label(field_def) if field_def else step.field.replace("_", " ")
-    value_text = resolved or display_value(step.value, resolve)
+    if isinstance(step.value, list):
+        value_text = _or_join([str(v) for v in step.value], resolve)
+    else:
+        value_text = resolved or display_value(step.value, resolve)
     relation = _RELATION_WORDS.get(step.field)
     if relation and step.operator == "==":
         # A container field reads as a place: "in earth", not "with universe
@@ -741,16 +758,26 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
     if ctype == ConditionType.HAS_RAZMERIT:
         return f"you have {op} {value} razmerit"
     if ctype == ConditionType.ENTITY_TYPE:
+        values = condition.target_values()
+        if len(values) > 1:
+            return f"you are {' or '.join(f'{_article(v)} {v}' for v in values)}"
         return f"you are {_article(target)} {target}"
     if ctype == ConditionType.USER_ROLE:
+        values = condition.target_values()
+        if len(values) > 1:
+            return f"{' or '.join(f'{_article(v)} {v}' for v in values)} is acting"
         return f"{_article(target)} {target} is acting"
     if ctype == ConditionType.UNPLACED:
         return "you are not at a location yet"
     if ctype == ConditionType.IN_UNIVERSE:
         return f"you are in {target}"
     if ctype == ConditionType.PHASE:
-        return f"the dice pool is in its {target} phase"
+        values = condition.target_values()
+        return f"the dice pool is in its {_or_join(values, resolve) or target} phase"
     if ctype == ConditionType.CONTEST_OUTCOME:
+        values = condition.target_values()
+        if len(values) > 1:
+            return f"the contest outcome is {_or_join(values, resolve)}"
         return f'the contest outcome is "{target}"'
     if ctype == ConditionType.HITCH:
         return "a hitch is being resolved"
@@ -763,7 +790,10 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
     if ctype == ConditionType.ROLL_TIER:
         return f"the roll is {op} {value}"
     if ctype == ConditionType.TEST_OUTCOME:
-        return "the test succeeds" if target == "success" else "the test fails"
+        values = condition.target_values()
+        if len(values) > 1:
+            return "the test resolves either way"
+        return "the test fails" if values[:1] == ["fail"] else "the test succeeds"
     if ctype == ConditionType.SOURCE_RATING:
         # The source is the instance the SFX sits on, so "this trait" reads shorter
         # than "this SFX's source" — and is closer to how a card would say it.

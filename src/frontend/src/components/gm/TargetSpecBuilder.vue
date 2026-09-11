@@ -66,8 +66,9 @@
           <select v-model="step.operator" class="tsb-op">
             <option v-for="op in operatorsFor(i)" :key="op" :value="op">{{ op }}</option>
           </select>
-          <select v-if="fieldOptionsFor(i)" :value="step.value" @change="onFilterValue(i, $event)">
-            <option value="">—</option>
+          <!-- An enum filter takes one value or several; several is stored as a
+               list with `in` (the resolver reads it as *any of*). -->
+          <select v-if="fieldOptionsFor(i)" multiple :value="enumValues(i)" @change="onEnumChange(i, $event)">
             <option v-for="o in fieldOptionsFor(i)" :key="o" :value="o">{{ o }}</option>
           </select>
           <span v-else-if="isTokenValue(step.value)" class="tsb-value-token">
@@ -428,6 +429,20 @@ function useToken(i, on) {
 
 // A picked candidate stores what the *field* holds: a universe's handle, not
 // its entity id (a projection's `universe` is `earth`, not `universe-earth`).
+// A single value stays a string with `==` (unchanged behaviour); several become a
+// list with `in`, which is the operator the resolver reads as membership.
+function enumValues(i) {
+  const v = steps.value[i]?.value
+  return Array.isArray(v) ? v : (v ? [v] : [])
+}
+
+function onEnumChange(i, event) {
+  const picked = Array.from(event.target.selectedOptions || []).map((o) => o.value)
+  steps.value[i].value = picked.length > 1 ? picked : (picked[0] || '')
+  if (picked.length > 1) steps.value[i].operator = 'in'
+  else if (steps.value[i].operator === 'in') steps.value[i].operator = '=='
+}
+
 function onFilterPicked(i, opt) {
   steps.value[i].value = opt?.universe || opt?.id || ''
 }

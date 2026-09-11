@@ -217,7 +217,8 @@ def _effect_to_gql(e: DomainEffect) -> GqlEffect:
 
 def _condition_to_gql(c: DomainCondition) -> Condition:
     return Condition(
-        type=c.type, subject=c.subject, target=c.target, value=c.value,
+        type=c.type, subject=c.subject, target=c.target,
+        targets=list(getattr(c, "targets", []) or []), value=c.value,
         operator=c.operator, narrative=c.narrative,
         spec=c.spec.model_dump() if c.spec else None,
     )
@@ -387,7 +388,8 @@ def _resolve_continuation_effects(continuation, entity, repo, resolved, structur
 
 def _condition_input_to_domain(c: ConditionInput) -> DomainCondition:
     return DomainCondition(
-        type=c.type, subject=c.subject, target=c.target, value=c.value,
+        type=c.type, subject=c.subject, target=c.target,
+        targets=[str(t) for t in (c.targets or [])], value=c.value,
         operator=c.operator, narrative=c.narrative,
         spec=_target_spec_from_input(c.spec),
     )

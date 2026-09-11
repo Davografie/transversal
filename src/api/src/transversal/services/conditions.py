@@ -73,10 +73,10 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     # Outcome gates read trigger/roll context rather than entity state, so
     # evaluate them before resolving a subject (they may not need one).
     if condition.type == ConditionType.CONTEST_OUTCOME:
-        wanted = (condition.target or "").strip()
-        if wanted == "give_in":
+        wanted = condition.target_values()
+        if "give_in" in wanted:
             return bool((context or {}).get("gave_in"))
-        return (context or {}).get("contest_winner") == wanted
+        return (context or {}).get("contest_winner") in wanted
 
     if condition.type == ConditionType.HITCH:
         # The hitch-buying menu is active (assembled with context["hitch"]).
@@ -88,7 +88,10 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         # the context from the contest that fired the event, from the contest
         # tracker on a manual activation, and from the roll context at resolve.
         stakes = bool((context or {}).get("high_stakes"))
-        return stakes if (condition.target or "high").strip() != "low" else not stakes
+        # `high` is the default reading; asking for `low` asks for the other side.
+        wanted = condition.target_values() or ["high"]
+        return (any(w == "high" for w in wanted) if stakes
+                else any(w == "low" for w in wanted))
 
     if condition.type == ConditionType.ARRIVAL_KIND:
         # How the entity arrived, carried on the location-change event (see
@@ -115,12 +118,11 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
     if condition.type == ConditionType.TEST_OUTCOME:
         # Binary test result: success = any non-fail tier (marginal counts).
         tier = (context or {}).get("tier")
-        wanted = (condition.target or "").strip()
-        if wanted == "success":
-            return tier not in (None, "", "fail")
-        if wanted == "fail":
-            return tier == "fail"
-        return False
+        if not tier:
+            return False  # no result in the context: neither success nor failure
+        wanted = condition.target_values()
+        failed = tier == "fail"
+        return (not failed and "success" in wanted) or (failed and "fail" in wanted)
 
     if condition.type == ConditionType.USER_ROLE:
         # The acting human's role: prefer the fire/menu context, else resolve
@@ -129,7 +131,7 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         if role is None and entity is not None:
             from transversal.services.role_resolver import resolve_role
             role = resolve_role(entity.id, repo)
-        return role == (condition.target or "").strip()
+        return role in condition.target_values()
 
     if condition.type == ConditionType.SOURCE_RATING:
         # The source trait-setting's rating (its dice) vs a die threshold.
@@ -236,12 +238,12 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         return _compare(subject.razmerit, condition.operator or ">=", threshold)
 
     if condition.type == ConditionType.ENTITY_TYPE:
-        return subject.type.value == target
+        return subject.type.value in condition.target_values()
 
     if condition.type == ConditionType.PHASE:
         # Phase predicates read the trigger context (e.g. "on adding"), not
         # entity state — so they only gate at trigger time.
-        return (context or {}).get("phase") == target
+        return (context or {}).get("phase") in condition.target_values()
 
     return False
 
