@@ -22,7 +22,7 @@ files move.
 | `App.vue` | 2559 | 2384 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
-| `components/CharacterSheet.vue` | 3281 | 2594 | `ui/TraitInstanceEditor` (shared with the effect form), `composables/useTraitEditor`, `sheet/TraitEditPanel` |
+| `components/CharacterSheet.vue` | 3281 | 2577 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard` |
 
 Census taken 2026-09-11 (three read-only recon passes) against a tree that was
 level with `release-build`; the CharacterSheet numbers moved when the trait
@@ -51,6 +51,11 @@ All on 2026-09-11, each verified by build + CDP against the running app.
   extras; fully controlled, ~5 v-model fields and one emit per interaction).
   Its CSS moved rule-by-rule — including a one-line-formatting rule the first
   pass missed, so **check single-line rules** when moving CSS out of this file.
+- **`sheet/SfxCard.vue`.** Five copies of the SFX card became one presentational
+  card fed by `sfxCardModel(sfxId)`; `disabled` reproduces the old inline click
+  guard. Its CSS moved including `.detail-section .sfx-card-rules`, a descendant
+  rule that would have silently stopped applying once the span left the
+  parent's scope — **watch for those when extracting markup with nested rules**.
 
 **Deliberately not extracted:** the roller's consequence panel. Its buttons are
 driven by contest state (`iWon` / `iGaveIn` / taken-out / waiting /
@@ -153,21 +158,24 @@ with `document.elementFromPoint` + sibling index over `.sel-slot` / `.total-slot
 drag code risks double registration; the 383-line scoped style block must follow
 each template slice.
 
-## CharacterSheet.vue (2594, was 3281) — next up
+## CharacterSheet.vue (2577, was 3281) — remaining
 
-Editor done. Remaining, in value order:
+Editor + SFX cards done. What is left is mostly line count rather than sharing:
 
-1. **`sheet/SfxCard.vue`** — the SFX card markup (name, description, rules text,
-   active/used/blocked classes) is duplicated between the trait-set list and the
-   detail panel, so this is a *sharing* win, not just a move. It needs the
-   display/gating helpers injected (`sfxName` / `sfxDescription` / `sfxCardText`
-   / `sfxTitle` / `sfxActive` / `sfxUsed` / `sfxConditionBlocked` /
-   `sfxAllowedInPhase`) plus an `activate` emit.
-2. **`sheet/TraitDetailPanel.vue`** — the read-only view. Lower value: it needs
-   ~10 injected behaviours (`canPlayTrait`, `playTrait`, `ratingTypeLabel`,
+1. **`sheet/TraitDetailPanel.vue`** — the read-only view; needs ~10 injected
+   behaviours (`canPlayTrait`, `playTrait`, `ratingTypeLabel`,
    `challengeProgressLabel`, the SFX helpers) so the win is mostly line count.
-3. **`sheet/TraitRow.vue`** — the list row; carry the click / context-menu /
+2. **`sheet/TraitRow.vue`** — the list row; carry the click / context-menu /
    long-press handlers together with it.
+3. **`useSheetData.js`** — fetch/refresh + trait-set splitting, if the script is
+   still unwieldy after the two above.
+
+## App.vue — remaining
+
+The settings/login overlay (template 4–274 with ~700 lines of script behind it)
+is the last big entangled block; splitting it means a `usePlayerIdentity.js`
+plus a presentational `app/SettingsOverlay.vue`. The `useSSE` +
+`watch(lastEvent)` sink stays in the root by design (it drives every surface).
 
 The heavy drill-in surface: header pills (110–121), trait-set list (342+),
 tab list, trait detail (read-only), and the `#after-*` slot hosts. The trait
