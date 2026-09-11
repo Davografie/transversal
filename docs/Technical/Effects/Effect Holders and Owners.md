@@ -81,10 +81,13 @@ A "holder" is the umbrella: anything that can carry SFX references.
    portal config) until a concrete reuse need appears; converting them to SFX-id
    holders is possible but adds indirection for marginal gain today.
 
-> [!note] Location and universe rows are the open question
+> [!note] Location rows are now filled — for reading
 > Table 1 shows `location` and `universe` with no owner surface and no source
-> kind — and that is why a rule attached to a place silently never fires. The
-> design that fills those rows (owner vs **audience**) is in
+> kind. **Resolved for locations 2026-09-11:** a location *is* an entity, so the
+> `entity` owner surface already carries its rules — what was missing was
+> availability *consulting* the place. It now does (read-time, scoped to the
+> entity's location and its ancestors), so a rule attached to a place reaches the
+> people in it. The design that generalises this to the other rows is in
 > [[Place-Owned Rules]].
 
 ## Related

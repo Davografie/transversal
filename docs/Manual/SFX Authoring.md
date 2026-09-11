@@ -211,6 +211,26 @@ The structured way to target. A **path** is an ordered pipeline of steps that re
 
 Resolution modes **choose** (interactive pick) and **random** (non-interactive sample) collapse a many-cardinality collection to one (or a subset when `count > 1`).
 
+### Rules on a place
+
+An SFX attached to a **location** applies to the entities *in* it — and in its
+sub-locations, however deep. Nothing is written onto them: the rule is simply in
+their list while they are there, so leaving ends it by itself.
+
+Attach one in **Manage SFX** (owner filter → *Entity* → pick the location). Two
+things it buys you:
+
+- **A place's rule, at a place.** *Everyone who walks into the Azure Dawn sect
+  gains access to its life path* is now the place's rule plus an arrival trigger,
+  rather than a global rule wearing an "at location" condition.
+- **Lair actions.** The rule shows up in the SFX list of whoever is standing
+  there, so a GM can activate it *because* they are in the lair.
+
+A place's rule is the ordinary kind — trigger, conditions, effects — and can carry
+a duration like any other. To make a granted trait last *only* while they are on
+the grounds, give it a duration whose timer is a **location change**: the trait is
+taken back when they next move.
+
 ### Filtering by tag
 
 A trait can carry free-form **tags** (authored in the trait editor — *violent*, *protective*, …), and a path can select by them: `select self_traitsettings` → `filter tag contains violent`. The filter field is `tag` on a trait instance (which reads the tags of the trait it is an instance of) and on the registry trait itself; the value box suggests the tags that exist, and typing a new one is still allowed. Naming the step (`output: violent_traits`) both labels the card *and* makes the matched instances available to later effects as a bound variable.

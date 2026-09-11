@@ -6,6 +6,7 @@ from transversal.db.arango import ENTITIES
 from transversal.db.arango import PROJECTIONS
 from transversal.db.arango import RELATIONSHIPS
 from transversal.db.arango import TRAITSETTINGS
+from transversal.domain import Entity
 from transversal.domain import EntityType
 from transversal.domain import PERSONAL_RELATIONSHIP_TYPE
 from transversal.domain import TraitSetting
@@ -185,6 +186,36 @@ class RepositoryRelationships:
                 return  # already registered
         parent.zones.append(Zone(name=child.name, x=50.0, y=50.0, location_id=child_id))
         self.update_entity(parent)
+
+    def list_ancestor_locations_with_sfx(self, location_id: str, max_depth: int = 8) -> list["Entity"]:
+        """The location and its ancestors that own SFX — the *location scope*.
+
+        A rule owned by a place reaches the entities under it, so availability
+        asks: which of the places above this one (itself included) carry rules?
+        Only those are returned — the traversal filters, so a world with no
+        place-owned rules costs one empty read rather than a walk.
+
+        Traversal follows `super` edges upward only (child → parent); `PRUNE`
+        stops descending through anything else, so a `transversal` portal does
+        not drag other locations into scope. The `e != null` guard matters: AQL
+        evaluates `PRUNE` at the start vertex too, where the edge is null —
+        without it the first evaluation prunes the whole walk and the scope comes
+        back empty. `max_depth` guards a cycle.
+        """
+        query = f"""
+            FOR v, e IN 1..@max_depth OUTBOUND @loc_ref {RELATIONSHIPS}
+              PRUNE e != null AND e.type != 'super'
+              FILTER e.type == 'super'
+              FILTER LENGTH(v.sfx_ids || []) > 0
+              RETURN DISTINCT v
+        """
+        cursor = self.db.aql.execute(
+            query, bind_vars={"loc_ref": f"{ENTITIES}/{location_id}", "max_depth": max_depth}
+        )
+        out = [Entity.model_validate({**doc, "id": doc["_key"]}) for doc in cursor]
+        # The starting location itself is level 0 — the traversal starts at 1.
+        here = self.get_entity(location_id)
+        return ([here] if here is not None and (here.sfx_ids or []) else []) + out
 
     def get_relationship(
         self, from_id: str, to_id: str, rel_type: str,

@@ -28,6 +28,20 @@ class Repo:
         self.trait_settings = []        # SimpleNamespace(sfx_ids=[...], trait_id=...)
         self.traits = {}                # trait_id -> SimpleNamespace(default_sfx_ids=[...])
         self.traitset_settings = []     # SimpleNamespace(sfx_ids=[...])
+        self.locations = {}             # location_id -> SimpleNamespace(sfx_ids=[...])
+        self.location_parents = {}      # location_id -> parent location_id
+
+    def list_ancestor_locations_with_sfx(self, location_id, max_depth=8):
+        """Mirror the real scope query: the location and its parents, filtered
+        to the ones that actually own rules."""
+        out, seen, cur = [], set(), location_id
+        while cur and cur not in seen and len(seen) < max_depth:
+            seen.add(cur)
+            loc = self.locations.get(cur)
+            if loc is not None and (loc.sfx_ids or []):
+                out.append(loc)
+            cur = self.location_parents.get(cur)
+        return out
 
     def get_entity(self, entity_id):
         return self.entity
@@ -51,8 +65,9 @@ class Repo:
         return None
 
 
-def _entity(sfx_ids=None, current_projection=None):
-    return SimpleNamespace(sfx_ids=sfx_ids or [], current_projection=current_projection)
+def _entity(sfx_ids=None, current_projection=None, current_location=None):
+    return SimpleNamespace(sfx_ids=sfx_ids or [], current_projection=current_projection,
+                           current_location=current_location)
 
 
 def test_empty_repo_returns_empty():
@@ -881,3 +896,100 @@ def test_no_narrowing_lists_everything():
     repo.entity = _entity(sfx_ids=["sfx-roll", "sfx-manual"])
     # The sheet's listing passes no triggers: a manual activation has no event.
     assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-manual", "sfx-roll"]
+
+
+# ── Location scope: a place's rules reach the people in it ────
+#
+# Read-time only: nothing is written onto the occupant, so walking out ends the
+# rule by itself. These pin both the reaching and the *not* reaching.
+
+def _place(repo, loc_id, sfx_ids, parent=None):
+    repo.locations[loc_id] = SimpleNamespace(id=loc_id, sfx_ids=list(sfx_ids))
+    if parent:
+        repo.location_parents[loc_id] = parent
+
+
+def test_a_place_rule_reaches_its_occupants():
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-hall")])
+    _place(repo, "hall", ["sfx-hall"])
+    repo.entity = _entity(current_location="hall")
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-hall"]
+
+
+def test_a_place_rule_reaches_the_rooms_inside_it():
+    """A rule on the sect applies in its cellar: the scope walks up."""
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-sect")])
+    _place(repo, "sect", ["sfx-sect"])
+    _place(repo, "cellar", [], parent="sect")
+    repo.entity = _entity(current_location="cellar")
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-sect"]
+
+
+def test_a_place_the_entity_is_not_in_does_not_reach_them():
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-elsewhere")])
+    _place(repo, "elsewhere", ["sfx-elsewhere"])
+    _place(repo, "hall", [])
+    repo.entity = _entity(current_location="hall")
+
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+def test_an_entity_with_no_location_gets_no_place_rules():
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-hall")])
+    _place(repo, "hall", ["sfx-hall"])
+    repo.entity = _entity()  # unplaced
+
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+def test_place_rules_and_carried_rules_combine():
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-own", "manual"), _sfx("sfx-hall", "manual")])
+    _place(repo, "hall", ["sfx-hall"])
+    repo.entity = _entity(sfx_ids=["sfx-own"], current_location="hall")
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-hall", "sfx-own"]
+
+
+def test_the_bulk_path_agrees_about_place_rules():
+    """The session-start fan-out resolves the scope once per location; it must
+    reach the same answer as the per-entity path."""
+    from transversal.services.sfx_owner import (
+        build_sfx_availability_prefetch,
+        invalidate_sfx_cache,
+    )
+
+    invalidate_sfx_cache()
+    repo = PrefetchRepo()
+    repo.sfxs = {"sfx-sect": _sfx("sfx-sect", "manual")}
+    repo.get_sfx = lambda sid: repo.sfxs.get(sid)
+    _place(repo, "sect", ["sfx-sect"])
+    _place(repo, "cellar", [], parent="sect")
+    kael = SimpleNamespace(id="e1", current_universe="earth", sfx_ids=[],
+                           current_projection=None, current_location="cellar")
+    other = SimpleNamespace(id="e2", current_universe="earth", sfx_ids=[],
+                            current_projection=None, current_location="outside")
+
+    repo.entity = kael  # the per-entity path loads it by id
+    per_entity = get_available_sfx_ids("e1", "earth", repo)
+    prefetch = build_sfx_availability_prefetch(repo, [kael, other])
+    bulk = get_available_sfx_ids("e1", "earth", repo, prefetch=prefetch)
+
+    assert per_entity == bulk == ["sfx-sect"]
+    assert get_available_sfx_ids("e2", "earth", repo, prefetch=prefetch) == []

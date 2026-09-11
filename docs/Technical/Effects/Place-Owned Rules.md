@@ -12,7 +12,7 @@ aliases:
   - Audience-Scoped SFX
   - Lair Actions
   - Location SFX
-status: proposed
+status: partly implemented
 ---
 
 # Place-Owned Rules
@@ -116,18 +116,23 @@ world full of lair actions, faction rules and portal effects affordable.
 
 ## What it takes (rough shape)
 
-1. **Availability grows a place scope.** `get_available_sfx_ids` consults the
-   owners in the audience relation to the entity: its current location (and
-   ancestors, if the author opted in), its factions, its held assets, its active
-   projection, the relations it is standing on. Buckets stay as they are.
+1. ~~**Availability grows a place scope.**~~ **Landed 2026-09-11 for locations:**
+   availability now also asks which of the places above the entity (its own
+   location and its ancestors) carry rules, and offers those. Read-time —
+   nothing is written onto the occupant, so walking out ends the rule by itself.
+   The scope query returns only the places that *own* rules, so a world with no
+   place-owned rules costs one empty read; and it follows `super` edges upward
+   only, so a portal does not drag another location into scope. This is what
+   makes all three of the author's cases reachable: *put the rule on the place*.
 2. **A source kind + catalog element per new owner type**, so `select source`,
    targeting paths and card text can name the place ("this location", "this
-   portal").
+   portal"). **Still open** — for now a place-owned rule resolves like any other
+   entity-owned one.
 3. **Authoring surfaces**: the owner panel already lists entities (locations
-   included); the *audience* is implied by type, so the authoring change is
-   small — but see the open questions.
+   included) and attaching an SFX to one now does what it looks like it does.
 4. **Validation honesty**, in both directions: until a type is supported, a rule
    attached to it should warn that it cannot fire; once supported, it should not.
+   **Partly stale now** — locations fire, so the old silent no-op is gone.
 
 ## Open questions (need the author)
 
@@ -149,9 +154,15 @@ world full of lair actions, faction rules and portal effects affordable.
 
 ## Sequencing
 
-1. **Locations, arrival-only, audience = occupants.** The Azure Dawn case, and
-   it exercises the whole seam end to end.
-2. **Standing**, with the sheet surface decided (open question 1).
+1. ~~**Locations, arrival-only, audience = occupants.**~~ **Landed 2026-09-11**, as
+   *availability* rather than arrival-only: a location's rules reach the entities
+   in it (and in its sub-locations) the whole time they are there — which covers
+   both the arrival case (Azure Dawn's life path) and the standing case (the
+   Formation trait, a lair action). The arrival/mode distinction now lives in how
+   the author writes the rule (a trigger + conditions), not in the mechanism.
+2. **Standing**, with the sheet surface decided (open question 1). **Partially
+   answered by the author's read-time reading:** the rule is simply in the
+   occupant's list while they are there.
 3. **The other owner types** — asset, faction, universe, projection — each a row
    in the table above.
 4. **Relations/portals**, reusing the same seam for the portal brief (randomised

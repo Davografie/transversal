@@ -44,6 +44,10 @@ class Repo:
     def get_effective_traitsetsettings(self, entity_id, universes):
         return []
 
+    def list_ancestor_locations_with_sfx(self, location_id, max_depth=8):
+        """No place-owned rules in these fixtures (mirrors the real query)."""
+        return []
+
     def get_sfx(self, sfx_id):
         return None
 

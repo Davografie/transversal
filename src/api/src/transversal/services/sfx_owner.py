@@ -544,6 +544,7 @@ class SfxAvailabilityPrefetch:
     table_bucket: Any = None                                         # shared "table" SfxOwner
     traitsettings: dict[str, list] = field(default_factory=dict)     # entity_id → [TraitSetting]
     traitsetsettings: dict[str, list] = field(default_factory=dict)  # entity_id → [TraitSetSetting]
+    location_rules: dict[str, list] = field(default_factory=dict)    # location_id → [sfx_id] in scope
     sfx_by_id: dict[str, Any] = field(default_factory=dict)          # sfx_id → SFX
 
 
@@ -623,12 +624,24 @@ def build_sfx_availability_prefetch(
         traitsettings.update(repo.get_effective_traitsettings_bulk(eids, scoped))
         traitsetsettings.update(repo.get_effective_traitsetsettings_bulk(eids, scoped))
 
+    # Location scope, resolved once per *distinct* location rather than per
+    # entity: the fan-out visits every entity, and most of them share a room.
+    location_rules: dict[str, list] = {}
+    for loc_id in {e.current_location for e in entities if getattr(e, "current_location", None)}:
+        rule_ids: list[str] = []
+        for place in repo.list_ancestor_locations_with_sfx(loc_id):
+            for sid in (place.sfx_ids or []):
+                if sid not in rule_ids:
+                    rule_ids.append(sid)
+        location_rules[loc_id] = rule_ids
+
     return SfxAvailabilityPrefetch(
         entities={e.id: e for e in entities},
         projections=projections,
         table_bucket=repo.get_sfx_owner("table"),
         traitsettings=traitsettings,
         traitsetsettings=traitsetsettings,
+        location_rules=location_rules,
         sfx_by_id={s.id: s for s in (sfx_docs if sfx_docs is not None else repo.get_all_sfxs())},
     )
 
@@ -697,6 +710,23 @@ def get_available_sfx_ids(
     # Trait-set-as-unit grants, universe-gated via effective set settings.
     for tss in traitset_settings:
         ids.update(tss.sfx_ids or [])
+
+    # Location scope: a rule owned by a *place* reaches the entities under it.
+    # Read-time only — nothing is written to the occupant, so walking out ends
+    # the rule by itself. `list_ancestor_locations_with_sfx` returns just the
+    # places above the entity that actually carry rules (itself included), so a
+    # world with no place-owned rules costs one empty read.
+    #
+    # This is also what keeps the cost bounded: candidates come from the room
+    # you are in, not from every rule in the game.
+    if entity is not None:
+        location_id = getattr(entity, "current_location", None)
+        if location_id:
+            if prefetch is not None:
+                ids.update(prefetch.location_rules.get(location_id, []))
+            else:
+                for place in repo.list_ancestor_locations_with_sfx(location_id):
+                    ids.update(place.sfx_ids or [])
 
     # Filter by context-free conditions so listing matches fireability
     # (e.g. entity_type, in_universe, source_rating). Variable/context-gated
