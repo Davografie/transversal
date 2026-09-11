@@ -19,7 +19,7 @@ files move.
 
 | File | Started | Now | Landed |
 | --- | --- | --- | --- |
-| `App.vue` | 2559 | 2384 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands` |
+| `App.vue` | 2559 | 2236 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
 | `components/CharacterSheet.vue` | 3281 | 2577 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard` |
@@ -38,7 +38,13 @@ All on 2026-09-11, each verified by build + CDP against the running app.
 - **App.vue.** `app/SseIndicator` + `app/PeersBar`; `usePeers` (peer/cache
   logic, `isEntityType` for the GM test) and `useThemeMode` (colorMode +
   theme-color meta); `useMobileBands` (media query, focus, empty-sheet rule,
-  roller-content measurement + observers).
+  roller-content measurement + observers); `usePlayerCharacters` (owned
+  characters + the per-character actions).
+  - **Lesson:** a composable extraction can pass the build and still be broken
+    when the removed call sits inside a `try/catch` — `fetchLocationNames` was
+    left out of the destructure and search quietly reported "no characters".
+    Grep the file for every removed identifier after the patch, not just for
+    build errors.
 - **LocationViewer.vue.** `location/ArrivalRings` (three-phase arrival),
   `location/TravelOverlay` (portal wipe), `location/SceneEffectsLayer` (overlay
   layer + canvas particle engine). The effects toggle and its persisted flag
@@ -170,12 +176,45 @@ Editor + SFX cards done. What is left is mostly line count rather than sharing:
 3. **`useSheetData.js`** — fetch/refresh + trait-set splitting, if the script is
    still unwieldy after the two above.
 
-## App.vue — remaining
+## App.vue — remaining: the settings/login overlay
 
-The settings/login overlay (template 4–274 with ~700 lines of script behind it)
-is the last big entangled block; splitting it means a `usePlayerIdentity.js`
-plus a presentational `app/SettingsOverlay.vue`. The `useSSE` +
-`watch(lastEvent)` sink stays in the root by design (it drives every surface).
+The last big entangled block: template 4–274 (a fresh-login branch and a
+settings branch) backed by ~450 lines of script spread over 610–2340. It binds
+**~55 names**, which is why it has not been rushed — this is the app's entry
+path.
+
+What is already out: the character list + per-character actions
+(`usePlayerCharacters`). What is still inline and would move next:
+
+- identity + login: `playerId` / `playerName` / `showLoginOverlay` /
+  `pendingPlayer` / `nameSuggestions` / `nameStatus` / `nameFound` /
+  `checking`, `searchPlayers` + the `playerName` watcher, `onNameEnter`,
+  `selectSuggestion`, `findOrCreatePlayer`, `fetchPlayer`, `ensurePlayer`,
+  `confirmPlayer` → `usePlayerIdentity.js`.
+- identity switching: `switchName` / `switchEditing` / `switchStatus` /
+  `switchFound` / `switchSuggestions` / `switchPending` / `switching`,
+  `onSwitchEnter`, `confirmSwitch`, `onSwitchBlur` → same composable.
+- character switching + resonance: `charSwitchLoading` / `charPending` /
+  `resonanceFrom` / `resonanceTo` / `charSwitchDone`, `beginCharacterSwitch`,
+  `cancelCharacterSwitch` → `useCharacterSwitch.js`.
+- support characters: `mySupportCharacters`, `otherPlayersMains`,
+  `assumeSupport`, `openCreateSupport`.
+- creation: `newCharName` / `creatingChar` / `createCharError` / `showNewChar`,
+  `createCharacter`. Plus the character search (`charSearch*`, `doCharSearch`,
+  `chooseFoundCharacter`, `fetchAllCharacters`).
+- media quality (`mediaQuality` / `setMediaQuality`) and the Resonance Lab
+  toggle (`showLab`).
+
+For the markup, two options were weighed: ~55 explicit props (verbose but
+greppable) versus passing one `api` object assembled in the parent (smaller,
+but the child would need `.value` unwrapping discipline). **Recommendation:**
+extract the script first (the composables above, each verifiable in the running
+app), then move the markup with explicit props once the surface is thin — the
+login path deserves a step-by-step, harness-verified landing rather than one
+big-bang component swap.
+
+The `useSSE` + `watch(lastEvent)` sink stays in the root by design (it drives
+every surface).
 
 The heavy drill-in surface: header pills (110–121), trait-set list (342+),
 tab list, trait detail (read-only), and the `#after-*` slot hosts. The trait
