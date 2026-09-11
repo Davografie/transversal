@@ -572,7 +572,13 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 values = [v for v in values
                           if _match(v, step, f.type, _bound_value(step.value, context),
                                     current_type.element, context.repo)]
-                # type unchanged
+                # A type-proving filter narrows the element, so the next step may
+                # be one only the narrower element has (see
+                # ``target_catalog.narrowed_element``).
+                narrowed = tc.narrowed_element(current_type.element, step.field, step.operator, step.value)
+                if narrowed:
+                    current_type = ValueType(narrowed, current_type.cardinality)
+                # type otherwise unchanged
 
         elif isinstance(step, NavigateStep):
             if current_type is None:

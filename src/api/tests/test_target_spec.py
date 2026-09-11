@@ -401,3 +401,31 @@ def test_top_deserializes_from_dict_defaulting_to_desc():
     ]})
     assert isinstance(s.steps[2], TopStep)
     assert s.steps[2].direction == "desc"
+
+
+def test_a_type_filter_enables_the_narrower_elements_edges():
+    """The Formation path: an SFX on a trait → its owning entity → proven to be a
+    location → that location's occupants → their trait instances."""
+    from transversal.services.target_spec import FilterStep, NavigateStep, SelectStep
+
+    def path(*narrow):
+        return TargetSpec(steps=list(narrow))
+
+    base = [
+        SelectStep(collection="source"),
+        NavigateStep(edge="entity"),
+    ]
+    # Without the proof, `occupants` is not an entity edge.
+    types, errors = trace(TargetSpec(steps=base + [NavigateStep(edge="occupants")]),
+                          source_element="traitsetting")
+    assert errors, "entity has no occupants edge — this must fail before narrowing"
+
+    proven = TargetSpec(steps=base + [
+        FilterStep(field="type", operator="==", value="location"),
+        NavigateStep(edge="occupants"),
+        NavigateStep(edge="traitsettings"),
+    ])
+    types, errors = trace(proven, source_element="traitsetting")
+    assert errors == []
+    final = final_type(proven, source_element="traitsetting")
+    assert (final.element, final.cardinality) == ("traitsetting", "many")

@@ -560,3 +560,18 @@ def test_arrival_conditions_read_as_the_moment():
     # An unknown token still reads as something, naming it.
     assert condition_text(Condition(type=ConditionType.ARRIVAL_KIND, target="bogus")) == \
         'you arrived as "bogus"'
+
+
+def test_a_type_filter_retypes_the_phrase():
+    """A proven type changes the noun, so the rest of the path reads in the
+    narrower vocabulary — "the location", not "the entity" — and the type is not
+    said twice."""
+    phrase = path_phrase(TargetSpec_of({"steps": [
+        {"kind": "select", "collection": "self"},
+        {"kind": "navigate", "edge": "traitsettings"},
+        {"kind": "navigate", "edge": "entity"},
+        {"kind": "filter", "field": "type", "operator": "==", "value": "location"},
+        {"kind": "navigate", "edge": "occupants"},
+    ]}), resolve=resolve)
+    assert phrase.element == "entity"  # occupants are entities again
+    assert render_phrase(phrase, "each") == "each occupant of each location of your trait instances"

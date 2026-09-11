@@ -101,6 +101,8 @@ A spec that type-checks is guaranteed to have resolvable steps; the resolver pro
 
 `==`, `!=`, `>`, `>=`, `<`, `<=`, `in` (field value is a member of a list), `contains` (list field contains the value — how a list-valued field is matched: `armed_sfx_ids`, and `tags` on a trait or trait instance). Ordering compares numerically (a `die` field coerces `d8` → 8). **Values are typed at authoring time** (decision 4): an `int`/`number` field stores a number, `die`/`string` fields store strings — so downstream logic always has typed values.
 
+**A filter can prove a type.** `entity.type == location` establishes that the value *is* a location, so the path may take the steps only a location has (`occupants`, `difficulty_pool`) afterwards — the same rule the resolver and the card text read (`target_catalog.narrowed_element`, declared in `ELEMENT_NARROWING`). Only equality with a value that names a catalog element narrows; `!=`, the ordering operators, a bound `{name}` and non-element types (`character`, `gmc`, `asset`, `faction`) prove nothing. This is what makes a path writable that starts at a trait instance on a place and then reaches the room: *the trait → its owner → (proven a location) → occupants*.
+
 ## Effect fields
 
 `Effect` (in `src/api/src/transversal/domain/__init__.py`) gained two structured fields alongside the legacy strings:

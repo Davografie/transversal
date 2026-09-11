@@ -70,6 +70,34 @@ def field_label(field: ScalarField) -> str:
     return field.label or field.name.replace("_", " ")
 
 
+# ── Element narrowing (filters that prove a type) ─────────────
+#
+# A filter can prove *what* an element is: `entity.type == location` means the
+# value **is** a location, so the path may take the steps only a location has
+# (`occupants`, `difficulty_pool`) afterwards. Without this, such a hop is
+# simply unavailable — the author sees an `entity` and cannot navigate to the
+# room's occupants.
+#
+# Only values that name a catalog element narrow (there is no `character` or
+# `gmc` element to narrow to). Declared here so the type-checker, the resolver
+# and the card text all read one rule.
+ELEMENT_NARROWING: dict[tuple[str, str], dict[str, str]] = {
+    ("entity", "type"): {e: e for e in ("location", "universe") if e in ELEMENT_TYPES},
+}
+
+
+def narrowed_element(element: str, field: str, operator: str, value: object) -> str | None:
+    """The element a filter *proves* the value is, or ``None`` when it proves nothing.
+
+    Only equality narrows: ``!=``, the ordering operators, and a bound ``{name}``
+    value (whose type is only known at run time) all leave the element as it was.
+    """
+    if operator != "==" or not isinstance(value, str):
+        return None
+    table = ELEMENT_NARROWING.get((element, field))
+    return table.get(value.strip()) if table else None
+
+
 # Operators valid per field type. Ordering operators only make sense on
 # comparable (numeric/die/timestamp) fields; plain strings only support
 # equality/membership.

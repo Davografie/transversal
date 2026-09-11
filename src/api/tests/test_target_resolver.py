@@ -687,3 +687,37 @@ def test_tag_filter_without_a_repo_matches_nothing():
                                    collections={"self_traitsettings": [ts]}))
     assert res.errors == []
     assert res.values == []
+
+
+def test_the_formation_path_reaches_the_occupants_movement_traits():
+    """The author's chain, end to end at run time: the SFX's own trait (Formation,
+    on the location) → its owner, *proven* to be a location → the location's
+    occupants → the occupant's Movement trait instance."""
+    kael = NS(id="kael", type="character", current_location="lair-1", current_universe="earth",
+              current_projection=None, razmerit=0)
+    lair = NS(id="lair-1", type="location", current_location=None, current_universe="earth")
+    formation = NS(id="lair-1:formation", trait_id="trait-formation", traitset_id="ts-arts",
+                   entity_id="lair-1", projection_id=None, rating="d8")
+    movement = NS(id="kael:movement", trait_id="trait-movement", traitset_id="ts-arts",
+                  entity_id="kael", projection_id=None, rating="d6")
+    other = NS(id="kael:formation", trait_id="trait-formation", traitset_id="ts-arts",
+               entity_id="kael", projection_id=None, rating="d4")
+    repo = FakeRepo(
+        entities={"kael": kael, "lair-1": lair},
+        traitsettings={"lair-1:formation": formation, "kael:movement": movement, "kael:formation": other},
+        traits={"trait-formation": NS(id="trait-formation", traitset_id="ts-arts", universes=["earth"]),
+                "trait-movement": NS(id="trait-movement", traitset_id="ts-arts", universes=["earth"])},
+        traitsets={"ts-arts": NS(id="ts-arts", name="Arts")},
+    )
+    ctx = TargetContext(subject=kael, repo=repo, source=formation, source_element="traitsetting")
+    s = spec(
+        SelectStep(collection="source"),
+        NavigateStep(edge="entity"),
+        FilterStep(field="type", operator="==", value="location"),
+        NavigateStep(edge="occupants"),
+        NavigateStep(edge="traitsettings"),
+        FilterStep(field="trait_id", operator="==", value="trait-movement"),
+    )
+    res = resolve(s, ctx)
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["kael:movement"]

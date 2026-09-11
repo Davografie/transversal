@@ -230,7 +230,13 @@ def trace(spec: TargetSpec, source_element: str | None = None,
                 errors.append(TraceError(i, "filter has no collection to narrow"))
             elif tc.field(current.element, step.field) is None:
                 errors.append(TraceError(i, f"unknown field {current.element}.{step.field}"))
-            # type unchanged
+            else:
+                # A filter can *prove* the element a step narrower (a type test),
+                # which is what lets a location-only hop follow an entity filter.
+                narrowed = tc.narrowed_element(current.element, step.field, step.operator, step.value)
+                if narrowed:
+                    current = ValueType(narrowed, current.cardinality)
+            # type otherwise unchanged
 
         elif isinstance(step, NavigateStep):
             if current is None:

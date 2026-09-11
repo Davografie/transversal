@@ -662,6 +662,19 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
             phrase = _select_phrase(step, source_element, die_scoped, variables)
         elif isinstance(step, FilterStep):
             phrase = _filter_phrase(phrase, step, resolve, variables)
+            # A type-proving filter re-types the phrase's noun too, so the rest of
+            # the path is described in the narrower vocabulary ("the occupants of
+            # the location", not "… of the entity"). The head noun changes with
+            # it; a possessive/pronoun phrase keeps its shape.
+            narrowed = tc.narrowed_element(phrase.element, step.field, step.operator, step.value)
+            if narrowed and not phrase.pronoun and phrase.element != narrowed:
+                phrase.element = narrowed
+                # The proven type becomes the head noun, so drop the adjective the
+                # filter just added — otherwise it reads "location location".
+                head = element_noun(narrowed)
+                phrase.adjectives = [a for a in phrase.adjectives if a.strip().lower() != head.lower()]
+                phrase.noun = head
+                phrase.plural = ""
         elif isinstance(step, NavigateStep):
             phrase = _navigate_phrase(phrase, step)
         elif isinstance(step, AggregateStep):

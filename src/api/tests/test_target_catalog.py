@@ -150,3 +150,24 @@ def test_trait_tags_are_matchable():
         assert f is not None, element_name
         assert tc.operators_for(f) == ("contains", "==", "!=")
         assert not tc.is_orderable(f), element_name
+
+
+def test_a_type_filter_narrows_the_element():
+    """`entity.type == location` proves the value is a location, so a location-only
+    hop (`occupants`) becomes legal after it — the author's Formation path."""
+    assert tc.narrowed_element("entity", "type", "==", "location") == "location"
+    assert tc.narrowed_element("entity", "type", "==", "universe") == "universe"
+
+    # Proves nothing: inequality, a non-element type, an unknown field.
+    assert tc.narrowed_element("entity", "type", "!=", "location") is None
+    assert tc.narrowed_element("entity", "type", "==", "character") is None
+    assert tc.narrowed_element("entity", "current_location", "==", "loc-1") is None
+    assert tc.narrowed_element("traitsetting", "type", "==", "location") is None
+    # A bound value's type is only known at run time.
+    assert tc.narrowed_element("entity", "type", "==", "{chosen_type}") is None
+    assert tc.narrowed_element("entity", "type", "==", 7) is None
+
+
+def test_the_narrowing_map_only_points_at_real_elements():
+    for target in tc.ELEMENT_NARROWING[("entity", "type")].values():
+        assert tc.element(target) is not None, target

@@ -202,7 +202,7 @@ The structured way to target. A **path** is an ordered pipeline of steps that re
 | Step | What it does |
 |------|--------------|
 | **Select** | Seed the working set from a collection (`self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`), the SFX `source`, or a bound `variable`. |
-| **Filter** | Keep items whose field matches a predicate (`polarity == negative`, `rating_type == static`, `traitset_id == …`). Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `contains`. |
+| **Filter** | Keep items whose field matches a predicate (`polarity == negative`, `rating_type == static`, `traitset_id == …`). Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `contains`. **A type test narrows the path**: `entity.type == location` means the rest of the path may use location-only steps (→ `occupants`). |
 | **Navigate** | Hop an edge to related elements (a trait instance → its entity, an entity → its current location, …). `dedup` collapses duplicates by identity. |
 | **Aggregate** | Collapse a collection to a scalar: `count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`. |
 | **Top** | Keep *one* element — the highest or lowest by a comparable field (a number, a die, or a **timestamp**). For a timestamp, `desc` reads as "the most recently used" and `asc` as "the least recently used"; otherwise "the highest/lowest …". This is how you ask for *the body you were last in*: `select self → navigate projections → top last used at`. |
