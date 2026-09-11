@@ -58,7 +58,10 @@ let closeTimer = null
 const selectedLabel = computed(() => {
   if (props.modelValue === '' || props.modelValue == null) return ''
   const opt = props.options.find(o => o[props.valueKey] === props.modelValue)
-  return opt ? opt[props.labelKey] : ''
+  // A value that isn't among the options is still a value — a `{bound_name}`
+  // token the author typed, or an id whose record is gone. Falling back to the
+  // placeholder hides what is actually set: the field looks empty when it isn't.
+  return (opt && opt[props.labelKey]) || String(props.modelValue)
 })
 
 const hasValue = computed(() => props.modelValue !== '' && props.modelValue != null)
