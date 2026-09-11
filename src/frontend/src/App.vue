@@ -383,6 +383,7 @@ import { usePeers } from '@/composables/usePeers.js'
 import { usePlayerCharacters } from '@/composables/usePlayerCharacters.js'
 import { usePlayerIdentity } from '@/composables/usePlayerIdentity.js'
 import { useCharacterFinder } from '@/composables/useCharacterFinder.js'
+import { useCharacterSwitch } from '@/composables/useCharacterSwitch.js'
 import { useMobileBands } from '@/composables/useMobileBands.js'
 import { useThemeMode } from '@/composables/useThemeMode.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
@@ -616,13 +617,6 @@ const showLab = ref(false)
 
 // Settings panel
 const gmMode = ref(localStorage.getItem('architectMode') === 'true')
-const charPending = ref(null)
-const charSwitchLoading = ref(false)
-const charSwitchDone = ref(false)
-const resonanceFrom = ref([])
-const resonanceTo = ref([])
-let charSwitchToken = 0
-let charSwitchPreviousEntityId = null
 
 // Player identity + login/switch logic (see composables/usePlayerIdentity.js).
 // The three refs are created here because other composables share them.
@@ -678,6 +672,18 @@ const {
   pendingPlayerEntities,
   focusSwitchInput: () => nextTick(() => switchInputRef.value?.focus()),
   diag: (label, detail) => DIAG.mark(label, detail),
+})
+
+// Switching which character you play (see composables/useCharacterSwitch.js).
+const {
+  charPending, charSwitchLoading, charSwitchDone, resonanceFrom, resonanceTo,
+  beginCharacterSwitch, cancelCharacterSwitch, resetSwitchAnimation,
+} = useCharacterSwitch({
+  entityId, playerId, showLoginOverlay, fetchPlayerEntities,
+  locationInit: {
+    reset: () => { locationInitPromise = null },
+    current: () => locationInitPromise,
+  },
 })
 
 // Find/create a character in the settings overlay (see useCharacterFinder.js).
@@ -1696,13 +1702,7 @@ function openSettings() {
   switchStatus.value = ''
   switchPending.value = null
   pendingPlayerEntities.value = []
-  charSwitchLoading.value = false
-  charSwitchDone.value = false
-  charSwitchToken++
-  charPending.value = null
-  charSwitchPreviousEntityId = null
-  resonanceFrom.value = []
-  resonanceTo.value = []
+  resetSwitchAnimation()
   switchError.value = ''
   resetFinder()
   fetchPlayerEntities()
@@ -1715,13 +1715,7 @@ function dismissOverlay() {
   if (playerId.value) {
     if (needsCharacterPick.value) return  // must pick an owned character first
     resetSwitch()
-    charSwitchLoading.value = false
-    charSwitchDone.value = false
-    charSwitchToken++
-    charPending.value = null
-    charSwitchPreviousEntityId = null
-    resonanceFrom.value = []
-    resonanceTo.value = []
+    resetSwitchAnimation()
     showLoginOverlay.value = false
   }
 }
@@ -1790,82 +1784,6 @@ async function loadPlayerRole() {
   } catch (e) {
     DIAG.mark('loadPlayerRole-err', { error: e.message })
   }
-}
-
-async function fetchCharacterSignature(id) {
-  if (!id) return []
-  try {
-    const r = await fetch('/api/v1/graphql', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `query($id: ID!) { character(id: $id) { entity { id razmerit effectiveTraitSettings { id traitId traitsetId dice polarity fromType projectionId } } } }`,
-        variables: { id }
-      })
-    })
-    const json = await r.json()
-    const c = json.data?.character
-    if (!c) return []
-    return signatureOf(c.entity?.effectiveTraitSettings || [], c.entity?.razmerit || 0, RESONANCE.egoBoost)
-  } catch {
-    return []
-  }
-}
-
-function beginCharacterSwitch(e) {
-  if (!e?.id || charSwitchLoading.value) return
-  const token = ++charSwitchToken
-  charPending.value = e
-  charSwitchLoading.value = true
-  charSwitchDone.value = false
-  charSwitchPreviousEntityId = entityId.value
-
-  const aId = entityId.value
-  const bId = e.id
-  resonanceFrom.value = []
-  resonanceTo.value = []
-  const sigAP = fetchCharacterSignature(aId).then(s => { if (token === charSwitchToken) resonanceFrom.value = s })
-  const sigBP = fetchCharacterSignature(bId).then(s => { if (token === charSwitchToken) resonanceTo.value = s })
-
-  // Commit the perspective and load everything in the background.
-  locationInitPromise = null
-  entityId.value = bId
-  const claimP = playerId.value
-    ? fetch(`/api/v1/players/${playerId.value}/claim/${bId}`, { method: 'POST' }).catch(() => {})
-    : Promise.resolve()
-  const controlP = playerId.value
-    ? fetch(`/api/v1/players/${playerId.value}/control/${bId}`, { method: 'POST' }).catch(() => {})
-    : Promise.resolve()
-  const entitiesP = fetchPlayerEntities()
-  const locationP = locationInitPromise || Promise.resolve()
-  const minDelayP = new Promise(resolve => setTimeout(resolve, RESONANCE.durationMs))
-
-  Promise.all([claimP, controlP, entitiesP, locationP, minDelayP, sigAP, sigBP]).then(() => {
-    if (token !== charSwitchToken) return
-    charSwitchDone.value = true
-    // Let the final fan-out read for a beat before closing.
-    setTimeout(() => {
-      if (token !== charSwitchToken) return
-      charSwitchLoading.value = false
-      charPending.value = null
-      charSwitchPreviousEntityId = null
-      resonanceFrom.value = []
-      resonanceTo.value = []
-      showLoginOverlay.value = false
-    }, RESONANCE.fanMs)
-  })
-}
-
-function cancelCharacterSwitch() {
-  charSwitchToken++
-  if (charSwitchPreviousEntityId != null && entityId.value !== charSwitchPreviousEntityId) {
-    entityId.value = charSwitchPreviousEntityId
-  }
-  charSwitchPreviousEntityId = null
-  charSwitchLoading.value = false
-  charSwitchDone.value = false
-  charPending.value = null
-  resonanceFrom.value = []
-  resonanceTo.value = []
 }
 
 watch(gmMode, (v) => {
