@@ -288,45 +288,50 @@
         </div>
 
         <!-- Trait detail (read-only) — the row's "elsewhere" click zone.
-             Right-click on the row still opens the editor. -->
+             Right-click on the row, or the header's Edit, opens the editor. -->
         <div v-else-if="detailTrait && !showAddTrait" class="trait-detail-panel">
-          <Button class="set-back" variant="link" @click="closeTraitDetail">← Back</Button>
-          <h4 class="edit-title">{{ displayName(detailTrait.name) }}</h4>
-          <span v-if="detailTrait.traitsetName" class="detail-set">{{ detailTrait.traitsetName }}</span>
+          <div class="detail-header">
+            <Button class="detail-back" variant="link" @click="closeTraitDetail">← {{ detailTrait.traitsetName || 'Back' }}</Button>
+            <Button class="detail-edit" variant="link" @click="startEdit(detailTrait)">✎ Edit</Button>
+          </div>
 
-          <div v-if="detailTrait.tags?.length" class="edit-field">
-            <span class="edit-label">Tags</span>
-            <div class="detail-tags">
+          <div class="detail-hero">
+            <div class="detail-hero-line">
+              <h3 class="detail-name">{{ displayName(detailTrait.name) }}</h3>
+              <span class="detail-polarity" :class="{ negative: detailTrait.polarity === 'NEGATIVE' }">● {{ detailTrait.polarity === 'NEGATIVE' ? 'negative' : 'positive' }}</span>
+            </div>
+            <div class="detail-kicker">
+              <span v-if="detailTrait.traitsetName">{{ detailTrait.traitsetName }}</span>
+              <span v-if="detailTrait.traitsetName" class="detail-kicker-sep">·</span>
+              <span>{{ detailTrait.ego === false ? 'morph' : 'ego' }}</span>
+              <span v-if="detailTrait.enabled === false" class="trait-disabled-badge">disabled</span>
+            </div>
+            <div v-if="detailTrait.tags?.length" class="detail-tags">
               <span v-for="tag in detailTrait.tags" :key="tag" class="detail-tag">{{ tag }}</span>
             </div>
           </div>
 
-          <div class="edit-field">
-            <span class="edit-label">Rating</span>
-            <div class="detail-rating">
-              <span class="detail-rating-type">{{ ratingTypeLabel(detailTrait) }}</span>
-              <span class="detail-rating-polarity" :class="{ negative: detailTrait.polarity === 'NEGATIVE' }">{{ detailTrait.polarity === 'NEGATIVE' ? 'negative' : 'positive' }}</span>
-              <span v-if="detailTrait.enabled === false" class="trait-disabled-badge">disabled</span>
+          <div
+            class="detail-section detail-rating-band"
+            :class="{ playable: canPlayTrait(detailTrait) }"
+            :title="canPlayTrait(detailTrait) ? 'Play this trait' : ''"
+            @click.stop="canPlayTrait(detailTrait) && playTrait(detailTrait)"
+          >
+            <div class="detail-section-head">
+              <span class="detail-label">Rating</span>
+              <span class="detail-meta">{{ ratingTypeLabel(detailTrait) }}</span>
             </div>
             <div class="detail-dice">
-              <DieIcon v-for="(die, i) in (detailTrait.dice || [])" :key="i" :die="String(die).toLowerCase()" class="trait-die-icon" />
+              <DieIcon v-for="(die, i) in (detailTrait.dice || [])" :key="i" :die="String(die).toLowerCase()" class="detail-die" />
               <span v-if="challengeProgressLabel(detailTrait)" class="challenge-progress">{{ challengeProgressLabel(detailTrait) }}</span>
               <span v-if="!(detailTrait.dice || []).length" class="trait-die depleted">unrated</span>
             </div>
+            <div v-if="canPlayTrait(detailTrait)" class="detail-hint">tap the dice to play</div>
+            <p v-if="detailTrait.statement" class="detail-statement">{{ detailTrait.statement }}</p>
           </div>
 
-          <div v-if="detailTrait.statement" class="edit-field">
-            <span class="edit-label">Statement</span>
-            <p class="detail-text">{{ detailTrait.statement }}</p>
-          </div>
-
-          <div v-if="detailTrait.notes" class="edit-field">
-            <span class="edit-label">Notes</span>
-            <p class="detail-text">{{ detailTrait.notes }}</p>
-          </div>
-
-          <div v-if="detailTrait.sfxIds?.length" class="edit-field">
-            <span class="edit-label">SFX</span>
+          <div v-if="detailTrait.sfxIds?.length" class="detail-section">
+            <div class="detail-section-head"><span class="detail-label">SFX</span></div>
             <div class="sfx-cards">
               <div
                 v-for="sfxId in detailTrait.sfxIds"
@@ -342,13 +347,28 @@
             </div>
           </div>
 
-          <div v-if="(detailTrait.subTraitSettings || []).length" class="edit-field">
-            <span class="edit-label">Sub-traits</span>
-            <div class="edit-subtraits">
-              <div v-for="st in detailTrait.subTraitSettings" :key="st.id" class="edit-subtrait-row">
-                <span class="edit-subtrait-name">{{ displayName(st.name) }}</span>
-                <span v-if="st.statement" class="edit-subtrait-statement">{{ st.statement }}</span>
+          <div v-if="detailTrait.notes" class="detail-section">
+            <div class="detail-section-head"><span class="detail-label">Notes</span></div>
+            <p class="detail-text">{{ detailTrait.notes }}</p>
+          </div>
+
+          <div v-if="(detailTrait.subTraitSettings || []).length" class="detail-section">
+            <div class="detail-section-head"><span class="detail-label">Sub-traits</span></div>
+            <div class="detail-subtraits">
+              <div v-for="st in detailTrait.subTraitSettings" :key="st.id" class="detail-subtrait">
+                <span class="detail-subtrait-dice">
+                  <DieIcon v-for="(die, i) in (st.dice || [])" :key="i" :die="String(die).toLowerCase()" class="detail-die-sm" />
+                </span>
+                <span class="detail-subtrait-name">{{ displayName(st.name) }}</span>
+                <Button v-if="canPlayTrait(st)" class="detail-subtrait-play" variant="link" @click.stop="playTrait(st)">▸ play</Button>
               </div>
+            </div>
+          </div>
+
+          <div v-if="detailContext(detailTrait).length" class="detail-section detail-context">
+            <div v-for="row in detailContext(detailTrait)" :key="row.label" class="detail-context-row">
+              <span class="detail-context-label">{{ row.label }}</span>
+              <span class="detail-context-value">{{ row.value }}</span>
             </div>
           </div>
         </div>
@@ -1084,6 +1104,31 @@ watch(activeSheetView, () => { detailTrait.value = null })
 
 function ratingTypeLabel(t) {
   return RATING_TYPES.find(rt => rt.id === t.ratingType)?.label || t.ratingType || ''
+}
+
+// Same gates playTrait() applies — the detail only offers the play affordance
+// when playing would actually do something. An EMPTY (profile) or depleted
+// trait has no die to play, so it gets no hint and no sub-trait play button.
+function canPlayTrait(t) {
+  if (props.phase !== 'adding' || t.enabled === false) return false
+  if (t.ratingType === 'EMPTY') return false
+  return (t.dice || []).length > 0
+}
+
+// Rows for the detail's CONTEXT block. Only what actually applies is returned,
+// so the block collapses entirely for a plain static trait.
+function detailContext(t) {
+  const rows = []
+  if (t.ego === false) {
+    rows.push({ label: 'body', value: t.universe ? `projection · ${t.universe}` : 'projection' })
+  }
+  if (t.relationshipContactName) rows.push({ label: 'toward', value: t.relationshipContactName })
+  if (t.knownTo?.length) {
+    rows.push({ label: 'known to', value: `${t.knownTo.length} ${t.knownTo.length === 1 ? 'entity' : 'entities'}` })
+  }
+  const timer = traitTimerLabel(t)
+  if (timer) rows.push({ label: 're-enables', value: timer })
+  return rows
 }
 
 // ── Playing a trait (rating zone) ───────────────────
@@ -3116,10 +3161,38 @@ watch(() => props.externalPoolSources, (sources) => {
 .pill + .pill { border-left: 1px solid var(--overlay-6); }
 .pill:hover { background: var(--overlay-4); color: var(--text); }
 .pill.active { background: var(--accent-dim); color: var(--text); font-weight: 600; }
-/* ── Trait detail (read-only) ──── */
+/* ── Trait detail (read-only) ────────────────────────
+   A drill-in that replaces the trait list. Layout priority top-down: the
+   mechanical cores (rating, SFX) above the narrative tail. */
 .trait-detail-panel { display: flex; flex-direction: column; }
-.detail-set { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
-.detail-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+/* Descendant-prefixed so these beat the primitive's .btn-md/.btn-link rules. */
+.detail-header .detail-back { padding: 0; font-size: 12px; font-weight: 400; }
+.detail-header .detail-edit { padding: 0; font-size: 12px; font-weight: 400; color: var(--text-dim); }
+.detail-header .detail-edit:hover { color: var(--accent); }
+
+.detail-hero { margin-bottom: 12px; }
+.detail-hero-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.detail-name { font-size: 20px; font-weight: 700; margin: 0; color: var(--text); }
+.detail-polarity { font-size: 11px; color: var(--success); white-space: nowrap; }
+.detail-polarity.negative { color: var(--danger); }
+.detail-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.detail-kicker-sep { opacity: 0.5; }
+.detail-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .detail-tag {
   font-size: 11px;
   line-height: 1.6;
@@ -3129,10 +3202,57 @@ watch(() => props.externalPoolSources, (sources) => {
   border: 1px solid var(--accent-20);
   color: var(--accent);
 }
-.detail-rating { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.detail-rating-type { font-size: 12px; font-weight: 600; color: var(--text); }
-.detail-rating-polarity { font-size: 11px; color: var(--text-dim); }
-.detail-rating-polarity.negative { color: var(--danger); }
-.detail-dice { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
-.detail-text { font-size: 12px; color: var(--text); margin: 0; white-space: pre-wrap; }
+
+.detail-section { padding: 10px 0; border-top: 1px solid var(--overlay-8); }
+.detail-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.detail-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.detail-meta { font-size: 11px; color: var(--text-dim); }
+
+/* The rating band is the play target, mirroring the trait row's rating zone. */
+.detail-rating-band.playable { cursor: pointer; }
+.detail-rating-band.playable:hover .detail-die { filter: brightness(1.2); }
+.detail-dice { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.detail-die { width: 40px; height: 43px; }
+.detail-hint { margin-top: 4px; font-size: 10px; color: var(--text-dim); }
+.detail-statement {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.detail-subtraits { display: flex; flex-direction: column; gap: 5px; }
+.detail-subtrait { display: flex; align-items: center; gap: 8px; }
+.detail-subtrait-dice { display: flex; gap: 2px; flex-shrink: 0; }
+.detail-die-sm { width: 20px; height: 21px; }
+.detail-subtrait-name { flex: 1; min-width: 0; font-size: 12px; color: var(--text); }
+.detail-subtrait .detail-subtrait-play {
+  padding: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.detail-subtrait .detail-subtrait-play:hover { color: var(--accent); }
+
+/* Rendered only when it has rows, so a plain static trait ends at Notes. */
+.detail-context { display: flex; flex-direction: column; gap: 2px; }
+.detail-context-row { display: flex; gap: 10px; font-size: 11px; }
+.detail-context-label { min-width: 68px; color: var(--text-dim); }
+.detail-context-value { color: var(--text); }
+
+.detail-text { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
 </style>
