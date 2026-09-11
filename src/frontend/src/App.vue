@@ -1136,8 +1136,18 @@ async function onPeerClick(id) {
       if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
       return
     }
-    // Clicking the entity you already act as returns to free-roam.
-    if (entityId.value === id) { returnToSelf(); forceSheet.value = true; return }
+    // Clicking the entity you already act as: if you were viewing another
+    // character, this resets the view back to this one (stop peeking, keep
+    // acting). Only a click with nothing being viewed exits to free-roam.
+    if (entityId.value === id) {
+      if (viewingEntityId.value) {
+        viewingEntityId.value = null
+        forceSheet.value = true
+        if (mobileStackActive.value) setMobileFocus('sheet')
+        return
+      }
+      returnToSelf(); forceSheet.value = true; return
+    }
     // Second click on the peer you are viewing → assume it.
     if (viewingEntityId.value === id) {
       await switchPerspective(id)   // clears viewingEntityId
