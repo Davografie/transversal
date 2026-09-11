@@ -19,7 +19,7 @@ files move.
 
 | File | Started | Now | Landed |
 | --- | --- | --- | --- |
-| `App.vue` | 2559 | 2236 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters` |
+| `App.vue` | 2559 | 1914 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters`, `usePlayerIdentity`, `useCharacterFinder` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
 | `components/CharacterSheet.vue` | 3281 | 2577 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard` |
@@ -194,22 +194,22 @@ path.
 What is already out: the character list + per-character actions
 (`usePlayerCharacters`). What is still inline and would move next:
 
-- identity + login: `playerId` / `playerName` / `showLoginOverlay` /
-  `pendingPlayer` / `nameSuggestions` / `nameStatus` / `nameFound` /
-  `checking`, `searchPlayers` + the `playerName` watcher, `onNameEnter`,
-  `selectSuggestion`, `findOrCreatePlayer`, `fetchPlayer`, `ensurePlayer`,
-  `confirmPlayer` → `usePlayerIdentity.js`.
-- identity switching: `switchName` / `switchEditing` / `switchStatus` /
-  `switchFound` / `switchSuggestions` / `switchPending` / `switching`,
-  `onSwitchEnter`, `confirmSwitch`, `onSwitchBlur` → same composable.
+- ~~identity + login~~ **done** → `usePlayerIdentity.js` (login, the
+  `playerName` watcher, `ensurePlayer`, `confirmPlayer`, and the identity-switch
+  half: `switchName` editing, suggestions, `onSwitchEnter`/`onSwitchBlur`/
+  `confirmSwitch`). `playerId`/`playerName`/`showLoginOverlay` are created in
+  App and handed in — `usePlayerCharacters` reads `playerId` and the shell
+  gates on `showLoginOverlay`, so owning them in the composable would force an
+  instantiation cycle.
 - character switching + resonance: `charSwitchLoading` / `charPending` /
   `resonanceFrom` / `resonanceTo` / `charSwitchDone`, `beginCharacterSwitch`,
   `cancelCharacterSwitch` → `useCharacterSwitch.js`.
 - support characters: `mySupportCharacters`, `otherPlayersMains`,
   `assumeSupport`, `openCreateSupport`.
-- creation: `newCharName` / `creatingChar` / `createCharError` / `showNewChar`,
-  `createCharacter`. Plus the character search (`charSearch*`, `doCharSearch`,
-  `chooseFoundCharacter`, `fetchAllCharacters`).
+- ~~creation + character search~~ **done** → `useCharacterFinder.js`
+  (`charSearch*`, `doCharSearch`, `fetchAllCharacters`, `chooseFoundCharacter`,
+  and `newCharName` / `createCharacter`; picking a found character still starts
+  the switch via an injected `onChoose`).
 - media quality (`mediaQuality` / `setMediaQuality`) and the Resonance Lab
   toggle (`showLab`).
 
