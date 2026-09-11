@@ -14,6 +14,15 @@
           @click="assumeCharacter"
         >🎭 Assume</Button>
         <Button
+          v-if="canImportToLocation"
+          class="import-btn"
+          variant="neutral"
+          size="sm"
+          :loading="importing"
+          title="Move this entity to your current location"
+          @click="importToLocation"
+        >📥 Import to Location</Button>
+        <Button
           class="publish-btn"
           :variant="form.unpublished ? 'neutral' : 'success'"
           size="sm"
@@ -209,13 +218,59 @@ const bus = usePanelBus()
 const { graphql } = useApi()
 
 // ── Composables: shared state with GmPanel ──────────
-const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = useEntityCrud()
+const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity, fetchEntities } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { fetchLifePaths } = useLifePaths()
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
 
 const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.value?.type))
+
+// ── Import to the GM's current location ─────────────
+// Same heuristics as the tree drop (GmPanel.onMoveEntity): when a projection
+// lives in the target location's universe it is assumed and moved there — the
+// active projection is the most recently touched one, so it wins; without one,
+// the current projection makes an inapposite jump. GmPanel provides the
+// location live, since a panel's props freeze at open time.
+const gmLocationId = inject('gmCurrentLocationId', ref(''))
+const importing = ref(false)
+const canImportToLocation = computed(() =>
+  isOccupant.value && !!gmLocationId.value && form.value?.current_location !== gmLocationId.value
+)
+
+async function importToLocation() {
+  const target = gmLocationId.value
+  if (!props.entityId || !target || importing.value) return
+  importing.value = true
+  try {
+    const q = await graphql(
+      `query($id: ID!) { entity(id: $id) { projections { id universe originUniverse } } }`,
+      { id: props.entityId }
+    )
+    const projs = q?.entity?.projections || []
+    const loc = await graphql(`query($id: ID!) { entity(id: $id) { currentUniverse } }`, { id: target })
+    const targetUniverse = loc?.entity?.currentUniverse || ''
+    const inUniverse = projs.filter((p) => p.universe === targetUniverse || p.originUniverse === targetUniverse)
+    const proj = inUniverse.find((p) => p.id === currentProjection.value) || inUniverse[0] || null
+    if (proj) {
+      await graphql(
+        `mutation($entityId: ID!, $projectionId: ID!, $location: ID) { activateProjection(entityId: $entityId, projectionId: $projectionId, location: $location) { id } }`,
+        { entityId: props.entityId, projectionId: proj.id, location: target }
+      )
+    } else {
+      await graphql(
+        `mutation($entityId: ID!, $location: ID!) { inappositeTravel(entityId: $entityId, location: $location) { id } }`,
+        { entityId: props.entityId, location: target }
+      )
+    }
+    await fetchEntities()
+    await selectEntity({ id: props.entityId })
+  } catch (e) {
+    console.error('importToLocation:', e)
+  } finally {
+    importing.value = false
+  }
+}
 const newProjLocationId = ref('')
 const newProjLocation = ref(null)
 const newProjType = ref('NATIVE')
