@@ -77,45 +77,14 @@
           @touch-end="onReleaseTouchEnd"
           @create="createCharacter"
         />
-        <div v-if="mySupportCharacters.length" class="settings-section">
-          <label class="settings-label">Support characters</label>
-          <div class="char-list support-list">
-            <button
-              v-for="sc in mySupportCharacters" :key="sc.entity.id"
-              class="char-chip support-chip"
-              :class="{ 'support-unavailable': !sc.mainActive, 'support-current': sc.entity.id === entityId }"
-              :disabled="!sc.mainActive"
-              @click="assumeSupport(sc)"
-            >
-              <MediaImage v-if="sc.entity.sheetPortrait" :src="sc.entity.sheetPortrait" class="char-portrait" alt="" />
-              <span v-else class="char-portrait char-portrait-fallback">{{ (sc.entity.name || sc.entity.id).charAt(0) }}</span>
-              <span class="char-chip-meta">
-                <span class="char-chip-name">{{ sc.entity.name || sc.entity.id }}</span>
-                <span class="char-chip-location support-main">supports {{ sc.main?.name || '—' }}</span>
-              </span>
-              <span v-if="sc.mainActive" class="support-available-dot" title="Available">●</span>
-            </button>
-          </div>
-          <p v-if="!mySupportCharacters.some(sc => sc.mainActive)" class="support-hint">No support characters are available right now — their mains are inactive.</p>
-        </div>
-
-        <div v-if="!gmMode" class="settings-section">
-          <label class="settings-label">Create support character</label>
-          <template v-if="otherPlayersMains.length">
-            <div class="other-mains-list">
-              <div v-for="a in otherPlayersMains" :key="a.playerId" class="other-main-row">
-                <MediaImage v-if="a.main?.sheetPortrait" :src="a.main.sheetPortrait" class="char-portrait" alt="" />
-                <span v-else class="char-portrait char-portrait-fallback">{{ (a.main?.name || a.playerId).charAt(0) }}</span>
-                <span class="char-chip-meta">
-                  <span class="char-chip-name">{{ a.main?.name || a.playerId }}</span>
-                  <span class="char-chip-location">{{ a.playerName || a.playerId }}</span>
-                </span>
-                <button class="support-create-btn support-create-inline" :title="'Create a support character for ' + (a.main?.name || a.playerId)" @click="openCreateSupport(a.main.id)">＋ support</button>
-              </div>
-            </div>
-          </template>
-          <p v-else class="support-hint">No other mains are active right now to support.</p>
-        </div>
+        <SupportBlock
+          :support-characters="mySupportCharacters"
+          :other-mains="otherPlayersMains"
+          :active-id="entityId"
+          :gm-mode="gmMode"
+          @assume="assumeSupport"
+          @create-support="openCreateSupport"
+        />
 
         <FindCharacterBlock
           v-model:search="charSearch"
@@ -261,6 +230,7 @@ import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
 import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
 import CharacterListBlock from '@/components/app/CharacterListBlock.vue'
+import SupportBlock from '@/components/app/SupportBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
 import RazmeritWaves from './components/RazmeritWaves.vue'
@@ -1674,17 +1644,6 @@ watch(gmMode, (v) => {
 </script>
 
 <style scoped>
-.support-chip.support-unavailable { opacity: 0.45; cursor: not-allowed; }
-.support-chip.support-current { border-color: var(--accent); }
-.support-main { font-size: 10px; }
-.support-available-dot { margin-left: auto; color: var(--success); font-size: 10px; }
-.support-hint { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
-.support-create-btn { width: 100%; font-size: 12px; padding: 8px; background: var(--accent-dim); color: var(--text); border: none; border-radius: 6px; cursor: pointer; }
-.support-create-btn:hover { background: var(--accent); }
-.support-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.other-mains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-.other-main-row { flex: 0 1 200px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--overlay-6); border: 1px solid var(--overlay-8); }
-.support-create-inline { width: auto; flex: 0 0 auto; font-size: 11px; padding: 5px 10px; }
 .main-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; color: var(--text-invert); background: var(--accent); font-weight: 600; margin-left: 4px; }
 .main-toggle {
   flex-shrink: 0;

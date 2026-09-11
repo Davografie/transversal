@@ -1123,3 +1123,18 @@ select option {
   border-radius: 999px;
   white-space: nowrap;
 }
+
+/* ── Support characters · settings overlay ──────────────────────────────
+   Shared by the support chips, the 'create support character' rows and the
+   hint lines; they live here because the overlay is split across components. */
+.support-chip.support-unavailable { opacity: 0.45; cursor: not-allowed; }
+.support-chip.support-current { border-color: var(--accent); }
+.support-main { font-size: 10px; }
+.support-available-dot { margin-left: auto; color: var(--success); font-size: 10px; }
+.support-hint { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
+.support-create-btn { width: 100%; font-size: 12px; padding: 8px; background: var(--accent-dim); color: var(--text); border: none; border-radius: 6px; cursor: pointer; }
+.support-create-btn:hover { background: var(--accent); }
+.support-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.other-mains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.other-main-row { flex: 0 1 200px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--overlay-6); border: 1px solid var(--overlay-8); }
+.support-create-inline { width: auto; flex: 0 0 auto; font-size: 11px; padding: 5px 10px; }
