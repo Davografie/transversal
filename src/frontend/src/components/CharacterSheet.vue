@@ -193,80 +193,13 @@
 
         <!-- Trait detail (read-only) — the row's "elsewhere" click zone.
              Right-click on the row, or the header's Edit, opens the editor. -->
-        <div v-else-if="detailTrait && !showAddTrait" class="trait-detail-panel">
-          <div class="detail-header">
-            <Button class="detail-back" variant="link" @click="closeTraitDetail">← {{ detailTrait.traitsetName || 'Back' }}</Button>
-            <Button class="detail-edit" variant="link" @click="startEdit(detailTrait)">✎ Edit</Button>
-          </div>
-
-          <div class="detail-hero">
-            <div class="detail-hero-line">
-              <h3 class="detail-name">{{ displayName(detailTrait.name) }}</h3>
-              <span class="detail-polarity" :class="{ negative: detailTrait.polarity === 'NEGATIVE' }">● {{ detailTrait.polarity === 'NEGATIVE' ? 'negative' : 'positive' }}</span>
-            </div>
-            <div class="detail-kicker">
-              <span v-if="detailTrait.traitsetName">{{ detailTrait.traitsetName }}</span>
-              <span v-if="detailTrait.traitsetName" class="detail-kicker-sep">·</span>
-              <span>{{ detailTrait.ego === false ? 'morph' : 'ego' }}</span>
-              <span v-if="detailTrait.enabled === false" class="trait-disabled-badge">disabled</span>
-            </div>
-            <div v-if="detailTrait.tags?.length" class="detail-tags">
-              <span v-for="tag in detailTrait.tags" :key="tag" class="detail-tag">{{ tag }}</span>
-            </div>
-          </div>
-
-          <div
-            class="detail-section detail-rating-band"
-            :class="{ playable: canPlayTrait(detailTrait) }"
-            :title="canPlayTrait(detailTrait) ? 'Play this trait' : ''"
-            @click.stop="canPlayTrait(detailTrait) && playTrait(detailTrait)"
-          >
-            <div class="detail-section-head">
-              <span class="detail-label">Rating</span>
-              <span class="detail-meta">{{ ratingTypeLabel(detailTrait) }}</span>
-            </div>
-            <div class="detail-dice">
-              <DieIcon v-for="(die, i) in (detailTrait.dice || [])" :key="i" :die="String(die).toLowerCase()" class="detail-die" />
-              <span v-if="challengeProgressLabel(detailTrait)" class="challenge-progress">{{ challengeProgressLabel(detailTrait) }}</span>
-              <span v-if="!(detailTrait.dice || []).length" class="trait-die depleted">unrated</span>
-            </div>
-            <div v-if="!(detailTrait.dice || []).length" class="trait-die depleted">unrated</div>
-            <p v-if="detailTrait.statement" class="detail-statement">{{ detailTrait.statement }}</p>
-          </div>
-
-          <div v-if="detailTrait.sfxIds?.length" class="detail-section">
-            <div class="detail-section-head"><span class="detail-label">SFX</span></div>
-            <div class="sfx-cards">
-              <SfxCard v-for="sfxId in detailTrait.sfxIds" :key="sfxId" v-bind="sfxCardModel(sfxId)"
-                       @activate="activateSfx(sfxId, detailTrait.id)" />
-            </div>
-          </div>
-
-          <div v-if="detailTrait.notes" class="detail-section">
-            <div class="detail-section-head"><span class="detail-label">Notes</span></div>
-            <p class="detail-text">{{ detailTrait.notes }}</p>
-          </div>
-
-          <div v-if="(detailTrait.subTraitSettings || []).length" class="detail-section">
-            <div class="detail-section-head"><span class="detail-label">Sub-traits</span></div>
-            <div class="detail-subtraits">
-              <div v-for="st in detailTrait.subTraitSettings" :key="st.id" class="detail-subtrait">
-                <span class="detail-subtrait-dice">
-                  <DieIcon v-for="(die, i) in (st.dice || [])" :key="i" :die="String(die).toLowerCase()" class="detail-die-sm" />
-                </span>
-                <span class="detail-subtrait-name">{{ displayName(st.name) }}</span>
-                <Button v-if="canPlayTrait(st)" class="detail-subtrait-play" variant="link" @click.stop="playTrait(st)">▸ play</Button>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="detailContext(detailTrait).length" class="detail-section detail-context">
-            <div v-for="row in detailContext(detailTrait)" :key="row.label" class="detail-context-row">
-              <span class="detail-context-label">{{ row.label }}</span>
-              <span class="detail-context-value">{{ row.value }}</span>
-            </div>
-          </div>
-        </div>
+        <TraitDetailPanel
+          v-else-if="detailTrait && !showAddTrait"
+          :trait="detailTrait"
+          :api="detailApi"
+          @back="closeTraitDetail"
+          @edit="startEdit"
+        />
 
         <!-- Traits tab: trait-set list -->
         <div v-else-if="activeSheetView === 'traits' && !activeSetName && traitSets.length && !showAddTrait" class="trait-sets">
@@ -466,6 +399,7 @@ import { usePersistedRef } from '../composables/usePersistedState.js'
 import { useTraitEditor } from '../composables/useTraitEditor.js'
 import TraitEditPanel from './sheet/TraitEditPanel.vue'
 import SfxCard from './sheet/SfxCard.vue'
+import TraitDetailPanel from './sheet/TraitDetailPanel.vue'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
@@ -918,6 +852,13 @@ const detailTrait = ref(null)
 const projectionChoices = computed(() =>
   (entity.value?.projections || []).map(p => ({ id: p.id, name: p.name || universeDisplay(p.originUniverse) }))
 )
+
+// Helpers the read-only trait detail needs; functions only, so the child can
+// take them as one object without any unwrapping.
+const detailApi = {
+  canPlayTrait, playTrait, ratingTypeLabel, challengeProgressLabel, detailContext,
+  displayName, sfxCardModel, activateSfx,
+}
 
 // The inline trait editor's draft state + actions (see composables/useTraitEditor.js).
 const {
@@ -2258,17 +2199,6 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-disabled {
   opacity: 0.45;
 }
-.trait-disabled-badge {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-dim);
-  margin-left: 6px;
-  padding: 1px 5px;
-  border: 1px solid var(--text-dim);
-  border-radius: 999px;
-  white-space: nowrap;
-}
 
 .trait-contact {
   font-size: 11px;
@@ -2292,15 +2222,6 @@ watch(() => props.externalPoolSources, (sources) => {
   overflow: hidden;
 }
 
-.trait-die {
-  font-weight: 700;
-  font-size: 14px;
-}
-.die-d4  { color: var(--die-d4); }
-.die-d6  { color: var(--die-d6); }
-.die-d8  { color: var(--die-d8); }
-.die-d10 { color: var(--die-d10); }
-.die-d12 { color: var(--die-d12); }
 
 .trait-die-groups {
   display: flex;
@@ -2319,16 +2240,6 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .trait-die-icon.ghost {
   opacity: 0.32;
-}
-.trait-die.depleted {
-  color: var(--text-dim);
-  font-style: italic;
-}
-.challenge-progress {
-  align-self: center;
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
 }
 
 .trait-row.negative {
@@ -2358,12 +2269,6 @@ watch(() => props.externalPoolSources, (sources) => {
   gap: 12px;
 }
 
-.sfx-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 4px;
-}
 .sfx-card {
   display: flex;
   flex-direction: column;
@@ -2468,110 +2373,18 @@ watch(() => props.externalPoolSources, (sources) => {
 /* ── Trait detail (read-only) ────────────────────────
    A drill-in that replaces the trait list. Layout priority top-down: the
    mechanical cores (rating, SFX) above the narrative tail. */
-.trait-detail-panel { display: flex; flex-direction: column; }
 
-.detail-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
 /* Descendant-prefixed so these beat the primitive's .btn-md/.btn-link rules. */
-.detail-header .detail-back { padding: 0; font-size: 12px; font-weight: 400; }
-.detail-header .detail-edit { padding: 0; font-size: 12px; font-weight: 400; color: var(--text-dim); }
-.detail-header .detail-edit:hover { color: var(--accent); }
 
-.detail-hero { margin-bottom: 12px; }
-.detail-hero-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.detail-name { font-size: 20px; font-weight: 700; margin: 0; color: var(--text); }
-.detail-polarity { font-size: 11px; color: var(--success); white-space: nowrap; }
-.detail-polarity.negative { color: var(--danger); }
-.detail-kicker {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.detail-kicker-sep { opacity: 0.5; }
-.detail-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.detail-tag {
-  font-size: 11px;
-  line-height: 1.6;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--accent-12);
-  border: 1px solid var(--accent-20);
-  color: var(--accent);
-}
 
-.detail-section { padding: 10px 0; border-top: 1px solid var(--overlay-8); }
-.detail-section-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.detail-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.detail-meta { font-size: 11px; color: var(--text-dim); }
 
 /* The rating band is the play target, mirroring the trait row's rating zone. */
-.detail-rating-band.playable { cursor: pointer; }
-.detail-rating-band.playable:hover .detail-die { filter: brightness(1.2); }
-.detail-dice {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.detail-die { width: 40px; height: 43px; }
-.detail-statement {
-  margin: 8px 0 0;
-  font-size: 13px;
-  font-style: italic;
-  line-height: 1.4;
-  color: var(--text);
-}
 
-.detail-subtraits { display: flex; flex-direction: column; gap: 5px; }
-.detail-subtrait { display: flex; align-items: center; gap: 8px; }
-.detail-subtrait-dice { display: flex; gap: 2px; flex-shrink: 0; }
-.detail-die-sm { width: 20px; height: 21px; }
-.detail-subtrait-name { flex: 1; min-width: 0; font-size: 12px; color: var(--text); }
-.detail-subtrait .detail-subtrait-play {
-  padding: 0;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-.detail-subtrait .detail-subtrait-play:hover { color: var(--accent); }
 
 /* Rendered only when it has rows, so a plain static trait ends at Notes. */
-.detail-context { display: flex; flex-direction: column; gap: 2px; }
-.detail-context-row { display: flex; gap: 10px; font-size: 11px; }
-.detail-context-label { min-width: 68px; color: var(--text-dim); }
-.detail-context-value { color: var(--text); }
 
-.detail-text { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
 
 /* The derived natural-language rules line inside a detail SFX card. Brighter
    than the flavour lead-in above it — this is the text that tells you what the
    SFX actually does. */
-.detail-section .sfx-card-rules {
-  margin-top: 2px;
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--text);
-}
 </style>
