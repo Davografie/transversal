@@ -1174,3 +1174,75 @@ def test_an_undeclared_source_is_unrestricted():
     free = _sfx("sfx-anywhere")  # _sfx() leaves source_kind unset
     assert can_attach(free, "table") and can_attach(free, "location")
     assert "location" in owner_surfaces_for(free) and "trait_instance" in owner_surfaces_for(free)
+
+
+# ── A gate on acquiring (not on using) ────────────────────────
+#
+# The author's case: learnable at Azure Dawn, attached to a trait instance, and
+# usable afterwards. So the gate is enforced where the *grant* happens, and it is
+# a path seeded at the owner itself.
+
+def _gated_rule(target_location: str, source_kind: str = "trait_setting"):
+    from transversal.services.target_spec import FilterStep, NavigateStep, SelectStep, TargetSpec
+
+    sfx = _sfx("sfx-azure-technique")
+    sfx.source_kind = source_kind
+    sfx.acquire_spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        NavigateStep(edge="entity"),
+        FilterStep(field="current_location", operator="==", value=target_location),
+    ])
+    return sfx
+
+
+def _world_at(location: str):
+    from transversal.domain import EntityType
+
+    repo = Repo()
+    repo.entities = {
+        "char-1": SimpleNamespace(id="char-1", type=EntityType.CHARACTER, current_location=location),
+        "loc-1": SimpleNamespace(id="loc-1", name="Azure Dawn", type=EntityType.LOCATION),
+        "loc-9": SimpleNamespace(id="loc-9", name="Elsewhere", type=EntityType.LOCATION),
+        "ts-1": SimpleNamespace(id="ts-1", trait_id="trait-technique", entity_id="char-1", sfx_ids=[]),
+    }
+    repo.get_entity = lambda eid: repo.entities.get(eid)
+    repo.get_traitsetting = lambda tid: repo.entities.get(tid)
+    repo.update_entity = lambda e: e
+    repo.update_traitsetting = lambda ts: ts
+    # `traitsetting → entity` and `entity → location` are resolver edges, not
+    # repo calls, so no more surface is needed here.
+    return repo
+
+
+def test_a_rule_can_be_gated_to_a_place_of_acquisition():
+    from transversal.services.sfx_owner import acquire_gate_holds
+
+    gated = _gated_rule("loc-1")
+    assert acquire_gate_holds(gated, "trait_instance", "ts-1", _world_at("loc-1")) is True
+    assert acquire_gate_holds(gated, "trait_instance", "ts-1", _world_at("loc-9")) is False
+
+
+def test_an_ungated_rule_is_acquirable_anywhere():
+    from transversal.services.sfx_owner import acquire_gate_holds
+
+    plain = _sfx("sfx-plain")
+    plain.source_kind = "trait_setting"
+    assert acquire_gate_holds(plain, "trait_instance", "ts-1", _world_at("loc-9")) is True
+
+
+def test_the_gate_is_enforced_on_attach_not_just_offered():
+    """A UI filter is a suggestion; the attach refuses for the same reason."""
+    from transversal.services.sfx_owner import add_sfx_to_owner, attach_refusal
+
+    gated = _gated_rule("loc-1")
+    away = _world_at("loc-9")
+    away.get_sfx = lambda sid: gated
+    assert attach_refusal(gated, "trait_instance", "ts-1", away) == "can't be acquired here"
+    assert add_sfx_to_owner(away, "trait_instance", "ts-1", gated.id) is False
+    assert away.entities["ts-1"].sfx_ids == [], "nothing is attached when the gate refuses"
+
+    here = _world_at("loc-1")
+    here.get_sfx = lambda sid: gated
+    assert attach_refusal(gated, "trait_instance", "ts-1", here) is None
+    assert add_sfx_to_owner(here, "trait_instance", "ts-1", gated.id) is True
+    assert here.entities["ts-1"].sfx_ids == [gated.id]

@@ -236,6 +236,30 @@ The rule is one declaration: an SFX's **source** names the surface it calls home
 [[SFX Source Model]]), and anything that attaches, offers or validates a rule reads it.
 A rule with no source declared can live anywhere.
 
+### Learning a rule somewhere
+
+A rule can say **where it may be taken** — not where it works. That's its *acquire
+path*: a path seeded at the thing being unlocked, checked when someone tries to take
+it. The author's case:
+
+```
+select source → navigate entity → filter current_location == Azure Dawn
+```
+
+Read as: *the trait instance I'm unlocking is held by someone standing at Azure Dawn.*
+A trait that offers the rule shows it as a chip only where that path resolves; step
+outside and the chip is simply not there. Once taken, the rule is theirs — it keeps
+working after they leave.
+
+That last part is the whole reason it's a separate thing from a **condition**. A
+condition is evaluated when a rule *fires* as well as when it's offered, so gating with
+one would hand the rule over at the sect and then take it back the moment they walked
+out.
+
+The gate is enforced where the grant happens, not only in the panel, so the chip list
+is an honest preview of what would actually be accepted. A rule with no acquire path
+can be taken anywhere — the common case.
+
 ### Rules on a place
 
 An SFX attached to a **location** applies to the entities *in* it — and in its

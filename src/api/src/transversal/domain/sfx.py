@@ -48,6 +48,16 @@ class SFX(BaseModel):
     # ``listener_spec`` (e.g. ``select self → navigate relationships → filter
     # type == curse_bind → navigate target``).
     listener_spec: Optional[TargetSpec] = None
+    # A **gate on acquiring** this rule, not on using it: a path seeded at the
+    # thing being unlocked (`select source` = the trait instance), resolved when
+    # someone tries to take it. Passes iff it resolves non-empty and error-free —
+    # the same reading a `TARGET_PATH` condition gets. `None` = acquirable
+    # anywhere, which is the common case.
+    #
+    # Deliberately not a condition: conditions are evaluated when the rule *fires*
+    # as well as when it is offered, so gating with one would take the rule away
+    # again the moment its bearer left the place they learned it.
+    acquire_spec: Optional[TargetSpec] = None
     effects: list[Effect] = Field(default_factory=list)
     conditions: list["Condition"] = Field(default_factory=list)
     # How long the SFX stays in effect once triggered (the in-memory effective

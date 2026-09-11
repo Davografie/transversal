@@ -929,16 +929,67 @@ def can_attach(sfx, owner_type: str) -> bool:
     return owner_type in owner_surfaces_for(sfx)
 
 
-def attach_refusal(sfx, owner_type: str) -> str | None:
+def attach_refusal(sfx, owner_type: str, owner_id: str = "", repo=None) -> str | None:
     """Why this SFX can't attach there — or ``None`` when it can.
 
-    Author-facing: the picker filters on the same rule and shows this text for
-    the rules it has to leave out.
+    Two questions, in order: *may it live on this kind of thing* (its declared
+    source), and *may it be taken right now* (its acquire path). Author-facing:
+    the picker filters on the first and the chip list on the second, and both
+    show this text for what they leave out.
     """
-    if can_attach(sfx, owner_type):
+    if not can_attach(sfx, owner_type):
+        wanted = sorted(owner_surfaces_for(sfx))[0]
+        return f"belongs on {_SURFACE_LABELS.get(wanted, wanted)}"
+    if repo is not None and owner_id and not acquire_gate_holds(sfx, owner_type, owner_id, repo):
+        return "can't be acquired here"
+    return None
+
+
+def _owner_object(repo, owner_type: str, owner_id: str):
+    """The object an owner id refers to, for seeding an acquire path."""
+    try:
+        if owner_type == "trait_instance":
+            return repo.get_traitsetting(owner_id)
+        if owner_type == "trait_set":
+            return repo.get_traitsetsetting(owner_id)
+        return repo.get_entity(owner_id)
+    except Exception:
         return None
-    wanted = sorted(owner_surfaces_for(sfx))[0]
-    return f"belongs on {_SURFACE_LABELS.get(wanted, wanted)}"
+
+
+def acquire_gate_holds(sfx, owner_type: str, owner_id: str, repo) -> bool:
+    """Whether this rule may be *taken* by that owner right now.
+
+    The acquire path is seeded at the owner itself (``select source``), so it can
+    ask the author's question — *is the thing I'm being attached to somewhere this
+    may be learned?* (`trait instance → entity → filter current_location == …`).
+    No path means ungated, which is the common case.
+
+    Enforced here rather than only in the picker: a gate that lives in the UI is
+    a suggestion, and a direct attach would walk past it.
+    """
+    spec = getattr(sfx, "acquire_spec", None)
+    if spec is None or not spec.steps:
+        return True
+
+    from transversal.services import target_catalog as tc
+    from transversal.services.target_resolver import TargetContext, resolve
+
+    owner = _owner_object(repo, owner_type, owner_id)
+    if owner is None:
+        return False
+
+    # `select self` should mean the entity that bears the owner (for a trait
+    # instance, the character holding it).
+    subject = owner
+    entity_id = getattr(owner, "entity_id", None)
+    if entity_id:
+        subject = repo.get_entity(entity_id) or owner
+
+    source_element = tc.source_element(sfx.source_kind) if getattr(sfx, "source_kind", None) else None
+    context = TargetContext(subject=subject, repo=repo, source=owner, source_element=source_element)
+    result = resolve(spec, context)
+    return bool(result.values) and not result.errors
 
 
 def owned_surfaces(repo, sfx_id: str) -> set[str]:
@@ -1204,8 +1255,11 @@ def add_sfx_to_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> bool:
     a source kind are unrestricted.
     """
     sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
-    if sfx is not None and not can_attach(sfx, owner_type):
-        return False
+    if sfx is not None:
+        if not can_attach(sfx, owner_type):
+            return False
+        if not acquire_gate_holds(sfx, owner_type, owner_id, repo):
+            return False
     ids = _get_owner_sfx_ids(repo, owner_type, owner_id)
     if ids is None:
         return False

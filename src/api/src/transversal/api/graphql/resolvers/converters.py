@@ -473,6 +473,7 @@ def _sfx_ref(sfx, resolve=None) -> SfxRef:
         owner_surfaces=sorted(owner_surfaces_for(sfx)),
         placement=sfx.placement, arming_scope=sfx.arming_scope,
         listener_spec=sfx.listener_spec.model_dump() if sfx.listener_spec else None,
+        acquire_spec=sfx.acquire_spec.model_dump() if sfx.acquire_spec else None,
         conditions=[_condition_to_gql(c) for c in sfx.conditions],
         effects=[_effect_to_gql(e) for e in sfx.effects],
         duration=_duration_to_gql(sfx.duration),

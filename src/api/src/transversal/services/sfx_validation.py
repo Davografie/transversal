@@ -121,6 +121,8 @@ def _specs_of(sfx: SFX):
                 yield f"Effect {i + 1} condition {j + 1}", condition.spec
     if sfx.listener_spec is not None:
         yield "Listener path", sfx.listener_spec
+    if sfx.acquire_spec is not None:
+        yield "Acquire path", sfx.acquire_spec
 
 
 def validate_sfx(sfx: SFX, repo=None) -> list[str]:

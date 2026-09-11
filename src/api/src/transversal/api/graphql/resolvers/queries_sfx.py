@@ -46,6 +46,32 @@ class QueriesSfx:
         return render(domain, resolve=repo_name_resolver(_em(info).repo))
 
     @strawberry.field
+    def acquirable_sfx_ids(self, info: strawberry.Info, trait_setting_id: strawberry.ID) -> list[strawberry.ID]:
+        """The trait instance's *possible* SFX that may be taken right now.
+
+        A rule can be gated to where it may be learned (`acquire_spec`): the
+        instance's trait offers it, but the chip only appears where the path
+        resolves. This is the list the sheet should render — enforcement lives in
+        the attach, so this is the honest preview of what would be accepted.
+        """
+        from transversal.services.sfx_owner import acquire_gate_holds, invalidate_sfx_cache
+
+        repo = _em(info).repo
+        ts = repo.get_traitsetting(str(trait_setting_id))
+        if ts is None:
+            return []
+        trait = repo.get_trait(ts.trait_id)
+        possible = list(getattr(trait, "possible_sfx_ids", None) or [])
+        out: list[strawberry.ID] = []
+        for sfx_id in possible:
+            sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
+            if sfx is None:
+                continue
+            if acquire_gate_holds(sfx, "trait_instance", ts.id, repo):
+                out.append(strawberry.ID(sfx_id))
+        return out
+
+    @strawberry.field
     def sfxs(self, info: strawberry.Info) -> list[SfxRef]:
         # Prefer DB-persisted SFXs; fall back to in-memory engine
         repo = _em(info).repo
@@ -130,6 +156,7 @@ class QueriesSfx:
             source_kind=input.source_kind, placement=input.placement,
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
+            acquire_spec=_target_spec_from_input(input.acquire_spec),
             conditions=[_condition_input_to_domain(c) for c in (input.conditions or [])],
             effects=[_effect_input_to_domain(e) for e in (input.effects or [])],
             duration=_duration_input_to_domain(input.duration),

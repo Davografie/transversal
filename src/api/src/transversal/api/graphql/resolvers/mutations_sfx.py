@@ -46,6 +46,7 @@ class MutationsSfx:
             source_kind=input.source_kind, placement=input.placement,
             arming_scope=input.arming_scope,
             listener_spec=_target_spec_from_input(input.listener_spec),
+            acquire_spec=_target_spec_from_input(input.acquire_spec),
             effects=[_effect_input_to_domain(e) for e in input.effects],
             duration=_duration_input_to_domain(input.duration),
         )
@@ -134,7 +135,8 @@ class MutationsSfx:
         # Validate *all* of them before touching any: a batch either applies or it
         # doesn't, and a refusal says why instead of returning a bare False.
         for ref in owner_refs:
-            reason = attach_refusal(sfx, ref.owner_type.value) if sfx is not None else None
+            reason = (attach_refusal(sfx, ref.owner_type.value, str(ref.owner_id), repo)
+                      if sfx is not None else None)
             if reason:
                 raise ValueError(f"'{sfx.name or sfx.id}' {reason}, not {ref.owner_type.value}")
         for ref in owner_refs:
