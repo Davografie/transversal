@@ -99,7 +99,7 @@ TRIGGER_CARDS: dict[str, str] = {
     "on_push": "When you push",
     "on_taken_out": "When you are taken out",
     "on_prevent_taken_out": "When you would be taken out",
-    "on_location_change": "When a location changes",
+    "on_location_change": "When you arrive somewhere",
     "on_trait_change": "When a trait changes",
     "on_trait_learn": "When a trait is learned",
     "on_trait_offered": "When a trait is offered",

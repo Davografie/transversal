@@ -231,6 +231,18 @@ a duration like any other. To make a granted trait last *only* while they are on
 the grounds, give it a duration whose timer is a **location change**: the trait is
 taken back when they next move.
 
+> [!example] A worked example is in the world
+> **Sect Initiation** (`sfx-azure-dawn-initiation`) sits on Azure Dawn: *when you
+> arrive somewhere, if you are a character: discover the Azure Dawn life path*.
+> Four settings combine — the **owner** decides who it reaches (everyone inside
+> Azure Dawn and its sub-locations), the **trigger** decides when (arriving), the
+> **condition** decides who it applies to (characters, not the GMCs standing
+> beside them), and the **effect** decides what happens (it lands on the arriver).
+> Note there is no "at location" condition: the scope already says where, and such
+> a condition would wrongly exclude someone in the sect's cellar.
+> It was seeded by hand (`sfx_owner.ensure_place_rule_example`); delete the SFX
+> and it stays deleted — nothing recreates it at startup.
+
 ### Filtering by tag
 
 A trait can carry free-form **tags** (authored in the trait editor — *violent*, *protective*, …), and a path can select by them: `select self_traitsettings` → `filter tag contains violent`. The filter field is `tag` on a trait instance (which reads the tags of the trait it is an instance of) and on the registry trait itself; the value box suggests the tags that exist, and typing a new one is still allowed. Naming the step (`output: violent_traits`) both labels the card *and* makes the matched instances available to later effects as a bound variable.

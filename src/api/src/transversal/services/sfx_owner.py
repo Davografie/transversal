@@ -331,6 +331,78 @@ def ensure_contest_complication_sfx(repo) -> None:
             "give_in")
 
 
+# ── Worked example: a rule owned by a place ──────────────────
+#
+# Location scope (see [[Place-Owned Rules]]) means an SFX attached to a location
+# reaches the entities inside it — and inside its sub-locations. That is content,
+# not mechanism, so this example is seeded **by hand** rather than from startup:
+# `main.py` never calls it, which is what makes deleting the example stick.
+#
+# To (re)create it:
+#     from transversal.services.sfx_owner import ensure_place_rule_example
+#     ensure_place_rule_example(repo)
+
+PLACE_RULE_EXAMPLE_ID = "sfx-azure-dawn-initiation"
+_PLACE_RULE_EXAMPLE_LOCATION = "Azure Dawn"
+_PLACE_RULE_EXAMPLE_LIFE_PATH = "Azure Dawn"
+
+
+def ensure_place_rule_example(repo) -> None:
+    """Seed the place-owned worked example. Idempotent; a no-op without its data.
+
+    Azure Dawn's initiation: whoever arrives on the sect's grounds discovers its
+    life path. Attached to the *location*, so it reaches everyone inside.
+
+    Note what is deliberately **not** authored: there is no "at location"
+    condition. The scope already says who the rule reaches, and an `AT_LOCATION`
+    condition would be *wrong* for a character standing in the sect's cellar —
+    the rule reaches them, the condition would refuse them.
+
+    What each setting does here:
+      * owner = the Azure Dawn location   → who it reaches (everyone inside)
+      * trigger = On Location Change      → when it fires (arriving)
+      * condition = Entity type: character→ who it applies to (not the GMCs)
+      * effect = Discover Life Path      → what happens, landing on the arriver
+    """
+    from transversal.domain import (
+        Condition, ConditionType, Effect, EffectTiming, EntityType, SFX,
+    )
+
+    location = next(
+        (e for e in repo.list_all_entities()
+         if e.type == EntityType.LOCATION and e.name == _PLACE_RULE_EXAMPLE_LOCATION),
+        None,
+    )
+    life_path = next(
+        (p for p in repo.list_all_lifepaths() if p.name == _PLACE_RULE_EXAMPLE_LIFE_PATH),
+        None,
+    )
+    if location is None or life_path is None:
+        return  # nothing to attach it to (or a renamed world)
+
+    desired = SFX(
+        id=PLACE_RULE_EXAMPLE_ID,
+        name="Sect Initiation",
+        description="Whoever arrives on Azure Dawn's grounds discovers its life path.",
+        trigger="on_location_change",
+        source_kind="entity",
+        conditions=[Condition(type=ConditionType.ENTITY_TYPE, target="character")],
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="life_path",
+                        action="discover", target=life_path.id)],
+    )
+
+    existing = repo.get_sfx(PLACE_RULE_EXAMPLE_ID)
+    if existing is None:
+        repo.create_sfx(desired)
+    else:
+        repo.update_sfx(desired)
+
+    # The owner side: a location *is* an entity, so the ordinary entity owner
+    # surface carries it (and `add_sfx_to_owner` checks the declared source kind
+    # against that surface).
+    add_sfx_to_owner(repo, "entity", location.id, PLACE_RULE_EXAMPLE_ID)
+
+
 def ensure_prevent_taken_out_sfx(repo) -> None:
     """Create the prevent-taken-out SFX (spend 1 razmerit). Idempotent.
 

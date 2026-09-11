@@ -993,3 +993,79 @@ def test_the_bulk_path_agrees_about_place_rules():
 
     assert per_entity == bulk == ["sfx-sect"]
     assert get_available_sfx_ids("e2", "earth", repo, prefetch=prefetch) == []
+
+
+# ── The place-owned worked example ────────────────────────────
+#
+# Seeded by hand (never from startup), so the risks are: attaching it twice, and
+# seeding into a world that has neither the place nor the life path.
+
+class _WorldDouble:
+    """Just enough repository for the example seeder."""
+
+    def __init__(self, location=None, life_path=None):
+        from transversal.domain import EntityType
+
+        self.sfxs = {}
+        self.entities = []
+        if location:
+            self.entities.append(SimpleNamespace(id=location, name="Azure Dawn",
+                                                type=EntityType.LOCATION, sfx_ids=[]))
+        self.lifepaths = ([SimpleNamespace(id=life_path, name="Azure Dawn")] if life_path else [])
+        self.owner_lists = {}
+
+    def list_all_entities(self):
+        return self.entities
+
+    def list_all_lifepaths(self):
+        return self.lifepaths
+
+    def get_sfx(self, sfx_id):
+        return self.sfxs.get(sfx_id)
+
+    def create_sfx(self, sfx):
+        self.sfxs[sfx.id] = sfx
+        return sfx
+
+    def update_sfx(self, sfx):
+        self.sfxs[sfx.id] = sfx
+        return sfx
+
+    # owner surface (the `entity` bucket is the entity's own list)
+    def get_entity(self, entity_id):
+        return next((e for e in self.entities if e.id == entity_id), None)
+
+    def update_entity(self, entity):
+        return entity
+
+
+def test_the_place_rule_example_lands_on_the_location():
+    from transversal.services.sfx_owner import PLACE_RULE_EXAMPLE_ID, ensure_place_rule_example
+
+    repo = _WorldDouble(location="azur-dawn", life_path="lp-azure")
+    ensure_place_rule_example(repo)
+
+    sfx = repo.sfxs[PLACE_RULE_EXAMPLE_ID]
+    assert sfx.trigger == "on_location_change"
+    assert [e.type for e in sfx.effects] == ["life_path"]
+    assert repo.get_entity("azur-dawn").sfx_ids == [PLACE_RULE_EXAMPLE_ID]
+
+
+def test_the_place_rule_example_is_idempotent():
+    from transversal.services.sfx_owner import PLACE_RULE_EXAMPLE_ID, ensure_place_rule_example
+
+    repo = _WorldDouble(location="azur-dawn", life_path="lp-azure")
+    ensure_place_rule_example(repo)
+    ensure_place_rule_example(repo)
+
+    assert repo.get_entity("azur-dawn").sfx_ids == [PLACE_RULE_EXAMPLE_ID]
+    assert len(repo.sfxs) == 1
+
+
+def test_the_place_rule_example_no_ops_without_its_data():
+    from transversal.services.sfx_owner import ensure_place_rule_example
+
+    for keyword in ({}, {"location": "azur-dawn"}, {"life_path": "lp-azure"}):
+        repo = _WorldDouble(**keyword)
+        ensure_place_rule_example(repo)
+        assert repo.sfxs == {}, keyword
