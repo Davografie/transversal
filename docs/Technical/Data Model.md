@@ -234,7 +234,6 @@ Registry of trait groupings. Defines named sets of traits available to entity ty
 | `order` | int | | Display sort order (default `0`) |
 | `limit` | int | | Max traits an entity can select from this set (default `1`) |
 | `allow_duplicates` | bool | | Allow multiple instances of the same trait definition, distinguished by `statement` (default `false`) |
-| `location_restricted` | bool | | Whether universe-specific laws are required (default `false`) |
 | `polarity` | Polarity? | | Default polarity override for traits in this set (null = global positive) |
 | `default_rating_type` | RatingType | | Default rating behaviour for new traits in this set (default `static`) |
 | `default_die_type` | DieType | | Default die for new traits in this set (default `d4`) |
@@ -257,7 +256,6 @@ Registry of all possible traits per universe. Shared definitions — not per-ent
 | `required_trait_ids` | string[] | | Prerequisite trait IDs |
 | `possible_subtrait_ids` | string[] | | Sub-traits that can be nested under this trait |
 | `possible_sfx_ids` | string[] | | SFX IDs unlockable for this trait |
-| `location_restricted` | bool | | Whether universe-specific laws are required (default `false`) |
 | `default_ego` | bool | | Grant default: true = entity (ego/persists), false = projection (morph/gated) |
 | `explanation` | string | | Flavor or rules explanation text |
 | `random_weight` | int | | Weight for random trait generation (default `0`) |

@@ -111,7 +111,6 @@ class TraitRef:
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     possible_subtrait_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     possible_subtraitset_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
-    location_restricted: bool
     default_ego: bool = False
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
@@ -142,7 +141,6 @@ class TraitSetRef:
                 default_sfx_ids=t.default_sfx_ids,
                 possible_subtrait_ids=t.possible_subtrait_ids,
                 possible_subtraitset_ids=t.possible_subtraitset_ids,
-                location_restricted=t.location_restricted,
                 default_ego=t.default_ego,
                 polarity=t.polarity,
                 display_names=[
@@ -677,7 +675,6 @@ class TraitInput:
     possible_subtrait_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     possible_subtraitset_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
-    location_restricted: bool = False
     default_ego: bool = False
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
@@ -694,7 +691,6 @@ class TraitUpdateInput:
     possible_subtrait_ids: Optional[list[strawberry.ID]] = None
     possible_subtraitset_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
-    location_restricted: Optional[bool] = None
     default_ego: Optional[bool] = None
     polarity: Optional[Polarity] = None
     clear_polarity: bool = False

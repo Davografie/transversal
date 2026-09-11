@@ -232,7 +232,6 @@ def _trait_to_gql(t) -> TraitRef:
         default_sfx_ids=t.default_sfx_ids,
         possible_subtrait_ids=t.possible_subtrait_ids,
         possible_subtraitset_ids=t.possible_subtraitset_ids,
-        location_restricted=t.location_restricted,
         default_ego=t.default_ego,
         polarity=t.polarity,
         display_names=[
@@ -1690,7 +1689,6 @@ class Mutation:
             possible_subtrait_ids=[str(s) for s in input.possible_subtrait_ids],
             possible_subtraitset_ids=[str(s) for s in input.possible_subtraitset_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
-            location_restricted=input.location_restricted,
             default_ego=input.default_ego,
             polarity=input.polarity,
             display_names=[
@@ -1709,7 +1707,6 @@ class Mutation:
             default_sfx_ids=created.default_sfx_ids,
             possible_subtrait_ids=created.possible_subtrait_ids,
             possible_subtraitset_ids=created.possible_subtraitset_ids,
-            location_restricted=created.location_restricted,
             default_ego=created.default_ego,
             polarity=created.polarity,
             display_names=[
@@ -1744,8 +1741,6 @@ class Mutation:
         default_sfx_changed = input.default_sfx_ids is not None
         if default_sfx_changed:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
-        if input.location_restricted is not None:
-            existing.location_restricted = input.location_restricted
         if input.default_ego is not None:
             existing.default_ego = input.default_ego
         if input.clear_polarity:
@@ -1778,7 +1773,6 @@ class Mutation:
             default_sfx_ids=updated.default_sfx_ids,
             possible_subtrait_ids=updated.possible_subtrait_ids,
             possible_subtraitset_ids=updated.possible_subtraitset_ids,
-            location_restricted=updated.location_restricted,
             default_ego=updated.default_ego,
             polarity=updated.polarity,
             display_names=[

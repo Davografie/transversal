@@ -45,7 +45,7 @@ class TestGraphQLQueries:
 
     def test_traits_by_universe_three_realms(self, client):
         result = _gql(client, """
-            query { traitsByUniverse(universe: "three_realms") { id name locationRestricted } }
+            query { traitsByUniverse(universe: "three_realms") { id name } }
         """)
         names = {t["name"] for t in result["traitsByUniverse"]}
         assert "Qi Reserves" in names

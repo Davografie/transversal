@@ -374,7 +374,6 @@ class Trait(BaseModel):
     possible_subtraitset_ids: list[str] = Field(default_factory=list)
     possible_sfx_ids: list[str] = Field(default_factory=list)
     default_sfx_ids: list[str] = Field(default_factory=list)
-    location_restricted: bool = False
     default_ego: bool = False  # grant default: true = entity (ego/persists), false = projection (morph/gated)
     polarity: Optional["Polarity"] = None  # default polarity override (None = inherit traitset)
     explanation: str = ""
@@ -395,7 +394,6 @@ class TraitSet(BaseModel):
     order: int = 0
     limit: int = 1
     allow_duplicates: bool = False
-    location_restricted: bool = False
     polarity: Optional["Polarity"] = None  # default polarity override (None = global positive)
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
