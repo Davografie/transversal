@@ -1,52 +1,25 @@
 <template>
   <div class="dice-roller panel" :class="[{ open: panelOpen }, `kind-${rollKind}`]" @touchstart="onRollerTouchStart">
-    <div class="pool-tabs" v-if="tabEntities.length > 1">
-      <template v-for="g in tabGroups" :key="g.key">
-        <div v-if="g.label && tabGroups.length > 1" class="pool-tab-group-label">{{ g.label }}</div>
-        <button
-          v-for="e in g.members"
-          :key="e.id"
-          class="pool-tab"
-          :class="{ active: activeId === e.id, self: e.id === selfTabId, blink: (e.id === selfTabId && youTabBlink) || (e.id === DIFFICULTY_TAB && difficultyTabBlink) }"
-          @click="switchTab(e.id)"
-        >
-          {{ e.name }}
-        </button>
-      </template>
-    </div>
+    <PoolTabs
+      v-if="tabEntities.length > 1"
+      :groups="tabGroups"
+      :active-id="activeId"
+      :self-tab-id="selfTabId"
+      :difficulty-tab="DIFFICULTY_TAB"
+      :you-tab-blink="youTabBlink"
+      :difficulty-tab-blink="difficultyTabBlink"
+      @select="switchTab"
+    />
 
-    <div v-if="contestResult && (!gmMode || entityId)" class="contest-result-widget">
-      <div class="contest-sides">
-        <div class="contest-side" :class="sideClasses('challenger')">
-          <span class="side-icon">{{ sideIcon('challenger') }}</span>
-          <span class="side-name">{{ challengerName }}</span>
-          <span v-if="contestResult.challenger" class="side-sum"><strong class="result-num">{{ contestResult.challenger.total }}</strong></span>
-          <span v-else class="side-empty">gave in</span>
-          <span v-if="sideIsWinner('challenger') && appliedEffectDie" class="side-effect">
-            <template v-if="steppedDown && winnerOriginalEffectDie">
-              <DieIcon :die="winnerOriginalEffectDie" class="side-effect-die original" />
-              <span class="step-arrow">↓</span>
-            </template>
-            <DieIcon :die="appliedEffectDie" class="side-effect-die" />
-          </span>
-          <span v-else-if="!sideIsWinner('challenger') && loserTakenOut" class="side-effect">taken out</span>
-        </div>
-        <div class="contest-side" :class="sideClasses('defendant')">
-          <span class="side-icon">{{ sideIcon('defendant') }}</span>
-          <span class="side-name">{{ defendantName }}</span>
-          <span v-if="contestResult.defendant" class="side-sum"><strong class="result-num">{{ contestResult.defendant.total }}</strong></span>
-          <span v-else class="side-empty">gave in</span>
-          <span v-if="sideIsWinner('defendant') && appliedEffectDie" class="side-effect">
-            <template v-if="steppedDown && winnerOriginalEffectDie">
-              <DieIcon :die="winnerOriginalEffectDie" class="side-effect-die original" />
-              <span class="step-arrow">↓</span>
-            </template>
-            <DieIcon :die="appliedEffectDie" class="side-effect-die" />
-          </span>
-          <span v-else-if="!sideIsWinner('defendant') && loserTakenOut" class="side-effect">taken out</span>
-        </div>
-      </div>
-    </div>
+    <ContestResultWidget
+      v-if="contestResult && (!gmMode || entityId)"
+      :result="contestResult"
+      :challenger-name="challengerName"
+      :defendant-name="defendantName"
+      :i-won="iWon"
+      :is-challenger="isChallenger"
+      :applied-effect-die="appliedEffectDie"
+    />
 
     <template v-if="isEditing">
     <div class="roll-kind-row">
@@ -374,6 +347,8 @@ import { useApi } from '../composables/useApi.js'
 import { useEffectApplication } from '../composables/useEffectApplication.js'
 import { useHitchMenu } from '../composables/useHitchMenu.js'
 import { perfMark } from '../composables/perfLog.js'
+import PoolTabs from './dice/PoolTabs.vue'
+import ContestResultWidget from './dice/ContestResultWidget.vue'
 import DieIcon from './DieIcon.vue'
 import ConsequenceMenu from './gm/ConsequenceMenu.vue'
 import EffectTargetWizard from './gm/EffectTargetWizard.vue'
@@ -579,14 +554,7 @@ const iWon = computed(() => {
   const challengerWon = contestResult.value.winner === 'player'
   return isChallenger.value ? challengerWon : !challengerWon
 })
-function sideIsMine(side) { return (side === 'challenger') === isChallenger.value }
-function sideIcon(side) { return sideIsMine(side) ? (iWon.value ? '🏆' : '💀') : '' }
-function sideClasses(side) {
-  const mine = sideIsMine(side)
-  return { mine, winner: mine && iWon.value, loser: mine && !iWon.value }
-}
 const appliedEffectDie = computed(() => contestResult.value?.effect_die || null)
-const loserTakenOut = computed(() => !!contestResult.value?.taken_out)
 const iAmTakenOut = computed(() => !!contestResult.value?.taken_out && !iWon.value)
 const razmerit = ref(null)  // acting entity's razmerit (fetched when a takeout happens)
 
@@ -595,17 +563,6 @@ watch(iAmTakenOut, async (taken) => {
   const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: editingEntityId.value })
   razmerit.value = data?.entity?.razmerit ?? 0
 })
-function sideIsWinner(side) {
-  if (!contestResult.value) return false
-  const challengerWon = contestResult.value.winner === 'player'
-  return (side === 'challenger') === challengerWon
-}
-const winnerOriginalEffectDie = computed(() => {
-  if (!contestResult.value) return null
-  const side = contestResult.value.winner === 'player' ? 'challenger' : 'defendant'
-  return contestResult.value[side]?.effect_die || null
-})
-const steppedDown = computed(() => !!appliedEffectDie.value && !!winnerOriginalEffectDie.value && appliedEffectDie.value !== winnerOriginalEffectDie.value)
 const iGaveIn = computed(() => {
   if (!contestResult.value?.gave_in) return false
   return isChallenger.value ? contestResult.value.gave_in === 'player' : contestResult.value.gave_in === 'opponent'
@@ -2017,23 +1974,6 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .dice-pool { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; min-height: 28px; }
 .dice-stage { display: flex; flex-direction: column; gap: var(--gap); min-height: 48px; }
 
-.pool-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.pool-tab-group-label {
-  flex-basis: 100%; text-align: center; font-size: 11px; font-weight: 700;
-  color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase;
-  margin: 2px 0 -2px;
-}
-.pool-tab {
-  padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 8px;
-  cursor: pointer; border: 1px solid transparent; background: var(--overlay-6);
-  color: var(--text-dim);
-}
-.pool-tab.active { background: var(--accent, #7aa2f7); color: var(--text-invert); }
-.pool-tab.self { border-color: var(--accent, #7aa2f7); }
-.pool-tab.self:not(.active) { color: var(--text); background: var(--accent-12); }
-.pool-tab.blink { animation: tab-blink 0.9s ease-in-out infinite; }
-@keyframes tab-blink { 0%, 100% { box-shadow: 0 0 0 rgba(64,136,212,0); } 50% { box-shadow: 0 0 10px 2px var(--accent-85); } }
-
 .difficulty-target {
   text-align: center; font-size: 13px; color: var(--text-dim);
 }
@@ -2053,34 +1993,6 @@ h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 4px; }
 .opponent-effect-die { width: 20px; height: 22px; }
 .contest-notice { font-size: 12px; color: var(--accent, #7aa2f7); }
 .contest-result { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
-
-.contest-result-widget {
-  margin-top: 6px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--overlay-4);
-  border: 1px solid var(--overlay-12);
-  display: flex; flex-direction: column; gap: 8px;
-}
-.contest-sides { display: flex; gap: 8px; }
-.contest-side {
-  flex: 1; padding: 8px; border-radius: 8px;
-  background: rgba(0,0,0,0.2); border: 1px solid transparent;
-  display: flex; flex-direction: column; gap: 2px; font-size: 12px;
-}
-.contest-side.mine.winner { border-color: var(--success, var(--success)); background: var(--success-12); }
-.contest-side.mine.loser { border-color: var(--danger, var(--danger)); background: var(--danger-12); }
-.side-icon { font-size: 16px; line-height: 1; }
-.side-name { font-weight: 600; color: var(--text); }
-.side-sum { color: var(--text); }
-.side-sum .result-num { font-size: 22px; }
-.contest-side.mine.winner .side-sum .result-num { color: var(--success, var(--success)); }
-.contest-side.mine.loser .side-sum .result-num { color: var(--danger, var(--danger)); }
-.side-effect { color: var(--text-dim); display: flex; align-items: center; gap: 4px; }
-.side-effect-die { width: 26px; height: 30px; }
-.side-effect-die.original { opacity: 0.35; filter: grayscale(0.6); }
-.step-arrow { font-weight: 700; color: var(--text-dim); }
-.side-empty { color: var(--text-dim); font-style: italic; }
 
 .peer-pool { display: flex; flex-direction: column; gap: 8px; }
 .peer-pool-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
