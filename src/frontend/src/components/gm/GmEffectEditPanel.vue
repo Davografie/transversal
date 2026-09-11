@@ -14,9 +14,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import EffectForm from './EffectForm.vue'
-import { useSfxEdit } from '@/composables/useSfxEdit.js'
+import { createSfxEdit } from '@/composables/useSfxEdit.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -28,7 +28,10 @@ const props = defineProps({
 })
 
 const panel = usePanel()
-const { draft, scopeVariables, save } = useSfxEdit()
+// The SFX editor provides its instance, so this child edits the same draft as
+// its parent panel. A standalone open (none today) falls back to a private
+// instance rather than a shared global.
+const { draft, scopeVariables, save } = inject('sfxEdit', null) || createSfxEdit()
 const { load: loadCatalog, sourceKinds, collectVariables } = useTargetCatalog()
 loadCatalog()
 

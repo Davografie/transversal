@@ -90,12 +90,12 @@
 </template>
 
 <script setup>
-import { computed, inject, onMounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, provide, ref, watch } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
-import { useSfxEdit } from '@/composables/useSfxEdit.js'
+import { createSfxEdit } from '@/composables/useSfxEdit.js'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import DangerButton from '@/components/ui/DangerButton.vue'
 import GmEffectEditPanel from './GmEffectEditPanel.vue'
@@ -109,10 +109,14 @@ import Button from '@/components/ui/Button.vue'
 const { graphql } = useApi()
 const panel = usePanel()
 const { traitNameMap, traitsets, allSfxs, fetchTraitsConfig } = useTraitsConfig()
+// One editor state per panel; the effect-edit child panel injects this same
+// instance so the pair shares a single draft (and two open editors do not).
+const sfxEdit = createSfxEdit()
+provide('sfxEdit', sfxEdit)
 const {
   draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables, cardText,
   open, reset, save, create, remove,
-} = useSfxEdit()
+} = sfxEdit
 
 const props = defineProps({
   sfx: { type: Object, default: null },

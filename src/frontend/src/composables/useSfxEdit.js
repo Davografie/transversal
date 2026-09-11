@@ -2,31 +2,40 @@ import { reactive, ref, watch } from 'vue'
 import { useApi } from './useApi.js'
 import { useTraitsConfig } from './useTraitsConfig.js'
 
-// ── Shared SFX-edit state (module-level singleton) ─────────────
-// One SFX is edited at a time across the panel stack: GmSfxEditPanel owns the
-// draft, and the GmEffectEditPanel child panel reads/writes the same reactive
-// state (Rule 2 — no prop-drilling the effects array; Rule 6 — identity only).
-const sfxId = ref(null)
-const draft = reactive({
-  name: '',
-  description: '',
-  trigger: 'manual',
-  source_kind: null,
-  placement: null,
-  arming_scope: null,   // null = auto (derive from trigger)
-  listener_spec: { steps: [] },
-  conditions: [],
-  effects: [],
-  duration: { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' },
-})
-const saving = ref(false)
-const errorMsg = ref('')
-const successMsg = ref('')
-const savedAt = ref(null)
-const validationWarnings = ref([])
-const scopeVariables = ref([])
-// Derived rules text for the current draft ([[SFX Natural Language Plan]]).
-const cardText = ref('')
+// ── SFX-edit state, one instance per editor panel ─────────────
+// Every ref lives inside the factory. GmSfxEditPanel owns an instance and
+// provides it to its GmEffectEditPanel child (Rule 2 — no prop-drilling the
+// effects array; Rule 6 — identity only), so that pair shares one draft while
+// two open editors keep their own. They used to share one module-level draft:
+// opening a second SFX inside a detached editor re-pointed the first, and a
+// save from either panel wrote to whichever SFX was opened last.
+// (The query constants and generateSfxId stay at module level.)
+export function generateSfxId(name) {
+  return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+export function createSfxEdit() {
+  const sfxId = ref(null)
+  const draft = reactive({
+    name: '',
+    description: '',
+    trigger: 'manual',
+    source_kind: null,
+    placement: null,
+    arming_scope: null,   // null = auto (derive from trigger)
+    listener_spec: { steps: [] },
+    conditions: [],
+    effects: [],
+    duration: { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' },
+  })
+  const saving = ref(false)
+  const errorMsg = ref('')
+  const successMsg = ref('')
+  const savedAt = ref(null)
+  const validationWarnings = ref([])
+  const scopeVariables = ref([])
+  // Derived rules text for the current draft ([[SFX Natural Language Plan]]).
+  const cardText = ref('')
 
 const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } } duration { timers { event remaining } combine } } }`
@@ -34,10 +43,6 @@ const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
 // Derived rules text for an *unsaved* draft — the SFX editor's live card preview.
 const SFX_TEXT_QUERY = `query($sfx: SfxInput!) { sfxText(sfx: $sfx) }`
 const SCOPE_VARS_QUERY = `query($trigger: String, $sourceKind: String) { scopeVariables(trigger: $trigger, sourceKind: $sourceKind) { name type } }`
-
-export function generateSfxId(name) {
-  return 'sfx-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
 
 function initialConditions(sfx) {
   if (sfx?.conditions?.length) {
@@ -71,12 +76,10 @@ function initialDuration(sfx) {
   return { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
 }
 
-let _watchersSetup = false
-let _saveTimer = null
-let _validationTimer = null
-let _suppressEdits = false
+  let _saveTimer = null
+  let _validationTimer = null
+  let _suppressEdits = false
 
-export function useSfxEdit() {
   const { graphql, error: apiError } = useApi()
   const { patchData, fetchTraitsConfig } = useTraitsConfig()
 
@@ -233,32 +236,28 @@ export function useSfxEdit() {
     } finally { saving.value = false }
   }
 
-  // One-time side effects (Rule 2): watchers are registered once against the
-  // module-level draft; both panels share the same reactive state. Sync flush
-  // lets `open()` suppress the initial assignment via `_suppressEdits`.
-  if (!_watchersSetup) {
-    _watchersSetup = true
-    watch(() => [draft.trigger, draft.source_kind], ([t, sk]) => {
+  // One set of watchers per instance, following this instance's draft. Sync
+  // flush lets `open()` suppress the initial assignment via `_suppressEdits`.
+  watch(() => [draft.trigger, draft.source_kind], ([t, sk]) => {
+    if (_suppressEdits) return
+    fetchScopeVariables(t || '', sk || null)
+  }, { flush: 'sync' })
+  watch(() => [draft.trigger, draft.source_kind, draft.arming_scope, draft.listener_spec, draft.conditions, draft.effects], () => {
+    if (_suppressEdits) return
+    clearTimeout(_validationTimer)
+    _validationTimer = setTimeout(() => { validate(); previewText() }, 400)
+  }, { deep: true, flush: 'sync' })
+  watch(
+    () => [draft.name, draft.description, draft.trigger, draft.source_kind, draft.placement, draft.arming_scope, draft.listener_spec, draft.conditions, draft.duration, draft.effects],
+    () => {
       if (_suppressEdits) return
-      fetchScopeVariables(t || '', sk || null)
-    }, { flush: 'sync' })
-    watch(() => [draft.trigger, draft.source_kind, draft.arming_scope, draft.listener_spec, draft.conditions, draft.effects], () => {
-      if (_suppressEdits) return
-      clearTimeout(_validationTimer)
-      _validationTimer = setTimeout(() => { validate(); previewText() }, 400)
-    }, { deep: true, flush: 'sync' })
-    watch(
-      () => [draft.name, draft.description, draft.trigger, draft.source_kind, draft.placement, draft.arming_scope, draft.listener_spec, draft.conditions, draft.duration, draft.effects],
-      () => {
-        if (_suppressEdits) return
-        if (!sfxId.value) return
-        savedAt.value = null
-        clearTimeout(_saveTimer)
-        _saveTimer = setTimeout(save, 700)
-      },
-      { deep: true, flush: 'sync' },
-    )
-  }
+      if (!sfxId.value) return
+      savedAt.value = null
+      clearTimeout(_saveTimer)
+      _saveTimer = setTimeout(save, 700)
+    },
+    { deep: true, flush: 'sync' },
+  )
 
   return {
     sfxId, draft, saving, errorMsg, successMsg, savedAt, validationWarnings, scopeVariables, cardText,
