@@ -249,8 +249,9 @@ select source → navigate entity → filter current_location == Azure Dawn
 Read as: *the trait instance I'm unlocking is held by someone standing at Azure Dawn.*
 A trait that offers the rule shows it as a chip only where that path resolves; step
 outside and the chip is simply not there. Once taken, the rule is theirs — it keeps
-working after they leave. On the card it trails as *gained only where: …*, so a gated
-rule never reads like an ungated one.
+working after they leave. The card itself says nothing about the gate: where a rule
+may be *taken* isn't part of what it *does*. The gate stays visible in the editor,
+and it is enforced where the grant happens.
 
 That last part is the whole reason it's a separate thing from a **condition**. A
 condition is evaluated when a rule *fires* as well as when it's offered, so gating with

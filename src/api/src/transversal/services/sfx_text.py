@@ -1129,14 +1129,11 @@ def sfx_text(sfx: SFX, *, resolve: NameResolver | None = None,
         head = f"{head}, if {' and '.join(rules)}"
     text = f"{head}: {effects}." if effects else f"{head}."
 
-    # A gate on *acquiring* is neither a condition nor an effect, so it trails in
-    # its own parenthesis — the same slot as narrative limits, different wording.
+    # An *acquire* gate is deliberately absent from the card: where a rule may be
+    # taken is not part of what it does. The card states the ability; the gate
+    # lives in the editor (and is enforced at the attach). Narrative conditions
+    # (the legacy ``limit`` text) are authors' flavour, so they still trail here.
     trailing: list[str] = []
-    if sfx.acquire_spec is not None and sfx.acquire_spec.steps:
-        phrase = render_phrase(
-            path_phrase(sfx.acquire_spec, source_element=source_element, resolve=resolve), "the")
-        if phrase:
-            trailing.append(f"gained only where: {phrase}")
     if narrative and include_narrative:
         trailing.extend(narrative)
     if trailing:
