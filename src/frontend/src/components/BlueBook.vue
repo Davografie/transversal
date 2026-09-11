@@ -38,12 +38,7 @@
           </div>
         </div>
         <input v-model="composeTitle" class="bb-input" placeholder="Title (optional)" @keyup.enter="focusBody" />
-        <div class="bb-threads-row">
-          <input v-model="composeThreads" class="bb-input" placeholder="Threads: dreams, investigation (comma-separated)" @focus="threadFocused = true" @blur="threadBlur" @input="onThreadInput" />
-          <div v-if="threadFocused && filteredThreadSuggestions.length" class="bb-suggestions">
-            <button v-for="t in filteredThreadSuggestions" :key="t" class="bb-suggestion-item" @mousedown.prevent @click="addThread(t)">{{ t }}</button>
-          </div>
-        </div>
+        <TagInput v-model="composeThreads" :suggestions="allThreads" placeholder="Threads — pick an existing one or type a new one" aria-label="Threads" />
         <div class="bb-body-row-full">
           <textarea ref="bodyEl" v-model="composeBody" class="bb-textarea" :placeholder="composePlaceholder" rows="4" @keyup.enter.ctrl="send"></textarea>
         </div>
@@ -123,6 +118,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import MediaImage from './MediaImage.vue'
+import TagInput from './ui/TagInput.vue'
 import { useDragDrop } from '../composables/useDragDrop.js'
 import { renderMarkdown } from '../utils/markdown.js'
 
@@ -149,7 +145,7 @@ const showRecipientList = ref(false)
 const composeMode = ref('new')
 const composeTitle = ref('')
 const composeBody = ref('')
-const composeThreads = ref('')
+const composeThreads = ref([])
 const composeImages = ref([])
 const uploadingImage = ref(false)
 const uploadError = ref('')
@@ -159,7 +155,6 @@ const composeRecipientId = ref('')
 const composeRecipientName = ref('')
 const bodyEl = ref(null)
 
-const threadFocused = ref(false)
 const allThreads = ref([])
 const relatedEntities = ref([])
 
@@ -384,14 +379,6 @@ function chainTitle(group) {
   return names.join(' → ')
 }
 
-const filteredThreadSuggestions = computed(() => {
-  if (!composeThreads.value) return allThreads.value
-  const parts = composeThreads.value.split(',')
-  const current = parts[parts.length - 1].trim().toLowerCase()
-  if (!current) return []
-  return allThreads.value.filter(t => t.toLowerCase().includes(current) && !parts.slice(0, -1).map(p => p.trim()).includes(t))
-})
-
 async function fetch() {
   if (!props.visible) return
   loading.value = true
@@ -496,8 +483,6 @@ function senderName(eid) { return senderNames.value[eid] || eid }
 function senderPortrait(eid) { return senderPortraits.value[eid] || null }
 function senderInitial(eid) { const n = senderName(eid); return n ? n.charAt(0).toUpperCase() : '?' }
 
-function parseTags() { return composeThreads.value.split(',').map(t => t.trim()).filter(Boolean) }
-
 async function send() {
   console.log("[BB] send() called", JSON.stringify({ body: composeBody.value, sending: sending.value, isSelf: isSelfRecipient.value, mode: composeMode.value, recipientId: composeRecipientId.value }))
   await nextTick()
@@ -508,7 +493,7 @@ async function send() {
   try {
     const body = composeBody.value.trim()
     const images = [...composeImages.value]
-    const tags = parseTags()
+    const tags = [...composeThreads.value]
     if (isSelfRecipient.value) {
       await graphql(ADD_JOURNAL, { eid: selfId.value, title: composeTitle.value.trim(), body, images, afterIds: [], threads: tags.length ? tags : [] })
     } else {
@@ -578,17 +563,6 @@ function selectRecipient(entity) {
   showRecipientList.value = false
 }
 
-function onThreadInput() {}
-function addThread(tag) {
-  const parts = composeThreads.value.split(',').map(t => t.trim()).filter(Boolean)
-  if (parts[parts.length - 1]) parts.pop()
-  parts.push(tag)
-  composeThreads.value = parts.join(', ') + ', '
-  threadFocused.value = true
-  bodyEl.value?.focus()
-}
-function threadBlur() { setTimeout(() => { threadFocused.value = false }, 150) }
-
 function openCompose(mode, recipient) {
   composeMode.value = mode || 'new'
   if (recipient) {
@@ -609,7 +583,7 @@ function cancelCompose() {
   showRecipientList.value = false
   composeTitle.value = ''
   composeBody.value = ''
-  composeThreads.value = ''
+  composeThreads.value = []
   composeImages.value = []
   composeRecipientId.value = ''
   composeRecipientName.value = ''
@@ -659,7 +633,7 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-body-row-full .bb-textarea{width:100%;min-height:80px}
 .bb-textarea{flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);font-size:12px;resize:none;outline:none;font-family:inherit}
 .bb-textarea:focus{border-color:var(--accent)}
-.bb-recipient-row,.bb-threads-row{position:relative}
+.bb-recipient-row{position:relative}
 .bb-recipient-btn{display:flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);font-size:12px;cursor:pointer;width:100%}
 .bb-recipient-btn:hover{border-color:var(--accent)}
 .bb-recipient-arrow{font-size:10px;color:var(--text-dim);margin-left:auto}
