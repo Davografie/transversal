@@ -406,6 +406,52 @@ def test_copy_trait_without_a_resolved_ref_does_nothing():
     assert "no trait instance to copy" in result.applied[0].summary
 
 
+# ── Trait move (steal) ───────────────────────
+
+def _move_effect(recipient_id, source_ts_id):
+    return Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="move",
+        entity=recipient_id, refs={"trait": TargetRef(value=source_ts_id)},
+    )
+
+
+def test_move_trait_re_anchors_the_instance():
+    src = _ts("asset", [DieType.D8], entity_id="char-1", traitset_id="ts-assets",
+              statement="Family heirloom")
+    src.sfx_ids = ["sfx-legacy"]
+    thief = _entity(id="char-2", name="Kael")
+    repo = FakeRepo(traits=[FakeTrait("asset", "ts-assets")], traitsettings=[src], entities=[thief])
+    result = apply_effects(_entity(), [_move_effect("char-2", "char-1:asset")], repo)
+    moved = result.new_trait_settings[0]
+    assert moved.id == "char-2:asset"
+    assert moved.entity_id == "char-2"
+    assert moved.statement == "Family heirloom"
+    # The same instance changing hands: its grants travel with it.
+    assert moved.sfx_ids == ["sfx-legacy"]
+    assert result.removed_trait_settings == [src]
+    assert result.applied[0].summary == "moved asset from char-1 to char-2"
+
+
+def test_move_trait_to_its_own_owner_is_a_no_op():
+    src = _ts("asset", [DieType.D8], entity_id="char-1", traitset_id="ts-assets")
+    repo = FakeRepo(traitsettings=[src])
+    result = apply_effects(_entity(), [_move_effect("char-1", "char-1:asset")], repo)
+    assert result.new_trait_settings == []
+    assert result.removed_trait_settings == []
+    assert "already on char-1" in result.applied[0].summary
+
+
+def test_move_trait_refuses_when_the_recipient_already_has_it():
+    src = _ts("asset", [DieType.D8], entity_id="char-1", traitset_id="ts-assets")
+    owned = _ts("asset", [DieType.D6], entity_id="char-2", traitset_id="ts-assets")
+    thief = _entity(id="char-2", name="Kael")
+    repo = FakeRepo(traitsettings=[src, owned], entities=[thief])
+    result = apply_effects(_entity(), [_move_effect("char-2", "char-1:asset")], repo)
+    assert result.new_trait_settings == []
+    assert result.removed_trait_settings == []
+    assert "already has asset" in result.applied[0].summary
+
+
 def test_remove_die_removes_matching_die():
     repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D8, DieType.D6])])
     entity = _entity()

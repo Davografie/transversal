@@ -132,7 +132,7 @@ def _register_core_handlers(em, raz):
             source_element=(ctx or {}).get(SOURCE_ELEMENT_CONTEXT_KEY),
         )
 
-    for action in ("step_up", "step_down", "reduce_by_effect", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die", "copy"):
+    for action in ("step_up", "step_down", "reduce_by_effect", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die", "copy", "move"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -773,37 +773,24 @@ def _apply_gain(entity, effect, repo, result):
     _queue_entity_revert(repo, subject, effect, target=target)
 
 
-def _apply_copy_trait(entity, effect, repo, result):
-    """Give the subject a copy of another trait instance (teach / gift).
+def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Effect,
+                            result: EffectsResult, *, carry_grants: bool = False) -> Optional[TraitSetting]:
+    """The instance ``src`` becomes on ``subject``, or ``None`` when refused.
 
-    The copy carries the *instance*: its dice, rating type, polarity, statement
-    and notes. Teaching hands over what the teacher has, not the trait's default
-    — which is the whole point, and why this is its own action rather than a
-    `gain` whose fields someone had to keep in sync by hand.
-
-    The recipient's trait-set rules still apply: a set that forbids duplicates
-    refuses the copy, and a set that allows them refuses only a same-statement
-    copy (statement is what distinguishes duplicates). The copy is anchored to
-    the recipient entity rather than mirroring the source's projection anchor,
-    and the repo seeds the trait's default SFX when it is created.
+    Shared by copy and move: both re-anchor an instance to another entity, and
+    both honour the recipient's trait-set rules — a set that forbids duplicates
+    refuses outright, a set that allows them refuses only a same-statement
+    instance (statement is what distinguishes duplicates). ``carry_grants`` is
+    for a *move*, where the instance keeps its SFX grants, spent dice and
+    visibility: it is the same trait changing hands, not a fresh one.
     """
-    subject = _effect_subject(entity, effect, result, repo)
-    if subject is None:
-        return
-    _track_subject(result, entity, subject)
-    ref = (effect.refs or {}).get("trait")
-    src_id = (getattr(ref, "value", "") or "") if ref else ""
-    src = repo.get_traitsetting(src_id) if src_id else None
-    if src is None:
-        result.applied.append(AppliedEffect(effect, f"no trait instance to copy ({src_id or 'unset'})"))
-        return
     get_traitset = getattr(repo, "get_traitset_by_id", None)
     traitset = get_traitset(src.traitset_id) if src.traitset_id and get_traitset else None
     allow_duplicates = bool(getattr(traitset, "allow_duplicates", False))
     if repo.find_traitsetting_collision(subject.id, src.trait_id, src.statement, allow_duplicates):
         result.applied.append(
             AppliedEffect(effect, f"{subject.name or subject.id} already has {src.trait_id}"))
-        return
+        return None
     ts = TraitSetting(
         id=repo.resolve_traitsetting_id(subject.id, src.trait_id, src.statement, allow_duplicates),
         entity_id=subject.id,
@@ -816,8 +803,71 @@ def _apply_copy_trait(entity, effect, repo, result):
         statement=src.statement,
         notes=src.notes,
     )
+    if carry_grants:
+        ts.sfx_ids = list(src.sfx_ids)
+        ts.enabled = src.enabled
+        ts.spent_dice = list(src.spent_dice)
+        ts.known_to = list(src.known_to)
+    return ts
+
+
+def _apply_copy_trait(entity, effect, repo, result):
+    """Give the subject a copy of another trait instance (teach / gift).
+
+    The copy carries the *instance*: its dice, rating type, polarity, statement
+    and notes. Teaching hands over what the teacher has, not the trait's default
+    — which is the whole point, and why this is its own action rather than a
+    `gain` whose fields someone had to keep in sync by hand.
+
+    Anchored to the recipient entity rather than mirroring the source's
+    projection anchor, and left without ``sfx_ids`` so the repo seeds the
+    trait's default grants when it creates the instance.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    ref = (effect.refs or {}).get("trait")
+    src_id = (getattr(ref, "value", "") or "") if ref else ""
+    src = repo.get_traitsetting(src_id) if src_id else None
+    if src is None:
+        result.applied.append(AppliedEffect(effect, f"no trait instance to copy ({src_id or 'unset'})"))
+        return
+    ts = _replicate_traitsetting(src, subject, repo, effect, result)
+    if ts is None:
+        return
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"copied {src.trait_id} to {subject.id}", ts.id))
+
+
+def _apply_move_trait(entity, effect, repo, result):
+    """Take a trait instance from another entity and give it to this one (steal).
+
+    The instance keeps its dice, grants, spent dice and visibility — it is the
+    same trait changing hands. A trait setting's id is keyed to its owner
+    (``{entity}:{trait}``), so a move is a create on the recipient plus a delete
+    of the source, not a field edit.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    ref = (effect.refs or {}).get("trait")
+    src_id = (getattr(ref, "value", "") or "") if ref else ""
+    src = repo.get_traitsetting(src_id) if src_id else None
+    if src is None:
+        result.applied.append(AppliedEffect(effect, f"no trait instance to move ({src_id or 'unset'})"))
+        return
+    if src.entity_id == subject.id:
+        result.applied.append(AppliedEffect(effect, f"{src.trait_id} is already on {subject.id}"))
+        return
+    ts = _replicate_traitsetting(src, subject, repo, effect, result, carry_grants=True)
+    if ts is None:
+        return
+    result.new_trait_settings.append(ts)
+    result.removed_trait_settings.append(src)
+    result.applied.append(
+        AppliedEffect(effect, f"moved {src.trait_id} from {src.entity_id} to {subject.id}", ts.id))
 
 
 def _apply_gain_or_step_up(entity, effect, repo, result):
@@ -1898,6 +1948,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "step_down"): _apply_step_down,
     ("modify_trait", "add_die"): _apply_add_die,
     ("modify_trait", "copy"): _apply_copy_trait,
+    ("modify_trait", "move"): _apply_move_trait,
     ("modify_trait", "remove_die"): _apply_remove_die,
     ("modify_trait", "reduce_by_effect"): _apply_reduce_by_effect,
     ("modify_trait", "set"): _apply_set,
