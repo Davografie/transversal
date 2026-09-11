@@ -325,6 +325,7 @@ class TargetCatalogField:
     options: list[str] = strawberry.field(default_factory=list)
     operators: list[str] = strawberry.field(default_factory=list)
     references: str = ""  # element type this id field points at (e.g. traitset)
+    suggest: str = ""  # value source for a data-driven field (e.g. trait_tags)
 
 
 @strawberry.type

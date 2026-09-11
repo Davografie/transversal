@@ -211,6 +211,10 @@ The structured way to target. A **path** is an ordered pipeline of steps that re
 
 Resolution modes **choose** (interactive pick) and **random** (non-interactive sample) collapse a many-cardinality collection to one (or a subset when `count > 1`).
 
+### Filtering by tag
+
+A trait can carry free-form **tags** (authored in the trait editor — *violent*, *protective*, …), and a path can select by them: `select self_traitsettings` → `filter tag contains violent`. The filter field is `tag` on a trait instance (which reads the tags of the trait it is an instance of) and on the registry trait itself; the value box suggests the tags that exist, and typing a new one is still allowed. Naming the step (`output: violent_traits`) both labels the card *and* makes the matched instances available to later effects as a bound variable.
+
 ### Useful seeds & edges
 
 - **Collections:** `self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`.

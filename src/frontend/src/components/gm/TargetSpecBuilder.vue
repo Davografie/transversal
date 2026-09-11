@@ -92,7 +92,14 @@
             />
             <button type="button" class="tsb-token-btn" title="Compare against a bound value" @click="useToken(i, true)">{ }</button>
           </span>
+          <input v-else-if="fieldSuggest(i)" :value="step.value" placeholder="value"
+                 :list="tagListId" @input="onFilterValue(i, $event)" />
           <input v-else :value="step.value" placeholder="value" @input="onFilterValue(i, $event)" />
+          <!-- Free-form labels: the suggestions come from the tags that exist,
+               but typing a new one stays allowed. -->
+          <datalist v-if="fieldSuggest(i)" :id="tagListId">
+            <option v-for="o in tagOptions" :key="o.id" :value="o.id" />
+          </datalist>
         </div>
 
         <!-- navigate: hop an edge -->
@@ -226,8 +233,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, useId, watch } from 'vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
+import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import DiePicker from '../DiePicker.vue'
 import GmList from '@/components/ui/GmList.vue'
@@ -262,6 +270,34 @@ const variablesMap = computed(() => {
 })
 
 const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections } = useTargetCatalog()
+
+// Free-form label fields (tags) have no schema-level option list — their values
+// are data. The wizard autosuggests the values that actually exist, off the
+// traits config the GM panel already loads (`suggest: "trait_tags"` in the
+// catalog names this source).
+const { traitsets, fetchTraitsConfig } = useTraitsConfig()
+
+const tagListId = `tsb-tag-options-${useId()}`
+
+const tagOptions = computed(() => {
+  const seen = new Set()
+  for (const ts of traitsets.value || []) {
+    for (const t of ts.traits || []) {
+      for (const tag of t.tags || []) if (tag) seen.add(tag)
+    }
+  }
+  return [...seen].sort().map((tag) => ({ id: tag, name: tag }))
+})
+
+function fieldSuggest(i) {
+  const field = steps.value[i]?.field
+  const f = fieldsFor(priorElement(i)).find((x) => x.name === field)
+  return f && f.suggest ? f.suggest : null
+}
+
+function ensureSuggestSource() {
+  if (!traitsets.value.length) fetchTraitsConfig()
+}
 
 const STEP_KINDS = [
   { kind: 'select', label: 'Select' },
@@ -553,6 +589,7 @@ async function runTrace() {
 }
 
 onMounted(load)
+onMounted(ensureSuggestSource)
 watch(() => [props.destination, props.sourceElement, props.variables], () => scheduleTrace(), { deep: true })
 watch(steps, scheduleTrace, { deep: true, immediate: true })
 </script>

@@ -51,6 +51,9 @@ class ScalarField:
     overrides the operators valid for this field (default derived from ``type``).
     ``references`` names the element type the field points at (e.g. ``traitset_id``
     → ``traitset``), so the wizard can render a picker for id-reference fields.
+    ``suggest`` names a *value source* for a free-form field whose values are data
+    rather than schema (e.g. ``trait_tags``) — the wizard renders an autosuggest
+    over the values that actually exist.
     """
     element: str
     name: str
@@ -58,6 +61,7 @@ class ScalarField:
     options: tuple[str, ...] = ()
     operators: tuple[str, ...] = ()
     references: str = ""
+    suggest: str = ""  # value source for a data-driven field ("" → free text)
     label: str = ""  # card-facing name; "" → humanized ``name``
 
 
@@ -121,7 +125,8 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         # shape as `armed_sfx_ids` below. Read through the trait, not the setting
         # (see the resolver's derived fields).
         "tags": ScalarField("traitsetting", "tags", "string",
-                            operators=("contains", "==", "!="), label="tag"),
+                            operators=("contains", "==", "!="), suggest="trait_tags",
+                            label="tag"),
     },
     "traitsetsetting": {
         "entity_id": ScalarField("traitsetsetting", "entity_id", "string", references="entity"),
@@ -136,7 +141,8 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "default_die_type": ScalarField("trait", "default_die_type", "die"),
         # The trait's own labels, matched the same way as on a trait instance.
         "tags": ScalarField("trait", "tags", "string",
-                            operators=("contains", "==", "!="), label="tag"),
+                            operators=("contains", "==", "!="), suggest="trait_tags",
+                            label="tag"),
     },
     "traitset": {
         "id": ScalarField("traitset", "id", "string"),
