@@ -369,6 +369,7 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 | Gain Trait / Gain or Step Up Trait / Cortex Gain Trait | Acquire a trait (or step it up) | either |
 | Copy Trait | Give another entity a copy of a trait instance — its dice, statement, notes, polarity are carried over; the recipient's trait-set rules apply | either |
 | Move Trait | Take a trait instance from another entity (a steal): the instance changes hands with its grants and spent dice | cost |
+| Delete Trait | Remove a trait instance from its owner — the trait burns away, is lost or destroyed | cost |
 | Reveal Trait (Learn) | Reveal a trait to another entity | benefit |
 | Set Trait-set Limit | Change a trait set's size limit | either |
 
@@ -429,6 +430,7 @@ Because effects run sequentially, the resolution effect waits for the dice-addin
 
 - **Effect conditions need a source.** `source_rating` / `target_path` conditions on an *effect* only work when the SFX declares a matching **Source**. Without it, `source` is empty and the condition fails silently.
 - **Trigger ≠ timing.** `manual` SFX are `immediate`; passive rules pair an `on_session_start`/`on_*` trigger with a roll/outcome timing effect.
+- **Boundary fires carry no context.** A beat/scene/session fire — an `on_beat`-style trigger, or an effect timed to the end of a beat/scene/session — passes *nothing* to the engine. A condition that reads the moment it fires (phase, stakes, contest outcome, roll tier, hitch, user role) can't be evaluated there, so the editor doesn't offer one, and `validateSfx` warns if a draft carries one anyway.
 - **SFX duration ≠ effect duration.** The SFX duration is a *listening window* (how long the SFX stays armed); the effect duration is an *undo timer* (when a change reverts). They don't influence each other.
 - **Sequential execution.** If an effect needs a `choose`, the effects after it pause until the choice resolves.
 - **Legacy vs structured targeting.** Old effects used `target`/`entity` strings; new effects use the **Targeting path** (`target_spec`/`entity_spec`). When both exist, the spec wins. Prefer the targeting path for anything that needs drillthrough or multi-target fan-out (see [[Targeting Model]]).

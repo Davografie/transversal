@@ -38,7 +38,7 @@ for. It is inert on an effect that also carries a `target_spec` or `refs`
 (`_apply_armed` checks those first), and the card text stays silent about a scope
 the applier ignores.
 
-## Coverage today (51 actions)
+## Coverage today (52 actions)
 
 - **Target offers a path — 25.** All the trait actions, the location/travel
   ones, `transfer_razmerit`, `attune`, `create_relationship`,
@@ -54,6 +54,9 @@ the applier ignores.
   `copy_trait` and `move_trait` (the trait instance). The last two take the
   recipient from their `entity`/subject field, so the thing being handed over is
   a path while *who gets it* is the ordinary subject target.
+- **Deletion is authorable.** `delete_trait` exposes `modify_trait`/`remove`
+  (previously only the internal inverse of `gain`), so a steal can be authored as
+  copy + delete when that reads better than `move_trait`.
 
 ## Gaps, and what each actually needs
 
