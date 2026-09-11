@@ -1,0 +1,69 @@
+"""Events — split out of src/api/src/transversal/services/effects_engine.py."""
+
+from dataclasses import dataclass
+from dataclasses import field
+from transversal.domain import DicePoolRequest
+from transversal.domain import Effect
+from transversal.domain import RollResult
+from typing import Optional
+
+
+@dataclass
+class GameEvent:
+    """An event that can trigger SFXs."""
+    type: str  # on_roll, on_complication, on_botch, on_success, etc.
+    entity_id: str
+    universe: str
+    context: dict = field(default_factory=dict)
+    # Optional payload depending on event type
+    dice_request: Optional[DicePoolRequest] = None
+    roll_result: Optional[RollResult] = None
+
+@dataclass
+class PendingSfxEffect:
+    """A pending ``{choose_*}`` effect plus its source SFX for display."""
+    effect: Effect
+    sfx_name: str
+    sfx_description: str = ""
+    # Immediate effects that come after this blocked effect; applied in order
+    # once the choice resolves (sequential execution).
+    continuation: list[Effect] = field(default_factory=list)
+
+@dataclass
+class StructuredChoice:
+    """A structured ``choose`` step awaiting user resolution.
+
+    ``element`` is the catalog element type; ``candidates`` are serialized
+    display records (``id``/``name``/``subtitle``/``element``); ``count`` is how
+    many to pick; ``field`` names where the result lands on the effect
+    (``target`` | ``entity`` | ``refs.<name>``).
+    """
+    element: str
+    candidates: list
+    count: int
+    field: str
+    effect: Effect
+    sfx_name: str = ""
+    sfx_description: str = ""
+    step_index: int = 0
+    source_kind: str = ""
+    source_id: str = ""
+    source_sfx_id: str = ""
+    answers_so_far: list = field(default_factory=list)
+    # Immediate effects that come after this blocked effect; applied in order
+    # once the choice resolves (sequential execution).
+    continuation: list[Effect] = field(default_factory=list)
+
+@dataclass
+class EventOutcome:
+    """Result of processing an event through the effects engine.
+
+    ``applied`` are immediately-applied effects. ``pending`` are immediate
+    effects with a ``{choose_*}`` target that were skipped and need user
+    resolution before they can be applied. ``structured`` are effects whose
+    ``target_spec``/``refs`` hit a ``choose`` step and carry the pre-resolved
+    candidate set for the picker.
+    """
+    applied: list[Effect] = field(default_factory=list)
+    pending: list[PendingSfxEffect] = field(default_factory=list)
+    structured: list[StructuredChoice] = field(default_factory=list)
