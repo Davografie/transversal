@@ -23,6 +23,25 @@ export function useEntityFilter(entities) {
     return false
   }
 
+  // A name chip that matches a location or a universe is a *scope* match: the
+  // entities at/in it match too. Searching "Yinling Creek" has to show the
+  // creek and who is in it — the tree draws occupants, and the location entity
+  // alone leaves it with nothing to render.
+  const matchedScope = computed(() => {
+    const locations = new Set()
+    const universes = new Set()
+    for (const f of activeFilters.value) {
+      if (f.type !== 'name') continue
+      for (const e of entities.value) {
+        if (e.type !== 'LOCATION' && e.type !== 'UNIVERSE') continue
+        if (!(fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value))) continue
+        if (e.type === 'UNIVERSE') universes.add(e.currentUniverse || e.id)
+        else locations.add(e.id)
+      }
+    }
+    return { locations, universes }
+  })
+
   // Chips combine with OR: an entity matches when it matches *any* active chip
   // — the chips are additive ("show me X, plus Y"), not narrowing. With no
   // chips everything matches.
@@ -31,7 +50,13 @@ export function useEntityFilter(entities) {
     return activeFilters.value.some((f) => {
       if (f.type === 'universe') return e.currentUniverse === f.value
       if (f.type === 'entityType') return e.type === f.value
-      if (f.type === 'name') return fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value)
+      if (f.type === 'name') {
+        if (fuzzyMatch(e.name, f.value) || fuzzyMatch(e.id, f.value)) return true
+        const scope = matchedScope.value
+        if (e.currentLocation && scope.locations.has(e.currentLocation)) return true
+        if (e.currentUniverse && scope.universes.has(e.currentUniverse)) return true
+        return false
+      }
       return false
     })
   }
