@@ -401,12 +401,21 @@ class EntityManager:
     def get_effective_traitsettings(
         self, entity_id: str, universes: Optional[list[str]] = None
     ) -> list[TraitSetting]:
-        """Traits active in ``universes``, or the entity's effective universes when omitted."""
+        """Traits live for the entity's active bodies, or scoped to ``universes``.
+
+        With no explicit scope the gate is **projection-native**: the body the trait
+        is anchored to must be in the active set, so two bodies in the same universe
+        no longer share availability. An explicit ``universes`` scope keeps the
+        universe-based question ("what is live in universe U"), which is what a
+        caller passing its own scope is actually asking.
+        """
         if universes is None:
             entity = self.repo.get_entity(entity_id)
             if entity is None:
                 return []
-            universes = self.repo.effective_universes(entity)
+            return self.repo.get_effective_traitsettings_for_projections(
+                entity_id, self.repo.active_projections(entity)
+            )
         return self.repo.get_effective_traitsettings(entity_id, universes)
 
     def get_traitsettings_by_set(

@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from strawberry.fastapi import GraphQLRouter
 
+from contextlib import asynccontextmanager
+
 import time
 
 from transversal.api.graphql.schema import schema
@@ -35,10 +37,22 @@ from transversal.services.entity_manager import EntityManager
 from transversal.services.razmerit import RazmeritService
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Wire core services on startup. Seed data runs via `python -m transversal seed`.
+
+    Defined ahead of ``app`` (the DI helpers it calls resolve at startup time, not
+    at import time).
+    """
+    await _startup()
+    yield
+
+
 app = FastAPI(
     title="Transversal API",
     version="0.2.0",
     description="VTTRPG backend for multiverse traversal",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -154,9 +168,8 @@ async def get_context(request: Request) -> dict:
 
 # ── Startup ──────────────────────────────────────────
 
-@app.on_event("startup")
-async def on_startup():
-    """Wire core services. Seed data runs via `python -m transversal seed`."""
+async def _startup():
+    """Wire core services (run by ``lifespan``). Seed data runs via `python -m transversal seed`."""
     from transversal.services.effects_applier import _register_core_handlers
     from transversal.services.sfx_owner import (
         ensure_sfx_owners,

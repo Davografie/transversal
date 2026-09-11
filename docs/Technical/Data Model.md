@@ -728,7 +728,7 @@ An entity's **active projection set** is the source of truth: `{current_projecti
 Traits resolve from the active set:
 
 1. **Ego traits** — always available (`from_type = entity`)
-2. **Morph traits** — available iff the trait's anchoring projection is live (`from_type = projection`); as implemented today this is checked as `origin_universe ∈ effective_universes`, which is equivalent while an entity holds at most one body per universe
+2. **Morph traits** — available iff the trait's anchoring projection is live (`from_type = projection`); the active-bodies path (`entity_manager.get_effective_traitsettings` with no explicit scope) gates **projection-native** (`ts._from ∈ active projections`), so two bodies in one universe do not share availability. An explicit `universes` scope still asks the coarser universe-scoped question.
 
 `transversal_type` is provenance and is **never** read for availability; having several NATIVE bodies does not make them all live (see [[Projections and Transversal]]).
 

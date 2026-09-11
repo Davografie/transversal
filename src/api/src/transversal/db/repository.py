@@ -1812,6 +1812,46 @@ class EntityRepository:
             for doc in self.db.aql.execute(query, bind_vars={"chain": chain})
         ]
 
+    def get_effective_traitsettings_for_projections(
+        self, entity_id: str, projection_ids: list[str]
+    ) -> list[TraitSetting]:
+        """Trait settings live for a set of **active bodies**.
+
+        The direct test the universe-name indirection stood in for: ego traits
+        (``from_type='entity'``) are always returned; a morph trait is returned iff
+        the projection it is anchored to is in ``projection_ids``. Two bodies in the
+        same universe therefore no longer share availability — only the live one
+        counts (see [[Active Projections Design Log]]). The registry checks (the
+        trait and its set must declare the projection's universe) still apply.
+        """
+        refs = [f"{PROJECTIONS}/{pid}" for pid in projection_ids]
+        query = f"""
+            FOR ts IN {TRAITSETTINGS}
+            FILTER ts.entity_id == @eid
+            LET is_projection = (ts.from_type == 'projection')
+            LET proj = is_projection ? DOCUMENT(ts._from) : null
+            LET origin = proj != null
+                ? (proj.origin_universe ? proj.origin_universe : SPLIT(proj._key, ":")[1])
+                : null
+            LET trait = DOCUMENT(ts._to)
+            LET set_doc = (trait.traitset_id != null)
+                ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
+            FILTER ts.from_type == 'entity'
+                OR (
+                    is_projection AND proj != null
+                    AND ts._from IN @refs
+                    AND origin IN trait.universes
+                    AND (set_doc == null OR origin IN set_doc.universes)
+                )
+            RETURN ts
+        """
+        return [
+            TraitSetting.model_validate({**doc, "id": doc["_key"]})
+            for doc in self.db.aql.execute(
+                query, bind_vars={"eid": entity_id, "refs": refs}
+            )
+        ]
+
     def get_effective_traitsettings(
         self, entity_id: str, universes: list[str]
     ) -> list[TraitSetting]:

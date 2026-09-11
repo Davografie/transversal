@@ -54,6 +54,11 @@ TRAITSET_GAMMA = "test-gating-ts-gamma"
 TRAITSET_EGO = "test-gating-ts-ego"
 
 
+TRAITSET_ALPHA_TWIN = "test-gating-ts-alpha-twin"
+ALPHA_TWIN = f"{CHAR_ID}:{UNIVERSE_ALPHA}:2"
+TRAIT_ALPHA_TWIN = "test-gating-trait-alpha-twin"
+
+
 def _cleanup(repo):
     """Remove the fixture data (idempotent — safe on a partial/absent run)."""
     repo.delete_entity(CHAR_ID)  # cascades projections + trait settings
@@ -205,6 +210,44 @@ def test_swap_is_add_plus_suppress(gating_data):
     })
     assert repo.active_projections(swapped) == [f"{CHAR_ID}:{UNIVERSE_GAMMA}"]
     assert repo.effective_universes(swapped) == [UNIVERSE_GAMMA]
+
+
+def test_effective_traitsettings_are_projection_native(gating_data):
+    """Two bodies in ONE universe do not share availability.
+
+    The projection-native gate: only the body that is in the active set counts, so a
+    second body in the same universe stays dark. Universe-based gating cannot tell
+    them apart — that is exactly the case this method exists for (see
+    [[Active Projections Design Log]]).
+    """
+    repo = gating_data
+    alpha_body = f"{CHAR_ID}:{UNIVERSE_ALPHA}"
+    repo.create_traitset(TraitSet(id=TRAITSET_ALPHA_TWIN, name="alpha twin set",
+                                  universes=[UNIVERSE_ALPHA]))
+    repo.create_trait(Trait(id=TRAIT_ALPHA_TWIN, name="alpha twin morph",
+                            universes=[UNIVERSE_ALPHA], traitset_id=TRAITSET_ALPHA_TWIN))
+    repo.create_projection(Projection(
+        id=ALPHA_TWIN, entity_id=CHAR_ID, origin_universe=UNIVERSE_ALPHA,
+        universe=UNIVERSE_ALPHA, transversal_type=TransversalType.NATIVE,
+    ))
+    repo.create_traitsetting(TraitSetting(
+        id=f"{CHAR_ID}:alpha-twin", entity_id=CHAR_ID, trait_id=TRAIT_ALPHA_TWIN,
+        from_type="projection", projection_id=ALPHA_TWIN,
+        traitset_id=TRAITSET_ALPHA_TWIN, dice=[DieType.D6],
+    ))
+    try:
+        live = repo.get_effective_traitsettings_for_projections(CHAR_ID, [alpha_body])
+        assert _has(live, TRAIT_ALPHA)           # the live body's morph trait
+        assert not _has(live, TRAIT_ALPHA_TWIN)  # same universe, but not live
+        assert _has(live, TRAIT_EGO)             # ego traits are always available
+
+        # The universe-scoped question is the coarser one — it cannot separate them.
+        by_universe = repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_ALPHA])
+        assert _has(by_universe, TRAIT_ALPHA_TWIN)
+    finally:
+        repo.delete_projection(ALPHA_TWIN)
+        repo.delete_trait(TRAIT_ALPHA_TWIN)
+        repo.delete_traitset(TRAITSET_ALPHA_TWIN)
 
 
 def test_projection_anchored_trait_gated_by_origin(gating_data):
