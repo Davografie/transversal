@@ -369,7 +369,7 @@ class TargetCatalog:
 @strawberry.input
 class TargetSpecStepInput:
     """One step of a targeting spec (kind discriminates the relevant fields)."""
-    kind: str  # "select" | "filter" | "navigate" | "aggregate" | "random" | "choose"
+    kind: str  # "select" | "filter" | "navigate" | "aggregate" | "random" | "choose" | "top"
     collection: Optional[str] = None
     variable: Optional[str] = None  # for kind == "select" + collection == "variable"
     output: Optional[str] = None  # bound variable name this step exposes
@@ -380,6 +380,7 @@ class TargetSpecStepInput:
     dedup: bool = False
     fn: Optional[str] = None
     count: Optional[int] = None  # random/choose: elements to sample (default 1)
+    direction: Optional[str] = None  # top: "desc" (highest/most recent) | "asc"
 
 
 @strawberry.input

@@ -17,6 +17,7 @@ from transversal.services.target_spec import (
     RandomStep,
     SelectStep,
     TargetSpec,
+    TopStep,
 )
 
 
@@ -573,3 +574,59 @@ def test_evaluate_named_field_lhs_compares_single_object():
     res = resolve(s, ctx)
     assert res.errors == []
     assert res.values == [True]
+
+
+# ── top: the ordering step ───────────────────────────
+
+def _three_bodies():
+    """One entity, three projections, used at different times."""
+    kael = NS(id="kael", type="character", current_location="loc-1", current_universe="earth",
+              current_projection="kael:earth", razmerit=0)
+    bodies = {
+        "kael:earth": NS(id="kael:earth", entity_id="kael", universe="earth",
+                         last_used_at="2026-01-02T10:00:00"),
+        "kael:valhalla": NS(id="kael:valhalla", entity_id="kael", universe="valhalla",
+                            last_used_at="2026-09-11T09:00:00Z"),
+        "kael:ember": NS(id="kael:ember", entity_id="kael", universe="emberline",
+                         last_used_at="2025-12-31T23:00:00"),
+    }
+    return kael, FakeRepo(entities={"kael": kael}, projections=bodies)
+
+
+def test_top_keeps_the_most_recently_used_body():
+    kael, repo = _three_bodies()
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="last_used_at"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert res.errors == []
+    assert [p.id for p in res.values] == ["kael:valhalla"]
+
+
+def test_top_asc_keeps_the_least_recently_used():
+    kael, repo = _three_bodies()
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="last_used_at", direction="asc"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert [p.id for p in res.values] == ["kael:ember"]
+
+
+def test_top_of_an_empty_collection_is_empty_not_an_error():
+    kael = NS(id="kael", type="character", current_location="loc-1", current_universe="earth",
+              current_projection=None, razmerit=0)
+    repo = FakeRepo(entities={"kael": kael}, projections={})
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="last_used_at"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert res.errors == []
+    assert res.values == []
+
+
+def test_top_skips_bodies_with_no_timestamp():
+    """An unset timestamp isn't "oldest" — it just can't be ranked."""
+    kael, repo = _three_bodies()
+    repo.projections["kael:never"] = NS(id="kael:never", entity_id="kael", universe="somewhere",
+                                        last_used_at=None)
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="last_used_at"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert [p.id for p in res.values] == ["kael:valhalla"]

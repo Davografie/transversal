@@ -43,6 +43,7 @@ class TargetSpec(BaseModel):
 | `navigate` | `edge`, `dedup` | Hop an edge to a related element; `dedup` collapses by identity |
 | `aggregate` | `fn`, `field` | Collapse a collection to a scalar (`count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`) |
 | `literal` | `element`, `value` | Name one object by id directly |
+| `top` | `field`, `direction` | Keep the extreme element of a collection by a comparable field — the ordering the pipeline otherwise lacks (`desc` = highest / most recent). Collapses `many → one` |
 | `evaluate` | `field`, `operator`, `value` | Terminal boolean test: `exists` (non-empty) or a comparison whose LHS is `field` — `"count"` (element count) or a scalar field name (e.g. `rating`) on a single object; produces `boolean/one` |
 
 Every step also carries `output: Optional[str]` — the variable name the step exposes
@@ -79,7 +80,7 @@ first, then draws the life from it (`filter universe == {universe}`).
 
 - **Element types** (`ELEMENT_TYPES`): `die`, `traitsetting`, `traitsetsetting`, `trait`, `traitset`, `entity`, `projection`, `location`, `universe`, `pool`.
 - **Edges** (`EDGES`): named hops `(source → target, cardinality)`. Edges are union-capable (`target` is a tuple) but single-typed today — e.g. `die → traitsetting`, `traitsetting → entity`, `entity → location`, `location → occupants`, plus the pool-assembly hops `entity → pool` and `location → difficulty_pool`.
-- **Scalar fields** (`SCALAR_FIELDS`): comparable/aggregatable fields per element, each with a type (`int`/`number`/`die`/`string`). Enum-like string fields also carry an **`options` tuple** so the wizard renders a dropdown (`die.source_kind`, `die.tier`, `die.rating`, `traitsetting.rating_type`, `traitsetting.from_type`, `entity.type`, …). Id-reference fields carry a **`references`** element hint (`traitset_id → traitset`, `trait_id → trait`, `entity_id → entity`, `projection_id → projection`, …) so the wizard renders a **TargetPicker** instead of a free-text id input.
+- **Scalar fields** (`SCALAR_FIELDS`): comparable/aggregatable fields per element, each with a type (`int`/`number`/`die`/`string`/`datetime`). Enum-like string fields also carry an **`options` tuple** so the wizard renders a dropdown (`die.source_kind`, `die.tier`, `die.rating`, `traitsetting.rating_type`, `traitsetting.from_type`, `entity.type`, …). Id-reference fields carry a **`references`** element hint (`traitset_id → traitset`, `trait_id → trait`, `entity_id → entity`, `projection_id → projection`, …) so the wizard renders a **TargetPicker** instead of a free-text id input. **`datetime`** orders by when it happened (naive and aware timestamps are normalised to UTC), which is what makes `projection.last_used_at` orderable — `is_orderable(field)` is the check a `top` step passes before it can rank.
 - **Aggregations** (`AGGREGATIONS`): `count` (int), `min`/`max` (same-type), `mean`/`avg_floor`/`avg_ceil` (number).
 - **Collections** (`COLLECTIONS`): the `select` seeds — `self` (singleton entity), `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`. Two special seeds live outside `COLLECTIONS` because their type varies: `select source` (typed by the SFX's `source_kind`) and `select variable` (typed by a bound output variable).
 

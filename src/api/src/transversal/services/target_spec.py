@@ -92,6 +92,21 @@ class ChooseStep(BaseModel):
     output: str | None = None
 
 
+class TopStep(BaseModel):
+    """Keep the extreme element of a collection, measured by a comparable field.
+
+    ``direction="desc"`` keeps the highest (the most recent, the largest),
+    ``"asc"`` the lowest. Collapses ``many → one``. This is the ordering the
+    pipeline otherwise lacks — it is how "the most recently used body" is written
+    now that ``projection.last_used_at`` is a catalog field. Ties keep the first
+    one encountered, so a spec resolves the same way twice.
+    """
+    kind: Literal["top"] = "top"
+    field: str
+    direction: Literal["desc", "asc"] = "desc"
+    output: str | None = None
+
+
 class EvaluateStep(BaseModel):
     """Terminal boolean test over the current collection/scalar.
 
@@ -111,7 +126,7 @@ class EvaluateStep(BaseModel):
 
 
 TargetStep = Annotated[
-    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep, ChooseStep, EvaluateStep],
+    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep, ChooseStep, TopStep, EvaluateStep],
     Field(discriminator="kind"),
 ]
 
@@ -292,6 +307,24 @@ def trace(spec: TargetSpec, source_element: str | None = None,
             else:
                 cardinality = "one" if step.count == 1 else "many"
                 current = ValueType(current.element, cardinality)
+
+        elif isinstance(step, TopStep):
+            if current is None:
+                errors.append(TraceError(i, "top has no collection to order"))
+                current = None
+            elif current.cardinality != "many":
+                errors.append(TraceError(i, "top requires a many-cardinality collection"))
+                # type unchanged (element preserved; caller sees the error)
+            else:
+                f = tc.field(current.element, step.field)
+                if f is None:
+                    errors.append(TraceError(i, f"unknown field {current.element}.{step.field}"))
+                    current = None
+                elif not tc.is_orderable(f):
+                    errors.append(TraceError(i, f"field {current.element}.{step.field} cannot be ordered"))
+                    current = None
+                else:
+                    current = ValueType(current.element, "one")
 
         elif isinstance(step, EvaluateStep):
             if current is None:

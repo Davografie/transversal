@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from transversal.services.target_spec import (
@@ -27,6 +28,7 @@ from transversal.services.target_spec import (
     RandomStep,
     SelectStep,
     TargetSpec,
+    TopStep,
     TraceError,
     ValueType,
 )
@@ -235,6 +237,16 @@ def _to_number(v: Any) -> float | None:
         s = v[1:] if v.startswith("d") else v
         try:
             return int(s)
+        except ValueError:
+            pass
+        # A timestamp orders by when it happened. Naive and aware values are both
+        # accepted and normalised to UTC so the two can't sort against each other
+        # inconsistently.
+        try:
+            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.timestamp()
         except ValueError:
             return None
     return getattr(v, "max_value", None)
@@ -630,6 +642,26 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 # The user's selection supplies the value; nothing resolved yet.
                 values, current_type = [], None
                 break
+
+        elif isinstance(step, TopStep):
+            f = tc.field(current_type.element, step.field) if current_type is not None else None
+            if current_type is None or f is None:
+                src = current_type.element if current_type else "nothing"
+                errors.append(TraceError(i, f"cannot order {src} by {step.field}"))
+                values, current_type = [], None
+            elif not values:
+                # Nothing to order: an empty collection stays empty (fail closed),
+                # with the cardinality the step produces.
+                current_type = ValueType(current_type.element, "one")
+            else:
+                ranked = [(_to_number(_get_field(v, step.field)), v) for v in values]
+                usable = [(n, v) for n, v in ranked if n is not None]
+                if not usable:
+                    values, current_type = [], ValueType(current_type.element, "one")
+                else:
+                    _, chosen = (max if step.direction == "desc" else min)(usable, key=lambda p: p[0])
+                    values = [chosen]
+                    current_type = ValueType(current_type.element, "one")
 
         elif isinstance(step, EvaluateStep):
             values = [_evaluate_step(values, current_type, step, context)]

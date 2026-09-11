@@ -45,6 +45,7 @@ from transversal.services.target_spec import (
     RandomStep,
     SelectStep,
     TargetSpec,
+    TopStep,
     ValueType,
     trace,
 )
@@ -448,6 +449,25 @@ def _random_phrase(p: Phrase, step: RandomStep) -> Phrase:
                    adjectives=[*p.adjectives, "random"])
 
 
+def _top_phrase(p: Phrase, step: TopStep) -> Phrase:
+    """``top`` reads as a superlative selection: "the most recently used".
+
+    A timestamp has an obvious reading (*most recently used* — how a path asks
+    for the body you were last in); any other orderable field reads as "with the
+    highest/lowest …". It collapses to one, so it supplies its own determiner.
+    """
+    from transversal.services import target_catalog as _tc
+    f = _tc.field(p.element, step.field) if p.element else None
+    if f is not None and f.type == "datetime":
+        head = "most recently used" if step.direction == "desc" else "least recently used"
+        return replace(p, cardinality="one", adjectives=[*p.adjectives, head],
+                       fixed_determiner="the")
+    label = _tc.field_label(f) if f is not None else step.field.replace("_", " ")
+    edge = "highest" if step.direction == "desc" else "lowest"
+    return replace(p, cardinality="one", origin=f"with the {edge} {label}",
+                   fixed_determiner="the")
+
+
 def _literal_phrase(step: LiteralStep, resolve: NameResolver | None = None) -> Phrase:
     # A literal is a complete reference, like a scalar: it carries its own article.
     return Phrase(element=step.element, cardinality="one",
@@ -558,6 +578,8 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
             phrase = _random_phrase(phrase, step)
         elif isinstance(step, ChooseStep):
             phrase = _choose_phrase(phrase, step)
+        elif isinstance(step, TopStep):
+            phrase = _top_phrase(phrase, step)
         elif isinstance(step, EvaluateStep):
             phrase = _evaluate_phrase(phrase, step, named)
 

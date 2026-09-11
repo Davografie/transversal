@@ -10,6 +10,7 @@ from transversal.services.target_spec import (
     RandomStep,
     SelectStep,
     TargetSpec,
+    TopStep,
     ValueType,
     check,
     final_type,
@@ -352,3 +353,51 @@ def test_choose_deserializes_from_dict():
     ]})
     assert isinstance(s.steps[1], ChooseStep)
     assert final_type(s) == ValueType("die", "many")
+
+
+# ── top (the ordering step) ──────────────────────────
+
+def test_top_collapses_to_one_by_a_timestamp():
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="last_used_at"))
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("projection", "one")
+
+
+def test_top_rejects_an_unorderable_field():
+    """A plain string has no ordering — the catalog's operators say so."""
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="universe"))
+    _types, errors = trace(s)
+    assert any("cannot be ordered" in e.message for e in errors)
+
+
+def test_top_rejects_an_unknown_field():
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="nope"))
+    _types, errors = trace(s)
+    assert any("unknown field" in e.message for e in errors)
+
+
+def test_top_needs_a_collection():
+    s = spec(SelectStep(collection="self"), TopStep(field="last_used_at"))
+    _types, errors = trace(s)
+    assert any("requires a many-cardinality collection" in e.message for e in errors)
+
+
+def test_top_exposes_its_output():
+    from transversal.services.target_spec import spec_variables
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             TopStep(field="last_used_at", output="most_recent"))
+    assert spec_variables(s)["most_recent"] == ValueType("projection", "one")
+
+
+def test_top_deserializes_from_dict_defaulting_to_desc():
+    s = TargetSpec.model_validate({"steps": [
+        {"kind": "select", "collection": "self"},
+        {"kind": "navigate", "edge": "projections"},
+        {"kind": "top", "field": "last_used_at"},
+    ]})
+    assert isinstance(s.steps[2], TopStep)
+    assert s.steps[2].direction == "desc"

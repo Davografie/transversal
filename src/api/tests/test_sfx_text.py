@@ -424,6 +424,18 @@ class TestTwoPathAttune:
         assert "their counterpart" in text
         assert "three_realms" not in text
 
+    def test_top_step_reads_as_the_most_recently_used(self):
+        """The ordering step is how "the body you were last in" is written."""
+        effect = Effect(
+            type="attune", action="enable",
+            target_spec=spec(
+                {"kind": "select", "collection": "self"},
+                {"kind": "navigate", "edge": "projections"},
+                {"kind": "top", "field": "last_used_at"},
+            ),
+        )
+        assert effect_text(effect) == "attune your most recently used projection"
+
     def test_copy_trait_reads_as_a_gift(self):
         """`sfx-teach`: hand another entity a copy of a trait you have."""
         from transversal.domain import TargetRef

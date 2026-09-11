@@ -67,18 +67,29 @@ def field_label(field: ScalarField) -> str:
 
 
 # Operators valid per field type. Ordering operators only make sense on
-# comparable (numeric/die) fields; strings only support equality/membership.
+# comparable (numeric/die/timestamp) fields; plain strings only support
+# equality/membership.
 _ORDERED_OPERATORS = ("==", "!=", ">", ">=", "<", "<=", "in")
 _STRING_OPERATORS = ("==", "!=", "in")
+_COMPARABLE_TYPES = ("int", "number", "die", "datetime")
 
 
 def operators_for(field: ScalarField) -> tuple[str, ...]:
     """The operators valid for a field (explicit override, else by type)."""
     if field.operators:
         return field.operators
-    if field.type in ("int", "number", "die"):
+    if field.type in _COMPARABLE_TYPES:
         return _ORDERED_OPERATORS
     return _STRING_OPERATORS
+
+
+def is_orderable(field: ScalarField) -> bool:
+    """True when a field can be ordered (its operators include a comparison).
+
+    What a ``top`` step checks before it can keep the highest/lowest element.
+    """
+    ops = operators_for(field)
+    return ">" in ops or "<" in ops
 
 
 # A "die" field is comparable (d4 < d6 < … < d12); numeric for mean after
@@ -139,6 +150,9 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "origin_universe": ScalarField("projection", "origin_universe", "string", references="universe"),
         "entity_id": ScalarField("projection", "entity_id", "string", references="entity"),
         "current_location": ScalarField("projection", "current_location", "string", references="location"),
+        # A timestamp: ordered by when it happened, which is what lets a path ask
+        # for "the most recently used body" (`top field=last_used_at`).
+        "last_used_at": ScalarField("projection", "last_used_at", "datetime", label="recently used"),
     },
     "location": {
         "id": ScalarField("location", "id", "string"),
@@ -470,7 +484,7 @@ def validate() -> list[str]:
         if element_name not in ELEMENT_TYPES:
             problems.append(f"scalar fields for unknown element {element_name!r}")
         for f in fields.values():
-            if f.type not in ("int", "number", "die", "string"):
+            if f.type not in ("int", "number", "die", "string", "datetime"):
                 problems.append(f"field {element_name}.{f.name}: bad type {f.type!r}")
 
     for a in AGGREGATIONS:

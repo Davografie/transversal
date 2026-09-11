@@ -125,6 +125,20 @@
           </select>
         </div>
 
+        <!-- top: keep the extreme element by a comparable field -->
+        <div v-else-if="step.kind === 'top'" class="tsb-config tsb-top">
+          <select v-model="step.field">
+            <option value="">— field —</option>
+            <option v-for="f in orderableFieldsFor(priorElement(i))" :key="f.name" :value="f.name">
+              {{ f.label || f.name }} <em>({{ f.type }})</em>
+            </option>
+          </select>
+          <select v-model="step.direction">
+            <option value="desc">highest / most recent</option>
+            <option value="asc">lowest / least recent</option>
+          </select>
+        </div>
+
         <!-- random: sample a subset of the current collection -->
         <div v-else-if="step.kind === 'random'" class="tsb-config tsb-random">
           <label class="tsb-check">
@@ -254,6 +268,7 @@ const STEP_KINDS = [
   { kind: 'filter', label: 'Filter' },
   { kind: 'navigate', label: 'Navigate' },
   { kind: 'aggregate', label: 'Aggregate' },
+  { kind: 'top', label: 'Top' },
   { kind: 'random', label: 'Random' },
   { kind: 'choose', label: 'Choose' },
   { kind: 'evaluate', label: 'Evaluate' },
@@ -416,6 +431,14 @@ function onEvaluateValue(i, raw) {
 // Left-hand side of an evaluate comparison. For a *many* collection the only
 // sensible LHS is its count; for a single object we offer count + its scalar
 // fields (e.g. rating); for a scalar element the scalar is the LHS.
+function orderableFieldsFor(element) {
+  // Only fields the backend will order by: numbers, dice and timestamps
+  // (`is_orderable` in the catalog). A `top` step over a plain string is
+  // rejected by the type-checker, so it is not offered here either.
+  if (!element) return []
+  return fieldsFor(element).filter((f) => ['int', 'number', 'die', 'datetime'].includes(f.type))
+}
+
 function evalFieldOptions(i) {
   const prior = priorType(i)
   if (!prior || !prior.element) return []
