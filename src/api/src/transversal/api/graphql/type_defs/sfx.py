@@ -21,6 +21,7 @@ class SfxOwnerKind(str, Enum):
     TABLE = "table"
     GM = "gm"
     ENTITY = "entity"
+    LOCATION = "location"
     PROJECTION = "projection"
     TRAIT = "trait"
     TRAIT_INSTANCE = "trait_instance"

@@ -126,8 +126,11 @@ world full of lair actions, faction rules and portal effects affordable.
    makes all three of the author's cases reachable: *put the rule on the place*.
 2. **A source kind + catalog element per new owner type**, so `select source`,
    targeting paths and card text can name the place ("this location", "this
-   portal"). **Still open** — for now a place-owned rule resolves like any other
-   entity-owned one.
+   portal"). **Landed for locations 2026-09-11:** `source_kind: location`
+   resolves the source to the **place** (not the acting entity, which is what
+   `entity` resolves to), exposes `{location}`, and lets a path walk straight to
+   `occupants`. It is a distinct *owner surface* too, so a location-sourced rule
+   attached to a character is refused rather than quietly resolving to them.
 3. **Authoring surfaces**: the owner panel already lists entities (locations
    included) and attaching an SFX to one now does what it looks like it does.
 4. **Validation honesty**, in both directions: until a type is supported, a rule

@@ -55,6 +55,7 @@ They stay separate. `manual` is **not** split into four triggers — the only th
 | `trait_setting` | `{trait_setting}` | a `TraitSetting` (instance) | `rating`, `rating_type`, `polarity`, `entity_id`, `traitset_id` |
 | `traitset_setting` | `{traitset_setting}` | a `TraitSetSetting` (instance) | `entity_id`, `traitset_id`, `limit` |
 | `entity` | `{entity}` | an `Entity` | `razmerit`, `type`, `current_location`, `current_universe` |
+| `location` | `{location}` | the **place** that owns the rule (a location entity) | `occupants` (a path may walk straight to them), `name`, `universe` |
 | `projection` | `{projection}` | a `Projection` | `entity_id`, `current_location`, `type` |
 | `table` | *(none)* | the `table` owner bucket (everyone) | — |
 | `gm` | *(none)* | the `gm` owner bucket (GM contexts) | — |
@@ -88,6 +89,15 @@ So the server never guesses a type; it only fills an id of a type it already exp
 ### Consequence
 
 Because `source_kind` is singular and enforced, one SFX can't be both a trait-SFX and an entity-SFX. To get the same effect on both, author two SFX. This is the accepted trade for "author knowing what they're authoring for."
+
+> [!important] `entity` and `location` are different sources, not synonyms
+> A location *is* an entity, but at fire time an `entity` source resolves to the
+> **acting entity** — for a place-owned rule that is the character who walked in,
+> not the place. `location` resolves to the **place** (the location that owns the
+> rule, or the ancestor of the one the entity is in). It also carries its own
+> owner surface, so `add_sfx_to_owner` refuses to attach a location-sourced rule
+> to a character instead of letting it quietly resolve to them later. See
+> [[Place-Owned Rules]].
 
 ## Scope asymmetry
 

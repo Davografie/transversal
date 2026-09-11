@@ -125,6 +125,11 @@ def resolve_source(source_kind: str, source_id: str | None, repo) -> tuple[Any, 
     if element == "entity":
         obj = repo.get_entity(source_id)
         return (obj, element) if obj is not None else None
+    if element == "location":
+        # A place source: the object is the location itself, so a path may walk
+        # straight to its occupants (`select source → occupants`).
+        obj = repo.get_entity(source_id)
+        return (obj, element) if obj is not None else None
     if element == "projection":
         obj = repo.get_projection(source_id)
         return (obj, element) if obj is not None else None

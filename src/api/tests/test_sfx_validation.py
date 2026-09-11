@@ -389,3 +389,23 @@ def test_ownership_guard_skipped_when_unowned_or_no_repo(monkeypatch):
     sfx.source_kind = "trait_setting"
     assert validate_sfx(sfx, repo=object()) == []  # unowned → skip
     assert validate_sfx(sfx) == []  # no repo → skip
+
+
+def test_a_location_sourced_rule_owned_by_a_character_warns(monkeypatch):
+    """The whole reason `location` is its own owner surface: a place-owned rule
+    must not silently sit on a character, where its source would resolve to them."""
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: {"entity"})
+    sfx = _sfx()
+    sfx.source_kind = "location"
+    assert validate_sfx(sfx, repo=object()) == [
+        "Source is 'location' but this SFX is owned by entity, not 'location' — select source / source rating will resolve to nothing"
+    ]
+
+
+def test_a_location_sourced_rule_owned_by_a_place_is_fine(monkeypatch):
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: {"location"})
+    sfx = _sfx()
+    sfx.source_kind = "location"
+    assert validate_sfx(sfx, repo=object()) == []

@@ -217,8 +217,13 @@ An SFX attached to a **location** applies to the entities *in* it — and in its
 sub-locations, however deep. Nothing is written onto them: the rule is simply in
 their list while they are there, so leaving ends it by itself.
 
-Attach one in **Manage SFX** (owner filter → *Entity* → pick the location). Two
-things it buys you:
+Attach one in **Manage SFX** (owner filter → *Location* → pick the place). Set the
+**Source** to `Location` as well, and the rule knows what it is: the place is both
+where it lives *and* what it resolves to, so a targeting path can walk straight to
+its occupants (`select source → occupants → …`) and a source-aware condition reads
+the place, not the character.
+
+Two things it buys you:
 
 - **A place's rule, at a place.** *Everyone who walks into the Azure Dawn sect
   gains access to its life path* is now the place's rule plus an arrival trigger,
@@ -234,6 +239,7 @@ taken back when they next move.
 > [!example] A worked example is in the world
 > **Sect Initiation** (`sfx-azure-dawn-initiation`) sits on Azure Dawn: *when you
 > arrive somewhere, if you are a character: discover the Azure Dawn life path*.
+> Its **source** is the place too, so a path could walk straight to its occupants.
 > Four settings combine — the **owner** decides who it reaches (everyone inside
 > Azure Dawn and its sub-locations), the **trigger** decides when (arriving), the
 > **condition** decides who it applies to (characters, not the GMCs standing

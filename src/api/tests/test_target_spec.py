@@ -429,3 +429,26 @@ def test_a_type_filter_enables_the_narrower_elements_edges():
     assert errors == []
     final = final_type(proven, source_element="traitsetting")
     assert (final.element, final.cardinality) == ("traitsetting", "many")
+
+
+def test_a_place_source_can_walk_straight_to_its_occupants():
+    """The payoff of a `location` source: a rule attached to the sect resolves the
+    *place* as its source, so its path reaches the people inside without the
+    trait-setting → entity → cast dance."""
+    from transversal.services.target_spec import FilterStep, NavigateStep, SelectStep
+
+    spec = TargetSpec(steps=[
+        SelectStep(collection="source"),
+        NavigateStep(edge="occupants"),
+        NavigateStep(edge="traitsettings"),
+        FilterStep(field="trait_id", operator="==", value="trait-movement"),
+    ])
+    types, errors = trace(spec, source_element="location")
+    assert errors == []
+    final = final_type(spec, source_element="location")
+    assert (final.element, final.cardinality) == ("traitsetting", "many")
+
+    # The same path from an `entity` source is unavailable — this is the gap the
+    # kind closes (an entity is not known to be a place).
+    _types, entity_errors = trace(spec, source_element="entity")
+    assert entity_errors, "an entity source must not silently reach occupants"

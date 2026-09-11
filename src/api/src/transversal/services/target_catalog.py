@@ -414,6 +414,12 @@ SOURCE_KINDS: tuple[SourceKind, ...] = (
     SourceKind("trait_setting", "Trait setting", "traitsetting", "trait_setting", "trait_instance"),
     SourceKind("traitset_setting", "Trait set setting", "traitsetsetting", "traitset_setting", "trait_set"),
     SourceKind("entity", "Entity", "entity", "entity", "entity"),
+    # A *place* is its own kind of source: the rule is attached to a location and
+    # applies to whoever is in it, so the source is the location itself — not the
+    # acting entity, which is what `entity` resolves to at fire time. The owner
+    # surface is the location one (not `entity`), so a location-sourced rule
+    # attached to a character is caught rather than silently resolving to them.
+    SourceKind("location", "Location", "location", "location", "location"),
     SourceKind("projection", "Projection", "projection", "projection", "projection"),
     # Bucket sources: attached to the table/GM owner buckets, not a typed
     # instance. Non-resolving — empty element/variable, so ``source_element``

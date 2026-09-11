@@ -385,22 +385,21 @@ def ensure_place_rule_example(repo) -> None:
         name="Sect Initiation",
         description="Whoever arrives on Azure Dawn's grounds discovers its life path.",
         trigger="on_location_change",
-        source_kind="entity",
+        source_kind="location",
         conditions=[Condition(type=ConditionType.ENTITY_TYPE, target="character")],
         effects=[Effect(timing=EffectTiming.IMMEDIATE, type="life_path",
                         action="discover", target=life_path.id)],
     )
 
-    existing = repo.get_sfx(PLACE_RULE_EXAMPLE_ID)
-    if existing is None:
+    # Create-only: this is content, and once the author edits it (a condition
+    # added, a trigger changed) re-running the seeder must not clobber them.
+    if repo.get_sfx(PLACE_RULE_EXAMPLE_ID) is None:
         repo.create_sfx(desired)
-    else:
-        repo.update_sfx(desired)
 
-    # The owner side: a location *is* an entity, so the ordinary entity owner
-    # surface carries it (and `add_sfx_to_owner` checks the declared source kind
-    # against that surface).
-    add_sfx_to_owner(repo, "entity", location.id, PLACE_RULE_EXAMPLE_ID)
+    # The owner side: attach it as a *location*, which is what its declared
+    # source kind requires — `add_sfx_to_owner` refuses a mismatch, so a
+    # place-owned rule can't quietly sit on a character.
+    add_sfx_to_owner(repo, "location", location.id, PLACE_RULE_EXAMPLE_ID)
 
 
 def ensure_prevent_taken_out_sfx(repo) -> None:
@@ -847,6 +846,18 @@ def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_
     if element == "entity":
         entity = repo.get_entity(entity_id)
         return (entity, "entity") if entity is not None else None
+    if element == "location":
+        # A place-owned rule's source is the *place*, not the entity standing in
+        # it — that is the whole point of the kind. Find which place in the
+        # entity's scope owns this SFX (the location itself or an ancestor).
+        entity = repo.get_entity(entity_id)
+        location_id = getattr(entity, "current_location", None) if entity is not None else None
+        if not location_id:
+            return None
+        for place in repo.list_ancestor_locations_with_sfx(location_id):
+            if sfx_id in (place.sfx_ids or []):
+                return (place, "location")
+        return None
     if element == "projection":
         entity = repo.get_entity(entity_id)
         proj = repo.get_projection(entity.current_projection) if (entity is not None and entity.current_projection) else None
@@ -876,7 +887,11 @@ _BUCKET_TYPES = ("table", "gm")
 _BUCKET_LABELS = {"table": "Table", "gm": "GM"}
 
 # Every owner surface an SFX can be attached to (mirrors SfxOwnerKind).
-_OWNER_SURFACES = ("table", "gm", "entity", "projection", "trait", "trait_instance", "trait_set")
+# Every owner surface an SFX can be attached to (mirrors SfxOwnerKind).
+# ``location`` is a distinct surface even though a location *is* an entity: a
+# place-owned rule resolves its source to the place, and a `location`-sourced SFX
+# attached to a character has to be catchable.
+_OWNER_SURFACES = ("table", "gm", "entity", "location", "projection", "trait", "trait_instance", "trait_set")
 
 
 def owned_surfaces(repo, sfx_id: str) -> set[str]:
@@ -974,12 +989,22 @@ def list_owner_refs(repo, owner_type: str) -> list[dict]:
         }]
 
     if owner_type == "entity":
+        from transversal.domain import EntityType
         return [{
             "owner_type": "entity",
             "owner_id": e.id,
             "label": e.name or e.id,
             "sfx_ids": list(e.sfx_ids or []),
-        } for e in repo.list_all_entities()]
+        } for e in repo.list_all_entities() if e.type != EntityType.LOCATION]
+
+    if owner_type == "location":
+        from transversal.domain import EntityType
+        return [{
+            "owner_type": "location",
+            "owner_id": e.id,
+            "label": e.name or e.id,
+            "sfx_ids": list(e.sfx_ids or []),
+        } for e in repo.list_all_entities() if e.type == EntityType.LOCATION]
 
     if owner_type == "projection":
         return [{
@@ -1053,7 +1078,7 @@ def _get_owner_sfx_ids(repo, owner_type: str, owner_id: str) -> list[str] | None
     if owner_type in _BUCKET_TYPES:
         owner = repo.get_sfx_owner(owner_id)
         return list(owner.sfx_ids or []) if owner else None
-    if owner_type == "entity":
+    if owner_type in ("entity", "location"):
         entity = repo.get_entity(owner_id)
         return list(entity.sfx_ids or []) if entity else None
     if owner_type == "projection":
@@ -1080,7 +1105,7 @@ def _set_owner_sfx_ids(repo, owner_type: str, owner_id: str, sfx_ids: list[str])
         owner.sfx_ids = list(sfx_ids)
         repo.update_sfx_owner(owner)
         return True
-    if owner_type == "entity":
+    if owner_type in ("entity", "location"):
         entity = repo.get_entity(owner_id)
         if entity is None:
             return False

@@ -1069,3 +1069,57 @@ def test_the_place_rule_example_no_ops_without_its_data():
         repo = _WorldDouble(**keyword)
         ensure_place_rule_example(repo)
         assert repo.sfxs == {}, keyword
+
+
+# ── A place as an owner *and* as a source ─────────────────────
+#
+# `location` is its own owner surface: a place-owned rule resolves its source to
+# the place, not to the entity standing in it.
+
+def test_locations_are_their_own_owner_surface():
+    from transversal.domain import EntityType
+    from transversal.services.sfx_owner import list_owner_refs
+
+    repo = Repo()
+    repo.entities = [
+        SimpleNamespace(id="loc-1", name="Azure Dawn", type=EntityType.LOCATION, sfx_ids=["sfx-a"]),
+        SimpleNamespace(id="char-1", name="Kael", type=EntityType.CHARACTER, sfx_ids=[]),
+    ]
+    repo.list_all_entities = lambda: repo.entities
+
+    assert [r["owner_id"] for r in list_owner_refs(repo, "location")] == ["loc-1"]
+    assert [r["owner_id"] for r in list_owner_refs(repo, "entity")] == ["char-1"]
+
+
+def test_a_location_writes_its_rules_to_the_same_field():
+    from transversal.domain import EntityType
+    from transversal.services.sfx_owner import _get_owner_sfx_ids, _set_owner_sfx_ids
+
+    repo = Repo()
+    repo.entities = [SimpleNamespace(id="loc-1", name="Azure Dawn", type=EntityType.LOCATION, sfx_ids=[])]
+    repo.get_entity = lambda eid: next((e for e in repo.entities if e.id == eid), None)
+    repo.update_entity = lambda e: e
+
+    assert _get_owner_sfx_ids(repo, "location", "loc-1") == []
+    assert _set_owner_sfx_ids(repo, "location", "loc-1", ["sfx-a"]) is True
+    assert repo.entities[0].sfx_ids == ["sfx-a"]
+
+
+def test_a_place_source_resolves_to_the_place_not_the_occupant():
+    from transversal.domain import EntityType
+    from transversal.services.sfx_owner import resolve_sfx_source
+
+    kael = SimpleNamespace(id="char-1", type=EntityType.CHARACTER, current_location="loc-1")
+    elsewhere = SimpleNamespace(id="char-2", type=EntityType.CHARACTER, current_location="loc-9")
+    repo = Repo()
+    repo.entities = {"char-1": kael, "char-2": elsewhere}
+    repo.get_entity = lambda eid: repo.entities.get(eid)
+    _place(repo, "loc-1", ["sfx-sect"])
+    _place(repo, "loc-9", [])
+
+    source, element = resolve_sfx_source(repo, "char-1", "earth", "sfx-sect", "location")
+    assert element == "location"
+    assert source.id == "loc-1", "the source is the place, not the character"
+
+    # A character who is not in a place that owns it has no location source.
+    assert resolve_sfx_source(repo, "char-2", "earth", "sfx-sect", "location") is None

@@ -11,7 +11,8 @@ const error = ref('')
 export const OWNER_TYPES = [
   { value: 'TABLE', label: 'Table', hint: 'everyone' },
   { value: 'GM', label: 'GM', hint: 'GM-context (manage-only for now)' },
-  { value: 'ENTITY', label: 'Entity', hint: 'characters, locations, factions, GMCs, assets, universes' },
+  { value: 'ENTITY', label: 'Entity', hint: 'characters, factions, GMCs, assets, universes' },
+  { value: 'LOCATION', label: 'Location', hint: 'a place — its rules reach whoever is inside' },
   { value: 'PROJECTION', label: 'Projection', hint: 'body' },
   { value: 'TRAIT', label: 'Trait', hint: 'trait definition default SFX' },
   { value: 'TRAIT_INSTANCE', label: 'Trait instance', hint: 'entity↔trait setting' },
