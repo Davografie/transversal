@@ -1285,6 +1285,17 @@ class Query:
             frm, from_proj = from_id, False
             to, to_proj = to_id, False
         edge = repo.get_relationship(frm, to, type, from_projection=from_proj, to_projection=to_proj)
+        if edge is None and (from_proj or to_proj):
+            # Fall back to the entity-level edge. The migration stored personal
+            # relationships at the entity level, but the projection resolution
+            # above can only reach body-level edges — and since every occupant
+            # now carries a single NATIVE projection, `is_transversal` is False
+            # for all of them, so `elevated` can no longer select the entity
+            # path either. Without this fallback, 663 of the 664 `relation`
+            # edges in the live DB are invisible to this query.
+            # Additive by construction: it only runs when the lookup above found
+            # nothing, so no edge that resolves today changes shape.
+            edge = repo.get_relationship(from_id, to_id, type)
         if edge is None:
             return None
         return Relationship(
