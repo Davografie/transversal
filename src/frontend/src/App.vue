@@ -372,7 +372,6 @@
 
 <script setup>
 import { ref, reactive, useTemplateRef, watch, computed, nextTick, onMounted, onUnmounted, provide } from 'vue'
-import { useColorMode } from '@vueuse/core'
 import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
 import DiceRoller from './components/DiceRoller.vue'
@@ -380,6 +379,8 @@ import ArmedSfxRail from './components/ArmedSfxRail.vue'
 import GmPanel from './components/GmPanel.vue'
 import PanelStack from './components/gm/PanelStack.vue'
 import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
+import { usePeers } from '@/composables/usePeers.js'
+import { useThemeMode } from '@/composables/useThemeMode.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
@@ -550,60 +551,6 @@ async function fetchLocationBg() {
     DIAG.mark('fetchLocationBg-err', { error: e.message })
     locationBgImage.value = ''; locationOverlay.value = null
   }
-}
-
-// The full entity list (with sheet images) is location-independent, so we cache
-// it and only re-fetch when the data itself may have changed (SSE / location
-// events pass force=true). Panel-open refreshes reuse the cache.
-let peersCache = null  // { entities, at }
-const PEERS_TTL_MS = 30_000
-
-function applyPeers(entities) {
-  const TYPE_ORDER = { CHARACTER: 0, GMC: 1, ASSET: 2, LOCATION: 3 }
-  const atLocation = entities
-    .filter(e => e.currentLocation === currentLocationId.value)
-    .filter(e => gmMode.value || !e.unpublished)
-  const here = entities.find(e => e.id === currentLocationId.value)
-  const combined = here && !atLocation.some(e => e.id === here.id)
-    ? [here, ...atLocation]
-    : atLocation
-  peers.value = combined.sort((a, b) => {
-    if (a.id === entityId.value) return -1
-    if (b.id === entityId.value) return 1
-    return (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)
-  })
-}
-
-async function fetchPeers(force = false) {
-  if (!force && peersCache && Date.now() - peersCache.at < PEERS_TTL_MS) {
-    applyPeers(peersCache.entities)
-    resolvePeerSheetImages()
-    return
-  }
-  DIAG.mark('fetchPeers-start', { currentLocationId: currentLocationId.value })
-  const data = await graphql(`query {
-    entities { id type name currentLocation unpublished }
-  }`)
-  if (data?.entities) {
-    peersCache = { entities: data.entities, at: Date.now() }
-    entityNames.value = Object.fromEntries(data.entities.map(e => [e.id, e.name]).filter(([id]) => id))
-    applyPeers(data.entities)
-    resolvePeerSheetImages()
-    DIAG.mark('fetchPeers-done', { total: data.entities.length, atLocation: peers.value.length })
-  } else {
-    DIAG.mark('fetchPeers-no-data')
-  }
-}
-
-async function resolvePeerSheetImages() {
-  const ids = peers.value.map((p) => p.id).filter(Boolean)
-  if (!ids.length) return
-  const qs = new URLSearchParams({ role: 'sheet', ids: ids.join(',') })
-  const r = await fetch(`/api/v1/entities/images?${qs}`)
-  if (!r.ok) return
-  const data = await r.json()
-  const images = data?.images || {}
-  peers.value = peers.value.map((p) => ({ ...p, sheetImage: images[p.id] || '' }))
 }
 
 function onMoved(data) {
@@ -973,8 +920,11 @@ async function initSession() {
 DIAG.mark('initSession-called')
 const initSessionPromise = initSession()
 DIAG.mark('initLocation-called')
-const peers = ref([])
 const entityNames = ref({})  // id → name for every entity (all locations, for tab labels)
+const { peers, fetchPeers, isEntityType } = usePeers({
+  graphql, currentLocationId, entityId, gmMode, entityNames,
+  diag: (label, detail) => DIAG.mark(label, detail),   // DIAG.mark uses `this`
+})
 const initLocationPromise = initLocation()
 
 // Mark play-ready once the initial pipeline (session + location + background +
@@ -1251,10 +1201,7 @@ watch(peers, (p) => {
 // A GMC is a GM-controlled character (no player owner) — the target the GM
 // must switch to when a player challenges it.
 function isGmcEntity(id) {
-  if (!id) return false
-  const atLocation = peers.value.find(e => e.id === id)
-  if (atLocation) return atLocation.type === 'GMC'
-  return (peersCache?.entities || []).some(e => e.id === id && e.type === 'GMC')
+  return isEntityType(id, 'GMC')
 }
 
 const remotePools = ref({})  // entity_id → { dice: [...], player_id, phase }
@@ -1659,13 +1606,8 @@ function onPanelDragEnd({ dy, velocity }) {
 // instead of the desktop bottom sheet. The focused band grows; tapping a
 // teaser band expands it (the .band-tap capture layers above). Breakpoint
 // mirrors the @media block in styles.css.
-// ── Theme (light/dark) — auto from OS, persisted on manual override.
-//    Adds `.dark`/`.light` on <html>; CSS defaults to dark, `html.light` overrides.
-const colorMode = useColorMode({ selector: 'html', storageKey: 'transversal-color-scheme' })
-watch(colorMode, (m) => {
-  const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', m === 'light' ? '#e9e9ee' : '#0a0a0f')
-}, { immediate: true })
+// ── Theme (light/dark) — see composables/useThemeMode.js
+useThemeMode()
 
 const MOBILE_MAX_WIDTH = 820
 const isMobile = ref(false)
