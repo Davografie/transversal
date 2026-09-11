@@ -139,3 +139,14 @@ def test_bind_source_maps_kind_to_variable():
     assert tc.bind_source("bogus", "x", {}) == {}
     assert tc.bind_source("trait_setting", None, {}) == {}
     assert tc.bind_source("trait_setting", "", {}) == {}
+
+
+def test_trait_tags_are_matchable():
+    """B116: a trait's free-form tags can be filtered on — on the registry trait
+    and on a trait instance (which reads them through the trait it points at).
+    A list, so it is matched with `contains`, never ordered."""
+    for element_name in ("trait", "traitsetting"):
+        f = tc.field(element_name, "tags")
+        assert f is not None, element_name
+        assert tc.operators_for(f) == ("contains", "==", "!=")
+        assert not tc.is_orderable(f), element_name

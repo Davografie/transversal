@@ -18,13 +18,17 @@ from transversal.services.target_spec import AggregateStep, EvaluateStep, Filter
 
 
 class FakeRepo:
-    def __init__(self, traitsettings=None, related=None, entities=None):
+    def __init__(self, traitsettings=None, related=None, entities=None, traits=None):
         self.traitsettings = list(traitsettings or [])
         self.related = list(related or [])
         self.entities = {e.id: e for e in (entities or [])}
+        self.traits = {t.id: t for t in (traits or [])}
 
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
+
+    def get_trait(self, trait_id):
+        return self.traits.get(trait_id)
 
     def get_related_entities(self, entity_id):
         return self.related
@@ -371,6 +375,28 @@ def test_target_path_self_filter():
 def test_target_path_empty_spec_fails():
     cond = Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[]))
     assert not evaluate_condition(_entity(), cond, FakeRepo())
+
+
+def test_target_path_gates_on_a_trait_tag():
+    """B116: a condition can gate on a trait's tag — "a violent trait I have".
+    The tag lives on the registry trait; the path filters the instance."""
+    from transversal.domain import Trait
+
+    spec = TargetSpec(steps=[
+        SelectStep(collection="self_traitsettings"),
+        FilterStep(field="tags", operator="contains", value="violent"),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+
+    anger = TraitSetting(id="char-1:anger", entity_id="char-1", trait_id="trait-anger",
+                         traitset_id="ts-emotion", dice=[DieType.D8])
+    violent = Trait(id="trait-anger", name="Anger", traitset_id="ts-emotion", tags=["violent"])
+    calm = Trait(id="trait-calm", name="Calm", traitset_id="ts-emotion", tags=[])
+
+    assert evaluate_condition(_entity(), cond,
+                              FakeRepo(traitsettings=[anger], traits=[violent]))
+    assert not evaluate_condition(_entity(), cond,
+                                  FakeRepo(traitsettings=[anger], traits=[calm]))
 
 
 def test_static_conditions_target_path():

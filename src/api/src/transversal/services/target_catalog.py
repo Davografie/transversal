@@ -116,6 +116,12 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "entity_id": ScalarField("traitsetting", "entity_id", "string", references="entity", label="entity"),
         "projection_id": ScalarField("traitsetting", "projection_id", "string", references="projection", label="projection"),
         "from_type": ScalarField("traitsetting", "from_type", "string", ("entity", "projection"), label="owner type"),
+        # Free-form labels carried by the *registry* trait this instance points at
+        # (e.g. "violent"). A list, so it is matched with `contains` — the same
+        # shape as `armed_sfx_ids` below. Read through the trait, not the setting
+        # (see the resolver's derived fields).
+        "tags": ScalarField("traitsetting", "tags", "string",
+                            operators=("contains", "==", "!="), label="tag"),
     },
     "traitsetsetting": {
         "entity_id": ScalarField("traitsetsetting", "entity_id", "string", references="entity"),
@@ -128,6 +134,9 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "id": ScalarField("trait", "id", "string"),
         "traitset_id": ScalarField("trait", "traitset_id", "string", references="traitset"),
         "default_die_type": ScalarField("trait", "default_die_type", "die"),
+        # The trait's own labels, matched the same way as on a trait instance.
+        "tags": ScalarField("trait", "tags", "string",
+                            operators=("contains", "==", "!="), label="tag"),
     },
     "traitset": {
         "id": ScalarField("traitset", "id", "string"),

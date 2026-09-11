@@ -630,3 +630,60 @@ def test_top_skips_bodies_with_no_timestamp():
              TopStep(field="last_used_at"))
     res = resolve(s, TargetContext(subject=kael, repo=repo))
     assert [p.id for p in res.values] == ["kael:valhalla"]
+
+
+def _tagged_world():
+    """A character with two emotion instances; only one's trait is tagged."""
+    kael = NS(id="kael", type="character", current_location="loc-1", current_universe="earth",
+              current_projection=None, razmerit=0)
+    ts_anger = NS(id="kael:trait-anger", trait_id="trait-anger", traitset_id="ts-emotion",
+                  entity_id="kael", projection_id=None, rating="d8")
+    ts_calm = NS(id="kael:trait-calm", trait_id="trait-calm", traitset_id="ts-emotion",
+                 entity_id="kael", projection_id=None, rating="d6")
+    repo = FakeRepo(
+        entities={"kael": kael},
+        traitsettings={"kael:trait-anger": ts_anger, "kael:trait-calm": ts_calm},
+        traits={
+            "trait-anger": NS(id="trait-anger", traitset_id="ts-emotion", tags=["violent"]),
+            "trait-calm": NS(id="trait-calm", traitset_id="ts-emotion", tags=[]),
+        },
+        traitsets={"ts-emotion": NS(id="ts-emotion", name="Emotion")},
+    )
+    return kael, repo
+
+
+def test_trait_instance_filters_by_tag():
+    """B116: a trait instance reads its tags from the registry trait it points
+    at — the derived field. This is the Protective-anger gesture: "a trait I have
+    that is tagged violent"."""
+    kael, repo = _tagged_world()
+    s = spec(SelectStep(collection="self_traitsettings"),
+             FilterStep(field="tags", operator="contains", value="violent"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["kael:trait-anger"]
+
+
+def test_registry_trait_filters_by_tag_directly():
+    """The registry trait carries its own tags, so the same filter works after
+    navigating to it (no derived read involved)."""
+    kael, repo = _tagged_world()
+    s = spec(SelectStep(collection="self_traitsettings"),
+             NavigateStep(edge="trait"),
+             FilterStep(field="tags", operator="contains", value="violent"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["trait-anger"]
+
+
+def test_tag_filter_without_a_repo_matches_nothing():
+    """No repo → no tags to read. Fail closed rather than erroring."""
+    kael, _repo = _tagged_world()
+    ts = NS(id="kael:trait-anger", trait_id="trait-anger", traitset_id="ts-emotion",
+            entity_id="kael", projection_id=None, rating="d8")
+    s = spec(SelectStep(collection="self_traitsettings"),
+             FilterStep(field="tags", operator="contains", value="violent"))
+    res = resolve(s, TargetContext(subject=kael, repo=None,
+                                   collections={"self_traitsettings": [ts]}))
+    assert res.errors == []
+    assert res.values == []

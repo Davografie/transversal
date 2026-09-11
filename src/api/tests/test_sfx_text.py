@@ -511,3 +511,25 @@ class TestTwoPathAttune:
         effect = Effect(type="attune", action="enable", target="loc-rusted-gate",
                         result="three_realms")
         assert effect_text(effect, resolve=resolve) == "attune Rusted Gate to three_realms"
+
+
+def test_a_tag_filter_reads_as_tagged():
+    """B116: matching on a tag is membership of the label, not the field name —
+    "your trait instances tagged violent", not "with tag including violent"."""
+    phrase = path_phrase(TargetSpec_of({"steps": [
+        {"kind": "select", "collection": "self_traitsettings"},
+        {"kind": "filter", "field": "tags", "operator": "contains", "value": "violent"},
+    ]}), resolve=resolve)
+    assert render_phrase(phrase, "") == "your trait instances tagged violent"
+
+
+def test_a_tag_filter_on_the_registry_trait_reads_the_same():
+    """Reaching the registry trait through an instance works and the tag clause is
+    the same; the head noun ("traits of your trait instances") is the known
+    deep-path compression ceiling, not the filter's doing."""
+    phrase = path_phrase(TargetSpec_of({"steps": [
+        {"kind": "select", "collection": "self_traitsettings"},
+        {"kind": "navigate", "edge": "trait"},
+        {"kind": "filter", "field": "tags", "operator": "contains", "value": "violent"},
+    ]}), resolve=resolve)
+    assert render_phrase(phrase, "") == "traits of your trait instances tagged violent"

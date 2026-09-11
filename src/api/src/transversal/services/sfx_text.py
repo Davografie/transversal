@@ -80,6 +80,13 @@ _OP_WORDS = {
     "contains": "including",
 }
 
+# A `contains` filter on a list-valued label field reads as membership of the
+# named thing, not as the field's name: "your trait instances tagged violent"
+# rather than "with tag including violent".
+_CONTAINS_WORDS = {
+    "tags": "tagged",
+}
+
 _ELEMENT_NOUNS = {
     "die": "die",
     "traitsetting": "trait instance",
@@ -434,6 +441,11 @@ def _filter_phrase(p: Phrase, step: FilterStep, resolve: NameResolver | None = N
             and (field_def.type == "die"
                  or (field_def.type == "string" and field_def.options))):
         p.adjectives.append(display_value(step.value, resolve))
+        return p
+
+    if step.operator == "contains" and step.field in _CONTAINS_WORDS:
+        value_text = resolved or display_value(step.value, resolve)
+        p.origin = f"{p.origin} {_CONTAINS_WORDS[step.field]} {value_text}".strip()
         return p
 
     field_text = tc.field_label(field_def) if field_def else step.field.replace("_", " ")

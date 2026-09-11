@@ -139,6 +139,33 @@ def _get_field(element: Any, name: str) -> Any:
     return getattr(element, name, None)
 
 
+# ── Derived fields ───────────────────────────────────────────
+#
+# Most catalog fields are plain attributes of the element. A few are not: a
+# trait *instance* has no tags of its own — they live on the registry trait it
+# points at. A derived reader is registered per ``(element_type, field_name)``
+# so the catalog stays declarative and the resolver stays the one place that
+# knows how a value is actually read.
+
+FieldResolver = Callable[[Any, Any], Any]  # (element, repo) -> value
+_DERIVED_FIELDS: dict[tuple[str, str], FieldResolver] = {}
+
+
+def register_derived_field(element: str, name: str, resolver: FieldResolver) -> None:
+    """Register a repo-backed reader for a catalog field that is not an attribute."""
+    _DERIVED_FIELDS[(element, name)] = resolver
+
+
+def _read_field(element: Any, name: str, element_type: str | None = None, repo=None) -> Any:
+    """Read a catalog field's value: its derived reader when one is registered,
+    else the element's own attribute."""
+    if element_type:
+        resolver = _DERIVED_FIELDS.get((element_type, name))
+        if resolver is not None:
+            return resolver(element, repo)
+    return _get_field(element, name)
+
+
 def _identity(element: Any) -> Any:
     if isinstance(element, dict):
         return element.get("id") or element.get("ts_id") or element
@@ -298,8 +325,8 @@ def _bound_value(value: Any, context: TargetContext | None) -> Any:
 
 
 def _match(element: Any, step: FilterStep, field_type: str | None = None,
-           expected: Any = _UNSET) -> bool:
-    actual = _get_field(element, step.field)
+           expected: Any = _UNSET, element_type: str | None = None, repo=None) -> bool:
+    actual = _read_field(element, step.field, element_type, repo)
     op = step.operator
     if expected is _UNSET:
         expected = step.value
@@ -432,7 +459,8 @@ def _evaluate_step(values: list[Any], current_type: ValueType | None, step: Eval
             rhs = _to_number(_bound_value(step.value, context))
         elif current_type.cardinality == "one" and values:
             f = tc.field(current_type.element, field)
-            raw = _get_field(values[0], field)
+            raw = _read_field(values[0], field, current_type.element,
+                              context.repo if context is not None else None)
             if step.operator in ("==", "!="):
                 expected = _coerce(_bound_value(step.value, context), f.type if f else None)
                 return (raw == expected) if step.operator == "==" else (raw != expected)
@@ -542,7 +570,8 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 values, current_type = [], None
             else:
                 values = [v for v in values
-                          if _match(v, step, f.type, _bound_value(step.value, context))]
+                          if _match(v, step, f.type, _bound_value(step.value, context),
+                                    current_type.element, context.repo)]
                 # type unchanged
 
         elif isinstance(step, NavigateStep):
@@ -726,6 +755,19 @@ def _pool_from_id(value: str, repo) -> Any | None:
     return None
 
 
+def _traitsetting_tags(ts: Any, repo) -> list[str]:
+    """A trait *instance*'s tags are its registry trait's tags (B116)."""
+    if repo is None:
+        return []
+    trait_id = _get_field(ts, "trait_id")
+    trait = repo.get_trait(trait_id) if trait_id else None
+    return list(getattr(trait, "tags", None) or [])
+
+
+def register_default_fields() -> None:
+    register_derived_field("traitsetting", "tags", _traitsetting_tags)
+
+
 def register_default_edges() -> None:
     register_edge("die", "traitsetting", lambda d, ctx: _maybe(ctx.repo.get_traitsetting(d.get("ts_id"))))
     register_edge("die", "owner", _die_owner)
@@ -761,3 +803,4 @@ def register_default_edges() -> None:
 
 
 register_default_edges()
+register_default_fields()
