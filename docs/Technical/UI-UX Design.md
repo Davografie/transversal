@@ -98,12 +98,10 @@ suggested) and a **restricted multi-select** (values must come from the list).
 - **A11y** — combobox + listbox roles with `aria-expanded`,
   `aria-activedescendant` and per-option `aria-selected`; chip buttons carry
   `aria-label="Remove …"`.
-- **Adoption** — [[blue-book]] replaces the comma-text field + hand-rolled
-  suggestion dropdown in the compose view (drop `parseTags`,
-  `filteredThreadSuggestions`, `addThread`, `threadFocused`); [[gm-panels]]
-  replaces the `.universe-chips` toggle grid in `GmTraitEditPanel`. `ChipInput`
-  (in `gm/`) now overlaps this primitive — `GmTraitsetDetail` can move over and
-  it can be retired.
+- **Adopted** — the Blue Book compose view (threads) and `GmTraitEditPanel`
+  (trait tags, edit + create) both use it. `ChipInput` (in `gm/`) remains an
+  overlapping older primitive, still used by `GmTraitsetDetail` — retiring it
+  is a small cleanup (gm-panels).
 
 **Migration (in progress, surface by surface).** Migrated so far: the GM
 list/form button patterns — `save-btn` (→ `success solid`), `ps-add-btn`
