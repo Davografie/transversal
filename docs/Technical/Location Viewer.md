@@ -224,10 +224,16 @@ are assumed never transparent, so the hole path is unaffected.
 ### Click / pop-out
 
 - **Occupant** → always `emit('inspectEntity', id)` (opens the sheet).
+- **Self dot** → `emit('inspectEntity', entityId)`; the GM free-roam dot emits
+  nothing (there is no entity to inspect).
 - **Zone / nav dot** → toggle the expanded bubble via `activeElement`.
 - **Expanded zone / nav dot overlay** → `onExpandedClick` triggers travel.
 - **Background click** → dismisses the pop-out, re-popping self.
 - **Edit mode** → clicking a portal nav dot toggles its `transversal_type`.
+- In GM mode `inspectEntity` lands in `App.vue`'s peer-click semantics: clicking
+  the character you already act as while inspecting another resets the view back
+  to it (the sheet swaps on the `overrideEntityId` watch); with nothing being
+  inspected, the same click exits to free-roam.
 
 ### Three drag systems
 
@@ -358,6 +364,13 @@ border), and the overlay/particle system below — run continuously.
 - **`destNavCache` avoids blocking renders.** Destination nav data is pre-fetched
   in the background so the dot previews (arrival point + aspect) are ready before
   a travel, not fetched on click.
+- **GM free-roam is device-local by design** (decided 2026-09-11). The GM dot's
+  position per location lives in `localStorage` only, and dropping it on a target
+  travels the **view** only — no server state, no cross-device sync.
+- **Constants are author-tuned, not derived.** `EXPAND_PROXIMITY` /
+  `TRAVEL_PROXIMITY_FACTOR` decouple bubble expansion from drop-to-travel, and
+  `INVERSE_PAN_STRENGTH` sets the hole illusion's strength; they are hand-tuned
+  values at the top of the file, kept there so they can be adjusted in one place.
 
 ## Related
 
