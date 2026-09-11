@@ -1,5 +1,7 @@
 """Scheduled events — split out of src/api/src/transversal/db/repository.py."""
 
+from __future__ import annotations
+
 from transversal.db.arango import SCHEDULED_EVENTS
 from transversal.domain import ScheduledEvent
 from typing import Optional

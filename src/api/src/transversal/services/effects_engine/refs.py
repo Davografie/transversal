@@ -1,5 +1,7 @@
 """Refs — split out of src/api/src/transversal/services/effects_engine.py."""
 
+from __future__ import annotations
+
 from dataclasses import field
 from transversal.domain import Effect
 from transversal.domain import SFX

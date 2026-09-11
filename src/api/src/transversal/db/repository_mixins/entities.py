@@ -1,5 +1,7 @@
 """Entities — split out of src/api/src/transversal/db/repository.py."""
 
+from __future__ import annotations
+
 import os
 
 from transversal.db.arango import ENTITIES

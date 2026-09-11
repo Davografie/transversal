@@ -1,5 +1,7 @@
 """Firing — split out of src/api/src/transversal/services/effects_engine.py."""
 
+from __future__ import annotations
+
 import transversal.services.effects_applier as _effects_applier
 
 from transversal.domain import Effect

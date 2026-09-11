@@ -1,5 +1,7 @@
 """Images — split out of src/api/src/transversal/db/repository.py."""
 
+from __future__ import annotations
+
 from transversal.db.arango import ENTITIES
 from transversal.db.arango import ENTITY_IMAGES
 from transversal.domain import EntityImage

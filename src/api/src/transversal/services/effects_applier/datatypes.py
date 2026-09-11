@@ -1,5 +1,7 @@
 """Datatypes — split out of src/api/src/transversal/services/effects_applier.py."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from dataclasses import field
 from transversal.domain import Effect

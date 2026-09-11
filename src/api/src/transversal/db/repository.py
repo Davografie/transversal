@@ -7,6 +7,13 @@ The implementation is split by concern into
 the public surface of this module is unchanged.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from arango.database import StandardDatabase
+
 from transversal.db.arango import (
     ENTITIES,
     ENTITY_IMAGES,

@@ -9,6 +9,8 @@ module re-exports every name it used to define, so
 ``from transversal.services.effects_engine import X`` is unchanged.
 """
 
+from __future__ import annotations
+
 
 
 # Re-exported for backwards compatibility (previously defined here).

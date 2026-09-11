@@ -1,5 +1,7 @@
 """Messaging — split out of src/api/src/transversal/db/repository.py."""
 
+from __future__ import annotations
+
 from transversal.db.arango import HISTORICAL_RECORDS
 from transversal.db.arango import MESSAGES
 from transversal.domain import HistoricalRecord

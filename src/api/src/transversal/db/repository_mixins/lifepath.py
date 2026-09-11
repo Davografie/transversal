@@ -1,5 +1,7 @@
 """Lifepath — split out of src/api/src/transversal/db/repository.py."""
 
+from __future__ import annotations
+
 from transversal.db.arango import LIFE_PATHS
 from transversal.db.arango import ROLL_TABLES
 from transversal.domain import LifePath
