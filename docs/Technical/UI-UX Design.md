@@ -69,6 +69,42 @@ and darken in light mode ("intensify" either way). `prefers-reduced-motion`
 drops transitions and slows the spinner. `DangerButton` is built on `Button`
 (`variant="danger"` + `active` for the armed confirm state).
 
+### TagInput
+
+`TagInput.vue` is the shared multi-tag input with autosuggest. It covers both
+shapes the app needs: a **free-form tag field** (type anything, existing values
+suggested) and a **restricted multi-select** (values must come from the list).
+
+```vue
+<!-- Blue Book threads: free-form, suggests existing threads -->
+<TagInput v-model="composeTags" :suggestions="allThreads"
+          placeholder="Threads: dreams, investigation" aria-label="Threads" />
+
+<!-- Trait universes: restricted to the allowed list -->
+<TagInput v-model="form.universes" :suggestions="allowedUniverses"
+          :allow-custom="false" placeholder="Add universe…" aria-label="Universes" />
+```
+
+- **Props** — `modelValue` (string[]), `suggestions` (string[] or
+  `{ value, label, hint? }[]`), `allowCustom` (default true), `placeholder`,
+  `disabled`, `max` (0 = unlimited), `ariaLabel`.
+- **Emits** — `update:modelValue` (batched: one emit per change), plus `add` /
+  `remove` for side effects.
+- **Interaction** — type to filter; Enter commits the armed (first/arrowed)
+  option, or the typed text in free-form mode; `,` (or pasting a
+  comma-separated list) adds every part at once; Backspace on an empty field
+  removes the last tag; the chip `×` removes; clicking away commits pending
+  text; ArrowUp/Down walk the list; Escape/Tab close.
+- **A11y** — combobox + listbox roles with `aria-expanded`,
+  `aria-activedescendant` and per-option `aria-selected`; chip buttons carry
+  `aria-label="Remove …"`.
+- **Adoption** — [[blue-book]] replaces the comma-text field + hand-rolled
+  suggestion dropdown in the compose view (drop `parseTags`,
+  `filteredThreadSuggestions`, `addThread`, `threadFocused`); [[gm-panels]]
+  replaces the `.universe-chips` toggle grid in `GmTraitEditPanel`. `ChipInput`
+  (in `gm/`) now overlaps this primitive — `GmTraitsetDetail` can move over and
+  it can be retired.
+
 **Migration (in progress, surface by surface).** Migrated so far: the GM
 list/form button patterns — `save-btn` (→ `success solid`), `ps-add-btn`
 (→ `secondary block`), `row-del-btn` (→ `danger-ghost sm`), 20 sites across 10
