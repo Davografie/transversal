@@ -58,66 +58,25 @@
 
         <p v-if="needsCharacterPick" class="switch-error">Pick one of your characters to play.</p>
 
-        <div v-if="loadingPlayerEntities" class="settings-section">
-          <label class="settings-label">Your characters</label>
-          <div class="char-list">
-            <div v-for="n in 3" :key="n" class="char-chip char-chip-skeleton" aria-hidden="true">
-              <span class="char-portrait char-skeleton-pulse"></span>
-              <span class="char-chip-meta">
-                <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-name"></span>
-                <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-location"></span>
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div v-else-if="playerEntities.length" class="settings-section">
-          <label class="settings-label">Your characters</label>
-          <div class="char-list">
-            <button
-              v-for="e in playerEntities" :key="e.id"
-              class="char-chip"
-              :class="{ active: entityId === e.id }"
-              @click="onCharChipClick(e)"
-              @contextmenu.prevent="revealRelease(e.id)"
-              @touchstart="onReleaseTouchStart($event, e.id)"
-              @touchmove="onReleaseTouchCancel"
-              @touchend="onReleaseTouchEnd"
-              @touchcancel="onReleaseTouchCancel"
-            >
-              <MediaImage v-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-portrait" alt="" />
-              <span v-else class="char-portrait char-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
-              <span class="char-chip-meta">
-                <span class="char-chip-name">{{ e.name || e.id }} <span v-if="e.main" class="main-badge">MAIN</span></span>
-                <span v-if="locationLabel(e)" class="char-chip-location">{{ locationLabel(e) }}</span>
-              </span>
-              <span class="main-toggle" :class="{ on: e.main }" :title="e.main ? 'Unset as main' : 'Set as main'" @click.stop="toggleMain(e)">★</span>
-              <span class="char-release-btn" :class="{ revealed: revealedReleaseId === e.id }" title="Relinquish agency" @click.stop="releaseCharacter(e)">✕</span>
-            </button>
-          </div>
-          <div class="char-create-row">
-            <template v-if="showNewChar">
-              <input v-model="newCharName" placeholder="Name…" @keyup.enter="createCharacter" class="char-name-input" />
-              <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar" class="char-create-btn">✓</button>
-            </template>
-            <button v-else class="new-char-toggle" @click="showNewChar = true">+ New character</button>
-          </div>
-          <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
-        </div>
-
-        <div v-else class="settings-section settings-empty">
-          <p class="settings-empty-title">No characters yet</p>
-          <p class="settings-empty-hint">Create a new character or find one below to claim agency.</p>
-          <template v-if="showNewChar">
-            <div class="switch-row">
-              <input v-model="newCharName" placeholder="Character name…" @keyup.enter="createCharacter" />
-              <button @click="createCharacter" :disabled="!newCharName.trim() || creatingChar">+</button>
-            </div>
-          </template>
-          <button v-else class="new-char-toggle" @click="showNewChar = true">+ New character</button>
-          <p v-if="createCharError" class="switch-error">{{ createCharError }}</p>
-        </div>
-
+        <CharacterListBlock
+          :entities="playerEntities"
+          :loading="loadingPlayerEntities"
+          :active-id="entityId"
+          :revealed-release-id="revealedReleaseId"
+          :location-label="locationLabel"
+          v-model:show-new-char="showNewChar"
+          v-model:new-char-name="newCharName"
+          :creating="creatingChar"
+          :error="createCharError"
+          @select="onCharChipClick"
+          @reveal="revealRelease"
+          @release="releaseCharacter"
+          @toggle-main="toggleMain"
+          @touch-start="onReleaseTouchStart"
+          @touch-cancel="onReleaseTouchCancel"
+          @touch-end="onReleaseTouchEnd"
+          @create="createCharacter"
+        />
         <div v-if="mySupportCharacters.length" class="settings-section">
           <label class="settings-label">Support characters</label>
           <div class="char-list support-list">
@@ -301,6 +260,7 @@ import LoginPrompt from '@/components/app/LoginPrompt.vue'
 import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
 import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
+import CharacterListBlock from '@/components/app/CharacterListBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
 import RazmeritWaves from './components/RazmeritWaves.vue'
