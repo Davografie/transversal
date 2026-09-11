@@ -170,47 +170,17 @@
           <p v-else class="support-hint">No other mains are active right now to support.</p>
         </div>
 
-        <div class="settings-section">
-          <label class="settings-label">Find character</label>
-          <div class="search-wrapper find-char-wrapper">
-            <input
-              v-model="charSearch"
-              placeholder="Search characters…"
-              class="find-char-input"
-              @keyup.enter="onCharSearchEnter"
-            />
-            <div v-if="charSearch.trim() && (charSearching || charSearchSearched)" class="name-suggestions">
-              <div v-if="charSearching" class="char-search-skeleton-list">
-                <div v-for="n in 3" :key="n" class="suggestion-item char-search-result char-search-skeleton" aria-hidden="true">
-                  <span class="char-search-portrait char-skeleton-pulse"></span>
-                  <span class="char-search-result-meta">
-                    <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-name"></span>
-                    <span class="char-skeleton-line char-skeleton-pulse char-skeleton-line-location"></span>
-                  </span>
-                </div>
-              </div>
-              <template v-else>
-                <button
-                  v-for="e in charSearchResults" :key="e.id"
-                  class="suggestion-item char-search-result"
-                  @mousedown.prevent
-                  @click="chooseFoundCharacter(e)"
-                >
-                  <MediaImage v-if="e.sheetPortrait" :src="e.sheetPortrait" class="char-search-portrait" alt="" />
-                  <span v-else class="char-search-portrait char-search-portrait-fallback">{{ (e.name || e.id).charAt(0) }}</span>
-                  <span class="char-search-result-meta">
-                    <span class="char-search-result-name">{{ e.name || e.id }}</span>
-                    <span v-if="locationLabel(e)" class="char-search-result-location">{{ locationLabel(e) }}</span>
-                  </span>
-                </button>
-                <div v-if="!charSearchResults.length && !charSearchError" class="suggestion-item char-search-empty">No characters found</div>
-              </template>
-            </div>
-          </div>
-          <p v-if="charSearchError" class="switch-error">{{ charSearchError }}</p>
-        </div>
-
-        <div v-if="gmMode" class="settings-section settings-lab">
+        <FindCharacterBlock
+          v-model:search="charSearch"
+          :results="charSearchResults"
+          :searching="charSearching"
+          :searched="charSearchSearched"
+          :error="charSearchError"
+          :location-label="locationLabel"
+          @enter="onCharSearchEnter"
+          @choose="chooseFoundCharacter"
+        />
+      <div v-if="gmMode" class="settings-section settings-lab">
           <button class="settings-lab-toggle" @click="showLab = !showLab">
             <span>🧪 Resonance Lab</span>
             <span class="settings-lab-caret">{{ showLab ? '▾' : '▸' }}</span>
@@ -341,6 +311,7 @@ import { useThemeMode } from '@/composables/useThemeMode.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
 import LoginPrompt from '@/components/app/LoginPrompt.vue'
 import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
+import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
 import RazmeritWaves from './components/RazmeritWaves.vue'
