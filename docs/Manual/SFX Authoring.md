@@ -257,6 +257,8 @@ Read it as a sanity check. If the card line does not say what you meant, the SFX
 
   So five rating-gated bumps revert *together*, and the card says so once rather than five times.
 - **A narrative condition trails in parentheses.** It is flavour the engine never checks, so it is kept visually apart from the rules text.
+- **A trait you name is named on the card.** A trait-granting effect with a `statement` in its config reads as yours — *create a Crimson Scar* — and falls back to the trait definition's name when you leave the statement empty.
+- **A filter against a bound value relates to it.** Comparing a field to a name decided elsewhere (`filter universe == {chosen_universe}`) reads as the thing — *in the chosen universe* — rather than restating the field and the value. A container field supplies the relation, so a literal reads *in earth*.
 - **Effect durations** read as *reverts at the end of the scene* — the **undo timer**. This is a different thing from the SFX's own listening window, and the two are phrased differently on purpose (see [[SFX and Effects]]).
 
 ### Naming a step is how you keep it readable
