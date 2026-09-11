@@ -6,6 +6,8 @@ from transversal.domain import (
     Effect,
     EffectTiming,
     SFX,
+    TargetRef,
+    TargetSpec,
 )
 from transversal.services.sfx_validation import validate_sfx
 
@@ -261,6 +263,45 @@ def test_live_shapes_are_allowed():
             conditions=[condition],
         )
         assert not any("can never pass" in w for w in validate_sfx(menu_sfx)), condition
+
+
+def test_unbound_step_value_warns():
+    """A name nothing binds matches nothing — law-bridge's '{universe}'."""
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="attune", action="enable",
+            target_spec=TargetSpec(steps=[
+                {"kind": "select", "collection": "self"},
+                {"kind": "navigate", "edge": "projections"},
+                {"kind": "filter", "field": "universe", "operator": "==",
+                 "value": "{chosen_universe}"},
+            ]),
+        )],
+    )
+    warnings = validate_sfx(sfx)
+    assert any("'{chosen_universe}' is not bound by anything" in w for w in warnings), warnings
+
+
+def test_bound_step_value_passes_when_an_earlier_reference_binds_it():
+    universe = TargetRef(value="", spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "entities"},
+        {"kind": "choose", "count": 1, "output": "chosen_universe"},
+    ]))
+    projection = TargetRef(value="", spec=TargetSpec(steps=[
+        {"kind": "select", "collection": "self"},
+        {"kind": "navigate", "edge": "projections"},
+        {"kind": "filter", "field": "universe", "operator": "==",
+         "value": "{chosen_universe}"},
+    ]))
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="attune", action="enable",
+            refs={"universe": universe, "projection": projection},
+        )],
+    )
+    assert not any("not bound" in w for w in validate_sfx(sfx))
 
 
 def test_select_source_warns_without_a_resolving_source():

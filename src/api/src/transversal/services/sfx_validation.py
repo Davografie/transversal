@@ -217,6 +217,23 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                     f"source is '{sfx.source_kind or 'unset'}'"
                 )
 
+    # A step value may name a value bound earlier in the activation
+    # (`filter universe == {chosen_universe}`). A name nothing binds matches
+    # nothing, so the path resolves empty and the card reads vaguely — which is
+    # exactly how "the universe" ended up on law-bridge's card.
+    bound = set(known)
+    for label, spec in _specs_of(sfx):
+        for step in spec.steps:
+            value = getattr(step, "value", None)
+            if isinstance(value, str):
+                for token in _TOKEN.findall(value):
+                    if token not in bound and not _reserved(token):
+                        warnings.append(
+                            f"{label}: '{{{token}}}' is not bound by anything — that step "
+                            f"can never match"
+                        )
+        bound |= {s.output for s in spec.steps if getattr(s, "output", None)}
+
     # Fire-time context, from the capability map: a condition that reads a key the
     # evaluation point never supplies can never pass. One rule for every context
     # condition and every fire site, so neither needs a special case here.

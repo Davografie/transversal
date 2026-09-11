@@ -427,6 +427,55 @@ class TestTwoPathAttune:
         assert "their counterpart" in text
         assert "three_realms" not in text
 
+    def test_a_stated_grant_uses_the_author_name(self):
+        """`sfx-crimson-scars`: "create a Crimson Scar", not "gain the trait"."""
+        effect = Effect(
+            type="modify_trait", action="gain", target="trait-environmental-hazard",
+            result="d6", negative=True, context={"statement": "Crimson Scar"},
+            entity_spec=spec(
+                {"kind": "select", "collection": "rolled_dice"},
+                {"kind": "navigate", "edge": "traitsetting"},
+                {"kind": "navigate", "edge": "entity"},
+                {"kind": "navigate", "edge": "location"},
+            ),
+        )
+        text = effect_text(effect)
+        assert text.startswith("create a Crimson Scar")
+        assert "environmental hazard" not in text
+
+    def test_a_bound_value_reads_as_the_thing(self):
+        """A filter against a bound name relates to it; it does not restate it.
+
+        Rendered as a comparison, law-bridge read "with universe equal to the
+        universe".
+        """
+        from transversal.services.target_spec import ValueType
+        effect = Effect(
+            type="attune", action="enable",
+            target_spec=spec(
+                {"kind": "select", "collection": "self"},
+                {"kind": "navigate", "edge": "projections"},
+                {"kind": "filter", "field": "universe", "operator": "==",
+                 "value": "{chosen_universe}"},
+            ),
+        )
+        text = effect_text(effect, variables={"chosen_universe": ValueType("universe", "one")})
+        assert "in the chosen universe" in text
+        assert "equal to" not in text
+
+    def test_select_variable_keeps_its_bound_type(self):
+        """Without the bound type the later steps can't rewrite the phrase."""
+        from transversal.services.target_spec import ValueType
+        effect = Effect(
+            type="attune", action="enable",
+            target_spec=spec(
+                {"kind": "select", "collection": "variable", "variable": "self"},
+                {"kind": "navigate", "edge": "projections"},
+            ),
+        )
+        text = effect_text(effect, variables={"self": ValueType("entity", "one")})
+        assert "your projections" in text
+
     def test_top_step_reads_as_the_most_recently_used(self):
         """The ordering step is how "the body you were last in" is written."""
         effect = Effect(

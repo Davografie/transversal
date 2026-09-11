@@ -344,11 +344,21 @@ def id_phrase(value: str, element: str = "", resolve: NameResolver | None = None
 # ── Step composition ──────────────────────────────────────────
 
 def _select_phrase(step: SelectStep, source_element: str | None = None,
-                   die_scoped: bool = False) -> Phrase:
+                   die_scoped: bool = False, variables=None) -> Phrase:
     if step.collection == "variable":
-        # The author named it — their name *is* the card phrase.
+        # A bound variable's phrase is the author's name for it — and its type,
+        # which the later steps need in order to rewrite the phrase at all
+        # (`select variable self → navigate projections` must be able to hop).
+        vt = (variables or {}).get(step.variable)
+        element = getattr(vt, "element", "") or ""
+        cardinality = getattr(vt, "cardinality", "") or "one"
+        if step.variable in _KNOWN_PLACEHOLDERS and element in ("", "entity"):
+            # Reserved names are the built-in things themselves: `self` is the
+            # acting entity, and "you" reads better than repeating the name.
+            return Phrase(element=element or "entity", cardinality=cardinality, pronoun=True)
         named = humanize(step.variable) or "value"
-        return Phrase(noun=singularize(named), plural=named)
+        return Phrase(element=element, cardinality=cardinality,
+                      noun=singularize(named), plural=named)
     if step.collection == "source":
         if source_element:
             return Phrase(
@@ -367,19 +377,57 @@ def _select_phrase(step: SelectStep, source_element: str | None = None,
     return Phrase(
         element=col.element,
         cardinality="one" if col.singular else "many",
-        noun=col.noun or element_noun(col.element),
-        plural=col.plural or ("" if col.noun else element_plural(col.element)),
+        # A pronoun collection *is* the actor: "you", not "the entity".
+        noun="" if col.pronoun else (col.noun or element_noun(col.element)),
+        plural="" if col.pronoun else (col.plural or ("" if col.noun else element_plural(col.element))),
         origin=col.origin,
         possessive=col.possessive,
         pronoun=col.pronoun,
     )
 
 
-def _filter_phrase(p: Phrase, step: FilterStep, resolve: NameResolver | None = None) -> Phrase:
+# The relation a filter's field implies when its value is a *thing* decided
+# earlier rather than a literal: "in the universe you chose" reads, "with
+# universe equal to the universe" does not.
+_RELATION_WORDS = {"universe": "in", "origin_universe": "from", "location": "in",
+                   "current_location": "in", "current_universe": "in"}
+
+
+def _bound_name(value) -> str:
+    """The variable name a step value refers to, or "" when it is a literal.
+
+    A reference to a thing decided elsewhere, as opposed to an authoring token
+    (``{choose_trait}``) or a plain value.
+    """
+    if not isinstance(value, str):
+        return ""
+    text = value.strip()
+    if not (text.startswith("{") and text.endswith("}")):
+        return ""
+    inner = text[1:-1]
+    if not inner or ":" in inner or inner.startswith("choose_"):
+        return ""
+    return inner
+
+
+def _filter_phrase(p: Phrase, step: FilterStep, resolve: NameResolver | None = None,
+                   variables=None) -> Phrase:
     field_def = tc.field(p.element, step.field) if p.element else None
     resolved = None
     if resolve and isinstance(step.value, str) and not step.value.startswith("{"):
         resolved = resolve(step.value)
+
+    bound = _bound_name(step.value)
+    if bound and bound not in _KNOWN_PLACEHOLDERS:
+        # A filter against a bound value relates the collection to something
+        # decided earlier, so it reads as *that thing* — "your projections in the
+        # universe you chose". Rendering the field and the value separately is
+        # what produced "with universe equal to the universe".
+        named = _named_phrase(bound, (variables or {}).get(bound))
+        relation = _RELATION_WORDS.get(step.field, "with")
+        clause = f"{relation} {render_phrase(named, _determiner(named))}".strip()
+        p.origin = f"{p.origin} {clause}".strip()
+        return p
 
     # Enum- or die-valued equality reads as an adjective: "static", "d4".
     if (step.operator == "==" and field_def is not None and not resolved
@@ -390,7 +438,13 @@ def _filter_phrase(p: Phrase, step: FilterStep, resolve: NameResolver | None = N
 
     field_text = tc.field_label(field_def) if field_def else step.field.replace("_", " ")
     value_text = resolved or display_value(step.value, resolve)
-    clause = f"with {field_text} {_OP_WORDS.get(step.operator, step.operator)} {value_text}".strip()
+    relation = _RELATION_WORDS.get(step.field)
+    if relation and step.operator == "==":
+        # A container field reads as a place: "in earth", not "with universe
+        # equal to earth".
+        clause = f"{relation} {value_text}"
+    else:
+        clause = f"with {field_text} {_OP_WORDS.get(step.operator, step.operator)} {value_text}".strip()
     p.origin = f"{p.origin} {clause}".strip()
     return p
 
@@ -447,6 +501,25 @@ def _choose_phrase(p: Phrase, step: ChooseStep) -> Phrase:
 def _random_phrase(p: Phrase, step: RandomStep) -> Phrase:
     return replace(p, cardinality="one" if step.count == 1 else p.cardinality,
                    adjectives=[*p.adjectives, "random"])
+
+
+# Trait-granting actions whose target can be named by the author's own config:
+# a `statement` makes the granted thing "a Crimson Scar" rather than "the
+# Environmental Hazard trait".
+_STATED_GRANTS = {("modify_trait", "gain"), ("modify_trait", "cortex_gain"),
+                  ("modify_trait", "gain_or_step_up")}
+
+
+def _stated_grant(effect: Effect) -> str:
+    """The author's own name for a granted trait ("a Crimson Scar"), or "".
+
+    Falls back to nothing — the target phrase already names the trait definition,
+    which is the fallback the author asked for.
+    """
+    if (effect.type, effect.action) not in _STATED_GRANTS:
+        return ""
+    statement = str((effect.context or {}).get("statement") or "").strip()
+    return f"a {statement}" if statement else ""
 
 
 def _top_phrase(p: Phrase, step: TopStep) -> Phrase:
@@ -565,9 +638,9 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
 
     for step, step_type in zip(spec.steps, types):
         if isinstance(step, SelectStep):
-            phrase = _select_phrase(step, source_element, die_scoped)
+            phrase = _select_phrase(step, source_element, die_scoped, variables)
         elif isinstance(step, FilterStep):
-            phrase = _filter_phrase(phrase, step, resolve)
+            phrase = _filter_phrase(phrase, step, resolve, variables)
         elif isinstance(step, NavigateStep):
             phrase = _navigate_phrase(phrase, step)
         elif isinstance(step, AggregateStep):
@@ -591,7 +664,7 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
                 phrase.cardinality = step_type.cardinality
 
         output = getattr(step, "output", None)
-        if output and not isinstance(step, EvaluateStep):
+        if output and not isinstance(step, EvaluateStep) and output not in _KNOWN_PLACEHOLDERS:
             named = _named_phrase(output, step_type)
             terminal_named = named
 
@@ -819,7 +892,13 @@ def _effect_core(effect: Effect, *, resolve: NameResolver | None = None,
     ref_result = _ref_result(effect, resolve=resolve, source_element=source_element,
                              variables=variables)
     template = reg.effect_card(effect.type, effect.action)
-    if not target and "{target}" in template:
+    stated = _stated_grant(effect)
+    if stated:
+        # "create a Crimson Scar" — the author named the thing, so the card uses
+        # their name for it (and "create" rather than "gain").
+        target = stated
+        template = "create {target}"
+    elif not target and "{target}" in template:
         target = _target_placeholder(effect)
     if subject:
         target = f"{target} {subject}" if target else subject
