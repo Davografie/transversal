@@ -40,11 +40,19 @@ All on 2026-09-11, each verified by build + CDP against the running app.
   theme-color meta); `useMobileBands` (media query, focus, empty-sheet rule,
   roller-content measurement + observers); `usePlayerCharacters` (owned
   characters + the per-character actions).
-  - **Lesson:** a composable extraction can pass the build and still be broken
-    when the removed call sits inside a `try/catch` — `fetchLocationNames` was
-    left out of the destructure and search quietly reported "no characters".
-    Grep the file for every removed identifier after the patch, not just for
-    build errors.
+  - **Lesson (two bugs, same commit, neither caught by the build):**
+    1. `fetchLocationNames` was left out of the destructure and the call sits
+       inside a `try/catch`, so search quietly reported "no characters".
+    2. The range delete that moved `releaseCharacter` out also swallowed its
+       neighbours `assumeSupport`, `supportCastMenu` and `openCreateSupport`
+       (the template kept using them, so Vue warned on every render and the
+       create-support menu never opened).
+    **Run the warning sweep after every extraction** — undefined template
+    properties do not fail a build. Vue prints
+    `Property "X" was accessed during render but is not defined on instance`
+    for exactly this, so booting the app and capturing `Vue warn` across the
+    touched surfaces is the check that matters. Also grep the removed names
+    back, and prefer anchored single-symbol deletes over range deletes.
 - **LocationViewer.vue.** `location/ArrivalRings` (three-phase arrival),
   `location/TravelOverlay` (portal wipe), `location/SceneEffectsLayer` (overlay
   layer + canvas particle engine). The effects toggle and its persisted flag
