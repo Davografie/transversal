@@ -220,119 +220,15 @@
         <!-- Set detail (traits) or profile: flat trait list -->
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
           <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">← {{ activeSetName }}</h4>
-            <template v-for="t in currentTraits" :key="t.id">
-              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE', 'trait-disabled': t.enabled === false }" @click="openTraitDetail(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
-                <div class="trait-left">
-                  <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
-                  <span v-if="traitTimerLabel(t)" class="trait-timer" :title="'Re-enables after ' + traitTimerLabel(t)">⏳ {{ traitTimerLabel(t) }}</span>
-                  <span v-if="t.enabled === false" class="trait-disabled-badge">disabled</span>
-                  <span v-if="t.fromType === 'relationship' && t.relationshipContactName" class="trait-contact">→ {{ t.relationshipContactName }}</span>
-                  <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
-                  <span v-if="t.notes" class="trait-notes">{{ t.notes }}</span>
-                  <div v-if="t.sfxIds?.length" class="sfx-cards">
-                    <SfxCard v-for="sfxId in t.sfxIds" :key="sfxId" v-bind="sfxCardModel(sfxId)"
-                             @activate="activateSfx(sfxId, t.id)" />
-                  </div>
-                </div>
-                <div class="trait-right" @click.stop="playTrait(t)" :title="'Play ' + displayName(t.name)">
-                  <div v-if="traitDiceGroups(t).length" class="trait-die-groups">
-                    <div v-for="(group, gi) in traitDiceGroups(t)" :key="gi" class="trait-die-group">
-                      <DieIcon
-                        v-for="(die, i) in group"
-                        :key="i"
-                        :die="die"
-                        class="trait-die-icon"
-                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
-                      />
-                    </div>
-                  </div>
-                  <div v-else-if="t.ratingType === 'RESOURCE'" class="trait-die-groups resource">
-                    <div
-                      v-for="(group, gi) in resourceDiceGroups(t)"
-                      :key="'a' + gi"
-                      class="trait-die-group clickable"
-                      :title="`Add ${group[0]} to pool`"
-                      @click.stop="spendResourceGroup(t, group[0])"
-                    >
-                      <DieIcon
-                        v-for="(die, i) in group"
-                        :key="i"
-                        :die="die"
-                        class="trait-die-icon"
-                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
-                      />
-                    </div>
-                    <div v-for="(group, gi) in resourceSpentGroups(t)" :key="'s' + gi" class="trait-die-group">
-                      <DieIcon
-                        v-for="(die, i) in group"
-                        :key="i"
-                        :die="die"
-                        class="trait-die-icon ghost"
-                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
-                      />
-                    </div>
-                    <span v-if="!(t.dice || []).length && !(t.spentDice || []).length" class="trait-die depleted">depleted</span>
-                  </div>
-                  <div v-else-if="t.ratingType === 'CHALLENGE'" class="trait-die-groups challenge">
-                    <div
-                      v-for="(group, gi) in resourceDiceGroups(t)"
-                      :key="'c' + gi"
-                      class="trait-die-group clickable"
-                      :title="`Spend ${group[0]} from challenge pool`"
-                      @click.stop="spendChallengeGroup(t, group[0])"
-                    >
-                      <DieIcon
-                        v-for="(die, i) in group"
-                        :key="i"
-                        :die="die"
-                        class="trait-die-icon"
-                        :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
-                      />
-                    </div>
-                    <span v-if="challengeProgressLabel(t)" class="challenge-progress">{{ challengeProgressLabel(t) }}</span>
-                    <span v-if="!(t.dice || []).length" class="trait-die depleted">empty</span>
-                  </div>
-                  <span v-else class="trait-die" :class="`die-${resolvedDieType(t)}`">{{ resourceDisplay(t) }}</span>
-                </div>
-              </div>
-              <div v-else class="trait-row unknown-trait">
-                <div class="trait-left">
-                  <span class="trait-name unknown">???</span>
-                </div>
-                <div class="trait-right">
-                  <span class="trait-die unknown-die">?</span>
-                </div>
-              </div>
-              <div v-if="isKnown(t) && (t.subTraitSettings || []).length" class="sub-trait-list">
-                <div
-                  v-for="st in t.subTraitSettings"
-                  :key="st.id"
-                  class="sub-trait-row"
-                  :class="{ 'in-pool': isInPool(st), negative: st.polarity === 'NEGATIVE', 'trait-disabled': st.enabled === false }"
-                  @click="openTraitDetail(st)"
-                  @contextmenu.prevent
-                >
-                  <div class="sub-trait-left">
-                    <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || st.enabled === false }">{{ displayName(st.name) }}</span>
-                    <span v-if="st.statement" class="sub-trait-statement">{{ st.statement }}</span>
-                  </div>
-                  <div class="sub-trait-right" @click.stop="playTrait(st)" :title="'Play ' + displayName(st.name)">
-                    <div v-if="traitDiceGroups(st).length" class="trait-die-groups">
-                      <div v-for="(group, gi) in traitDiceGroups(st)" :key="gi" class="trait-die-group">
-                        <DieIcon
-                          v-for="(die, i) in group"
-                          :key="i"
-                          :die="die"
-                          class="trait-die-icon sub-trait-die"
-                          :style="i ? { marginLeft: '-12px' } : null"
-                        />
-                      </div>
-                    </div>
-                    <span v-else-if="st.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${resolvedDieType(st)}`">{{ resourceDisplay(st) }}</span>
-                  </div>
-                </div>
-              </div>
-            </template>
+            <TraitRow
+              v-for="t in currentTraits"
+              :key="t.id"
+              :trait="t"
+              :api="traitRowApi"
+              :phase="phase"
+              :limit-reached="currentSetReachedLimit"
+              :wrap="activeSheetView === 'profile'"
+            />
           <Button
             v-if="activeSheetView === 'traits' && nextSet"
             class="next-set-btn"
@@ -400,10 +296,10 @@ import { useTraitEditor } from '../composables/useTraitEditor.js'
 import TraitEditPanel from './sheet/TraitEditPanel.vue'
 import SfxCard from './sheet/SfxCard.vue'
 import TraitDetailPanel from './sheet/TraitDetailPanel.vue'
+import TraitRow from './sheet/TraitRow.vue'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
-import DieIcon from './DieIcon.vue'
 import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
@@ -875,6 +771,17 @@ const {
   props, entity, traitSets, profileTraits, detailTrait, graphql,
   fetchEntity, recomputeTraitSets, recoverResourceDie, universeDisplay,
 })
+
+// Helpers the list rows call; functions only, like detailApi. It sits below the
+// useTraitEditor destructure on purpose — it closes over `startEdit` (a const,
+// so creating the object earlier would hit the TDZ).
+const traitRowApi = {
+  isKnown, isInPool, isOffered, displayName, traitTimerLabel, isResourceDepleted,
+  traitDiceGroups, resourceDiceGroups, resourceSpentGroups,
+  spendResourceGroup, spendChallengeGroup, challengeProgressLabel,
+  resolvedDieType, resourceDisplay, sfxCardModel, activateSfx,
+  openTraitDetail, startEdit, playTrait, onTouchStart, onTouchEnd,
+}
 
 function openTraitDetail(t) {
   // A touch long-press fires startEdit on touchstart and the click on release,
@@ -1810,15 +1717,6 @@ watch(() => props.externalPoolSources, (sources) => {
   flex-wrap: wrap;
   gap: 6px;
 }
-.trait-list-wrap .trait-row {
-  margin: 0;
-  flex: 0 0 auto;
-  max-width: 100%;
-  background: var(--overlay-2);
-}
-.trait-list-wrap .trait-left {
-  flex: 0 1 auto;
-}
   .set-back { align-self: flex-start;
     margin-bottom: 6px; }
   .next-set-btn { align-self: flex-end;
@@ -1839,35 +1737,6 @@ watch(() => props.externalPoolSources, (sources) => {
   opacity: 1;
   color: var(--accent);
 }
-
-.trait-row.in-pool {
-  background: var(--accent-12);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.trait-row.offered {
-  background: var(--offered-12);
-  box-shadow: inset 2px 0 0 var(--offered);
-}
-.trait-row.limit-reached {
-  opacity: 0.3;
-  cursor: default;
-  pointer-events: none;
-}
-
-.unknown-trait {
-  cursor: default;
-  opacity: 0.4;
-}
-.trait-name.unknown {
-  font-style: italic;
-  letter-spacing: 2px;
-}
-.unknown-die {
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--text-dim);
-}
-
 
   .add-trait-btn { margin-top: 8px; }
 
@@ -2081,178 +1950,6 @@ watch(() => props.externalPoolSources, (sources) => {
   margin-bottom: 6px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--overlay-6);
-}
-
-.trait-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 8px;
-  /* margin: 0 -8px; */
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.trait-row:hover {
-  background: var(--overlay-4);
-}
-.trait-row.morph {
-  background: var(--accent-8);
-  border-left: 2px solid var(--accent);
-}
-
-.sub-trait-list {
-  margin: 0 0 4px 20px;
-  padding-left: 8px;
-  border-left: 2px solid var(--overlay-10);
-}
-.sub-trait-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 5px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.sub-trait-row:hover {
-  background: var(--overlay-4);
-}
-.sub-trait-row.in-pool {
-  background: var(--accent-12);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.sub-trait-row.negative {
-  border-left: 2px solid var(--offered, #f2908a);
-}
-.sub-trait-row.trait-disabled {
-  opacity: 0.45;
-}
-.sub-trait-left {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-.sub-trait-name {
-  font-weight: 500;
-}
-.sub-trait-name.disabled {
-  opacity: 0.5;
-}
-.sub-trait-statement {
-  font-size: 11px;
-  opacity: 0.75;
-}
-.sub-trait-right {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.sub-trait-die {
-  font-size: 12px;
-}
-
-.trait-left {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.trait-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.trait-name {
-  cursor: pointer;
-  transition: color 0.15s;
-  font-weight: 500;
-}
-.trait-name:hover {
-  color: var(--accent);
-}
-.trait-name.disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.trait-name.disabled:hover {
-  color: inherit;
-}
-.trait-timer {
-  font-size: 10px;
-  color: var(--accent, #d9b45a);
-  margin-left: 6px;
-  white-space: nowrap;
-}
-.trait-disabled {
-  opacity: 0.45;
-}
-
-.trait-contact {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-left: 4px;
-}
-
-.trait-statement {
-  font-size: 10px;
-  color: var(--text-dim);
-  font-style: italic;
-  line-height: 1.3;
-}
-.trait-notes {
-  font-size: 10px;
-  color: var(--text-dim);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-
-.trait-die-groups {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.trait-die-group {
-  display: flex;
-  align-items: flex-start;
-}
-.trait-die-group.clickable { cursor: pointer; }
-.trait-die-group.clickable:hover .trait-die-icon { filter: brightness(1.25); }
-.trait-die-icon {
-  width: 32px;
-  height: 34px;
-}
-.trait-die-icon.ghost {
-  opacity: 0.32;
-}
-
-.trait-row.negative {
-  --die-d4: var(--die-d4-neg);
-  --die-d6: var(--die-d6-neg);
-  --die-d8: var(--die-d8-neg);
-  --die-d10: var(--die-d10-neg);
-  --die-d12: var(--die-d12-neg);
-  background: color-mix(in srgb, var(--die-d8-neg) 10%, transparent);
-}
-.trait-row.negative.morph {
-  background: color-mix(in srgb, var(--die-d8-neg) 14%, transparent);
-  border-left: 2px solid var(--die-d8-neg);
 }
 
 .loading, .error, .empty {
