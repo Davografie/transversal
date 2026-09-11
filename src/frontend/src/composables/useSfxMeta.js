@@ -4,8 +4,8 @@ import { useApi } from './useApi.js'
 // Trigger + condition-type vocabularies, sourced from the backend `triggers` and
 // `conditionTypes` resolvers (single source of truth — no frontend hardcoding).
 const META_QUERY = `{
-  triggers { value label group }
-  conditionTypes { value label needsTarget targetPlaceholder targetKind valueKind operators targetOptions usesSpec requiresSourceElements }
+  triggers { value label group carriesContext }
+  conditionTypes { value label needsTarget targetPlaceholder targetKind valueKind operators targetOptions usesSpec needsContext requiresSourceElements }
   targetFilterFields { field label valueType kinds options }
 }`
 

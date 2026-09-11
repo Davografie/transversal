@@ -71,6 +71,14 @@ class TriggerDef:
     variables: tuple[Variable, ...] = ()
     group: str = "auto"  # "manual" | "dicepool" | "auto"
 
+    @property
+    def carries_context(self) -> bool:
+        """False for the time boundaries (beat/scene/session): the walk that fires
+        them passes no context, so a condition reading the moment it fires can
+        never be evaluated there, and the editor does not offer one."""
+        from transversal.services.conditions import BOUNDARY_TRIGGERS
+        return self.value not in BOUNDARY_TRIGGERS
+
 
 # Card-facing trigger phrases ([[SFX Natural Language Plan]]): how the trigger
 # reads in derived rules text ("Whenever a roll happens, …"). Kept beside

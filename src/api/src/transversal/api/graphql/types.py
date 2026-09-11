@@ -276,6 +276,9 @@ class TriggerOption:
     value: str
     label: str
     group: str = "auto"  # "auto" | "manual" | "menu"
+    # False at a time boundary: the beat/scene/session walk carries no context, so
+    # context-reading conditions cannot be evaluated there.
+    carries_context: bool = True
 
 
 @strawberry.type
@@ -290,6 +293,10 @@ class ConditionTypeOption:
     operators: list[str] = strawberry.field(default_factory=list)
     target_options: list[str] = strawberry.field(default_factory=list)
     uses_spec: bool = False
+    # True when the condition reads the fire-time context (phase, stakes, outcome
+    # …). A boundary fire carries no context, so the editor does not offer these
+    # where they could never be evaluated.
+    needs_context: bool = False
     # Catalog elements ("traitsetting", …) the SFX's source must resolve to, or
     # the condition can never pass — the editor greys it out with the reason.
     requires_source_elements: list[str] = strawberry.field(default_factory=list)

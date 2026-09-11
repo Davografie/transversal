@@ -479,6 +479,23 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         target_kind="trait",
     ),
     EffectActionMeta(
+        action_id="delete_trait",
+        label="Delete Trait",
+        description=(
+            "Remove a trait instance from its owner — the trait burns away, is lost or "
+            "destroyed (the same removal a temporary grant does when it expires)"
+        ),
+        category="cost",
+        effect_type="modify_trait",
+        effect_action="remove",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
+            _ENTITY_FIELD,
+        ],
+        target_kind="trait",
+    ),
+    EffectActionMeta(
         action_id="copy_trait",
         label="Copy Trait",
         description=(
@@ -1010,6 +1027,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_trait", "gain_or_step_up"): "gain or step up {target}",
     ("modify_trait", "disable"): "disable {target}",
     ("modify_trait", "gain"): "gain {target}",
+    ("modify_trait", "remove"): "remove {target}",
     ("modify_trait", "cortex_gain"): "gain {target} as a complication at {result}",
     ("modify_trait", "add_die"): "add a {result} die to {target}",
     ("modify_trait", "copy"): "give {target} a copy of {result}",

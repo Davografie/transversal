@@ -1,6 +1,6 @@
 """Tests for the effect-action metadata contract."""
 
-from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
+from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY, effect_card
 
 
 def _meta(effect_action):
@@ -8,6 +8,16 @@ def _meta(effect_action):
         if m.effect_action == effect_action:
             return m
     return None
+
+
+def test_delete_trait_is_authorable():
+    """`remove` existed only as the internal inverse of `gain` — an author could
+    not delete a trait at all. It is now a first-class action."""
+    meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "delete_trait")
+    assert (meta.effect_type, meta.effect_action) == ("modify_trait", "remove")
+    assert meta.target_kind == "trait"
+    assert [f.name for f in meta.fields] == ["target", "entity"]
+    assert effect_card("modify_trait", "remove") == "remove {target}"
 
 
 def test_step_actions_declare_steps_context_field():

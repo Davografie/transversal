@@ -338,6 +338,57 @@ class ConditionTypeDef:
     requires_source_elements: tuple[str, ...] = ()
 
 
+    @property
+    def needs_context(self) -> bool:
+        """True when this condition reads the *fire-time context* (phase, stakes,
+        outcome, hitch …) rather than entity state.
+
+        Boundary fires carry no context at all — a beat/scene/session tick, or an
+        ``on_beat``-style trigger — so such a condition can never be evaluated
+        there and the editor does not offer it. Derived from ``_CONTEXT_TYPES`` so
+        the two can't drift apart.
+        """
+        try:
+            return ConditionType[self.value] in _CONTEXT_TYPES
+        except KeyError:
+            return False
+
+
+def context_is_available(trigger: str = "", timing: str = "") -> bool:
+    """Whether an evaluation point carries any fire-time context.
+
+    False for the two sites that provably carry none: a boundary *timing* (the
+    effect is stored and fires from the timer store with an empty context) and a
+    boundary *trigger* (the beat/scene/session walk passes no context). Roll-timed
+    effects are always fine — they fire from the roll, which brings its own.
+
+    This is deliberately coarse: it answers "is there any context here", not
+    "which keys". A per-key capability map is the finer version (see the open
+    item in [[SFX Authoring]]).
+    """
+    return not (trigger in BOUNDARY_TRIGGERS or timing in BOUNDARY_TIMINGS)
+
+
+# Triggers and effect timings that fire at a time boundary. Both carry no
+# fire-time context: the beat/scene/session walk passes none, and a stored
+# boundary effect is applied with an empty context.
+BOUNDARY_TRIGGERS = frozenset({"on_beat", "on_scene", "on_session_start", "on_session_end"})
+BOUNDARY_TIMINGS = frozenset({"end_of_beat", "end_of_scene", "end_of_session", "after_beats"})
+
+
+def context_is_available(trigger: str = "", timing: str = "") -> bool:
+    """Whether an evaluation point carries any fire-time context at all.
+
+    False for the two sites that provably carry none (a boundary trigger and a
+    boundary timing); roll-timed effects are always true — they fire from the
+    roll, which brings its own context.
+
+    Deliberately coarse: it answers *is there any context here*, not *which keys*.
+    A per-key capability map is the finer version and is still open.
+    """
+    return not (trigger in BOUNDARY_TRIGGERS or timing in BOUNDARY_TIMINGS)
+
+
 CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.ALWAYS.name, "Always"),
     ConditionTypeDef(ConditionType.AT_LOCATION.name, "At location", needs_target=True, target_placeholder="location id", target_kind="location"),

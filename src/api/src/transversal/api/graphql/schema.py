@@ -950,7 +950,8 @@ class Query:
     def triggers(self, info: strawberry.Info) -> list[TriggerOption]:
         """The activation-trigger vocabulary for the SFX editor, sourced from the backend."""
         from transversal.services.menu_contexts import TRIGGERS
-        return [TriggerOption(value=t.value, label=t.label, group=t.group) for t in TRIGGERS]
+        return [TriggerOption(value=t.value, label=t.label, group=t.group,
+                              carries_context=t.carries_context) for t in TRIGGERS]
 
     @strawberry.field
     def condition_types(self, info: strawberry.Info) -> list[ConditionTypeOption]:
@@ -963,6 +964,7 @@ class Query:
                 target_kind=c.target_kind, value_kind=c.value_kind,
                 operators=list(c.operators), target_options=list(c.target_options),
                 uses_spec=c.uses_spec,
+                needs_context=c.needs_context,
                 requires_source_elements=list(c.requires_source_elements),
             )
             for c in CONDITION_TYPES

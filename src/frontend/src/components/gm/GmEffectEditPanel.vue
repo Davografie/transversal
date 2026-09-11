@@ -4,6 +4,7 @@
       :value="editingEffect"
       :variables="scopeVariables"
       :source-element="sourceElement"
+      :trigger-carries-context="triggerCarriesContext"
       :output-variables="outputVariables"
       @save="onSave"
       @cancel="close"
@@ -15,6 +16,7 @@
 import { computed, ref, watch } from 'vue'
 import EffectForm from './EffectForm.vue'
 import { useSfxEdit } from '@/composables/useSfxEdit.js'
+import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import { usePanel } from '@/composables/usePanel.js'
 
@@ -28,6 +30,16 @@ const panel = usePanel()
 const { draft, scopeVariables, save } = useSfxEdit()
 const { load: loadCatalog, sourceKinds, collectVariables } = useTargetCatalog()
 loadCatalog()
+
+// A beat/scene/session trigger brings no context, so an immediate effect under it
+// can't evaluate a context-reading condition. The flag rides the trigger
+// vocabulary so the editor and `validate_sfx` can't disagree.
+const { load: loadSfxMeta, triggers } = useSfxMeta()
+loadSfxMeta()
+const triggerCarriesContext = computed(() => {
+  const t = triggers.value.find(x => x.value === draft.trigger)
+  return t ? t.carriesContext !== false : true
+})
 
 const editingEffect = computed(() => (props.index === null ? null : (draft.effects[props.index] || null)))
 

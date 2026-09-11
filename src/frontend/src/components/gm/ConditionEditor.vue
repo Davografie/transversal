@@ -2,11 +2,9 @@
   <div class="ce-root">
     <div v-for="(c, i) in conditions" :key="i" class="ce-row" :class="{ 'ce-row-spec': usesSpec(c.type) }">
       <select v-model="c.type">
-        <option v-for="t in typeOptions" :key="t.value" :value="t.value" :disabled="!typeUsable(t)">{{ t.label }}{{ sourceReason(t) }}</option>
+        <option v-for="t in typeOptions" :key="t.value" :value="t.value" :disabled="!typeUsable(t)">{{ t.label }}{{ optionReason(t) }}</option>
       </select>
-      <span v-if="missingSource(selectedMeta(c.type))" class="ce-warn">
-        never passes: needs a {{ missingSource(selectedMeta(c.type)) }} source
-      </span>
+      <span v-if="selectedProblem(c.type)" class="ce-warn">{{ selectedProblem(c.type) }}</span>
       <template v-if="usesSpec(c.type)">
         <TargetSpecBuilder v-model="c.spec" :source-element="sourceElement" title="Condition path" boolean-terminal class="ce-spec" />
       </template>
@@ -74,6 +72,9 @@ import Button from '@/components/ui/Button.vue'
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
+  // False where the condition would be evaluated with no fire-time context at all
+  // (a beat/scene/session boundary, or a boundary-trigger SFX).
+  contextAvailable: { type: Boolean, default: true },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -116,12 +117,27 @@ function missingSource(meta) {
 }
 
 function typeUsable(t) {
-  return !missingSource(t)
+  return !optionReason(t)
 }
 
-function sourceReason(t) {
+function optionReason(t) {
   const need = missingSource(t)
-  return need ? ` — needs a ${need} source` : ''
+  if (need) return ` — needs a ${need} source`
+  if (!props.contextAvailable && t.needsContext) return ' — nothing to read at a boundary'
+  return ''
+}
+
+// What is wrong with the condition that is actually selected (legacy content can
+// hold a gate the vocabulary would no longer offer).
+function selectedProblem(type) {
+  const meta = selectedMeta(type)
+  if (!meta) return ''
+  const need = missingSource(meta)
+  if (need) return `never passes: needs a ${need} source`
+  if (!props.contextAvailable && meta.needsContext) {
+    return 'never passes: it reads the moment it fires, and a boundary carries no context'
+  }
+  return ''
 }
 
 function usesSpec(type) {

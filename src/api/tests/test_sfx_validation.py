@@ -158,6 +158,42 @@ def test_each_source_kind_exposes_its_variable():
     assert source_variable("") is None
 
 
+def test_context_condition_on_a_boundary_trigger_warns():
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="on_beat",
+        conditions=[Condition(type=ConditionType.HIGH_STAKES, target="high")],
+    )
+    assert validate_sfx(sfx) == [
+        "Condition 1: 'High stakes' reads the moment it fires, and 'on_beat' carries "
+        "no context — it can never pass"
+    ]
+
+
+def test_context_condition_on_a_boundary_effect_warns():
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual",
+        effects=[Effect(
+            timing=EffectTiming.END_OF_SCENE, type="modify_trait", action="step_down",
+            target="{choose_trait}",
+            conditions=[Condition(type=ConditionType.PHASE, target="adding")],
+        )],
+    )
+    assert any("end_of_scene boundary carries no context" in w for w in validate_sfx(sfx))
+
+
+def test_context_condition_on_a_roll_effect_is_fine():
+    """A roll-timed effect fires from the roll, which brings its own context."""
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="on_session_start",
+        effects=[Effect(
+            timing=EffectTiming.ON_RESULT, type="modify_trait", action="step_down",
+            target="{choose_trait}",
+            conditions=[Condition(type=ConditionType.HIGH_STAKES, target="high")],
+        )],
+    )
+    assert not any("carries no context" in w for w in validate_sfx(sfx))
+
+
 def test_source_rating_on_an_entity_sfx_warns():
     """A source-reading condition with the wrong source can never pass."""
     sfx = SFX(
