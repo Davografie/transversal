@@ -38,6 +38,7 @@
         <label>Tags</label>
         <TagInput
           v-model="form.tags"
+          :suggestions="tagSuggestions"
           placeholder="Add tag…"
           aria-label="Trait tags"
         />
@@ -165,6 +166,7 @@
         <label>Tags</label>
         <TagInput
           v-model="createForm.tags"
+          :suggestions="tagSuggestions"
           placeholder="Add tag…"
           aria-label="Trait tags"
         />
@@ -278,6 +280,22 @@ const allowedUniverses = computed(() => {
   const ts = (traitsets.value || []).find(ts => ts.id === trait.value?.traitsetId)
   if (!ts) return []
   return (ts.universes || []).map(u => universeOptions.value.find(o => o.value === u) || { label: u, value: u })
+})
+
+// Existing tags across every trait — the free-form tag field's autocomplete.
+// Case-insensitively deduped (first spelling wins) and sorted, so the dropdown
+// stays stable. TagInput hides the ones already on the trait.
+const tagSuggestions = computed(() => {
+  const seen = new Map()
+  for (const ts of (traitsets.value || [])) {
+    for (const t of (ts.traits || [])) {
+      for (const tag of (t.tags || [])) {
+        const key = String(tag).toLowerCase()
+        if (key && !seen.has(key)) seen.set(key, String(tag))
+      }
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
 })
 
 // ── Edit mode form ──
