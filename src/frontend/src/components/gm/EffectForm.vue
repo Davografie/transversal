@@ -145,13 +145,21 @@
       </div>
       <TraitInstanceEditor
         v-if="isGainAction"
-        v-model:die="newEffect.fields.result"
-        v-model:negative="newEffect.negative"
-        v-model:rating-type="newEffect.context.rating_type"
-        v-model:statement="newEffect.context.statement"
-        v-model:notes="newEffect.context.notes"
-        :variables="dieVariables"
+        mode="single"
+        variant="box"
         allow-variable
+        :show-capacity="false"
+        :die="newEffect.fields.result"
+        :polarity="newEffect.negative ? 'NEGATIVE' : 'POSITIVE'"
+        :rating-type="(newEffect.context.rating_type || 'STATIC').toUpperCase()"
+        :statement="newEffect.context.statement"
+        :notes="newEffect.context.notes"
+        :variables="dieVariables"
+        @update:die="newEffect.fields.result = $event"
+        @update:polarity="newEffect.negative = $event === 'NEGATIVE'"
+        @update:rating-type="newEffect.context.rating_type = $event.toLowerCase()"
+        @update:statement="newEffect.context.statement = $event"
+        @update:notes="newEffect.context.notes = $event"
       />
       <div v-for="f in visibleContextFields" :key="f.name" class="ee-field">
         <label>{{ f.label }}</label>
@@ -222,7 +230,7 @@ import TargetSpecBuilder from './TargetSpecBuilder.vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import ConditionEditor from './ConditionEditor.vue'
 import DurationBuilder from './DurationBuilder.vue'
-import TraitInstanceEditor from './TraitInstanceEditor.vue'
+import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import ScopeBuilder from './ScopeBuilder.vue'
 import ReturnMapEditor from './ReturnMapEditor.vue'
 import DiePicker from '@/components/DiePicker.vue'

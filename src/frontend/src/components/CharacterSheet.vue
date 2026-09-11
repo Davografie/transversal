@@ -168,123 +168,86 @@
           <Button class="set-back" variant="link" @click="cancelEdit">← Back</Button>
           <h4 class="edit-title">{{ displayName(editingTrait.name) }}</h4>
 
-          <div class="edit-field">
-            <span class="edit-label">Rating</span>
-            <div class="edit-rating-type">
-              <button
-                v-for="rt in RATING_TYPES"
-                :key="rt.id"
-                type="button"
-                class="rating-type-btn"
-                :class="{ active: editRatingType === rt.id }"
-                @click="setRatingType(rt.id)"
-              >{{ rt.label }}</button>
-            </div>
-          </div>
-
-          <div v-if="editRatingType !== 'EMPTY'" class="edit-field">
-            <span class="edit-label">Dice</span>
-            <div class="edit-dice">
-              <button v-for="(d, i) in editDice" :key="i" class="die-chip die-chip-icon" :title="`Change ${d}`" @click="pickIdx = i; showDiePicker = true">
-                <DieIcon :die="d" />
-              </button>
-              <button class="die-chip add-chip" @click="pickIdx = editDice.length; showDiePicker = true">+</button>
-            </div>
-            <div v-if="editRatingType === 'RESOURCE' && (editingTrait.spentDice || []).length" class="edit-spent-dice">
-              <span class="edit-spent-label">Recoverable</span>
-              <button
-                v-for="(die, i) in editingTrait.spentDice"
-                :key="'spent' + i"
-                class="die-chip ghost-chip die-chip-icon"
-                :title="`Recover one ${die.toLowerCase()}`"
-                @click="recoverSpentDie(die)"
-              ><DieIcon :die="die.toLowerCase()" /></button>
-            </div>
-          </div>
-
-          <div v-if="editRatingType === 'CHALLENGE'" class="edit-field">
-            <span class="edit-label">Capacity</span>
-            <div class="edit-dice">
-              <button v-for="(d, i) in editCapacity" :key="'cap' + i" class="die-chip die-chip-icon" :title="`Change ${d}`" @click="capacityPickIdx = i; showCapacityPicker = true">
-                <DieIcon :die="d" />
-              </button>
-              <button class="die-chip add-chip" @click="capacityPickIdx = editCapacity.length; showCapacityPicker = true">+</button>
-            </div>
-          </div>
-
-          <DiePicker v-if="showDiePicker" v-model="pickedDie" @update:model-value="onDiePicked" />
-          <DiePicker v-if="showCapacityPicker" v-model="pickedCapacityDie" @update:model-value="onCapacityPicked" />
-
-          <div v-if="editingTrait.possibleSfxIds?.length" class="edit-field">
-            <span class="edit-label">SFX</span>
-            <div class="edit-sfx">
-              <button v-for="sfxId in editingTrait.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
-                {{ sfxId.replace('sfx-', '') }}
-              </button>
-            </div>
-          </div>
-
-          <div v-if="editingTrait.statement !== undefined" class="edit-field">
-            <span class="edit-label">Statement</span>
-            <input v-model="editStatement" class="edit-statement" placeholder="Statement…" @input="onStatementInput" @blur="splitStatement" />
-          </div>
-
-          <div v-if="editingTrait.notes !== undefined || editNotes" class="edit-field">
-            <span class="edit-label">Notes</span>
-            <textarea v-model="editNotes" class="edit-notes" placeholder="Notes…" @input="onStatementInput"></textarea>
-          </div>
-
-          <div class="edit-field">
-            <span class="edit-label">Type</span>
-            <div class="edit-flags">
-              <button v-if="editingTrait.fromType !== 'relationship'" type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
-              <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
-                {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
-              </button>
-            </div>
-            <div v-if="!editIsEgo && editingTrait.fromType !== 'relationship'" class="edit-projection">
-              <span class="edit-projection-label">on</span>
-              <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
-              <div v-if="showProjectionPicker" class="projection-dropdown">
-                <button
-                  v-for="p in editProjectionOptions"
-                  :key="p.id"
-                  type="button"
-                  class="projection-option"
-                  :class="{ selected: p.id === editProjectionId }"
-                  @click="selectProjection(p)"
-                >{{ p.name || universeDisplay(p.originUniverse) }}</button>
+          <TraitInstanceEditor
+            :rating-type="editRatingType"
+            :show-polarity="false"
+            :show-statement="editingTrait.statement !== undefined"
+            :show-notes="editingTrait.notes !== undefined || !!editNotes"
+            :spent-dice="editingTrait.spentDice || []"
+            v-model:dice="editDice"
+            v-model:capacity="editCapacity"
+            v-model:statement="editStatement"
+            v-model:notes="editNotes"
+            @update:rating-type="onEditorRatingType"
+            @change="onEditorChange"
+            @field-blur="onEditorFieldBlur"
+            @recover-die="recoverSpentDie"
+          >
+            <template #after-dice>
+            <div v-if="editingTrait.possibleSfxIds?.length" class="edit-field">
+              <span class="edit-label">SFX</span>
+              <div class="edit-sfx">
+                <button v-for="sfxId in editingTrait.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
+                  {{ sfxId.replace('sfx-', '') }}
+                </button>
               </div>
             </div>
-          </div>
-
-          <div class="edit-field">
-            <span class="edit-label">Sub-traits</span>
-            <div v-if="(editingTrait.subTraitSettings || []).length" class="edit-subtraits">
-              <div v-for="st in editingTrait.subTraitSettings" :key="st.id" class="edit-subtrait-row">
-                <span class="edit-subtrait-name">{{ displayName(st.name) }}</span>
-                <span v-if="st.statement" class="edit-subtrait-statement">{{ st.statement }}</span>
-                <Button class="edit-subtrait-remove" variant="danger-ghost" size="sm" title="Remove sub-trait" @click="removeSubTrait(st.id)">✕</Button>
+            </template>
+            <template #after-fields>
+            <div class="edit-field">
+              <span class="edit-label">Type</span>
+              <div class="edit-flags">
+                <button v-if="editingTrait.fromType !== 'relationship'" type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
+                <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
+                  {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
+                </button>
+              </div>
+              <div v-if="!editIsEgo && editingTrait.fromType !== 'relationship'" class="edit-projection">
+                <span class="edit-projection-label">on</span>
+                <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
+                <div v-if="showProjectionPicker" class="projection-dropdown">
+                  <button
+                    v-for="p in editProjectionOptions"
+                    :key="p.id"
+                    type="button"
+                    class="projection-option"
+                    :class="{ selected: p.id === editProjectionId }"
+                    @click="selectProjection(p)"
+                  >{{ p.name || universeDisplay(p.originUniverse) }}</button>
+                </div>
               </div>
             </div>
-            <div v-if="availableSubtraits.length" class="edit-subtraits-add">
-              <span class="edit-subtrait-add-label">Add:</span>
-              <button v-for="opt in availableSubtraits" :key="opt.id" class="edit-subtrait-chip" @click="addSubTrait(opt.id)">{{ opt.name }}</button>
-            </div>
-            <span v-else-if="!(editingTrait.possibleSubtraitIds || []).length" class="edit-subtrait-empty">No sub-traits configured for this trait.</span>
-          </div>
 
-          <div class="edit-actions">
-            <Button class="edit-done-btn" variant="primary" @click="cancelEdit">Done</Button>
-            <Button
-              class="edit-delete-btn"
-              variant="danger"
-              :active="deleteCountdown > 0 && deletingTraitId === editingTrait.id"
-              @click="onDeleteClick(editingTrait)"
-            >
-              {{ deleteCountdown > 0 && deletingTraitId === editingTrait.id ? `Cancel (${deleteCountdown})` : 'Delete' }}
-            </Button>
-          </div>
+            <div class="edit-field">
+              <span class="edit-label">Sub-traits</span>
+              <div v-if="(editingTrait.subTraitSettings || []).length" class="edit-subtraits">
+                <div v-for="st in editingTrait.subTraitSettings" :key="st.id" class="edit-subtrait-row">
+                  <span class="edit-subtrait-name">{{ displayName(st.name) }}</span>
+                  <span v-if="st.statement" class="edit-subtrait-statement">{{ st.statement }}</span>
+                  <Button class="edit-subtrait-remove" variant="danger-ghost" size="sm" title="Remove sub-trait" @click="removeSubTrait(st.id)">✕</Button>
+                </div>
+              </div>
+              <div v-if="availableSubtraits.length" class="edit-subtraits-add">
+                <span class="edit-subtrait-add-label">Add:</span>
+                <button v-for="opt in availableSubtraits" :key="opt.id" class="edit-subtrait-chip" @click="addSubTrait(opt.id)">{{ opt.name }}</button>
+              </div>
+              <span v-else-if="!(editingTrait.possibleSubtraitIds || []).length" class="edit-subtrait-empty">No sub-traits configured for this trait.</span>
+            </div>
+            </template>
+            <template #actions>
+            <div class="edit-actions">
+              <Button class="edit-done-btn" variant="primary" @click="cancelEdit">Done</Button>
+              <Button
+                class="edit-delete-btn"
+                variant="danger"
+                :active="deleteCountdown > 0 && deletingTraitId === editingTrait.id"
+                @click="onDeleteClick(editingTrait)"
+              >
+                {{ deleteCountdown > 0 && deletingTraitId === editingTrait.id ? `Cancel (${deleteCountdown})` : 'Delete' }}
+              </Button>
+            </div>
+            </template>
+          </TraitInstanceEditor>
         </div>
 
         <!-- Trait detail (read-only) — the row's "elsewhere" click zone.
@@ -590,6 +553,7 @@ import LifePathWizard from './LifePathWizard.vue'
 import DieIcon from './DieIcon.vue'
 import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
+import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
 
 const props = defineProps({
@@ -921,12 +885,6 @@ const editPolarity = usePersistedRef('sheet.editPolarity', null)
 const editCapacity = usePersistedRef('sheet.editCapacity', [])
 const editStatement = usePersistedRef('sheet.editStatement', '')
 const editNotes = usePersistedRef('sheet.editNotes', '')
-const showDiePicker = ref(false)
-const pickIdx = ref(0)
-const pickedDie = ref('')
-const showCapacityPicker = ref(false)
-const capacityPickIdx = ref(0)
-const pickedCapacityDie = ref('')
 const editSfxIds = usePersistedRef('sheet.editSfxIds', [])
 const editIsEgo = usePersistedRef('sheet.editIsEgo', true)
 const editProjectionId = usePersistedRef('sheet.editProjectionId', null)
@@ -1741,8 +1699,6 @@ function startEdit(t) {
     (isMorph ? (entity.value?.currentProjection || entity.value?.projections?.[0]?.id) : null) ||
     null
   showProjectionPicker.value = false
-  showDiePicker.value = false
-  showCapacityPicker.value = false
 }
 
 function cancelEdit() {
@@ -1949,14 +1905,26 @@ function toggleSfx(sfxId) {
   doSave()
 }
 
-async function setRatingType(rt) {
-  if (editRatingType.value === rt) return
+// --- shared trait editor (components/ui/TraitInstanceEditor.vue) ------------
+// The editor is controlled: it emits field updates and a `change` event naming
+// the field, and this sheet owns persistence (it saves live, like before).
+async function onEditorRatingType(rt) {
   editRatingType.value = rt
   // EMPTY traits carry no dice rating — clear them.
   if (rt === 'EMPTY') editDice.value = []
   await doSave()
   // Re-split so the trait moves between the rated list and the profile tab.
   recomputeTraitSets()
+}
+
+function onEditorChange(field) {
+  if (field === 'ratingType') return                                    // onEditorRatingType owns this path
+  if (field === 'statement' || field === 'notes') return onStatementInput()  // debounced, as before
+  doSave()                                                              // dice, capacity, polarity
+}
+
+function onEditorFieldBlur(field) {
+  if (field === 'statement') splitStatement()
 }
 
 async function addSubTrait(traitId) {
@@ -1984,30 +1952,6 @@ function splitStatement() {
     editNotes.value = editNotes.value ? editNotes.value + '\n' + moved : moved
     editStatement.value = ''
   }
-}
-
-function onDiePicked(die) {
-  if (!die) {
-    editDice.value.splice(pickIdx.value, 1)
-  } else if (pickIdx.value >= editDice.value.length) {
-    editDice.value.push(die)
-  } else {
-    editDice.value.splice(pickIdx.value, 1, die)
-  }
-  showDiePicker.value = false
-  doSave()
-}
-
-function onCapacityPicked(die) {
-  if (!die) {
-    editCapacity.value.splice(capacityPickIdx.value, 1)
-  } else if (capacityPickIdx.value >= editCapacity.value.length) {
-    editCapacity.value.push(die)
-  } else {
-    editCapacity.value.splice(capacityPickIdx.value, 1, die)
-  }
-  showCapacityPicker.value = false
-  doSave()
 }
 
 // Long-press detection for touchscreens
@@ -2352,98 +2296,6 @@ watch(() => props.externalPoolSources, (sources) => {
   letter-spacing: 1px;
   color: var(--text);
 }
-.edit-dice {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.edit-dice .die-chip {
-  font-size: 14px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 6px;
-  border: 2px solid var(--overlay-10);
-  background: var(--overlay-6);
-  color: var(--text);
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-.edit-dice .die-chip:hover {
-  border-color: var(--accent);
-}
-.edit-dice .add-chip {
-  color: var(--accent);
-  border-color: var(--accent-dim);
-  font-size: 16px;
-  font-weight: 400;
-  padding: 3px 8px;
-}
-.edit-dice .add-chip:hover {
-  border-color: var(--accent);
-  background: var(--accent-12);
-}
-.edit-spent-dice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.edit-spent-label {
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.edit-spent-dice .die-chip {
-  font-size: 13px;
-  font-weight: 700;
-  padding: 2px 9px;
-  border-radius: 6px;
-  border: 2px dashed var(--overlay-25);
-  background: var(--overlay-4);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.edit-spent-dice .die-chip:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-.edit-dice .die-chip.die-chip-icon,
-.edit-spent-dice .die-chip.die-chip-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  line-height: 0;
-}
-.edit-dice .die-chip.die-chip-icon .die-icon,
-.edit-spent-dice .die-chip.die-chip-icon .die-icon {
-  width: 28px;
-  height: 30px;
-}
-.edit-spent-dice .die-chip.die-chip-icon .die-icon {
-  opacity: 0.45;
-}
-.edit-rating-type {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.rating-type-btn {
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--overlay-12);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-}
-.rating-type-btn.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-12);
-}
 .edit-sfx {
   display: flex;
   flex-wrap: wrap;
@@ -2513,28 +2365,6 @@ watch(() => props.externalPoolSources, (sources) => {
 }
 .edit-subtrait-empty { font-size: 11px; color: var(--text-dim); }
 
-.edit-statement,
-.edit-notes {
-  width: 100%;
-  box-sizing: border-box;
-  background: var(--overlay-4);
-  border: 1px solid var(--overlay-12);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 12px;
-  font-family: inherit;
-  padding: 6px 8px;
-  transition: border-color 0.15s;
-}
-.edit-statement:focus,
-.edit-notes:focus {
-  outline: none;
-  border-color: var(--accent-dim);
-}
-.edit-notes {
-  min-height: 56px;
-  resize: vertical;
-}
 .edit-actions {
   display: flex;
   gap: 6px;
