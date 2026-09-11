@@ -728,14 +728,28 @@ class AttunementScope(str, Enum):
     DOMAIN = "domain"    # occupants in the entity's location subtree
 
 
-class Attunement(BaseModel):
-    """An active temporary addition of a universe to an entity's effective universes.
+class AttunementOp(str, Enum):
+    """What a projection grant does to its carrier's active set."""
+    ADD = "add"        # attune — bring a body (or a universe's bodies) live
+    REMOVE = "remove"  # suppress — cut a specific body out of the set
 
-    Stored on the entity document (``Entity.attunements``).  Expiry is driven by
-    the effects system: when the ``until`` timing fires, the effects system
-    removes the attunement.
+
+class Attunement(BaseModel):
+    """A projection grant: a body made live, or cut off.
+
+    Stored on the entity document (``Entity.attunements``). The entity's *active
+    projection set* is **derived** from these on read (see
+    [[Active Projections Design Log]]); expiry is driven by the effects system:
+    when the ``until`` timing fires, the effects system removes the grant.
+
+    Two target forms (which generalise to a resolved targeting path):
+    ``universe`` names every one of the carrier's bodies from that universe
+    (needed for ``domain`` grants, which cannot name one occupant's body), and
+    ``projection_id`` names one specific body (the ``suppress`` form).
     """
-    universe: str
+    universe: Optional[str] = None
+    projection_id: Optional[str] = None
+    op: AttunementOp = AttunementOp.ADD
     scope: AttunementScope = AttunementScope.SELF
     until: Optional[EffectTiming] = None
     source_sfx_id: Optional[str] = None

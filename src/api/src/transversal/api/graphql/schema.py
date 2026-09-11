@@ -182,8 +182,8 @@ def _entity_to_gql(e: DomainEntity) -> Entity:
         nav_positions=json.dumps(e.nav_positions) if e.nav_positions else "{}",
         node_ids=e.node_ids, owned_by=e.owned_by,
         attunements=[
-            Attunement(universe=a.universe, scope=a.scope.value,
-                       until=a.until, source_sfx_id=a.source_sfx_id)
+            Attunement(op=a.op.value, universe=a.universe, projection_id=a.projection_id,
+                       scope=a.scope.value, until=a.until, source_sfx_id=a.source_sfx_id)
             for a in e.attunements
         ],
         lora_config=json.dumps(e.lora_config) if e.lora_config else None,

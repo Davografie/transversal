@@ -578,16 +578,20 @@ A configurable, automatically-evaluated gate or limit (parallel to `Effect`).
 
 `ConditionType` values: `always`, `at_location`, `has_trait`, `has_effective_trait`, `has_trait_in_traitset`, `has_relationship`, `trait_rating`, `has_razmerit`, `entity_type`, `user_role`, `narrative`, `unplaced`, `in_universe`, `phase`, `contest_outcome`, `hitch`, `roll_tier`, `test_outcome`, `source_rating`, `target_path`.
 
-### Attunement
+### Attunement (projection grant)
 
-Active temporary addition of a universe to an entity's effective universes (stored on `Entity.attunements`).
+A **projection grant**: a body made live, or cut off. Stored on `Entity.attunements`. The entity's *active projection set* is **derived** from these on read (see [[Active Projections Design Log]]).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `universe` | string | Universe key |
+| `op` | AttunementOp | `add` (attune — bring live) or `remove` (suppress — cut off); default `add` |
+| `universe` | string? | Target form 1: every one of the carrier's bodies from this universe (used by `domain` grants, which cannot name one occupant's body) |
+| `projection_id` | string? | Target form 2: one specific body (the `suppress` form) |
 | `scope` | AttunementScope | `self` (entity only) or `domain` (occupants in its location subtree) |
 | `until` | EffectTiming? | Expiry timing (driven by the effects system) |
 | `source_sfx_id` | string? | Originating SFX |
+
+Targets are resolved **read-time**, so a universe grant tracks bodies gained while the grant is live. Both forms generalise to a resolved targeting path (an `omni` grant is `navigate` along the **All projections** edge — not a flag).
 
 ### TargetingBan
 
@@ -719,10 +723,14 @@ Built by the repository, not stored. Assembles entity + projections + trait sett
 
 ## Effective Trait Resolution
 
-Traits resolve from `effective_universes` — the active projection's universe plus any unexpired attunements:
+An entity's **active projection set** is the source of truth: `{current_projection}` plus `add` grants minus `remove` grants (self- and domain-scoped). `effective_universes` is a compatibility view over it — the universes of the active bodies.
+
+Traits resolve from the active set:
 
 1. **Ego traits** — always available (`from_type = entity`)
-2. **Morph traits** — available iff the trait's `origin_universe` is in `effective_universes` (`from_type = projection`)
+2. **Morph traits** — available iff the trait's anchoring projection is live (`from_type = projection`); as implemented today this is checked as `origin_universe ∈ effective_universes`, which is equivalent while an entity holds at most one body per universe
+
+`transversal_type` is provenance and is **never** read for availability; having several NATIVE bodies does not make them all live (see [[Projections and Transversal]]).
 
 See [[Projections and Transversal]] for the canonical model and [[Entities and Traits#Ego and Morph]] for the ego/morph split.
 

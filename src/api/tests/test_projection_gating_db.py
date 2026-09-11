@@ -13,6 +13,7 @@ from transversal.db.arango import TRAITSETTINGS
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
     Attunement,
+    AttunementOp,
     AttunementScope,
     DieType,
     Entity,
@@ -166,6 +167,44 @@ def test_attunement_is_how_another_universe_goes_live(gating_data):
     universes = repo.effective_universes(attuned)
     assert UNIVERSE_ALPHA in universes
     assert UNIVERSE_GAMMA in universes      # live via the effect, not the body type
+
+
+def test_active_projections_default_to_the_current_body(gating_data):
+    repo = gating_data
+    char = repo.get_entity(CHAR_ID)
+    assert repo.active_projections(char) == [f"{CHAR_ID}:{UNIVERSE_ALPHA}"]
+    assert repo.effective_universes(char) == [UNIVERSE_ALPHA]
+
+
+def test_suppression_cuts_a_specific_body_out(gating_data):
+    """A `remove` grant naming a body takes it out of the active set."""
+    repo = gating_data
+    char = repo.get_entity(CHAR_ID)
+    suppressed = char.model_copy(update={
+        "attunements": [Attunement(
+            op=AttunementOp.REMOVE,
+            projection_id=f"{CHAR_ID}:{UNIVERSE_ALPHA}",
+            scope=AttunementScope.SELF,
+        )],
+    })
+    assert repo.active_projections(suppressed) == []
+    assert repo.effective_universes(suppressed) == []   # ego traits only
+
+
+def test_swap_is_add_plus_suppress(gating_data):
+    """Swap = attune another body + suppress the current one (two effects)."""
+    repo = gating_data
+    char = repo.get_entity(CHAR_ID)
+    swapped = char.model_copy(update={
+        "attunements": [
+            Attunement(op=AttunementOp.ADD, universe=UNIVERSE_GAMMA,
+                       scope=AttunementScope.SELF),
+            Attunement(op=AttunementOp.REMOVE, projection_id=f"{CHAR_ID}:{UNIVERSE_ALPHA}",
+                       scope=AttunementScope.SELF),
+        ],
+    })
+    assert repo.active_projections(swapped) == [f"{CHAR_ID}:{UNIVERSE_GAMMA}"]
+    assert repo.effective_universes(swapped) == [UNIVERSE_GAMMA]
 
 
 def test_projection_anchored_trait_gated_by_origin(gating_data):

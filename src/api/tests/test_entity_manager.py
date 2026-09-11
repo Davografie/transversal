@@ -316,7 +316,14 @@ class TestProjections:
         # base = active projection's universe
         assert repo.effective_universes(kael) == ["earth"]
 
-        # a self attunement adds its universe
+        # A self attunement makes the carrier's bodies from that universe live.
+        # Resolution is read-time over the active set: a universe grant needs a
+        # body to bring live (see [[Active Projections Design Log]]).
+        repo.create_projection(Projection(
+            id=f"{kael.id}:three_realms", entity_id=kael.id,
+            origin_universe="three_realms", universe="three_realms",
+            transversal_type=TransversalType.NATIVE,
+        ))
         kael.attunements.append(Attunement(universe="three_realms", scope=AttunementScope.SELF))
         repo.update_entity(kael)
         assert repo.effective_universes(kael) == ["earth", "three_realms"]

@@ -37,6 +37,8 @@ from transversal.db.arango import (
 )
 from transversal.domain import (
     SFX,
+    Attunement,
+    AttunementOp,
     AttunementScope,
     CharacterView,
     Entity,
@@ -1708,28 +1710,66 @@ class EntityRepository:
                 return proj.current_location
         return entity.current_location
 
-    def effective_universes(self, entity: Entity) -> list[str]:
-        """Compute the set of universes governing the entity's trait availability.
+    def active_projections(self, entity: Entity) -> list[str]:
+        """The entity's currently-active bodies — the projection-native source of truth.
 
-        Union of: the active universe (active projection), self-scoped
-        attunements, and domain-scoped attunements from entities at this entity's
-        location or its ancestors.
-
-        A multiversal being (several NATIVE bodies) does **not** get every native
-        universe at once: ``transversal_type`` is provenance, never read for trait
-        availability (see [[Projections and Transversal]]). Making another body's
-        traits live is a deliberate, costed effect — an attunement (or, later, an
-        active-projection grant; see [[Active Projections Design Log]]).
+        ``{current_projection}`` plus ``add`` grants minus ``remove`` grants, over
+        the entity's own ``self`` grants and any ``domain``-scoped grants it sits
+        under. Grant targets resolve **read-time** (see
+        [[Active Projections Design Log]]), so "every body of mine from universe U"
+        tracks bodies gained while the grant is live. The entity's projections are
+        loaded only when a universe-form grant actually needs resolving, so the
+        common (grant-free) read stays free.
         """
-        result: set[str] = set()
-        active = self._active_universe(entity)
-        if active:
-            result.add(active)
-        for att in entity.attunements:
-            if att.scope == AttunementScope.SELF:
-                result.add(att.universe)
-        result.update(self._domain_attunement_universes(entity))
-        return sorted(result)
+        active: set[str] = set()
+        if entity.current_projection:
+            active.add(entity.current_projection)
+
+        grants = [g for g in entity.attunements if g.scope == AttunementScope.SELF]
+        grants += self._domain_grants(entity)
+        if not grants:
+            return sorted(active)
+
+        projection_universes: dict[str, str] | None = None  # lazily loaded
+
+        def resolve(grant: Attunement) -> set[str]:
+            nonlocal projection_universes
+            if grant.projection_id:
+                return {grant.projection_id}
+            if not grant.universe:
+                return set()
+            if projection_universes is None:
+                projection_universes = {
+                    p.id: p.universe for p in self.get_projections_for_entity(entity.id)
+                }
+            return {pid for pid, uni in projection_universes.items() if uni == grant.universe}
+
+        for grant in grants:
+            if grant.op == AttunementOp.REMOVE:
+                active -= resolve(grant)
+            else:
+                active |= resolve(grant)
+        return sorted(active)
+
+    def effective_universes(self, entity: Entity) -> list[str]:
+        """The universes governing trait availability — derived from the active bodies.
+
+        A compatibility view over :meth:`active_projections` (a body's universe is
+        what the trait-gating queries filter on). ``transversal_type`` is never
+        read for availability (see [[Projections and Transversal]]).
+        """
+        universes = {
+            p.universe
+            for p in (self.get_projection(pid) for pid in self.active_projections(entity))
+            if p is not None and p.universe
+        }
+        if not entity.current_projection and entity.current_universe:
+            # Legacy fallback: entity kinds with no active body at all (locations,
+            # universes, factions) still resolve from the denormalized universe.
+            # Deliberately *not* applied when a body was suppressed — an emptied
+            # active set is a real state, not a missing one.
+            universes.add(entity.current_universe)
+        return sorted(universes)
 
     def is_transversal(self, entity: Entity) -> bool:
         """Whether an entity exists in multiple universes (multiversal).
@@ -1749,20 +1789,28 @@ class EntityRepository:
             return len(native) > 1
         return False
 
-    def _domain_attunement_universes(self, entity: Entity) -> set[str]:
-        """Universes from domain-scoped attunements over this entity's active location chain."""
+    def _domain_grants(self, entity: Entity) -> list[Attunement]:
+        """Domain-scoped grants carried by entities along this entity's location chain.
+
+        A pull, not a fan-out: each reader collects what covers it, so there is no
+        per-fire set of affected entities to maintain (see
+        [[Active Projections Design Log]]).
+        """
         location = self._active_location(entity)
         if not location:
-            return set()
+            return []
         chain = [location] + self.get_location_ancestors(location)
         query = f"""
             FOR e IN {ENTITIES}
             FILTER e.current_location IN @chain AND LENGTH(e.attunements) > 0
             FOR att IN e.attunements
             FILTER att.scope == 'domain'
-            RETURN DISTINCT att.universe
+            RETURN att
         """
-        return set(self.db.aql.execute(query, bind_vars={"chain": chain}))
+        return [
+            Attunement.model_validate(doc)
+            for doc in self.db.aql.execute(query, bind_vars={"chain": chain})
+        ]
 
     def get_effective_traitsettings(
         self, entity_id: str, universes: list[str]

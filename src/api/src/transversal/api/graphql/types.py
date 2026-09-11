@@ -910,8 +910,11 @@ class Zone:
 
 @strawberry.type
 class Attunement:
-    universe: str
-    scope: str
+    """A projection grant (attune = add, suppress = remove)."""
+    op: str = "add"
+    universe: Optional[str] = None
+    projection_id: Optional[strawberry.ID] = None
+    scope: str = "self"
     until: Optional[EffectTimingEnum] = None
     source_sfx_id: Optional[str] = None
 
