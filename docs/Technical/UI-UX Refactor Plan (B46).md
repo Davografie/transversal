@@ -22,7 +22,7 @@ files move.
 | `App.vue` | 2559 | 1832 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters`, `usePlayerIdentity`, `useCharacterFinder`, `useCharacterSwitch` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
-| `components/CharacterSheet.vue` | 3281 | 2577 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard` |
+| `components/CharacterSheet.vue` | 3281 | 2390 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard`, `sheet/TraitDetailPanel` |
 
 Census taken 2026-09-11 (three read-only recon passes) against a tree that was
 level with `release-build`; the CharacterSheet numbers moved when the trait
@@ -176,16 +176,22 @@ each template slice.
 
 Editor + SFX cards done. What is left is mostly line count rather than sharing:
 
-1. **`sheet/TraitDetailPanel.vue`** — the read-only view. Not a pure move:
-   it shares `.trait-die*` (30 uses elsewhere) and `.challenge-progress` with
-   the list rows, so extracting it means either duplicating those rules in the
-   child or promoting them to `assets/styles.css` first. **Do the CSS promotion
-   as its own verified step**, then move the markup (which also needs ~10
-   injected behaviours — `canPlayTrait`, `playTrait`, `ratingTypeLabel`,
-   `challengeProgressLabel`, `detailContext`, `displayName`, `sfxCardModel`,
-   `activateSfx` — best passed as one `api` object of functions).
-2. **`sheet/TraitRow.vue`** — the list row; carry the click / context-menu /
-   long-press handlers together with it.
+1. ~~**`sheet/TraitDetailPanel.vue`**~~ **done** — with the CSS promotion first
+   (`.trait-die*`, `.die-d4..d12`, `.challenge-progress`, `.sfx-cards`,
+   `.trait-disabled-badge` now live in `assets/styles.css`; the die colours were
+   already duplicated in the GM batch editor). The panel takes the trait + one
+   `api` object of functions and emits `back` / `edit`.
+2. **`sheet/TraitRow.vue`** — the list row. Same shape as the detail panel: it
+   brings click / context-menu / long-press handlers and its own class family
+   (`.trait-left`, `.trait-right`, `.trait-name`, `.trait-timer`,
+   `.trait-statement`, `.trait-notes`, `.trait-contact`, `.trait-die-groups*`),
+   all row-only, so the CSS should move with it — **check for descendant rules
+   in the sheet before assuming a pure move**, and pass the ~15 helpers it calls
+   (`isInPool`, `isOffered`, `isKnown`, `canPlayTrait`, `playTrait`,
+   `openTraitDetail`, `startEdit`, `traitTimerLabel`, `traitDiceGroups`,
+   `resourceDiceGroups`, `resourceSpentGroups`, `resolvedDieType`,
+   `resourceDisplay`, `challengeProgressLabel`, `sfxCardModel`, `activateSfx`,
+   `displayName`) as one `api` object plus events.
 3. **`useSheetData.js`** — fetch/refresh + trait-set splitting, if the script is
    still unwieldy after the two above.
 
