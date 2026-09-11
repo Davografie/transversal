@@ -151,6 +151,13 @@ _TARGET_FALLBACKS = {
 
 _KNOWN_PLACEHOLDERS = {
     "self": "the acting entity",
+    # The *source* variables read as the thing the rule sits on ("this trait"),
+    # not as their token name: "step up this trait", not "step up the trait
+    # setting". Same voice the source-aware conditions already use.
+    "trait_setting": "this trait",
+    "traitset_setting": "this trait set",
+    "projection": "this projection",
+    "location": "this location",
     "source_trait": "this SFX's trait",
     "source_traitset": "this SFX's trait set",
     "effect_die": "the effect die",

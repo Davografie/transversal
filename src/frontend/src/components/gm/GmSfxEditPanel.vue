@@ -46,8 +46,9 @@
            the rule is being attached to. Empty = acquirable anywhere. -->
       <label>Acquire path <span class="hint-inline">(optional)</span></label>
       <div class="sfx-listener">
-        <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement"
-                           :destination="{ element: 'entity' }" />
+        <!-- No destination hint: "who may take this" is not a fixed type — it ends
+             wherever the author means (an entity, a trait instance, …). -->
+        <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement" />
         <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
       </div>
       <label>Conditions</label>
