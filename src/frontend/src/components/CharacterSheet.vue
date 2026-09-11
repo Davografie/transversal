@@ -326,7 +326,7 @@
               <span v-if="challengeProgressLabel(detailTrait)" class="challenge-progress">{{ challengeProgressLabel(detailTrait) }}</span>
               <span v-if="!(detailTrait.dice || []).length" class="trait-die depleted">unrated</span>
             </div>
-            <div v-if="canPlayTrait(detailTrait)" class="detail-hint">tap the dice to play</div>
+            <div v-if="!(detailTrait.dice || []).length" class="trait-die depleted">unrated</div>
             <p v-if="detailTrait.statement" class="detail-statement">{{ detailTrait.statement }}</p>
           </div>
 
@@ -343,6 +343,7 @@
               >
                 <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
                 <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
+                <span v-if="sfxCardText(sfxId)" class="sfx-card-rules">{{ sfxCardText(sfxId) }}</span>
               </div>
             </div>
           </div>
@@ -1120,7 +1121,7 @@ function canPlayTrait(t) {
 function detailContext(t) {
   const rows = []
   if (t.ego === false) {
-    rows.push({ label: 'body', value: t.universe ? `projection · ${t.universe}` : 'projection' })
+    rows.push({ label: 'body', value: t.universe ? `projection · ${universeDisplay(t.universe)}` : 'projection' })
   }
   if (t.relationshipContactName) rows.push({ label: 'toward', value: t.relationshipContactName })
   if (t.knownTo?.length) {
@@ -1375,6 +1376,13 @@ function sfxDescription(sfxId) {
   return sfxCatalog.value[sfxId]?.description || ''
 }
 
+// The derived natural-language rules text ("Activated: spend 1 razmerit."), as
+// opposed to `description`, which is the author's flavour lead-in. Cards show
+// both; the compact row cards keep to the flavour line.
+function sfxCardText(sfxId) {
+  return sfxCatalog.value[sfxId]?.cardText || ''
+}
+
 // A roll-table-as-menu SFX carries a single roll_table/menu effect whose
 // ``target`` is the table id. Clicking it opens the picker instead of firing.
 function rollTableMenuEffect(sfxId) {
@@ -1416,7 +1424,7 @@ async function fetchSfxCatalog() {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `query { sfxs { id name description effects { timing type action target entity result } } }` }),
+      body: JSON.stringify({ query: `query { sfxs { id name description cardText effects { timing type action target entity result } } }` }),
     })
     const json = await r.json()
     const map = {}
@@ -3223,9 +3231,14 @@ watch(() => props.externalPoolSources, (sources) => {
 /* The rating band is the play target, mirroring the trait row's rating zone. */
 .detail-rating-band.playable { cursor: pointer; }
 .detail-rating-band.playable:hover .detail-die { filter: brightness(1.2); }
-.detail-dice { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.detail-dice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
 .detail-die { width: 40px; height: 43px; }
-.detail-hint { margin-top: 4px; font-size: 10px; color: var(--text-dim); }
 .detail-statement {
   margin: 8px 0 0;
   font-size: 13px;
@@ -3255,4 +3268,14 @@ watch(() => props.externalPoolSources, (sources) => {
 .detail-context-value { color: var(--text); }
 
 .detail-text { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
+
+/* The derived natural-language rules line inside a detail SFX card. Brighter
+   than the flavour lead-in above it — this is the text that tells you what the
+   SFX actually does. */
+.detail-section .sfx-card-rules {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text);
+}
 </style>
