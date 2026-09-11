@@ -1,25 +1,29 @@
 import { ref, computed, watch } from 'vue'
 import { useApi } from './useApi.js'
 
-// ── Module-level singleton state ─────────────────────
-const entities = ref([])
-const selected = ref(null)
-const selectedId = ref(null)
-const editing = ref(false)
-const creating = ref(false)
-const saving = ref(false)
-const form = ref({})
-const projections = ref([])
-const currentProjection = ref(null)
-
-// ── Imagen job state ─────────────────────────────────
-const jobStatuses = ref({})  // {entity_id: {type, status, percent, message}}
-
-// ── Watcher guard: only set up once ──────────────────
-let _watchersSetup = false
-
-export function useEntityCrud() {
+// ── Entity CRUD, one instance per editor ─────────────
+// Every ref lives inside the factory. Entity *panels* each take their own
+// instance, so two open panels (a detached one and the one behind it, say)
+// cannot overwrite each other's form/selection — they used to share one
+// module-level form, and opening a second entity renamed the first panel's
+// Name field. useEntityCrud() below returns the shared instance for genuinely
+// global state: the GM panel's entity list, the app prefetch, the create
+// panel's saving flag, the projection editor's list patch.
+export function createEntityCrud() {
   const { graphql, imagenEntity } = useApi()
+
+  const entities = ref([])
+  const selected = ref(null)
+  const selectedId = ref(null)
+  const editing = ref(false)
+  const creating = ref(false)
+  const saving = ref(false)
+  const form = ref({})
+  const projections = ref([])
+  const currentProjection = ref(null)
+
+  // ── Imagen job state ───────────────────────────────
+  const jobStatuses = ref({})  // {entity_id: {type, status, percent, message}}
 
   // ── Queries ────────────────────────────────────────
   const ENTITY_QUERY = `query($id: ID!) {
@@ -282,20 +286,17 @@ export function useEntityCrud() {
     }
   }
 
-  // ── Auto-save watcher (guarded: only set up once) ──
-  if (!_watchersSetup) {
-    _watchersSetup = true
-    let entitySaveTimer = null
-    watch(
-      () => form.value,
-      () => {
-        if (!editing.value || !selected.value) return
-        clearTimeout(entitySaveTimer)
-        entitySaveTimer = setTimeout(() => saveEntity(), 600)
-      },
-      { deep: true }
-    )
-  }
+  // ── Auto-save watcher — one per instance, following this instance's form ──
+  let entitySaveTimer = null
+  watch(
+    () => form.value,
+    () => {
+      if (!editing.value || !selected.value) return
+      clearTimeout(entitySaveTimer)
+      entitySaveTimer = setTimeout(() => saveEntity(), 600)
+    },
+    { deep: true }
+  )
 
   return {
     // State
@@ -330,4 +331,11 @@ export function useEntityCrud() {
     onImagen,
     onCancel,
   }
+}
+
+// ── The shared instance ──────────────────────────────
+let _sharedCrud = null
+export function useEntityCrud() {
+  if (!_sharedCrud) _sharedCrud = createEntityCrud()
+  return _sharedCrud
 }

@@ -194,7 +194,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, inject } from 'vue'
 import { useApi } from '@/composables/useApi.js'
-import { useEntityCrud } from '@/composables/useEntityCrud.js'
+import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
@@ -218,7 +218,13 @@ const bus = usePanelBus()
 const { graphql } = useApi()
 
 // ── Composables: shared state with GmPanel ──────────
-const { form, deleteEntity, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity, fetchEntities } = useEntityCrud()
+// This panel's own editor state, keyed to props.entityId. The shared instance
+// would let a second open entity panel overwrite this one's form — and this one
+// would overwrite it back.
+const { form, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = createEntityCrud()
+// Genuinely global: the GM panel's entity list, and the delete that clears the
+// shared selection.
+const { deleteEntity, fetchEntities } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { fetchLifePaths } = useLifePaths()
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
@@ -356,13 +362,14 @@ const props = defineProps({
 
 const emit = defineEmits(['switch-to-sheet', 'image-open', 'go-to-location'])
 
-// The entity form is a module-level singleton (useEntityCrud) shared by every
-// open entity panel. Re-select this panel's entity when it becomes the active
-// tab again, so it doesn't keep showing whichever entity was selected last.
+// This panel owns its editor state (createEntityCrud): it loads its entity on
+// mount and re-loads whenever it becomes the active tab again, so it follows
+// edits made in its sub-panels and never shows whichever entity was selected
+// last.
 const panelActive = inject('panelActive', computed(() => true))
 watch(panelActive, (active) => {
   if (active && props.entityId) selectEntity({ id: props.entityId })
-})
+}, { immediate: true })
 
 // ── Sub-panel openers ───────────────────────────────
 function openLoraConfig() {
