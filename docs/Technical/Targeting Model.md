@@ -62,6 +62,17 @@ binds the full ordered list (`Binding {value, values, element, cardinality}`); a
 effect references `{name}` in the flat `target`/`entity`/`result`/
 `refs.<name>.value` fields (scalar `one` bindings only). See [[Effect Output Variables]].
 
+**A step's value may itself be a name** — `filter universe == {chosen_universe}`,
+where the right-hand side is resolved from the bound scope at resolution time
+(`target_resolver._bound_value`). An unknown name matches nothing rather than
+everything. This is what lets a path **join** to a decision made elsewhere in the
+activation instead of comparing against a literal.
+
+**References are variables too.** Each declared `EffectActionMeta.refs` entry is
+resolved in order and published into the same scope (typed by its element), so a
+reference declared *before* another is in scope for it: Attune decides the world
+first, then draws the life from it (`filter universe == {universe}`).
+
 ## The catalog
 
 `target_catalog.py` is the single source of truth both the type-checker and the wizard read, so only valid steps compose.
@@ -118,7 +129,7 @@ The wizard is catalog-driven: it cannot compose an invalid path, and a field wit
 
 - `targetCatalog` — the full catalog (elements, edges, fields + options, aggregations, collections).
 - `traceTargetSpec(input, destinationElement, destinationCardinality, sourceElement, variables)` — walks a draft spec through the shared type-checker; returns the type after each step, step errors, and `valid` (does the final type match the destination). `variables` seeds the bound-variable scope (name → element).
-- `effectVariables(effects, sourceElement)` — traces a list of effects' specs and returns the typed output variables they expose (for cross-effect `select variable`).
+- `effectVariables(effects, sourceElement, conditions)` — traces the SFX's conditions first, then each effect's specs and its declared references, and returns the typed names they expose (for `select variable` and `{name}` values).
 
 `Effect` / `EffectInput` expose `targetSpec` and `entitySpec` as JSON (camelCase on the wire; `target_spec`/`entity_spec` in Python).
 
