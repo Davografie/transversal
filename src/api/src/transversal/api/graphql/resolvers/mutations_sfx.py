@@ -127,9 +127,16 @@ class MutationsSfx:
         sfx_id: strawberry.ID,
     ) -> bool:
         """Add one SFX id to every referenced owner (batch, idempotent)."""
-        from transversal.services.sfx_owner import add_sfx_to_owner
+        from transversal.services.sfx_owner import add_sfx_to_owner, attach_refusal
 
         repo = _em(info).repo
+        sfx = repo.get_sfx(str(sfx_id)) if hasattr(repo, "get_sfx") else None
+        # Validate *all* of them before touching any: a batch either applies or it
+        # doesn't, and a refusal says why instead of returning a bare False.
+        for ref in owner_refs:
+            reason = attach_refusal(sfx, ref.owner_type.value) if sfx is not None else None
+            if reason:
+                raise ValueError(f"'{sfx.name or sfx.id}' {reason}, not {ref.owner_type.value}")
         for ref in owner_refs:
             if not add_sfx_to_owner(repo, ref.owner_type.value, str(ref.owner_id), str(sfx_id)):
                 return False

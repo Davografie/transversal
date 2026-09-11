@@ -38,6 +38,10 @@ class SfxRef:
     trigger: str = ""
     limit: str = ""
     source_kind: Optional[str] = None
+    # Owner surfaces this SFX may be attached to (from its declared source kind).
+    # The ownership picker filters on it, so a rule that can't live somewhere is
+    # never offered there. Empty for old payloads.
+    owner_surfaces: list[str] = strawberry.field(default_factory=list)
     placement: Optional[str] = None
     arming_scope: Optional[str] = None
     listener_spec: Optional[strawberry.scalars.JSON] = None

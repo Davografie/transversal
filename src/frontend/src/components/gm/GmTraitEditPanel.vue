@@ -553,6 +553,7 @@ function createOpenSfxPicker() {
     title: 'Add SFX to Trait',
     props: {
       selectedIds: [...createForm.possibleSfxIds],
+      ownerType: 'trait',
     },
     listeners: {
       'add-sfx': (id) => {
@@ -682,6 +683,7 @@ function openSfxPicker() {
     title: 'Add SFX to Trait',
     props: {
       selectedIds: [...form.possibleSfxIds],
+      ownerType: 'trait',
     },
     listeners: {
       'add-sfx': (id) => {

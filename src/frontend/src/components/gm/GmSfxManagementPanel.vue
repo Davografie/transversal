@@ -178,7 +178,7 @@ async function openPicker() {
   panel.open({
     component: GmSfxPickerPanel,
     title: 'Add SFX to ' + (ownerRef.value.label || 'owner'),
-    props: { selectedIds: [...ownerRef.value.sfxIds] },
+    props: { selectedIds: [...ownerRef.value.sfxIds], ownerType: (ownerRef.value.ownerType || '').toLowerCase() },
     listeners: {
       'add-sfx': async (id) => { await addOwnerSfx([ref], id) },
       'remove-sfx': async (id) => { await removeOwnerSfx([ref], id) },

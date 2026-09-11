@@ -27,7 +27,7 @@ export function useTraitsConfig() {
       }`),
       graphql(`query {
         sfxs {
-          id name description trigger limit sourceKind
+          id name description trigger limit sourceKind ownerSurfaces
           conditions { type subject target value operator narrative spec }
           effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target value operator narrative spec } }
         }

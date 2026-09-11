@@ -462,11 +462,13 @@ def _historical_record_to_gql(r: DomainHistoricalRecord) -> HistoricalRecord:
 def _sfx_ref(sfx, resolve=None) -> SfxRef:
     """Build the GraphQL SFX ref, including its derived card text
     ([[SFX Natural Language Plan]])."""
+    from transversal.services.sfx_owner import owner_surfaces_for
     from transversal.services.sfx_text import sfx_text
 
     return SfxRef(
         id=sfx.id, name=sfx.name, description=sfx.description,
         trigger=sfx.trigger, limit=sfx.limit, source_kind=sfx.source_kind,
+        owner_surfaces=sorted(owner_surfaces_for(sfx)),
         placement=sfx.placement, arming_scope=sfx.arming_scope,
         listener_spec=sfx.listener_spec.model_dump() if sfx.listener_spec else None,
         conditions=[_condition_to_gql(c) for c in sfx.conditions],

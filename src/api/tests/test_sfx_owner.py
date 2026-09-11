@@ -833,7 +833,8 @@ class CountingRepo(Repo):
 
 
 def _sfx(sfx_id, trigger="manual"):
-    return SimpleNamespace(id=sfx_id, trigger=trigger, conditions=[])
+    return SimpleNamespace(id=sfx_id, name=sfx_id, trigger=trigger, conditions=[],
+                           source_kind=None)
 
 
 def _cache_state():
@@ -1140,3 +1141,36 @@ def test_owner_refs_say_what_kind_of_entity_they_are():
 
     rows = list_owner_refs(repo, "entity")
     assert {r["entity_type"] for r in rows} == {"character", "faction"}
+
+
+# ── One rule decides where a rule may live ────────────────────
+
+def test_a_declared_source_restricts_where_a_rule_can_attach():
+    """The same rule drives the attach guard, the picker's filter and validation,
+    so a mismatch is refused for the reason it isn't offered."""
+    from transversal.services.sfx_owner import (
+        attach_refusal,
+        can_attach,
+        owner_surfaces_for,
+    )
+
+    trait_sfx = _sfx("sfx-on-trait")
+    trait_sfx.source_kind = "trait_setting"
+    assert owner_surfaces_for(trait_sfx) == {"trait_instance"}
+    assert can_attach(trait_sfx, "trait_instance") is True
+    assert can_attach(trait_sfx, "location") is False
+    assert attach_refusal(trait_sfx, "location") == "belongs on a trait instance"
+    assert attach_refusal(trait_sfx, "trait_instance") is None
+
+    place_sfx = _sfx("sfx-on-place")
+    place_sfx.source_kind = "location"
+    assert can_attach(place_sfx, "location") is True
+    assert can_attach(place_sfx, "entity") is False, "a place rule is not an entity rule"
+
+
+def test_an_undeclared_source_is_unrestricted():
+    from transversal.services.sfx_owner import can_attach, owner_surfaces_for
+
+    free = _sfx("sfx-anywhere")  # _sfx() leaves source_kind unset
+    assert can_attach(free, "table") and can_attach(free, "location")
+    assert "location" in owner_surfaces_for(free) and "trait_instance" in owner_surfaces_for(free)

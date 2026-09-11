@@ -886,12 +886,59 @@ def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_
 _BUCKET_TYPES = ("table", "gm")
 _BUCKET_LABELS = {"table": "Table", "gm": "GM"}
 
+# Owner surfaces in author-facing words — used when telling someone why a rule
+# can't go where they tried to put it.
+_SURFACE_LABELS = {
+    "table": "the Table (everyone)",
+    "gm": "the GM bucket",
+    "entity": "an entity",
+    "location": "a location",
+    "projection": "a projection",
+    "trait": "a trait definition",
+    "trait_instance": "a trait instance",
+    "trait_set": "a trait set instance",
+}
+
 # Every owner surface an SFX can be attached to (mirrors SfxOwnerKind).
 # Every owner surface an SFX can be attached to (mirrors SfxOwnerKind).
 # ``location`` is a distinct surface even though a location *is* an entity: a
 # place-owned rule resolves its source to the place, and a `location`-sourced SFX
 # attached to a character has to be catchable.
 _OWNER_SURFACES = ("table", "gm", "entity", "location", "projection", "trait", "trait_instance", "trait_set")
+
+
+def owner_surfaces_for(sfx) -> frozenset[str]:
+    """Every owner surface this SFX may be attached to.
+
+    The declared ``source_kind`` names the surface it belongs on (see
+    ``target_catalog.SOURCE_KINDS``); an SFX without one is unrestricted. This is
+    the **one rule** behind three things that used to disagree: the attach guard,
+    the picker's filter, and authoring validation — so a mismatch is refused for
+    the same reason it isn't offered.
+    """
+    from transversal.services import target_catalog as tc
+
+    kind = tc.source_kind(getattr(sfx, "source_kind", None) or "")
+    if kind is None or not kind.owner_surface:
+        return frozenset(_OWNER_SURFACES)
+    return frozenset({kind.owner_surface})
+
+
+def can_attach(sfx, owner_type: str) -> bool:
+    """Whether ``sfx`` may be attached to an owner of ``owner_type``."""
+    return owner_type in owner_surfaces_for(sfx)
+
+
+def attach_refusal(sfx, owner_type: str) -> str | None:
+    """Why this SFX can't attach there — or ``None`` when it can.
+
+    Author-facing: the picker filters on the same rule and shows this text for
+    the rules it has to leave out.
+    """
+    if can_attach(sfx, owner_type):
+        return None
+    wanted = sorted(owner_surfaces_for(sfx))[0]
+    return f"belongs on {_SURFACE_LABELS.get(wanted, wanted)}"
 
 
 def owned_surfaces(repo, sfx_id: str) -> set[str]:
@@ -1157,11 +1204,8 @@ def add_sfx_to_owner(repo, owner_type: str, owner_id: str, sfx_id: str) -> bool:
     a source kind are unrestricted.
     """
     sfx = repo.get_sfx(sfx_id) if hasattr(repo, "get_sfx") else None
-    if sfx is not None and sfx.source_kind:
-        from transversal.services.target_catalog import source_kind
-        sk = source_kind(sfx.source_kind)
-        if sk is not None and owner_type != sk.owner_surface:
-            return False
+    if sfx is not None and not can_attach(sfx, owner_type):
+        return False
     ids = _get_owner_sfx_ids(repo, owner_type, owner_id)
     if ids is None:
         return False

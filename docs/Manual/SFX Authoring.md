@@ -225,9 +225,14 @@ Two conveniences as the catalogue grows:
 - **Locations are their own filter**, not part of Entity.
 
 Not every rule fits every owner. A rule whose **source** is a trait instance belongs on
-*Trait instance*, a place-sourced one on *Location*; the panel is where that pairing
-lives, and a rule put where it doesn't belong resolves to nothing. (The catalogue says
-which is which — see [[Place-Owned Rules]].)
+*Trait instance*, a place-sourced one on *Location*. The picker only offers the rules
+that fit where you're putting them, and lists the rest under **Can't go here** with the
+reason — *belongs on a trait instance* — rather than accepting the click and quietly
+doing nothing.
+
+The rule is one declaration: an SFX's **source** names the surface it calls home (see
+[[SFX Source Model]]), and anything that attaches, offers or validates a rule reads it.
+A rule with no source declared can live anywhere.
 
 ### Rules on a place
 
