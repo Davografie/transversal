@@ -257,6 +257,9 @@ function openEffectEditor(index) {
     component: GmEffectEditPanel,
     title: index == null ? 'Add effect' : 'Edit effect',
     props: { index },
+    // The effect editor lives in a *child panel*, which cannot inject this
+    // panel's provide — hand the shared draft across in the spec's context.
+    context: { sfxEdit },
   })
 }
 

@@ -79,7 +79,9 @@
         @toggle-collapse="toggleChildCollapse(c.key)"
       >
         <template #default>
-          <component :is="c.spec.component" v-bind="c.spec.props || {}" v-on="c.spec.listeners || {}" @close="closeChild(c.key)" />
+          <PanelScope :context="c.spec.context">
+            <component :is="c.spec.component" v-bind="c.spec.props || {}" v-on="c.spec.listeners || {}" @close="closeChild(c.key)" />
+          </PanelScope>
         </template>
       </Panel>
     </div>
@@ -94,6 +96,7 @@ import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { VIEWPORT_MARGIN } from '@/composables/usePanelAnchor.js'
 import { nextPanelDiagId, registerPanelReporter, unregisterPanelReporter, dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
 import Button from '@/components/ui/Button.vue'
+import PanelScope from './PanelScope.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },

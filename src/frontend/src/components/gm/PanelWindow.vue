@@ -15,7 +15,9 @@
     @dock="$emit('dock')"
   >
     <template v-if="win.spec" #default>
-      <component :is="win.spec.component" v-bind="win.spec.props || {}" v-on="win.spec.listeners || {}" />
+      <PanelScope :context="win.spec.context">
+        <component :is="win.spec.component" v-bind="win.spec.props || {}" v-on="win.spec.listeners || {}" />
+      </PanelScope>
     </template>
   </Panel>
 </template>
@@ -39,6 +41,7 @@
 // drag/pulse so the rail's ⠿ handle moves *this* window.
 import { computed, ref, provide, watch, onMounted, onUnmounted } from 'vue'
 import Panel from './Panel.vue'
+import PanelScope from './PanelScope.vue'
 import { usePanelWindows } from '@/composables/usePanelWindows.js'
 import { clampAnchor, deriveDirection, VIEWPORT_MARGIN } from '@/composables/usePanelAnchor.js'
 import { dumpPanelLayoutSoon } from '@/composables/usePanelDiagnostics.js'
