@@ -30,9 +30,9 @@
       </div>
       <div v-if="isPortalLocation" class="ee-fixed-dest">Scope <b>{location:transversal_target}</b> → {{ portalDestination }} (+ zones)</div>
       <div v-else-if="isPortalUniverse" class="ee-fixed-dest">Scope <b>{universe:transversal_target}</b> → any location in {{ portalUniverse }}</div>
-      <div v-if="variables.length" class="ee-vars">
+      <div v-if="chipVariables.length" class="ee-vars">
         <span class="ee-vars-label">Variables:</span>
-        <button v-for="v in variables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" @click="copyVariable(v.name)">
+        <button v-for="v in chipVariables" :key="v.name" type="button" class="ee-var" :class="{ copied: copiedVar === v.name }" @click="copyVariable(v.name)">
           {{ '{' + v.name + '}' }}<em class="ee-var-type">{{ v.type }}</em>
         </button>
       </div>
@@ -312,6 +312,18 @@ const dieVariables = computed(() => {
   const names = (props.variables || []).map(v => v.name || v)
   const out = [...names]
   if (isRollTiming.value) for (const v of ROLL_CONTEXT_VARIABLES) if (!out.includes(v)) out.push(v)
+  return out
+})
+
+// The chips the author reads. A roll-timed effect gets the roll context too:
+// `{triggered_die_*}` resolves per die inside an effect with a die filter (the
+// die *is* the roll there), which is what lets an "add a die" granted per
+// unchosen die take its size from that die's tier.
+const chipVariables = computed(() => {
+  const out = [...(props.variables || [])]
+  if (!isRollTiming.value) return out
+  const known = new Set(out.map((v) => v.name || v))
+  for (const name of ROLL_CONTEXT_VARIABLES) if (!known.has(name)) out.push({ name, type: 'roll' })
   return out
 })
 
