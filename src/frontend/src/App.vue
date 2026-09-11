@@ -371,7 +371,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, useTemplateRef, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, useTemplateRef, watch, computed, nextTick, onMounted, onUnmounted, provide } from 'vue'
 import { useColorMode } from '@vueuse/core'
 import LocationViewer from './components/LocationViewer.vue'
 import CharacterSheet from './components/CharacterSheet.vue'
@@ -451,6 +451,12 @@ const gmRootPanel = computed(() => ({
 const universe = ref('earth')
 const currentLocationId = ref(localStorage.getItem('currentLocationId') || 'loc-krasnoyarsk')
 watch(currentLocationId, (v) => { if (v) localStorage.setItem('currentLocationId', v) })
+
+// The GM's current location, live for the panels. It must be provided here:
+// PanelStack is mounted by App, so a provider inside GmPanel reaches only its
+// own slot content — not the panels the stack renders (the entity panel's
+// Import to Location reads this).
+provide('gmCurrentLocationId', computed(() => currentLocationId.value))
 const fullCanvas = ref(null) // { mode: 'location'|'faction', entityId } or null
 const locationName = ref('Krasnoyarsk-45')
 const locationBgImage = ref('')

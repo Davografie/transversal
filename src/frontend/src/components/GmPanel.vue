@@ -97,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref, toRef, computed, onMounted, onUnmounted, watch, nextTick, provide } from 'vue'
+import { ref, toRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import Button from '@/components/ui/Button.vue'
@@ -132,12 +132,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['next-beat', 'advance-scene', 'start-session', 'end-session', 'add-to-pool'])
-
-// The GM's current location, live for injected descendants (the entity panel's
-// Import to Location). A panel's props are v-bind-ed from a spec object created
-// once at open, so a captured prop would go stale while a floating panel
-// outlives the GM moving.
-provide('gmCurrentLocationId', computed(() => props.currentLocationId))
 
 // ── Composables ─────────────────────────────────────
 const {
@@ -291,7 +285,7 @@ function openEntityEdit() {
     component: GmEntityEditPanel,
     title: selected.value.name || 'Edit Entity',
     id: selectedId.value,
-    props: { entityId: selectedId.value, currentEntityId: props.entityId },
+    props: { entityId: selectedId.value, currentEntityId: props.entityId, currentLocationId: props.currentLocationId },
     listeners: {
       'switch-to-sheet': switchToSheet,
       'image-open': onImageOpen,

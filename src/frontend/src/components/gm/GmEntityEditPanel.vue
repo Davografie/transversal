@@ -238,7 +238,9 @@ const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.va
 // active projection is the most recently touched one, so it wins; without one,
 // the current projection makes an inapposite jump. GmPanel provides the
 // location live, since a panel's props freeze at open time.
-const gmLocationId = inject('gmCurrentLocationId', ref(''))
+// Provided by App, live (the stack is mounted there). The prop is the open-time
+// fallback for a panel opened outside that tree.
+const gmLocationId = inject('gmCurrentLocationId', null) || computed(() => props.currentLocationId || '')
 const importing = ref(false)
 const canImportToLocation = computed(() =>
   isOccupant.value && !!gmLocationId.value && form.value?.current_location !== gmLocationId.value
@@ -358,6 +360,7 @@ const dropTarget = computed(() => {
 const props = defineProps({
   entityId: { type: String, default: null },
   currentEntityId: { type: String, default: '' },
+  currentLocationId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['switch-to-sheet', 'image-open', 'go-to-location'])
