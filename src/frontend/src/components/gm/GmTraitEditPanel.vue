@@ -35,6 +35,15 @@
           <option value="POSITIVE">Positive</option>
           <option value="NEGATIVE">Negative</option>
         </select>
+        <label>Tags</label>
+        <input
+          :value="tagsText"
+          placeholder="violent, social, …"
+          title="Free-form labels — an SFX can select traits by tag (B116)"
+          @input="tagsText = $event.target.value"
+          @change="commitTags"
+          @keyup.enter="commitTags"
+        />
       </div>
 
       <!-- Display Names (read-only list → opens editor panel) -->
@@ -156,6 +165,15 @@
           <option value="POSITIVE">Positive</option>
           <option value="NEGATIVE">Negative</option>
         </select>
+        <label>Tags</label>
+        <input
+          :value="createTagsText"
+          placeholder="violent, social, …"
+          title="Free-form labels — an SFX can select traits by tag (B116)"
+          @input="createTagsText = $event.target.value"
+          @change="commitCreateTags"
+          @keyup.enter="commitCreateTags"
+        />
       </div>
 
       <h4 class="ps-section-title">Possible SFXs</h4>
@@ -275,11 +293,30 @@ const form = reactive({
   defaultRatingType: 'STATIC',
   defaultEgo: false,
   polarity: '',
+  tags: [],
   possibleSfxIds: [],
   defaultSfxIds: [],
   possibleSubtraitIds: [],
   possibleSubtraitsetIds: [],
 })
+
+// ── Tags (B116) ──
+// Free-form labels a condition/target can match on. The input is a plain
+// comma-separated string; raw text is kept in refs so typing a separator is not
+// normalised away mid-word, and the list is committed on change/blur/enter.
+const tagsText = ref('')
+const createTagsText = ref('')
+function parseTags(raw) {
+  return [...new Set(String(raw || '').split(',').map(s => s.trim()).filter(Boolean))]
+}
+function commitTags() {
+  form.tags = parseTags(tagsText.value)
+  tagsText.value = form.tags.join(', ')
+}
+function commitCreateTags() {
+  createForm.tags = parseTags(createTagsText.value)
+  createTagsText.value = createForm.tags.join(', ')
+}
 
 // Display names — derived from props.trait, kept as local array for display/auto-save
 const displayNames = ref([])
@@ -337,6 +374,8 @@ watch(trait, (t) => {
     form.defaultRatingType = t.defaultRatingType || 'STATIC'
     form.defaultEgo = t.defaultEgo || false
     form.polarity = t.polarity || ''
+    form.tags = [...(t.tags || [])]
+    tagsText.value = form.tags.join(', ')
     form.possibleSfxIds = [...(t.possibleSfxIds || [])]
     form.defaultSfxIds = [...(t.defaultSfxIds || [])]
     form.possibleSubtraitIds = [...(t.possibleSubtraitIds || [])]
@@ -349,7 +388,7 @@ let saveTimer = null
 watch([
   () => form.name, () => [...form.universes], () => form.defaultDieType,
   () => form.defaultRatingType, () => form.defaultEgo,
-  () => form.polarity,
+  () => form.polarity, () => [...form.tags],
   () => [...form.possibleSfxIds], () => [...form.defaultSfxIds], () => [...form.possibleSubtraitIds], () => [...form.possibleSubtraitsetIds],
 ], () => {
   if (!trait.value) return
@@ -371,11 +410,12 @@ async function save() {
   if (!trait.value?.id) return
   await graphql(
     `mutation($id: ID!, $input: TraitUpdateInput!) { updateTrait(id: $id, input: $input) { id } }`,
-    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds, possibleSubtraitsetIds: form.possibleSubtraitsetIds } }
+    { id: trait.value.id, input: { name: form.name, universes: form.universes, defaultDieType: form.defaultDieType, defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo, tags: form.tags, polarity: form.polarity || null, clearPolarity: !form.polarity, possibleSfxIds: form.possibleSfxIds, defaultSfxIds: form.defaultSfxIds, possibleSubtraitIds: form.possibleSubtraitIds, possibleSubtraitsetIds: form.possibleSubtraitsetIds } }
   )
   patchData('traits', trait.value.id, {
     name: form.name, universes: [...form.universes], defaultDieType: form.defaultDieType,
     defaultRatingType: form.defaultRatingType, defaultEgo: form.defaultEgo,
+    tags: [...form.tags],
     polarity: form.polarity || null,
     possibleSfxIds: [...form.possibleSfxIds],
     defaultSfxIds: [...form.defaultSfxIds],
@@ -429,6 +469,7 @@ const createForm = reactive({
   defaultRatingType: 'STATIC',
   defaultEgo: false,
   polarity: '',
+  tags: [],
   possibleSfxIds: [],
   defaultSfxIds: [],
   possibleSubtraitIds: [],
@@ -475,6 +516,7 @@ async function onCreate() {
       defaultDieType: createForm.defaultDieType,
       defaultRatingType: createForm.defaultRatingType,
       defaultEgo: createForm.defaultEgo,
+      tags: [...createForm.tags],
       polarity: createForm.polarity || null,
       possibleSfxIds: [...createForm.possibleSfxIds],
       defaultSfxIds: [...createForm.defaultSfxIds],
