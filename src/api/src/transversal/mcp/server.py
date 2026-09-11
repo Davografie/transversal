@@ -535,7 +535,6 @@ def create_trait(args: dict) -> dict:
         "defaultRatingType": args.get("default_rating_type", "STATIC"),
         "possibleSfxIds": args.get("possible_sfx_ids", []),
         "defaultSfxIds": args.get("default_sfx_ids", []),
-        "locationRestricted": args.get("location_restricted", False),
         "defaultEgo": args.get("default_ego", False),
     }
     if args.get("polarity") is not None:
@@ -727,7 +726,6 @@ def update_trait(args: dict) -> dict:
         ("default_die_type", "defaultDieType"),
         ("default_rating_type", "defaultRatingType"),
         ("polarity", "polarity"),
-        ("location_restricted", "locationRestricted"),
         ("default_ego", "defaultEgo"),
     ):
         if args.get(key) is not None:
@@ -1184,7 +1182,6 @@ TOOL_SCHEMAS = {
                 "default_die_type": {"type": "string"},
                 "default_rating_type": {"type": "string"},
                 "polarity": {"type": "string", "description": "POSITIVE|NEGATIVE"},
-                "location_restricted": {"type": "boolean"},
                 "default_ego": {"type": "boolean"},
                 "dry_run": _dry_run_property(),
             },
@@ -1295,7 +1292,6 @@ TOOL_SCHEMAS = {
                 "default_die_type": {"type": "string"},
                 "default_rating_type": {"type": "string"},
                 "polarity": {"type": "string"},
-                "location_restricted": {"type": "boolean"},
                 "default_ego": {"type": "boolean"},
                 "dry_run": _dry_run_property(),
             },
