@@ -5,87 +5,39 @@
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
     <div class="name-entry-scroll">
     <!-- Fresh login: no identity yet -->
-    <template v-if="!playerId">
-      <h3>Who are you?</h3>
-      <p class="name-hint">Your name is your recovery key — use the same name on any device.</p>
-      <div class="search-wrapper">
-        <input
-          v-model="playerName"
-          placeholder="Your name"
-          @keyup.enter="onNameEnter"
-          autofocus
-          :disabled="checking"
-        />
-        <!-- Search results dropdown -->
-        <div v-if="nameSuggestions.length || showLoginCreate" class="name-suggestions">
-          <button
-            v-for="s in nameSuggestions" :key="s.id"
-            class="suggestion-item"
-            @mousedown.prevent
-            @click="selectSuggestion(s)"
-          >{{ s.name }}</button>
-          <button
-            v-if="showLoginCreate"
-            class="suggestion-item suggestion-create"
-            @mousedown.prevent
-            @click="onNameEnter"
-          >New transverser: <strong>{{ playerName.trim() }}</strong></button>
-        </div>
-      </div>
-      <p v-if="nameStatus" class="name-status" :class="{ 'name-found': nameFound, 'name-new': !nameFound }">{{ nameStatus }}</p>
-      <button v-if="nameStatus" class="continue-btn" @click="confirmPlayer">{{ nameFound ? 'Continue' : 'Begin' }}</button>
-    </template>
+    <LoginPrompt
+      v-if="!playerId"
+      v-model:player-name="playerName"
+      :checking="checking"
+      :suggestions="nameSuggestions"
+      :show-create="showLoginCreate"
+      :status="nameStatus"
+      :found="nameFound"
+      @enter="onNameEnter"
+      @select="selectSuggestion"
+      @confirm="confirmPlayer"
+    />
     <!-- Settings: already logged in -->
     <template v-else>
       <p class="name-hint settings-hint">Player settings</p>
 
-      <!-- Name: business-card style, click to edit -->
-      <div class="search-wrapper settings-name-wrapper">
-        <div
-          v-if="!switchEditing"
-          class="settings-name-static"
-          @click="startSwitchEdit"
-        >{{ switchName || playerName }}</div>
-        <input
-          v-else
-          ref="switchInputRef"
-          v-model="switchName"
-          class="settings-name-input"
-          placeholder="Your name"
-          @keyup.enter="onSwitchEnter"
-          @blur="onSwitchBlur"
-          :disabled="switching"
-        />
-        <div v-if="switchEditing && (switchSuggestions.length || showSwitchCreate)" class="name-suggestions">
-          <button
-            v-for="s in switchSuggestions" :key="s.id"
-            class="suggestion-item"
-            @mousedown.prevent
-            @click="selectSwitchSuggestion(s)"
-          >{{ s.name }}</button>
-          <button
-            v-if="showSwitchCreate"
-            class="suggestion-item suggestion-create"
-            @mousedown.prevent
-            @click="onSwitchEnter"
-          >New transverser: <strong>{{ switchName.trim() }}</strong></button>
-        </div>
-      </div>
-
-      <!-- Switch confirmation -->
-      <p v-if="switchStatus" class="name-status" :class="{ 'name-found': switchFound, 'name-new': !switchFound }">{{ switchStatus }}</p>
-      <div v-if="switchStatus && pendingPlayerEntities.length" class="settings-section">
-        <label class="settings-label">Characters</label>
-        <div class="char-list">
-          <button
-            v-for="e in pendingPlayerEntities" :key="e.id"
-            class="char-item"
-          >{{ e.name || e.id }}</button>
-        </div>
-      </div>
-      <button v-if="switchStatus" class="continue-btn" @click="confirmSwitch">
-        {{ switchFound ? 'Continue' : 'Begin' }}
-      </button>
+      <IdentitySwitchBlock
+        ref="switchBlockRef"
+        v-model:switch-name="switchName"
+        :player-name="playerName"
+        :editing="switchEditing"
+        :switching="switching"
+        :suggestions="switchSuggestions"
+        :show-create="showSwitchCreate"
+        :status="switchStatus"
+        :found="switchFound"
+        :pending-entities="pendingPlayerEntities"
+        @start-edit="startSwitchEdit"
+        @enter="onSwitchEnter"
+        @blur="onSwitchBlur"
+        @select="selectSwitchSuggestion"
+        @confirm="confirmSwitch"
+      />
 
       <!-- Character switch (loading + cancel) -->
       <div v-if="charSwitchLoading" class="settings-section char-switch-section">
@@ -387,6 +339,8 @@ import { useCharacterSwitch } from '@/composables/useCharacterSwitch.js'
 import { useMobileBands } from '@/composables/useMobileBands.js'
 import { useThemeMode } from '@/composables/useThemeMode.js'
 import SseIndicator from '@/components/app/SseIndicator.vue'
+import LoginPrompt from '@/components/app/LoginPrompt.vue'
+import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
 import RazmeritWaves from './components/RazmeritWaves.vue'
@@ -621,6 +575,7 @@ const gmMode = ref(localStorage.getItem('architectMode') === 'true')
 // Player identity + login/switch logic (see composables/usePlayerIdentity.js).
 // The three refs are created here because other composables share them.
 const playerId = ref(localStorage.getItem('playerId') || '')
+const switchBlockRef = useTemplateRef('switchBlockRef')   // settings name field focus
 const playerName = ref(localStorage.getItem('playerName') || '')
 const showLoginOverlay = ref(!playerId.value)
 
@@ -670,7 +625,7 @@ const {
   loadPlayerRole, initLocation,
   fetchPlayerEntities, fetchSupportCharacters, fetchActiveMains, fetchEntitiesFor,
   pendingPlayerEntities,
-  focusSwitchInput: () => nextTick(() => switchInputRef.value?.focus()),
+  focusSwitchInput: () => nextTick(() => switchBlockRef.value?.focusName()),
   diag: (label, detail) => DIAG.mark(label, detail),
 })
 
@@ -1335,7 +1290,6 @@ function onPhaseChange(p) {
 const diceRef = useTemplateRef('diceRef')
 const sheetRef = useTemplateRef('sheetRef')
 const locationRef = useTemplateRef('locationRef')
-const switchInputRef = useTemplateRef('switchInputRef')
 
 const hoverOpen = ref(false)
 const sheetVisible = ref(false)
