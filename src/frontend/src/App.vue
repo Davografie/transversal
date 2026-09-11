@@ -50,23 +50,11 @@
 
       <!-- Mode + Characters (hidden during switch) -->
       <template v-if="!switchStatus && !charSwitchLoading">
-        <div class="settings-section">
-          <label class="settings-label">Mode</label>
-          <div class="mode-toggle">
-            <button :class="{ active: !gmMode }" @click="gmMode = false">🎭 Player</button>
-            <button :class="{ active: gmMode }" @click="gmMode = true">🏛 Architect</button>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <label class="settings-label">Media quality</label>
-          <div class="mode-toggle">
-            <button :class="{ active: mediaQuality === 'auto' }" @click="setMediaQuality('auto')">Auto</button>
-            <button :class="{ active: mediaQuality === 'low' }" @click="setMediaQuality('low')">Low</button>
-            <button :class="{ active: mediaQuality === 'high' }" @click="setMediaQuality('high')">High</button>
-          </div>
-          <p class="quality-hint">Low uses smaller images (less data). Auto follows your connection.</p>
-        </div>
+        <ModeAndMediaBlock
+          v-model:gm-mode="gmMode"
+          :media-quality="mediaQuality"
+          @set-media-quality="setMediaQuality"
+        />
 
         <p v-if="needsCharacterPick" class="switch-error">Pick one of your characters to play.</p>
 
@@ -312,6 +300,7 @@ import SseIndicator from '@/components/app/SseIndicator.vue'
 import LoginPrompt from '@/components/app/LoginPrompt.vue'
 import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
+import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
 import RazmeritWaves from './components/RazmeritWaves.vue'
