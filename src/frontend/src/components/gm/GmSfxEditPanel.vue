@@ -41,6 +41,15 @@
         <TargetSpecBuilder v-model="draft.listener_spec" :destination="{ element: 'entity' }" :source-element="sourceElement" />
         <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>).</p>
       </div>
+      <!-- Where this may be *taken*, not where it works. Seeded at the thing
+           being unlocked, so `select source` is the trait instance (or entity)
+           the rule is being attached to. Empty = acquirable anywhere. -->
+      <label>Acquire path <span class="hint-inline">(optional)</span></label>
+      <div class="sfx-listener">
+        <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement"
+                           :destination="{ element: 'entity' }" />
+        <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
+      </div>
       <label>Conditions</label>
       <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" />
     </div>
@@ -294,6 +303,7 @@ async function onDelete() {
 </script>
 
 <style scoped>
+.hint-inline { opacity: 0.6; font-weight: 400; }
 .ps-form input, .ps-form select, .ps-form textarea {
   font-size: 12px; padding: 6px 8px;
   background: var(--overlay-6); color: var(--text);

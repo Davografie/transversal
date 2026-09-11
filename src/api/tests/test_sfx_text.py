@@ -590,3 +590,22 @@ def test_several_enum_values_read_as_alternatives():
          "value": ["positive", "negative"]},
     ]}), resolve=resolve)
     assert render_phrase(phrase, "each") == "each positive or negative trait instance you rolled"
+
+
+def test_a_gated_rule_says_where_it_can_be_gained():
+    """A rule that may only be *taken* somewhere must not read like an ungated one."""
+    from transversal.services.target_spec import TargetSpec
+
+    effect = Effect(type="modify_trait", action="step_up", target="trait-fire")
+    sfx = SFX(id="sfx-gated", name="Sect Technique", trigger="on_roll",
+              source_kind="trait_setting", effects=[effect])
+    assert "gained only where" not in sfx_text(sfx, resolve=resolve)
+
+    sfx.acquire_spec = TargetSpec(steps=[
+        {"kind": "select", "collection": "source"},
+        {"kind": "navigate", "edge": "entity"},
+        {"kind": "filter", "field": "current_location", "operator": "==", "value": "loc-rusted-gate"},
+    ])
+    text = sfx_text(sfx, resolve=resolve)
+    assert "gained only where:" in text
+    assert "Rusted Gate" in text, text

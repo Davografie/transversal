@@ -240,7 +240,7 @@ A rule with no source declared can live anywhere.
 
 A rule can say **where it may be taken** — not where it works. That's its *acquire
 path*: a path seeded at the thing being unlocked, checked when someone tries to take
-it. The author's case:
+it. Author it in the SFX editor, under **Acquire path** (optional). The author's case:
 
 ```
 select source → navigate entity → filter current_location == Azure Dawn
@@ -249,7 +249,8 @@ select source → navigate entity → filter current_location == Azure Dawn
 Read as: *the trait instance I'm unlocking is held by someone standing at Azure Dawn.*
 A trait that offers the rule shows it as a chip only where that path resolves; step
 outside and the chip is simply not there. Once taken, the rule is theirs — it keeps
-working after they leave.
+working after they leave. On the card it trails as *gained only where: …*, so a gated
+rule never reads like an ungated one.
 
 That last part is the whole reason it's a separate thing from a **condition**. A
 condition is evaluated when a rule *fires* as well as when it's offered, so gating with

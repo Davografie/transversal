@@ -24,6 +24,7 @@ export function createSfxEdit() {
     placement: null,
     arming_scope: null,   // null = auto (derive from trigger)
     listener_spec: { steps: [] },
+    acquire_spec: { steps: [] },
     conditions: [],
     effects: [],
     duration: { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' },
@@ -37,8 +38,8 @@ export function createSfxEdit() {
   // Derived rules text for the current draft ([[SFX Natural Language Plan]]).
   const cardText = ref('')
 
-const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
-const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec limit conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const UPDATE_MUTATION = `mutation($input: SfxUpdateInput!) { updateSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec limit conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
+const CREATE_MUTATION = `mutation($input: SfxInput!) { createSfx(input: $input) { id name description trigger sourceKind placement armingScope listenerSpec acquireSpec limit conditions { type subject target targets value operator narrative spec } effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } } duration { timers { event remaining } combine } } }`
 const VALIDATE_QUERY = `query($input: SfxInput!) { validateSfx(input: $input) }`
 // Derived rules text for an *unsaved* draft — the SFX editor's live card preview.
 const SFX_TEXT_QUERY = `query($sfx: SfxInput!) { sfxText(sfx: $sfx) }`
@@ -95,6 +96,7 @@ function initialDuration(sfx) {
     draft.placement = sfx?.placement ?? null
     draft.arming_scope = sfx?.armingScope ?? sfx?.arming_scope ?? null
     draft.listener_spec = sfx?.listenerSpec ?? sfx?.listener_spec ?? { steps: [] }
+    draft.acquire_spec = sfx?.acquireSpec ?? sfx?.acquire_spec ?? { steps: [] }
     draft.conditions = initialConditions(sfx)
     draft.duration = initialDuration(sfx)
     draft.effects = (sfx?.effects || []).map(e => ({ ...e }))
@@ -115,6 +117,7 @@ function initialDuration(sfx) {
     draft.placement = null
     draft.arming_scope = null
     draft.listener_spec = { steps: [] }
+    draft.acquire_spec = { steps: [] }
     draft.conditions = []
     draft.duration = { timers: [{ event: 'rolls', remaining: 1 }], combine: 'FIRST_TO_FIRE' }
     draft.effects = []
@@ -140,6 +143,7 @@ function initialDuration(sfx) {
       placement: draft.placement || null,
       armingScope: draft.arming_scope || null,
       listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
+              acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
       conditions: draft.conditions || [],
       effects: draft.effects || [],
       duration: draft.duration,
@@ -175,6 +179,7 @@ function initialDuration(sfx) {
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
+              acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
       })
@@ -183,6 +188,7 @@ function initialDuration(sfx) {
         name: draft.name, trigger: draft.trigger, description: draft.description,
         source_kind: draft.source_kind, placement: draft.placement,
         arming_scope: draft.arming_scope, listener_spec: draft.listener_spec,
+        acquire_spec: draft.acquire_spec,
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       savedAt.value = Date.now()
@@ -201,6 +207,7 @@ function initialDuration(sfx) {
           sourceKind: draft.source_kind || null, placement: draft.placement || null,
           armingScope: draft.arming_scope || null,
           listenerSpec: (draft.listener_spec?.steps?.length) ? draft.listener_spec : null,
+              acquireSpec: (draft.acquire_spec?.steps?.length) ? draft.acquire_spec : null,
           conditions: draft.conditions, effects: draft.effects, duration: draft.duration,
         },
       })
@@ -219,6 +226,7 @@ function initialDuration(sfx) {
         id, name: draft.name.trim(), trigger: draft.trigger, description: draft.description,
         source_kind: draft.source_kind, placement: draft.placement,
         arming_scope: draft.arming_scope, listener_spec: draft.listener_spec,
+        acquire_spec: draft.acquire_spec,
         conditions: [...draft.conditions], duration: draft.duration, effects: [...draft.effects],
       })
       successMsg.value = `Created "${draft.name}"`
