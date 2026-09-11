@@ -963,6 +963,7 @@ class Query:
                 target_kind=c.target_kind, value_kind=c.value_kind,
                 operators=list(c.operators), target_options=list(c.target_options),
                 uses_spec=c.uses_spec,
+                requires_source_elements=list(c.requires_source_elements),
             )
             for c in CONDITION_TYPES
         ]

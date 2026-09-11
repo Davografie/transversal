@@ -331,6 +331,11 @@ class ConditionTypeDef:
     operators: tuple[str, ...] = ()  # numeric comparators (HAS_RAZMERIT)
     target_options: tuple[str, ...] = ()  # fixed select options for the target (ENTITY_TYPE)
     uses_spec: bool = False  # renders a targeting-path builder instead of a flat target
+    # Catalog elements the SFX's source must resolve to for this condition to be
+    # able to pass ("" = any). "Source rating" on an entity-source SFX is a
+    # silent no-op, so the editor greys the option out with the reason instead of
+    # letting a gate that can never fire be authored.
+    requires_source_elements: tuple[str, ...] = ()
 
 
 CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
@@ -352,7 +357,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low")),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<")),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail")),
-    ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">")),
+    ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",)),
     ConditionTypeDef(ConditionType.TARGET_PATH.name, "Targeting path", uses_spec=True),
     ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
 )

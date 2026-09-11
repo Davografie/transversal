@@ -158,6 +158,38 @@ def test_each_source_kind_exposes_its_variable():
     assert source_variable("") is None
 
 
+def test_source_rating_on_an_entity_sfx_warns():
+    """A source-reading condition with the wrong source can never pass."""
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual", source_kind="entity",
+        conditions=[Condition(type=ConditionType.SOURCE_RATING, operator=">=", value="d8")],
+    )
+    assert validate_sfx(sfx) == [
+        "'Source rating' can never pass here: it reads the SFX's source, and this "
+        "SFX's source is 'entity'"
+    ]
+
+
+def test_source_rating_on_a_trait_sfx_passes():
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual", source_kind="trait_setting",
+        conditions=[Condition(type=ConditionType.SOURCE_RATING, operator=">=", value="d8")],
+    )
+    assert validate_sfx(sfx) == []
+
+
+def test_source_rating_warns_on_an_effect_condition_too():
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="manual", source_kind="entity",
+        effects=[Effect(
+            timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_down",
+            target="{choose_trait}",
+            conditions=[Condition(type=ConditionType.SOURCE_RATING, value="d8")],
+        )],
+    )
+    assert any("never pass here" in w for w in validate_sfx(sfx))
+
+
 def test_listener_spec_scope_without_path_warns():
     sfx = _sfx()
     sfx.arming_scope = "listener_spec"

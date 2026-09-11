@@ -290,6 +290,9 @@ class ConditionTypeOption:
     operators: list[str] = strawberry.field(default_factory=list)
     target_options: list[str] = strawberry.field(default_factory=list)
     uses_spec: bool = False
+    # Catalog elements ("traitsetting", …) the SFX's source must resolve to, or
+    # the condition can never pass — the editor greys it out with the reason.
+    requires_source_elements: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.type

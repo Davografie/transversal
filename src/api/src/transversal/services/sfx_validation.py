@@ -158,4 +158,21 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                     f"not '{sk.owner_surface}' — select source / source rating will resolve to nothing"
                 )
 
+    # A condition that reads the source can only pass when the SFX has that kind
+    # of source — "source rating" on an entity SFX is the same silent no-op class.
+    from transversal.services.conditions import CONDITION_TYPES
+    from transversal.services.target_catalog import source_kind as source_kind_def
+    kind = source_kind_def(sfx.source_kind or "")
+    element = getattr(kind, "element", "") or ""
+    every_condition = list(sfx.conditions) + [
+        c for e in sfx.effects for c in (e.conditions or [])
+    ]
+    for cond in every_condition:
+        meta = next((m for m in CONDITION_TYPES if m.value == cond.type.name), None)
+        if meta and meta.requires_source_elements and element not in meta.requires_source_elements:
+            warnings.append(
+                f"'{meta.label}' can never pass here: it reads the SFX's source, and this "
+                f"SFX's source is '{sfx.source_kind or 'unset'}'"
+            )
+
     return warnings

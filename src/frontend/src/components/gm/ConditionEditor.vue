@@ -2,8 +2,11 @@
   <div class="ce-root">
     <div v-for="(c, i) in conditions" :key="i" class="ce-row" :class="{ 'ce-row-spec': usesSpec(c.type) }">
       <select v-model="c.type">
-        <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
+        <option v-for="t in typeOptions" :key="t.value" :value="t.value" :disabled="!typeUsable(t)">{{ t.label }}{{ sourceReason(t) }}</option>
       </select>
+      <span v-if="missingSource(selectedMeta(c.type))" class="ce-warn">
+        never passes: needs a {{ missingSource(selectedMeta(c.type)) }} source
+      </span>
       <template v-if="usesSpec(c.type)">
         <TargetSpecBuilder v-model="c.spec" :source-element="sourceElement" title="Condition path" boolean-terminal class="ce-spec" />
       </template>
@@ -98,6 +101,29 @@ function needsTarget(type) {
   return conditionTypes.value.some(c => c.value === type && c.needsTarget)
 }
 
+function selectedMeta(type) {
+  return conditionTypes.value.find(c => c.value === type) || null
+}
+
+// A condition that reads the SFX's source can only pass when the source is the
+// kind it reads ("source rating" needs a trait instance). Offering it anyway is
+// how a gate that can never fire gets authored, so those options are disabled
+// and say why, and an already-authored one warns in place.
+function missingSource(meta) {
+  const need = (meta && meta.requiresSourceElements) || []
+  if (!need.length || need.includes(props.sourceElement)) return ''
+  return need.join(' / ')
+}
+
+function typeUsable(t) {
+  return !missingSource(t)
+}
+
+function sourceReason(t) {
+  const need = missingSource(t)
+  return need ? ` — needs a ${need} source` : ''
+}
+
 function usesSpec(type) {
   return conditionTypes.value.some(c => c.value === type && c.usesSpec)
 }
@@ -153,6 +179,7 @@ function remove(i) {
   font-family: inherit; flex: 1; min-width: 0;
 }
 .ce-target { flex: 2 !important; }
+.ce-warn { flex: 1 1 100%; font-size: 9px; color: var(--warn, #d8a13a); }
 .ce-subject { flex: 1.5 !important; }
 .ce-value { flex: 1 !important; }
 .ce-operator { flex: none !important; width: 58px; }
