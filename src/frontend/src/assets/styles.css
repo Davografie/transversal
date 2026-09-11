@@ -1038,16 +1038,23 @@ select option {
   .stage.mobile-stack.focus-sheet:has(.roller-band .kind-empty-pool) .add-die-toggle { display: none; }
 
   /* Dice focus: content-dependent bottom stack — the roller takes its
-     measured content height (a concrete length via --roller-h, so the band
-     animates smoothly; grows for wizards/menus, clamped to 42dvh then
-     scrolls) and the location takes the rest as an explicit calc. Every
-     band height is a single monotonic animated length — no flex-grow. */
-  .stage.mobile-stack.focus-dice .loc-band {
-    flex-basis: calc(100% - 56px - clamp(148px, var(--roller-h, 148px), 42dvh));
+     measured content height (--roller-h) as a concrete length so the band
+     animates smoothly. There is NO viewport cap: a targeting wizard or
+     consequence menu gets the height it needs and the bands above shrink to
+     their minimums (location 10%, sheet teaser 56px). Every band height is
+     still a single monotonic animated length — no flex-grow. */
+  .stage.mobile-stack.focus-dice {
+    --band-sheet-min: 56px;
+    --band-loc-min: 10%;
+    --band-roller-max: calc(100% - var(--band-sheet-min) - var(--band-loc-min));
+    --band-roller: clamp(148px, var(--roller-h, 148px), var(--band-roller-max));
   }
-  .stage.mobile-stack.focus-dice .sheet-band { flex-basis: 56px; }
+  .stage.mobile-stack.focus-dice .loc-band {
+    flex-basis: calc(100% - var(--band-sheet-min) - var(--band-roller));
+  }
+  .stage.mobile-stack.focus-dice .sheet-band { flex-basis: var(--band-sheet-min); }
   .stage.mobile-stack.focus-dice .roller-band {
-    flex-basis: clamp(148px, var(--roller-h, 148px), 42dvh);
+    flex-basis: var(--band-roller);
     overflow: hidden auto;
   }
 
@@ -1060,7 +1067,11 @@ select option {
   .stage.mobile-stack.sheet-empty.focus-sheet .roller-band { flex-basis: 16%; }
   .stage.mobile-stack.sheet-empty.focus-location:has(.roller-band .kind-empty-pool) .loc-band { flex-basis: 100%; }
   .stage.mobile-stack.sheet-empty.focus-dice .loc-band {
-    flex-basis: calc(100% - clamp(148px, var(--roller-h, 148px), 42dvh));
+    flex-basis: calc(100% - var(--band-roller));
+  }
+  /* No sheet band in dice focus: the roller may use its saved 56px. */
+  .stage.mobile-stack.sheet-empty.focus-dice {
+    --band-roller-max: calc(100% - var(--band-loc-min));
   }
 
   /* GM panels open (PanelStack .panel-viewport exists): the map takes the

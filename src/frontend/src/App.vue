@@ -284,7 +284,7 @@
     @applied="onSupportCreated"
     @close="supportCastMenu = null"
   />
-  <div class="stage" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '']">
+  <div class="stage" :style="{ '--roller-h': rollerContentH + 'px' }" :class="[mobileStackActive ? 'mobile-stack' : '', mobileStackActive ? 'focus-' + mobileFocus : '', mobileStackActive && sheetEmpty ? 'sheet-empty' : '']">
     <ArmedSfxRail
       v-if="playerId && !showLoginOverlay && !fullCanvas"
       :entity-id="entityId"
@@ -348,7 +348,7 @@
         />
         <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
       </div>
-      <div class="roller-band" :style="{ '--roller-h': rollerContentH + 'px' }">
+      <div class="roller-band">
         <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => shareRoll(r)" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
         <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @click="setMobileFocus('dice')"></div>
       </div>
@@ -1691,10 +1691,28 @@ function setMobileFocus(f) {
 // The mobile dice-focus band sizes to the roller's CONTENT as a concrete
 // length (keyword flex-basis: auto doesn't interpolate, which made entering /
 // leaving dice focus jump). --roller-h feeds the clamp() in styles.css.
+//
+// Measured as the flex column's INTRINSIC height (children + gaps + padding),
+// not `scrollHeight`: once the band has grown, scrollHeight reports the
+// element's own height, so the band would latch open after a wizard closes.
 const rollerContentH = ref(148)
 function syncRollerContentH() {
   const roller = wrapperEl.value?.querySelector('.dice-roller')
-  if (roller) rollerContentH.value = Math.max(0, roller.scrollHeight)
+  if (!roller) return
+  const rs = getComputedStyle(roller)
+  const gap = parseFloat(rs.rowGap) || 0
+  let h = (parseFloat(rs.paddingTop) || 0) + (parseFloat(rs.paddingBottom) || 0)
+  const kids = [...roller.children].filter((el) => {
+    const cs = getComputedStyle(el)
+    return cs.display !== 'none' && cs.position !== 'absolute' && cs.position !== 'fixed'
+  })
+  kids.forEach((el, idx) => {
+    const cs = getComputedStyle(el)
+    h += el.getBoundingClientRect().height
+      + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0)
+    if (idx < kids.length - 1) h += gap
+  })
+  rollerContentH.value = Math.max(0, Math.round(h))
 }
 watch(mobileFocus, () => nextTick(syncRollerContentH))
 watch(isMobile, () => nextTick(syncRollerContentH))

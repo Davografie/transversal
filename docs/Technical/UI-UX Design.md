@@ -190,7 +190,10 @@ viewer hide too, leaving a clean design workspace (CSS-only via `:has`).
   height animates monotonically — no crossfade overshoot. Focus states:
   `location` (loc 77% / sheet 7% / roller 16%), `sheet` (loc 20% / sheet 64% /
   roller 16%), `dice` (content-dependent bottom stack: the roller takes its
-  natural height up to 42dvh and scrolls beyond; the sheet is a fixed 56px
+  measured content height with **no viewport cap** — a targeting wizard or
+  consequence menu gets the room it needs and the bands above shrink to their
+  minimums (location 10%, sheet teaser 56px), so a tall wizard can land at
+  roughly 10% / 56px / rest; the sheet is a
   header teaser; the location fills the rest).
 - **Tap a teaser to expand it.** App renders a capture layer (`.band-tap`)
   over every non-focused band; the first tap expands the band, removing the
