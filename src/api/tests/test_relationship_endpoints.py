@@ -211,3 +211,45 @@ def test_p2p_relationship_is_directional():
     finally:
         repo.delete_entity(A)
         repo.delete_entity(B)
+
+
+def test_relationship_traitsettings_lookup_by_edge_key(data):
+    """The edge-key lookup behind the GraphQL `Relationship.relationTraits` field.
+
+    The sheet's relation tab keys off *our outgoing* edge to the sheet being
+    viewed, so what matters is that traits come back per-edge: the reverse
+    edge's traits must not leak into this one's list.
+    """
+    repo = data
+    forward = repo.create_relationship(A_ID, B_ID, "relation")
+    reverse = repo.create_relationship(B_ID, A_ID, "relation")
+    ts_fwd = repo.create_traitsetting(TraitSetting(
+        id=f"{forward['_key']}:trust", entity_id=forward["_key"],
+        trait_id="trait-relation-trust", traitset_id="ts-relations-b114",
+        from_type="relationship", dice=[DieType.D6],
+    ))
+    ts_rev = repo.create_traitsetting(TraitSetting(
+        id=f"{reverse['_key']}:fear", entity_id=reverse["_key"],
+        trait_id="trait-relation-fear", traitset_id="ts-relations-b114",
+        from_type="relationship", dice=[DieType.D8],
+    ))
+    try:
+        got = repo.get_relationship_traitsettings(forward["_key"])
+        assert [t.trait_id for t in got] == ["trait-relation-trust"]
+        assert got[0].dice == [DieType.D6]
+
+        rev = repo.get_relationship_traitsettings(reverse["_key"])
+        assert [t.trait_id for t in rev] == ["trait-relation-fear"]
+
+        # An edge with no traits yields nothing rather than falling back to the
+        # entities' own settings.
+        bare = repo.create_relationship(A_ID, B_ID, "relation")
+        try:
+            assert repo.get_relationship_traitsettings(bare["_key"]) == []
+        finally:
+            repo._relationships.delete(bare["_key"])
+    finally:
+        repo.delete_traitsetting(ts_fwd.id)
+        repo.delete_traitsetting(ts_rev.id)
+        repo._relationships.delete(forward["_key"])
+        repo._relationships.delete(reverse["_key"])

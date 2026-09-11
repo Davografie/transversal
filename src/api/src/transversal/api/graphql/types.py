@@ -1224,6 +1224,17 @@ class Relationship:
     type: str
     description: str = ""
 
+    @strawberry.field
+    def relation_traits(self, info: strawberry.Info) -> list[TraitSetting]:
+        """Trait settings anchored to this edge (``from_type == 'relationship'``).
+
+        These are the traits the ``_from`` side holds *about* the ``_to`` side —
+        the contact is deliberately left off, because on the surface that renders
+        them the other end of the edge is the subject.
+        """
+        repo = info.context["entity_manager"].repo
+        return [_gql_trait_setting(ts) for ts in repo.get_relationship_traitsettings(self.id)]
+
 
 @strawberry.input
 class CreateRelationshipInput:

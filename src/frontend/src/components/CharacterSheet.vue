@@ -102,12 +102,20 @@
             </div>
           </div>
           <div class="sheet-pills">
-            <div v-if="gmMode || !overrideEntityId">
-              <button :class="['pill', { active: activeSheetView === 'profile' }]" @click="activeSheetView = 'profile'">👤</button>
-              <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="goToTraitSets">🎲</button>
-              <button v-if="gmMode" :class="['pill', { active: showAllTraits }]" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
-              <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
-              <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
+            <div v-if="gmMode || !overrideEntityId || showRelationTab">
+              <button
+                v-if="showRelationTab"
+                :class="['pill', { active: activeSheetView === 'relation' }]"
+                :title="`What you hold about ${entity.name}`"
+                @click="activeSheetView = 'relation'"
+              >🤝</button>
+              <template v-if="gmMode || !overrideEntityId">
+                <button :class="['pill', { active: activeSheetView === 'profile' }]" @click="activeSheetView = 'profile'">👤</button>
+                <button :class="['pill', { active: activeSheetView === 'traits' }]" @click="goToTraitSets">🎲</button>
+                <button v-if="gmMode" :class="['pill', { active: showAllTraits }]" :title="showAllTraits ? 'Showing all traits' : 'Show all traits'" @click="showAllTraits = !showAllTraits">🌍</button>
+                <button :class="['pill', { active: activeSheetView === 'bluebook' }]" @click="activeSheetView = 'bluebook'">📘</button>
+                <button :class="['pill', { active: activeSheetView === 'lifepath' }]" @click="activeSheetView = 'lifepath'">🛤️</button>
+              </template>
             </div>
             <Button v-if="!gmMode && !isForeignSheet" variant="ghost" size="icon" title="Player settings" @click.stop="$emit('openSettings')">↩</Button>
             <Button v-if="isForeignSheet && !relationship" variant="ghost" size="icon" title="Add relationship" @click.stop="createImmediateRelationship()">+</Button>
@@ -643,12 +651,27 @@ const relInput = ref(null)
 const blueBookRef = ref(null)
 
 
-const activeSheetView = usePersistedRef('sheet.activeView', 'traits')  // 'traits' | 'profile' | 'lifepath' | 'bluebook'
+const activeSheetView = usePersistedRef('sheet.activeView', 'traits')  // 'traits' | 'profile' | 'lifepath' | 'bluebook' | 'relation'
 watch(activeSheetView, (v) => emit('sheetViewChange', v))
 
 const isForeignSheet = computed(() =>
   props.overrideEntityId && props.overrideEntityId !== props.viewerEntityId
 )
+
+// ── Relation tab (foreign sheets) ───────────────────────────────
+// Traits hanging off *our* outgoing edge to the sheet we're looking at — what we
+// hold about them (`_from == viewerEntityId`, `_to == overrideEntityId`). The tab
+// only exists when such an edge carries traits; a bare edge isn't worth a tab.
+const relationTraits = computed(() => relationship.value?.relationTraits || [])
+const showRelationTab = computed(() => !!isForeignSheet.value && relationTraits.value.length > 0)
+// `activeSheetView` is persisted, so 'relation' can outlive the edge that
+// justified it (refresh, relationship removed, sheet switched). Fall back
+// whenever the tab isn't available — immediate, so a stale value is caught on
+// mount too. Defined after `activeSheetView`/`isForeignSheet` so the immediate
+// run has both.
+watch(showRelationTab, (has) => {
+  if (!has && activeSheetView.value === 'relation') activeSheetView.value = 'traits'
+}, { immediate: true })
 
 const ownsCharacter = computed(() => {
   const id = props.overrideEntityId || props.entityId
@@ -731,6 +754,7 @@ const currentSet = computed(() => {
 })
 
 const currentTraits = computed(() => {
+  if (activeSheetView.value === 'relation') return relationTraits.value
   if (activeSheetView.value === 'profile') return profileTraits.value
   return currentSet.value?.traits || []
 })
@@ -1888,7 +1912,39 @@ async function fetchRelationship() {
   const query = `
     query($viewer: ID!, $target: ID!) {
       relationship(fromEntityId: $viewer, toEntityId: $target) {
+        id
         description
+        relationTraits {
+          id
+          traitId
+          traitsetId
+          name
+          traitsetName
+          dieType
+          ratingType
+          rating
+          ego
+          fromType
+          projectionId
+          statement
+          notes
+          sfxIds
+          universe
+          dice
+          spentDice
+          capacity
+          polarity
+          enabled
+          traitsetOrder
+          traitsetLimit
+          knownTo
+          possibleSfxIds
+          relationshipContactId
+          relationshipContactName
+          relationshipContactType
+          relationshipType
+          possibleSubtraitIds
+        }
       }
     }
   `
@@ -1961,6 +2017,8 @@ async function removeRelationship() {
 watch(() => props.overrideEntityId, () => {
   if (isForeignSheet.value) fetchRelationship()
   if (!ownsCharacter.value && activeSheetView.value === 'bluebook') activeSheetView.value = 'traits'
+  // The relation view belongs to one specific edge — don't carry it across sheets.
+  if (activeSheetView.value === 'relation') activeSheetView.value = 'traits'
 })
 watch(() => props.viewerEntityId, () => {
   if (isForeignSheet.value) fetchRelationship()
