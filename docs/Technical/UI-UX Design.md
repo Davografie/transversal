@@ -203,6 +203,31 @@ read as one object, so the primitive owns its chrome
 - **Remaining migration:** `EffectForm.vue`'s `.ee-result-mode` (Die/Variable)
   still hand-rolls this — its owner (gm-panels) migrates it (B104).
 
+## Pickers
+
+Picking is already one system; new surfaces should compose it rather than reach
+for a raw `<select>` (that was the point of **B47**).
+
+- **`ui/TargetPicker`** — the universal picker: a search field plus a filtered
+  dropdown, backed by the server's `targetCandidates(kind, entityId, scope,
+  action, filter)`. The *kind* is the whole vocabulary, and it is server-defined:
+  `location` (410 candidates), `trait` (802), `roll_table`, `universe`, plus the
+  scoped kinds (`character` / `gmc` / … resolve within an entity or location —
+  an empty list just means "none in scope"). It also takes `excludeIds`,
+  `allowRandom` (🎲) and `clearable`. Nine call sites today, from the canvas and
+  the effect/condition builders to the entity panel's location fields.
+- **`ui/SearchDropdown`** — the input + dropdown it is built on; use it directly
+  for a free-text search that isn't a target lookup.
+- **`DiePicker`** — die faces (d4…d12), single or `multiple`. This is the
+  **rating-die picker**: `TraitInstanceEditor` and the sheet's trait editor use
+  it for ratings, the GM forms for effect dice.
+- **GM-specific**: `gm/UniversePicker`, `gm/GmScopePicker`, `gm/GmSfxPickerPanel`
+  (sfx/scope picking inside effect authoring).
+
+**Not yet using it:** the GM panels still hand-roll `<select>`s where a search
+would be better (`TargetSpecBuilder` has 15, `EffectForm` 10, the trait panels
+8 each) — each panel owner's call, since some are genuinely short enumerations.
+
 ## Character sheet
 
 Navigation lives in the header **pills**: 👤 profile · 🎲 traits · 📘 bluebook · 🛤️ lifepath (GM also gets 🌍 show-all-traits).
