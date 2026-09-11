@@ -424,6 +424,25 @@ class TestTwoPathAttune:
         assert "their counterpart" in text
         assert "three_realms" not in text
 
+    def test_copy_trait_reads_as_a_gift(self):
+        """`sfx-teach`: hand another entity a copy of a trait you have."""
+        from transversal.domain import TargetRef
+
+        effect = Effect(
+            type="modify_trait", action="copy",
+            entity_spec=spec(
+                {"kind": "select", "collection": "occupants"},
+                {"kind": "choose", "count": 1},
+            ),
+            refs={"trait": TargetRef(value="", spec=spec(
+                {"kind": "select", "collection": "self_traitsettings"},
+                {"kind": "choose", "count": 1},
+            ))},
+        )
+        assert effect_text(effect) == (
+            "give one of the entities here a copy of one of the trait instances"
+        )
+
     def test_the_universe_fallback_still_reads(self):
         effect = Effect(type="attune", action="enable", target="loc-rusted-gate",
                         result="three_realms")

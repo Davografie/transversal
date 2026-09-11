@@ -132,7 +132,7 @@ def _register_core_handlers(em, raz):
             source_element=(ctx or {}).get(SOURCE_ELEMENT_CONTEXT_KEY),
         )
 
-    for action in ("step_up", "step_down", "reduce_by_effect", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die"):
+    for action in ("step_up", "step_down", "reduce_by_effect", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die", "copy"):
         effect_registry.register("modify_trait", action, _commit)
     effect_registry.register("life_path", "discover", _commit)
     effect_registry.register("relationship", "create", _commit)
@@ -771,6 +771,53 @@ def _apply_gain(entity, effect, repo, result):
     result.new_trait_settings.append(ts)
     result.applied.append(AppliedEffect(effect, f"gained {target} at {die.value}", ts.id))
     _queue_entity_revert(repo, subject, effect, target=target)
+
+
+def _apply_copy_trait(entity, effect, repo, result):
+    """Give the subject a copy of another trait instance (teach / gift).
+
+    The copy carries the *instance*: its dice, rating type, polarity, statement
+    and notes. Teaching hands over what the teacher has, not the trait's default
+    — which is the whole point, and why this is its own action rather than a
+    `gain` whose fields someone had to keep in sync by hand.
+
+    The recipient's trait-set rules still apply: a set that forbids duplicates
+    refuses the copy, and a set that allows them refuses only a same-statement
+    copy (statement is what distinguishes duplicates). The copy is anchored to
+    the recipient entity rather than mirroring the source's projection anchor,
+    and the repo seeds the trait's default SFX when it is created.
+    """
+    subject = _effect_subject(entity, effect, result, repo)
+    if subject is None:
+        return
+    _track_subject(result, entity, subject)
+    ref = (effect.refs or {}).get("trait")
+    src_id = (getattr(ref, "value", "") or "") if ref else ""
+    src = repo.get_traitsetting(src_id) if src_id else None
+    if src is None:
+        result.applied.append(AppliedEffect(effect, f"no trait instance to copy ({src_id or 'unset'})"))
+        return
+    get_traitset = getattr(repo, "get_traitset_by_id", None)
+    traitset = get_traitset(src.traitset_id) if src.traitset_id and get_traitset else None
+    allow_duplicates = bool(getattr(traitset, "allow_duplicates", False))
+    if repo.find_traitsetting_collision(subject.id, src.trait_id, src.statement, allow_duplicates):
+        result.applied.append(
+            AppliedEffect(effect, f"{subject.name or subject.id} already has {src.trait_id}"))
+        return
+    ts = TraitSetting(
+        id=repo.resolve_traitsetting_id(subject.id, src.trait_id, src.statement, allow_duplicates),
+        entity_id=subject.id,
+        trait_id=src.trait_id,
+        traitset_id=src.traitset_id,
+        rating_type=src.rating_type,
+        dice=list(src.dice),
+        capacity=list(src.capacity) if src.capacity else None,
+        polarity=src.polarity,
+        statement=src.statement,
+        notes=src.notes,
+    )
+    result.new_trait_settings.append(ts)
+    result.applied.append(AppliedEffect(effect, f"copied {src.trait_id} to {subject.id}", ts.id))
 
 
 def _apply_gain_or_step_up(entity, effect, repo, result):
@@ -1850,6 +1897,7 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "step_up"): _apply_step_up,
     ("modify_trait", "step_down"): _apply_step_down,
     ("modify_trait", "add_die"): _apply_add_die,
+    ("modify_trait", "copy"): _apply_copy_trait,
     ("modify_trait", "remove_die"): _apply_remove_die,
     ("modify_trait", "reduce_by_effect"): _apply_reduce_by_effect,
     ("modify_trait", "set"): _apply_set,

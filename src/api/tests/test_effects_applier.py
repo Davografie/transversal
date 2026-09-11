@@ -28,11 +28,18 @@ class FakeTrait:
         self.universes = []
 
 
+class FakeTraitSet:
+    def __init__(self, ts_id, allow_duplicates=False):
+        self.id = ts_id
+        self.allow_duplicates = allow_duplicates
+
+
 class FakeRepo:
-    def __init__(self, traits=None, traitsettings=None, entities=None):
+    def __init__(self, traits=None, traitsettings=None, entities=None, traitsets=None):
         self.traits = {t.id: t for t in (traits or [])}
         self.traitsettings = list(traitsettings or [])
         self.entities = {e.id: e for e in (entities or [])}
+        self.traitsets = {t.id: t for t in (traitsets or [])}
         self.scheduled_events = []
         self.projections = []
         self.traitsetsettings = []
@@ -41,7 +48,28 @@ class FakeRepo:
         return self.traits.get(trait_id)
 
     def get_traitset_by_id(self, traitset_id):
+        return self.traitsets.get(traitset_id)
+
+    # Mirrors the real repository's duplicate rules (statement distinguishes
+    # duplicates when a set allows them).
+    def find_traitsetting_collision(self, entity_id, trait_id, statement="", allow_duplicates=False):
+        existing = [ts for ts in self.traitsettings
+                    if ts.entity_id == entity_id and ts.trait_id == trait_id]
+        if not existing:
+            return None
+        if not allow_duplicates:
+            return existing[0]
+        for ts in existing:
+            if (ts.statement or "") == (statement or ""):
+                return ts
         return None
+
+    def resolve_traitsetting_id(self, entity_id, trait_id, statement="", allow_duplicates=False):
+        base = f"{entity_id}:{trait_id}"
+        if allow_duplicates and statement:
+            import hashlib
+            return f"{base}:{hashlib.sha1(statement.encode()).hexdigest()[:8]}"
+        return base
 
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
@@ -302,6 +330,80 @@ def test_add_die_without_a_die_rating_is_skipped():
     result = apply_effects(entity, [_effect("modify_trait", "add_die", "hazard", "")], repo)
     assert result.new_trait_settings == []
     assert "no die rating" in result.applied[0].summary
+
+
+# ── Trait copy (teach / gift) ────────────────
+
+def _copy_effect(recipient_id, source_ts_id):
+    return Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="copy",
+        entity=recipient_id, refs={"trait": TargetRef(value=source_ts_id)},
+    )
+
+
+def test_copy_trait_carries_the_instance_to_the_recipient():
+    src = _ts("medicine", [DieType.D8], entity_id="char-1", traitset_id="ts-med",
+              statement="Field surgery", notes="from the war")
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(traits=[FakeTrait("medicine", "ts-med")], traitsettings=[src], entities=[learner])
+    result = apply_effects(_entity(), [_copy_effect("char-2", "char-1:medicine")], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.id == "char-2:medicine"
+    assert ts.entity_id == "char-2"
+    assert ts.dice == [DieType.D8]
+    assert ts.traitset_id == "ts-med"
+    assert ts.statement == "Field surgery"
+    assert ts.notes == "from the war"
+    assert result.applied[0].summary == "copied medicine to char-2"
+
+
+def test_copy_trait_refuses_when_the_recipient_already_has_it():
+    src = _ts("medicine", [DieType.D8], entity_id="char-1")
+    owned = _ts("medicine", [DieType.D6], entity_id="char-2")
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(traitsettings=[src, owned], entities=[learner])
+    result = apply_effects(_entity(), [_copy_effect("char-2", "char-1:medicine")], repo)
+    assert result.new_trait_settings == []
+    assert "already has medicine" in result.applied[0].summary
+
+
+def test_copy_trait_allows_a_distinct_statement_when_the_set_allows_duplicates():
+    src = _ts("medicine", [DieType.D8], entity_id="char-1",
+              statement="Field surgery", traitset_id="ts-med")
+    owned = _ts("medicine", [DieType.D6], entity_id="char-2",
+                statement="Herbalism", traitset_id="ts-med")
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(
+        traits=[FakeTrait("medicine", "ts-med")], traitsettings=[src, owned], entities=[learner],
+        traitsets=[FakeTraitSet("ts-med", allow_duplicates=True)],
+    )
+    result = apply_effects(_entity(), [_copy_effect("char-2", "char-1:medicine")], repo)
+    ts = result.new_trait_settings[0]
+    assert ts.statement == "Field surgery"
+    assert ts.id != "char-2:medicine"      # statement-distinguished key
+
+
+def test_copy_trait_refuses_a_same_statement_duplicate():
+    src = _ts("medicine", [DieType.D8], entity_id="char-1",
+              statement="Field surgery", traitset_id="ts-med")
+    owned = _ts("medicine", [DieType.D6], entity_id="char-2",
+                statement="Field surgery", traitset_id="ts-med")
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(
+        traits=[FakeTrait("medicine", "ts-med")], traitsettings=[src, owned], entities=[learner],
+        traitsets=[FakeTraitSet("ts-med", allow_duplicates=True)],
+    )
+    result = apply_effects(_entity(), [_copy_effect("char-2", "char-1:medicine")], repo)
+    assert result.new_trait_settings == []
+    assert "already has medicine" in result.applied[0].summary
+
+
+def test_copy_trait_without_a_resolved_ref_does_nothing():
+    learner = _entity(id="char-2", name="Dmitri")
+    repo = FakeRepo(entities=[learner])
+    result = apply_effects(_entity(), [_copy_effect("char-2", "")], repo)
+    assert result.new_trait_settings == []
+    assert "no trait instance to copy" in result.applied[0].summary
 
 
 def test_remove_die_removes_matching_die():

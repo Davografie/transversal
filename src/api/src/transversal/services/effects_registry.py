@@ -479,6 +479,21 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
         target_kind="trait",
     ),
     EffectActionMeta(
+        action_id="copy_trait",
+        label="Copy Trait",
+        description=(
+            "Give another entity a copy of a trait instance — its dice, rating type, "
+            "polarity, statement and notes. Teaching hands over what you have, not "
+            "the trait's default"
+        ),
+        category="either",
+        effect_type="modify_trait",
+        effect_action="copy",
+        valid_timings=["IMMEDIATE"],
+        fields=[_ENTITY_FIELD],
+        refs=[RefDef("trait", "Trait to Copy", "traitsetting")],
+    ),
+    EffectActionMeta(
         action_id="disable_trait",
         label="Disable Trait",
         description="Disable a trait so it contributes no dice (until re-enabled or the duration ends)",
@@ -982,6 +997,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_trait", "gain"): "gain {target}",
     ("modify_trait", "cortex_gain"): "gain {target} as a complication at {result}",
     ("modify_trait", "add_die"): "add a {result} die to {target}",
+    ("modify_trait", "copy"): "give {target} a copy of {result}",
     ("modify_trait", "reduce_by_effect"): "reduce {target} by the effect die",
     ("transfer_razmerit", "earn"): "gain {result} razmerit",
     ("transfer_razmerit", "spend"): "spend {result} razmerit",
