@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from transversal.api.sse.bus import StreamEvent, event_bus
 from transversal.db.repository import EntityRepository
+from transversal.domain import ArrivalKind
 from transversal.services.entity_manager import EntityManager
 
 logger = logging.getLogger("transversal.locations")
@@ -152,6 +153,9 @@ from pydantic import BaseModel
 class MoveRequest(BaseModel):
     location: str
     universe: str | None = None
+    # How they got there. Omitted → "move"; navigation sends "hierarchy" when
+    # entering/leaving a sub-location, so a rule can tell the two apart.
+    arrival_kind: str | None = None
 
 
 class EdgeRequest(BaseModel):
@@ -166,7 +170,8 @@ async def move_entity(entity_id: str, body: MoveRequest):
     em = _em()
     repo = _repo()
     entity = em.get(entity_id)
-    result = em.move_to(entity, body.location, body.universe)
+    result = em.move_to(entity, body.location, body.universe,
+                        arrival_kind=ArrivalKind.parse(body.arrival_kind, ArrivalKind.MOVE))
 
     # Get the display name of the target location
     loc = repo.get_entity(body.location)
@@ -385,7 +390,7 @@ async def fire_portal(from_id: str, to_id: str, body: PortalFireRequest):
             "location_id": updated.current_location, "universe": updated.current_universe,
         }
 
-    result = commit_effects(entity, effects, repo)
+    result = commit_effects(entity, effects, repo, arrival_kind=ArrivalKind.TRANSVERSAL)
     return {
         "status": "applied" if result.applied else "pending",
         "applied": [a.summary for a in result.applied],

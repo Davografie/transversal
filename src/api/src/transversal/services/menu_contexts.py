@@ -167,6 +167,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("from_location", "location"),
         Variable("to_location", "location"),
         Variable("universe", "universe"),
+        Variable("arrival_kind", "string"),
     )),
     TriggerDef("on_trait_change", "On Trait Change", (
         Variable("trait", "trait"),

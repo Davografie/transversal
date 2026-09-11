@@ -337,6 +337,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 | **Contest outcome** | The contest resolved `player` / `opponent` / `give_in` (fire-time only). |
 | **Hitch** | The current context is a hitch-buying menu (fire-time only). |
 | **High stakes** | The contest in play is high-stakes (`high`) or not (`low`); fire-time only. |
+| **Arrival kind** | *How* the subject got here — `transversal` (through a portal), `hierarchy` (up/down a sub-location), `move` (placed — GM drag), `effect` (an effect moved them). Carried on the location-change event. |
 | **Roll tier** | The roll's outcome tier compares to a tier (fire-time only). |
 | **Test outcome** | A test succeeded / failed (fire-time only). |
 | **Source rating** | The SFX's source trait rating compares to a die. |

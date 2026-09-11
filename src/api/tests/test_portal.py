@@ -87,8 +87,9 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
 
     captured = {}
 
-    def fake_commit_effects(e, effects, r):
+    def fake_commit_effects(e, effects, r, **kwargs):
         captured["effects"] = effects
+        captured["arrival_kind"] = kwargs.get("arrival_kind")
         class _R:
             applied = []
             pending_choices = []
@@ -103,6 +104,8 @@ def test_fire_portal_applies_edge_effects(monkeypatch):
     r = client.post("/api/v1/locations/loc-a/portal/loc-b/fire", json={"entity_id": "char-1"})
     assert r.status_code == 200, r.text
     assert len(captured["effects"]) == 1
+    # A portal crossing is a transversal arrival, not a generic effect move.
+    assert captured["arrival_kind"] == "transversal"
     assert captured["effects"][0].type == "travel"
     assert captured["effects"][0].target == "loc-b"
     assert captured["effects"][0].context == {"transversal_type": "inapposite"}
@@ -125,8 +128,9 @@ def test_fire_portal_substitutes_location_transversal_target(monkeypatch):
 
     captured = {}
 
-    def fake_commit_effects(e, effects, r):
+    def fake_commit_effects(e, effects, r, **kwargs):
         captured["effects"] = effects
+        captured["arrival_kind"] = kwargs.get("arrival_kind")
         class _R:
             applied = []
             pending_choices = []
@@ -161,8 +165,9 @@ def test_fire_portal_substitutes_universe_transversal_target(monkeypatch):
 
     captured = {}
 
-    def fake_commit_effects(e, effects, r):
+    def fake_commit_effects(e, effects, r, **kwargs):
         captured["effects"] = effects
+        captured["arrival_kind"] = kwargs.get("arrival_kind")
         class _R:
             applied = []
             pending_choices = []

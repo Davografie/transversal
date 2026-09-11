@@ -101,6 +101,16 @@ class MutationsEntities:
         return _entity_to_gql(updated)
 
     @strawberry.mutation
-    def inapposite_travel(self, info: strawberry.Info, entity_id: strawberry.ID, location: strawberry.ID) -> Entity:
-        updated = _em(info).travel(str(entity_id), str(location), transversal_type="inapposite")
+    def inapposite_travel(self, info: strawberry.Info, entity_id: strawberry.ID, location: strawberry.ID,
+                          arrival_kind: Optional[str] = None) -> Entity:
+        """Move an entity to a location.
+
+        ``arrival_kind`` labels how they got there; it defaults to ``move``
+        because this mutation's callers are the GM panels (a placement), not a
+        walk through a portal. Pass ``transversal`` for a real crossing.
+        """
+        from transversal.domain import ArrivalKind
+
+        updated = _em(info).travel(str(entity_id), str(location), transversal_type="inapposite",
+                                   arrival_kind=ArrivalKind.parse(arrival_kind, ArrivalKind.MOVE))
         return _entity_to_gql(updated)

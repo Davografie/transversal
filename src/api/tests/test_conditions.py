@@ -540,3 +540,28 @@ def test_derive_arming_scope():
     # Explicit scope wins.
     assert SFX(id="c", name="c", trigger="manual", arming_scope="global").effective_arming_scope == "global"
     assert SFX(id="d", name="d", trigger="on_session_start", arming_scope="self").effective_arming_scope == "self"
+
+
+def test_arrival_kind_gate_reads_the_context():
+    """How they arrived is a gate: "when they come through a portal…" (B-arrival)."""
+    from transversal.domain import ArrivalKind
+
+    cond = Condition(type=ConditionType.ARRIVAL_KIND, target=ArrivalKind.TRANSVERSAL.value)
+    assert evaluate_condition(_entity(), cond, FakeRepo(), {"arrival_kind": "transversal"})
+    assert not evaluate_condition(_entity(), cond, FakeRepo(), {"arrival_kind": "hierarchy"})
+    # No arrival in context → the gate cannot pass (a roll must not satisfy it).
+    assert not evaluate_condition(_entity(), cond, FakeRepo(), {})
+    assert not evaluate_condition(_entity(), cond, FakeRepo())
+    # An unauthored target matches nothing rather than everything.
+    assert not evaluate_condition(_entity(), Condition(type=ConditionType.ARRIVAL_KIND), FakeRepo(),
+                                  {"arrival_kind": "transversal"})
+
+
+def test_arrival_kind_is_declared_where_it_is_available():
+    """The foolproofing map knows the key is read here and supplied there."""
+    from transversal.services.conditions import condition_context_keys, context_keys_for
+
+    cond = Condition(type=ConditionType.ARRIVAL_KIND, target="move")
+    assert condition_context_keys(cond) == frozenset({"arrival_kind"})
+    available = context_keys_for(trigger="on_location_change")
+    assert available is not None and "arrival_kind" in available

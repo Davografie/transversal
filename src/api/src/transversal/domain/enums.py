@@ -73,6 +73,33 @@ class TransversalType(str, Enum):
     CONSCIOUSNESS = "consciousness"
     INAPPOSITE = "inapposite"
 
+
+class ArrivalKind(str, Enum):
+    """How an entity came to be where it now is.
+
+    Carried on every location change — in the SSE payload and in the SFX event
+    context — so a rule (or the viewer) can tell a portal from a step up the
+    hierarchy, a direct placement, or being moved by an effect.
+    """
+    TRANSVERSAL = "transversal"  # through a portal / cross-boundary travel
+    HIERARCHY = "hierarchy"      # up or down a sub-location (`super` edge)
+    MOVE = "move"                # direct relocation (GM drag, panel, placement)
+    EFFECT = "effect"            # an effect action moved them
+
+    @classmethod
+    def parse(cls, value: object, default: "ArrivalKind") -> str:
+        """The arrival-kind *value* for an API input, falling back to ``default``.
+
+        Returns the plain string — the wire currency. A str-Enum member would
+        stringify as ``"ArrivalKind.MOVE"``, which is never what belongs in an
+        event context.
+        """
+        try:
+            return cls(str(value or "").strip().lower()).value
+        except ValueError:
+            return default.value
+
+
 class RollKind(str, Enum):
     """What kind of roll a dice pool represents.
 
@@ -158,6 +185,7 @@ class ConditionType(str, Enum):
     SOURCE_RATING = "source_rating"      # the source trait-setting's rating (dice) vs a die threshold
     HIGH_STAKES = "high_stakes"          # target = "high" | "low"; the contest in play is high-stakes
     TARGET_PATH = "target_path"          # a targeting path (spec) resolves non-empty; source-aware predicate
+    ARRIVAL_KIND = "arrival_kind"        # target = how they arrived (transversal/hierarchy/move/effect); reads context
 
 class RollTableScheme(str, Enum):
     """How a roll table selects an entry."""

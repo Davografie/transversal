@@ -544,3 +544,19 @@ def test_the_effect_die_comparison_pair_reads_symmetrically():
     assert effect_text(Effect(type="modify_trait", action="increase_by_effect",
                               target="trait-fire"), resolve=resolve) == \
         "increase the Fire trait by the effect die"
+
+
+def test_arrival_conditions_read_as_the_moment():
+    """Each arrival kind names the way they got there, not the raw token."""
+    cases = {
+        "transversal": "you arrived through a portal",
+        "hierarchy": "you arrived through the location hierarchy",
+        "move": "you were placed here",
+        "effect": "an effect moved you here",
+    }
+    for kind, expected in cases.items():
+        cond = Condition(type=ConditionType.ARRIVAL_KIND, target=kind)
+        assert condition_text(cond, resolve=resolve) == expected, kind
+    # An unknown token still reads as something, naming it.
+    assert condition_text(Condition(type=ConditionType.ARRIVAL_KIND, target="bogus")) == \
+        'you arrived as "bogus"'

@@ -21,19 +21,29 @@ def _publish_to_sessions(event: StreamEvent) -> None:
             event=event.event, session_id=s.id, data=event.data))
 
 
-def _publish_location_changed(entity: Entity, old_location: Optional[str], old_universe: str) -> None:
-    """Publish a location_changed event when an entity's active location/universe moved."""
+def _publish_location_changed(entity: Entity, old_location: Optional[str], old_universe: str,
+                              arrival_kind: str = "move") -> None:
+    """Publish a location_changed event when an entity's active location/universe moved.
+
+    ``arrival_kind`` says *how* they got there (:class:`ArrivalKind`). It rides
+    the SSE payload and the SFX event context, so a rule can tell a portal from a
+    GM placement or a step up the hierarchy.
+    """
     if entity.current_location == old_location and entity.current_universe == old_universe:
         return
+    kind = str(getattr(arrival_kind, "value", arrival_kind))
     _publish_to_sessions(StreamEvent(
         event="location_changed",
         data={"entity_id": entity.id, "from": old_location or "",
-              "to": entity.current_location or "", "universe": entity.current_universe},
+              "to": entity.current_location or "", "universe": entity.current_universe,
+              "arrival_kind": kind},
     ))
     from transversal.services.scheduled_events import dispatch_event
     dispatch_event(None, "location_changed", entity_id=entity.id, universe=entity.current_universe,
-                   context={"from_location": old_location, "to_location": entity.current_location, "universe": entity.current_universe})
+                   context={"from_location": old_location, "to_location": entity.current_location,
+                            "universe": entity.current_universe, "arrival_kind": kind})
 from transversal.domain import (
+    ArrivalKind,
     CharacterView,
     Effect,
     EffectTiming,
@@ -327,7 +337,7 @@ class EntityManager:
         entity.current_universe = proj.universe
         entity.current_location = proj.current_location
         result = self.repo.update_entity(entity)
-        _publish_location_changed(entity, old_location, old_universe)
+        _publish_location_changed(entity, old_location, old_universe, ArrivalKind.TRANSVERSAL.value)
         _record_transversal(
             self.repo, entity.id, entity.name,
             old_location, entity.current_location, entity.current_universe,
@@ -342,6 +352,7 @@ class EntityManager:
         location: str,
         transversal_type: str = "inapposite",
         projection_policy: Optional[str] = None,
+        arrival_kind: str = ArrivalKind.TRANSVERSAL.value,
     ) -> Entity:
         """Relocate an entity across a boundary through the unified travel effect.
 
@@ -375,7 +386,7 @@ class EntityManager:
 
         from transversal.services.effects_commit import commit_effects
 
-        commit_effects(entity, [effect], self.repo)
+        commit_effects(entity, [effect], self.repo, arrival_kind=arrival_kind)
 
         _record_transversal(
             self.repo, entity.id, entity.name,
@@ -485,7 +496,8 @@ class EntityManager:
     # ── Locations ─────────────────────────────────────
 
     def move_to(self, entity: Entity, location: str, universe: Optional[str] = None,
-                session_id: Optional[str] = None) -> Entity:
+                session_id: Optional[str] = None,
+                arrival_kind: str = ArrivalKind.MOVE.value) -> Entity:
         old_location = entity.current_location
         old_universe = entity.current_universe
 
@@ -532,12 +544,21 @@ class EntityManager:
             from transversal.services.state_events import fire_projection_created
             fire_projection_created(entity.id, new_universe, proj.id)
 
+        kind = str(getattr(arrival_kind, "value", arrival_kind))
         event = StreamEvent(
             event="location_changed",
             data={"entity_id": entity.id, "from": old_location, "to": location,
-                  "universe": entity.current_universe},
+                  "universe": entity.current_universe, "arrival_kind": kind},
         )
         _publish_to_sessions(event)
+        # A move is an arrival too: dispatch it so a state SFX can react (this
+        # path used to publish to the viewer only, so nothing ever fired).
+        from transversal.services.scheduled_events import dispatch_event
+        dispatch_event(self.repo, "location_changed", entity_id=entity.id,
+                       universe=entity.current_universe,
+                       context={"from_location": old_location, "to_location": location,
+                                "universe": entity.current_universe,
+                                "arrival_kind": kind})
 
         _record_transversal(
             self.repo, entity.id, entity.name,

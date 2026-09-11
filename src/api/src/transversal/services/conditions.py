@@ -90,6 +90,14 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         stakes = bool((context or {}).get("high_stakes"))
         return stakes if (condition.target or "high").strip() != "low" else not stakes
 
+    if condition.type == ConditionType.ARRIVAL_KIND:
+        # How the entity arrived, carried on the location-change event (see
+        # :class:`ArrivalKind`). Unset — a fire that isn't an arrival, or an older
+        # caller — matches nothing, so a gate on "arrived through a portal" can't
+        # pass on a roll.
+        wanted = (condition.target or "").strip()
+        return bool(wanted) and (context or {}).get("arrival_kind") == wanted
+
     if condition.type == ConditionType.ROLL_TIER:
         from transversal.domain import OutcomeTier
 
@@ -396,6 +404,7 @@ TRIGGER_CONTEXT_KEYS: dict[str, frozenset[str]] = {
     "on_contest_win": frozenset({"contest_winner", "effect_die", "high_stakes"}),
     "on_contest_loss": frozenset({"contest_winner", "effect_die", "high_stakes"}),
     "on_give_in": frozenset({"gave_in", "high_stakes"}),
+    "on_location_change": frozenset({"from_location", "to_location", "universe", "arrival_kind"}),
     "on_beat": _EMPTY,
     "on_scene": _EMPTY,
     "on_session_start": _EMPTY,
@@ -456,6 +465,8 @@ def condition_context_keys(condition: Condition) -> frozenset[str]:
         return frozenset({"high_stakes"})
     if ctype == ConditionType.HITCH:
         return frozenset({"hitch"})
+    if ctype == ConditionType.ARRIVAL_KIND:
+        return frozenset({"arrival_kind"})
     if ctype == ConditionType.TARGET_PATH:
         spec = condition.spec
         if spec is not None and any(
@@ -482,6 +493,7 @@ CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
     ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in"), requires_context_any_of=("contest_winner", "gave_in")),
     ConditionTypeDef(ConditionType.HITCH.name, "Hitch", requires_context_any_of=("hitch",)),
     ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low"), requires_context_any_of=("high_stakes",)),
+    ConditionTypeDef(ConditionType.ARRIVAL_KIND.name, "Arrival kind", needs_target=True, target_placeholder="arrival", target_options=("transversal", "hierarchy", "move", "effect"), requires_context_any_of=("arrival_kind",)),
     ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<"), requires_context_any_of=("tier",)),
     ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",)),
     ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",)),

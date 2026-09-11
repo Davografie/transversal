@@ -4,6 +4,7 @@ import pytest
 
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
+    ArrivalKind,
     Attunement,
     AttunementScope,
     CharacterView,
@@ -554,3 +555,60 @@ def test_origin_universe_from_key_handles_suffix():
     assert _origin_universe_from_key("character-1:earth") == "earth"
     assert _origin_universe_from_key("character-1:earth:2") == "earth"
     assert _origin_universe_from_key("x") == ""
+
+
+class TestArrivalKind:
+    """How an entity arrived rides the location-change event (see ``ArrivalKind``).
+
+    The table needs to tell a portal from a step up the hierarchy, a placement,
+    and an effect-driven move — so the kind is part of the event context, not
+    something a consumer has to infer from the endpoints.
+    """
+
+    def _captured(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(
+            "transversal.services.scheduled_events.dispatch_event",
+            lambda repo, event_type, **kw: seen.append(kw.get("context") or {}),
+        )
+        return seen
+
+    def test_move_reports_move(self, em, kael, monkeypatch):
+        seen = self._captured(monkeypatch)
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        em.move_to(kael, loc.id)
+        assert seen, "a move is an arrival: it must dispatch"
+        assert seen[-1]["arrival_kind"] == "move"
+
+    def test_move_can_declare_the_hierarchy(self, em, kael, monkeypatch):
+        seen = self._captured(monkeypatch)
+        loc = em.create(name="Cellar", entity_type=EntityType.LOCATION, universe="earth")
+        em.move_to(kael, loc.id, arrival_kind=ArrivalKind.HIERARCHY)
+        assert seen[-1]["arrival_kind"] == "hierarchy"
+
+    def test_travel_reports_transversal(self, em, kael, monkeypatch):
+        seen = self._captured(monkeypatch)
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        em.travel(kael.id, loc.id, transversal_type="inapposite")
+        assert seen and seen[-1]["arrival_kind"] == "transversal"
+
+    def test_an_effect_driven_move_reads_as_effect(self, em, kael, monkeypatch):
+        seen = self._captured(monkeypatch)
+        loc = em.create(name="Aviary Peak", entity_type=EntityType.LOCATION, universe="three_realms")
+        from transversal.domain import Effect, EffectTiming
+
+        effect = Effect(timing=EffectTiming.IMMEDIATE, type="travel", action="move", target=loc.id)
+        from transversal.services.effects_commit import commit_effects
+
+        commit_effects(kael, [effect], em.repo)
+        assert seen and seen[-1]["arrival_kind"] == "effect"
+
+    def test_the_kind_reaches_the_condition_layer(self, monkeypatch):
+        """End to end: the dispatched context is what an ``ArrivalKind`` gate reads."""
+        from transversal.domain import ArrivalKind, Condition, ConditionType
+        from transversal.services.conditions import evaluate_condition
+
+        gate = Condition(type=ConditionType.ARRIVAL_KIND, target=ArrivalKind.TRANSVERSAL.value)
+        assert evaluate_condition(None, gate, None, {"arrival_kind": "transversal"})
+        assert not evaluate_condition(None, gate, None, {"arrival_kind": "move"})
+        assert not evaluate_condition(None, gate, None, {})

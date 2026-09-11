@@ -9,7 +9,7 @@ entities by id, so the in-memory entity stays authoritative.
 from __future__ import annotations
 
 from transversal.api.sse.bus import StreamEvent, event_bus
-from transversal.domain import Effect, Entity, dice_list_to_rating
+from transversal.domain import ArrivalKind, Effect, Entity, dice_list_to_rating
 from transversal.services.effects_applier import EffectsResult, apply_effects
 from transversal.services.scene_state import resync_pool_dice_for_trait
 from transversal.services.session_manager import session_manager
@@ -37,12 +37,16 @@ def _publish_trait_changed(ts, universe: str) -> None:
                    context={"trait": ts.trait_id, "traitset": ts.traitset_id})
 
 
-def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None, source=None, source_element: str | None = None) -> EffectsResult:
+def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None, source=None, source_element: str | None = None, arrival_kind: str | None = None) -> EffectsResult:
     """Apply effects in-memory, then persist and broadcast.
 
     Returns the EffectsResult so callers can report what was applied. The caller
     is responsible for having loaded a fresh `entity`; this function persists the
     mutated entity plus any produced trait settings and relationship edges.
+
+    ``arrival_kind`` only matters when the effects *move* the entity: it labels
+    how they arrived (see :class:`ArrivalKind`). Defaults to ``effect`` — an
+    effect moved them — which a caller that knows better (a portal, say) overrides.
     """
     old_razmerit = entity.razmerit
     old_location = entity.current_location
@@ -99,15 +103,18 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
         repo.delete_projection(proj.id)
 
     if entity.current_location != old_location or entity.current_universe != old_universe:
+        kind = str(getattr(arrival_kind, "value", arrival_kind) or ArrivalKind.EFFECT.value)
         _publish("location_changed", {
             "entity_id": entity.id,
             "from": old_location or "",
             "to": entity.current_location or "",
             "universe": entity.current_universe,
+            "arrival_kind": kind,
         })
         from transversal.services.scheduled_events import dispatch_event
         dispatch_event(repo, "location_changed", entity_id=entity.id, universe=entity.current_universe,
-                       context={"from_location": old_location, "to_location": entity.current_location, "universe": entity.current_universe})
+                       context={"from_location": old_location, "to_location": entity.current_location,
+                                "universe": entity.current_universe, "arrival_kind": kind})
 
     # Trait settings produced by the applier.
     for ts in result.new_trait_settings:

@@ -87,6 +87,15 @@ _CONTAINS_WORDS = {
     "tags": "tagged",
 }
 
+# How an arrival reads on the card (``ConditionType.ARRIVAL_KIND``), keyed by
+# :class:`ArrivalKind` value. An unknown value falls back to naming it.
+_ARRIVAL_PHRASES = {
+    "transversal": "you arrived through a portal",
+    "hierarchy": "you arrived through the location hierarchy",
+    "move": "you were placed here",
+    "effect": "an effect moved you here",
+}
+
 _ELEMENT_NOUNS = {
     "die": "die",
     "traitsetting": "trait instance",
@@ -735,6 +744,9 @@ def condition_text(condition: Condition, *, resolve: NameResolver | None = None,
     if ctype == ConditionType.HIGH_STAKES:
         return "the contest is not high stakes" if (condition.target or "high").strip() == "low" \
             else "the contest is high stakes"
+    if ctype == ConditionType.ARRIVAL_KIND:
+        return _ARRIVAL_PHRASES.get((condition.target or "").strip(),
+                                    f"you arrived as \"{target}\"")
     if ctype == ConditionType.ROLL_TIER:
         return f"the roll is {op} {value}"
     if ctype == ConditionType.TEST_OUTCOME:

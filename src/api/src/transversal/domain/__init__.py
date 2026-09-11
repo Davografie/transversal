@@ -30,6 +30,7 @@ from transversal.domain.enums import (  # noqa: F401
     OutcomeTier,
     EntityType,
     TransversalType,
+    ArrivalKind,
     RollKind,
     ContestWinner,
     EffectTiming,
