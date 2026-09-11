@@ -81,6 +81,12 @@ A "holder" is the umbrella: anything that can carry SFX references.
    portal config) until a concrete reuse need appears; converting them to SFX-id
    holders is possible but adds indirection for marginal gain today.
 
+> [!note] Location and universe rows are the open question
+> Table 1 shows `location` and `universe` with no owner surface and no source
+> kind — and that is why a rule attached to a place silently never fires. The
+> design that fills those rows (owner vs **audience**) is in
+> [[Place-Owned Rules]].
+
 ## Related
 
 - [[Effect Output Variables]] — the typed-variable work this feeds.
