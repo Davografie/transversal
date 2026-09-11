@@ -97,6 +97,7 @@ type TraitRef {
   defaultRatingType: RatingType!
   polarity: Polarity
   possibleSfxIds: [ID!]!
+  tags: [String!]!
 }
 
 type TraitSetRef {

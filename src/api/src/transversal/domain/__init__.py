@@ -367,6 +367,7 @@ class Trait(BaseModel):
     name: str
     universes: list[str] = Field(default_factory=list)
     traitset_id: str
+    tags: list[str] = Field(default_factory=list)  # free-form labels a condition/target can match on (e.g. "violent")
     default_die_type: DieType = DieType.D6
     default_rating_type: RatingType = RatingType.STATIC
     required_trait_ids: list[str] = Field(default_factory=list)

@@ -250,6 +250,7 @@ Registry of all possible traits per universe. Shared definitions — not per-ent
 | `name` | string | ✅ | Display name (e.g. `Hacking`, `Qi Reserves`) |
 | `universes` | string[] | ✅ | Universe keys where this trait exists |
 | `traitset_id` | string | ✅ | `_key` of parent traitset |
+| `tags` | string[] | | Free-form labels a condition or targeting path can match on (e.g. `violent`) |
 | `default_die_type` | DieType | | Die for untrained/new entities (default `d6`) |
 | `default_rating_type` | RatingType | | Rating behaviour (default `static`) |
 | `polarity` | Polarity? | | Default polarity override (null = inherit traitset) |

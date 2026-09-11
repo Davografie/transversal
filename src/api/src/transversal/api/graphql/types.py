@@ -112,6 +112,7 @@ class TraitRef:
     possible_subtrait_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     possible_subtraitset_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_ego: bool = False
+    tags: list[str] = strawberry.field(default_factory=list)
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayName] = strawberry.field(default_factory=list)
 
@@ -142,6 +143,7 @@ class TraitSetRef:
                 possible_subtrait_ids=t.possible_subtrait_ids,
                 possible_subtraitset_ids=t.possible_subtraitset_ids,
                 default_ego=t.default_ego,
+                tags=t.tags,
                 polarity=t.polarity,
                 display_names=[
                     TraitDisplayName(name=dn.name, universe=dn.universe,
@@ -676,6 +678,7 @@ class TraitInput:
     possible_subtraitset_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     default_ego: bool = False
+    tags: list[str] = strawberry.field(default_factory=list)
     polarity: Optional[Polarity] = None
     display_names: list[TraitDisplayNameInput] = strawberry.field(default_factory=list)
 
@@ -692,6 +695,7 @@ class TraitUpdateInput:
     possible_subtraitset_ids: Optional[list[strawberry.ID]] = None
     default_sfx_ids: Optional[list[strawberry.ID]] = None
     default_ego: Optional[bool] = None
+    tags: Optional[list[str]] = None
     polarity: Optional[Polarity] = None
     clear_polarity: bool = False
     display_names: Optional[list[TraitDisplayNameInput]] = None

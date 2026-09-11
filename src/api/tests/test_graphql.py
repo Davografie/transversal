@@ -34,6 +34,24 @@ def _gql(client, query: str, variables: dict | None = None):
 
 
 class TestGraphQLQueries:
+    def test_trait_tags_round_trip(self, client):
+        """Tags survive create → read (B116: a trait can carry tags)."""
+        created = _gql(client, """
+            mutation {
+              createTrait(input: {id: "trait-tagged-test", name: "Protective Anger",
+                                 universes: ["earth"], traitsetId: "ts-earth-skills",
+                                 tags: ["violent", "emotion"]}) { id tags }
+            }
+        """)["createTrait"]
+        assert created["tags"] == ["violent", "emotion"]
+
+        # and they come back out of the registry query
+        listed = _gql(client, """
+            query { traitsByUniverse(universe: "earth") { id tags } }
+        """)["traitsByUniverse"]
+        row = next(t for t in listed if t["id"] == "trait-tagged-test")
+        assert row["tags"] == ["violent", "emotion"]
+
     def test_traits_by_universe(self, client):
         result = _gql(client, """
             query { traitsByUniverse(universe: "earth") { id name } }

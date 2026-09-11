@@ -233,6 +233,7 @@ def _trait_to_gql(t) -> TraitRef:
         possible_subtrait_ids=t.possible_subtrait_ids,
         possible_subtraitset_ids=t.possible_subtraitset_ids,
         default_ego=t.default_ego,
+        tags=list(t.tags or []),
         polarity=t.polarity,
         display_names=[
             GqlTraitDisplayName(name=dn.name, universe=dn.universe, ratings=dn.ratings)
@@ -1690,6 +1691,7 @@ class Mutation:
             possible_subtraitset_ids=[str(s) for s in input.possible_subtraitset_ids],
             default_sfx_ids=[str(s) for s in input.default_sfx_ids],
             default_ego=input.default_ego,
+            tags=[str(s) for s in (input.tags or [])],
             polarity=input.polarity,
             display_names=[
                 DomainTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -1708,6 +1710,7 @@ class Mutation:
             possible_subtrait_ids=created.possible_subtrait_ids,
             possible_subtraitset_ids=created.possible_subtraitset_ids,
             default_ego=created.default_ego,
+            tags=list(created.tags or []),
             polarity=created.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
@@ -1743,6 +1746,8 @@ class Mutation:
             existing.default_sfx_ids = [str(s) for s in input.default_sfx_ids]
         if input.default_ego is not None:
             existing.default_ego = input.default_ego
+        if input.tags is not None:
+            existing.tags = [str(s) for s in input.tags]
         if input.clear_polarity:
             existing.polarity = None
         elif input.polarity is not None:
@@ -1774,6 +1779,7 @@ class Mutation:
             possible_subtrait_ids=updated.possible_subtrait_ids,
             possible_subtraitset_ids=updated.possible_subtraitset_ids,
             default_ego=updated.default_ego,
+            tags=list(updated.tags or []),
             polarity=updated.polarity,
             display_names=[
                 GqlTraitDisplayName(name=dn.name, universe=dn.universe,
