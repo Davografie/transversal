@@ -33,9 +33,10 @@ Living interaction-design reference for the Transversal frontend. Captures the c
 ## Shared primitives
 
 The reusable UI set lives in `src/frontend/src/components/ui/`: `GmList`/
-`GmListItem`, `TargetPicker`/`SearchDropdown`, `Button`, `DangerButton`. (The
-`gm/` folder keeps the GM-specific panels, which compose these primitives.)
-New surfaces should compose the primitives instead of re-styling raw elements.
+`GmListItem`, `TargetPicker`/`SearchDropdown`, `Button`, `DangerButton`,
+`TagInput`, `TraitInstanceEditor`. (The `gm/` folder keeps the GM-specific
+panels, which compose these primitives.) New surfaces should compose the
+primitives instead of re-styling raw elements.
 
 ### Button
 
@@ -151,6 +152,32 @@ character sheet, blue book), the GM action rails (`.section-btn`,
 `.cancel-btn`, `.shortcut-btn`), canvas and location-viewer buttons.
 Segmented controls (mode/media-quality toggles) are not buttons — a
 `SegmentedControl` primitive is the right follow-up for those.
+
+### Trait instance editor
+
+One editor for a trait's rating, shared by the [[Character sheet]] (the drill-in
+trait editor) and the effect form's *Gain Trait* action — see
+`components/ui/TraitInstanceEditor.vue`.
+
+- **Controlled, host owns persistence.** Every field is a `v-model`
+  (`ratingType`, `dice`, `capacity`, `die`, `polarity`, `statement`, `notes`) and
+  each edit also emits `change` **naming the field**, so a host can save live
+  (the sheet: debounced for text, immediate for dice/rating) or hold a draft
+  (the effect form). `recover-die` and `field-blur` cover the sheet's extra
+  affordances.
+- **Rating type is canonical uppercase** (`STATIC` / `RESOURCE` / `CHALLENGE` /
+  `EMPTY`); hosts that speak lowercase (the effect form) adapt at the boundary.
+- **Two modes.** `mode="array"` gives a row of die chips plus the popup
+  `DiePicker` (dice, capacity, and the recoverable spent dice for `RESOURCE`);
+  `mode="single"` gives one inline picker with an optional `Die`/`Variable`
+  toggle for effects. The sheet hides polarity (`show-polarity="false"`) because
+  its own Type block owns ego/morph, projection and polarity together.
+- **Two skins.** `variant="panel"` is bare sections for the sheet's full-panel
+  view; `variant="box"` is the compact bordered chrome used inside editor forms.
+- **Extras ride slots:** `after-dice` (SFX chips), `after-fields` (ego/morph,
+  projection, sub-traits) and `actions` (Done/Delete). Slot markup is compiled in
+  the host's scope, so host-scoped styles still apply to it — the sheet's
+  `.edit-field` / `.edit-label` rules stay where they are.
 
 ## Character sheet
 
