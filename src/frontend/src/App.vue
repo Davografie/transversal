@@ -1,5 +1,5 @@
 <template>
-  <div class="sse-indicator" :class="[connected ? 'shape-circle' : 'shape-triangle', { pulse: ssePulse }]" :title="connected ? 'SSE connected' : (error || 'SSE disconnected')"></div>
+  <SseIndicator :connected="connected" :pulse="ssePulse" :error="error" />
   <button v-if="gmMode && playerId && !showLoginOverlay" class="settings-btn" @click="openSettings" title="Player settings">↩</button>
   <!-- Login / Settings overlay -->
   <div v-if="showLoginOverlay" class="name-entry panel" @click.self="dismissOverlay">
@@ -313,13 +313,13 @@
       <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @click="setMobileFocus('location')"></div>
     </div>
     <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, dragging: occupantDragging && !isMobile }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
-      <div v-if="(wrapperOpen || mobileStackActive) && peers.length" class="peers-bar">
-        <button v-for="p in peers" :key="p.id" class="peer-chip" :class="{ assumed: isPeerAssumed(p), viewing: isPeerViewed(p) }" @click.stop="onPeerClick(p.id)" :title="p.name">
-          <MediaImage v-if="p.sheetImage" :src="p.sheetImage" class="peer-img" alt="" />
-          <span v-else class="peer-avatar">{{ p.name.charAt(0) }}</span>
-          <span class="peer-label">{{ p.name }}</span>
-        </button>
-      </div>
+      <PeersBar
+        v-if="(wrapperOpen || mobileStackActive) && peers.length"
+        :peers="peers"
+        :assumed-id="entityId"
+        :viewed-id="viewingEntityId"
+        @select="onPeerClick"
+      />
       <div class="sheet-band">
         <CharacterSheet
           v-show="(mobileStackActive || (sheetVisible && (phase === 'adding' || forceSheet))) && (!gmMode || entityId || viewingEntityId)"
@@ -380,6 +380,8 @@ import ArmedSfxRail from './components/ArmedSfxRail.vue'
 import GmPanel from './components/GmPanel.vue'
 import PanelStack from './components/gm/PanelStack.vue'
 import RelationalCanvas from './components/canvas/RelationalCanvas.vue'
+import SseIndicator from '@/components/app/SseIndicator.vue'
+import PeersBar from '@/components/app/PeersBar.vue'
 import MediaImage from './components/MediaImage.vue'
 import RazmeritWaves from './components/RazmeritWaves.vue'
 import ResonanceLab from './components/ResonanceLab.vue'
@@ -1129,8 +1131,6 @@ function onInspectEntity(id) {
 // Peer-chip styling states, deliberately distinct:
 //   assumed — you ARE this entity (entityId) → solid fill
 //   viewing — you are peeking at it (viewingEntityId) → outlined
-function isPeerAssumed(p) { return !!entityId.value && p.id === entityId.value }
-function isPeerViewed(p) { return !!viewingEntityId.value && p.id === viewingEntityId.value }
 
 async function onPeerClick(id) {
   if (gmMode.value) {
@@ -2473,60 +2473,6 @@ watch(gmMode, (v) => {
 </script>
 
 <style scoped>
-.peers-bar {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 4px 8px;
-  scrollbar-width: none;
-}
-.peers-bar::-webkit-scrollbar { display: none; }
-.peer-chip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  padding: 3px 10px 3px 4px;
-  border-radius: 16px;
-  background: var(--bg-panel);
-  border: 1px solid var(--overlay-8);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.peer-chip:hover { border-color: var(--overlay-20); }
-/* You ARE this entity — solid fill. */
-.peer-chip.assumed {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
-/* You are peeking at this entity (inspect) — highlight border only, no fill. */
-.peer-chip.viewing {
-  border-color: var(--accent);
-}
-.peer-img, .peer-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.peer-avatar {
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.peer-label {
-  font-size: 12px;
-  white-space: nowrap;
-  color: var(--text-dim);
-}
-.peer-chip.assumed .peer-label { color: var(--text); }
-.peer-chip.viewing .peer-label { color: var(--text-dim); }
-
 .support-chip.support-unavailable { opacity: 0.45; cursor: not-allowed; }
 .support-chip.support-current { border-color: var(--accent); }
 .support-main { font-size: 10px; }
