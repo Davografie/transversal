@@ -240,6 +240,22 @@ Tunable constants:
 | `PANEL_DRAG_VELOCITY` | App.vue | flick px/ms that triggers open/close | 0.5 |
 | `PANEL_DRAG_SLOP` | DiceRoller.vue | dead-zone px before a touch is a drag | 8 |
 
+
+**Panel position is stateless (B48).** The desktop sheet's closed offset lives in
+`--panel-closed-y` on `.dice-panel-wrapper`, and the `.open` class sets
+`transform` itself:
+
+```css
+.dice-panel-wrapper      { transform: translateX(-50%) translateY(var(--panel-closed-y, 0px)); }
+.dice-panel-wrapper.open { transform: translateX(-50%) translateY(0); }
+```
+
+The closed offset used to be written as an **inline** `transform`, which beats a
+class rule — so any code path that opened the panel (the sheet/peer/perspective
+handlers set `sheetVisible = true`) without clearing that inline style left the
+panel sitting at the 56px peek while the app believed it was open ("the
+DiceRoller is sometimes hardly visible"). Only a live drag sets an inline
+transform now, and both `openPanel()` and `closePanel()` clear it.
 ### Result/effect slots
 
 - Slots are **draggable** (mouse + touch), just like pool dice.

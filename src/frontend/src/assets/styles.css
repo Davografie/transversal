@@ -871,7 +871,13 @@ select option {
   position: fixed;
   bottom: 0;
   left: 50%;
-  transform: translateX(-50%);
+  /* Closed offset comes from --panel-closed-y (set by syncClosedPosition when
+     the panel is closed). Keeping it in a custom property rather than an
+     inline `transform` means the `.open` rule below always wins — an inline
+     transform used to override it, so any code path that opened the panel
+     without clearing that style left it stuck at the closed peek. Only a drag
+     sets an inline transform now, and both open and close clear it. */
+  transform: translateX(-50%) translateY(var(--panel-closed-y, 0px));
   z-index: 9;
   width: min(400px, calc(100vw - 32px));
   display: flex;

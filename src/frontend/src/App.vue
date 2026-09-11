@@ -1205,7 +1205,7 @@ const documentDragging = ref(false)
 
 function openPanel() {
   hoverOpen.value = true
-  // Clear inline transform so .open class translateY(0) takes over
+  // Drop any inline transform left by a drag so the .open class takes over
   if (wrapperEl.value) wrapperEl.value.style.transform = ''
   if (sheetTimer) clearTimeout(sheetTimer)
   sheetTimer = setTimeout(() => { sheetVisible.value = true }, 300)
@@ -1218,7 +1218,8 @@ function closePanel() {
   if (diceRef.value) diceRef.value.panelOpen = false
   if (sheetTimer) { clearTimeout(sheetTimer); sheetTimer = null }
   if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
-  // Set peek position after DOM updates
+  // Drop the drag transform, then re-measure the closed offset after layout
+  if (wrapperEl.value) wrapperEl.value.style.transform = ''
   nextTick(() => syncClosedPosition())
 }
 
@@ -1235,7 +1236,9 @@ const panelDragState = { active: false, wasOpen: false, startOffset: 0 }
 function syncClosedPosition() {
   if (mobileStackActive.value || !wrapperEl.value) return
   const h = wrapperEl.value.offsetHeight
-  wrapperEl.value.style.transform = `translateX(-50%) translateY(${h - PANEL_CLOSED_PEEK}px)`
+  // The closed offset lives in a custom property: the `.open` class sets
+  // `transform` itself, so opening always wins over a stale closed offset.
+  wrapperEl.value.style.setProperty('--panel-closed-y', `${h - PANEL_CLOSED_PEEK}px`)
 }
 
 function onPanelDragStart() {
@@ -1253,6 +1256,7 @@ function onPanelDrag(dy) {
   if (!el || !panelDragState.active) return
   const closedOffset = Math.max(0, el.offsetHeight - PANEL_CLOSED_PEEK)
   const offset = Math.max(0, Math.min(closedOffset, panelDragState.startOffset + dy))
+  // Inline on purpose: a live drag must beat both the class and the variable.
   el.style.transform = `translateX(-50%) translateY(${offset}px)`
 }
 
