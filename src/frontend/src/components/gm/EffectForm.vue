@@ -75,6 +75,7 @@
             :kind="selectedAction.targetKind"
             :scope="literalTargetScope"
             :filter="newEffect.targetFilter"
+            :allow-filters="false"
             :action="selectedAction.effectAction"
             :placeholder="`Pick ${selectedAction.targetKind}…`"
             @update:model-value="onTargetPicked(f, $event)"

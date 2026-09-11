@@ -32,6 +32,7 @@
         :scope="current.scope || ''"
         :action="current.effect?.action || ''"
         :filter="current.filter || null"
+        :allow-filters="false"
         :entity-id="targetEntityId"
         :placeholder="`Choose ${current.kind}…`"
         allow-random

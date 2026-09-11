@@ -224,6 +224,27 @@ for a raw `<select>` (that was the point of **B47**).
 - **GM-specific**: `gm/UniversePicker`, `gm/GmScopePicker`, `gm/GmSfxPickerPanel`
   (sfx/scope picking inside effect authoring).
 
+### Picker filters
+
+`TargetPicker` offers **result filters** behind a ⚙ button (B47): the backend
+describes which candidate fields can narrow a kind (`targetFilterFields`:
+`field` / `label` / `valueType` / `kinds` / `options`), and the picker renders
+the applicable ones as a small popout — checkbox for `boolean`, select for a
+field with `options`, text otherwise. Selections merge over the `filter` prop
+and ride along with every candidate lookup; the button carries a count badge and
+a Clear, and it only appears when the kind actually has filter fields.
+
+Because the vocabulary is server-sourced, **new filter fields show up in every
+picker without a frontend change** — that is the point: broadening what can be
+filtered is a backend `FILTER_FIELDS` entry, not a UI project.
+
+Today that vocabulary is thin (`starter_location` for locations; `type` for
+entity/occupant). The richer facets asked for — trait set, default rating, "this
+entity has an instance", parent location, location traits — are **backend
+fields**, not UI work. Callers that build their own filter UI (the effect form,
+the target wizard) pass `:allow-filters="false"` so filters appear exactly once
+per surface.
+
 **Not yet using it:** the GM panels still hand-roll `<select>`s where a search
 would be better (`TargetSpecBuilder` has 15, `EffectForm` 10, the trait panels
 8 each) — each panel owner's call, since some are genuinely short enumerations.
