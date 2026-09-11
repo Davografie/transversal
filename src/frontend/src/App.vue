@@ -1992,6 +1992,34 @@ function selectCharacter(e) {
 }
 
 
+async function assumeSupport(sc) {
+  if (!playerId.value || !sc?.entity?.id) return
+  const scId = sc.entity.id
+  // Take control without claiming (it's a peer's SC): record_control stamps
+  // nothing but broadcasts my own main as inactive. The perspective switch
+  // below re-inits location via the entityId watcher.
+  await fetch(`/api/v1/players/${playerId.value}/control/${scId}`, { method: 'POST' }).catch(() => {})
+  entityId.value = scId
+  fetchSupportCharacters(true)
+  showLoginOverlay.value = false
+}
+
+// B59 — create-from-scratch support cast (SFX → roll table → pick → pay → gain).
+const supportCastMenu = ref(null)  // { tableId, mainEntityId, mainName, mainRazmerit } | null
+
+async function openCreateSupport(mainId) {
+  if (!playerId.value || !mainId) return
+  const tableId = await fetchSupportCastTableId(mainId)
+  if (!tableId) return
+  const data = await graphql(`query($id: ID!) { entity(id: $id) { razmerit } }`, { id: mainId })
+  supportCastMenu.value = {
+    tableId,
+    mainEntityId: mainId,
+    mainName: mainName(mainId),
+    mainRazmerit: data?.entity?.razmerit ?? 0,
+  }
+}
+
 function onSupportCreated() {
   // Refresh the character + support lists so the new SC shows up immediately;
   // the menu stays open so the player sees the "Created X" confirmation and
