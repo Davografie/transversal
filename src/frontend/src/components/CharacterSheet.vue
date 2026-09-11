@@ -287,6 +287,72 @@
           </div>
         </div>
 
+        <!-- Trait detail (read-only) — the row's "elsewhere" click zone.
+             Right-click on the row still opens the editor. -->
+        <div v-else-if="detailTrait && !showAddTrait" class="trait-detail-panel">
+          <Button class="set-back" variant="link" @click="closeTraitDetail">← Back</Button>
+          <h4 class="edit-title">{{ displayName(detailTrait.name) }}</h4>
+          <span v-if="detailTrait.traitsetName" class="detail-set">{{ detailTrait.traitsetName }}</span>
+
+          <div v-if="detailTrait.tags?.length" class="edit-field">
+            <span class="edit-label">Tags</span>
+            <div class="detail-tags">
+              <span v-for="tag in detailTrait.tags" :key="tag" class="detail-tag">{{ tag }}</span>
+            </div>
+          </div>
+
+          <div class="edit-field">
+            <span class="edit-label">Rating</span>
+            <div class="detail-rating">
+              <span class="detail-rating-type">{{ ratingTypeLabel(detailTrait) }}</span>
+              <span class="detail-rating-polarity" :class="{ negative: detailTrait.polarity === 'NEGATIVE' }">{{ detailTrait.polarity === 'NEGATIVE' ? 'negative' : 'positive' }}</span>
+              <span v-if="detailTrait.enabled === false" class="trait-disabled-badge">disabled</span>
+            </div>
+            <div class="detail-dice">
+              <DieIcon v-for="(die, i) in (detailTrait.dice || [])" :key="i" :die="String(die).toLowerCase()" class="trait-die-icon" />
+              <span v-if="challengeProgressLabel(detailTrait)" class="challenge-progress">{{ challengeProgressLabel(detailTrait) }}</span>
+              <span v-if="!(detailTrait.dice || []).length" class="trait-die depleted">unrated</span>
+            </div>
+          </div>
+
+          <div v-if="detailTrait.statement" class="edit-field">
+            <span class="edit-label">Statement</span>
+            <p class="detail-text">{{ detailTrait.statement }}</p>
+          </div>
+
+          <div v-if="detailTrait.notes" class="edit-field">
+            <span class="edit-label">Notes</span>
+            <p class="detail-text">{{ detailTrait.notes }}</p>
+          </div>
+
+          <div v-if="detailTrait.sfxIds?.length" class="edit-field">
+            <span class="edit-label">SFX</span>
+            <div class="sfx-cards">
+              <div
+                v-for="sfxId in detailTrait.sfxIds"
+                :key="sfxId"
+                class="sfx-card"
+                :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
+                :title="sfxTitle(sfxId)"
+                @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, detailTrait.id)"
+              >
+                <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
+                <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="(detailTrait.subTraitSettings || []).length" class="edit-field">
+            <span class="edit-label">Sub-traits</span>
+            <div class="edit-subtraits">
+              <div v-for="st in detailTrait.subTraitSettings" :key="st.id" class="edit-subtrait-row">
+                <span class="edit-subtrait-name">{{ displayName(st.name) }}</span>
+                <span v-if="st.statement" class="edit-subtrait-statement">{{ st.statement }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Traits tab: trait-set list -->
         <div v-else-if="activeSheetView === 'traits' && !activeSetName && traitSets.length && !showAddTrait" class="trait-sets">
           <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
@@ -313,7 +379,7 @@
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
           <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">← {{ activeSetName }}</h4>
             <template v-for="t in currentTraits" :key="t.id">
-              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE', 'trait-disabled': t.enabled === false }" @click="onTraitClick(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
+              <div v-if="isKnown(t)" class="trait-row" :class="{ morph: t.ego === false, 'in-pool': isInPool(t), offered: isOffered(t), 'limit-reached': currentSetReachedLimit && !isInPool(t), negative: t.polarity === 'NEGATIVE', 'trait-disabled': t.enabled === false }" @click="openTraitDetail(t)" @contextmenu.prevent="startEdit(t)" @touchstart="onTouchStart(t)" @touchend="onTouchEnd" @touchmove="onTouchEnd">
                 <div class="trait-left">
                   <span class="trait-name" :class="{ disabled: phase !== 'adding' || isResourceDepleted(t) }">{{ displayName(t.name) }}</span>
                   <span v-if="traitTimerLabel(t)" class="trait-timer" :title="'Re-enables after ' + traitTimerLabel(t)">⏳ {{ traitTimerLabel(t) }}</span>
@@ -335,7 +401,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="trait-right">
+                <div class="trait-right" @click.stop="playTrait(t)" :title="'Play ' + displayName(t.name)">
                   <div v-if="traitDiceGroups(t).length" class="trait-die-groups">
                     <div v-for="(group, gi) in traitDiceGroups(t)" :key="gi" class="trait-die-group">
                       <DieIcon
@@ -410,14 +476,14 @@
                   :key="st.id"
                   class="sub-trait-row"
                   :class="{ 'in-pool': isInPool(st), negative: st.polarity === 'NEGATIVE', 'trait-disabled': st.enabled === false }"
-                  @click="onTraitClick(st)"
+                  @click="openTraitDetail(st)"
                   @contextmenu.prevent
                 >
                   <div class="sub-trait-left">
                     <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || st.enabled === false }">{{ displayName(st.name) }}</span>
                     <span v-if="st.statement" class="sub-trait-statement">{{ st.statement }}</span>
                   </div>
-                  <div class="sub-trait-right">
+                  <div class="sub-trait-right" @click.stop="playTrait(st)" :title="'Play ' + displayName(st.name)">
                     <div v-if="traitDiceGroups(st).length" class="trait-die-groups">
                       <div v-for="(group, gi) in traitDiceGroups(st)" :key="gi" class="trait-die-group">
                         <DieIcon
@@ -994,7 +1060,34 @@ async function addTrait(trait) {
   fetchEntity()
 }
 
-async function onTraitClick(t) {
+// ── Trait detail (read-only) ────────────────────────────────────
+// The row's third click zone. Playing the trait moved to the rating zone; the
+// name / statement / empty space of the row now opens the trait read-only, with
+// its full SFX, notes and tags. `contextmenu` still opens the editor.
+const detailTrait = ref(null)
+
+function openTraitDetail(t) {
+  // A touch long-press fires startEdit on touchstart and the click on release,
+  // so the editor can already be open by the time this runs — don't stack the
+  // detail panel behind it.
+  if (editingTraitId.value) return
+  detailTrait.value = t
+}
+
+function closeTraitDetail() {
+  detailTrait.value = null
+}
+
+// The detail panel sits ahead of the tab branches in the render chain, so a tab
+// change would otherwise leave it covering the newly chosen view.
+watch(activeSheetView, () => { detailTrait.value = null })
+
+function ratingTypeLabel(t) {
+  return RATING_TYPES.find(rt => rt.id === t.ratingType)?.label || t.ratingType || ''
+}
+
+// ── Playing a trait (rating zone) ───────────────────
+async function playTrait(t) {
   if (props.phase !== 'adding') return
   if (t.enabled === false) return  // disabled trait contributes no dice
 
@@ -1338,6 +1431,7 @@ const QUERY = `
         traitsetLimit
         knownTo
         possibleSfxIds
+        tags
         relationshipContactId
         relationshipContactName
         relationshipContactType
@@ -1385,6 +1479,7 @@ const QUERY = `
         traitsetLimit
         knownTo
         possibleSfxIds
+        tags
         relationshipContactId
         relationshipContactName
         relationshipContactType
@@ -1577,6 +1672,7 @@ function startEdit(t) {
     deleteTrait({ id: targetId })
   }
   editingTraitId.value = t.id
+  detailTrait.value = null
   ensureTraitNames()
   editDice.value = (t.dice || []).map(d => d.toLowerCase())
   editCapacity.value = (t.capacity || []).map(d => d.toLowerCase())
@@ -1939,6 +2035,7 @@ async function fetchRelationship() {
           traitsetLimit
           knownTo
           possibleSfxIds
+        tags
           relationshipContactId
           relationshipContactName
           relationshipContactType
@@ -3019,4 +3116,23 @@ watch(() => props.externalPoolSources, (sources) => {
 .pill + .pill { border-left: 1px solid var(--overlay-6); }
 .pill:hover { background: var(--overlay-4); color: var(--text); }
 .pill.active { background: var(--accent-dim); color: var(--text); font-weight: 600; }
+/* ── Trait detail (read-only) ──── */
+.trait-detail-panel { display: flex; flex-direction: column; }
+.detail-set { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+.detail-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.detail-tag {
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-12);
+  border: 1px solid var(--accent-20);
+  color: var(--accent);
+}
+.detail-rating { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.detail-rating-type { font-size: 12px; font-weight: 600; color: var(--text); }
+.detail-rating-polarity { font-size: 11px; color: var(--text-dim); }
+.detail-rating-polarity.negative { color: var(--danger); }
+.detail-dice { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.detail-text { font-size: 12px; color: var(--text); margin: 0; white-space: pre-wrap; }
 </style>

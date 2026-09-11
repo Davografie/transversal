@@ -818,6 +818,18 @@ class TraitSetting:
         return trait.possible_sfx_ids if trait else []
 
     @strawberry.field
+    def tags(self, info: strawberry.Info) -> list[str]:
+        """Registry tags for this trait (B116).
+
+        Tags live on the registry ``Trait``, not on the setting — this surfaces
+        them on the setting the sheet already has, the same way
+        ``possible_sfx_ids`` does.
+        """
+        em = info.context["entity_manager"]
+        trait = em.repo.get_trait(self.trait_id)
+        return trait.tags if trait else []
+
+    @strawberry.field
     def possible_subtrait_ids(self, info: strawberry.Info) -> list[strawberry.ID]:
         """Resolved sub-traits that may be nested under this trait (ids + set refs)."""
         from transversal.services.entity_manager import EntityManager
