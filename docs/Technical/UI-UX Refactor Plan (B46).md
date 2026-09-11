@@ -22,7 +22,7 @@ files move.
 | `App.vue` | 2559 | 1672 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters`, `usePlayerIdentity`, `useCharacterFinder`, `useCharacterSwitch`, `app/LoginPrompt`, `app/IdentitySwitchBlock`, `app/CharacterListBlock`, `app/SupportBlock`, `app/FindCharacterBlock`, `app/ModeAndMediaBlock`, `app/AppearanceBlock` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
-| `components/CharacterSheet.vue` | 3281 | 2390 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard`, `sheet/TraitDetailPanel` |
+| `components/CharacterSheet.vue` | 3281 | 2087 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard`, `sheet/TraitDetailPanel`, `sheet/TraitRow` |
 
 Census taken 2026-09-11 (three read-only recon passes) against a tree that was
 level with `release-build`; the CharacterSheet numbers moved when the trait
@@ -70,6 +70,19 @@ All on 2026-09-11, each verified by build + CDP against the running app.
   guard. Its CSS moved including `.detail-section .sfx-card-rules`, a descendant
   rule that would have silently stopped applying once the span left the
   parent's scope — **watch for those when extracting markup with nested rules**.
+- **`sheet/TraitRow.vue`.** The whole list item — known row, unknown ("???") row
+  and the sub-trait list under a trait — as one presentational component fed by
+  `trait` + an `api` object of functions, plus plain `phase` / `limitReached` /
+  `wrap` props. **The census changed the shape here:** the plan had called the
+  family row-only, but `trait-left/right`, `trait-name` and the `trait-die-*`
+  group are shared with the unknown row and the sub-trait rows — so those three
+  moved together instead of promoting half the sheet into `assets/styles.css`.
+  The profile view's chip layout (the old `.trait-list-wrap .trait-row`
+  descendant pair) became a `wrap` prop with `.trait-row.wrap` rules **inside the
+  component**: a `:deep()` rewrite in the parent would take specificity ties
+  (parent styles inject after child styles) that in-pool/offered/hover/morph must
+  keep winning in wrap mode. All 42 rules moved byte-identically; only the two
+  wrap selectors were renamed.
 
 **Deliberately not extracted:** the roller's consequence panel. Its buttons are
 driven by contest state (`iWon` / `iGaveIn` / taken-out / waiting /
@@ -172,28 +185,24 @@ with `document.elementFromPoint` + sibling index over `.sel-slot` / `.total-slot
 drag code risks double registration; the 383-line scoped style block must follow
 each template slice.
 
-## CharacterSheet.vue (2577, was 3281) — remaining
+## CharacterSheet.vue (2087, was 3281) — remaining
 
-Editor + SFX cards done. What is left is mostly line count rather than sharing:
+Editor, SFX cards, detail panel and list rows all done. What is left is mostly
+line count rather than sharing:
 
 1. ~~**`sheet/TraitDetailPanel.vue`**~~ **done** — with the CSS promotion first
    (`.trait-die*`, `.die-d4..d12`, `.challenge-progress`, `.sfx-cards`,
    `.trait-disabled-badge` now live in `assets/styles.css`; the die colours were
    already duplicated in the GM batch editor). The panel takes the trait + one
    `api` object of functions and emits `back` / `edit`.
-2. **`sheet/TraitRow.vue`** — the list row. Same shape as the detail panel: it
-   brings click / context-menu / long-press handlers and its own class family
-   (`.trait-left`, `.trait-right`, `.trait-name`, `.trait-timer`,
-   `.trait-statement`, `.trait-notes`, `.trait-contact`, `.trait-die-groups*`),
-   all row-only, so the CSS should move with it — **check for descendant rules
-   in the sheet before assuming a pure move**, and pass the ~15 helpers it calls
-   (`isInPool`, `isOffered`, `isKnown`, `canPlayTrait`, `playTrait`,
-   `openTraitDetail`, `startEdit`, `traitTimerLabel`, `traitDiceGroups`,
-   `resourceDiceGroups`, `resourceSpentGroups`, `resolvedDieType`,
-   `resourceDisplay`, `challengeProgressLabel`, `sfxCardModel`, `activateSfx`,
-   `displayName`) as one `api` object plus events.
+2. ~~**`sheet/TraitRow.vue`**~~ **done** — the whole list item (known row,
+   unknown row, sub-trait list) with `api` + `phase`/`limitReached`/`wrap` props;
+   see [[#Slices landed]]. The extraction mutated nothing: the handlers all ride
+   the `api` object, so `@click`/`@contextmenu`/touch long-press behave exactly
+   as before.
 3. **`useSheetData.js`** — fetch/refresh + trait-set splitting, if the script is
-   still unwieldy after the two above.
+   still unwieldy after the two above. The sheet script is ~1000 lines now;
+   this remains the only open slice.
 
 ## App.vue — remaining: the settings/login overlay
 
