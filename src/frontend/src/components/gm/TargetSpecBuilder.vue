@@ -650,7 +650,14 @@ watch(steps, scheduleTrace, { deep: true, immediate: true })
   font-family: inherit; min-width: 0;
 }
 .tsb-config em { font-style: normal; font-size: 8px; color: var(--text-dim); }
-.tsb-filter select, .tsb-filter input { flex: 1; min-width: 60px; }
+/* A filter is three controls, and one narrow row makes the last of them
+   unreadable — the value picker had no room to say anything. Field, operator and
+   value stack instead; the value gets the full width because it carries the
+   content. */
+.tsb-filter { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.tsb-filter select, .tsb-filter input { flex: none; width: 100%; min-width: 0; }
+.tsb-filter .tsb-value-token { flex: none; width: 100%; }
+.tsb-filter .tsb-op, .tsb-filter .tsb-field { flex: none; width: 100%; }
 .tsb-op { flex: none; width: 52px; }
 .tsb-field { flex: none; width: 88px; }
 .tsb-eval-lhs { flex: none; font-family: monospace; font-size: 9px; color: var(--text-dim); }
