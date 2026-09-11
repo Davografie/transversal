@@ -329,6 +329,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 | **Phase** | The roll is in `adding` / `rolling` / `picking` / `resolved` (fire-time only). |
 | **Contest outcome** | The contest resolved `player` / `opponent` / `give_in` (fire-time only). |
 | **Hitch** | The current context is a hitch-buying menu (fire-time only). |
+| **High stakes** | The contest in play is high-stakes (`high`) or not (`low`); fire-time only. |
 | **Roll tier** | The roll's outcome tier compares to a tier (fire-time only). |
 | **Test outcome** | A test succeeded / failed (fire-time only). |
 | **Source rating** | The SFX's source trait rating compares to a die. |
@@ -366,6 +367,8 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 | Add Die to Rating / Remove Die from Rating | Change a multi-die rating | benefit / cost |
 | Disable Trait / Toggle Trait | Turn a trait off / flip it | cost / either |
 | Gain Trait / Gain or Step Up Trait / Cortex Gain Trait | Acquire a trait (or step it up) | either |
+| Copy Trait | Give another entity a copy of a trait instance — its dice, statement, notes, polarity are carried over; the recipient's trait-set rules apply | either |
+| Move Trait | Take a trait instance from another entity (a steal): the instance changes hands with its grants and spent dice | cost |
 | Reveal Trait (Learn) | Reveal a trait to another entity | benefit |
 | Set Trait-set Limit | Change a trait set's size limit | either |
 

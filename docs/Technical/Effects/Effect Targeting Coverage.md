@@ -38,7 +38,7 @@ for. It is inert on an effect that also carries a `target_spec` or `refs`
 (`_apply_armed` checks those first), and the card text stays silent about a scope
 the applier ignores.
 
-## Coverage today (49 actions)
+## Coverage today (51 actions)
 
 - **Target offers a path — 25.** All the trait actions, the location/travel
   ones, `transfer_razmerit`, `attune`, `create_relationship`,
@@ -49,8 +49,11 @@ the applier ignores.
   `spend_razmerit`, `travel`, `set_location`, `set_traitset_limit`,
   `end_active_effect`, and the two *name* actions below (you can path who
   receives an asset; you just cannot path what it is called).
-- **Own path builders (refs) — 4.** `add_trait_rating_dice` (trait + pool),
-  `roll_pool` (pool), `resolve_pool` (pool), `attune` (universe + projection).
+- **Own path builders (refs) — 6.** `add_trait_rating_dice` (trait + pool),
+  `roll_pool` (pool), `resolve_pool` (pool), `attune` (universe + projection),
+  `copy_trait` and `move_trait` (the trait instance). The last two take the
+  recipient from their `entity`/subject field, so the thing being handed over is
+  a path while *who gets it* is the ordinary subject target.
 
 ## Gaps, and what each actually needs
 
