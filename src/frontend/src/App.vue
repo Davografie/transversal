@@ -50,6 +50,8 @@
 
       <!-- Mode + Characters (hidden during switch) -->
       <template v-if="!switchStatus && !charSwitchLoading">
+        <AppearanceBlock :mode="colorMode" @update:mode="colorMode = $event" />
+
         <ModeAndMediaBlock
           v-model:gm-mode="gmMode"
           :media-quality="mediaQuality"
@@ -229,6 +231,7 @@ import LoginPrompt from '@/components/app/LoginPrompt.vue'
 import IdentitySwitchBlock from '@/components/app/IdentitySwitchBlock.vue'
 import FindCharacterBlock from '@/components/app/FindCharacterBlock.vue'
 import ModeAndMediaBlock from '@/components/app/ModeAndMediaBlock.vue'
+import AppearanceBlock from '@/components/app/AppearanceBlock.vue'
 import CharacterListBlock from '@/components/app/CharacterListBlock.vue'
 import SupportBlock from '@/components/app/SupportBlock.vue'
 import PeersBar from '@/components/app/PeersBar.vue'
@@ -1281,7 +1284,7 @@ function onPanelDragEnd({ dy, velocity }) {
 // teaser band expands it (the .band-tap capture layers above). Breakpoint
 // mirrors the @media block in styles.css.
 // ── Theme (light/dark) — see composables/useThemeMode.js
-useThemeMode()
+const { colorMode } = useThemeMode()
 
 const { isMobile, mobileFocus, mobileStackActive, sheetEmpty, setMobileFocus, rollerContentH } = useMobileBands({
   wrapperEl, gmMode, entityId, viewingEntityId,

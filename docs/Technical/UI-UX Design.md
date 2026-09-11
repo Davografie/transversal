@@ -347,6 +347,12 @@ as a literal in components.
   `--offered`); `--accent-dim` flips to a pale blue `#b9d3ec` so its
   `background + var(--text)` pairing stays readable in both themes.
 
+
+**In-app control.** Settings → *Appearance* offers Auto / Light / Dark
+(`app/AppearanceBlock.vue` over a `SegmentedControl`). It stores the
+*preference*, not the resolved theme: `useThemeMode` runs `useColorMode` with
+`emitAuto`, so Auto stays visible and the `theme-color` meta tracks whatever
+theme is actually applied (in Auto, the device's).
 ## Razmerit
 
 `− value +` controls around the amount, with touch-friendly round buttons (no background). Tapping the value opens direct numeric input.
