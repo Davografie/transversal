@@ -122,20 +122,10 @@
           </div>
         </div>
         <div v-if="entitySfxIds.length || projectionSfxIds.length" class="entity-sfx-cards">
-          <div v-for="sfxId in entitySfxIds" :key="'e-' + sfxId" class="sfx-card"
-               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
-               :title="sfxTitle(sfxId)"
-               @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, entity.id)">
-            <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
-            <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
-          </div>
-          <div v-for="sfxId in projectionSfxIds" :key="'p-' + sfxId" class="sfx-card"
-               :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
-               :title="sfxTitle(sfxId)"
-               @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, activeProjection.id)">
-            <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
-            <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
-          </div>
+          <SfxCard v-for="sfxId in entitySfxIds" :key="'e-' + sfxId" v-bind="sfxCardModel(sfxId)"
+                   @activate="activateSfx(sfxId, entity.id)" />
+          <SfxCard v-for="sfxId in projectionSfxIds" :key="'p-' + sfxId" v-bind="sfxCardModel(sfxId)"
+                   @activate="activateSfx(sfxId, activeProjection.id)" />
         </div>
         <div v-if="gmMode" class="meta">
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
@@ -247,18 +237,8 @@
           <div v-if="detailTrait.sfxIds?.length" class="detail-section">
             <div class="detail-section-head"><span class="detail-label">SFX</span></div>
             <div class="sfx-cards">
-              <div
-                v-for="sfxId in detailTrait.sfxIds"
-                :key="sfxId"
-                class="sfx-card"
-                :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
-                :title="sfxTitle(sfxId)"
-                @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, detailTrait.id)"
-              >
-                <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
-                <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
-                <span v-if="sfxCardText(sfxId)" class="sfx-card-rules">{{ sfxCardText(sfxId) }}</span>
-              </div>
+              <SfxCard v-for="sfxId in detailTrait.sfxIds" :key="sfxId" v-bind="sfxCardModel(sfxId)"
+                       @activate="activateSfx(sfxId, detailTrait.id)" />
             </div>
           </div>
 
@@ -298,14 +278,8 @@
               </span>
             </h4>
             <div v-if="traitsetSfxIds(ts).length" class="sfx-cards">
-              <div v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" class="sfx-card"
-                   :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
-                   :title="sfxTitle(sfxId)"
-                   @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, traitsetSettingSourceId(ts))"
-              >
-                <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
-                <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
-              </div>
+              <SfxCard v-for="sfxId in traitsetSfxIds(ts)" :key="'ts-' + sfxId" v-bind="sfxCardModel(sfxId)"
+                       @activate="activateSfx(sfxId, traitsetSettingSourceId(ts))" />
             </div>
           </div>
         </div>
@@ -323,17 +297,8 @@
                   <span v-if="t.statement" class="trait-statement">{{ t.statement }}</span>
                   <span v-if="t.notes" class="trait-notes">{{ t.notes }}</span>
                   <div v-if="t.sfxIds?.length" class="sfx-cards">
-                    <div
-                      v-for="sfxId in t.sfxIds"
-                      :key="sfxId"
-                      class="sfx-card"
-                      :class="{ 'sfx-active': sfxActive(sfxId), 'sfx-used': sfxUsed(sfxId) && !sfxActive(sfxId), 'sfx-blocked': sfxConditionBlocked(sfxId) }"
-                      :title="sfxTitle(sfxId)"
-                      @click.stop.prevent="sfxAllowedInPhase(sfxId) && !sfxConditionBlocked(sfxId) && activateSfx(sfxId, t.id)"
-                    >
-                      <span class="sfx-card-name">{{ sfxName(sfxId) }}</span>
-                      <span v-if="sfxDescription(sfxId)" class="sfx-card-desc">{{ sfxDescription(sfxId) }}</span>
-                    </div>
+                    <SfxCard v-for="sfxId in t.sfxIds" :key="sfxId" v-bind="sfxCardModel(sfxId)"
+                             @activate="activateSfx(sfxId, t.id)" />
                   </div>
                 </div>
                 <div class="trait-right" @click.stop="playTrait(t)" :title="'Play ' + displayName(t.name)">
@@ -500,6 +465,7 @@ import { useScheduledEvents } from '../composables/useScheduledEvents.js'
 import { usePersistedRef } from '../composables/usePersistedState.js'
 import { useTraitEditor } from '../composables/useTraitEditor.js'
 import TraitEditPanel from './sheet/TraitEditPanel.vue'
+import SfxCard from './sheet/SfxCard.vue'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
@@ -1269,6 +1235,23 @@ function sfxConditionBlocked(sfxId) {
 function sfxTitle(sfxId) {
   if (sfxConditionBlocked(sfxId)) return `${sfxName(sfxId)} (conditions not met)`
   return sfxActive(sfxId) ? `Deactivate ${sfxName(sfxId)}` : `Activate ${sfxName(sfxId)}`
+}
+
+// Everything one SFX card needs, resolved once for all five strips (entity,
+// projection, trait row, detail, trait-set). `disabled` reproduces the old
+// inline guard so the card does not fire when the phase or a condition blocks.
+function sfxCardModel(sfxId) {
+  const blocked = sfxConditionBlocked(sfxId)
+  return {
+    name: sfxName(sfxId),
+    description: sfxDescription(sfxId),
+    rules: sfxCardText(sfxId),
+    title: sfxTitle(sfxId),
+    active: sfxActive(sfxId),
+    used: sfxUsed(sfxId),
+    blocked,
+    disabled: blocked || !sfxAllowedInPhase(sfxId),
+  }
 }
 
 async function fetchAvailableSfxIds() {
