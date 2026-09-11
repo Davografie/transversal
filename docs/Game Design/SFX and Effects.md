@@ -238,6 +238,7 @@ Conditions are authored alongside effects and evaluated against an entity's stat
 | `modify_trait` | `step_up_trait` → `step_up` | benefit |
 | | `step_down_trait` → `step_down` | cost |
 | | `reduce_by_effect_die` → `reduce_by_effect` | benefit (effect die vs rating: remove if larger, else step down) |
+| | `increase_by_effect_die` → `increase_by_effect` | benefit (effect die vs rating: set to the effect die if larger, else step up) |
 | | `set_trait` → `set` | either |
 | | `gain_trait` → `gain` | either (polarity) |
 | | `gain_or_step_up_trait` → `gain_or_step_up` | either (polarity) |

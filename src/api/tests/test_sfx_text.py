@@ -533,3 +533,14 @@ def test_a_tag_filter_on_the_registry_trait_reads_the_same():
         {"kind": "filter", "field": "tags", "operator": "contains", "value": "violent"},
     ]}), resolve=resolve)
     assert render_phrase(phrase, "") == "traits of your trait instances tagged violent"
+
+
+def test_the_effect_die_comparison_pair_reads_symmetrically():
+    """P1.8's two comparison actions name the same comparison, in opposite
+    directions — 'reduce … by the effect die' / 'increase … by the effect die'."""
+    assert effect_text(Effect(type="modify_trait", action="reduce_by_effect",
+                              target="trait-fire"), resolve=resolve) == \
+        "reduce the Fire trait by the effect die"
+    assert effect_text(Effect(type="modify_trait", action="increase_by_effect",
+                              target="trait-fire"), resolve=resolve) == \
+        "increase the Fire trait by the effect die"

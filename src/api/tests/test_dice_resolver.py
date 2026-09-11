@@ -21,8 +21,10 @@ from transversal.services.dice_resolver import (
     _is_botch,
     _resolve_challenge,
     compare_committed,
+    compare_effect_die,
     compare_totals,
     detect_hitches,
+    effect_die_beats,
     is_botch,
     pick_effect_die,
     pick_total,
@@ -671,3 +673,25 @@ class TestDiceLimits:
         assert len(result.effect_dice) == 2
         assert result.effect_die == DieType.D8
         assert result.effect_die_value == 6
+
+
+class TestEffectDieComparison:
+    """One definition of "the effect die beats the target die" (P1.8).
+
+    Both comparison effect actions and the challenge pipeline read it, so the
+    pair can't drift: strictly larger beats, equal does not.
+    """
+
+    def test_strictly_larger_beats(self):
+        assert effect_die_beats(DieType.D8, DieType.D6) is True
+        assert effect_die_beats(DieType.D12, DieType.D4) is True
+
+    def test_equal_does_not_beat(self):
+        assert effect_die_beats(DieType.D6, DieType.D6) is False
+
+    def test_smaller_does_not_beat(self):
+        assert effect_die_beats(DieType.D4, DieType.D12) is False
+
+    def test_compare_effect_die_still_maps_the_negative_pair(self):
+        assert compare_effect_die(DieType.D8, DieType.D6) == "remove"
+        assert compare_effect_die(DieType.D6, DieType.D6) == "step_down"

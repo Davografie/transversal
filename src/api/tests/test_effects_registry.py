@@ -60,3 +60,22 @@ def test_dice_limit_actions_declare_amount_and_limit():
     # increase/decrease are mutual inverses
     assert get_inverse("modify_dice_limit", "increase") == (("modify_dice_limit", "decrease"), False)
     assert get_inverse("modify_dice_limit", "decrease") == (("modify_dice_limit", "increase"), False)
+
+
+def test_increase_by_effect_die_mirrors_reduce():
+    """P1.8's positive comparison: 'set if the effect die beats the rating, else
+    step up'. Same declared shape as its negative twin, opposite direction."""
+    meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "increase_by_effect_die")
+    assert (meta.effect_type, meta.effect_action) == ("modify_trait", "increase_by_effect")
+    assert meta.target_kind == "trait"
+    assert [f.name for f in meta.fields] == ["target", "entity"]
+    ctx = {f.name: f for f in meta.context_fields}
+    assert ctx["effect_die"].default == "{effect_die}"
+    assert effect_card("modify_trait", "increase_by_effect") == "increase {target} by the effect die"
+
+    twin = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "reduce_by_effect_die")
+    assert meta.valid_timings == twin.valid_timings
+    assert [f.name for f in meta.fields] == [f.name for f in twin.fields]
+    assert sorted(f.name for f in meta.context_fields) == sorted(f.name for f in twin.context_fields)
+    # Both are Trait actions in the editor (they were falling into "Other").
+    assert meta.group == "Trait" and twin.group == "Trait"

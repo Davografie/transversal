@@ -369,7 +369,8 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 | Action | What it does | Sign |
 |--------|--------------|------|
 | Step Up Trait / Step Down Trait | Shift a trait rating | benefit / cost |
-| Reduce by Effect Die | Step a trait down by the effect die | benefit |
+| Reduce by Effect Die | Step a trait down by the effect die — removed if the effect die beats its rating, else one step down | benefit |
+| Increase by Effect Die | Raise a trait by the effect die — set *to* the effect die if it beats the rating, else one step up | benefit |
 | Set Trait Rating | Set a trait to a fixed rating | either |
 | Add Die to Rating / Remove Die from Rating | Change a multi-die rating | benefit / cost |
 | Disable Trait / Toggle Trait | Turn a trait off / flip it | cost / either |

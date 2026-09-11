@@ -142,6 +142,18 @@ def compare_totals(player_total: int, opponent_total: int) -> ContestWinner:
     return ContestWinner.PLAYER
 
 
+def effect_die_beats(effect_die: DieType, target_die: DieType) -> bool:
+    """True when the effect die is strictly larger than the target die.
+
+    The single definition of the effect-die comparison, shared by the challenge
+    pipeline (which steps a challenge die *down*) and the two comparison effect
+    actions — ``reduce_by_effect`` (removes when it beats) and
+    ``increase_by_effect`` (sets when it beats).
+    """
+    order = list(DieType)
+    return order.index(effect_die) > order.index(target_die)
+
+
 def compare_effect_die(effect_die: DieType, target_die: DieType) -> str:
     """The shared effect-die-vs-target-die rule.
 
@@ -149,8 +161,7 @@ def compare_effect_die(effect_die: DieType, target_die: DieType) -> str:
     ``"step_down"``. Used by challenge resolution and the ``reduce_by_effect``
     effect action so both apply the same comparison.
     """
-    order = list(DieType)
-    return "remove" if order.index(effect_die) > order.index(target_die) else "step_down"
+    return "remove" if effect_die_beats(effect_die, target_die) else "step_down"
 
 
 def _resolve_challenge(

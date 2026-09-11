@@ -538,6 +538,57 @@ def test_reduce_by_effect_die_steps_down_when_smaller():
     assert len(result.removed_trait_settings) == 0
 
 
+def test_increase_by_effect_die_sets_when_larger():
+    """The positive twin: a winning effect die *becomes* the rating."""
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="increase_by_effect",
+                    target="char-1:pool", context={"effect_die": "d10"})
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D10]
+
+
+def test_increase_by_effect_die_steps_up_when_equal():
+    """Strictly larger sets; equal steps up (same border as the reduce twin)."""
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="increase_by_effect",
+                    target="char-1:pool", context={"effect_die": "d6"})
+    result = apply_effects(entity, [effect], repo)
+    assert len(result.updated_trait_settings) == 1
+    assert result.updated_trait_settings[0].dice == [DieType.D8]
+
+
+def test_increase_by_effect_die_steps_up_when_smaller():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D8])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="increase_by_effect",
+                    target="char-1:pool", context={"effect_die": "d4"})
+    result = apply_effects(entity, [effect], repo)
+    assert result.updated_trait_settings[0].dice == [DieType.D10]
+
+
+def test_increase_by_effect_die_without_an_effect_die_does_nothing():
+    repo = FakeRepo(traitsettings=[_ts("pool", [DieType.D6])])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="increase_by_effect",
+                    target="char-1:pool")
+    result = apply_effects(entity, [effect], repo)
+    assert result.updated_trait_settings == []
+    assert "no effect die to compare" in result.applied[0].summary
+
+
+def test_increase_by_effect_die_without_the_trait_does_nothing():
+    repo = FakeRepo()
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="increase_by_effect",
+                    target="char-1:pool", context={"effect_die": "d8"})
+    result = apply_effects(entity, [effect], repo)
+    assert result.updated_trait_settings == []
+    assert "no trait" in result.applied[0].summary
+
+
 def test_set_overrides_dice():
     repo = FakeRepo(traitsettings=[_ts("trait", [DieType.D6])])
     entity = _entity()

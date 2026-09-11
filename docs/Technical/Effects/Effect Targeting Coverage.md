@@ -39,14 +39,19 @@ for. It runs the effect **once per matching die**, and inside that effect the di
 against it (the filter is checked before the spec/ref branches for exactly that
 reason). The card states the scope (*"for each unchosen die, …"*).
 
-## Coverage today (52 actions)
+## Coverage today (53 actions)
 
-- **Target offers a path — 25.** All the trait actions, the location/travel
+> Numerals below are from the regeneration recipe at the end of this note
+> (re-run 2026-09-11, when `increase_by_effect_die` landed): 53 actions total, 27
+> with a path-capable target (`target` **and** `target_kind`), 6 declaring
+> `refs`, 9 flat targets, 17 with no `target` field at all.
+
+- **Target offers a path — 27.** All the trait actions, the location/travel
   ones, `transfer_razmerit`, `attune`, `create_relationship`,
   `entity_targeting_ban`, `set_traitset_limit`, `discover_life_path`,
   `draft_life_path`, `open_roll_table`, `next_step`, `add_dice`,
   `end_active_effect`.
-- **Subject available — 19.** The trait actions plus `earn_razmerit`,
+- **Subject available — 20.** The trait actions plus `earn_razmerit`,
   `spend_razmerit`, `travel`, `set_location`, `set_traitset_limit`,
   `end_active_effect`, and the two *name* actions below (you can path who
   receives an asset; you just cannot path what it is called).
@@ -83,9 +88,10 @@ separated** (`path_element` vs `picker_kind`).
 `create_projection` ("Disguise Name"). Correctly flat: these are labels, not
 references. No change wanted.
 
-**5. No target at all — 15 actions,** mostly correct (dice limits, steps,
-outcomes, muster). Three of them resolve their real inputs through `refs`
-already, so they are path-capable in the way that matters.
+**5. No target at all — 17 actions.** Mostly correct (dice limits, steps,
+outcomes, muster). Five of them (`add_trait_rating_dice`, `roll_pool`,
+`resolve_pool`, `copy_trait`, `move_trait`) resolve their real inputs through
+`refs` already, so they are path-capable in the way that matters.
 
 ## Regenerating this
 

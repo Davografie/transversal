@@ -158,7 +158,8 @@ The interface surface each consumer needs is in the next two sections.
   routing a spent die into a dice pool (`opposition` or `pool` destination).
 - Registered `modify_trait` actions today: `step_up`, `step_down`, `set`,
   `gain`, `remove`, `gain_or_step_up`, `cortex_gain`, `reveal`, `disable`,
-  `enable`, `toggle`, `add_die`, `remove_die`.
+  `enable`, `toggle`, `add_die`, `remove_die`, `copy`, `move`,
+  `reduce_by_effect`, `increase_by_effect`.
 
 ## Interface contract — character sheet
 
