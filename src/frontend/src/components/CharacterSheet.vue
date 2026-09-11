@@ -164,91 +164,42 @@
       <template v-else>
         <div class="sheet-scroll">
         <!-- Full-panel trait edit -->
-        <div v-if="editingTrait && !showAddTrait" class="trait-edit-panel">
-          <Button class="set-back" variant="link" @click="cancelEdit">← Back</Button>
-          <h4 class="edit-title">{{ displayName(editingTrait.name) }}</h4>
-
-          <TraitInstanceEditor
-            :rating-type="editRatingType"
-            :show-polarity="false"
-            :show-statement="editingTrait.statement !== undefined"
-            :show-notes="editingTrait.notes !== undefined || !!editNotes"
-            :spent-dice="editingTrait.spentDice || []"
-            v-model:dice="editDice"
-            v-model:capacity="editCapacity"
-            v-model:statement="editStatement"
-            v-model:notes="editNotes"
-            @update:rating-type="onEditorRatingType"
-            @change="onEditorChange"
-            @field-blur="onEditorFieldBlur"
-            @recover-die="recoverSpentDie"
-          >
-            <template #after-dice>
-            <div v-if="editingTrait.possibleSfxIds?.length" class="edit-field">
-              <span class="edit-label">SFX</span>
-              <div class="edit-sfx">
-                <button v-for="sfxId in editingTrait.possibleSfxIds" :key="sfxId" class="sfx-chip" :class="{ assigned: editSfxIds.includes(sfxId) }" @click="toggleSfx(sfxId)">
-                  {{ sfxId.replace('sfx-', '') }}
-                </button>
-              </div>
-            </div>
-            </template>
-            <template #after-fields>
-            <div class="edit-field">
-              <span class="edit-label">Type</span>
-              <div class="edit-flags">
-                <button v-if="editingTrait.fromType !== 'relationship'" type="button" class="ego-toggle" :class="{ 'is-ego': editIsEgo }" @click="toggleEgo">{{ editIsEgo ? 'ego' : 'morph' }}</button>
-                <button type="button" class="polarity-toggle" :class="{ 'is-positive': editPolarity === 'POSITIVE' }" @click="togglePolarity">
-                  {{ editPolarity === 'POSITIVE' ? 'positive' : 'negative' }}
-                </button>
-              </div>
-              <div v-if="!editIsEgo && editingTrait.fromType !== 'relationship'" class="edit-projection">
-                <span class="edit-projection-label">on</span>
-                <button type="button" class="projection-chip" @click="toggleProjectionPicker">{{ editProjectionName }}</button>
-                <div v-if="showProjectionPicker" class="projection-dropdown">
-                  <button
-                    v-for="p in editProjectionOptions"
-                    :key="p.id"
-                    type="button"
-                    class="projection-option"
-                    :class="{ selected: p.id === editProjectionId }"
-                    @click="selectProjection(p)"
-                  >{{ p.name || universeDisplay(p.originUniverse) }}</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="edit-field">
-              <span class="edit-label">Sub-traits</span>
-              <div v-if="(editingTrait.subTraitSettings || []).length" class="edit-subtraits">
-                <div v-for="st in editingTrait.subTraitSettings" :key="st.id" class="edit-subtrait-row">
-                  <span class="edit-subtrait-name">{{ displayName(st.name) }}</span>
-                  <span v-if="st.statement" class="edit-subtrait-statement">{{ st.statement }}</span>
-                  <Button class="edit-subtrait-remove" variant="danger-ghost" size="sm" title="Remove sub-trait" @click="removeSubTrait(st.id)">✕</Button>
-                </div>
-              </div>
-              <div v-if="availableSubtraits.length" class="edit-subtraits-add">
-                <span class="edit-subtrait-add-label">Add:</span>
-                <button v-for="opt in availableSubtraits" :key="opt.id" class="edit-subtrait-chip" @click="addSubTrait(opt.id)">{{ opt.name }}</button>
-              </div>
-              <span v-else-if="!(editingTrait.possibleSubtraitIds || []).length" class="edit-subtrait-empty">No sub-traits configured for this trait.</span>
-            </div>
-            </template>
-            <template #actions>
-            <div class="edit-actions">
-              <Button class="edit-done-btn" variant="primary" @click="cancelEdit">Done</Button>
-              <Button
-                class="edit-delete-btn"
-                variant="danger"
-                :active="deleteCountdown > 0 && deletingTraitId === editingTrait.id"
-                @click="onDeleteClick(editingTrait)"
-              >
-                {{ deleteCountdown > 0 && deletingTraitId === editingTrait.id ? `Cancel (${deleteCountdown})` : 'Delete' }}
-              </Button>
-            </div>
-            </template>
-          </TraitInstanceEditor>
-        </div>
+        <TraitEditPanel
+          v-if="editingTrait && !showAddTrait"
+          :trait="editingTrait"
+          :dice="editDice"
+          :capacity="editCapacity"
+          :rating-type="editRatingType"
+          :polarity="editPolarity"
+          :statement="editStatement"
+          :notes="editNotes"
+          :sfx-ids="editSfxIds"
+          :is-ego="editIsEgo"
+          :projection-id="editProjectionId"
+          :projection-name="editProjectionName"
+          :projection-options="projectionChoices"
+          :subtraits="availableSubtraits"
+          :show-projection-picker="showProjectionPicker"
+          :delete-countdown="deleteCountdown"
+          :deleting-trait-id="deletingTraitId"
+          @update:dice="editDice = $event"
+          @update:capacity="editCapacity = $event"
+          @update:statement="editStatement = $event"
+          @update:notes="editNotes = $event"
+          @rating-type="onEditorRatingType"
+          @change="onEditorChange"
+          @field-blur="onEditorFieldBlur"
+          @recover-die="recoverSpentDie"
+          @back="cancelEdit"
+          @delete="onDeleteClick"
+          @toggle-sfx="toggleSfx"
+          @toggle-ego="toggleEgo"
+          @toggle-polarity="togglePolarity"
+          @toggle-projection-picker="toggleProjectionPicker"
+          @select-projection="selectProjection"
+          @add-subtrait="addSubTrait"
+          @remove-subtrait="removeSubTrait"
+        />
 
         <!-- Trait detail (read-only) — the row's "elsewhere" click zone.
              Right-click on the row, or the header's Edit, opens the editor. -->
@@ -548,6 +499,7 @@ import { perfMark } from '../composables/perfLog.js'
 import { useScheduledEvents } from '../composables/useScheduledEvents.js'
 import { usePersistedRef } from '../composables/usePersistedState.js'
 import { useTraitEditor } from '../composables/useTraitEditor.js'
+import TraitEditPanel from './sheet/TraitEditPanel.vue'
 import DiePicker from './DiePicker.vue'
 import BlueBook from './BlueBook.vue'
 import LifePathWizard from './LifePathWizard.vue'
@@ -995,6 +947,11 @@ async function addTrait(trait) {
 // name / statement / empty space of the row now opens the trait read-only, with
 // its full SFX, notes and tags. `contextmenu` still opens the editor.
 const detailTrait = ref(null)
+
+// Projection options with their display names resolved, for the editor's chip.
+const projectionChoices = computed(() =>
+  (entity.value?.projections || []).map(p => ({ id: p.id, name: p.name || universeDisplay(p.originUniverse) }))
+)
 
 // The inline trait editor's draft state + actions (see composables/useTraitEditor.js).
 const {
@@ -1987,116 +1944,6 @@ watch(() => props.externalPoolSources, (sources) => {
   color: var(--text-dim);
 }
 
-.trait-edit-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 4px 0 8px;
-}
-.edit-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.edit-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
-.edit-flags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.edit-title {
-  margin: 0 0 2px;
-  font-size: 14px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text);
-}
-.edit-sfx {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-}
-.sfx-chip {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--overlay-10);
-  background: var(--overlay-4);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.sfx-chip:hover {
-  border-color: var(--overlay-20);
-  color: var(--text);
-}
-.sfx-chip.assigned {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.edit-subtraits {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.edit-subtrait-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--overlay-10);
-  background: var(--overlay-4);
-}
-.edit-subtrait-name { font-weight: 500; }
-.edit-subtrait-statement { font-size: 11px; opacity: 0.7; flex: 1; }
-  .edit-subtrait-remove { margin-left: auto;
-    flex-shrink: 0; }
-.edit-subtraits-add {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  margin-top: 4px;
-}
-.edit-subtrait-add-label { font-size: 11px; color: var(--text-dim); }
-.edit-subtrait-chip {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--overlay-10);
-  background: var(--overlay-4);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.edit-subtrait-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.edit-subtrait-empty { font-size: 11px; color: var(--text-dim); }
-
-.edit-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px solid var(--overlay-8);
-}
-  .edit-done-btn { flex: 1; }
-  .edit-delete-btn { flex: 1; }
 
   .add-trait-btn { margin-top: 8px; }
 
@@ -2237,93 +2084,6 @@ watch(() => props.externalPoolSources, (sources) => {
 .active-effects {
   color: var(--accent, #d9b45a);
   font-size: 11px;
-}
-.ego-toggle {
-  padding: 3px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--text-dim);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-}
-.ego-toggle.is-ego {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--overlay-6);
-}
-.polarity-toggle {
-  padding: 3px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--text-dim);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-}
-.polarity-toggle.is-positive {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--overlay-6);
-}
-.edit-projection {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  position: relative;
-}
-.edit-projection-label {
-  font-size: 10px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.projection-chip {
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--accent-dim);
-  background: var(--accent-12);
-  color: var(--accent);
-  font-size: 11px;
-  cursor: pointer;
-}
-.projection-chip:hover {
-  border-color: var(--accent);
-}
-.projection-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
-  margin-top: 4px;
-  min-width: 160px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  overflow: hidden;
-}
-.projection-option {
-  display: block;
-  width: 100%;
-  padding: 6px 10px;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-.projection-option:hover {
-  background: var(--bg-hover);
-}
-.projection-option.selected {
-  color: var(--accent);
-  background: var(--accent-12);
 }
 .razmerit-anchor {
   position: relative;
