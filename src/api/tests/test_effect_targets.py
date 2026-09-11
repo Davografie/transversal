@@ -399,3 +399,14 @@ def test_register_scope_adds_a_new_prefix():
     register_scope("__test_custom__", _always)
     out = resolve_candidates("entity", "__test_custom__:anything", _entity(), TargetRepo())
     assert _ids(out) == ["x"]
+
+
+def test_traitset_scope_effect_die_comparison_filters_to_owned():
+    """The comparison pair mutates a rating the entity already has, so the picker
+    offers its own instances — same as step_up/step_down/set/remove."""
+    for action in ("reduce_by_effect", "increase_by_effect"):
+        repo = TargetRepo()
+        repo.traits_traitset = {"ts-skills": [_t("medicine"), _t("surgery")]}
+        repo.trait_settings_by_traitset = {("char-1", "ts-skills"): [SimpleNamespace(trait_id="medicine")]}
+        out = resolve_candidates("trait", "traitset:ts-skills", _entity(), repo, action=action)
+        assert _ids(out) == ["medicine"], action

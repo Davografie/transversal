@@ -306,7 +306,13 @@ def _traitset_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -
 
 
 # Trait actions that only make sense on a trait the entity already has.
-_MUTATE_EXISTING_TRAIT_ACTIONS = {"step_down", "step_up", "set", "remove"}
+# The effect-die comparison pair belongs here too: both act on the *rating* of a
+# trait the entity holds (`reduce`/`increase` step it or set it), so picking from
+# the whole registry would offer traits there is nothing to mutate.
+_MUTATE_EXISTING_TRAIT_ACTIONS = {
+    "step_down", "step_up", "set", "remove",
+    "reduce_by_effect", "increase_by_effect",
+}
 
 
 # ── Default registrations ────────────────────────────
