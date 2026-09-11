@@ -19,7 +19,7 @@ files move.
 
 | File | Started | Now | Landed |
 | --- | --- | --- | --- |
-| `App.vue` | 2559 | 1914 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters`, `usePlayerIdentity`, `useCharacterFinder` |
+| `App.vue` | 2559 | 1832 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands`, `usePlayerCharacters`, `usePlayerIdentity`, `useCharacterFinder`, `useCharacterSwitch` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
 | `components/CharacterSheet.vue` | 3281 | 2577 | `ui/TraitInstanceEditor` (shared), `useTraitEditor`, `sheet/TraitEditPanel`, `sheet/SfxCard` |
@@ -176,9 +176,14 @@ each template slice.
 
 Editor + SFX cards done. What is left is mostly line count rather than sharing:
 
-1. **`sheet/TraitDetailPanel.vue`** — the read-only view; needs ~10 injected
-   behaviours (`canPlayTrait`, `playTrait`, `ratingTypeLabel`,
-   `challengeProgressLabel`, the SFX helpers) so the win is mostly line count.
+1. **`sheet/TraitDetailPanel.vue`** — the read-only view. Not a pure move:
+   it shares `.trait-die*` (30 uses elsewhere) and `.challenge-progress` with
+   the list rows, so extracting it means either duplicating those rules in the
+   child or promoting them to `assets/styles.css` first. **Do the CSS promotion
+   as its own verified step**, then move the markup (which also needs ~10
+   injected behaviours — `canPlayTrait`, `playTrait`, `ratingTypeLabel`,
+   `challengeProgressLabel`, `detailContext`, `displayName`, `sfxCardModel`,
+   `activateSfx` — best passed as one `api` object of functions).
 2. **`sheet/TraitRow.vue`** — the list row; carry the click / context-menu /
    long-press handlers together with it.
 3. **`useSheetData.js`** — fetch/refresh + trait-set splitting, if the script is
@@ -205,7 +210,15 @@ What is already out: the character list + per-character actions
   `resonanceFrom` / `resonanceTo` / `charSwitchDone`, `beginCharacterSwitch`,
   `cancelCharacterSwitch` → `useCharacterSwitch.js`.
 - support characters: `mySupportCharacters`, `otherPlayersMains`,
-  `assumeSupport`, `openCreateSupport`.
+  `assumeSupport`, `openCreateSupport`, `supportCastMenu`, `onSupportCreated`.
+  **Blocked on data, not on design:** `activeMains` is empty on the dev server,
+  so the '+ support' buttons never render and the path cannot be exercised.
+  Extracting it now would be exactly the silent-failure shape that broke
+  support-cast earlier (state moved, never clicked). Extract it when an active
+  main exists to click.
+  - `openSettings` / `dismissOverlay` are now thin orchestrators (each just
+    resets the composables and fetches the lists); they can move last, or stay
+    as the shell's entry points.
 - ~~creation + character search~~ **done** → `useCharacterFinder.js`
   (`charSearch*`, `doCharSearch`, `fetchAllCharacters`, `chooseFoundCharacter`,
   and `newCharName` / `createCharacter`; picking a found character still starts
