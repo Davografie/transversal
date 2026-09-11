@@ -59,6 +59,10 @@ const props = defineProps({
   imageType: { type: String, default: '' },
   animateJob: { type: Object, default: null },
   animatedSrc: { type: String, default: '' },
+  // Both are passed by the opener and were previously undeclared, so the size
+  // never rendered and the tags relied on a fetch that only ran on mount.
+  roles: { type: Array, default: () => [] },
+  sizeBytes: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['close', 'deleted', 'refresh'])
@@ -77,17 +81,19 @@ const motionHint = ref('')
 const fetchedRoles = ref([])
 
 async function fetchRoles() {
-  if (!props.entityId || !props.imageId) return
+  const entityId = props.entityId
+  const imageId = props.imageId
+  if (!entityId || !imageId) return
   try {
-    const r = await fetch(`/api/v1/imagen/${props.entityId}`)
+    const r = await fetch(`/api/v1/imagen/${entityId}`)
     if (r.ok) {
       const data = await r.json()
-      const img = (data.images || []).find(i => i.id === props.imageId)
+      if (imageId !== props.imageId) return   // the viewer moved on while in flight
+      const img = (data.images || []).find(i => i.id === imageId)
       if (img) fetchedRoles.value = img.roles || []
     }
   } catch {}
 }
-onMounted(() => { fetchRoles(); fetchEntityProjections(); fetchImageProjection() })
 
 // Body (projection) assignment — the tap-friendly alternative to drag-and-drop.
 const imageProjection = ref('')
@@ -111,16 +117,32 @@ async function fetchEntityProjections() {
 }
 
 async function fetchImageProjection() {
-  if (!props.entityId || !props.imageId) return
+  const entityId = props.entityId
+  const imageId = props.imageId
+  if (!entityId || !imageId) return
   try {
-    const r = await fetch(`/api/v1/imagen/${props.entityId}`)
+    const r = await fetch(`/api/v1/imagen/${entityId}`)
     if (r.ok) {
       const data = await r.json()
-      const img = (data.images || []).find(i => i.id === props.imageId)
+      if (imageId !== props.imageId) return   // the viewer moved on while in flight
+      const img = (data.images || []).find(i => i.id === imageId)
       if (img) imageProjection.value = img.projection_id || ''
     }
   } catch {}
 }
+
+// Re-opening the viewer on another image replaces its props but reuses this
+// component instance, so mount-only fetches left the previous image's tags
+// (BG/Sheet/Nav) and body on screen — and a tag toggle would have written that
+// stale list back. Follow the props instead, seeding the tags from the opener's
+// `roles` so there is no stale window at all.
+watch(() => [props.entityId, props.imageId], () => {
+  fetchedRoles.value = [...(props.roles || [])]
+  imageProjection.value = ''
+  fetchEntityProjections()
+  fetchRoles()
+  fetchImageProjection()
+}, { immediate: true })
 
 function projectionLabel(p) {
   const uni = p.universe || p.originUniverse || ''
