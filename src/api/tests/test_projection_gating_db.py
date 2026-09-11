@@ -12,6 +12,8 @@ import pytest
 from transversal.db.arango import TRAITSETTINGS
 from transversal.db.repository import EntityRepository
 from transversal.domain import (
+    Attunement,
+    AttunementScope,
     DieType,
     Entity,
     EntityType,
@@ -139,13 +141,31 @@ def _has(settings, trait_id):
 
 # ── Gating behaviour (fixture-scoped) ────────────────
 
-def test_effective_universes_include_active_and_native_homes(gating_data):
+def test_effective_universes_are_the_active_body_only(gating_data):
+    """A second NATIVE home does not go live on its own.
+
+    ``transversal_type`` is provenance, never a gate for trait availability —
+    another body's traits arrive only through a deliberate, costed effect. See
+    [[Active Projections Design Log]].
+    """
     repo = gating_data
     char = repo.get_entity(CHAR_ID)
     universes = repo.effective_universes(char)
     assert UNIVERSE_ALPHA in universes      # active body
-    assert UNIVERSE_GAMMA in universes      # second NATIVE home (multiversal)
+    assert UNIVERSE_GAMMA not in universes  # second NATIVE home — not auto-live
     assert UNIVERSE_BETA not in universes   # consciousness body, not active
+
+
+def test_attunement_is_how_another_universe_goes_live(gating_data):
+    """The deliberate path: an attunement makes another universe available."""
+    repo = gating_data
+    char = repo.get_entity(CHAR_ID)
+    attuned = char.model_copy(update={
+        "attunements": [Attunement(universe=UNIVERSE_GAMMA, scope=AttunementScope.SELF)],
+    })
+    universes = repo.effective_universes(attuned)
+    assert UNIVERSE_ALPHA in universes
+    assert UNIVERSE_GAMMA in universes      # live via the effect, not the body type
 
 
 def test_projection_anchored_trait_gated_by_origin(gating_data):
