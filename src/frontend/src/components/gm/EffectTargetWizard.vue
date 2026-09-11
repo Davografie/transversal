@@ -36,13 +36,16 @@
         :placeholder="`Choose ${current.kind}…`"
         allow-random
         @update:model-value="targets[current.index] = $event"
+        @select="onPickerSelect"
       />
     </div>
     <div v-else class="etw-empty">No targets to resolve.</div>
     <div class="etw-actions">
       <Button class="etw-btn" variant="neutral" :disabled="stepIndex === 0" @click="back">Back</Button>
-      <Button v-if="!isLast" class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="next">Next</Button>
-      <Button v-else class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="apply">Apply</Button>
+      <template v-if="needsConfirm">
+        <Button v-if="!isLast" class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="next">Next</Button>
+        <Button v-else class="etw-btn etw-primary" variant="primary" :disabled="!hasSelection" @click="apply">Apply</Button>
+      </template>
       <Button class="etw-btn etw-cancel" variant="neutral" @click="$emit('cancel')">Cancel</Button>
     </div>
   </div>
@@ -73,6 +76,11 @@ const hasSelection = computed(() => {
 })
 const isLast = computed(() => stepIndex.value >= props.pendingChoices.length - 1)
 
+// Picking a candidate *is* the choice on a single-choice step, so the wizard
+// commits and moves on without a separate confirm. Multi-select steps keep the
+// explicit Next/Apply — nothing is committed there until the user says so.
+const needsConfirm = computed(() => (current.value?.count || 1) > 1)
+
 // Resolve candidates against the effect's own subject entity (e.g. {buying_entity}
 // for an opportunity, {hitch_entity} for a GM hitch), falling back to the roller.
 const targetEntityId = computed(() => {
@@ -96,9 +104,24 @@ function pick(c) {
   if (current.value.count > 1) {
     const arr = Array.isArray(targets.value[idx]) ? targets.value[idx] : []
     targets.value[idx] = arr.includes(c.id) ? arr.filter((x) => x !== c.id) : [...arr, c.id]
-  } else {
-    targets.value[idx] = c.id
+    return
   }
+  targets.value[idx] = c.id
+  advance()
+}
+
+// Dropdown/random picks arrive here too (TargetPicker emits `select`), so the
+// same "the pick is the choice" rule holds for every picker in the wizard.
+// A clear (`null`) is not a commit — it just empties the step.
+function onPickerSelect(opt) {
+  if (!opt || !opt.id) return
+  targets.value[current.value.index] = opt.id
+  if (!needsConfirm.value) advance()
+}
+
+function advance() {
+  if (isLast.value) apply()
+  else stepIndex.value++
 }
 
 function next() { if (!isLast.value) stepIndex.value++ }
