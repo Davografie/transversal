@@ -16,6 +16,14 @@
       Hidden
     </label>
 
+    <!-- B86: a GMC flagged here may be taken over by a player as a support character -->
+    <template v-if="local.type === 'GMC'">
+      <label title="A player may take this GMC over as their support character">
+        <input :checked="local.support_eligible" type="checkbox" @change="onToggleBool('support_eligible', $event)" />
+        Available for take-over
+      </label>
+    </template>
+
     <template v-if="local.type === 'LOCATION'">
       <label>
         <input :checked="local.starter_location" type="checkbox" @change="onToggleBool('starter_location', $event)" />

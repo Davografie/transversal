@@ -25,7 +25,7 @@ export function useEntityCrud() {
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
-      hidden unpublished starterLocation loraConfig
+      hidden unpublished supportEligible starterLocation loraConfig
       projections {
         id originUniverse universe name backgroundImage currentLocation transversalType
       }
@@ -39,7 +39,7 @@ export function useEntityCrud() {
     const data = await graphql(
       `query($type: EntityType) {
         entities(type: $type) {
-          id type name razmerit currentUniverse currentLocation hidden unpublished
+          id type name razmerit currentUniverse currentLocation hidden unpublished supportEligible
         }
       }`,
       { type: null }
@@ -68,6 +68,7 @@ export function useEntityCrud() {
         overlay: data.entity.overlay || null,
         hidden: data.entity.hidden,
         unpublished: data.entity.unpublished ?? false,
+        support_eligible: data.entity.supportEligible ?? false,
         starter_location: data.entity.starterLocation ?? false,
         lora_config: data.entity.loraConfig || '{}',
       }
@@ -83,7 +84,7 @@ export function useEntityCrud() {
     const result = await graphql(
       `mutation($input: UpdateEntityInput!) {
         updateEntity(input: $input) {
-          id name razmerit currentUniverse currentLocation hidden unpublished starterLocation loraConfig
+          id name razmerit currentUniverse currentLocation hidden unpublished supportEligible starterLocation loraConfig
         }
       }`,
       {
@@ -95,6 +96,7 @@ export function useEntityCrud() {
           currentLocation: form.value.current_location || null,
           hidden: form.value.hidden,
           unpublished: form.value.unpublished,
+          supportEligible: form.value.support_eligible,
           overlay: form.value.overlay,
           starterLocation: form.value.starter_location,
           loraConfig: form.value.lora_config,
@@ -110,6 +112,7 @@ export function useEntityCrud() {
         selected.value.currentLocation = ue.currentLocation
         selected.value.hidden = ue.hidden
         selected.value.unpublished = ue.unpublished
+        selected.value.supportEligible = ue.supportEligible
         selected.value.starterLocation = ue.starterLocation
       }
     }
