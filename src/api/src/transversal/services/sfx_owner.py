@@ -16,6 +16,8 @@ context (e.g. buy-hitch, P3.3), not derived from an entity.
 
 from __future__ import annotations
 
+import time
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -545,6 +547,51 @@ class SfxAvailabilityPrefetch:
     sfx_by_id: dict[str, Any] = field(default_factory=dict)          # sfx_id → SFX
 
 
+# ── SFX record cache ─────────────────────────────────
+#
+# Availability runs on every state event, every roll, and every "what can I do"
+# query, and it needs each candidate's *record* (to read its trigger and static
+# conditions). Reading one document per candidate made the cost linear in the
+# whole catalogue — fine for 30 SFX, ruinous for a thousand. SFX content changes
+# rarely, so the records are cached.
+#
+# Staleness is bounded twice over: the SFX mutations call
+# :func:`invalidate_sfx_cache` eagerly (same process, so the editor sees its own
+# edit immediately), and ``_SFX_CACHE_TTL`` caps how long a write from another
+# process (the MCP server, a script) can go unnoticed here.
+_SFX_CACHE_TTL = 30.0
+_SFX_CACHE: dict[str, Any] = {}
+_SFX_CACHE_FILLED_AT = 0.0
+
+
+def invalidate_sfx_cache() -> None:
+    """Drop the cached SFX records (call after any SFX write)."""
+    global _SFX_CACHE_FILLED_AT
+    _SFX_CACHE.clear()
+    _SFX_CACHE_FILLED_AT = 0.0
+
+
+def _load_sfx(repo, sfx_id: str):
+    """An SFX record, cache-first (see the cache notes above).
+
+    Only *hits* are cached. A miss stays a miss on every call, because a missing
+    record usually means "not created yet" — caching that would hide a brand-new
+    SFX for the whole TTL, which is a functional bug, not a staleness one.
+    """
+    global _SFX_CACHE_FILLED_AT
+    now = time.monotonic()
+    if _SFX_CACHE_FILLED_AT and (now - _SFX_CACHE_FILLED_AT) > _SFX_CACHE_TTL:
+        invalidate_sfx_cache()
+    if not _SFX_CACHE_FILLED_AT:
+        _SFX_CACHE_FILLED_AT = now
+    if sfx_id in _SFX_CACHE:
+        return _SFX_CACHE[sfx_id]
+    sfx = repo.get_sfx(sfx_id)
+    if sfx is not None:
+        _SFX_CACHE[sfx_id] = sfx
+    return sfx
+
+
 def build_sfx_availability_prefetch(
     repo,
     entities: list,
@@ -591,12 +638,20 @@ def get_available_sfx_ids(
     universe: str,
     repo,
     prefetch: SfxAvailabilityPrefetch | None = None,
+    triggers: frozenset[str] | None = None,
 ) -> list[str]:
     """Return the sorted SFX ids available to ``entity_id`` in ``universe``.
 
     ``prefetch`` (optional) supplies bulk-loaded per-entity data so a fan-out
     over many entities avoids the per-entity round-trips; see
     :func:`build_sfx_availability_prefetch`.
+
+    ``triggers`` (optional) narrows to SFX whose trigger is one of these — the
+    caller knows which triggers an event could match
+    (``effects_engine.triggers.triggers_for_event``), so a candidate that cannot
+    fire is dropped before it is read or evaluated. ``None`` = no narrowing, and
+    callers that list SFX for a *person* to activate (the sheet) must leave it
+    unset: a manual activation has no event type.
     """
     ids: set[str] = set()
     # Map each trait-granted SFX id to its source trait-setting, so source-aware
@@ -652,8 +707,15 @@ def get_available_sfx_ids(
             if prefetch is not None:
                 sfx = prefetch.sfx_by_id.get(sfx_id)
             else:
-                sfx = repo.get_sfx(sfx_id)
+                sfx = _load_sfx(repo, sfx_id)
             if sfx is None:
+                # Unresolvable id: keep it (as before) rather than silently
+                # dropping a reference the data may still be catching up to.
+                continue
+            if triggers is not None and sfx.trigger not in triggers:
+                # Cannot match this event: no read of the conditions, no
+                # evaluation — that is the point of the narrowing.
+                ids.discard(sfx_id)
                 continue
             static = static_conditions(sfx.conditions or [])
             source = sfx_sources.get(sfx_id)

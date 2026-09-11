@@ -175,6 +175,10 @@ def seed_sfx_registry(repo: EntityRepository, engine=None) -> None:
         engine = _get_engine()
     for s in sfxs:
         engine.register(s)
+    # Seeding writes SFX records in-process; the availability cache must not
+    # keep serving the pre-seed view of them.
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+    invalidate_sfx_cache()
 
 def seed_locations(em) -> None:
     """Create location entities and their hierarchy relationships. Idempotent."""

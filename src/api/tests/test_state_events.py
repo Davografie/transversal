@@ -37,7 +37,7 @@ def test_contest_context_carries_opponent_entity_projection_and_effect_die(monke
     monkeypatch.setattr(main, "_effects_engine", engine)
     monkeypatch.setattr(
         "transversal.services.sfx_owner.get_available_sfx_ids",
-        lambda entity_id, universe, repo: [],
+        lambda entity_id, universe, repo, **kwargs: [],
     )
 
     se.fire_contest_outcome_sfx("winner", "loser", "earth", effect_die="d8")
@@ -78,7 +78,7 @@ def test_fire_global_state_sfx_iterates_entities(monkeypatch):
     )
     monkeypatch.setattr(
         "transversal.services.sfx_owner.get_available_sfx_ids",
-        lambda entity_id, universe, repo, prefetch=None: [],
+        lambda entity_id, universe, repo, prefetch=None, **kwargs: [],
     )
     monkeypatch.setattr(
         "transversal.services.roll_orchestrator._emit_pending_choices",
@@ -177,7 +177,7 @@ def test_fire_session_start_fans_out_non_deferred_effects(monkeypatch):
     )
     monkeypatch.setattr(
         "transversal.services.sfx_owner.get_available_sfx_ids",
-        lambda entity_id, universe, repo, prefetch=None: [sfx.id],
+        lambda entity_id, universe, repo, prefetch=None, **kwargs: [sfx.id],
     )
     monkeypatch.setattr(
         "transversal.services.roll_orchestrator._emit_pending_choices",
@@ -257,7 +257,7 @@ def test_global_boundary_fanout_arms_once_for_n_entities(monkeypatch):
     )
     monkeypatch.setattr(
         "transversal.services.sfx_owner.get_available_sfx_ids",
-        lambda entity_id, universe, repo, prefetch=None: [sfx.id],
+        lambda entity_id, universe, repo, prefetch=None, **kwargs: [sfx.id],
     )
     monkeypatch.setattr(
         "transversal.services.roll_orchestrator._emit_pending_choices",

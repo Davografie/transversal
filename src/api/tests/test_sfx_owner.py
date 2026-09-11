@@ -795,3 +795,89 @@ def test_backfill_source_kinds_folds_buckets_and_traits(monkeypatch):
 
     # Idempotent: second pass changes nothing.
     assert sfo.backfill_source_kinds(repo) == 0
+
+
+# ── Availability narrowing + record cache ─────────────────────
+#
+# Availability runs on every state event, every roll and every "what can I do"
+# query, and reads each candidate's record. These pin the two things that keep
+# its cost proportional to the *candidates that matter* rather than the whole
+# catalogue.
+
+class CountingRepo(Repo):
+    """The same double, counting `get_sfx` reads and serving real records."""
+
+    def __init__(self, sfxs=None):
+        super().__init__()
+        self.sfxs = {s.id: s for s in (sfxs or [])}
+        self.reads = 0
+
+    def get_sfx(self, sfx_id):
+        self.reads += 1
+        return self.sfxs.get(sfx_id)
+
+
+def _sfx(sfx_id, trigger="manual"):
+    return SimpleNamespace(id=sfx_id, trigger=trigger, conditions=[])
+
+
+def _cache_state():
+    from transversal.services import sfx_owner
+
+    return sfx_owner._SFX_CACHE
+
+
+def test_records_are_cached_across_calls():
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-a")])
+    repo.entity = _entity(sfx_ids=["sfx-a"])
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-a"]
+    first = repo.reads
+    assert first == 1
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-a"]
+    assert repo.reads == first, "a warm cache must not re-read the record"
+
+    invalidate_sfx_cache()
+    get_available_sfx_ids("e1", "earth", repo)
+    assert repo.reads > first, "an explicit invalidation forces a re-read"
+
+
+def test_a_missing_record_is_not_remembered_as_missing():
+    """A miss means "not created yet" — caching it would hide a new SFX."""
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([])
+    repo.entity = _entity(sfx_ids=["sfx-new"])
+    get_available_sfx_ids("e1", "earth", repo)  # resolves to nothing (still listed)
+
+    repo.sfxs["sfx-new"] = _sfx("sfx-new")      # the SFX now exists
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-new"]
+
+
+def test_trigger_narrowing_drops_candidates_before_reading_them():
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-roll", "on_roll"), _sfx("sfx-manual", "manual")])
+    repo.entity = _entity(sfx_ids=["sfx-roll", "sfx-manual"])
+    # Warm the cache so the narrowing is what we measure, not the first read.
+    get_available_sfx_ids("e1", "earth", repo)
+    repo.reads = 0
+
+    out = get_available_sfx_ids("e1", "earth", repo, triggers=frozenset({"on_roll"}))
+    assert out == ["sfx-roll"]
+    assert repo.reads == 0, "a narrowed-away candidate must not be read at all"
+
+
+def test_no_narrowing_lists_everything():
+    from transversal.services.sfx_owner import invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-roll", "on_roll"), _sfx("sfx-manual", "manual")])
+    repo.entity = _entity(sfx_ids=["sfx-roll", "sfx-manual"])
+    # The sheet's listing passes no triggers: a manual activation has no event.
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-manual", "sfx-roll"]

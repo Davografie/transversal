@@ -17,6 +17,17 @@ log = logging.getLogger("transversal.sfx")
 _firing: set[tuple[str, str]] = set()
 
 
+def _triggers_for(event_type: str, **payload) -> frozenset[str] | None:
+    """The triggers that event type could match (``None`` = don't narrow).
+
+    Thin wrapper so every fire site in this module narrows the same way: the
+    mapping lives beside the trigger matching in the engine.
+    """
+    from transversal.services.effects_engine.triggers import triggers_for_event
+
+    return triggers_for_event(event_type, **payload)
+
+
 def fire_state_sfx(
     entity_id: str,
     universe: str,
@@ -42,7 +53,10 @@ def fire_state_sfx(
         if not universe:
             universe = entity.current_universe
 
-        sfx_ids = get_available_sfx_ids(entity_id, universe, repo)
+        sfx_ids = get_available_sfx_ids(
+            entity_id, universe, repo,
+            triggers=_triggers_for(event_type),
+        )
         log.info(
             "[fire_state_sfx] entity=%s event=%s universe=%s available=%s",
             entity_id, event_type, universe, sfx_ids,
@@ -249,7 +263,10 @@ def fire_contest_outcome_sfx(
             universe = entity.current_universe
         opponent = repo.get_entity(opponent_id)
         opponent_projection = opponent.current_projection if opponent else None
-        sfx_ids = get_available_sfx_ids(entity_id, universe, repo)
+        sfx_ids = get_available_sfx_ids(
+            entity_id, universe, repo,
+            triggers=_triggers_for("contest", has_contest=True),
+        )
         event = GameEvent(
             type="contest",
             entity_id=entity_id,

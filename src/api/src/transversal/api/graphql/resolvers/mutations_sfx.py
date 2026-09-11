@@ -1,5 +1,6 @@
 """Mutations sfx — split out of src/api/src/transversal/api/graphql/schema.py."""
 
+from transversal.services.sfx_owner import invalidate_sfx_cache
 import strawberry
 
 from transversal.api.graphql.types import OwnerRefInput
@@ -53,6 +54,7 @@ class MutationsSfx:
         engine = info.context.get("effects_engine")
         if engine:
             engine.register(created)
+            invalidate_sfx_cache()
         _maybe_rearm_passives(created.trigger)
         return _sfx_ref(created, repo_name_resolver(_em(info).repo))
 
@@ -102,6 +104,7 @@ class MutationsSfx:
         engine = info.context.get("effects_engine")
         if engine:
             engine.register(updated)
+            invalidate_sfx_cache()
         _maybe_rearm_passives(old_trigger, updated.trigger)
         return _sfx_ref(updated, repo_name_resolver(_em(info).repo))
 
@@ -110,6 +113,8 @@ class MutationsSfx:
         repo = _em(info).repo
         existing = repo.get_sfx(str(id))
         ok = repo.delete_sfx(str(id))
+        if ok:
+            invalidate_sfx_cache()
         if ok and existing is not None:
             _maybe_rearm_passives(existing.trigger)
         return ok
