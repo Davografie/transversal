@@ -22,7 +22,7 @@ files move.
 | `App.vue` | 2559 | 2384 | `app/SseIndicator`, `app/PeersBar`, `usePeers`, `useThemeMode`, `useMobileBands` |
 | `components/LocationViewer.vue` | 1938 | 1654 | `location/ArrivalRings`, `location/TravelOverlay`, `location/SceneEffectsLayer` |
 | `components/DiceRoller.vue` | 2367 | 2278 | `dice/ContestResultWidget`, `dice/PoolTabs` |
-| `components/CharacterSheet.vue` | 3281 | 3111 | `ui/TraitInstanceEditor` (shared with the effect form) |
+| `components/CharacterSheet.vue` | 3281 | 2594 | `ui/TraitInstanceEditor` (shared with the effect form), `composables/useTraitEditor`, `sheet/TraitEditPanel` |
 
 Census taken 2026-09-11 (three read-only recon passes) against a tree that was
 level with `release-build`; the CharacterSheet numbers moved when the trait
@@ -45,6 +45,12 @@ All on 2026-09-11, each verified by build + CDP against the running app.
   stay in the parent, which now passes `enabled` down.
 - **DiceRoller.vue.** `dice/ContestResultWidget` (scoreboard, step-down arrow,
   taken-out) and `dice/PoolTabs` (grouped switcher, one `select` emit).
+- **CharacterSheet.vue.** `useTraitEditor.js` (the `sheet.*` draft refs, the
+  editor actions, live-saving `doSave`, delete countdown, spent-die recovery)
+  and `sheet/TraitEditPanel.vue` (header + the shared editor + the sheet's
+  extras; fully controlled, ~5 v-model fields and one emit per interaction).
+  Its CSS moved rule-by-rule — including a one-line-formatting rule the first
+  pass missed, so **check single-line rules** when moving CSS out of this file.
 
 **Deliberately not extracted:** the roller's consequence panel. Its buttons are
 driven by contest state (`iWon` / `iGaveIn` / taken-out / waiting /
@@ -147,13 +153,21 @@ with `document.elementFromPoint` + sibling index over `.sel-slot` / `.total-slot
 drag code risks double registration; the 383-line scoped style block must follow
 each template slice.
 
-## CharacterSheet.vue (3111, was 3281) — next up
+## CharacterSheet.vue (2594, was 3281) — next up
 
-The remaining `usePersistedRef('sheet.*')` refs (ten of them) are the draft
-state behind the editor; `useTraitEditor.js` should take those plus
-`startEdit` / `doSave` / `deleteTrait` / `recomputeTraitSets`, then
-`sheet/TraitEditPanel.vue` can wrap the shared editor with the same
-`change`-event contract the editor already uses.
+Editor done. Remaining, in value order:
+
+1. **`sheet/SfxCard.vue`** — the SFX card markup (name, description, rules text,
+   active/used/blocked classes) is duplicated between the trait-set list and the
+   detail panel, so this is a *sharing* win, not just a move. It needs the
+   display/gating helpers injected (`sfxName` / `sfxDescription` / `sfxCardText`
+   / `sfxTitle` / `sfxActive` / `sfxUsed` / `sfxConditionBlocked` /
+   `sfxAllowedInPhase`) plus an `activate` emit.
+2. **`sheet/TraitDetailPanel.vue`** — the read-only view. Lower value: it needs
+   ~10 injected behaviours (`canPlayTrait`, `playTrait`, `ratingTypeLabel`,
+   `challengeProgressLabel`, the SFX helpers) so the win is mostly line count.
+3. **`sheet/TraitRow.vue`** — the list row; carry the click / context-menu /
+   long-press handlers together with it.
 
 The heavy drill-in surface: header pills (110–121), trait-set list (342+),
 tab list, trait detail (read-only), and the `#after-*` slot hosts. The trait
