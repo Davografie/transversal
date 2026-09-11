@@ -134,7 +134,15 @@ instead of re-implementing:
 - `SearchDropdown` — search input + dropdown.
 - `ChipInput` — chip/tag input with suggestions.
 - `GmList` + `GmListItem` — generic controlled list (selection highlight, ✓/+ toggle, drag-reorder, loading/empty). Parents supply pre-filtered `items` and a `#item` slot, and react to `click` / `toggle` / `reorder`. Search stays in the parent.
-- `ConditionEditor`, `EffectEditor`, `TraitEditor`, `GmEntityForm` — sub-form editors.
+- `ConditionEditor`, `EffectEditor`, `GmEntityForm` — sub-form editors.
+- `TraitInstanceEditor` (in `components/ui/`) — the trait-rating editor shared by
+  the character sheet and the effect form's *Gain Trait* action. Controlled:
+  `v-model` per field (`ratingType` / `dice` / `capacity` / `die` / `polarity` /
+  `statement` / `notes`) plus a `change` event naming the field, so hosts own
+  persistence. `mode="array"` edits dice rows (sheet), `mode="single"` edits one
+  die with an optional variable mode (effects); `variant="box"` is the compact
+  form chrome. Host extras ride the `after-dice` / `after-fields` / `actions`
+  slots.
 - `GmTraitPicker` — trait search/select with universe filtering.
 
 Shared panel CSS lives in `src/frontend/src/assets/gm-panel.css` (imported
