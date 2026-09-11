@@ -44,12 +44,15 @@ import GmRollTableGroupPanel from './GmRollTableGroupPanel.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { paths, fetchLifePaths } = useLifePaths()
+const { pathsFor, fetchLifePaths } = useLifePaths()
 const { allTables, fetchAllTables } = useRollTables()
 
 const props = defineProps({
   universe: { type: String, default: '' },
 })
+
+// This panel's universe, from the per-universe store.
+const paths = pathsFor(props.universe)
 
 const fundamentalCount = computed(() =>
   allTables.value.filter(t => !t.universe && !t.lifePath).length,

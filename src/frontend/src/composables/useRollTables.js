@@ -1,8 +1,10 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useApi } from './useApi.js'
 
-// ── Module-level singleton state ─────────────────────
-const tables = ref([])        // lightweight list ({ id name scheme die }) for a path
+// ── Module-level state, keyed per life path ──────────
+// Keyed so two roll-table panels on different life paths cannot clobber each
+// other's list (they used to share one `tables` ref and re-fetch on activation).
+const tablesByPath = ref({})  // lifePathId ('' = unlinked) → list
 const allTables = ref([])     // all tables ({ id name universe lifePath }) for grouping
 const allTableNames = ref({}) // id → name, for human-friendly effect summaries
 const loading = ref(false)
@@ -21,14 +23,47 @@ export function useRollTables() {
   const { graphql } = useApi()
 
   async function fetchTables(lifePathId = null) {
+    const key = lifePathId || ''
     loading.value = true
     const data = await graphql(
       `query($lp:String){ rollTables(lifePathId:$lp){ id name scheme rollSource die } }`,
       { lp: lifePathId },
     )
-    tables.value = data?.rollTables || []
+    tablesByPath.value = { ...tablesByPath.value, [key]: data?.rollTables || [] }
     loading.value = false
-    return tables.value
+    return tablesByPath.value[key]
+  }
+
+  // A path's list — reactive to both the store and the key.
+  function tablesFor(lifePathId = null) {
+    return computed(() => tablesByPath.value[lifePathId || ''] || [])
+  }
+
+  // Apply an updater to every bucket (a table lives in exactly one, but which
+  // one is not the caller's business).
+  function _patchBuckets(updater) {
+    const next = { ...tablesByPath.value }
+    for (const key of Object.keys(next)) {
+      const list = next[key] || []
+      const out = updater(list)
+      if (out !== list) next[key] = out
+    }
+    tablesByPath.value = next
+  }
+
+  function _putTable(t) {
+    let placed = false
+    _patchBuckets((list) => {
+      const idx = list.findIndex(x => x.id === t.id)
+      if (idx < 0) return list
+      placed = true
+      return list.map((x, i) => (i === idx ? t : x))
+    })
+    if (!placed) {
+      const key = t.lifePath || ''
+      tablesByPath.value = { ...tablesByPath.value, [key]: [...(tablesByPath.value[key] || []), t] }
+    }
+    allTableNames.value = { ...allTableNames.value, [t.id]: t.name }
   }
 
   async function fetchAllTableNames() {
@@ -49,11 +84,7 @@ export function useRollTables() {
     loading.value = true
     const data = await graphql(`query($id:ID!){ rollTable(id:$id){ ${ROLL_TABLE_FIELDS} } }`, { id })
     const t = data?.rollTable || null
-    if (t) {
-      const idx = tables.value.findIndex(x => x.id === t.id)
-      if (idx >= 0) tables.value[idx] = t
-      allTableNames.value = { ...allTableNames.value, [t.id]: t.name }
-    }
+    if (t) _putTable(t)
     loading.value = false
     return t
   }
@@ -64,25 +95,20 @@ export function useRollTables() {
       { input },
     )
     const t = data?.saveRollTable || null
-    if (t) {
-      const idx = tables.value.findIndex(x => x.id === t.id)
-      if (idx >= 0) tables.value[idx] = t
-      else tables.value.push(t)
-      allTableNames.value = { ...allTableNames.value, [t.id]: t.name }
-    }
+    if (t) _putTable(t)
     return t
   }
 
   async function deleteRollTable(id) {
     const data = await graphql(`mutation($id:ID!){ deleteRollTable(id:$id) }`, { id })
     if (data?.deleteRollTable) {
-      tables.value = tables.value.filter(t => t.id !== id)
+      _patchBuckets((list) => (list.some(t => t.id === id) ? list.filter(t => t.id !== id) : list))
     }
     return data?.deleteRollTable
   }
 
   return {
-    tables, allTables, allTableNames, loading,
+    tablesByPath, tablesFor, allTables, allTableNames, loading,
     fetchTables, fetchAllTables, fetchAllTableNames, fetchTable, saveRollTable, deleteRollTable,
   }
 }

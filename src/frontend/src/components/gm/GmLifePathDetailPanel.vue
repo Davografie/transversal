@@ -62,18 +62,22 @@ import Button from '@/components/ui/Button.vue'
 const panel = usePanel()
 const bus = usePanelBus()
 const { deleteLifePath } = useLifePaths()
-const { tables, fetchTables } = useRollTables()
+const { tablesFor, fetchTables } = useRollTables()
 
 const props = defineProps({
   lp: { type: Object, required: true },
 })
 
+// This path's tables, from the per-path store (a sibling panel on another path
+// cannot clobber them).
+const tables = tablesFor(props.lp?.id)
+
 async function refreshTables() {
   try { await fetchTables(props.lp.id) } catch {}
 }
 
-// `tables` is a module-level singleton (useRollTables); re-fetch this path's
-// tables when it becomes the active tab again so it doesn't show another path's.
+// Re-fetch this path's tables when it becomes the active tab again — a sibling
+// panel or a sub-panel may have changed them.
 const panelActive = inject('panelActive', computed(() => true))
 watch(panelActive, (active) => { if (active) refreshTables() })
 
