@@ -373,13 +373,27 @@ function onImageOpen(img) {
 const rejectedUniverseId = ref(null)
 
 async function onMoveEntity({ entityId, entityKind, targetId, targetKind, targetUniverse }) {
+  // A location dropped on itself — or anywhere inside its own subtree — would
+  // re-parent it to itself and detach the whole branch from the root (the
+  // limbo Yinling Creek fell into). Flash the target instead of moving.
+  if (entityKind === 'location' && targetKind === 'location') {
+    const chain = []
+    if (findAncestorIds(locationTree.value, targetId, chain) && chain.includes(entityId)) {
+      rejectedUniverseId.value = targetId
+      setTimeout(() => { if (rejectedUniverseId.value === targetId) rejectedUniverseId.value = null }, 700)
+      return
+    }
+  }
   if (entityKind === 'occupant') {
     const data = await graphql(
-      `query($id: ID!) { entity(id: $id) { projections { id originUniverse universe currentLocation } } }`,
+      `query($id: ID!) { entity(id: $id) { currentProjection projections { id originUniverse universe currentLocation } } }`,
       { id: entityId }
     )
     const projections = data?.entity?.projections || []
-    const proj = projections.find((p) => p.universe === targetUniverse || p.originUniverse === targetUniverse)
+    // Last used wins: the active projection is the most recently touched body,
+    // so it beats an arbitrary first match (same rule as Import to Location).
+    const inUniverse = projections.filter((p) => p.universe === targetUniverse || p.originUniverse === targetUniverse)
+    const proj = inUniverse.find((p) => p.id === data?.entity?.currentProjection) || inUniverse[0] || null
 
     if (targetKind === 'universe') {
       if (proj) {
