@@ -211,6 +211,24 @@ The structured way to target. A **path** is an ordered pipeline of steps that re
 
 Resolution modes **choose** (interactive pick) and **random** (non-interactive sample) collapse a many-cardinality collection to one (or a subset when `count > 1`).
 
+### Where rules live
+
+Rules are attached to whatever they are *about*. **Manage SFX** has an owner filter for
+that: *Table* (everyone), *GM*, *Entity*, *Location*, *Projection*, *Trait*, *Trait
+instance*, *Trait set*. Pick the kind, then the thing by name.
+
+Two conveniences as the catalogue grows:
+
+- **Entity rows say what they are** — *Kael — character*, *The Emberline — universe* —
+  because one list mixing characters, factions, assets, worlds and GMCs by name alone
+  is a guessing game. An extra dropdown narrows it by type when you filter by Entity.
+- **Locations are their own filter**, not part of Entity.
+
+Not every rule fits every owner. A rule whose **source** is a trait instance belongs on
+*Trait instance*, a place-sourced one on *Location*; the panel is where that pairing
+lives, and a rule put where it doesn't belong resolves to nothing. (The catalogue says
+which is which — see [[Place-Owned Rules]].)
+
 ### Rules on a place
 
 An SFX attached to a **location** applies to the entities *in* it — and in its

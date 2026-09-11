@@ -32,9 +32,17 @@
         <option value="">No owner filter</option>
         <option v-for="t in OWNER_TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
       </select>
+      <!-- One flat list of 462 names is unusable: show what each thing *is*,
+           and let the type narrow it. Only the entity surface mixes types. -->
+      <select v-if="ownerType === 'ENTITY'" v-model="entityTypeFilter" class="filter-select" @change="ownerId = ''">
+        <option value="">All entity types</option>
+        <option v-for="t in ENTITY_TYPE_OPTIONS" :key="t" :value="t">{{ t }}</option>
+      </select>
       <select v-if="ownerType" v-model="ownerId" class="filter-select">
         <option value="">-- pick owner --</option>
-        <option v-for="o in ownersOfType" :key="o.ownerId" :value="o.ownerId">{{ o.label }}</option>
+        <option v-for="o in ownersOfType" :key="o.ownerId" :value="o.ownerId">
+          {{ o.label }}<template v-if="o.entityType"> — {{ o.entityType }}</template>
+        </option>
       </select>
       <Button v-if="ownerRef" type="button" class="add-btn" variant="secondary" @click="openPicker">+ Add SFX</Button>
     </div>
@@ -84,6 +92,8 @@ const fCondition = ref('')
 const fAction = ref('')
 const ownerType = ref('')
 const ownerId = ref('')
+const entityTypeFilter = ref('')
+const ENTITY_TYPE_OPTIONS = ['character', 'gmc', 'faction', 'asset', 'universe']
 
 onMounted(() => {
   if (!allSfxs.value.length) fetchTraitsConfig()
@@ -115,7 +125,11 @@ function triggerLabel(value) {
   return triggers.value.find(t => t.value === value)?.label || value || ''
 }
 
-const ownersOfType = computed(() => ownersByType.value[ownerType.value] || [])
+const ownersOfType = computed(() => {
+  const all = ownersByType.value[ownerType.value] || []
+  if (!entityTypeFilter.value) return all
+  return all.filter((o) => (o.entityType || '').toLowerCase() === entityTypeFilter.value)
+})
 
 const ownerRef = computed(() => {
   if (!ownerType.value || !ownerId.value) return null

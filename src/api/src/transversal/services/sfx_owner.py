@@ -994,6 +994,9 @@ def list_owner_refs(repo, owner_type: str) -> list[dict]:
             "owner_type": "entity",
             "owner_id": e.id,
             "label": e.name or e.id,
+            # What kind of entity this is. Without it the picker is a flat list of
+            # names — a character, a world and a faction are indistinguishable.
+            "entity_type": getattr(e.type, "value", e.type),
             "sfx_ids": list(e.sfx_ids or []),
         } for e in repo.list_all_entities() if e.type != EntityType.LOCATION]
 
@@ -1003,6 +1006,7 @@ def list_owner_refs(repo, owner_type: str) -> list[dict]:
             "owner_type": "location",
             "owner_id": e.id,
             "label": e.name or e.id,
+            "entity_type": getattr(e.type, "value", e.type),
             "sfx_ids": list(e.sfx_ids or []),
         } for e in repo.list_all_entities() if e.type == EntityType.LOCATION]
 

@@ -71,6 +71,7 @@ class QueriesSfx:
                 owner_type=r["owner_type"],
                 owner_id=r["owner_id"],
                 label=r["label"],
+                entity_type=r.get("entity_type", ""),
                 sfx_ids=r["sfx_ids"],
             )
             for r in refs

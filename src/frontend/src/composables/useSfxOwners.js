@@ -3,7 +3,7 @@ import { useApi } from './useApi.js'
 
 // ── Module-level singleton state ─────────────────────
 // All components sharing this composable read/write the same refs.
-const ownersByType = ref({})   // { [ownerType]: [{ ownerType, ownerId, label, sfxIds }] }
+const ownersByType = ref({})   // { [ownerType]: [{ ownerType, ownerId, label, entityType, sfxIds }] }
 const loading = ref(false)
 const error = ref('')
 
@@ -27,7 +27,7 @@ export function useSfxOwners() {
     error.value = ''
     const res = await graphql(
       `query($ownerType: SfxOwnerKind!) {
-        sfxOwners(ownerType: $ownerType) { ownerType ownerId label sfxIds }
+        sfxOwners(ownerType: $ownerType) { ownerType ownerId label entityType sfxIds }
       }`,
       { ownerType }
     )

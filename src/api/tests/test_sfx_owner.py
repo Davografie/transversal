@@ -1123,3 +1123,20 @@ def test_a_place_source_resolves_to_the_place_not_the_occupant():
 
     # A character who is not in a place that owns it has no location source.
     assert resolve_sfx_source(repo, "char-2", "earth", "sfx-sect", "location") is None
+
+
+def test_owner_refs_say_what_kind_of_entity_they_are():
+    """A flat list of 462 names is unusable — each row carries its entity type,
+    as the *value* ("faction"), never the enum's repr ("EntityType.FACTION")."""
+    from transversal.domain import EntityType
+    from transversal.services.sfx_owner import list_owner_refs
+
+    repo = Repo()
+    repo.entities = [
+        SimpleNamespace(id="char-1", name="Kael", type=EntityType.CHARACTER, sfx_ids=[]),
+        SimpleNamespace(id="faction-1", name="Azure Dawn", type=EntityType.FACTION, sfx_ids=[]),
+    ]
+    repo.list_all_entities = lambda: repo.entities
+
+    rows = list_owner_refs(repo, "entity")
+    assert {r["entity_type"] for r in rows} == {"character", "faction"}

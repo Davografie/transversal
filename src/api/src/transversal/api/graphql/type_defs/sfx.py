@@ -85,6 +85,10 @@ class SfxOwnerRef:
     owner_type: SfxOwnerKindGql
     owner_id: strawberry.ID
     label: str
+    # The entity's own type ("character"/"gmc"/"faction"/"asset"/"universe"/
+    # "location"), so an owner picker can label and filter rows. "" for surfaces
+    # where it doesn't apply (traits, projections, buckets).
+    entity_type: str = ""
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
 
 @strawberry.input
