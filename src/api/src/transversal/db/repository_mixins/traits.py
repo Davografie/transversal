@@ -36,6 +36,25 @@ class RepositoryTraits:
             for doc in self.db.aql.execute(query, bind_vars={"u": universe})
         ]
 
+    def get_trait_tags_by_universe(self, universe: str) -> list[str]:
+        """The distinct tags across every trait in a universe, deduped and sorted.
+
+        Aggregated in AQL on purpose: a caller that only wants the tag *pool*
+        (an editor's suggestions) would otherwise transfer every trait in the
+        universe — 613 of them in ``three_realms`` — to extract a handful of
+        strings.
+        """
+        query = f"""
+            FOR t IN {TRAITS}
+            FILTER @u IN t.universes
+            FOR tag IN NOT_NULL(t.tags, [])
+            FILTER tag != null AND tag != ""
+            COLLECT distinct_tag = tag
+            SORT distinct_tag
+            RETURN distinct_tag
+        """
+        return list(self.db.aql.execute(query, bind_vars={"u": universe}))
+
     def get_trait_by_name(self, name: str, universe: str) -> Optional[Trait]:
         query = f"""
             FOR t IN {TRAITS}

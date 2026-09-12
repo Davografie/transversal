@@ -209,3 +209,50 @@ def test_collision_and_id_resolution(batch_data):
     dup = repo.resolve_traitsetting_id(
         ENTITY_A, TRAIT_1, statement="archery", allow_duplicates=True)
     assert dup.startswith(f"{ENTITY_A}:{TRAIT_1}:") and dup != base
+
+
+# ── Tag pool aggregation ─────────────────────────────────────────
+#
+# The editor wants the distinct tags a universe uses, not every trait that
+# carries one. The AQL must agree with the obvious Python fold.
+
+TAG_UNIVERSE = "test-tag-universe"
+TAG_TS = "test-tag-ts"
+TAG_TRAITS = ("test-tag-trait-1", "test-tag-trait-2", "test-tag-trait-3")
+
+
+def _tag_cleanup(repo):
+    for tid in TAG_TRAITS:
+        repo.delete_trait(tid)
+    repo.delete_traitset(TAG_TS)
+
+
+@pytest.fixture(scope="module")
+def tag_data():
+    repo = _repo
+    _tag_cleanup(repo)  # self-heal any leftover from an interrupted prior run
+
+    repo.create_traitset(TraitSet(id=TAG_TS, name="tag set", universes=[TAG_UNIVERSE]))
+    repo.create_trait(Trait(id=TAG_TRAITS[0], name="Tagged One", universes=[TAG_UNIVERSE],
+                            traitset_id=TAG_TS, tags=["alpha", "beta"]))
+    repo.create_trait(Trait(id=TAG_TRAITS[1], name="Tagged Two", universes=[TAG_UNIVERSE],
+                            traitset_id=TAG_TS, tags=["beta", "gamma"]))
+    # A trait with no tags and one with an empty string — neither contributes.
+    repo.create_trait(Trait(id=TAG_TRAITS[2], name="Untagged", universes=[TAG_UNIVERSE],
+                            traitset_id=TAG_TS, tags=[""]))
+    yield repo
+    _tag_cleanup(repo)
+
+
+def test_trait_tags_by_universe_agrees_with_folding_the_traits(tag_data):
+    """The AQL aggregation is exactly the Python fold: distinct, sorted, no
+    empties — the invariant the two must share."""
+    repo = tag_data
+    expected = sorted({t for tr in repo.get_traits_by_universe(TAG_UNIVERSE)
+                       for t in (tr.tags or []) if t})
+    assert repo.get_trait_tags_by_universe(TAG_UNIVERSE) == expected
+    assert expected == ["alpha", "beta", "gamma"]
+
+
+def test_trait_tags_by_universe_is_empty_for_an_unknown_universe(tag_data):
+    assert tag_data.get_trait_tags_by_universe("no-such-universe") == []

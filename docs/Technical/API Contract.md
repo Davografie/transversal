@@ -211,6 +211,7 @@ type Query {
 
   # Trait registry
   traitsByUniverse(universe: String!): [TraitRef!]!
+  traitTags(universe: String!): [String!]!  # distinct tags across the universe's traits, deduped + sorted
   traitsetsByUniverse(universe: String!): [TraitSetRef!]!
 
   # Players & troupe

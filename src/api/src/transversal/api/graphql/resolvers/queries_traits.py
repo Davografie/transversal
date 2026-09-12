@@ -30,6 +30,17 @@ class QueriesTraits:
         return [_trait_to_gql(t) for t in traits]
 
     @strawberry.field
+    def trait_tags(self, info: strawberry.Info, universe: str) -> list[str]:
+        """Distinct tags across every trait in a universe, deduped and sorted.
+
+        The tag *pool* an editor offers as suggestions: a character need not
+        carry a tagged trait of its own to see the vocabulary its universe uses.
+        Aggregated in the repository, so the caller gets the handful of strings
+        rather than every trait in the universe.
+        """
+        return _em(info).repo.get_trait_tags_by_universe(universe)
+
+    @strawberry.field
     def traits_by_traitsets(self, info: strawberry.Info, traitset_ids: list[strawberry.ID]) -> list[TraitRef]:
         """Traits belonging to the given trait sets (across universes)."""
         repo = _em(info).repo
