@@ -634,6 +634,36 @@ def test_the_undo_finds_a_die_that_shifted():
     store.clear_all()
 
 
+def test_a_booked_undo_records_the_activation_source():
+    """The row remembers which trait instance the rule lived on — the attribution
+    that works even when nothing stamped the die."""
+    repo = FakeRepo(entities=[_entity()])
+    with activation_booking("sfx-x", cancelable=True, source_id="ts-hinder"):
+        event = schedule_revert(repo, "entity", "kael", _invertible_effect())
+
+    assert event.effect.context.get("activation_source") == "ts-hinder"
+
+
+def test_a_die_from_the_rules_own_source_counts_as_its_cost():
+    """No client stamp needed: a die whose trait instance is the rule's source is
+    the rule's cost, and losing it ends the activation."""
+    repo = FakeRepo(entities=[_entity()])
+    repo.events = [ScheduledEvent(
+        id="se-src", target_type="entity", target_id="kael",
+        effect=Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit",
+                      action="spend", result="1",
+                      context={"activation_source": "ts-hinder"}),
+        kind="hold", source_sfx_id="sfx-x", created_at="2026-09-12T10:00:00+00:00",
+    )]
+    bare_die = {"die": "d4", "source_kind": "hinder", "label": "Hinder d4", "ts_id": "ts-hinder"}
+
+    ended = end_activations_whose_cost_left(
+        repo, "kael", [bare_die, _other_die()], [_other_die()], manual_ids={"sfx-x"},
+    )
+
+    assert ended == ["sfx-x"]
+
+
 def test_ending_refunds_an_immediate_earn():
     """Hinder's money, end to end: the click earns 1, the take-back pays it back."""
     from transversal.services.effects_applier import apply_effects
@@ -672,7 +702,7 @@ def test_registry_apply_scopes_bookings_to_the_activation():
                    {ACTIVATION_CONTEXT_KEY: {"sfx_id": "sfx-x", "cancelable": True}})
     registry.apply(_invertible_effect(), "kael", "earth", {})
 
-    assert seen == [{"sfx_id": "sfx-x", "cancelable": True}, None]
+    assert seen == [{"sfx_id": "sfx-x", "cancelable": True, "source_id": ""}, None]
 
 
 def test_the_engine_marks_a_manual_activation_cancelable(monkeypatch):
@@ -695,9 +725,9 @@ def test_the_engine_marks_a_manual_activation_cancelable(monkeypatch):
 
     engine.process_event_outcome(
         GameEvent(type="manual", entity_id="kael", universe="earth"), ["sfx-x"], 0)
-    assert captured == [{"sfx_id": "sfx-x", "cancelable": True}]
+    assert captured == [{"sfx_id": "sfx-x", "cancelable": True, "source_id": ""}]
 
     captured.clear()
     engine.process_event_outcome(
         GameEvent(type="on_roll", entity_id="kael", universe="earth"), ["sfx-auto"], 0)
-    assert captured == [{"sfx_id": "sfx-auto", "cancelable": False}]
+    assert captured == [{"sfx_id": "sfx-auto", "cancelable": False, "source_id": ""}]

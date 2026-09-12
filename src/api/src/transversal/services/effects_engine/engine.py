@@ -283,6 +283,7 @@ class EffectsEngine:
                 _effects_applier.ACTIVATION_CONTEXT_KEY: {
                     "sfx_id": sfx.id,
                     "cancelable": event.type in ("manual", "on_activate"),
+                    "source_id": source_id or "",
                 },
             }
             roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]

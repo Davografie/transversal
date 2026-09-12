@@ -37,9 +37,11 @@ _BOOKING: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
 
 
 @contextmanager
-def activation_booking(sfx_id: Optional[str], cancelable: bool = False):
+def activation_booking(sfx_id: Optional[str], cancelable: bool = False, source_id: str = ""):
     """Scope handler dispatch to one activation, so bookings can be attributed."""
-    token = _BOOKING.set({"sfx_id": sfx_id, "cancelable": bool(cancelable)})
+    token = _BOOKING.set({
+        "sfx_id": sfx_id, "cancelable": bool(cancelable), "source_id": source_id or "",
+    })
     try:
         yield
     finally:
@@ -125,6 +127,21 @@ def schedule_event(
     return event
 
 
+def _booking_context_extra(context_extra: Optional[dict]) -> Optional[dict]:
+    """Fold the activation's own source into a booked undo's context.
+
+    The pool-as-ledger check needs to know which trait instance a rule lived on
+    (its declared source) so a die that came from it is attributed even when the
+    client did not stamp the die — ``activation_source`` is that record.
+    """
+    booking = _booking()
+    if not (booking and booking.get("source_id")):
+        return context_extra
+    extra = dict(context_extra or {})
+    extra.setdefault("activation_source", booking["source_id"])
+    return extra
+
+
 def schedule_revert(
     repo,
     target_type: str,
@@ -143,7 +160,7 @@ def schedule_revert(
     exists so the activation can be taken back before it commits. Anywhere else
     there is nothing to book and this is a no-op.
     """
-    revert = build_revert(effect, prior_result=prior_result, context_extra=context_extra)
+    revert = build_revert(effect, prior_result=prior_result, context_extra=_booking_context_extra(context_extra))
     if revert is None:
         return None
     if target is not None:
@@ -351,19 +368,24 @@ def _die_identity(die: dict) -> tuple:
 def _contribution_keys(repo, sfx_id: str, entity_id: str, pool: list) -> list:
     """The dice in ``pool`` this rule put there.
 
-    Two kinds of evidence, because a rule can put a die in a pool two ways: the
-    client stamps the die it adds with the rules that were active for its trait
-    (``armed_sfx_ids``), and a pool-add *effect* records the dice it appended in
-    its own undo row (``pool_add``).
+    Three kinds of evidence, because a die can arrive in a pool in three ways: the
+    client stamps the die it adds with the rules active for its trait
+    (``armed_sfx_ids``); a pool-add *effect* records the dice it appended in its
+    own undo row (``pool_add``); and a die that came from the trait instance the
+    rule *lives on* (its declared source, ``activation_source``) is the rule's
+    cost whatever put it there.
     """
     keys = [_die_identity(d) for d in (pool or []) if sfx_id in (d.get("armed_sfx_ids") or [])]
     for event in repo.list_all_scheduled_events():
         if event.source_sfx_id != sfx_id:
             continue
-        record = (event.effect.context or {}).get("pool_add") or {}
-        if record.get("owner") != entity_id:
-            continue
-        keys.extend(_die_identity(d) for d in (record.get("entries") or []))
+        context = event.effect.context or {}
+        record = context.get("pool_add") or {}
+        if record.get("owner") == entity_id:
+            keys.extend(_die_identity(d) for d in (record.get("entries") or []))
+        source_ts = context.get("activation_source")
+        if source_ts:
+            keys.extend(_die_identity(d) for d in (pool or []) if d.get("ts_id") == source_ts)
     return keys
 
 

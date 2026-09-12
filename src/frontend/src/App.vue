@@ -690,6 +690,9 @@ function onPoolSaved({ key, locationId, dice }) {
   if (!key) return
   remotePools.value = { ...remotePools.value, [key]: { dice: dice || [], player_id: key, phase: 'adding' } }
   poolLocations.value = { ...poolLocations.value, [key]: locationId || currentLocationId.value }
+  // A pool save is also the moment a rule's cost can leave it — ask the server
+  // whether anything ended, so the chip tells the truth without waiting for SSE.
+  sheetRef.value?.fetchInFlightSfxIds?.()
 }
 
 async function switchPerspective(id) {

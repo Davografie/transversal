@@ -68,6 +68,7 @@ class EffectRegistry:
             from transversal.services.scheduled_events import activation_booking
             with activation_booking(
                 activation.get("sfx_id"), cancelable=bool(activation.get("cancelable")),
+                source_id=activation.get("source_id") or "",
             ):
                 handler(action, entity_id, universe, context)
         else:
