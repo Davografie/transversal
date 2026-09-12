@@ -461,6 +461,14 @@ async function onDelete() {
   margin: 14px 0 0; padding-top: 8px;
   border-top: 1px solid var(--overlay-8);
 }
+/* These two blocks sit *outside* `.ps-form` (the acquire path belongs at the end
+   of the panel, the armed window only exists for delayed rules), so they carry the
+   form's label treatment themselves — otherwise their labels fall back to the base
+   size and read far larger than every other field on the panel. */
+.sfx-acquire label, .sfx-duration label {
+  font-size: 10px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
 .sfx-summary { font-size: 11px; color: var(--accent); font-family: monospace; background: var(--accent-8); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; line-height: 1.4; }
 .sfx-warnings { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .sfx-warning { font-size: 11px; color: var(--warn-soft); background: var(--warn-12); border: 1px solid var(--warn-32); border-radius: 4px; padding: 5px 8px; font-family: monospace; }
