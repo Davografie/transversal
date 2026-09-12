@@ -1,5 +1,5 @@
 <template>
-  <div v-if="api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }" @click="api.openTraitDetail(trait)" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd">
+  <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }" @click="api.openTraitDetail(trait)" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd">
     <div class="trait-left" :class="{ 'has-statement': !!trait.statement }">
       <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }">{{ api.displayName(trait.name) }}</span>
       <span v-if="api.traitTimerLabel(trait)" class="trait-timer" :title="'Re-enables after ' + api.traitTimerLabel(trait)">⏳ {{ api.traitTimerLabel(trait) }}</span>
@@ -72,7 +72,7 @@
       <span v-else class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
     </div>
   </div>
-  <div v-else class="trait-row unknown-trait" :class="{ wrap }">
+  <div v-else-if="depth === 0" class="trait-row unknown-trait" :class="{ wrap }">
     <div class="trait-left">
       <span class="trait-name unknown">???</span>
     </div>
@@ -80,52 +80,79 @@
       <span class="trait-die unknown-die">?</span>
     </div>
   </div>
-  <div v-if="api.isKnown(trait) && (trait.subTraitSettings || []).length" class="sub-trait-list">
-    <div
-      v-for="st in trait.subTraitSettings"
-      :key="st.id"
-      class="sub-trait-row"
-      :class="{ 'in-pool': api.isInPool(st), negative: st.polarity === 'NEGATIVE', 'trait-disabled': st.enabled === false }"
-      @click="api.openTraitDetail(st)"
-      @contextmenu.prevent
-    >
-      <div class="sub-trait-left" :class="{ 'has-statement': !!st.statement }">
-        <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || st.enabled === false }">{{ api.displayName(st.name) }}</span>
-        <span v-if="st.statement" class="sub-trait-statement">{{ st.statement }}</span>
-      </div>
-      <div class="sub-trait-right" @click.stop="api.playTrait(st)" :title="'Play ' + api.displayName(st.name)">
-        <div v-if="api.traitDiceGroups(st).length" class="trait-die-groups">
-          <div v-for="(group, gi) in api.traitDiceGroups(st)" :key="gi" class="trait-die-group">
-            <DieIcon
-              v-for="(die, i) in group"
-              :key="i"
-              :die="die"
-              class="trait-die-icon sub-trait-die"
-              :style="i ? { marginLeft: '-12px' } : null"
-            />
-          </div>
-        </div>
-        <span v-else-if="st.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${api.resolvedDieType(st)}`">{{ api.resourceDisplay(st) }}</span>
-      </div>
+  <!-- A nested row (depth > 0). Same markup the sub-trait list always had —
+       the difference is that it is now reachable at any depth. -->
+  <div
+    v-else
+    class="sub-trait-row"
+    :class="{ 'in-pool': api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }"
+    @click="api.openTraitDetail(trait)"
+    @contextmenu.prevent
+  >
+    <div class="sub-trait-left" :class="{ 'has-statement': !!trait.statement }">
+      <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }">{{ api.displayName(trait.name) }}</span>
+      <span v-if="trait.statement" class="sub-trait-statement">{{ trait.statement }}</span>
     </div>
+    <div class="sub-trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
+      <div v-if="api.traitDiceGroups(trait).length" class="trait-die-groups">
+        <div v-for="(group, gi) in api.traitDiceGroups(trait)" :key="gi" class="trait-die-group">
+          <DieIcon
+            v-for="(die, i) in group"
+            :key="i"
+            :die="die"
+            class="trait-die-icon sub-trait-die"
+            :style="i ? { marginLeft: '-12px' } : null"
+          />
+        </div>
+      </div>
+      <span v-else-if="trait.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
+    </div>
+  </div>
+
+  <!-- Children, at any depth. A trait's sub-traits are part of it, so they need
+       no expansion of their own; each level nests its own list, so the indent
+       accumulates on its own. A nested row's children render unconditionally —
+       by the time we are here, the root of the chain already passed the
+       fog-of-war check, which is how sub-traits have always behaved. -->
+  <div v-if="(depth > 0 || api.isKnown(trait)) && children.length" class="sub-trait-list">
+    <TraitRow
+      v-for="child in children"
+      :key="child.id"
+      :trait="child"
+      :api="api"
+      :phase="phase"
+      :depth="depth + 1"
+    />
   </div>
 </template>
 
 <script setup>
-// A single trait-list item: the known trait row, the unknown ("???") row, and
-// the sub-trait list that hangs under a trait. Presentational — every helper
-// and every interaction arrives through `api` (functions only), matching the
-// detail panel's contract. `wrap` is the profile view's chip layout.
+// A single trait-list item — the known trait row, the unknown ("???") row, and
+// the traits nested under it. Presentational: every helper and every interaction
+// arrives through `api` (functions only), matching the detail panel's contract.
+// `wrap` is the profile view's chip layout.
+//
+// **Recursive.** A trait's sub-traits render through this same component with
+// `depth` incremented, so nesting is limited only by what the query delivered
+// (see `utils/traitTree.js`). `depth` 0 is the top-level row; anything deeper
+// uses the compact sub-trait markup, and each level nests its own list so the
+// indent accumulates on its own.
+import { computed } from 'vue'
 import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
+import { childrenOf } from '@/utils/traitTree.js'
 
-defineProps({
+const props = defineProps({
   trait: { type: Object, required: true },
   api: { type: Object, required: true },
   phase: { type: String, default: '' },
   limitReached: { type: Boolean, default: false },
   wrap: { type: Boolean, default: false },
+  // 0 = a row in the set's trait list; > 0 = nested under a parent.
+  depth: { type: Number, default: 0 },
 })
+
+const children = computed(() => childrenOf(props.trait))
 </script>
 
 <style scoped>
