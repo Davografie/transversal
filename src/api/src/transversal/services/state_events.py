@@ -73,6 +73,43 @@ def fire_state_sfx(
         _firing.discard(key)
 
 
+def _opponent_in_contest(location_id: str, entity_id: str) -> str | None:
+    """The other side of the contest at this location, when one is recorded."""
+    from transversal.services.contest_tracker import get_contest_tracker
+
+    challenger, defendant = get_contest_tracker().get_contestants(location_id, entity_id)
+    for state in (challenger, defendant):
+        side = getattr(state, "entity_id", None) if state is not None else None
+        if side and side != entity_id:
+            return side
+    return None
+
+
+def fire_pool_change_sfx(location_id: str, entity_id: str, dice: list[dict]) -> None:
+    """Fire ``on_pool_change`` — the moment an assembled dice pool is saved.
+
+    The one server moment where a rule sees a pool as the player built it: every
+    die still carries its ``ts_id``, so a path can walk back to the trait that
+    produced it.
+
+    It fires on **every** save rather than only contested ones — the moment is
+    the moment, and a rule that wants a contest gates on the opposition being
+    there. The context supplies the other side when it exists
+    (``contest_entity_opponent``, and their assembled dice as ``opposing_rolls``
+    so a path can start from ``opposing_dice``). One consequence worth knowing:
+    a rule may fire while only one side has assembled, when the opponent's pool
+    is empty — an empty opposition is a real state, not an error.
+    """
+    context: dict = {"rolls": list(dice)}
+    opponent_id = _opponent_in_contest(location_id, entity_id)
+    if opponent_id:
+        from transversal.services.scene_state import get_scene_store
+
+        context["contest_entity_opponent"] = opponent_id
+        context["opposing_rolls"] = get_scene_store().get_pool(location_id, opponent_id)
+    fire_state_sfx(entity_id, "", "pool_changed", context)
+
+
 def broadcast_main_active(player_id: str, entity_id: str, active: bool) -> None:
     """Broadcast a main's active state to all sessions (SSE).
 

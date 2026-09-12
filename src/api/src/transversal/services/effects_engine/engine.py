@@ -388,6 +388,10 @@ class EffectsEngine:
         if trigger == "on_location_change" and event.type == "location_changed":
             return True
 
+        # on_pool_change
+        if trigger == "on_pool_change" and event.type == "pool_changed":
+            return True
+
         # on_trait_change
         if trigger == "on_trait_change" and event.type == "trait_updated":
             return True

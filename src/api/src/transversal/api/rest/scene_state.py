@@ -73,6 +73,12 @@ async def save_pool(location_id: str, entity_id: str, req: SavePoolRequest):
     logger.info(f"[init] save_pool loc={location_id} entity={entity_id} dice={len(dice)}")
     broadcast_pool_change(location_id, entity_id, dice=dice, phase="adding")
 
+    # The pool is saved — a rule can now see it as the player built it, with the
+    # other side of the contest too when there is one (`on_pool_change`).
+    from transversal.services.state_events import fire_pool_change_sfx
+
+    fire_pool_change_sfx(location_id, entity_id, dice)
+
     # Fog of war: everyone at this location learns the traits now in the pool.
     from transversal.services.trait_reveal import reveal_pool_traits, trait_setting_ids_from_pool
 

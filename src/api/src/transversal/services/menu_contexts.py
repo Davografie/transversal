@@ -106,6 +106,7 @@ TRIGGER_CARDS: dict[str, str] = {
     "on_push": "When you push",
     "on_taken_out": "When you are taken out",
     "on_prevent_taken_out": "When you would be taken out",
+    "on_pool_change": "Whenever your dice pool changes",
     "on_location_change": "When you arrive somewhere",
     "on_trait_change": "When a trait changes",
     "on_trait_learn": "When a trait is learned",
@@ -177,6 +178,13 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("on_prevent_taken_out", "On Prevent Taken Out", (
         Variable("effect_die", "die"),
         Variable("prevented", "string"),
+    ), group="dicepool"),
+    # The moment the assembled pool is saved. Every die still carries its
+    # ``ts_id``, so a rule can read *what is in my pool right now* — and, when a
+    # contest has an opponent, the other side (``contest_entity_opponent``, with
+    # their dice as the ``opposing_dice`` collection).
+    TriggerDef("on_pool_change", "On Pool Change", (
+        Variable("contest_entity_opponent", "entity"),
     ), group="dicepool"),
     TriggerDef("on_location_change", "On Location Change", (
         Variable("from_location", "location"),

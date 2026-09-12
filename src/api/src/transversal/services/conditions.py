@@ -406,6 +406,10 @@ TRIGGER_CONTEXT_KEYS: dict[str, frozenset[str]] = {
     "on_contest_win": frozenset({"contest_winner", "effect_die", "high_stakes"}),
     "on_contest_loss": frozenset({"contest_winner", "effect_die", "high_stakes"}),
     "on_give_in": frozenset({"gave_in", "high_stakes"}),
+    # The pool-save moment: it carries the actor's dice, and — when a contest has
+    # an opponent recorded at this location — the other side's as well. Only a
+    # `targeting path` condition reads dice, so only it is gated by these keys.
+    "on_pool_change": frozenset({"rolls", "opposing_rolls"}),
     "on_location_change": frozenset({"from_location", "to_location", "universe", "arrival_kind"}),
     "on_beat": _EMPTY,
     "on_scene": _EMPTY,
