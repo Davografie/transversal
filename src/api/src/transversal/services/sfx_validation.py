@@ -176,13 +176,22 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                 f"{need} source — with {sfx.source_kind or 'no source'} it can never pass"
             )
 
+    # A name an earlier effect bound is in scope for everything after it: an
+    # ``Effect.output`` on a *producing* action is bound at fire time
+    # (``effects_applier.publish_effect_output``), so `{beast}` in a later step is
+    # known, not unknown.
+    from transversal.services.effects_registry import output_element_for as _output_element_for
+    named_outputs: set[str] = set()
     for i, effect in enumerate(sfx.effects):
-        known_here = known
+        known_here = known | named_outputs
         if effect.timing.value in _ROLL_TIMINGS:
-            known_here = known | _ROLL_CONTEXT_VARIABLES
+            known_here = known | named_outputs | _ROLL_CONTEXT_VARIABLES
         for token in _effect_tokens(effect):
             if token not in known_here and not _reserved(token):
                 warnings.append(f"Effect {i + 1}: unknown variable {{{token}}}")
+        name = (getattr(effect, "output", "") or "").strip()
+        if name and _output_element_for(effect.type, effect.action):
+            named_outputs.add(name)
 
         target_kind = _target_kind(effect)
         for field in (effect.target_filter or {}):
@@ -282,7 +291,7 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     # (`filter universe == {chosen_universe}`). A name nothing binds matches
     # nothing, so the path resolves empty and the card reads vaguely — which is
     # exactly how "the universe" ended up on law-bridge's card.
-    bound = set(known)
+    bound = set(known) | named_outputs
     for label, spec in _specs_of(sfx):
         for step in spec.steps:
             value = getattr(step, "value", None)

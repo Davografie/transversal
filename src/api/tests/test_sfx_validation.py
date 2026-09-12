@@ -12,9 +12,9 @@ from transversal.domain import (
 from transversal.services.sfx_validation import validate_sfx
 
 
-def _sfx(trigger="manual", placement=None, effects=None, conditions=None):
+def _sfx(trigger="manual", placement=None, effects=None, conditions=None, source_kind=None):
     return SFX(
-        id="sfx-x", name="X", trigger=trigger, placement=placement,
+        id="sfx-x", name="X", trigger=trigger, placement=placement, source_kind=source_kind,
         effects=effects or [],
         conditions=conditions or [],
     )
@@ -442,3 +442,35 @@ def test_a_location_sourced_rule_owned_by_a_place_is_fine(monkeypatch):
     sfx = _sfx()
     sfx.source_kind = "location"
     assert validate_sfx(sfx, repo=object()) == []
+
+
+def test_a_named_output_is_not_an_unknown_variable():
+    """`{beast}` is bound by the gain that named it — the validator must know."""
+    effects = [
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+               target="trait-beast", output="beast"),
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="add_die",
+               target="{beast}", result="d6"),
+    ]
+    warnings = validate_sfx(_sfx(effects=effects))
+    assert not [w for w in warnings if "beast" in w], warnings
+
+
+def test_an_output_cannot_shadow_the_rules_own_token():
+    effects = [
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+               target="trait-beast", output="trait_setting"),
+    ]
+    # The token only exists when the rule declares a source of that kind — a rule
+    # with no source has nothing to shadow.
+    warnings = validate_sfx(_sfx(effects=effects, source_kind="trait_setting"))
+    assert any("shadows the rule's own" in w for w in warnings), warnings
+
+
+def test_a_token_nothing_binds_is_still_unknown():
+    effects = [
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="add_die",
+               target="{mystery}", result="d6"),
+    ]
+    warnings = validate_sfx(_sfx(effects=effects))
+    assert any("unknown variable {mystery}" in w for w in warnings), warnings
