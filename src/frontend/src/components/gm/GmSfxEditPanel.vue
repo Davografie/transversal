@@ -38,15 +38,12 @@
         </optgroup>
         <option v-if="!knownTrigger" :value="draft.trigger">{{ draft.trigger }}</option>
       </select>
-      <label>Placement</label>
-      <select v-model="draft.placement">
-        <option :value="null">From the trigger</option>
-        <option value="menu">Consequence menu (post-roll)</option>
-        <!-- Never strand a stored value: an SFX saved before the dead options
-             were dropped still shows what it holds (and keeps it on save). -->
-        <option v-if="unknownPlacement" :value="draft.placement">{{ draft.placement }} (stored)</option>
-      </select>
-      <p class="hint">Lands as: {{ placementLands }}.</p>
+      <!-- Placement used to sit here. The menu is a trigger now, so there is
+           nothing left for the field to say; a stored value is shown rather
+           than silently dropped, and rides along on save untouched. -->
+      <p v-if="storedPlacement" class="hint">
+        Carries a stored placement of <em>{{ draft.placement }}</em>.
+      </p>
 
       <h5 class="sfx-slot">Who it's about</h5>
       <label>Listens to</label>
@@ -231,17 +228,11 @@ const knownTrigger = computed(() => !draft.trigger || triggers.value.some(t => t
 // the context-key map read it). `sheet`/`auto` were choices nothing consumed, so
 // they are no longer offered — but a stored one must still render, or opening
 // and saving a rule would silently rewrite it.
-const unknownPlacement = computed(() =>
-  !!draft.placement && !['menu'].includes(draft.placement))
+const unknownPlacement = computed(() => !!draft.placement)
 
-// Where the rule lands, said as a consequence rather than as an enum. Mirrors
-// `derive_placement` in domain/traits.py (manual -> sheet, on_* -> auto, else
-// menu) — the two dead values are only ever *read* as this sentence.
-const placementLands = computed(() => {
-  if (draft.placement === 'menu') return 'the post-roll consequence menu'
-  if ((draft.trigger || '') === 'manual') return 'a card its owner presses'
-  return 'no card — it fires on its own when its event happens'
-})
+// Placement is no longer authored here — the menu is a trigger. A rule saved
+// before the change keeps whatever it holds; showing it beats rewriting it.
+const storedPlacement = unknownPlacement
 
 // A condition that reads the fire-time context can only be offered where the
 // point supplies it. The keys come from the backend capability map (shared with

@@ -93,6 +93,7 @@ class TriggerDef:
 # new trigger never renders as nothing.
 TRIGGER_CARDS: dict[str, str] = {
     "manual": "Activated",
+    "menu": "Picked from the post-roll menu",
     "on_roll": "Whenever a roll happens",
     "on_result": "When a roll is resolved",
     "on_complication": "When a complication is rolled",
@@ -133,6 +134,14 @@ def trigger_card(trigger: str) -> str:
 
 TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("manual", "Manual (player activates)", group="manual"),
+    # A manual activation that is offered in the post-roll consequence menu
+    # instead of as a card. It is a *trigger* rather than a placement because
+    # "after a roll, the player picks it" is when it starts — and because a
+    # separate placement field could disagree with the trigger (it could say
+    # "fires when a trait is learned" and "a player picks it after a roll" at
+    # once). No `on_` prefix: `derive_placement` reads `on_*` as event-driven
+    # and everything else as the menu, which is exactly right here.
+    TriggerDef("menu", "Post-roll menu (player picks)", group="manual"),
     TriggerDef("on_roll", "On Roll", group="dicepool"),
     TriggerDef("on_result", "On Result", (
         Variable("effect_die", "die"),

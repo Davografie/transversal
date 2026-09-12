@@ -435,13 +435,18 @@ def context_keys_for(trigger: str = "", timing: str = "",
     ``timing`` is an effect's timing when the point is that effect's own fire:
     roll/outcome timings bring the roll, boundary timings bring nothing. An
     immediate effect — and any SFX-level condition — is evaluated at activation,
-    where the trigger decides. A ``placement="menu"`` SFX is gated by the menu
-    assembly instead, which supplies the outcome keys.
+    where the trigger decides. A menu rule is gated by the menu assembly instead,
+    which supplies the outcome keys — and a menu rule is either
+    ``trigger="menu"`` or a legacy ``placement="menu"`` override, so both count.
     """
     if timing and timing != "immediate":
         return TIMING_CONTEXT_KEYS.get(timing)
     if placement == "menu":
         return _MENU_KEYS
+    if trigger:
+        from transversal.domain.traits import derive_placement
+        if derive_placement(trigger) == "menu":
+            return _MENU_KEYS
     return TRIGGER_CONTEXT_KEYS.get(trigger or "")
 
 

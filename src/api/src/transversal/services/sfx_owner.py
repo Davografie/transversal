@@ -80,11 +80,15 @@ def _challenge_pool_spec(polarity: str):
 
 
 def ensure_base_move_sfxs(repo) -> None:
-    """Seed the post-roll consequence-menu base moves as ``placement="menu"`` SFX.
+    """Seed the post-roll consequence-menu base moves as ``trigger="menu"`` SFX.
 
     Side (player vs architect) is a ``USER_ROLE`` condition rather than a hard
     code path. The SFX live in the ``table`` bucket (available to every entity);
-    menu assembly gates them by role. Idempotent.
+    the trigger puts them in the menu, which gates them by role. Idempotent.
+
+    The menu used to be a ``placement`` override on a ``manual`` trigger, which
+    let the two disagree (see ``menu_contexts.TRIGGERS``); it is the trigger
+    now, so the pair cannot be authored into nonsense.
     """
     from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
 
@@ -117,7 +121,7 @@ def ensure_base_move_sfxs(repo) -> None:
             continue
         repo.create_sfx(SFX(
             id=sfx_id, name=name, description=description,
-            trigger="manual", placement="menu",
+            trigger="menu",
             conditions=[Condition(type=ConditionType.USER_ROLE, target=role)],
             effects=effects,
         ))
@@ -296,7 +300,7 @@ def ensure_contest_complication_sfx(repo) -> None:
                 id=sfx_id,
                 name=name,
                 description=description,
-                trigger="manual", placement="menu",
+                trigger="menu",
                 conditions=[outcome_cond],
                 effects=[_complication_effect()],
             ))
@@ -310,9 +314,9 @@ def ensure_contest_complication_sfx(repo) -> None:
                 if eff.action != desired.action or not eff.negative:
                     existing.effects[i] = desired
                     changed = True
-        if existing.trigger != "manual" or existing.placement != "menu":
-            existing.trigger = "manual"
-            existing.placement = "menu"
+        if existing.trigger != "menu" or existing.placement is not None:
+            existing.trigger = "menu"
+            existing.placement = None
             changed = True
         conditions = [c for c in (existing.conditions or []) if c.type != ConditionType.CONTEST_OUTCOME]
         conditions.append(outcome_cond)
@@ -467,15 +471,15 @@ def ensure_hitch_gain_complication_sfx(repo) -> None:
             id="hitch-gain-complication",
             name="Gain a complication",
             description="Roller takes a complication stepped up by the bought hitches, then earns 1 razmerit",
-            trigger="manual", placement="menu",
+            trigger="menu",
             conditions=[hitch_cond],
             effects=effects,
         ))
         return
     changed = False
-    if existing.trigger != "manual" or existing.placement != "menu":
-        existing.trigger = "manual"
-        existing.placement = "menu"
+    if existing.trigger != "menu" or existing.placement is not None:
+        existing.trigger = "menu"
+        existing.placement = None
         changed = True
     if not any(c.type == ConditionType.HITCH for c in (existing.conditions or [])):
         existing.conditions = [*(existing.conditions or []), hitch_cond]
@@ -517,9 +521,9 @@ def ensure_opportunity_sfx(repo) -> None:
     existing = repo.get_sfx("opportunity-step-down-complication")
     if existing is not None:
         changed = False
-        if existing.trigger != "manual" or existing.placement != "menu":
-            existing.trigger = "manual"
-            existing.placement = "menu"
+        if existing.trigger != "menu" or existing.placement is not None:
+            existing.trigger = "menu"
+            existing.placement = None
             changed = True
         conditions = list(existing.conditions or [])
         if not any(c.type == ConditionType.HITCH for c in conditions):
@@ -536,7 +540,7 @@ def ensure_opportunity_sfx(repo) -> None:
         id="opportunity-step-down-complication",
         name="Step down a complication",
         description="Spend 1 razmerit to step down one of your complications",
-        trigger="manual", placement="menu",
+        trigger="menu",
         conditions=[hitch_cond, entity_cond],
         effects=effects,
     ))

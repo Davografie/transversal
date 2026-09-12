@@ -146,7 +146,7 @@ class SFX(BaseModel):
 
 - `trigger` is the event axis: an auto-fire event (`on_*`) or `manual`.
 - `source_kind` declares the owner surface — `trait_setting`/`traitset_setting`/`entity`/`projection`, plus the non-resolving bucket sources `table`/`gm` (empty element/variable; no `select source`/`source_rating`). Ownership is the concrete instances of the declared kind (see [[#Ownership & source resolution]]).
-- `placement` is the activation surface (`auto`/`sheet`/`menu`), derived from `trigger` when unset (`on_*` → auto, `manual` → sheet). `placement="menu"` SFX are the consequence-menu moves, gated by role/outcome conditions (`USER_ROLE` / `CONTEST_OUTCOME` / `TEST_OUTCOME` / `HITCH`) rather than a menu-context trigger.
+- `placement` is the activation surface (`auto`/`sheet`/`menu`), derived from `trigger` when unset (`on_*` → auto, `manual` → sheet, anything else → menu). It is **no longer authored**: the menu is a trigger (`menu`), because a separate field could disagree with the trigger it sat beside. Menu rules are gated by role/outcome conditions (`USER_ROLE` / `CONTEST_OUTCOME` / `TEST_OUTCOME` / `HITCH`) rather than a legacy menu-context trigger.
 - `arming_scope` is the listener scope — who the armed SFX listens to once it fires its roll/outcome-timed effects. `None` = derive from trigger (`on_session_start` → `global`, else `self`); `listener_spec` resolves the listener set from a `TargetSpec`. See [[#Arming scope]].
 - `conditions` gate which instance of that activation applies.
 - Legacy `menu_context` and `limit` strings are folded into `trigger` / a `NARRATIVE` condition by `@model_validator`s (`_fold_legacy_menu_context`, `_fold_legacy_limit`).
@@ -163,7 +163,7 @@ class SfxOwner(BaseModel):
 
 ### `ConsequenceOption` (line 660)
 
-A selectable post-roll consequence entry. Authored directly on entities (location/lair moves) or derived from `placement="menu"` SFX gated by role/outcome conditions (the base moves are now seeded such SFX, not hard-coded).
+A selectable post-roll consequence entry. Authored directly on entities (location/lair moves) or derived from `trigger="menu"` SFX gated by role/outcome conditions (the base moves are seeded as such SFX, not hard-coded).
 
 | Field | Meaning |
 |-------|---------|
@@ -494,11 +494,11 @@ Then context-free conditions are evaluated (`static_conditions`) so listing matc
 
 ### Editor vocabularies (backend-served)
 
-The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`dicepool`/`auto`); the activation surface is a separate `placement` field (`auto`/`sheet`/`menu`)), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
+The SFX editor renders three vocabularies from GraphQL rather than hardcoding them: `triggers` (from `TRIGGERS` in `menu_contexts.py` — value + label + variables + `group` (`manual`/`dicepool`/`auto`); the activation surface is derived from the trigger (`manual` → sheet, `on_*` → auto, `menu` → the post-roll menu)), `conditionTypes` (from `CONDITION_TYPES` in `conditions.py` — value + label + needs-target + placeholder + target-kind), and `targetFilterFields` (from `FILTER_FIELDS` in `effect_targets.py` — field + label + valueType + applicable kinds). Adding an entry to the backend registry makes it appear in the editor without frontend edits.
 
 The editor also validates a draft on save (and live, debounced) via the `validateSfx` GraphQL field backed by `sfx_validation.validate_sfx`, which warns on unknown `{variables}`, a `target_filter` field that doesn't apply to the action's target kind, missing required fields, a declared `source_kind` that matches no actual owner (a silent `select source` / `source_rating` no-op), a `listener_spec` arming scope without a listener path, a condition whose **source** can't supply what it reads, and a condition whose **moment** doesn't supply a context key it reads. Warnings are advisory, not a save gate.
 
-**The context capability map** (`conditions.py`) answers the last one. Every condition declares the context keys it reads (`condition_context_keys`) and every evaluation point the keys it supplies (`context_keys_for`) — site keys are read off the fire sites themselves (roll/outcome timings bring the roll, boundary timings and boundary triggers bring nothing, a manual activation brings `phase` + `high_stakes`, a `placement="menu"` SFX is gated by the menu assembly's outcome keys). An unmodelled site supplies `null` = unrestricted: the map only ever *forbids*, because hiding a working gate is worse than offering a dead one. `conditionContextKeys(trigger, placement, timing)` serves one point to the editor; the per-condition exactness stays here, where the live warnings surface.
+**The context capability map** (`conditions.py`) answers the last one. Every condition declares the context keys it reads (`condition_context_keys`) and every evaluation point the keys it supplies (`context_keys_for`) — site keys are read off the fire sites themselves (roll/outcome timings bring the roll, boundary timings and boundary triggers bring nothing, a manual activation brings `phase` + `high_stakes`, a menu rule (`trigger="menu"`, or a legacy `placement="menu"`) is gated by the menu assembly's outcome keys). An unmodelled site supplies `null` = unrestricted: the map only ever *forbids*, because hiding a working gate is worse than offering a dead one. `conditionContextKeys(trigger, placement, timing)` serves one point to the editor; the per-condition exactness stays here, where the live warnings surface.
 
 ### Target pickers (frontend)
 
@@ -559,7 +559,7 @@ Scene advance (`advance_scene` in `src/api/src/transversal/api/rest/targeting_ba
 `assemble_consequence_menu(entity, repo, side, menu_context)` builds the post-roll consequence options from three sources:
 
 1. **Entity moves** — `Entity.consequence_options` on the acting entity's current location and its ancestors (lair moves), filtered by `side`.
-2. **SFX moves** — `placement="menu"` SFX gated by their conditions (role via `USER_ROLE`, outcome via `CONTEST_OUTCOME`/`TEST_OUTCOME`/`HITCH`), wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`. Legacy `trigger="on_consequence"` SFX still appear in every menu for backward compatibility.
+2. **SFX moves** — `trigger="menu"` SFX gated by their conditions (role via `USER_ROLE`, outcome via `CONTEST_OUTCOME`/`TEST_OUTCOME`/`HITCH`), wrapped as `ConsequenceOption(id="sfx:{sfx_id}", source="sfx")`. Legacy `trigger="on_consequence"` SFX still appear in every menu for backward compatibility.
 
 Choosing an option applies its effects through the shared applier, resolving any `{choose_*}` targets via the wizard.
 

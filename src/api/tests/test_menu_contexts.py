@@ -261,3 +261,34 @@ def test_an_unmodelled_trigger_is_never_called_arrival():
 
     assert trigger_fires_on_arrival("on_something_new") is False
     assert trigger_fires_on_arrival("") is False
+
+
+def test_menu_is_a_trigger_because_a_placement_could_disagree_with_it():
+    """`menu` is the post-roll menu offered as a trigger. It is grouped under
+    Manual (a person still picks it), it isn't an arrival rule, and it carries no
+    `on_` prefix — which is what makes `derive_placement` read it as the menu
+    without a special case."""
+    from transversal.services.menu_contexts import trigger_fires_on_arrival
+
+    menu = [t for t in TRIGGERS if t.value == "menu"]
+    assert len(menu) == 1
+    assert menu[0].group == "manual"
+    assert trigger_fires_on_arrival("menu") is False
+
+
+def test_a_menu_rule_reads_the_menu_context_keys():
+    """Conditions on a menu rule are evaluated against the menu's context (the
+    outcome keys), whether the rule says `trigger="menu"` or carries the legacy
+    `placement="menu"` — one map, both spellings."""
+    from transversal.services.conditions import context_keys_for
+
+    new = context_keys_for("menu", "", None)
+    legacy = context_keys_for("manual", "", "menu")
+    assert new is not None and new == legacy
+    assert "role" in new
+
+
+def test_an_ordinary_trigger_is_still_unrestricted_by_this():
+    from transversal.services.conditions import context_keys_for
+
+    assert context_keys_for("", "", None) is None

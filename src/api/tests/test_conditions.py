@@ -522,10 +522,14 @@ def test_derive_placement():
     assert derive_placement("manual") == "sheet"
     assert derive_placement("on_roll") == "auto"
     assert derive_placement("contest_win") == "menu"
+    # `menu` is a trigger now, and needs no special case: it carries no `on_`
+    # prefix, so the "everything else is the menu" branch already answers it.
+    assert derive_placement("menu") == "menu"
     assert SFX(id="a", name="a", trigger="manual").effective_placement == "sheet"
     assert SFX(id="b", name="b", trigger="on_contest_win").effective_placement == "auto"
     assert SFX(id="c", name="c", trigger="contest_win").effective_placement == "menu"
     assert SFX(id="d", name="d", trigger="manual", placement="menu").effective_placement == "menu"
+    assert SFX(id="e", name="e", trigger="menu").effective_placement == "menu"
 
 
 def test_derive_arming_scope():

@@ -36,8 +36,10 @@ order in which the fields constrain each other.
    this is also a readout: opened from **Manage SFX** it names the actual owner
    (*Lives on: Azure Dawn — location → reaches everyone inside it*), which is the
    one fact the editor cannot know by itself.
-2. **What starts it** — *Trigger* + *Placement*: who fires it, and whether it is
-   a card someone presses or something the world does.
+2. **What starts it** — *Trigger*: a game event, a card the owner presses
+   (`Manual`), or an option in the post-roll consequence menu (`Post-roll menu`).
+   One field, one answer — the menu used to be a separate *Placement* override
+   that could contradict the trigger, and it is a trigger again.
 3. **Who it's about** — *Listens to*: for a rule that stays armed, whose rolls it
    is watching (self, everyone, or a path).
 4. **Where it may be learned** — *Acquire path* (optional): where the rule can be
@@ -74,26 +76,29 @@ The SFX **id** is generated from the name (a slug like `sfx-heal`); it is not ed
 The single activation axis. Choose from the trigger vocabulary (see [[#Trigger reference]]). Broadly:
 
 - **`manual`** — a button the player clicks (the SFX shows on the owner's card/sheet).
+- **`menu`** — a button the player or GM picks from the **post-roll consequence
+  menu** instead of from a card. It is a trigger rather than a separate field
+  because a placement could disagree with the trigger (it could claim both
+  "fires when a trait is learned" and "a player picks it after a roll"). The
+  base moves — *Proceed the narrative*, *Apply a complication*, *Decrease the
+  doom pool* — are these.
 - **`on_*` dice-pool events** — `on_roll`, `on_result`, `on_contest_win`, `on_taken_out`, … fire automatically when that event happens.
 - **`on_beat` / `on_scene` / `on_session_start`** — fire on time/state boundaries.
 
 Some triggers expose **variables** (e.g. `on_contest_win` provides `{effect_die}`, `{taken_out}`, `{contest_entity_opponent}`). The editor lists them under "Available variables" so you can reference them in effect fields as `{variable}`.
 
-### Placement
+### Placement — removed
 
-Where the SFX surfaces, shown under the select as a sentence (*Lands as: a card
-its owner presses*). Two real choices:
+There is no Placement field any more. It offered four values and only one did
+anything (`menu`), it overlapped with the trigger, and it could be authored into
+nonsense — *fires when a trait is learned* **and** *offered as a post-roll choice*.
+The menu is a trigger now (`Post-roll menu (player picks)`), which is what it
+always was under the surface: `derive_placement` reads `manual` as a card,
+`on_*` as event-driven, and everything else as the menu.
 
-- **From the trigger** (default) — the trigger already decides how a rule reaches
-a person: `manual` → a card its owner presses; `on_*` → no card, it fires on its
-own when the event happens.
-- **Consequence menu (post-roll)** — a real override: the rule is offered in the
-consequence menu after a roll, which is what the ten `apply-complication`-style
-rules do.
-
-Older rules may still carry `auto` / `sheet`. Those were choices nothing read,
-so they are no longer offered — but a stored one is shown rather than silently
-rewritten on save.
+If a rule still carries a stored `placement`, the editor says so under the
+Trigger field and leaves it untouched. The eleven rules that used the override
+were migrated to `trigger="menu"`.
 
 ### Source (the panel's *Lives on*)
 

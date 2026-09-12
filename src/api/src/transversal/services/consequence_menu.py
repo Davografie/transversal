@@ -80,8 +80,11 @@ def assemble_consequence_menu(
         sfx = repo.get_sfx(sfx_id)
         if sfx is None:
             continue
-        # New model: explicitly-placed menu SFX, gated by role/outcome conditions.
-        if sfx.placement == "menu":
+        # New model: menu-placed SFX, gated by role/outcome conditions. The menu
+        # is a *trigger* now (`trigger="menu"`), so `effective_placement` is the
+        # one read that accepts both spellings — a rule authored as
+        # `trigger="manual", placement="menu"` still lands here.
+        if sfx.effective_placement == "menu":
             if sfx.conditions and not evaluate_conditions(entity, sfx.conditions, repo, context=_outcome_context(menu_context, role)):
                 continue
             options.append(ConsequenceOption(
@@ -134,7 +137,7 @@ def assemble_hitch_menu(repo, roller_id: str = "", buyer_id: str = "") -> list[C
                 continue
             seen.add(sfx_id)
             sfx = repo.get_sfx(sfx_id)
-            if sfx is None or sfx.placement != "menu":
+            if sfx is None or sfx.effective_placement != "menu":
                 continue
             if not any(c.type == ConditionType.HITCH for c in (sfx.conditions or [])):
                 continue

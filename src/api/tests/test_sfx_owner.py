@@ -416,10 +416,11 @@ def test_ensure_contest_complication_sfx_creates_once():
     ensure_contest_complication_sfx(repo)
     apply_sfx = repo.sfxs["apply-complication"]
     take_sfx = repo.sfxs["take-complication"]
-    assert apply_sfx.trigger == "manual"
-    assert take_sfx.trigger == "manual"
-    assert apply_sfx.placement == "menu"
-    assert take_sfx.placement == "menu"
+    assert apply_sfx.trigger == "menu"
+    assert take_sfx.trigger == "menu"
+    # The menu is the trigger now, not a placement override.
+    assert apply_sfx.placement is None
+    assert take_sfx.placement is None
     assert [c.target for c in apply_sfx.conditions if c.type.value == "contest_outcome"] == ["player"]
     assert [c.target for c in take_sfx.conditions if c.type.value == "contest_outcome"] == ["give_in"]
     assert apply_sfx.name == "Apply a complication"
@@ -456,8 +457,8 @@ def test_ensure_contest_complication_sfx_migrates_stale_effect():
     assert apply_sfx.effects[0].action == "cortex_gain"
     assert apply_sfx.effects[0].negative is True
     assert apply_sfx.effects[0].target_scope == "traitset:ts-complications-a190"
-    assert apply_sfx.trigger == "manual"
-    assert apply_sfx.placement == "menu"
+    assert apply_sfx.trigger == "menu"
+    assert apply_sfx.placement is None
     assert [c.target for c in apply_sfx.conditions if c.type.value == "contest_outcome"] == ["player"]
 
 
@@ -482,8 +483,8 @@ def test_ensure_hitch_gain_complication_sfx_creates_once():
     repo = SetupRepo()
     ensure_hitch_gain_complication_sfx(repo)
     sfx = repo.sfxs["hitch-gain-complication"]
-    assert sfx.trigger == "manual"
-    assert sfx.placement == "menu"
+    assert sfx.trigger == "menu"
+    assert sfx.placement is None
     assert [c.type.value for c in sfx.conditions] == ["hitch"]
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "modify_trait"
@@ -507,8 +508,8 @@ def test_ensure_opportunity_sfx_creates_once():
     repo = SetupRepo()
     ensure_opportunity_sfx(repo)
     sfx = repo.sfxs["opportunity-step-down-complication"]
-    assert sfx.trigger == "manual"
-    assert sfx.placement == "menu"
+    assert sfx.trigger == "menu"
+    assert sfx.placement is None
     assert {c.type.value for c in sfx.conditions} == {"hitch", "entity_type"}
     assert len(sfx.effects) == 2
     assert sfx.effects[0].type == "transfer_razmerit"

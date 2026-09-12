@@ -259,3 +259,22 @@ def test_hitch_menu_filters_by_buyer_condition():
     # Buyer has no complications → the SFX is filtered out.
     repo.trait_settings = []
     assert assemble_hitch_menu(repo, roller_id="roller-1", buyer_id="buyer-1") == []
+
+
+def test_both_spellings_of_a_menu_rule_reach_the_menu():
+    """The menu is a trigger now (`trigger="menu"`). A rule authored the old way
+    (`trigger="manual", placement="menu"`) still lands, so nothing written before
+    the change stops appearing — and the new spelling is the one that can't
+    contradict its own trigger."""
+    repo = MenuRepo()
+    repo.sfx_owners = {"table": SimpleNamespace(id="table", sfx_ids=["new-spelling", "old-spelling", "not-a-menu"])}
+    repo.sfxs = {
+        "new-spelling": SFX(id="new-spelling", name="New", trigger="menu", effects=[]),
+        "old-spelling": SFX(id="old-spelling", name="Old", trigger="manual", placement="menu", effects=[]),
+        "not-a-menu": SFX(id="not-a-menu", name="Plain", trigger="manual", effects=[]),
+    }
+
+    labels = _labels(assemble_consequence_menu(_entity(), repo, "player"))
+    assert "New" in labels
+    assert "Old" in labels
+    assert "Plain" not in labels
