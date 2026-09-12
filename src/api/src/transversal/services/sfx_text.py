@@ -505,6 +505,13 @@ def _filter_phrase(p: Phrase, step: FilterStep, resolve: NameResolver | None = N
         p.adjectives.append(_or_join([str(v) for v in values], resolve))
         return p
 
+    # A negated set: "not one of static or resource". The phrase is chosen so it
+    # cannot be misread as a plain equality on the first value.
+    if step.operator == "not in":
+        values = step.value if isinstance(step.value, list) else [step.value]
+        p.adjectives.append(f"not one of {_or_join([str(v) for v in values], resolve)}")
+        return p
+
     if step.operator == "contains" and step.field in _CONTAINS_WORDS:
         value_text = (_or_join([str(v) for v in step.value], resolve)
                       if isinstance(step.value, list)

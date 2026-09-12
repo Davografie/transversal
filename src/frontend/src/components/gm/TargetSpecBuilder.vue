@@ -60,7 +60,7 @@
           <select v-model="step.field" :disabled="!priorType(i)">
             <option value="">— field —</option>
             <option v-for="f in fieldsFor(priorElement(i))" :key="f.name" :value="f.name">
-              {{ f.name }} <em>({{ f.type }})</em>
+              {{ f.label || f.name }}
             </option>
           </select>
           <select v-model="step.operator" class="tsb-op">
@@ -143,7 +143,7 @@
           <select v-if="aggNeedsField(step.fn)" v-model="step.field">
             <option value="">— field —</option>
             <option v-for="f in fieldsFor(priorElement(i))" :key="f.name" :value="f.name">
-              {{ f.name }} <em>({{ f.type }})</em>
+              {{ f.label || f.name }}
             </option>
           </select>
         </div>
@@ -153,7 +153,7 @@
           <select v-model="step.field">
             <option value="">— field —</option>
             <option v-for="f in orderableFieldsFor(priorElement(i))" :key="f.name" :value="f.name">
-              {{ f.label || f.name }} <em>({{ f.type }})</em>
+              {{ f.label || f.name }}
             </option>
           </select>
           <select v-model="step.direction">
@@ -185,7 +185,7 @@
           <select v-if="evalFieldOptions(i).length" v-model="step.field" class="tsb-field">
             <option value="count">count</option>
             <option v-for="f in evalFieldOptions(i)" :key="f.name" :value="f.name">
-              {{ f.name }} <em>({{ f.type }})</em>
+              {{ f.label || f.name }}
             </option>
           </select>
           <span v-else class="tsb-eval-lhs">{{ evalLhsLabel(i) }}</span>

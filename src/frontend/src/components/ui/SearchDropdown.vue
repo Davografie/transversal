@@ -44,6 +44,10 @@ const props = defineProps({
   valueKey: { type: String, default: 'id' },
   labelKey: { type: String, default: 'name' },
   maxResults: { type: Number, default: 20 },
+  // A display name for a value that isn't among `options` (a saved id whose
+  // candidate is not in the loaded page). The caller resolves it so the field
+  // shows a name instead of a raw id; the raw value stays the last resort.
+  fallbackLabel: { type: String, default: '' },
   clearable: { type: Boolean, default: false },
 })
 
@@ -61,7 +65,9 @@ const selectedLabel = computed(() => {
   // A value that isn't among the options is still a value — a `{bound_name}`
   // token the author typed, or an id whose record is gone. Falling back to the
   // placeholder hides what is actually set: the field looks empty when it isn't.
-  return (opt && opt[props.labelKey]) || String(props.modelValue)
+  // `fallbackLabel` (a resolved name from the caller) comes first, so an id the
+  // author never should see reads as its name; a raw id is the last resort.
+  return (opt && opt[props.labelKey]) || props.fallbackLabel || String(props.modelValue)
 })
 
 const hasValue = computed(() => props.modelValue !== '' && props.modelValue != null)

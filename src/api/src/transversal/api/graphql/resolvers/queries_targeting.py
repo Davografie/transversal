@@ -19,6 +19,7 @@ from transversal.api.graphql.types import TargetCatalogCollection
 from transversal.api.graphql.types import TargetCatalogEdge
 from transversal.api.graphql.types import TargetCatalogElement
 from transversal.api.graphql.types import TargetCatalogField
+from transversal.api.graphql.types import TargetLabel
 from transversal.api.graphql.types import TargetSpecInput
 from transversal.api.graphql.types import TargetTraceError
 from transversal.api.graphql.types import TargetTraceResult
@@ -184,6 +185,20 @@ class QueriesTargeting:
         ]
 
     @strawberry.field
+    def target_labels(self, info: strawberry.Info, ids: list[strawberry.ID]) -> list[TargetLabel]:
+        """Display names for ids — so authoring surfaces never show a raw id.
+
+        Resolved through the same repository name resolver the card text renders
+        with (entities, registry traits, trait sets, life paths, roll tables,
+        universe keys), so what the editor shows and what the card says cannot
+        drift.
+        """
+        from transversal.services.sfx_text import repo_name_resolver
+
+        resolve = repo_name_resolver(_em(info).repo)
+        return [TargetLabel(id=str(i), name=resolve(str(i)) or str(i)) for i in ids]
+
+    @strawberry.field
     def target_catalog(self, info: strawberry.Info) -> TargetCatalog:
         """The declarative targeting catalog (element types, edges, fields,
         aggregations, collections) the targeting wizard composes specs from."""
@@ -195,7 +210,7 @@ class QueriesTargeting:
                 for e in tc.EDGES
             ],
             fields=[
-                TargetCatalogField(element=element_name, name=f.name, type=f.type, options=list(f.options), operators=list(tc.operators_for(f)), references=f.references, suggest=f.suggest)
+                TargetCatalogField(element=element_name, name=f.name, type=f.type, label=tc.field_label(f), options=list(f.options), operators=list(tc.operators_for(f)), references=f.references, suggest=f.suggest)
                 for element_name, fields in tc.SCALAR_FIELDS.items()
                 for f in fields.values()
             ],

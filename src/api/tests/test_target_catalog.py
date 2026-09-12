@@ -111,7 +111,7 @@ def test_operators_are_type_aware():
     assert ">" not in tc.operators_for(tc.field("die", "source_kind"))
     assert ">" in tc.operators_for(tc.field("die", "result"))
     assert tc.operators_for(tc.field("die", "armed_sfx_ids")) == ("contains", "==", "!=")
-    assert tc.operators_for(tc.field("traitsetting", "rating_type")) == ("==", "!=", "in")
+    assert tc.operators_for(tc.field("traitsetting", "rating_type")) == ("==", "!=", "in", "not in")
 
 
 def test_id_reference_fields_declare_reference():

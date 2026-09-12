@@ -85,6 +85,7 @@ from transversal.api.graphql.type_defs.targeting import (  # noqa: F401
     TargetCatalogElement,
     TargetCatalogEdge,
     TargetCatalogField,
+    TargetLabel,
     TargetCatalogAggregation,
     TargetCatalogCollection,
     SourceKindOption,

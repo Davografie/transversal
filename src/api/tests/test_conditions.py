@@ -420,6 +420,29 @@ def test_target_path_self_filter():
     assert not evaluate_condition(_entity(type=EntityType.GMC), cond, FakeRepo())
 
 
+def test_target_path_not_in_filter():
+    """`not in` = none of the listed values (the negation of `in`)."""
+    spec = TargetSpec(steps=[
+        SelectStep(collection="self"),
+        FilterStep(field="type", operator="not in", value=["gmc", "asset"]),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    assert evaluate_condition(_entity(), cond, FakeRepo())
+    assert not evaluate_condition(_entity(type=EntityType.GMC), cond, FakeRepo())
+    assert not evaluate_condition(_entity(type=EntityType.ASSET), cond, FakeRepo())
+
+
+def test_target_path_not_in_accepts_a_single_value():
+    """One-or-several: the editor stores a single pick as a scalar."""
+    spec = TargetSpec(steps=[
+        SelectStep(collection="self"),
+        FilterStep(field="type", operator="not in", value="character"),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    assert not evaluate_condition(_entity(), cond, FakeRepo())
+    assert evaluate_condition(_entity(type=EntityType.GMC), cond, FakeRepo())
+
+
 def test_target_path_can_start_from_the_opposing_dice():
     """Elements and Spiritual Roots: the cycle rule compares two sides by giving
     each its own condition path — mine seeded from ``rolled_dice``, theirs from

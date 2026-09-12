@@ -351,8 +351,12 @@ def _match(element: Any, step: FilterStep, field_type: str | None = None,
         if op == "<":
             return lhs < rhs
         return lhs <= rhs
-    if op == "in":
-        return actual in expected
+    if op in ("in", "not in"):
+        # One-or-several: the editor stores a single pick as a scalar and several
+        # as a list. `in` = is one of them; `not in` = is none of them.
+        wanted = expected if isinstance(expected, list) else [expected]
+        hit = actual in wanted
+        return hit if op == "in" else not hit
     if op == "contains":
         # A list value means *any of* — the same one-or-several reading an enum
         # filter gets from `in`, for a field that is itself a list (a trait's

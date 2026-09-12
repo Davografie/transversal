@@ -92,10 +92,18 @@ class TargetCatalogField:
     element: str
     name: str
     type: str  # "int" | "number" | "die" | "string"
+    label: str = ""  # the author-facing word (`trait`, not `trait_id`)
     options: list[str] = strawberry.field(default_factory=list)
     operators: list[str] = strawberry.field(default_factory=list)
     references: str = ""  # element type this id field points at (e.g. traitset)
     suggest: str = ""  # value source for a data-driven field (e.g. trait_tags)
+
+
+@strawberry.type
+class TargetLabel:
+    """An id's display name — what authoring surfaces show instead of raw ids."""
+    id: str
+    name: str
 
 @strawberry.type
 class TargetCatalogAggregation:

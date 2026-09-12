@@ -8,6 +8,7 @@
         :placeholder="placeholder"
         value-key="id"
         label-key="name"
+        :fallback-label="resolvedLabel"
         :clearable="clearable"
         @select="pick"
         @clear="clear"
@@ -70,6 +71,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SearchDropdown from './SearchDropdown.vue'
 import { useEffectTargets } from '@/composables/useEffectTargets.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
+import { useApi } from '@/composables/useApi.js'
 
 // Generic target picker — resolves candidates through the backend's shared
 // `targetCandidates` resolver (same candidate set the random mode uses) and
@@ -103,6 +105,24 @@ const emit = defineEmits(['update:modelValue', 'select', 'update:filter'])
 
 const { candidates, fetchTargets } = useEffectTargets()
 const { load: loadSfxMeta, targetFilterFields } = useSfxMeta()
+const { graphql } = useApi()
+
+// A saved value whose candidate isn't in the loaded set would otherwise render
+// as a raw id. The backend resolves the name through the same resolver the card
+// text uses — so the picker shows "Beast", never "trait-2081905".
+const resolvedLabel = ref('')
+watch([() => props.modelValue, candidates], async ([value, list]) => {
+  resolvedLabel.value = ''
+  if (!value || (list || []).some((c) => c.id === value)) return
+  try {
+    const data = await graphql(
+      `query($ids: [ID!]!) { targetLabels(ids: $ids) { id name } }`,
+      { ids: [value] },
+    )
+    const name = data?.targetLabels?.[0]?.name || ''
+    if (name && name !== value) resolvedLabel.value = name
+  } catch (e) { /* the raw value stays as the last resort */ }
+})
 
 // Fields the backend says can narrow this kind.
 const filterFields = computed(() =>

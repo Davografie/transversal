@@ -105,8 +105,8 @@ def narrowed_element(element: str, field: str, operator: str, value: object) -> 
 # Operators valid per field type. Ordering operators only make sense on
 # comparable (numeric/die/timestamp) fields; plain strings only support
 # equality/membership.
-_ORDERED_OPERATORS = ("==", "!=", ">", ">=", "<", "<=", "in")
-_STRING_OPERATORS = ("==", "!=", "in")
+_ORDERED_OPERATORS = ("==", "!=", ">", ">=", "<", "<=", "in", "not in")
+_STRING_OPERATORS = ("==", "!=", "in", "not in")
 _COMPARABLE_TYPES = ("int", "number", "die", "datetime")
 
 
