@@ -730,8 +730,11 @@ function returnToSelf() {
 
 function onInspectEntity(id) {
   if (gmMode.value) {
-    onPeerClick(id)
-    sheetVisible.value = true
+    // A map-dot click is spatial, not a request to read: it selects the
+    // occupant (the rail outlines it) but must never pop the sheet open. The
+    // rail chips keep the full open/switch/assume semantics — they call
+    // ``onPeerClick`` bare.
+    onPeerClick(id, { fromMap: true })
     return
   }
   // Map-dot semantics (deliberately NOT the peer-chip toggle):
@@ -760,30 +763,36 @@ function onInspectEntity(id) {
 //   assumed — you ARE this entity (entityId) → solid fill
 //   viewing — you are peeking at it (viewingEntityId) → outlined
 
-async function onPeerClick(id) {
+async function onPeerClick(id, { fromMap = false } = {}) {
   if (gmMode.value) {
     const isLocation = peers.value.find(p => p.id === id)?.type === 'LOCATION'
     if (isLocation) {
       // Locations are never assumed — view their read-only sheet (toggle).
       viewingEntityId.value = viewingEntityId.value === id ? null : id
+      if (fromMap) return  // map = select only, never steer the sheet
       forceSheet.value = true
       if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
       return
     }
     // Clicking the entity you already act as: if you were viewing another
     // character, this resets the view back to this one (stop peeking, keep
-    // acting). Only a click with nothing being viewed exits to free-roam.
+    // acting). Only a click with nothing being viewed exits to free-roam —
+    // and never from the map, where a click is not a command.
     if (entityId.value === id) {
       if (viewingEntityId.value) {
         viewingEntityId.value = null
+        if (fromMap) return
         forceSheet.value = true
         if (mobileStackActive.value) setMobileFocus('sheet')
         return
       }
+      if (fromMap) return
       returnToSelf(); forceSheet.value = true; return
     }
-    // Second click on the peer you are viewing → assume it.
+    // Second click on the peer you are viewing → assume it (rail only; from the
+    // map a second click just deselects).
     if (viewingEntityId.value === id) {
+      if (fromMap) { viewingEntityId.value = null; return }
       await switchPerspective(id)   // clears viewingEntityId
       forceSheet.value = true
       if (mobileStackActive.value && entityId.value === id) setMobileFocus('sheet')
@@ -791,6 +800,7 @@ async function onPeerClick(id) {
     }
     // First click → view only (inspect), don't assume.
     viewingEntityId.value = id
+    if (fromMap) return
     forceSheet.value = true
     if (mobileStackActive.value) setMobileFocus('sheet')
     return
