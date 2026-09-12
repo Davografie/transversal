@@ -25,9 +25,17 @@ export function useTraitsConfig() {
           }
         }
       }`),
+      // Every field the SFX editor *reads* must be selected here: the editor's
+      // draft is loaded from these rows and saved back whole, so a field missing
+      // from this selection is a field the editor silently rewrites to blank
+      // (placement / armingScope / duration were all three missing, which made
+      // the 10 consequence-menu rules look like plain defaults and reset them on
+      // any save). Add a field here before reading it in useSfxEdit.
       graphql(`query {
         sfxs {
           id name description trigger limit sourceKind ownerSurfaces
+          placement armingScope
+          duration { timers { event remaining } combine }
           listenerSpec acquireSpec
           conditions { type subject target targets value operator narrative spec }
           effects { timing type action target entity result targetScope entityScope targetFilter dieFilter negative context duration { timers { event remaining } combine } targetSpec entitySpec refs conditions { type subject target targets value operator narrative spec } }
