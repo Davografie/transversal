@@ -1,12 +1,11 @@
 <template>
   <div v-if="api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }" @click="api.openTraitDetail(trait)" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd">
-    <div class="trait-left">
+    <div class="trait-left" :class="{ 'has-statement': !!trait.statement }">
       <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }">{{ api.displayName(trait.name) }}</span>
       <span v-if="api.traitTimerLabel(trait)" class="trait-timer" :title="'Re-enables after ' + api.traitTimerLabel(trait)">⏳ {{ api.traitTimerLabel(trait) }}</span>
       <span v-if="trait.enabled === false" class="trait-disabled-badge">disabled</span>
       <span v-if="trait.fromType === 'relationship' && trait.relationshipContactName" class="trait-contact">→ {{ trait.relationshipContactName }}</span>
       <span v-if="trait.statement" class="trait-statement">{{ trait.statement }}</span>
-      <span v-if="trait.notes" class="trait-notes">{{ trait.notes }}</span>
       <div v-if="trait.sfxIds?.length" class="sfx-cards">
         <SfxCard v-for="sfxId in trait.sfxIds" :key="sfxId" v-bind="api.sfxCardModel(sfxId, 'chip')"
                  @activate="api.activateSfx(sfxId, trait.id)" />
@@ -90,7 +89,7 @@
       @click="api.openTraitDetail(st)"
       @contextmenu.prevent
     >
-      <div class="sub-trait-left">
+      <div class="sub-trait-left" :class="{ 'has-statement': !!st.statement }">
         <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || st.enabled === false }">{{ api.displayName(st.name) }}</span>
         <span v-if="st.statement" class="sub-trait-statement">{{ st.statement }}</span>
       </div>
@@ -259,14 +258,27 @@ defineProps({
   line-height: 1.3;
 }
 
-.trait-notes {
+/* The statement is the identity of *this* instance; the definition name is the
+   base it derives from. So when a statement exists the emphasis flips — the
+   name drops to a dim kicker and the statement carries the row. With no
+   statement the name stays the prominent line, since then it is all there is. */
+.trait-left.has-statement .trait-name {
   font-size: 10px;
   color: var(--text-dim);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  letter-spacing: 0.02em;
+}
+.trait-left.has-statement .trait-statement {
+  font-size: 13px;
+  color: var(--text);
+}
+.sub-trait-left.has-statement .sub-trait-name {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.sub-trait-left.has-statement .sub-trait-statement {
+  font-size: 13px;
+  opacity: 1;
+  color: var(--text);
 }
 
 .trait-die-groups {
