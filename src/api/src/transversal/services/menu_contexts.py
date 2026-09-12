@@ -198,10 +198,10 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     # "This trait instance is what got added." The fact that the rule's own trait
     # arrived is *structural* — the trigger only matches when the source is among
     # the dice this save added, so a rule that only cares about its own arrival no
-    # longer evaluates conditions on every pool change. `{added_die}` is that die,
-    # resolved to the one in *this* rule's pool (see `_activation_bindings`).
+    # longer evaluates conditions on every pool change. The dice themselves are the
+    # `added_dice` collection, read from this rule's point of view (`dice_from_source`
+    # — a 2d8 trait contributes two of them, so it is always a list).
     TriggerDef("on_pool_add", "On Added To Pool", (
-        Variable("added_die", "die"),
         Variable("dice_pool", "pool"),
         Variable("contest_entity_opponent", "entity"),
     ), group="dicepool", requires_source_elements=("traitsetting",)),

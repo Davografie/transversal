@@ -401,7 +401,28 @@ def resolved_id(value) -> str | None:
     return getattr(value, "ts_id", None) or getattr(value, "id", None)
 
 
-def event_collections(context: dict | None) -> dict[str, list[Any]]:
+def dice_from_source(added: list[Any] | None, source_id: str | None,
+                     source_element: str | None = None) -> list[Any]:
+    """The dice a pool save added that came from *this rule's own source*.
+
+    A rule reads the moment from where it stands, and a trait instance can
+    contribute more than one die — a ``2d8`` rating is **two** dice, and both
+    arrived. So this is a list, never a die, and a rule on a fire technique sees
+    the two dice its own technique just put in, not everything the save added.
+
+    Narrowing needs a source that can *contribute* dice; for anything else (an
+    entity rule, a table rule, no source at all) there is nothing to narrow by,
+    and the whole of what was added is the honest answer.
+    """
+    everything = list(added or [])
+    if not source_id or source_element != "traitsetting":
+        return everything
+    return [d for d in everything
+            if d.get("ts_id") == source_id or d.get("source_id") == source_id]
+
+
+def event_collections(context: dict | None, source_id: str | None = None,
+                      source_element: str | None = None) -> dict[str, list[Any]]:
     """The dice collections a fire event carries, as resolver seeds.
 
     One rule for every caller: an event that carries dice exposes them under the
@@ -409,6 +430,10 @@ def event_collections(context: dict | None) -> dict[str, list[Any]]:
     the other side's ``opposing_dice`` — resolves wherever the context is
     threaded through (conditions, immediate effects, deferred effects). Absent
     keys seed nothing, which is a real state at a moment with no contest.
+
+    ``added_dice`` is the one seed that is *about the rule*: it is narrowed to the
+    dice that came from the rule's own source (see :func:`dice_from_source`), so
+    "the die I just added" needs no filter — and a ``2d8`` trait brings two.
     """
     ctx = context or {}
     seeds: dict[str, list[Any]] = {}
@@ -417,7 +442,7 @@ def event_collections(context: dict | None) -> dict[str, list[Any]]:
     if ctx.get("opposing_rolls"):
         seeds["opposing_dice"] = ctx["opposing_rolls"]
     if ctx.get("added_dice"):
-        seeds["added_dice"] = ctx["added_dice"]
+        seeds["added_dice"] = dice_from_source(ctx["added_dice"], source_id, source_element)
     return seeds
 
 
@@ -844,8 +869,9 @@ def _die_from_ref(value: str, repo) -> dict | None:
     The mirror of :func:`_pool_from_id`. A die in a pool has no id — two dice from
     the same trait are different dice — so the reference carries *where it sits*
     and this reads the pool back. That is what makes a **bound** die usable in a
-    path: `{added_die}` is exactly such a reference, and without this a rule could
-    hold the right die and still resolve to nobody.
+    path: a binding that names a die (the pool's `added_dice`, say) is exactly such
+    a reference, and without this a rule could hold the right die and still resolve
+    to nobody.
     """
     parts = (value or "").split(":")
     if len(parts) != 4 or parts[0] != "die":

@@ -156,7 +156,10 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         # Event-scoped seeds: a roll-bearing trigger (on_roll / on_result) carries
         # its dice in the context, so a path can inspect *this* roll — and, at the
         # pool-save moment, the other side's as well (``opposing_dice``).
-        collections = event_collections(context)
+        # `added_dice` is read from the rule's own point of view — the dice its
+        # source contributed — so the source goes with the context.
+        collections = event_collections(
+            context, getattr(source, "id", None), source_element)
 
         target_context = TargetContext(
             subject=entity, repo=repo, source=source,

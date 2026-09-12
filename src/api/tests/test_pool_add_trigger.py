@@ -8,8 +8,9 @@ pool."*
 That is what this is: a trigger *about its source*. A rule on a fire technique
 does not care about every pool save — it cares about its own arrival — so the
 fact is decided structurally (before the conditions, which is the point) instead
-of being one more path to evaluate on every change. `{added_die}` is that die,
-resolved into *this* rule's pool, so the effect needs no filter either.
+of being one more path to evaluate on every change. The dice are the `added_dice`
+seed, read from this rule's point of view, so the effect needs no filter either —
+and a `2d8` trait instance brings two of them.
 """
 
 from types import SimpleNamespace as NS
@@ -82,12 +83,16 @@ def die(ts_id, rating="d8", index=0):
 
 
 def sfx(target_steps=None) -> SFX:
-    """The rule: *when this trait is added, step its die down.*"""
+    """The rule: *when this trait is added, step the dice it brought down.*
+
+    No filter, and no singular token: `added_dice` is read from this rule's own
+    point of view, and a trait instance can contribute more than one die.
+    """
     return SFX(
         id="sfx-on-add", name="On Add Probe", trigger="on_pool_add", source_kind="trait_setting",
         effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll", action="step_down_die",
                         target="", target_spec=TargetSpec(steps=target_steps or [
-                            {"kind": "select", "collection": "variable", "variable": "added_die"}]))],
+                            {"kind": "select", "collection": "added_dice"}]))],
     )
 
 
@@ -126,13 +131,26 @@ def test_it_does_not_fire_when_a_different_trait_was_added():
     assert store.get_pool("loc-1", "kael")[0]["die"] == "d6"
 
 
-def test_it_targets_the_die_of_its_own_trait_when_several_arrive():
-    """A save can add more than one die. `{added_die}` is *this* rule's die, so
-    the effect needs no filter to hit the right one."""
-    fire = die("kael:fire-palm", "d8", index=0)
-    other = die("kael:iron-bark", "d6", index=1)
-    store = run([fire, other], [fire, other])
-    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d6"]
+def test_it_takes_the_dice_of_its_own_trait_when_several_arrive():
+    """A save can add more than one die — including *two from the same trait*,
+    which is what a `2d8` rating does. `added_dice` is that trait's dice, so the
+    effect needs no filter to hit exactly them."""
+    fire_a = die("kael:fire-palm", "d8", index=0)
+    fire_b = die("kael:fire-palm", "d8", index=1)
+    other = die("kael:iron-bark", "d6", index=2)
+    store = run([fire_a, fire_b, other], [fire_a, fire_b, other])
+    # Both fire dice came down; the other technique's die is untouched.
+    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d6", "d6"]
+
+
+def test_a_2d8_trait_instance_brings_two_dice_and_both_are_taken():
+    """The author's correction: a trait instance can be `2d8`, so the seed is a
+    *list* — a singular binding would have stepped one of the two down and left
+    the other standing."""
+    one = die("kael:fire-palm", "d10", index=0)
+    two = die("kael:fire-palm", "d10", index=1)
+    store = run([one, two], [one, two])
+    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d8", "d8"]
 
 
 def test_an_unresolved_source_never_fires():
@@ -163,8 +181,9 @@ def test_the_trigger_says_which_sources_it_can_work_with():
     meta = next(t for t in TRIGGERS if t.value == "on_pool_add")
     assert meta.requires_source_elements == ("traitsetting",)
     assert trigger_card("on_pool_add") == "When this trait is added to your dice pool"
+    # No singular `{added_die}`: the dice are the `added_dice` collection, plural.
     assert [v.name for v in trigger_variables("on_pool_add")] == [
-        "added_die", "dice_pool", "contest_entity_opponent"]
+        "dice_pool", "contest_entity_opponent"]
 
 
 def test_the_moment_is_the_pool_save_and_it_is_a_seed():
@@ -174,4 +193,4 @@ def test_the_moment_is_the_pool_save_and_it_is_a_seed():
 
     assert "on_pool_add" in (triggers_for_event("pool_changed") or set())
     assert {"rolls", "opposing_rolls", "added_dice"} <= (context_keys_for(trigger="on_pool_add") or set())
-    assert scope_seed_names("on_pool_add", "trait_setting")["added_die"] == "die"
+    assert "added_die" not in scope_seed_names("on_pool_add", "trait_setting")

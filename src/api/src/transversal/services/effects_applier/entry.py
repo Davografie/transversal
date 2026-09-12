@@ -160,13 +160,18 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
     entity = repo.get_entity(entity_id) if repo is not None else None
     if entity is None:
         return effect
+    from transversal.services.effects_applier.datatypes import SOURCE_CONTEXT_KEY
+    from transversal.services.effects_applier.datatypes import SOURCE_ELEMENT_CONTEXT_KEY
     from transversal.services.target_resolver import event_collections
 
     bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
     # The event's own dice seed the path (an immediate effect reads the same
     # collections a condition does); an explicit argument still wins, because a
-    # caller iterating one die means *that die* is the roll.
-    seeds = event_collections(context)
+    # caller iterating one die means *that die* is the roll. `added_dice` is
+    # narrowed by the rule's source, which the caller threaded into the context.
+    source = (context or {}).get(SOURCE_CONTEXT_KEY)
+    seeds = event_collections(
+        context, getattr(source, "id", None), (context or {}).get(SOURCE_ELEMENT_CONTEXT_KEY))
     seeds.update(collections or {})
     resolved = _resolve_entity_spec(effect, entity, repo, bindings, seeds)
     return resolved if resolved is not None else effect

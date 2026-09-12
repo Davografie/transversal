@@ -122,17 +122,6 @@ def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None) -> d
 
     out: dict = {}
     for name, element in names.items():
-        if name == "added_die":
-            # Per-rule: the die from *this* rule's own trait, not every die the
-            # save added. Bound as the die reference an effect can act on, so
-            # "step down the one I just added" needs no filter at all.
-            die = _added_die_of(event.context, source_id)
-            if die is None:
-                continue
-            ref = _resolved_id(die)
-            if ref:
-                out[name] = Binding(value=str(ref), element=element, cardinality="one")
-            continue
         value = values.get(name)
         if value is None or value == "":
             continue
@@ -361,7 +350,8 @@ class EffectsEngine:
                     blocked = False
                     if effect.refs:
                         before = len(outcome.structured)
-                        fire_ctx = _fire_context(event, sfx, repo, bindings=bindings)
+                        fire_ctx = _fire_context(event, sfx, repo, bindings=bindings,
+                                                 source_id=source_id, source_element=source_element)
                         # An effect may carry both a primary target path and named
                         # references — "attune *these people* to *their projection*".
                         # Walk the target path first: its named outputs join the

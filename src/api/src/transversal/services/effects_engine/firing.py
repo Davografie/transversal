@@ -72,21 +72,30 @@ def _emit_sfx_triggered(entity_id: str, sfx) -> None:
             },
         ))
 
-def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None, bindings: dict | None = None):
-    """Build the resolver context for a fire-time effect (spec + refs paths share it)."""
+def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None,
+                  bindings: dict | None = None, source_id: str | None = None,
+                  source_element: str | None = None):
+    """Build the resolver context for a fire-time effect (spec + refs paths share it).
+
+    ``source_id``/``source_element`` are the *resolved* activation source when the
+    caller has it (the engine resolves it before dispatching); without them the raw
+    id from the event context is used. `added_dice` is narrowed by them — the seed
+    is read from the rule's own point of view.
+    """
     from transversal.services.target_resolver import TargetContext, event_collections, resolve_source
 
     entity = repo.get_entity(event.entity_id) if repo is not None else None
-    source_id = event.context.get("source_id") if event.context else None
-    source, source_element = (
-        resolve_source(sfx.source_kind or "", source_id, repo)
-        if sfx.source_kind and source_id and repo is not None
+    raw_source_id = source_id or (event.context.get("source_id") if event.context else None)
+    source, resolved_element = (
+        resolve_source(sfx.source_kind or "", raw_source_id, repo)
+        if sfx.source_kind and raw_source_id and repo is not None
         else (None, None)
     )
+    source_element = source_element or resolved_element
     # Event-carried dice are seeds wherever the context travels, so an immediate
     # effect can read the same collections a condition can; an explicit
     # ``collections`` argument still wins (the per-die deferred path builds it).
-    seeds = event_collections(event.context)
+    seeds = event_collections(event.context, raw_source_id, source_element)
     seeds.update(collections or {})
     return TargetContext(
         subject=entity, repo=repo, collections=seeds,
@@ -158,7 +167,12 @@ def _apply_immediate_spec(
 
     resolution = resolve(
         effect.target_spec,
-        TargetContext(subject=entity, repo=repo, collections=event_collections(event.context),
+        TargetContext(subject=entity, repo=repo,
+                      collections=event_collections(
+                          event.context,
+                          getattr(source, "id", None)
+                          or (event.context.get("source_id") if event.context else None),
+                          source_element),
                       source=source, source_element=source_element, bindings=bindings if bindings is not None else {}),
         answers=answers,
     )

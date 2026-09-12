@@ -445,9 +445,13 @@ declared, the other side's dice come with it.
   effect can step exactly that die.
 - `select variable {dice_pool} → navigate dice → …` — the pool itself, by name
   (a handle; walking it is what `pool → dice` does).
-- `select variable {added_die} → …` — the die that arrived *from this rule's own
-  trait* (`on_pool_add` binds it per rule), so "step down the one I just added"
-  needs no filter.
+- `select added_dice → …` — **the dice this rule's own trait just contributed**.
+  It is read from the rule's point of view: a rule on a fire technique sees the
+  dice its technique put in, not everything the save added — and a `2d8` technique
+  brings *two* dice, so it is always a list. (A rule whose source contributes no
+  dice — an entity rule, a table rule — sees everything the save added, because
+  there is nothing to narrow by.) "Step down the one I just added" therefore needs
+  no filter at all.
 
 **A trigger can be about its own source.** `on_pool_add` fires only when the trait
 instance the rule lives on is what got added — the fact is decided structurally,
@@ -588,7 +592,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 | `on_prevent_taken_out` | A take-out is prevented | dicepool | `{effect_die}`, `{prevented}` |
 | `on_set` | Dice are set | dicepool | `{effect_die}`, `{total}` |
 | `on_pool_change` | Your assembled dice pool is saved | dicepool | `{dice_pool}`, `{contest_entity_opponent}` |
-| `on_pool_add` | **This trait instance** is added to your pool | dicepool | `{added_die}`, `{dice_pool}`, `{contest_entity_opponent}` |
+| `on_pool_add` | **This trait instance** is added to your pool | dicepool | `{dice_pool}`, `{contest_entity_opponent}` (and the `added_dice` seed) |
 | `on_location_change` | Entity changes location | — | `{from_location}`, `{to_location}`, `{universe}` |
 | `on_trait_change` | A trait changes | — | `{trait}`, `{traitset}` |
 | `on_trait_learn` / `on_trait_offered` | A trait is learned / offered | — | `{trait}`, `{trait_setting}`, `{owner}`, `{learner}` / `{opponent}` |

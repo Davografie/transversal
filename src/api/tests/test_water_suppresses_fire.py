@@ -219,20 +219,19 @@ def test_it_does_not_fire_when_the_source_is_not_a_fire_technique():
 
 # ── What the conditions do *not* say ───────────────────────────────────
 
-def test_without_a_filter_any_added_die_comes_down():
-    """The trigger's condition is about the rule's **own** trait ("this technique
-    is fire-aspected"), not about what was added — and `on_pool_change` fires on
-    every save. So an unfiltered `added_dice` target takes whatever arrived: here
-    a die from no trait at all comes down, because the rule was suppressed by the
-    opponent's water, not because it was fire.
-
-    This is what the `ts_id == {trait_setting}` filter is for."""
+def test_only_the_rules_own_trait_dice_are_taken():
+    """`added_dice` is read from the rule's own point of view (2026-09-12, later):
+    the dice *this* rule's source contributed. The author's rule needs no filter —
+    a die from another technique is not its business, and a `2d8` technique brings
+    both of its dice."""
     manual = {"die": "d6", "ts_id": None, "source_kind": "manual",
               "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 0}
+    fire = {"die": "d8", "ts_id": "kael:fire-palm", "source_kind": "trait",
+            "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 1}
 
-    store = run([manual], [manual])
+    store = run([manual, fire], [manual, fire])
 
-    assert store.get_pool("loc-1", "kael")[0]["die"] == "d4"
+    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d6"]
 
 
 def test_with_the_filter_only_the_fire_die_comes_down():
@@ -247,23 +246,21 @@ def test_with_the_filter_only_the_fire_die_comes_down():
 
     assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d6"]
 
-def test_the_rule_lives_on_one_trait_and_fires_when_another_is_added():
-    """The author's exact question: *"I have trait A with this SFX, and I add
-    trait B to the pool — does the SFX on trait A fire?"*
+def test_adding_another_trait_is_not_this_rules_business():
+    """The author's exact question, re-answered after `added_dice` became per-rule:
+    *"I have trait A with this SFX, and I add trait B — does the SFX on A fire?"*
 
-    Yes. The rule's home (A) decides **whether it is available to this character**
-    and what `{trait_setting}` means — condition ① asks whether *A's* technique is
-    fire-aspected. What was *added* is the trigger's business, not its conditions:
-    `on_pool_change` fires on any save, so adding B's die while facing water brings
-    B's die down — even though B has nothing to do with fire. Naming the added die
-    (`filter ts_id == {trait_setting}`) is what ties the effect to A.
+    The *trigger* still fires (it is about the pool changing, and A's conditions
+    still hold), but the effect now reads `added_dice` from its own point of view —
+    the dice *A* contributed — so B's die is not touched. That is the reading the
+    author expected all along; it is the seed's job now, not a filter's.
     """
     iron_bark = {"die": "d6", "ts_id": "kael:iron-bark", "source_kind": "trait",
                  "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 0}
 
     store = run([iron_bark], [iron_bark])
 
-    assert store.get_pool("loc-1", "kael")[0]["die"] == "d4", "B's die came down because the rule fired"
+    assert store.get_pool("loc-1", "kael")[0]["die"] == "d6"
 
 
 def test_with_the_filter_a_die_from_another_trait_is_left_alone():
