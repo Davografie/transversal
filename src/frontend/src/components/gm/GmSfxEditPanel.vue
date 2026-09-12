@@ -1,12 +1,36 @@
 <template>
   <div>
     <div class="sfx-summary">{{ sfxSummary }}</div>
-    <!-- Shared form -->
+    <!-- Where this rule is attached, when the caller knows. Manage SFX knows (its
+         owner filter picked it); the editor alone never does — and since the
+         attachment lives on another screen, that fact is invisible here. -->
+    <div v-if="owner" class="sfx-owner-line">
+      <span class="sfx-owner-where">Lives on</span>
+      <span class="sfx-owner-name">{{ owner.label || owner.ownerId }}</span>
+      <span v-if="ownerTypeLabel" class="sfx-owner-type">{{ ownerTypeLabel }}</span>
+      <span v-if="ownerReaches" class="sfx-owner-reach">→ {{ ownerReaches }}</span>
+    </div>
+    <!-- Shared form. The headings are the questions a rule answers, in dependency
+         order: what it lives on decides the words available below it, what
+         starts it decides when it fires, and the rest follow from those two. -->
     <div class="ps-form">
       <label>Name</label>
       <input v-model="draft.name" placeholder="SFX name…" />
       <label>Description</label>
-      <textarea v-model="draft.description" rows="2" placeholder="What it does…"></textarea>
+      <textarea v-model="draft.description" rows="2" placeholder="Flavour text…"></textarea>
+
+      <h5 class="sfx-slot">Lives on</h5>
+      <label>Source</label>
+      <select v-model="draft.source_kind">
+        <option :value="null">None</option>
+        <option v-for="s in sourceKinds()" :key="s.value" :value="s.value">{{ s.label }}</option>
+      </select>
+      <div v-if="scopeVariables.length" class="sfx-vars">
+        <span class="sfx-vars-label">Available variables:</span>
+        <span v-for="v in scopeVariables" :key="v.name" class="sfx-var">{{ '{' + v.name + '}' }}<em class="sfx-var-type">{{ v.type }}</em></span>
+      </div>
+
+      <h5 class="sfx-slot">What starts it</h5>
       <label>Trigger</label>
       <select v-model="draft.trigger">
         <optgroup v-for="g in triggerGroups" :key="g.label" :label="g.label">
@@ -21,15 +45,8 @@
         <option value="sheet">Sheet (owner card)</option>
         <option value="menu">Menu (consequence menu)</option>
       </select>
-      <label>Source</label>
-      <select v-model="draft.source_kind">
-        <option :value="null">None</option>
-        <option v-for="s in sourceKinds()" :key="s.value" :value="s.value">{{ s.label }}</option>
-      </select>
-      <div v-if="scopeVariables.length" class="sfx-vars">
-        <span class="sfx-vars-label">Available variables:</span>
-        <span v-for="v in scopeVariables" :key="v.name" class="sfx-var">{{ '{' + v.name + '}' }}<em class="sfx-var-type">{{ v.type }}</em></span>
-      </div>
+
+      <h5 class="sfx-slot">Who it's about</h5>
       <label>Listens to</label>
       <select v-model="draft.arming_scope">
         <option :value="null">Auto (from trigger)</option>
@@ -44,6 +61,7 @@
       <!-- Where this may be *taken*, not where it works. Seeded at the thing
            being unlocked, so `select source` is the trait instance (or entity)
            the rule is being attached to. Empty = acquirable anywhere. -->
+      <h5 class="sfx-slot">Where it may be learned</h5>
       <label>Acquire path <span class="hint-inline">(optional)</span></label>
       <div class="sfx-listener">
         <!-- No destination hint: "who may take this" is not a fixed type — it ends
@@ -51,12 +69,13 @@
         <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement" />
         <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
       </div>
+      <h5 class="sfx-slot">When it applies</h5>
       <label>Conditions</label>
       <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" />
     </div>
 
     <!-- Effects: list inline; each effect's form opens in a child panel -->
-    <h4 class="ps-section-title">Effects</h4>
+    <h4 class="ps-section-title">What it does</h4>
     <EffectList
       :model-value="draft.effects"
       @update:model-value="draft.effects = $event"
@@ -66,6 +85,7 @@
 
     <!-- Armed window: only meaningful when the SFX has delayed effects. -->
     <div v-if="hasDeferredEffects" class="sfx-duration">
+      <h4 class="ps-section-title">How long it's held</h4>
       <label>Armed for (listening window)</label>
       <DurationBuilder v-model="draft.duration" allow-rolls />
       <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts.</p>
@@ -130,7 +150,26 @@ const {
 
 const props = defineProps({
   sfx: { type: Object, default: null },
+  /**
+   * Where this SFX is attached: `{ ownerType, ownerId, label }`. Supplied by
+   * whoever opened the panel *and knows* — Manage SFX does, because its owner
+   * filter picked the thing. The editor alone never knows, which is why the
+   * attachment has been an invisible fact on this screen.
+   */
+  owner: { type: Object, default: null },
 })
+
+// "LOCATION" reads as "location" in a sentence; the raw enum is for the picker.
+const ownerTypeLabel = computed(() =>
+  String(props.owner?.ownerType || '').toLowerCase().replace(/_/g, ' '))
+
+// A place's rules are the one case where "lives on" and "who it's about" come
+// apart: the place owns the rule, and it reaches whoever is inside it. Worth
+// saying out loud, since this screen otherwise implies the owner is the answer.
+const ownerReaches = computed(() =>
+  String(props.owner?.ownerType || '').toUpperCase() === 'LOCATION'
+    ? 'reaches everyone inside it'
+    : '')
 
 const emit = defineEmits(['sfx-created', 'sfx-updated', 'sfx-deleted'])
 
@@ -313,6 +352,25 @@ async function onDelete() {
 }
 .ps-form textarea { resize: vertical; min-height: 48px; }
 
+.sfx-owner-line {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  font-size: 11px; padding: 5px 8px; margin-bottom: 8px;
+  border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2);
+}
+.sfx-owner-where, .sfx-owner-type {
+  font-size: 9px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.sfx-owner-name { color: var(--text); }
+/* The seven questions this panel answers. Deliberately *not* uppercase like the
+   field labels: a group heading should read as a sentence, and the fields under
+   it are the machinery answering it. */
+.sfx-slot {
+  font-size: 12px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; color: var(--text); opacity: 0.85;
+  margin: 14px 0 0; padding-top: 8px;
+  border-top: 1px solid var(--overlay-8);
+}
 .sfx-summary { font-size: 11px; color: var(--accent); font-family: monospace; background: var(--accent-8); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; line-height: 1.4; }
 .sfx-warnings { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .sfx-warning { font-size: 11px; color: var(--warn-soft); background: var(--warn-12); border: 1px solid var(--warn-32); border-radius: 4px; padding: 5px 8px; font-family: monospace; }

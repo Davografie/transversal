@@ -160,7 +160,20 @@ const filteredSfxs = computed(() => {
 })
 
 function openSfx(sfx) {
-  panel.open({ component: GmSfxEditPanel, title: sfx.name || 'Edit SFX', id: sfx.id, props: { sfx }, listeners: {} })
+  // Hand the owner over when the filter knows one: "where it lives" is set on
+  // this screen but shown on the editor's, so the editor can only display it
+  // when told.
+  const ref = ownerRef.value
+  panel.open({
+    component: GmSfxEditPanel,
+    title: sfx.name || 'Edit SFX',
+    id: sfx.id,
+    props: {
+      sfx,
+      owner: ref ? { ownerType: ref.ownerType, ownerId: ref.ownerId, label: ref.label } : null,
+    },
+    listeners: {},
+  })
 }
 
 function newSfx() {

@@ -27,14 +27,36 @@ For the *rules* behind SFX, see [[SFX and Effects]] (technical reference) and th
 
 ## The mental model
 
-An SFX has four moving parts:
+An SFX answers seven questions. The editor is grouped by them, in this order —
+the earlier answers decide the later ones, so reading top to bottom is also the
+order in which the fields constrain each other.
 
-1. **When it activates** — the *trigger* (a game event, a button click, or a menu entry).
-2. **Who carries it** — the *source* (a trait, a trait set, the entity, or a projection).
-3. **When it is allowed** — *conditions* that gate activation.
-4. **What it does** — a list of *effects*, each of which is an operation (`step up a die`, `earn razmerit`, `travel`, …).
+1. **Lives on** — *Source*: the kind of thing that may carry it, and the words
+   that choice puts in scope (`{trait_setting}`, `{location}`, …). On the panel
+   this is also a readout: opened from **Manage SFX** it names the actual owner
+   (*Lives on: Azure Dawn — location → reaches everyone inside it*), which is the
+   one fact the editor cannot know by itself.
+2. **What starts it** — *Trigger* + *Placement*: who fires it, and whether it is
+   a card someone presses or something the world does.
+3. **Who it's about** — *Listens to*: for a rule that stays armed, whose rolls it
+   is watching (self, everyone, or a path).
+4. **Where it may be learned** — *Acquire path* (optional): where the rule can be
+   *taken*, as opposed to where it works.
+5. **When it applies** — *Conditions*: gates on using it.
+6. **What it does** — *Effects*: one row per step, each with its own target and
+   subject. This is the level where "what does it touch" is answered.
+7. **How long it's held** — the armed window, only when a step is delayed.
 
-Most authoring work is picking the right **trigger** + **effect action**, then scoping the effect with **targeting** and **conditions**.
+Two of those live on other screens and are worth knowing about, because their
+absence here is what makes some rules feel invisible:
+
+- **Where it is attached** is set in **Manage SFX** (owner filter → the thing →
+  *+ Add SFX*).
+- **Who may take it** is the trait definition's possible-SFX list, plus the
+  acquire gate above; the chip then appears on the instance whose gate holds.
+
+Most authoring work is picking the right **source** + **trigger** + **effect
+action**, then scoping the effect with **targeting** and **conditions**.
 
 ---
 
@@ -67,7 +89,17 @@ Where the SFX appears. **Auto (from trigger)** derives it for you:
 
 Override it only when you want to force a surface (e.g. a `manual` trigger shown in the consequence menu instead of the sheet).
 
-### Source
+### Source (the panel's *Lives on*)
+
+What kind of thing may carry it. This is the first question on the panel because
+it is the one the others depend on: it constrains what may be attached where,
+and it decides which `{variables}` the rest of the form can use (they appear
+underneath it as **Available variables**).
+
+Opened from **Manage SFX**, the panel also prints the actual owner above the form
+(*Lives on: Azure Dawn — location → reaches everyone inside it*). That line only
+shows when the opener knows the owner; the editor alone never does, because
+attaching happens in Manage SFX.
 
 What kind of thing *carries* the SFX — its activation origin. This determines what `select source` and `{source_*}` resolve to, and what a **Source rating** condition measures.
 
@@ -83,7 +115,7 @@ What kind of thing *carries* the SFX — its activation origin. This determines 
 
 Set **Trait setting** when the SFX is granted by and scales with a trait (so `source_rating` conditions can gate on that trait's rating). **Table**/**GM** are *bucket* sources — they have no single instance, so `select source` / `source_rating` don't apply to them.
 
-### Arming scope
+### Listens to (arming scope)
 
 Who the armed SFX **listens to** once it fires its delayed (roll/outcome-timed) effects. **Auto (from trigger)** derives it:
 
@@ -113,7 +145,7 @@ Two important subtleties:
 
 The list of operations the SFX performs, in order. Effects are executed **sequentially**: if an effect needs a runtime choice (`choose`), later effects wait for that choice to resolve. Add, reorder, and edit effects here; each effect's form opens in a child panel.
 
-### Duration — the *listening window*
+### How long it's held (the armed window)
 
 How long the SFX stays **armed** (listening for the next roll/outcome event) after it triggers.
 
