@@ -256,6 +256,16 @@ perspective entity** (`'self-' + entityId`), which remounts it on a take so
 of appearing at full size. `settling` is skipped when the entity is still driven
 by another client, whose dot must not change size at all.
 
+**Why a dot could stick large.** `controlledEntityIds` used to union *every*
+`playerBodies` entry, our own included — and our own is a server echo: it arrives
+late over SSE and, when no session is streaming, may never arrive at all. After a
+switch the stale entry kept the body just left in the sized-up state,
+inconsistently (only when the refresh was missed). Our own body is now read from
+the local `entityId` alone — `playerBodies` entries for our own `playerId` are
+skipped — while the server list still drives *other* clients' dots. The 60s
+presence poll also re-fetches `playerBodies`, so a missed `body_changed` cannot
+leave a dot sized up for long.
+
 ## Interactions
 
 ### Click / pop-out

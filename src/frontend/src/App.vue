@@ -1248,6 +1248,11 @@ const viewingEntityId = ref(null)
 const controlledEntityIds = computed(() => {
   const ids = new Set()
   for (const body of playerBodies.value) {
+    // Our *own* entry is a server echo: it arrives late (over SSE) and, when no
+    // session is streaming, may never arrive at all — leaving the body we just
+    // left stuck in the sized-up state. Our own body is `entityId`, which is
+    // local and immediate, so it is added below and never read back.
+    if (body?.playerId === playerId.value) continue
     if (body?.entity?.id) ids.add(body.entity.id)
   }
   if (entityId.value) ids.add(entityId.value)
@@ -1509,7 +1514,12 @@ onMounted(() => {
   if (playerId.value) fetchPlayerBodies()  // who is driving whom (dot sizing)
   // Periodically re-fetch presence so grace-window expiry (a player whose device
   // slept past the 10-minute grace) drops them from the online list.
-  presencePollTimer = setInterval(() => { if (playerId.value) fetchOnlinePlayers(true) }, 60_000)
+  // `playerBodies` rides along: it is how the map knows which occupants are being
+  // driven, and a missed `body_changed` would otherwise leave a dot sized up
+  // until something else refreshed it.
+  presencePollTimer = setInterval(() => {
+    if (playerId.value) { fetchOnlinePlayers(true); fetchPlayerBodies(true) }
+  }, 60_000)
   if (gmMode.value) prefetchEntities()  // warm scene-overview cache before panel opens
   refreshDiceBonuses()
   offRollTablePrepare = bus.on('roll-table:prepare', onRollTablePrepare)
