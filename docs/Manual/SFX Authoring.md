@@ -29,7 +29,10 @@ For the *rules* behind SFX, see [[SFX and Effects]] (technical reference) and th
 
 An SFX answers seven questions. The editor is grouped by them, in this order —
 the earlier answers decide the later ones, so reading top to bottom is also the
-order in which the fields constrain each other.
+order in which the fields constrain each other. *(One exception, on the author's
+call: the acquire path — question 4 — renders at the **end** of the panel. It is
+optional, and it describes how the rule came to be attached rather than what it
+does, so it stays out of the way of the fields that answer behaviour.)*
 
 1. **Lives on** — *Source*: the kind of thing that may carry it, and the words
    that choice puts in scope (`{trait_setting}`, `{location}`, …). On the panel
@@ -43,7 +46,8 @@ order in which the fields constrain each other.
 3. **Who it's about** — *Listens to*: for a rule that stays armed, whose rolls it
    is watching (self, everyone, or a path).
 4. **Where it may be learned** — *Acquire path* (optional): where the rule can be
-   *taken*, as opposed to where it works.
+   *taken*, as opposed to where it works. It sits at the end of the panel (see
+   above).
 5. **When it applies** — *Conditions*: gates on using it.
 6. **What it does** — *Effects*: one row per step, each with its own target and
    subject. This is the level where "what does it touch" is answered.

@@ -66,17 +66,10 @@
           <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>). Resolved once, when the rule arms.</p>
         </div>
       </template>
-      <!-- Where this may be *taken*, not where it works. Seeded at the thing
-           being unlocked, so `select source` is the trait instance (or entity)
-           the rule is being attached to. Empty = acquirable anywhere. -->
-      <h5 class="sfx-slot">Where it may be learned</h5>
-      <label>Acquire path <span class="hint-inline">(optional)</span></label>
-      <div class="sfx-listener">
-        <!-- No destination hint: "who may take this" is not a fixed type — it ends
-             wherever the author means (an entity, a trait instance, …). -->
-        <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement" />
-        <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
-      </div>
+      <!-- Where this may be *taken*, not where it works. It sits at the end of
+           the panel (below) rather than here, because it answers a question
+           about the rule's *history* — how it came to be attached — and the
+           fields above answer what it does. -->
       <h5 class="sfx-slot">When it applies</h5>
       <label>Conditions</label>
       <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" />
@@ -97,6 +90,20 @@
       <label>Armed for (listening window)</label>
       <DurationBuilder v-model="draft.duration" allow-rolls />
       <p class="hint">How long this SFX stays armed before its delayed effects fire and it drops. Only affects <em>On roll / On result / On contest</em> effects — immediate effects fire once regardless. This is <strong>not</strong> an undo timer; each effect's own duration governs when a change reverts.</p>
+    </div>
+
+    <!-- Where this may be *taken*, not where it works: the last question on the
+         panel, because it is optional and it describes the rule's history rather
+         than its behaviour. Seeded at the thing being unlocked, so `select
+         source` is the trait instance (or entity) the rule is being attached to.
+         Empty = acquirable anywhere. -->
+    <div class="sfx-acquire">
+      <h4 class="ps-section-title">Where it may be learned</h4>
+      <label>Acquire path <span class="hint-inline">(optional)</span></label>
+      <!-- No destination hint: "who may take this" is not a fixed type — it ends
+           wherever the author means (an entity, a trait instance, …). -->
+      <TargetSpecBuilder v-model="draft.acquire_spec" :source-element="sourceElement" />
+      <p class="hint">Where this rule may be <em>learned</em> — leaving the place afterwards does not take it away (a condition would). E.g. <em>select source → navigate entity → filter current_location == Azure Dawn</em>.</p>
     </div>
 
     <!-- Status messages -->
