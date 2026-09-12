@@ -98,7 +98,7 @@ class PlayerManager:
         updates["last_spotlight_at"] = timestamp or datetime.now(timezone.utc).isoformat()
         return self._repo.update_player(player_id, updates)
 
-    def record_control(self, player_id: str, entity_id: str) -> bool:
+    def record_control(self, player_id: str, entity_id: str, stamp: bool = True) -> bool:
         """Handle a player taking control of an entity (B55).
 
         Stamps ``last_spotlight_at``/``last_main_entity_id`` only when the
@@ -107,16 +107,28 @@ class PlayerManager:
         The stamp is actor-keyed: it keys on the explicit ``player_id``, so a
         GM possessing/roaming as a main never reaches this path.
 
+        ``stamp=False`` is that GM path, made explicit: the body is recorded (so
+        the entity shows up in ``playerBodies`` and its map dot sizes up) and
+        ``body_changed`` is broadcast, but **no** spotlight recency is stamped
+        and no main flips active — recency belongs to the owning player's own
+        switches.
+
         Broadcasts ``main_active`` via SSE in both directions (a main becoming
         active when taken, inactive when the player switches to a non-main).
 
         Returns True when the entity is a main (and was stamped).
         """
-        is_main = self._repo.get_agency_main(player_id, entity_id)
-        from transversal.services.state_events import broadcast_main_active
+        from transversal.services.state_events import broadcast_main_active, broadcast_body_changed
 
-        # Track the current body on every switch (main or support character).
+        # Track the current body on every switch — main, support character, or a
+        # GM's possessed GMC.
         _current_body[player_id] = entity_id
+
+        if not stamp:
+            broadcast_body_changed(player_id, entity_id)
+            return False
+
+        is_main = self._repo.get_agency_main(player_id, entity_id)
 
         if is_main:
             self.set_spotlight(player_id, entity_id)
@@ -131,6 +143,16 @@ class PlayerManager:
             _set_active_main(player_id, None)
             broadcast_main_active(player_id, p.last_main_entity_id, False)
         return False
+
+    def clear_control(self, player_id: str) -> None:
+        """Forget the body a player was driving (they went to free-roam).
+
+        Without this the last possessed entity would stay in ``playerBodies``
+        forever, and its map dot would stay sized up after the GM let go.
+        """
+        if _current_body.pop(player_id, None) is not None:
+            from transversal.services.state_events import broadcast_body_changed
+            broadcast_body_changed(player_id, None)
 
 
 # Global singleton

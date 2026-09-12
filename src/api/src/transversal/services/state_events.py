@@ -211,6 +211,25 @@ def broadcast_presence_changed() -> None:
         ))
 
 
+def broadcast_body_changed(player_id: str, entity_id: str | None) -> None:
+    """Broadcast that the body a player is *driving* changed (SSE).
+
+    The presence half of a body switch, split out from ``broadcast_main_active``:
+    the map sizes up the dot of whatever a client is driving, and a GM taking an
+    entity must publish that without flipping any main's active state or stamping
+    spotlight recency — those belong to the owning player's own switches.
+    ``entity_id=None`` means the player is driving nothing (GM free-roam).
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="body_changed", session_id=s.id,
+            data={"player_id": player_id, "entity_id": entity_id or ""},
+        ))
+
+
 def fire_global_state_sfx(
     event_type: str,
     context: dict | None = None,

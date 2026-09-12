@@ -52,6 +52,16 @@ All three stamp together on the single "took control of a main" event. `last_mai
 
 **Guard:** the stamp keys on the *actor* (the human player), not "a body became active" — so the GM testing/possessing a player's main does not falsely stamp spotlight.
 
+**Two signals, deliberately split.** `POST /players/{id}/control/{entity}` records
+*which body a client is driving* and, when the body is one of that player's mains,
+stamps the spotlight — the switch signal for players. The GM path passes
+`stamp=false`: it records the same body (so `playerBodies` stays truthful and the
+map can size the driven occupant's dot) but stamps nothing and flips no main
+active, which is the guard above made explicit rather than assumed. `body_changed`
+carries that presence half over SSE; `main_active` keeps carrying the spotlight
+half. `DELETE /players/{id}/control` clears the body when a GM returns to
+free-roam — otherwise the last possessed dot would stay sized up.
+
 ## Support character model
 
 An **SC is a relationship, not just a character** — an entity owned by its controlling player via `agency` (with `main: false`), joined to the main it supports via a **`support` edge** (directional: SC → main). The character (traits/name) hangs off the SC entity; the `support` edge is the *only* SC-specific data. Ownership is many-to-many: a main has a **cast** (1→many SCs); a player owns many SCs across mains.

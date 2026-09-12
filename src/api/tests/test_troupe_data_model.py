@@ -183,6 +183,40 @@ def test_record_control_stamps_only_for_mains():
     _cleanup(repo)
 
 
+def test_record_control_stamp_false_records_the_body_but_never_stamps():
+    """The GM path: taking an entity (even a main) records presence only.
+
+    Downstream, `playerBodies` is what sizes the map dots, so a GM taking a GMC
+    must show up there — but the GM's possession must never move spotlight
+    recency or flip a main active. That state belongs to the owning player's own
+    switches (B55), and this is the invariant that keeps them apart.
+    """
+    from transversal.services.player_manager import PlayerManager, list_current_bodies
+
+    repo = _repo
+    _cleanup(repo)
+
+    repo.create_entity(_char(MAIN_ID))
+    repo.create_player(P_ID, "test-player", role="player")
+    repo.claim_entity(P_ID, MAIN_ID)
+    repo.set_agency_main(P_ID, MAIN_ID, True)
+
+    mgr = PlayerManager(repo=repo)
+
+    # stamp=False on an entity that IS a main: body recorded, nothing stamped.
+    assert mgr.record_control(P_ID, MAIN_ID, stamp=False) is False
+    p = repo.get_player(P_ID)
+    assert p.last_spotlight_at is None
+    assert p.last_main_entity_id is None
+    assert list_current_bodies().get(P_ID) == MAIN_ID
+
+    # Letting go drops the body, so the dot does not stay sized up.
+    mgr.clear_control(P_ID)
+    assert list_current_bodies().get(P_ID) is None
+
+    _cleanup(repo)
+
+
 def test_designated_main_fallback():
     """`get_designated_main` + `Player.main_entity` fall back to the flagged main (B63)."""
     from types import SimpleNamespace

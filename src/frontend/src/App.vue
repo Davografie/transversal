@@ -706,6 +706,11 @@ async function switchPerspective(id) {
   const sameLocation = targetLoc != null && targetLoc === currentLocationId.value
   entityId.value = id
   viewingEntityId.value = null  // clear any read-only location inspect
+  // Presence only: other clients size up the dot of whatever this client is
+  // driving. stamp=false keeps a GM's possession out of spotlight recency.
+  if (playerId.value) {
+    fetch(`/api/v1/players/${playerId.value}/control/${id}?stamp=false`, { method: 'POST' }).catch(() => {})
+  }
   if (!sameLocation) await initLocation()
 }
 
@@ -731,6 +736,11 @@ async function switchViewLocation(locId) {
 function returnToSelf() {
   entityId.value = gmMode.value ? null : ownMainId.value
   viewingEntityId.value = null  // clear any read-only location inspect
+  // A GM going to free-roam drives nothing: drop the recorded body, or the last
+  // possessed dot stays sized up. (Players are still driving their main.)
+  if (gmMode.value && playerId.value) {
+    fetch(`/api/v1/players/${playerId.value}/control`, { method: 'DELETE' }).catch(() => {})
+  }
 }
 
 function onInspectEntity(id) {
@@ -957,6 +967,11 @@ function handleSseEvent(evt) {
       fetchSupportCharacters(true)
       fetchActiveMains(true)
       fetchRecency(true)
+      fetchPlayerBodies(true)
+      break
+    case 'body_changed':
+      // A client changed the body it is driving (a player switch, or the GM
+      // taking a GMC) — the map sizes those dots, so refresh the body list.
       fetchPlayerBodies(true)
       break
     case 'presence_changed':

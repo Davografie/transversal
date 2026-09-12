@@ -93,11 +93,20 @@ async def set_spotlight(player_id: str, req: dict | None = None) -> dict:
 
 
 @router.post("/{player_id}/control/{entity_id}")
-async def record_control(player_id: str, entity_id: str) -> dict:
+async def record_control(player_id: str, entity_id: str, stamp: bool = True) -> dict:
     """A player took control of an entity (the character-switch signal).
 
-    Stamps spotlight only when the entity is one of the player's mains; always
-    broadcasts the main-active state via SSE.
+    Stamps spotlight only when the entity is one of the player's mains, and
+    always broadcasts the main-active state via SSE. ``stamp=false`` records the
+    body only — the GM taking a GMC: presence (which sizes the map dots) with no
+    spotlight stamp and no main active/inactive flip.
     """
-    is_main = player_manager.record_control(player_id, entity_id)
+    is_main = player_manager.record_control(player_id, entity_id, stamp=stamp)
     return {"player_id": player_id, "entity_id": entity_id, "main": is_main}
+
+
+@router.delete("/{player_id}/control")
+async def clear_control(player_id: str) -> dict:
+    """A player stopped driving anything (the GM going to free-roam)."""
+    player_manager.clear_control(player_id)
+    return {"player_id": player_id, "entity_id": None}

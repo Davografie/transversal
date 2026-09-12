@@ -233,7 +233,12 @@ table-wide fact, not a local one: `App.vue` unions the server's `playerBodies`
 (the entity each player is currently driving — refreshed on the `main_active`
 SSE event) with the local `entityId`, and passes `controlledEntityIds` down. The
 `self` dot carries it whenever a perspective entity is set; the GM free-roam dot
-does **not** — that is a view marker, not a driven entity. The size change uses
+does **not** — that is a view marker, not a driven entity. The GM's own
+assumptions feed the same set: `switchPerspective` reports the taken body with
+`POST /players/{id}/control/{entity}?stamp=false`, which records presence without
+touching spotlight recency (see [[Troupe Play]]), and `returnToSelf` clears it
+when the GM goes to free-roam. Both arrive over SSE as `body_changed`, which
+refreshes `playerBodies`. The size change uses
 the **individual `scale` property**, not `transform: scale()`: the `self` dot runs
 the `arrivePop` animation, which fills `transform` forwards and therefore wins
 the cascade over any normal `transform` declaration (this silently disabled the
