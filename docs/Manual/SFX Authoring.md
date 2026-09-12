@@ -81,13 +81,19 @@ Some triggers expose **variables** (e.g. `on_contest_win` provides `{effect_die}
 
 ### Placement
 
-Where the SFX appears. **Auto (from trigger)** derives it for you:
+Where the SFX surfaces, shown under the select as a sentence (*Lands as: a card
+its owner presses*). Two real choices:
 
-- `manual` → **sheet** (owner card)
-- `on_*` → **auto** (event-driven, no button)
-- legacy menu triggers → **menu** (post-roll consequence menu)
+- **From the trigger** (default) — the trigger already decides how a rule reaches
+a person: `manual` → a card its owner presses; `on_*` → no card, it fires on its
+own when the event happens.
+- **Consequence menu (post-roll)** — a real override: the rule is offered in the
+consequence menu after a roll, which is what the ten `apply-complication`-style
+rules do.
 
-Override it only when you want to force a surface (e.g. a `manual` trigger shown in the consequence menu instead of the sheet).
+Older rules may still carry `auto` / `sheet`. Those were choices nothing read,
+so they are no longer offered — but a stored one is shown rather than silently
+rewritten on save.
 
 ### Source (the panel's *Lives on*)
 
