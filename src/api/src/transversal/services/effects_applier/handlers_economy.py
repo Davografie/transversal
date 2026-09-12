@@ -20,6 +20,9 @@ def _apply_earn(entity, effect, repo, result):
     amount = int(effect.result or "0")
     subject.razmerit += amount
     result.applied.append(AppliedEffect(effect, f"earned {amount} razmerit"))
+    # A gain is refundable until the activation commits (the take-back pays it back).
+    from transversal.services.effects_applier.reverts import book_undo
+    book_undo(repo, subject.id, effect)
 
 def _apply_spend(entity, effect, repo, result):
     subject = _effect_subject(entity, effect, result, repo)
@@ -29,6 +32,9 @@ def _apply_spend(entity, effect, repo, result):
     amount = int(effect.result or "0")
     subject.razmerit -= amount
     result.applied.append(AppliedEffect(effect, f"spent {amount} razmerit"))
+    # A cost is refundable until the activation commits.
+    from transversal.services.effects_applier.reverts import book_undo
+    book_undo(repo, subject.id, effect)
 
 def _apply_transfer(entity, effect, repo, result):
     target = _resolve_target(entity, effect, result, "entity", repo)

@@ -98,6 +98,21 @@ The honest boundary: the server sees saves and rolls, not the screen. This is th
 rules *noticing*, never preventing — and it reads as a feature, because dropping
 the die is simply how a player takes Hinder back.
 
+## One reversal, and it is booked
+
+The money side has one mechanism, deliberately: an activation's economy effects
+book their undo (`book_undo`, in `effects_applier/reverts.py` — the one home,
+called by both the registry's razmerit operations and the applier's earn/spend
+handlers, because production runs the former and tests the latter). The legacy
+`{reverse: true}` trigger branch that predated it was **retired** — it reversed
+an earn a second time once the generic take-back existed, and two reversal
+mechanisms can only disagree.
+
+A take-back survives an undo it cannot apply — a refund the balance can no longer
+cover (the razmerit was spent elsewhere), a target that is gone. That row is
+logged, counted as `failed` in the summary, and the rest of the take-back
+proceeds: the change happened, it just could not be paid back.
+
 ## What a take-back can and cannot undo
 
 Reversibility is a **declaration on the action**, not something each rule has to

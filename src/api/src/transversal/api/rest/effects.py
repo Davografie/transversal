@@ -3,7 +3,6 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from transversal.domain import Effect
 from transversal.services.entity_manager import EntityManager
 from transversal.services.effects_engine import EffectsEngine, GameEvent
 
@@ -75,26 +74,10 @@ async def trigger_sfx(req: TriggerRequest, request: Request):
         if contest is not None:
             context["high_stakes"] = bool(contest.high_stakes)
 
-    # Reverse: apply the opposite razmerit effect
-    if context.get("reverse"):
-        sfx = engine.get(req.sfx_name)
-        if sfx is None:
-            return {"applied": False, "error": f"SFX '{req.sfx_name}' not found"}
-        from transversal.services.effects_applier import effect_registry
-        for effect in sfx.effects:
-            # Reverse razmerit costs (spend → earn)
-            if effect.type == "transfer_razmerit" and effect.action == "spend":
-                effect_registry.apply(
-                    Effect(timing=effect.timing, type="transfer_razmerit", action="earn",
-                           target="self", result=effect.result or "1"),
-                    req.entity_id, req.universe, context)
-            # Reverse razmerit earnings (earn → spend)
-            elif effect.type == "transfer_razmerit" and effect.action == "earn":
-                effect_registry.apply(
-                    Effect(timing=effect.timing, type="transfer_razmerit", action="spend",
-                           target="self", result=effect.result or "1"),
-                    req.entity_id, req.universe, context)
-        return {"applied": True, "effects_applied": 1, "effects": [{"type": "reverse", "action": "reverse"}]}
+    # (The legacy ``{"reverse": true}`` branch is retired: a rule's costs are
+    # reversed by *ending the activation* — ``POST /effects/end`` — which applies
+    # the same declared inverses the engine books. Two reversal mechanisms could
+    # disagree, and did: the old one reversed an earn a second time.)
 
     # Create the event
     event = GameEvent(

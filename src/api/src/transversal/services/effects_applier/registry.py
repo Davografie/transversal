@@ -91,12 +91,27 @@ def _register_core_handlers(em, raz):
     # Razmerit operations. Who it acts on is explicit: the effect's ``entity``
     # (already resolved from any ``entity_spec`` by the engine), falling back to
     # the acting entity only when the field is blank/``self``.
+    #
+    # Each one also books its undo (the opposite operation): a cost or a gain is
+    # refundable until the activation commits, so a take-back can pay it back.
+    def _razmerit_op(action, a, eid):
+        target = _razmerit_entity(a, eid)
+        amount = int(a.result or "0")
+        if action == "spend":
+            raz.spend(target, amount, reason="sfx_cost")
+        elif action == "earn":
+            raz.earn(target, amount, reason="effect")
+        else:
+            raz.transfer(target, a.target, amount)
+        from transversal.services.effects_applier.reverts import book_undo
+        book_undo(em.repo, target, a)
+
     effect_registry.register("transfer_razmerit", "spend",
-        lambda a, eid, u, ctx: raz.spend(_razmerit_entity(a, eid), int(a.result or "0"), reason="sfx_cost"))
+        lambda a, eid, u, ctx: _razmerit_op("spend", a, eid))
     effect_registry.register("transfer_razmerit", "earn",
-        lambda a, eid, u, ctx: raz.earn(_razmerit_entity(a, eid), int(a.result or "0"), reason="effect"))
+        lambda a, eid, u, ctx: _razmerit_op("earn", a, eid))
     effect_registry.register("transfer_razmerit", "transfer",
-        lambda a, eid, u, ctx: raz.transfer(_razmerit_entity(a, eid), a.target, int(a.result or "0")))
+        lambda a, eid, u, ctx: _razmerit_op("transfer", a, eid))
 
     # Trait, rank, and life-path state mutations route through the shared applier.
     def _commit(a, eid, u, ctx):

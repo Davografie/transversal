@@ -1477,7 +1477,9 @@ async function activateSfx(sfxId, sourceId = null) {
     if (sfxId === 'sfx-hinder') {
       const tsId = findTsIdForSfx('sfx-hinder')
       emit('removeByTsId', tsId)
-      emit('addToPool', { die: 'd4', source: 'hinder', label: 'Hinder d4', tsId })
+      // Stamp the die with the rule that put it there: the pool is the ledger, so
+      // taking this die back out is how the Hinder is taken back.
+      emit('addToPool', { die: 'd4', source: 'hinder', label: 'Hinder d4', tsId, armedSfxIds: [sfxId] })
     }
     if (sfxId === 'sfx-spray-n-pray') {
       emit('splitDie', { source: 'shooting', label: 'Spray' })
@@ -1492,16 +1494,15 @@ async function activateSfx(sfxId, sourceId = null) {
     // roll is dropped. A rule with nothing in flight is a no-op here.
     await endSfx(props.entityId, sfxId)
 
+    // The take-back above (`endSfx`) already refunded what this rule earned or
+    // spent — the legacy `{reverse: true}` call would have reversed the same
+    // money a second time. What is left here is the pool edit.
     if (sfxId === 'sfx-hinder') {
-      const tsId = findTsIdForSfx('sfx-hinder')
-      emit('removeByTsId', tsId)
-      // Reverse razmerit: spend 1
-      await triggerSfx(props.entityId, 'sfx-hinder', props.universe, { reverse: true })
+      emit('removeByTsId', findTsIdForSfx('sfx-hinder'))
     }
     if (sfxId === 'sfx-spray-n-pray') {
       emit('removeFromPool', 'shooting-a')
       emit('removeFromPool', 'shooting-b')
-      await triggerSfx(props.entityId, 'sfx-spray-n-pray', props.universe, { reverse: true })
     }
     emit('sfxToggled', { sfxId, active: false })
     await fetchEntity()

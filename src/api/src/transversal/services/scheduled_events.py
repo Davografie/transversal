@@ -10,6 +10,7 @@ in-memory ``_schedule`` with one persisted, queryable timer store.
 from __future__ import annotations
 
 import contextvars
+import logging
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -307,6 +308,7 @@ def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
         if e.source_sfx_id == sfx_id and _event_owner_entity(repo, e) == entity_id
     ]
     reverted = 0
+    failed = 0
     dropped_pending = 0
     dropped_holds = 0
     for event in sorted(records, key=lambda e: (e.created_at, e.id), reverse=True):
@@ -314,7 +316,16 @@ def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
             repo.delete_scheduled_event(event.id)
             dropped_pending += 1
             continue
-        reverted += end_event(repo, event)
+        try:
+            reverted += end_event(repo, event)
+        except Exception as exc:  # noqa: BLE001
+            # An undo that cannot be applied (a refund the balance can no longer
+            # cover, a missing target) must not stop the rest of the take-back.
+            logging.getLogger(__name__).warning(
+                "[end_activation] could not apply %s: %s", event.id, exc,
+            )
+            repo.delete_scheduled_event(event.id)
+            failed += 1
         if event.kind == "hold":
             dropped_holds += 1
 
@@ -325,6 +336,7 @@ def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
         "sfx_id": sfx_id,
         "records": len(records),
         "reverted": reverted,
+        "failed": failed,
         "dropped_pending": dropped_pending,
         "dropped_holds": dropped_holds,
         "unarmed": unarmed,

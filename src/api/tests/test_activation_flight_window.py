@@ -634,6 +634,28 @@ def test_the_undo_finds_a_die_that_shifted():
     store.clear_all()
 
 
+def test_ending_refunds_an_immediate_earn():
+    """Hinder's money, end to end: the click earns 1, the take-back pays it back."""
+    from transversal.services.effects_applier import apply_effects
+
+    entity = _entity()
+    entity.razmerit = 5
+    repo = FakeRepo(entities=[entity])
+    earn = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit",
+                  action="earn", target="self", result="1")
+
+    with activation_booking("sfx-hinder", cancelable=True):
+        apply_effects(entity, [earn], repo)
+
+    assert entity.razmerit == 6
+    hold = repo.events[0]
+    assert hold.kind == "hold"
+
+    apply_effects(entity, [hold.effect], repo)  # the take-back
+
+    assert entity.razmerit == 5
+
+
 # ── The plumbing that carries the booking ────────────
 
 def test_registry_apply_scopes_bookings_to_the_activation():
