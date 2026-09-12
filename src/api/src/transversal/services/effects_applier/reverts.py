@@ -11,11 +11,12 @@ def _queue_trait_revert(repo, ts, effect, prior_result=None):
 
     schedule_revert(repo, "trait_setting", ts.id, effect, prior_result=prior_result)
 
-def _queue_entity_revert(repo, entity, effect, target=None, prior_result=None):
+def _queue_entity_revert(repo, entity, effect, target=None, prior_result=None, context_extra=None):
     """Schedule the inverse of ``effect`` on an entity in the central store."""
     from transversal.services.scheduled_events import schedule_revert
 
-    schedule_revert(repo, "entity", entity.id, effect, target=target, prior_result=prior_result)
+    schedule_revert(repo, "entity", entity.id, effect, target=target,
+                    prior_result=prior_result, context_extra=context_extra)
 
 def _queue_explicit(repo, owner, effect, action, target):
     """Schedule an explicit inverse action (for compound actions like gain_or_step_up)."""

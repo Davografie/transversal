@@ -22,6 +22,8 @@ ACTIONS: list[EffectActionMeta] = [
             _ENTITY_FIELD,
         ],
         implicit_target="self",
+        # A gain undoes by paying it back — the cost of a rule that is taken back.
+        inverse=("transfer_razmerit", "spend"),
     ),
     EffectActionMeta(
         action_id="spend_razmerit",
@@ -36,6 +38,8 @@ ACTIONS: list[EffectActionMeta] = [
             _ENTITY_FIELD,
         ],
         implicit_target="self",
+        # A cost undoes by refunding it.
+        inverse=("transfer_razmerit", "earn"),
     ),
     EffectActionMeta(
         action_id="transfer_razmerit",

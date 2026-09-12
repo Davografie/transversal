@@ -30,12 +30,13 @@ from transversal.services.scheduled_events import (
 )
 
 
-def _entity(entity_id="kael"):
+def _entity(entity_id="kael", current_location=None):
     return Entity(
         id=entity_id,
         type=EntityType.CHARACTER,
         name=entity_id,
         current_universe="earth",
+        current_location=current_location,
     )
 
 
@@ -70,6 +71,9 @@ class FakeRepo:
     def get_traitsetting(self, ts_id):
         return self.traitsettings.get(ts_id)
 
+    def get_trait(self, trait_id):
+        return None
+
 
 def _invertible_effect(duration=None):
     """``modify_dice_limit/increase`` — the registry declares its inverse (decrease)."""
@@ -87,6 +91,20 @@ def _spy_applier(monkeypatch, fired):
     monkeypatch.setattr(
         "transversal.services.effects_applier.effect_registry.apply",
         lambda eff, eid, u, ctx: fired.append((eff.type, eff.action, eff.target, eid)),
+    )
+
+
+def _route_applier(monkeypatch, repo, entity):
+    """Route dispatched effects through ``apply_effects`` against the test repo.
+
+    The production registry's handlers reach for the singleton EntityManager's
+    repo; a unit test's FakeRepo is only reached by going through apply_effects.
+    """
+    from transversal.services.effects_applier import apply_effects
+
+    monkeypatch.setattr(
+        "transversal.services.effects_applier.effect_registry.apply",
+        lambda eff, eid, u, ctx: apply_effects(entity, [eff], repo),
     )
 
 
@@ -299,6 +317,142 @@ def test_ending_leaves_other_activations_alone():
         ("sfx-y", "kael"),
         ("sfx-x", "mira"),
     ]
+
+
+# ── The inverses the flight window leans on ─────────
+
+def test_the_razmerit_pair_declares_its_inverse():
+    from transversal.services.effects_registry import get_inverse
+
+    assert get_inverse("transfer_razmerit", "earn") == (("transfer_razmerit", "spend"), False)
+    assert get_inverse("transfer_razmerit", "spend") == (("transfer_razmerit", "earn"), False)
+
+
+def test_a_revert_lands_on_the_same_subject():
+    from transversal.services.scheduled_events import build_revert
+
+    earned = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit",
+                    action="earn", result="1", entity="mira")
+    revert = build_revert(earned)
+    assert (revert.type, revert.action, revert.entity, revert.result) == (
+        "transfer_razmerit", "spend", "mira", "1")
+
+    # An unresolved name is not copied (it would act on nobody) — the row's owner
+    # is the right actor then.
+    named = Effect(timing=EffectTiming.IMMEDIATE, type="transfer_razmerit",
+                   action="earn", result="1", entity="{buyer}")
+    assert build_revert(named).entity == ""
+
+
+def _pool_of(location_id, owner_id):
+    from transversal.services.scene_state import get_scene_store
+
+    return get_scene_store().get_pool(location_id, owner_id)
+
+
+def test_a_pool_add_books_the_exact_dice_it_added():
+    from transversal.services.effects_applier import apply_effects
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    repo = FakeRepo(entities=[_entity()])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_dice",
+                    target="difficulty:loc-1", context={"dice": ["d8", "d8"]})
+
+    with activation_booking("sfx-x", cancelable=True):
+        apply_effects(entity, [effect], repo)
+
+    assert [d["die"] for d in _pool_of("loc-1", "loc-1")] == ["d8", "d8"]
+    hold = repo.events[0]
+    assert hold.kind == "hold"
+    assert hold.effect.action == "remove_added_dice"
+    assert hold.effect.context["pool_add"]["positions"] == [0, 1]
+
+    # The undo takes exactly those dice back out.
+    apply_effects(entity, [hold.effect], repo)
+    assert _pool_of("loc-1", "loc-1") == []
+    store.clear_all()
+
+
+def test_a_trait_rating_add_books_a_removable_undo():
+    """The Hinder shape: a trait's rating dice go into the pool, and a take-back removes them."""
+    from transversal.domain import DieType, TraitSetting
+    from transversal.services.effects_applier import apply_effects
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    ts = TraitSetting(id="ts-1", entity_id="kael", trait_id="trait-fire",
+                      traitset_id="tset", dice=[DieType.D4])
+    repo = FakeRepo(entities=[_entity(current_location="loc-1")], traitsettings=[ts])
+    entity = _entity(current_location="loc-1")
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_trait_rating",
+                    target="pool:kael", refs={"trait": {"value": "ts-1"},
+                                              "pool": {"value": "pool:kael"}})
+
+    with activation_booking("sfx-x", cancelable=True):
+        apply_effects(entity, [effect], repo)
+
+    pool = _pool_of("loc-1", "kael")
+    assert [d["die"] for d in pool] == ["d4"]
+    hold = repo.events[0]
+    assert hold.kind == "hold"
+    assert hold.effect.context["pool_add"] == {
+        "location": "loc-1", "owner": "kael", "positions": [0], "dice": ["d4"],
+    }
+
+    apply_effects(entity, [hold.effect], repo)
+    assert _pool_of("loc-1", "kael") == []
+    store.clear_all()
+
+
+def test_a_pool_add_with_a_duration_books_a_timed_revert():
+    from transversal.services.effects_applier import apply_effects
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    repo = FakeRepo(entities=[_entity()])
+    entity = _entity()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_dice",
+                    target="difficulty:loc-1", context={"dice": ["d6"]},
+                    duration=EffectDuration(timers=[Timer(event="scene", remaining=1)]))
+
+    with activation_booking("sfx-x", cancelable=True):
+        apply_effects(entity, [effect], repo)
+
+    row = repo.events[0]
+    assert row.kind == "revert"
+    assert [t.event for t in row.timers] == ["scene"]
+    assert row.effect.action == "remove_added_dice"
+    store.clear_all()
+
+
+def test_ending_a_pool_add_takes_the_dice_back_out(monkeypatch):
+    """End to end: apply, end the activation, the dice are gone."""
+    from transversal.services.effects_applier import apply_effects
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    repo = FakeRepo(entities=[_entity(current_location="loc-1")])
+    entity = _entity(current_location="loc-1")
+    _route_applier(monkeypatch, repo, entity)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_dice",
+                    target="pool:kael", context={"dice": ["d4"]})
+
+    with activation_booking("sfx-x", cancelable=True):
+        apply_effects(entity, [effect], repo)
+    assert [d["die"] for d in _pool_of("loc-1", "kael")] == ["d4"]
+
+    summary = end_activation(repo, "kael", "sfx-x")
+
+    assert summary["reverted"] == 1
+    assert _pool_of("loc-1", "kael") == []
+    assert repo.events == []
+    store.clear_all()
 
 
 # ── The plumbing that carries the booking ────────────

@@ -49,12 +49,24 @@ def _booking() -> Optional[dict]:
     return _BOOKING.get()
 
 
-def build_revert(effect: Effect, *, prior_result: Optional[str] = None) -> Optional[Effect]:
+def build_revert(
+    effect: Effect,
+    *,
+    prior_result: Optional[str] = None,
+    context_extra: Optional[dict] = None,
+) -> Optional[Effect]:
     """Return the inverse effect for ``effect``, or None if it has no inverse.
 
     The inverse (type, action) comes from the effect registry.  ``prior_result``
     overrides the revert's ``result`` for actions that capture the pre-apply
-    value (e.g. ``set`` reverts to the previous die rating).
+    value (e.g. ``set`` reverts to the previous die rating).  ``context_extra``
+    merges extra data into the revert's context — how a handler hands its undo
+    the private facts only it knows (which dice a pool add appended, and where).
+
+    The revert lands where the effect landed: the same target, and the same
+    subject (``entity``, when it is a concrete value rather than an unresolved
+    name) — an undo of a cross-entity effect is not silently redirected to the
+    actor.
     """
     from transversal.services.effects_registry import get_inverse
 
@@ -64,14 +76,18 @@ def build_revert(effect: Effect, *, prior_result: Optional[str] = None) -> Optio
     result = effect.result
     if captures_prior and prior_result is not None:
         result = prior_result
+    subject = (effect.entity or "").strip()
+    if subject.startswith("{"):
+        subject = ""  # unresolved name → the row's owner is the right actor
     return Effect(
         timing=EffectTiming.IMMEDIATE,
         type=inv[0],
         action=inv[1],
         target=effect.target,
+        entity=subject,
         result=result,
         target_scope=effect.target_scope,
-        context=effect.context,
+        context={**(effect.context or {}), **(context_extra or {})},
     )
 
 
@@ -117,6 +133,7 @@ def schedule_revert(
     target: Optional[str] = None,
     prior_result: Optional[str] = None,
     source_sfx_id: Optional[str] = None,
+    context_extra: Optional[dict] = None,
 ) -> Optional[ScheduledEvent]:
     """Build + persist the inverse of ``effect``.
 
@@ -125,7 +142,7 @@ def schedule_revert(
     exists so the activation can be taken back before it commits. Anywhere else
     there is nothing to book and this is a no-op.
     """
-    revert = build_revert(effect, prior_result=prior_result)
+    revert = build_revert(effect, prior_result=prior_result, context_extra=context_extra)
     if revert is None:
         return None
     if target is not None:

@@ -245,38 +245,50 @@ def _apply_add_dice(entity, effect, repo, result):
 
     store = get_scene_store()
     pool = store.get_pool(location_id, owner_id)
+    positions = []
     for die in dice:
+        positions.append(len(pool))
         pool.append({"die": die, "source_kind": "sfx", "source_id": "", "label": die, "ts_id": None})
     store.save_pool(location_id, owner_id, pool)
     broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
     result.applied.append(AppliedEffect(effect, f"added {len(dice)} dice to {owner_id} pool"))
+    # Book the undo: exactly these dice, in this pool. A no-op without a duration,
+    # except inside a cancelable activation — where it becomes a hold.
+    _queue_entity_revert(
+        repo, entity, effect,
+        context_extra={"pool_add": {"location": location_id, "owner": owner_id,
+                                    "positions": positions, "dice": list(dice)}},
+    )
 
 def _add_trait_rating_to_pool(ts_id: str, pool_id: str, entity, repo):
-    """Add a trait setting's rating dice to a pool; return ``(location_id, owner_id)``.
+    """Add a trait setting's rating dice to a pool; return ``(location_id, owner_id, positions)``.
 
-    Returns ``(None, None)`` when the trait is missing/has no rating, or the pool
-    target is unresolvable.
+    ``positions`` are the pool indices the dice were appended at, so the undo can
+    remove exactly these dice. Returns ``(None, None, [])`` when the trait is
+    missing/has no rating, or the pool target is unresolvable.
     """
     from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.services.scene_state import get_scene_store
 
     ts = repo.get_traitsetting(ts_id) if ts_id else None
     if ts is None or not ts.dice:
-        return (None, None)
+        return (None, None, [])
     location_id, owner_id = _resolve_pool(pool_id, entity, repo)
     if not location_id or not owner_id:
-        return (None, None)
+        return (None, None, [])
 
     trait = repo.get_trait(ts.trait_id)
     label = trait.name if trait else ts.trait_id
     dice = [d.value for d in ts.dice]
     store = get_scene_store()
     pool = store.get_pool(location_id, owner_id)
+    positions = []
     for die in dice:
+        positions.append(len(pool))
         pool.append({"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id})
     store.save_pool(location_id, owner_id, pool)
     broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
-    return (location_id, owner_id)
+    return (location_id, owner_id, positions)
 
 def _apply_add_trait_rating(entity, effect, repo, result):
     """Add a trait instance's rating dice to a targeted dice pool.
@@ -298,13 +310,49 @@ def _apply_add_trait_rating(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"trait {ts_id} has no rating"))
         return
 
-    loc = _add_trait_rating_to_pool(ts_id, pool_id, entity, repo)
-    if loc == (None, None):
+    location_id, owner_id, positions = _add_trait_rating_to_pool(ts_id, pool_id, entity, repo)
+    if not location_id or not owner_id:
         result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
         return
     trait = repo.get_trait(ts.trait_id)
     label = trait.name if trait else ts.trait_id
     result.applied.append(AppliedEffect(effect, f"added {label} rating {[d.value for d in ts.dice]} to pool"))
+    _queue_entity_revert(
+        repo, entity, effect,
+        context_extra={"pool_add": {"location": location_id, "owner": owner_id,
+                                    "positions": positions,
+                                    "dice": [d.value for d in ts.dice]}},
+    )
+
+
+def _apply_remove_added_dice(entity, effect, repo, result):
+    """Remove the dice a pool add appended (the inverse of ``add_dice``).
+
+    The forward handler recorded the pool coordinates and the exact positions it
+    appended (``effect.context.pool_add``); this removes them, newest first so
+    the earlier positions stay valid. A pool that has since changed shape is not
+    guessed at — only positions that still exist are popped.
+    """
+    from transversal.services.contest_tracker import broadcast_pool_change
+    from transversal.services.scene_state import get_scene_store
+
+    record = (effect.context or {}).get("pool_add") or {}
+    location_id = record.get("location") or ""
+    owner_id = record.get("owner") or ""
+    positions = sorted(record.get("positions") or [], reverse=True)
+    if not location_id or not owner_id or not positions:
+        result.applied.append(AppliedEffect(effect, "no recorded pool add to undo"))
+        return
+    store = get_scene_store()
+    pool = store.get_pool(location_id, owner_id)
+    removed = 0
+    for index in positions:
+        if 0 <= index < len(pool):
+            pool.pop(index)
+            removed += 1
+    store.save_pool(location_id, owner_id, pool)
+    broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
+    result.applied.append(AppliedEffect(effect, f"removed {removed} added dice from {owner_id} pool"))
 
 def _resolve_pool_ref(effect):
     """Return the resolved pool id from ``refs["pool"]`` or the literal ``target``."""

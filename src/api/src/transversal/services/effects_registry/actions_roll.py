@@ -94,6 +94,9 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="dice", label="Dice", field_type="dice_array", required=True),
         ],
         target_kind="pool",
+        # The undo takes exactly these dice back out (the handler records which
+        # ones it appended; see ``_apply_remove_added_dice``).
+        inverse=("modify_pool", "remove_added_dice"),
     ),
     EffectActionMeta(
         action_id="add_trait_rating_dice",
@@ -107,6 +110,9 @@ ACTIONS: list[EffectActionMeta] = [
             RefDef("trait", "Trait", "traitsetting"),
             RefDef("pool", "Destination pool", "pool"),
         ],
+        # The undo takes exactly the dice this put in back out (the handler records
+        # which ones and where; see ``_apply_remove_added_dice``).
+        inverse=("modify_pool", "remove_added_dice"),
     ),
     EffectActionMeta(
         action_id="roll_pool",

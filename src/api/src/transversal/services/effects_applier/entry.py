@@ -28,6 +28,7 @@ from transversal.services.effects_applier.handlers_pools import (
     _apply_add_dice,
     _apply_add_trait_rating,
     _apply_dice_limit,
+    _apply_remove_added_dice,
     _apply_resolve_pool,
     _apply_roll_pool,
     _apply_set_traitset_limit,
@@ -88,6 +89,7 @@ _MUTATION_HANDLERS = {
     ("modify_dice_limit", "decrease"): _apply_dice_limit,
     ("modify_pool", "add_dice"): _apply_add_dice,
     ("modify_pool", "add_trait_rating"): _apply_add_trait_rating,
+    ("modify_pool", "remove_added_dice"): _apply_remove_added_dice,
     ("modify_pool", "roll"): _apply_roll_pool,
     ("modify_pool", "resolve"): _apply_resolve_pool,
     # Stepping a die *in the pool* (as opposed to a trait's rating). These were

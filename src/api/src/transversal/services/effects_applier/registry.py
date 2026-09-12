@@ -121,6 +121,7 @@ def _register_core_handlers(em, raz):
     effect_registry.register("modify_dice_limit", "decrease", _commit)
     effect_registry.register("modify_pool", "add_dice", _commit)
     effect_registry.register("modify_pool", "add_trait_rating", _commit)
+    effect_registry.register("modify_pool", "remove_added_dice", _commit)
     effect_registry.register("modify_pool", "roll", _commit)
     effect_registry.register("modify_pool", "resolve", _commit)
 
