@@ -18,6 +18,28 @@ class TriggerRequest(BaseModel):
     context: dict = {}
 
 
+class EndRequest(BaseModel):
+    entity_id: str
+    sfx_id: str
+
+
+@router.post("/end")
+async def end_sfx(req: EndRequest, request: Request):
+    """Take back a manual activation that has not committed yet.
+
+    Applies the undos it still owes — the effect reverts and the holds — in
+    reverse order of application, drops the deferred parts it never reached, and
+    un-arms anything still waiting on a roll. Once the dice have been rolled, or
+    a delayed part of the activation has fired, there is nothing left to end and
+    the summary reports zero records.
+    """
+    from transversal.main import _get_repo
+    from transversal.services.scheduled_events import end_activation
+
+    summary = end_activation(_get_repo(), req.entity_id, req.sfx_id)
+    return {"ended": summary["records"] > 0, **summary}
+
+
 @router.post("/trigger")
 async def trigger_sfx(req: TriggerRequest, request: Request):
     """Trigger an SFX for an entity.

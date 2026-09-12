@@ -72,19 +72,30 @@ class EffectDuration(BaseModel):
     combine: TimerCombine = TimerCombine.FIRST_TO_FIRE
 
 class ScheduledEvent(BaseModel):
-    """A persisted, centrally-scheduled revert fired when its timers expire.
+    """A persisted row in the central timer store.
 
     ``target_type`` + ``target_id`` identify the owner (entity or trait setting)
     the effect applies against; resolved at fire time so a deleted target is a
     no-op.
+
+    ``kind`` says what the row is for:
+
+    - ``"revert"`` — an undo timer: applies its effect when the timers expire.
+    - ``"pending"`` — a deferred forward effect: applies when the timers expire.
+    - ``"hold"`` — the undo of an effect that had no timer. It never fires on its
+      own: it is applied when the activation is **ended** early, and dissolved
+      when the activation *commits* — a delayed part of it fires, or the dice are
+      rolled. Until then the whole activation can be taken back.
     """
     id: str
     target_type: str = "entity"           # "entity" | "trait_setting"
     target_id: str = ""                   # entity id or trait-setting id
-    effect: "Effect"                     # the revert effect to apply
+    effect: "Effect"                     # the revert (or deferred) effect
     timers: list["Timer"] = Field(default_factory=list)
     combine: TimerCombine = TimerCombine.FIRST_TO_FIRE
     source_sfx_id: Optional[str] = None
+    kind: str = "revert"                  # "revert" | "pending" | "hold"
+    created_at: str = ""                  # ISO timestamp; orders a cancel's reverts
 
 class ConsequenceOption(BaseModel):
     """A selectable entry in the post-roll consequence menu.

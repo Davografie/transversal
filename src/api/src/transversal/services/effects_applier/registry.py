@@ -7,6 +7,7 @@ from typing import Callable
 from transversal.services.effects_applier.datatypes import (
     SOURCE_CONTEXT_KEY,
     SOURCE_ELEMENT_CONTEXT_KEY,
+    ACTIVATION_CONTEXT_KEY,
 )
 from transversal.services.effects_applier.handlers_world import (
     _apply_attune_universe,
@@ -57,7 +58,19 @@ class EffectRegistry:
             or self._handlers.get((action.type, "*"))
             or self._handlers.get(("*", "*"))
         )
-        if handler:
+        if handler is None:
+            return
+        activation = context.get(ACTIVATION_CONTEXT_KEY) if isinstance(context, dict) else None
+        if activation:
+            # Bookings made while this effect applies belong to the activation; when
+            # it is a *manual* one, an effect without a duration books a hold — the
+            # undo that can be applied until the activation commits.
+            from transversal.services.scheduled_events import activation_booking
+            with activation_booking(
+                activation.get("sfx_id"), cancelable=bool(activation.get("cancelable")),
+            ):
+                handler(action, entity_id, universe, context)
+        else:
             handler(action, entity_id, universe, context)
 
 def _register_core_handlers(em, raz):

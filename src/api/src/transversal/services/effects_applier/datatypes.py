@@ -16,6 +16,11 @@ SOURCE_ELEMENT_CONTEXT_KEY = "_source_element"
 
 BINDINGS_CONTEXT_KEY = "_bindings"
 
+#: The activation currently being applied — ``{"sfx_id": ..., "cancelable": bool}``.
+#: Set by the engine around one SFX's effects so bookings are attributed to the
+#: rule, and a *manual* activation's untimed undos are booked as holds.
+ACTIVATION_CONTEXT_KEY = "_activation"
+
 @dataclass
 class AppliedEffect:
     """Record of one successfully applied mutation."""

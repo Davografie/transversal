@@ -272,9 +272,18 @@ class EffectsEngine:
             # Carry the activation's variable scope to the applier, so an effect's
             # ``entity_spec`` can resolve ``select variable`` against what the SFX's
             # conditions (and any earlier effect) bound.
+            #
+            # ``_activation`` marks which activation these effects belong to. It
+            # travels with every dispatch (see ``EffectRegistry.apply``) so bookings
+            # are attributed to the rule, and a *manual* activation's untimed undos
+            # are booked as holds — the flight window the sheet lets a player undo.
             effect_context = {
                 **(effect_context or {}),
                 _effects_applier.BINDINGS_CONTEXT_KEY: bindings,
+                _effects_applier.ACTIVATION_CONTEXT_KEY: {
+                    "sfx_id": sfx.id,
+                    "cancelable": event.type in ("manual", "on_activate"),
+                },
             }
             roll_effects = [e for e in sfx.effects if e.timing in _deferred_timings]
             log.info(

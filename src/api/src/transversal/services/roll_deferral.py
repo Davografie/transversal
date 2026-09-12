@@ -558,6 +558,22 @@ def clear_armed(entity_id: str) -> None:
     _armed.pop(entity_id, None)
 
 
+def drop_armed(entity_id: str, source_sfx_id: str) -> int:
+    """Drop this entity's waiting entries for one SFX — and its global ones.
+
+    Used when a manual activation is *ended*: the parts of it that were still
+    waiting on a roll never fire. Returns how many entries were dropped.
+    """
+    global _global_armed
+    if not source_sfx_id:
+        return 0
+    before = list(_armed.get(entity_id, []))
+    _armed[entity_id] = [a for a in before if a.source_sfx_id != source_sfx_id]
+    global_before = len(_global_armed)
+    _global_armed = [a for a in _global_armed if a.source_sfx_id != source_sfx_id]
+    return (len(before) - len(_armed[entity_id])) + (global_before - len(_global_armed))
+
+
 def list_armed(entity_id: str) -> list[Effect]:
     """The armed roll-timing effects currently queued for an entity (tests/debug)."""
     out: list[Effect] = []

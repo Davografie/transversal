@@ -118,8 +118,11 @@ def fire_roll_sfx(
     # immediate effect (e.g. modify_dice_limit) reverts N rolls later. Ticking
     # before firing ``on_roll`` reverts the previous roll's bonus, then this
     # roll's bonus applies — so the delta is active for exactly one roll.
-    from transversal.services.scheduled_events import advance_scheduled_events
+    from transversal.services.scheduled_events import advance_scheduled_events, commit_holds
     advance_scheduled_events(repo, "rolls", entity_id=entity_id)
+    # The dice landing commits every in-flight manual activation for this entity:
+    # from here on, what it changed is paid for for real (its holds dissolve).
+    commit_holds(repo, entity_id=entity_id)
 
     sfx_ids, razmerit = _entity_sfx_context(repo, entity_id, universe)
     rolls = _rolls_as_dicts(roll_result)

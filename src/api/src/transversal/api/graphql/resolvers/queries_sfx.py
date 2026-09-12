@@ -153,7 +153,10 @@ class QueriesSfx:
             target_id=str(target_id) if target_id is not None else None,
             target_ids=[str(i) for i in target_ids] if target_ids is not None else None,
         )
-        return [_scheduled_event_to_gql(e) for e in events]
+        # Holds are the activation's *cancelability* record, not a running timer:
+        # they are not displayed as a countdown. (The sheet asks for them through
+        # the activation's own affordance, not the ⏳ line.)
+        return [_scheduled_event_to_gql(e) for e in events if getattr(e, "kind", "revert") != "hold"]
 
     @strawberry.field
     def armed_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[strawberry.ID]:

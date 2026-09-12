@@ -9,7 +9,10 @@ in-memory ``_schedule`` with one persisted, queryable timer store.
 
 from __future__ import annotations
 
+import contextvars
 import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Optional
 
 from transversal.domain import (
@@ -22,6 +25,28 @@ from transversal.domain import (
 
 # Global timing boundaries that also fire an auto-fire SFX trigger.
 _GLOBAL_BOUNDARY_SFX = {"beat": "on_beat", "scene": "on_scene"}
+
+#: The activation whose effects are currently being applied (set by the applier
+#: around one SFX's handler dispatch, from the context the engine threaded in).
+#: ``cancelable`` marks a *manual* activation: its untimed undos are booked as
+#: holds — applied if the activation is ended early, dissolved when it commits.
+_BOOKING: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
+    "sfx_booking", default=None,
+)
+
+
+@contextmanager
+def activation_booking(sfx_id: Optional[str], cancelable: bool = False):
+    """Scope handler dispatch to one activation, so bookings can be attributed."""
+    token = _BOOKING.set({"sfx_id": sfx_id, "cancelable": bool(cancelable)})
+    try:
+        yield
+    finally:
+        _BOOKING.reset(token)
+
+
+def _booking() -> Optional[dict]:
+    return _BOOKING.get()
 
 
 def build_revert(effect: Effect, *, prior_result: Optional[str] = None) -> Optional[Effect]:
@@ -50,7 +75,10 @@ def build_revert(effect: Effect, *, prior_result: Optional[str] = None) -> Optio
     )
 
 
-def _new_event(target_type, target_id, effect, timers, combine, source_sfx_id) -> ScheduledEvent:
+def _new_event(target_type, target_id, effect, timers, combine, source_sfx_id, kind="revert") -> ScheduledEvent:
+    booking = _booking()
+    if source_sfx_id is None and booking is not None:
+        source_sfx_id = booking.get("sfx_id")
     return ScheduledEvent(
         id=f"se-{uuid.uuid4().hex[:12]}",
         target_type=target_type,
@@ -59,6 +87,8 @@ def _new_event(target_type, target_id, effect, timers, combine, source_sfx_id) -
         timers=list(timers),
         combine=combine,
         source_sfx_id=source_sfx_id,
+        kind=kind,
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -70,9 +100,10 @@ def schedule_event(
     timers,
     combine,
     source_sfx_id: Optional[str] = None,
+    kind: str = "revert",
 ) -> ScheduledEvent:
-    """Create + persist a scheduled event in the central store."""
-    event = _new_event(target_type, target_id, effect, timers, combine, source_sfx_id)
+    """Create + persist a row in the central store."""
+    event = _new_event(target_type, target_id, effect, timers, combine, source_sfx_id, kind=kind)
     repo.create_scheduled_event(event)
     return event
 
@@ -87,15 +118,30 @@ def schedule_revert(
     prior_result: Optional[str] = None,
     source_sfx_id: Optional[str] = None,
 ) -> Optional[ScheduledEvent]:
-    """Build + persist the inverse of ``effect`` (no-op without a duration/inverse)."""
-    if not effect.duration or not effect.duration.timers:
-        return None
+    """Build + persist the inverse of ``effect``.
+
+    With a duration the inverse is a timed **revert**. Without one it is booked as
+    a **hold** — but only inside a cancelable (manual) activation, where the undo
+    exists so the activation can be taken back before it commits. Anywhere else
+    there is nothing to book and this is a no-op.
+    """
     revert = build_revert(effect, prior_result=prior_result)
     if revert is None:
         return None
     if target is not None:
         revert.target = target
-    return schedule_event(repo, target_type, target_id, revert, effect.duration.timers, effect.duration.combine, source_sfx_id)
+    if effect.duration and effect.duration.timers:
+        return schedule_event(
+            repo, target_type, target_id, revert, effect.duration.timers,
+            effect.duration.combine, source_sfx_id, kind="revert",
+        )
+    booking = _booking()
+    if not (booking and booking.get("cancelable")):
+        return None
+    return schedule_event(
+        repo, target_type, target_id, revert, [], TimerCombine.FIRST_TO_FIRE,
+        source_sfx_id, kind="hold",
+    )
 
 
 def schedule_effect(
@@ -135,11 +181,12 @@ def schedule_deferred(
     *,
     source_sfx_id: Optional[str] = None,
 ) -> bool:
-    """Persist a deferred (non-IMMEDIATE) effect as a scheduled event."""
+    """Persist a deferred (non-IMMEDIATE) forward effect as a scheduled event."""
     timer = timing_to_timer(effect.timing)
     if timer is None:
         return False
-    schedule_event(repo, target_type, target_id, effect, [timer], TimerCombine.FIRST_TO_FIRE, source_sfx_id)
+    schedule_event(repo, target_type, target_id, effect, [timer], TimerCombine.FIRST_TO_FIRE,
+                   source_sfx_id, kind="pending")
     return True
 
 
@@ -181,6 +228,78 @@ def _apply_event(repo, event: ScheduledEvent) -> int:
     return 1
 
 
+def _event_owner_entity(repo, event: ScheduledEvent) -> Optional[str]:
+    """The entity a row ultimately applies against (a trait setting resolves through its owner)."""
+    if event.target_type == "trait_setting":
+        ts = repo.get_traitsetting(event.target_id)
+        return ts.entity_id if ts is not None else None
+    return event.target_id
+
+
+def commit_holds(
+    repo,
+    *,
+    entity_id: Optional[str] = None,
+    source_sfx_id: Optional[str] = None,
+) -> int:
+    """Dissolve held undos: the activation has committed.
+
+    Called when a delayed part of the activation fires and when the dice are
+    rolled. From either moment on, what the activation changed is paid for for
+    real — its holds cannot be applied any more, they are simply dropped.
+    """
+    dropped = 0
+    for event in repo.list_all_scheduled_events():
+        if event.kind != "hold":
+            continue
+        if source_sfx_id is not None and event.source_sfx_id != source_sfx_id:
+            continue
+        if entity_id is not None and _event_owner_entity(repo, event) != entity_id:
+            continue
+        repo.delete_scheduled_event(event.id)
+        dropped += 1
+    return dropped
+
+
+def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
+    """Take back a manual activation that has not committed yet.
+
+    Applies every undo the activation still owes — the timed reverts early, and
+    the holds — in reverse order of application; drops the deferred parts it had
+    not reached; and un-arms anything still waiting on a roll. Returns a summary
+    for the caller (counts only; the effects themselves are applied through the
+    ordinary handler path, persistence included).
+    """
+    records = [
+        e for e in repo.list_all_scheduled_events()
+        if e.source_sfx_id == sfx_id and _event_owner_entity(repo, e) == entity_id
+    ]
+    reverted = 0
+    dropped_pending = 0
+    dropped_holds = 0
+    for event in sorted(records, key=lambda e: (e.created_at, e.id), reverse=True):
+        if event.kind == "pending":
+            repo.delete_scheduled_event(event.id)
+            dropped_pending += 1
+            continue
+        reverted += _apply_event(repo, event)
+        repo.delete_scheduled_event(event.id)
+        if event.kind == "hold":
+            dropped_holds += 1
+
+    from transversal.services.roll_deferral import drop_armed
+    unarmed = drop_armed(entity_id, sfx_id)
+    return {
+        "entity_id": entity_id,
+        "sfx_id": sfx_id,
+        "records": len(records),
+        "reverted": reverted,
+        "dropped_pending": dropped_pending,
+        "dropped_holds": dropped_holds,
+        "unarmed": unarmed,
+    }
+
+
 def advance_scheduled_events(repo, event_type: str, entity_id: Optional[str] = None) -> int:
     """Advance the central timer store by one tick; fire + delete due events.
 
@@ -190,6 +309,10 @@ def advance_scheduled_events(repo, event_type: str, entity_id: Optional[str] = N
     """
     fired = 0
     for event in repo.list_all_scheduled_events():
+        if event.kind == "hold":
+            # A hold never fires on its own: it is applied by end_activation, or
+            # dissolved by commit_holds. Ticking it would apply it out of turn.
+            continue
         if entity_id is not None:
             if event.target_type == "entity":
                 if event.target_id != entity_id:
@@ -203,6 +326,14 @@ def advance_scheduled_events(repo, event_type: str, entity_id: Optional[str] = N
         if _advance_event(event, event_type):
             fired += _apply_event(repo, event)
             repo.delete_scheduled_event(event.id)
+            if event.source_sfx_id:
+                # A delayed part of the activation fired: it has committed, so
+                # anything it was still holding on to is now permanent.
+                commit_holds(
+                    repo,
+                    source_sfx_id=event.source_sfx_id,
+                    entity_id=_event_owner_entity(repo, event),
+                )
         else:
             repo.update_scheduled_event(event)
     return fired
