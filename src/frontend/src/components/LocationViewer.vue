@@ -8,19 +8,19 @@
       <img v-else-if="currentImage" :src="currentImage" class="scene-media" alt="" />
 
       <!-- Zone dots -->
-      <template v-for="(z, i) in zones" :key="'z-' + z.name">
+      <template v-for="(z, i) in zones" :key="'z-' + zoneId(z, i)">
       <MapDot
         v-if="showElements"
         type="zone"
         :x="z.x" :y="z.y"
         :image="childImage(z)"
         :label="z.name"
-        :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.name === z.name) || (expandLevels['zone-' + z.name] || 0) > 0"
+        :expanded="editZones || (activeElement?.type === 'zone' && activeElement?.id === zoneId(z, i)) || (expandLevels['zone-' + zoneId(z, i)] || 0) > 0"
         :draggable="editZones"
         :title="z.name"
         :hole-style="zoneHoleStyle(z)"
-        :expand-level="expandLevels['zone-' + z.name] || 0"
-        :class="{ armed: armedDot === 'zone-' + z.name }"
+        :expand-level="expandLevels['zone-' + zoneId(z, i)] || 0"
+        :class="{ armed: armedDot === 'zone-' + zoneId(z, i) }"
         @click="onDotClick('zone', z)"
         @overlay-click="onExpandedClick('zone', z)"
         @drag-start="(e) => onZoneDragStart(e, z, i)"
@@ -485,7 +485,13 @@ async function onDragEnd() {
     await fetch(`/api/v1/locations/${props.locationId}/zones`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(zones.value.map(z => ({ name: z.name, x: z.x, y: z.y }))),
+      // PUT replaces the whole zone list: send every field back, or a drag
+      // silently strips the zone→child link (`location_id`) and its image.
+      body: JSON.stringify(zones.value.map(z => ({
+        name: z.name, x: z.x, y: z.y,
+        background_image: z.background_image ?? null,
+        location_id: z.location_id ?? null,
+      }))),
     })
   } catch { /* silent */ }
 }
@@ -730,26 +736,26 @@ function updateTravelTargets(px, py) {
   const travelDist = travelProximity()
   const levels = {}
   let travelNearest = null, travelNearestDist = travelDist
-  const scan = (type, key, name, tx, ty) => {
+  const scan = (type, id, tx, ty) => {
     const dist = Math.sqrt((tx - px) ** 2 + (ty - py) ** 2)
-    if (dist < travelNearestDist) { travelNearest = { type, key, name }; travelNearestDist = dist }
+    if (dist < travelNearestDist) { travelNearest = { type, id }; travelNearestDist = dist }
     if (dist < EXPAND_PROXIMITY) {
       const t = dist / EXPAND_PROXIMITY
-      levels[`${type}-${key || name}`] = 1 - t * t  // quadratic: expands fast
+      levels[`${type}-${id}`] = 1 - t * t  // quadratic: expands fast
     }
   }
-  for (const z of zones.value) scan('zone', null, z.name, z.x, z.y)
-  for (const nd of navDots.value) scan('nav', nd.key, null, nd.x, nd.y)
+  for (const z of zones.value) scan('zone', zoneId(z), z.x, z.y)
+  for (const nd of navDots.value) scan('nav', nd.key, nd.x, nd.y)
   dragTarget = travelNearest
   expandLevels.value = levels
-  armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.key || travelNearest.name}` : ''
+  armedDot.value = (!props.editZones && travelNearest) ? `${travelNearest.type}-${travelNearest.id}` : ''
 }
 
 // Drop-on-target travel, shared by the occupant self-drag and the GM dot drag.
 function travelToTarget(t) {
   if (!t) return false
   if (t.type === 'zone') {
-    const zone = zones.value.find(z => z.name === t.name)
+    const zone = zones.value.find(z => zoneId(z) === t.id)
     if (!zone) return false
     const child = childForZone(zone)
     if (child) {
@@ -989,13 +995,19 @@ async function relocate(locationId, universe, consciousness, effects, name) {
 // ── Child location image lookup ────────────────────
 
 function childForZone(zone) {
-  // Match zone to child by location_id first, then by name
-  const children = nav.value.children || []
-  if (zone.location_id) {
-    const byId = children.find(c => c._key === zone.location_id)
-    if (byId) return byId
-  }
-  return children.find(c => c.name === zone.name) || null
+  // Identity is the stored link, never the label: names are editable, and a
+  // rename must not orphan or mis-route a zone. Zones get their `location_id`
+  // when the `super` edge is created (repository `_ensure_child_zone`).
+  if (!zone.location_id) return null
+  return (nav.value.children || []).find(c => c._key === zone.location_id) || null
+}
+
+// Identity for a zone: the linked child's ID, else its position in the current
+// list (stable per fetch). Used for dot keys and proximity state — a rename
+// must not re-key, re-arm, or re-target anything.
+function zoneId(z, i) {
+  if (z.location_id) return z.location_id
+  return `idx-${i === undefined ? zones.value.indexOf(z) : i}`
 }
 
 function childImage(zone) {
@@ -1092,14 +1104,15 @@ function onDotClick(type, item) {
   }
   // Zones / nav dots: pop or dismiss the expanded bubble.
   if (activeElement.value?.type === type) {
-    const match = type === 'zone' ? activeElement.value.name === item.name
+    const same = type === 'zone'
+      ? activeElement.value.id === zoneId(item)
       : activeElement.value.key === item.key
-    if (match) {
+    if (same) {
       activeElement.value = null
       return
     }
   }
-  activeElement.value = type === 'zone' ? { type: 'zone', name: item.name }
+  activeElement.value = type === 'zone' ? { type: 'zone', id: zoneId(item) }
     : { type: 'nav', key: item.key }
 }
 
@@ -1132,11 +1145,9 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     const r = await fetch(`/api/v1/locations/${child._key}/navigate`)
     const destNav = await r.json()
     const destLoc = destNav.location
-    // Find which dot on destination points back to source
+    // Find which dot on destination links back to source (by child ID)
     for (const z of (destLoc?.zones || [])) {
-      const destChildren = destNav.children || []
-      const c = destChildren.find(ch => ch.name === z.name)
-      if (c && c._key === sourceId) { arriveX = z.x; arriveY = z.y; break }
+      if (z.location_id === sourceId) { arriveX = z.x; arriveY = z.y; break }
     }
     if (arriveX === zone.x && arriveY === zone.y) {
       // Check parent dot
@@ -1210,9 +1221,7 @@ function placeCharacterAtSource(sourceId) {
   // Determine new position
   let nx = 50, ny = 50
   for (const z of zones.value) {
-    const children = nav.value.children || []
-    const child = children.find(c => c.name === z.name)
-    if (child && child._key === sourceId) { nx = z.x; ny = z.y; break }
+    if (z.location_id === sourceId) { nx = z.x; ny = z.y; break }
   }
   if (nx === 50 && ny === 50) {
     const nd = navDots.value.find(d => d.key === 'parent')
@@ -1312,12 +1321,9 @@ async function preloadDestNavCache() {
         const parentPos = loc?.nav_positions?.parent
         if (parentPos) { arriveX = parentPos.x; arriveY = parentPos.y }
       } else if (dest.kind === 'parent') {
-        // Parent: find which zone on parent points back to us (our name matches a zone name)
+        // Parent: find which zone on parent links back to us (by child ID)
         for (const z of (loc?.zones || [])) {
-          const destChildren = data.children || []
-          if (destChildren.some(c => c.name === z.name && c._key === currentId)) {
-            arriveX = z.x; arriveY = z.y; break
-          }
+          if (z.location_id === currentId) { arriveX = z.x; arriveY = z.y; break }
         }
       } else if (dest.kind === 'portal') {
         // Portal: use the destination's matching portal dot position

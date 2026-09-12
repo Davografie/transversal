@@ -87,16 +87,11 @@ async def navigate(location_id: str):
             parent["navdot_image"] = nav
             parent["navdot_image_transparent"] = navdot_transparent.get(_eid(parent), False)
 
-    # Populate zone location_id by matching children to zones by name
-    children = result.get("children", [])
-    zones = result.get("location", {}).get("zones", [])
-    for child in children:
-        child_name = child.get("name", "")
-        child_key = child.get("_key", "")
-        if child_name and child_key:
-            for zone in zones:
-                if zone.get("name") == child_name and not zone.get("location_id"):
-                    zone["location_id"] = child_key
+    # Zones carry their own ``location_id`` — the authoritative link, written
+    # when the ``super`` edge is created (repository ``_ensure_child_zone``) —
+    # and it is served verbatim. Identity is never resolved by comparing
+    # display names: they are editable labels, so a rename must not retarget
+    # or orphan a zone.
 
     return result
 
