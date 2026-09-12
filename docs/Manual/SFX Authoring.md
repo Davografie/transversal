@@ -558,6 +558,15 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 
 ## Condition reference
 
+The picker bands these by the question they answer — **Character state** (what the
+subject is or holds), **The moment it fires** (what is true at the activation,
+including who is driving), **This rule** (its own source or path), **No gate**
+(*Always*, *Narrative*). The bands and their order are declared beside the types
+in the backend, so the editor renders the grouping rather than owning a taxonomy
+that could drift from it. A type that cannot pass where you are authoring — a
+source-rating gate with no trait source, a moment-reading gate at a beat
+boundary — is greyed out and says why.
+
 | Condition | Passes when… |
 |-----------|--------------|
 | **Always** | Always (no gate). |

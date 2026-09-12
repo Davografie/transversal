@@ -58,6 +58,10 @@ class ConditionTypeOption:
     # option out of a site that supplies none of them. The exact per-condition
     # answer is `conditionContextKeys` / `validate_sfx`.
     requires_context_any_of: list[str] = strawberry.field(default_factory=list)
+    # The picker band this type belongs to ("Character state", …), declared on
+    # the type in `services/conditions.py`; the editor renders one optgroup per
+    # band and holds no taxonomy of its own.
+    group: str = ""
     # Catalog elements ("traitsetting", …) the SFX's source must resolve to, or
     # the condition can never pass — the editor greys it out with the reason.
     requires_source_elements: list[str] = strawberry.field(default_factory=list)

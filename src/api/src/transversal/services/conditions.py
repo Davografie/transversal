@@ -339,6 +339,10 @@ class ConditionTypeDef:
     operators: tuple[str, ...] = ()  # numeric comparators (HAS_RAZMERIT)
     target_options: tuple[str, ...] = ()  # fixed select options for the target (ENTITY_TYPE)
     uses_spec: bool = False  # renders a targeting-path builder instead of a flat target
+    # Which band of the picker this condition belongs to (see
+    # ``CONDITION_GROUP_ORDER``). Declared here, next to the type it describes,
+    # so the editor never carries a list of its own.
+    group: str = ""
     # Catalog elements the SFX's source must resolve to for this condition to be
     # able to pass ("" = any). "Source rating" on an entity-source SFX is a
     # silent no-op, so the editor greys the option out with the reason instead of
@@ -492,27 +496,67 @@ def condition_context_keys(condition: Condition) -> frozenset[str]:
     return frozenset()
 
 
-CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
-    ConditionTypeDef(ConditionType.ALWAYS.name, "Always"),
-    ConditionTypeDef(ConditionType.AT_LOCATION.name, "At location", needs_target=True, target_placeholder="location id", target_kind="location"),
-    ConditionTypeDef(ConditionType.HAS_TRAIT.name, "Has trait", needs_target=True, target_placeholder="trait id", target_kind="trait"),
-    ConditionTypeDef(ConditionType.HAS_EFFECTIVE_TRAIT.name, "Has effective trait", needs_target=True, target_placeholder="trait id", target_kind="trait"),
-    ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id", target_kind="traitset"),
-    ConditionTypeDef(ConditionType.HAS_RELATIONSHIP.name, "Has relationship", needs_target=True, target_placeholder="entity id", target_kind="entity"),
-    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">")),
-    ConditionTypeDef(ConditionType.HAS_RAZMERIT.name, "Has razmerit", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">")),
-    ConditionTypeDef(ConditionType.ENTITY_TYPE.name, "Entity type", needs_target=True, target_placeholder="entity type", target_options=("character", "gmc", "asset")),
-    ConditionTypeDef(ConditionType.USER_ROLE.name, "User role", needs_target=True, target_placeholder="role", target_options=("player", "architect")),
-    ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)"),
-    ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe"),
-    ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved"), requires_context_any_of=("phase",)),
-    ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in"), requires_context_any_of=("contest_winner", "gave_in")),
-    ConditionTypeDef(ConditionType.HITCH.name, "Hitch", requires_context_any_of=("hitch",)),
-    ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low"), requires_context_any_of=("high_stakes",)),
-    ConditionTypeDef(ConditionType.ARRIVAL_KIND.name, "Arrival kind", needs_target=True, target_placeholder="arrival", target_options=("transversal", "hierarchy", "move", "effect"), requires_context_any_of=("arrival_kind",)),
-    ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<"), requires_context_any_of=("tier",)),
-    ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",)),
-    ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",)),
-    ConditionTypeDef(ConditionType.TARGET_PATH.name, "Targeting path", uses_spec=True),
-    ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative"),
+# ── The picker's bands ───────────────────────────────
+#
+# The condition picker is ~22 entries, which is past the point where a flat list
+# can be scanned. Every type names its band here (declared next to the type) and
+# this tuple gives the bands their order — so the editor renders grouping it was
+# *told about*, rather than carrying a taxonomy of its own that would drift.
+#
+# The bands are the author's question, not the implementation's: a gate is about
+# the character, about the moment it fires, about the rule itself, or it is not
+# a gate at all.
+GROUP_CHARACTER = "Character state"
+# What is true *when it fires* — including who is driving (a user role only
+# resolves at an activation, so it belongs with the moment, not the character).
+GROUP_MOMENT = "The moment it fires"
+GROUP_RULE = "This rule"
+GROUP_NONE = "No gate"
+
+CONDITION_GROUP_ORDER: tuple[str, ...] = (
+    GROUP_CHARACTER,
+    GROUP_MOMENT,
+    GROUP_RULE,
+    GROUP_NONE,
 )
+
+CONDITION_TYPES: tuple[ConditionTypeDef, ...] = (
+    ConditionTypeDef(ConditionType.ALWAYS.name, "Always", group=GROUP_NONE),
+    ConditionTypeDef(ConditionType.AT_LOCATION.name, "At location", needs_target=True, target_placeholder="location id", target_kind="location", group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.HAS_TRAIT.name, "Has trait", needs_target=True, target_placeholder="trait id", target_kind="trait", group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.HAS_EFFECTIVE_TRAIT.name, "Has effective trait", needs_target=True, target_placeholder="trait id", target_kind="trait", group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.HAS_TRAIT_IN_TRAITSET.name, "Has trait in traitset", needs_target=True, target_placeholder="traitset id", target_kind="traitset", group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.HAS_RELATIONSHIP.name, "Has relationship", needs_target=True, target_placeholder="entity id", target_kind="entity", group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.TRAIT_RATING.name, "Trait rating", needs_target=True, target_placeholder="trait id", target_kind="trait", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.HAS_RAZMERIT.name, "Has razmerit", value_kind="number", operators=("<", "<=", "==", "!=", ">=", ">"), group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.ENTITY_TYPE.name, "Entity type", needs_target=True, target_placeholder="entity type", target_options=("character", "gmc", "asset"), group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.USER_ROLE.name, "User role", needs_target=True, target_placeholder="role", target_options=("player", "architect"), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.UNPLACED.name, "Unplaced (no location)", group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.IN_UNIVERSE.name, "In universe", needs_target=True, target_placeholder="universe key", target_kind="universe", group=GROUP_CHARACTER),
+    ConditionTypeDef(ConditionType.PHASE.name, "Phase", needs_target=True, target_placeholder="phase", target_options=("adding", "rolling", "picking", "resolved"), requires_context_any_of=("phase",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.CONTEST_OUTCOME.name, "Contest outcome", needs_target=True, target_placeholder="outcome", target_options=("player", "opponent", "give_in"), requires_context_any_of=("contest_winner", "gave_in"), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.HITCH.name, "Hitch", requires_context_any_of=("hitch",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.HIGH_STAKES.name, "High stakes", needs_target=True, target_placeholder="stakes", target_options=("high", "low"), requires_context_any_of=("high_stakes",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.ARRIVAL_KIND.name, "Arrival kind", needs_target=True, target_placeholder="arrival", target_options=("transversal", "hierarchy", "move", "effect"), requires_context_any_of=("arrival_kind",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.ROLL_TIER.name, "Roll tier", value_kind="tier", operators=(">=", ">", "==", "!=", "<=", "<"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.TEST_OUTCOME.name, "Test outcome", needs_target=True, target_placeholder="outcome", target_options=("success", "fail"), requires_context_any_of=("tier",), group=GROUP_MOMENT),
+    ConditionTypeDef(ConditionType.SOURCE_RATING.name, "Source rating", value_kind="die", operators=("<", "<=", "==", "!=", ">=", ">"), requires_source_elements=("traitsetting",), group=GROUP_RULE),
+    ConditionTypeDef(ConditionType.TARGET_PATH.name, "Targeting path", uses_spec=True, group=GROUP_RULE),
+    ConditionTypeDef(ConditionType.NARRATIVE.name, "Narrative", group=GROUP_NONE),
+)
+
+
+def ordered_condition_types() -> list[ConditionTypeDef]:
+    """The vocabulary in the order the editor shows it: grouped, then declared.
+
+    The picker is ~22 entries, which is past the point where a flat list can be
+    read — so each type declares its band and this puts them in band order,
+    keeping the declaration order *within* a band (which is where related types
+    already sit next to each other). The editor renders one ``optgroup`` per
+    consecutive band, so a new type only has to name its group.
+    """
+    rank = {name: i for i, name in enumerate(CONDITION_GROUP_ORDER)}
+    return sorted(
+        CONDITION_TYPES,
+        key=lambda c: (rank.get(c.group, len(rank)), list(CONDITION_TYPES).index(c)),
+    )

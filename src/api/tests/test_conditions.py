@@ -346,6 +346,43 @@ def test_condition_types_declare_uses_spec():
     assert by_value["AT_LOCATION"].uses_spec is False
 
 
+def test_every_condition_type_declares_a_band():
+    """The picker is ~22 entries: a type with no band would land in the editor's
+    fallback group, which is for legacy content only."""
+    from transversal.services.conditions import CONDITION_GROUP_ORDER
+
+    for c in CONDITION_TYPES:
+        assert c.group in CONDITION_GROUP_ORDER, c.value
+
+
+def test_the_picker_order_bands_the_vocabulary():
+    """Grouped, and within a band still in declaration order — the editor groups
+    consecutive runs, so a band split in two would render as two optgroups."""
+    from transversal.services.conditions import CONDITION_GROUP_ORDER, ordered_condition_types
+
+    ordered = ordered_condition_types()
+    assert {c.value for c in ordered} == {c.value for c in CONDITION_TYPES}
+
+    bands = [c.group for c in ordered]
+    runs = [b for i, b in enumerate(bands) if i == 0 or bands[i - 1] != b]
+    assert len(runs) == len(set(runs)), f"a band is split: {runs}"
+    assert runs == [b for b in CONDITION_GROUP_ORDER if b in runs]
+
+    for band in runs:
+        declared = [c.value for c in CONDITION_TYPES if c.group == band]
+        assert [c.value for c in ordered if c.group == band] == declared, band
+
+
+def test_the_rule_question_is_banded_as_the_author_asks_it():
+    """A spot check on the assignment itself, so a refactor can't quietly move a
+    type to the wrong band."""
+    by_value = {c.value: c for c in CONDITION_TYPES}
+    assert by_value["HAS_TRAIT"].group == "Character state"
+    assert by_value["ROLL_TIER"].group == "The moment it fires"
+    assert by_value["TARGET_PATH"].group == "This rule"
+    assert by_value["ALWAYS"].group == "No gate"
+
+
 def test_target_path_source_rating():
     # The cultivation-stage shape: the source trait's rating reached d8.
     spec = TargetSpec(steps=[

@@ -87,8 +87,14 @@ class QueriesTargeting:
 
     @strawberry.field
     def condition_types(self, info: strawberry.Info) -> list[ConditionTypeOption]:
-        """The condition-type vocabulary for the SFX editor, sourced from the backend."""
-        from transversal.services.conditions import CONDITION_TYPES
+        """The condition-type vocabulary for the SFX editor, sourced from the backend.
+
+        Returned in the picker's order — grouped into bands, declaration order
+        within a band (`ordered_condition_types`) — so the editor can render the
+        grouping by grouping consecutive runs, with no taxonomy of its own.
+        """
+        from transversal.services.conditions import ordered_condition_types
+
         return [
             ConditionTypeOption(
                 value=c.value, label=c.label,
@@ -98,8 +104,9 @@ class QueriesTargeting:
                 uses_spec=c.uses_spec,
                 requires_context_any_of=list(c.requires_context_any_of),
                 requires_source_elements=list(c.requires_source_elements),
+                group=c.group,
             )
-            for c in CONDITION_TYPES
+            for c in ordered_condition_types()
         ]
 
     @strawberry.field

@@ -2,7 +2,12 @@
   <div class="ce-root">
     <div v-for="(c, i) in conditions" :key="i" class="ce-row" :class="{ 'ce-row-spec': usesSpec(c.type) }">
       <select v-model="c.type">
-        <option v-for="t in typeOptions" :key="t.value" :value="t.value" :disabled="!typeUsable(t)">{{ t.label }}{{ optionReason(t) }}</option>
+        <!-- The backend returns the vocabulary already banded and ordered, so the
+             picker renders the grouping by grouping runs of the same band: no
+             taxonomy lives here to drift from the one the backend declares. -->
+        <optgroup v-for="g in typeGroups" :key="g.label" :label="g.label">
+          <option v-for="t in g.options" :key="t.value" :value="t.value" :disabled="!typeUsable(t)">{{ t.label }}{{ optionReason(t) }}</option>
+        </optgroup>
       </select>
       <span v-if="selectedProblem(c.type)" class="ce-warn">{{ selectedProblem(c.type) }}</span>
       <template v-if="usesSpec(c.type)">
@@ -99,6 +104,20 @@ const typeOptions = computed(() => {
     }
   }
   return opts
+})
+
+// One optgroup per band, in the order the backend sent them. A type the backend
+// doesn't know (legacy content) has no band: it lands in its own group, still
+// selectable, rather than being hidden or silently reordered.
+const typeGroups = computed(() => {
+  const groups = []
+  for (const t of typeOptions.value) {
+    const label = t.group || 'Other'
+    const last = groups[groups.length - 1]
+    if (last && last.label === label) last.options.push(t)
+    else groups.push({ label, options: [t] })
+  }
+  return groups
 })
 
 function needsTarget(type) {
