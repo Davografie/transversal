@@ -107,20 +107,53 @@ export function useTraitEditor({
     }
   }
 
-  // Suggestions for the instance-tag field: every tag already in play on this
-  // character, own or inherited. Local data — no extra query — and it keeps new
-  // instance tags spelled the way the rest of the sheet spells them.
+  // Suggestions for the instance-tag field. Two sources, unioned:
+  //  1. tags already in play on this character (own + inherited) — local data;
+  //  2. every tag on a trait in the current universe.
+  // (2) matters because the elements set is tagged registry-wide: without it a
+  // character who doesn't happen to carry a tagged trait sees an empty pool, and
+  // an empty pool renders no dropdown at all (TagInput opens on content).
+  const universeTags = ref([])
+  let universeTagsFor = null
+
+  async function fetchUniverseTags() {
+    const u = entity.value?.currentUniverse || props.universe
+    if (!u || universeTagsFor === u) return
+    try {
+      const data = await graphql(
+        `query($u: String!) { traitsByUniverse(universe: $u) { tags } }`,
+        { u },
+      )
+      const seen = new Set()
+      for (const t of data?.traitsByUniverse || []) {
+        for (const g of (t.tags || [])) seen.add(g)
+      }
+      universeTags.value = [...seen].sort()
+      universeTagsFor = u
+    } catch (e) {
+      console.error('universe tag pool failed:', e)
+    }
+  }
+
   const tagSuggestions = computed(() => {
-    const out = new Set()
+    // Case-insensitive dedupe, first spelling wins. TagInput hides the ones
+    // already on the trait.
+    const seen = new Map()
+    const add = (tag) => {
+      const label = String(tag || '').trim()
+      const key = label.toLowerCase()
+      if (key && !seen.has(key)) seen.set(key, label)
+    }
     const rows = [
       ...(traitSets.value || []).flatMap((s) => s.traits || []),
       ...(profileTraits.value || []),
     ]
     for (const t of rows) {
-      for (const g of (t.tags || [])) out.add(g)
-      for (const g of (t.registryTags || [])) out.add(g)
+      for (const g of (t.tags || [])) add(g)
+      for (const g of (t.registryTags || [])) add(g)
     }
-    return [...out].sort()
+    for (const g of universeTags.value) add(g)
+    return [...seen.values()].sort((a, b) => a.localeCompare(b))
   })
 
   const editProjectionOptions = computed(() => entity.value?.projections || [])
@@ -144,6 +177,7 @@ export function useTraitEditor({
     editingTraitId.value = t.id
     detailTrait.value = null
     fetchAcquirableSfxIds(t.id)
+    fetchUniverseTags()
     ensureTraitNames()
     editDice.value = (t.dice || []).map(d => d.toLowerCase())
     editCapacity.value = (t.capacity || []).map(d => d.toLowerCase())
