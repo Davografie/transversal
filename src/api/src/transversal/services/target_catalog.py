@@ -270,8 +270,11 @@ def pluralize(word: str) -> str:
 
 EDGES: tuple[Edge, ...] = (
     # die → its trait instance (ts_id) and its pool/roll owner
+    # No first-person default here: *whose* dice these are is the seed's business
+    # (`rolled_dice` / `opposing_dice` / `added_dice` each carry their own party
+    # phrase), so a path through a *pool* does not get to claim "you rolled".
     Edge("traitsetting", "die", ("traitsetting",), "one", "Owning trait instance",
-         noun="trait instance", plural="trait instances", card_origin="you rolled"),
+         noun="trait instance", plural="trait instances"),
     Edge("owner", "die", ("entity",), "one", "Pool owner", noun="pool owner"),
 
     # traitsetting → registry trait / traitset / owners

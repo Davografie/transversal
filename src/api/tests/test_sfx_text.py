@@ -5,7 +5,7 @@ tests that keep the card vocabulary honest (every card phrase is keyed to a real
 action/trigger, and no edge noun double-pluralizes).
 """
 
-from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX
+from transversal.domain import Condition, ConditionType, Effect, EffectTiming, SFX, TargetSpec
 from transversal.services import effects_registry as reg
 from transversal.services import menu_contexts as mc
 from transversal.services import target_catalog as tc
@@ -534,6 +534,57 @@ def test_a_tag_filter_reads_as_tagged():
         {"kind": "filter", "field": "tags", "operator": "contains", "value": "violent"},
     ]}), resolve=resolve)
     assert render_phrase(phrase, "") == "your trait instances tagged violent"
+
+
+def test_a_variable_seeded_path_keeps_its_qualifiers_and_its_party():
+    """The card is the author's check, and a `select variable` seed used to render
+    as "you": because a pronoun phrase drops its qualifiers, *every step after the
+    seed* vanished — a rule read "if there is a you", with the tags filter that
+    was the whole condition gone. And the opponent's pool read as the actor's.
+
+    Now the seed is named ("this trait"), the same declaration the engine binds
+    types it (`scope_seed_names`), and a hop to the *same word*
+    (instance → registry trait) says nothing instead of "a trait of this trait".
+    """
+    from transversal.domain import EffectTiming
+
+    sfx = SFX(
+        id="sfx-x", name="Water Suppresses Fire",
+        trigger="on_pool_change", source_kind="trait_setting",
+        conditions=[Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[
+            {"kind": "select", "collection": "variable", "variable": "trait_setting"},
+            {"kind": "navigate", "edge": "trait", "dedup": False},
+            {"kind": "filter", "field": "tags", "operator": "contains", "value": "fire"},
+        ]))],
+        effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
+                        action="step_down_die", target="",
+                        target_spec=TargetSpec(steps=[
+                            {"kind": "select", "collection": "added_dice"},
+                        ]))],
+    )
+    text = sfx_text(sfx)
+    assert "this trait tagged fire" in text          # the qualifier survives
+    assert "step down each die just added" in text   # and the effect names its die
+
+
+def test_the_opponents_pool_does_not_read_as_the_actors():
+    """`{contest_entity_opponent}` is someone else: a path through their pool must
+    not say "you rolled" (that default belongs to the *seed*, and the seeds each
+    carry their own party)."""
+    sfx = SFX(
+        id="sfx-x", name="X", trigger="on_pool_change",
+        conditions=[Condition(type=ConditionType.TARGET_PATH, spec=TargetSpec(steps=[
+            {"kind": "select", "collection": "variable", "variable": "contest_entity_opponent"},
+            {"kind": "navigate", "edge": "pool", "dedup": False},
+            {"kind": "navigate", "edge": "dice", "dedup": False},
+            {"kind": "navigate", "edge": "traitsetting", "dedup": False},
+            {"kind": "filter", "field": "tags", "operator": "contains", "value": "water"},
+        ]))],
+    )
+    text = sfx_text(sfx)
+    assert "the opposing entity" in text
+    assert "tagged water" in text
+    assert "you rolled" not in text
 
 
 def test_several_tags_read_as_or():

@@ -47,8 +47,14 @@ STEP_DOWN_THE_ADDED_DIE = TargetSpec(steps=[
     {"kind": "select", "collection": "added_dice"},
 ])
 
+# The same effect, naming *which* added die: the one from the rule's own trait.
+STEP_DOWN_THE_ADDED_FIRE_DIE = TargetSpec(steps=[
+    {"kind": "select", "collection": "added_dice"},
+    {"kind": "filter", "field": "ts_id", "operator": "==", "value": "{trait_setting}"},
+])
 
-def authored_sfx() -> SFX:
+
+def authored_sfx(target: TargetSpec = STEP_DOWN_THE_ADDED_DIE) -> SFX:
     return SFX(
         id="sfx-water-suppresses-fire", name="Water Suppresses Fire",
         trigger="on_pool_change", source_kind="trait_setting",
@@ -57,7 +63,7 @@ def authored_sfx() -> SFX:
             Condition(type=ConditionType.TARGET_PATH, spec=WATER_CONDITION),
         ],
         effects=[Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll",
-                        action="step_down_die", target="", target_spec=STEP_DOWN_THE_ADDED_DIE)],
+                        action="step_down_die", target="", target_spec=target)],
     )
 
 
@@ -132,7 +138,7 @@ def _register_like_startup(repo):
     applier_registry._register_core_handlers(em, None)
 
 
-def run(added, rolls, repo=None):
+def run(added, rolls, repo=None, target=STEP_DOWN_THE_ADDED_DIE):
     repo = repo or Repo()
     _register_like_startup(repo)
     ss_module._store = SceneStateStore()
@@ -141,7 +147,7 @@ def run(added, rolls, repo=None):
     ])
     ss_module._store.save_pool("loc-1", "kael", rolls)
     engine = EffectsEngine()
-    engine.register(authored_sfx())
+    engine.register(authored_sfx(target))
     engine.process_event_outcome(event(added, rolls), ["sfx-water-suppresses-fire"], 0, repo=repo)
     return ss_module._store
 
@@ -204,3 +210,33 @@ def test_it_does_not_fire_when_the_source_is_not_a_fire_technique():
     engine.process_event_outcome(event(added, added), ["sfx-water-suppresses-fire"], 0, repo=repo)
 
     assert ss_module._store.get_pool("loc-1", "kael")[0]["die"] == "d8"
+
+# ── What the conditions do *not* say ───────────────────────────────────
+
+def test_without_a_filter_any_added_die_comes_down():
+    """The trigger's condition is about the rule's **own** trait ("this technique
+    is fire-aspected"), not about what was added — and `on_pool_change` fires on
+    every save. So an unfiltered `added_dice` target takes whatever arrived: here
+    a die from no trait at all comes down, because the rule was suppressed by the
+    opponent's water, not because it was fire.
+
+    This is what the `ts_id == {trait_setting}` filter is for."""
+    manual = {"die": "d6", "ts_id": None, "source_kind": "manual",
+              "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 0}
+
+    store = run([manual], [manual])
+
+    assert store.get_pool("loc-1", "kael")[0]["die"] == "d4"
+
+
+def test_with_the_filter_only_the_fire_die_comes_down():
+    """Naming the rule's own trait in the target is what makes it a *fire*
+    suppression: the untagged die is left alone."""
+    manual = {"die": "d6", "ts_id": None, "source_kind": "manual",
+              "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 0}
+    fire = {"die": "d8", "ts_id": "kael:fire-palm", "source_kind": "trait",
+            "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 1}
+
+    store = run([manual, fire], [manual, fire], target=STEP_DOWN_THE_ADDED_FIRE_DIE)
+
+    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d6"]

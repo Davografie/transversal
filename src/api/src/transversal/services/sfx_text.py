@@ -171,6 +171,26 @@ _KNOWN_PLACEHOLDERS = {
 }
 
 
+_DETERMINERS = ("this", "the", "that", "these", "those", "a", "an")
+
+
+def named_variable_phrase(name: str) -> tuple[str, str]:
+    """A bound-variable name → ``(determiner, noun)``.
+
+    ``_KNOWN_PLACEHOLDERS`` stores whole phrases ("this trait", "the opposing
+    entity") because a ``{token}`` value needs the determiner in the sentence. A
+    *select* step needs the two apart: the noun still has to pluralise and be
+    counted. An unknown name falls back to its own words.
+    """
+    phrase = _KNOWN_PLACEHOLDERS.get(name, "")
+    if not phrase:
+        return ("", humanize(name) or "value")
+    head, _, rest = phrase.partition(" ")
+    if head in _DETERMINERS and rest:
+        return (head, rest)
+    return ("", phrase)
+
+
 def pluralize(word: str) -> str:
     """Naive English plural (catalog entries override where it matters)."""
     return tc.pluralize(word)
@@ -298,7 +318,13 @@ def _with_article(p: Phrase) -> str:
     body = render_phrase(replace(p, cardinality="one", possessive=False), "")
     if not body:
         return body
-    return f"your {body}" if p.possessive else f"{_article(body)} {body}"
+    if p.possessive:
+        return f"your {body}"
+    # A phrase that brought its own determiner ("this trait") keeps it: "a this
+    # trait" is what happens when one is added anyway.
+    if p.fixed_determiner:
+        return body
+    return f"{_article(body)} {body}"
 
 
 def _at_least_one(p: Phrase) -> str:
@@ -386,13 +412,19 @@ def _select_phrase(step: SelectStep, source_element: str | None = None,
         vt = (variables or {}).get(step.variable)
         element = getattr(vt, "element", "") or ""
         cardinality = getattr(vt, "cardinality", "") or "one"
-        if step.variable in _KNOWN_PLACEHOLDERS and element in ("", "entity"):
-            # Reserved names are the built-in things themselves: `self` is the
-            # acting entity, and "you" reads better than repeating the name.
+        if step.variable == "self":
+            # The actor itself is the one name that reads as a pronoun.
             return Phrase(element=element or "entity", cardinality=cardinality, pronoun=True)
-        named = humanize(step.variable) or "value"
+        # **Every other name is named.** Treating a *known* name as a pronoun when
+        # its element wasn't supplied (the editor's card call passes no variable
+        # types) did two wrong things at once: it pointed the card at the wrong
+        # party — the opponent's pool read as "your dice pool" — and, because a
+        # pronoun phrase renders without its qualifiers, it swallowed every step
+        # after it ("if there is a you", with the tags filter gone).
+        determiner, noun = named_variable_phrase(step.variable)
         return Phrase(element=element, cardinality=cardinality,
-                      noun=singularize(named), plural=named)
+                      noun=singularize(noun), plural=pluralize(noun),
+                      fixed_determiner=determiner)
     if step.collection == "source":
         if source_element:
             return Phrase(
@@ -515,6 +547,14 @@ def _navigate_phrase(p: Phrase, step: NavigateStep) -> Phrase:
         # to "the X of your location" so long chains stay unambiguous).
         return Phrase(element=element, cardinality=cardinality, noun=noun,
                       plural=plural, possessive=True, modal=p.modal)
+
+    if not origin and len(edge.target) == 1 and noun == p.noun:
+        # A hop to the *same word* says nothing new, so it does not get said: a
+        # trait instance and its registry trait are both "trait", and the hop from
+        # one to the other is how a filter reaches the definition's tags. Reading
+        # it literally gave "a trait of this trait tagged fire" for what the author
+        # wrote as "this trait tagged fire".
+        return replace(p, element=element, cardinality=cardinality)
 
     if origin:
         # The edge absorbs its source ("… you rolled"): carry the source's
@@ -1118,16 +1158,25 @@ def sfx_text(sfx: SFX, *, resolve: NameResolver | None = None,
     they trail in parentheses rather than masquerading as rules text.
     """
     source_element = tc.source_element(sfx.source_kind) if sfx.source_kind else None
+    # The names the activation puts in scope, typed — the *same declaration* the
+    # wizard offers and the engine binds (`scope_seed_names`). Without this a
+    # `select variable` seed carries no element, and the renderer then skips every
+    # step after it: the card said "if there is a this trait" and dropped the tags
+    # filter that was the whole point of the condition.
+    seeds = {
+        name: ValueType(element, "one")
+        for name, element in tc.scope_seed_names(sfx.trigger or "", sfx.source_kind).items()
+    }
     rules: list[str] = []
     narrative: list[str] = []
 
     for cond in sfx.conditions:
-        clause = condition_text(cond, resolve=resolve, source_element=source_element)
+        clause = condition_text(cond, resolve=resolve, source_element=source_element, variables=seeds)
         if not clause:
             continue
         (narrative if cond.type == ConditionType.NARRATIVE else rules).append(clause)
 
-    effects = _effects_text(sfx.effects, resolve=resolve, source_element=source_element)
+    effects = _effects_text(sfx.effects, resolve=resolve, source_element=source_element, variables=seeds)
 
     head = mc.trigger_card(sfx.trigger)
     if rules:

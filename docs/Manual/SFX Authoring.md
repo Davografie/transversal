@@ -529,6 +529,15 @@ Read it as a sanity check. If the card line does not say what you meant, the SFX
 - **A filter against a bound value relates to it.** Comparing a field to a name decided elsewhere (`filter universe == {chosen_universe}`) reads as the thing — *in the chosen universe* — rather than restating the field and the value. A container field supplies the relation, so a literal reads *in earth*.
 - **Effect durations** read as *reverts at the end of the scene* — the **undo timer**. This is a different thing from the SFX's own listening window, and the two are phrased differently on purpose (see [[SFX and Effects]]).
 
+**A path that starts from a bound variable reads with the variable's own words.**
+`{trait_setting}` is *this trait* (the rule's own trait) and
+`{contest_entity_opponent}` is *the opposing entity* — the card types them from the
+same declaration the wizard offers and the engine binds, so what you read is what
+fires. A hop that would say nothing is dropped: instance → registry trait is
+*trait* either way, so filtering the tags reads *this trait tagged fire*, not
+*a trait of this trait*. (Long chains through a pool still read long — which is
+what naming a step is for, below.)
+
 ### Naming a step is how you keep it readable
 
 Long paths make long sentences. The fix is naming: **any step with an `output` name contributes that name to the card line instead of the pipeline behind it.**

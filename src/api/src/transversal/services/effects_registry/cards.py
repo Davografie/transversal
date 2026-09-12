@@ -8,6 +8,11 @@ Split out of ``effects_registry.py``."""
 EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("modify_roll", "play_as_rating"): "play {target} as {result}",
     ("modify_roll", "double_die"): "double {target}",
+    # The step-die pair needs its target on the card: an effect that names a die
+    # (usually by a path) with no card template fell back to the action's own
+    # words — "step down die" — which said nothing about *which* die.
+    ("modify_roll", "step_up_die"): "step up {target}",
+    ("modify_roll", "step_down_die"): "step down {target}",
     ("modify_trait", "step_up"): "step up {target}",
     ("modify_trait", "step_down"): "step down {target}",
     ("modify_trait", "gain_or_step_up"): "gain or step up {target}",
