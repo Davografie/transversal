@@ -233,11 +233,16 @@ table-wide fact, not a local one: `App.vue` unions the server's `playerBodies`
 (the entity each player is currently driving — refreshed on the `main_active`
 SSE event) with the local `entityId`, and passes `controlledEntityIds` down. The
 `self` dot carries it whenever a perspective entity is set; the GM free-roam dot
-does **not** — that is a view marker, not a driven entity. The size change is a
-`transform: scale()` rather than a width/height change so the portrait ring and
-crop (`--dot-r`) scale with it instead of drifting mid-animation, and
-`.map-dot`'s transition covers `transform` — so taking a body grows the dot and
-handing it off shrinks it.
+does **not** — that is a view marker, not a driven entity. The size change uses
+the **individual `scale` property**, not `transform: scale()`: the `self` dot runs
+the `arrivePop` animation, which fills `transform` forwards and therefore wins
+the cascade over any normal `transform` declaration (this silently disabled the
+first attempt). `scale` composes with `transform` instead of competing with it,
+so the dot grows on take and shrinks on hand-off while `--dot-r` geometry scales
+uniformly with the ring. Note that a switch *swaps elements* — the entity you
+take becomes the `self` dot, the one you leave returns as an occupant dot — so
+the size change reads as the abandoned dot shrinking and the new one being
+larger, not as one dot animating between the two.
 
 ## Interactions
 

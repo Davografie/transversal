@@ -118,11 +118,13 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  /* Actively-controlled dots are this much bigger (tune here). Scaled rather
-     than resized so the portrait/ring geometry (--dot-r) scales with it
-     instead of drifting mid-transition. */
+  /* Actively-controlled dots are this much bigger (tune here). Applied with the
+     *individual* `scale` property, not `transform: scale()`: the self dot runs
+     the `arrivePop` animation, which fills `transform` forwards and would win
+     the cascade — `scale` composes with `transform` instead, so it survives
+     while still scaling the portrait/ring geometry (--dot-r) uniformly. */
   --controlled-scale: 1.2;
-  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, scale 0.25s ease;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
   z-index: 3;
@@ -142,7 +144,7 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   50% { box-shadow: 0 0 24px rgba(100,180,255,0.9), 0 0 48px rgba(100,180,255,0.5), 0 0 80px rgba(100,180,255,0.25); }
 }
 .occ-dot:not(.self).lerping {
-  transition: left 1.5s ease-out, top 1.5s ease-out, width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  transition: left 1.5s ease-out, top 1.5s ease-out, width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, scale 0.25s ease;
 }
 .nav-dot { width: 16px; height: 16px; }
 .nav-dot.nav-parent { background: rgba(200,170,60,0.8); box-shadow: 0 0 6px rgba(200,170,60,0.4); }
@@ -174,9 +176,9 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 }
 /* Actively controlled — someone at the table is driving this entity right now
    (the map's counterpart to the "assumed" state). Grows on take, shrinks on
-   hand-off, via the transform transition on `.map-dot`. */
+   hand-off, via the `scale` transition on `.map-dot`. */
 .map-dot.controlled {
-  transform: scale(var(--controlled-scale));
+  scale: var(--controlled-scale);
 }
 .dot-overlay {
   position: absolute; inset: 0; border-radius: 50%;
