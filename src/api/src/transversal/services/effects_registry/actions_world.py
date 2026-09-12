@@ -31,7 +31,7 @@ ACTIONS: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="end_active_effect",
         label="End Active Effect",
-        description="Cancel a running temporary effect (a pending timer) on the target",
+        description="End a running temporary effect now: its change is reverted (a deferred part is dropped) instead of waiting for the timer",
         category="either",
         effect_type="entity",
         effect_action="cancel_scheduled_event",

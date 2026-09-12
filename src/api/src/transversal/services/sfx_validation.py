@@ -198,6 +198,22 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
             if token not in known and not _reserved(token):
                 warnings.append(f"Condition {i + 1}: unknown variable {{{token}}}")
 
+    # What a take-back would leave behind. A manual rule can be ended early (until
+    # it commits), and the effects it cannot undo are the ones the registry
+    # declares no inverse for. Named only where the mixture exists: a rule that is
+    # entirely irreversible is not a take-back rule at all, and one that is
+    # entirely reversible needs no note.
+    if sfx.trigger in ("manual", "on_activate"):
+        from transversal.services.effects_registry import get_inverse
+        has_undoable = any(get_inverse(e.type, e.action)[0] for e in sfx.effects)
+        if has_undoable:
+            for i, effect in enumerate(sfx.effects):
+                if not get_inverse(effect.type, effect.action)[0]:
+                    warnings.append(
+                        f"Effect {i + 1} cannot be undone: pressing the rule again before it "
+                        f"commits leaves it in place (no inverse for {effect.type}/{effect.action})"
+                    )
+
     # Arming scope consistency: a listener_spec scope needs a resolvable path.
     if sfx.arming_scope == "listener_spec" and not (sfx.listener_spec and sfx.listener_spec.steps):
         warnings.append("Arming scope is 'listener_spec' but no listener path is set")

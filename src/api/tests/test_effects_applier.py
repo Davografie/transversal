@@ -647,7 +647,13 @@ def test_disable_with_duration_schedules_enable_revert():
     assert revert.effect.action == "enable"
 
 
-def test_cancel_scheduled_event_deletes_timer():
+def test_ending_a_timer_applies_its_revert_and_removes_it(monkeypatch):
+    """`end_active_effect` ends the effect *now*: the row's stored undo is applied.
+
+    (It used to delete the row without applying — quietly making a temporary change
+    permanent, the opposite of what the label promises.)
+    """
+    import transversal.services.effects_applier as applier
     from transversal.domain import ScheduledEvent, Timer, TimerCombine
     ev = ScheduledEvent(
         id="se-1", target_type="entity", target_id="char-1",
@@ -655,9 +661,13 @@ def test_cancel_scheduled_event_deletes_timer():
         timers=[Timer(event="scene", remaining=2)],
         combine=TimerCombine.FIRST_TO_FIRE,
     )
-    repo = FakeRepo()
+    repo = FakeRepo(entities=[_entity()])
     repo.scheduled_events = [ev]
+    fired = []
+    monkeypatch.setattr(applier.effect_registry, "apply",
+                        lambda eff, eid, u, ctx: fired.append((eff.type, eff.action)))
     result = apply_effects(_entity(), [_effect("entity", "cancel_scheduled_event", "se-1")], repo)
+    assert fired == [("modify_trait", "enable")]
     assert repo.scheduled_events == []
     assert result.applied
 

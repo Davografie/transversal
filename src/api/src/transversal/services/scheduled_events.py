@@ -245,6 +245,21 @@ def _apply_event(repo, event: ScheduledEvent) -> int:
     return 1
 
 
+def end_event(repo, event: ScheduledEvent) -> int:
+    """End one row now, instead of when its timer expires.
+
+    A revert/hold row's stored effect *is* the undo — applying it ends the effect
+    early. A deferred forward row has not happened yet, so ending it means it
+    never does.
+    """
+    if event.kind == "pending":
+        repo.delete_scheduled_event(event.id)
+        return 0
+    applied = _apply_event(repo, event)
+    repo.delete_scheduled_event(event.id)
+    return applied
+
+
 def _event_owner_entity(repo, event: ScheduledEvent) -> Optional[str]:
     """The entity a row ultimately applies against (a trait setting resolves through its owner)."""
     if event.target_type == "trait_setting":
@@ -299,8 +314,7 @@ def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
             repo.delete_scheduled_event(event.id)
             dropped_pending += 1
             continue
-        reverted += _apply_event(repo, event)
-        repo.delete_scheduled_event(event.id)
+        reverted += end_event(repo, event)
         if event.kind == "hold":
             dropped_holds += 1
 

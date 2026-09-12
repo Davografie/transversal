@@ -37,7 +37,13 @@ def _apply_attune_universe(a, em, universe_fallback: str) -> str:
     return a.result or universe_fallback
 
 def _apply_cancel_scheduled_event(entity, effect, repo, result):
-    """Cancel a specific pending timer (target = a scheduled-event id)."""
+    """End a pending row now (target = a scheduled-event id).
+
+    Ending means the effect stops: a revert/hold row's undo is applied instead of
+    waiting for its timer, and a deferred forward row is dropped before it fires.
+    (It used to delete without applying — which quietly made a temporary change
+    permanent, the opposite of what the label promises.)
+    """
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
         return
@@ -45,10 +51,19 @@ def _apply_cancel_scheduled_event(entity, effect, repo, result):
     target = _resolve_target(subject, effect, result, "scheduled_event", repo)
     if target is None:
         return  # pending choice (or no candidate)
-    if repo.delete_scheduled_event(target):
-        result.applied.append(AppliedEffect(effect, f"ended active effect {target}", target))
-    else:
+    getter = getattr(repo, "get_scheduled_event", None)
+    event = getter(target) if getter else None
+    if event is None and hasattr(repo, "list_all_scheduled_events"):
+        event = next((e for e in repo.list_all_scheduled_events() if e.id == target), None)
+    if event is None:
         result.applied.append(AppliedEffect(effect, f"no active effect {target} to end"))
+        return
+    from transversal.services.scheduled_events import end_event
+
+    applied = end_event(repo, event)
+    result.applied.append(
+        AppliedEffect(effect, f"ended active effect {target}" if applied else f"dropped pending effect {target}", target)
+    )
 
 def _apply_create_projection(entity, effect, repo, result):
     """Create + activate a temporary alternate body (disguise) in the current

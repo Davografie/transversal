@@ -65,6 +65,9 @@ class FakeRepo:
         self.events = [e for e in self.events if e.id != event_id]
         return True
 
+    def get_scheduled_event(self, event_id):
+        return next((e for e in self.events if e.id == event_id), None)
+
     def get_entity(self, entity_id):
         return self.entities.get(entity_id)
 
@@ -453,6 +456,63 @@ def test_ending_a_pool_add_takes_the_dice_back_out(monkeypatch):
     assert _pool_of("loc-1", "kael") == []
     assert repo.events == []
     store.clear_all()
+
+
+# ── Ending one effect on purpose (the authorable action) ─
+
+def test_end_active_effect_applies_the_revert_now(monkeypatch):
+    from transversal.services.effects_applier import _apply_cancel_scheduled_event
+    from transversal.services.effects_applier.datatypes import EffectsResult
+
+    repo = FakeRepo(entities=[_entity()])
+    repo.events = [ScheduledEvent(
+        id="se-1", target_type="entity", target_id="kael",
+        effect=_invertible_effect(), timers=[Timer(event="scene", remaining=1)],
+        kind="revert", created_at="2026-09-12T10:00:00+00:00",
+    )]
+    fired = []
+    _spy_applier(monkeypatch, fired)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="entity",
+                    action="cancel_scheduled_event", target="se-1")
+
+    _apply_cancel_scheduled_event(_entity(), effect, repo, EffectsResult())
+
+    assert [f[:2] for f in fired] == [("modify_dice_limit", "increase")]
+    assert repo.events == []
+
+
+def test_end_active_effect_drops_a_pending_part_without_applying(monkeypatch):
+    from transversal.services.effects_applier import _apply_cancel_scheduled_event
+    from transversal.services.effects_applier.datatypes import EffectsResult
+
+    repo = FakeRepo(entities=[_entity()])
+    repo.events = [ScheduledEvent(
+        id="se-p", target_type="entity", target_id="kael",
+        effect=_invertible_effect(), timers=[Timer(event="beat", remaining=2)],
+        kind="pending", created_at="2026-09-12T10:00:00+00:00",
+    )]
+    fired = []
+    _spy_applier(monkeypatch, fired)
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="entity",
+                    action="cancel_scheduled_event", target="se-p")
+
+    _apply_cancel_scheduled_event(_entity(), effect, repo, EffectsResult())
+
+    assert fired == []          # never happened → never applied
+    assert repo.events == []
+
+
+def test_validation_names_what_a_take_back_cannot_undo():
+    from transversal.services.sfx_validation import validate_sfx
+
+    sfx = SFX(id="sfx-x", name="X", trigger="manual", effects=[
+        _invertible_effect(),  # undoable
+        Effect(timing=EffectTiming.IMMEDIATE, type="modify_roll", action="play_as_rating"),
+    ])
+
+    warnings = validate_sfx(sfx)
+
+    assert any("cannot be undone" in w for w in warnings)
 
 
 # ── The plumbing that carries the booking ────────────
