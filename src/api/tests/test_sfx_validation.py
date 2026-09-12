@@ -238,6 +238,23 @@ def test_the_opposing_dice_gate_is_allowed_exactly_where_it_can_pass():
     assert any("it reads 'opposing_rolls'" in w for w in validate_sfx(flagged))
 
 
+def test_a_source_aware_trigger_needs_the_source_it_is_about():
+    """`On Added To Pool` fires when *this trait* is added — with a source that is
+    not a trait instance it can never pass, and the author is told at the time."""
+    ok = SFX(id="sfx-x", name="X", trigger="on_pool_add", source_kind="trait_setting")
+    assert validate_sfx(ok) == []
+
+    wrong = SFX(id="sfx-y", name="Y", trigger="on_pool_add", source_kind="entity")
+    assert any("needs a Trait setting source" in w and "can never pass" in w
+               for w in validate_sfx(wrong))
+
+    none = SFX(id="sfx-z", name="Z", trigger="on_pool_add")
+    assert any("can never pass" in w for w in validate_sfx(none))
+
+    # Triggers that are not about their source are unaffected.
+    assert validate_sfx(SFX(id="sfx-w", name="W", trigger="on_pool_change", source_kind="entity")) == []
+
+
 def test_user_role_needs_no_context():
     """It prefers context['role'] but falls back to the controlling player."""
     sfx = SFX(

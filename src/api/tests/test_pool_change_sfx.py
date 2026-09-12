@@ -65,7 +65,10 @@ def test_the_engine_matches_a_pool_change_event():
 def test_the_event_map_narrows_to_it():
     # Narrowed to this trigger (plus the event type itself, which the engine's
     # direct match accepts) — so a rule with any other trigger is never read.
-    assert triggers_for_event("pool_changed") == frozenset({"on_pool_change", "pool_changed"})
+    # `on_pool_add` rides the same event and narrows it further (its own trait must
+    # be among the added dice — see test_pool_add_trigger.py).
+    assert triggers_for_event("pool_changed") == frozenset(
+        {"on_pool_change", "on_pool_add", "pool_changed"})
 
 
 def test_the_moment_supplies_both_sides_dice_as_context():

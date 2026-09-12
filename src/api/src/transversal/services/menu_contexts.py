@@ -70,6 +70,13 @@ class TriggerDef:
     label: str
     variables: tuple[Variable, ...] = ()
     group: str = "auto"  # "manual" | "dicepool" | "auto"
+    # Catalog elements the SFX's **source** must resolve to for this trigger to
+    # be meaningful (`""` = any). A trigger can be *about its source* — "this
+    # trait was added" is a fact about the trait the rule lives on — and such a
+    # trigger can never fire for a source kind that has no such thing. The editor
+    # greys the option out with the reason, the same way a condition does.
+    requires_source_elements: tuple[str, ...] = ()
+
     # Fires *as the audience arrives* into the owner's scope. By the time they
     # are standing there it has already happened, so it is not something they
     # hold while they remain — an arrival rule is an instant, not a permanent.
@@ -107,6 +114,7 @@ TRIGGER_CARDS: dict[str, str] = {
     "on_taken_out": "When you are taken out",
     "on_prevent_taken_out": "When you would be taken out",
     "on_pool_change": "Whenever your dice pool changes",
+    "on_pool_add": "When this trait is added to your dice pool",
     "on_location_change": "When you arrive somewhere",
     "on_trait_change": "When a trait changes",
     "on_trait_learn": "When a trait is learned",
@@ -187,6 +195,16 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("dice_pool", "pool"),
         Variable("contest_entity_opponent", "entity"),
     ), group="dicepool"),
+    # "This trait instance is what got added." The fact that the rule's own trait
+    # arrived is *structural* — the trigger only matches when the source is among
+    # the dice this save added, so a rule that only cares about its own arrival no
+    # longer evaluates conditions on every pool change. `{added_die}` is that die,
+    # resolved to the one in *this* rule's pool (see `_activation_bindings`).
+    TriggerDef("on_pool_add", "On Added To Pool", (
+        Variable("added_die", "die"),
+        Variable("dice_pool", "pool"),
+        Variable("contest_entity_opponent", "entity"),
+    ), group="dicepool", requires_source_elements=("traitsetting",)),
     TriggerDef("on_location_change", "On Location Change", (
         Variable("from_location", "location"),
         Variable("to_location", "location"),

@@ -15,6 +15,7 @@ from transversal.services.effects_engine.events import (
     GameEvent,
     PendingSfxEffect,
 )
+from transversal.services.target_resolver import resolved_id as _resolved_id  # noqa: E402
 from transversal.services.effects_engine.firing import (
     _apply_immediate_spec,
     _attach_continuation,
@@ -68,6 +69,33 @@ def _resolve_listeners(sfx: SFX, repo, event, source, source_element) -> list[st
     return out
 
 
+def _added_die_of(context: dict | None, source_id: str | None) -> dict | None:
+    """The just-added die that came from ``source_id``, if any.
+
+    The pool save carries *everything* it added; a rule that lives on one trait
+    instance cares about its own. Matched on ``ts_id`` (the instance a trait die
+    came from) and ``source_id`` (an sfx-made die's origin).
+    """
+    if not source_id:
+        return None
+    for die in (context or {}).get("added_dice") or []:
+        if die.get("ts_id") == source_id or die.get("source_id") == source_id:
+            return die
+    return None
+
+
+def _source_was_added(sfx: SFX, event: GameEvent, source_id: str | None) -> bool:
+    """Whether the rule's own source is among what this save added.
+
+    Asked only of ``on_pool_add``; every other trigger is satisfied by the event
+    itself. False when the source is unresolved — a rule with no home cannot have
+    been added — which is the honest answer rather than firing on everything.
+    """
+    if sfx.trigger != "on_pool_add":
+        return True
+    return _added_die_of(event.context, source_id) is not None
+
+
 def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None) -> dict:
     """The activation's own names, bound as typed seeds for targeting paths.
 
@@ -94,6 +122,17 @@ def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None) -> d
 
     out: dict = {}
     for name, element in names.items():
+        if name == "added_die":
+            # Per-rule: the die from *this* rule's own trait, not every die the
+            # save added. Bound as the die reference an effect can act on, so
+            # "step down the one I just added" needs no filter at all.
+            die = _added_die_of(event.context, source_id)
+            if die is None:
+                continue
+            ref = _resolved_id(die)
+            if ref:
+                out[name] = Binding(value=str(ref), element=element, cardinality="one")
+            continue
         value = values.get(name)
         if value is None or value == "":
             continue
@@ -186,6 +225,14 @@ class EffectsEngine:
             # Resolve the activation source once: explicit source_id wins (manual
             # activation); else ownership resolution (automatic triggers).
             source, source_element, source_id = _resolve_activation_source(sfx, event, repo)
+
+            # A trigger *about* its source ("this trait was added") can only be
+            # decided now that the source is resolved — and it is decided before
+            # the conditions, which is the point of having the trigger at all.
+            if not _source_was_added(sfx, event, source_id):
+                log.info("[process_event] sfx=%s trigger=on_pool_add but source %s was not added",
+                         sfx.id, source_id)
+                continue
 
             # Per-activation variable scope. Sealed *before* the gate because a
             # condition's targeting path can publish named outputs into it ("the
@@ -428,8 +475,11 @@ class EffectsEngine:
         if trigger == "on_location_change" and event.type == "location_changed":
             return True
 
-        # on_pool_change
-        if trigger == "on_pool_change" and event.type == "pool_changed":
+        # on_pool_change / on_pool_add — both are the pool-save moment. The *add*
+        # trigger narrows further, and only the resolved source can say whether
+        # "this trait" is what arrived (see `_source_was_added`, checked by the
+        # caller once the source is resolved).
+        if trigger in ("on_pool_change", "on_pool_add") and event.type == "pool_changed":
             return True
 
         # on_trait_change

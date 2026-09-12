@@ -41,6 +41,11 @@ class TriggerOption:
     value: str
     label: str
     group: str = "auto"  # "auto" | "manual" | "menu"
+    # Catalog elements the SFX's *source* must resolve to for this trigger to be
+    # meaningful (empty = any). A trigger can be about its source — "this trait was
+    # added" — and such a trigger can never fire for a source that has no such
+    # thing, so the editor disables the option and says why.
+    requires_source_elements: list[str] = strawberry.field(default_factory=list)
 
 @strawberry.type
 class ConditionTypeOption:

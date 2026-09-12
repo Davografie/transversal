@@ -125,6 +125,13 @@ def _specs_of(sfx: SFX):
         yield "Acquire path", sfx.acquire_spec
 
 
+def _source_kinds_for(elements: tuple[str, ...]) -> set[str]:
+    """The source kinds whose element is one of ``elements`` (see ``SOURCE_KINDS``)."""
+    from transversal.services.target_catalog import SOURCE_KINDS
+
+    return {s.value for s in SOURCE_KINDS if s.element in elements}
+
+
 def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     """Return authoring warnings for unknown ``{variables}`` (empty = valid).
 
@@ -151,6 +158,23 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     src_var = source_variable(sfx.source_kind or "")
     if src_var:
         known.add(src_var)
+
+    # A trigger that is *about its source* can never pass for a source kind that
+    # has no such thing: "when this trait is added" needs a trait instance to be
+    # about. Named here rather than left to a log line at fire time.
+    from transversal.services.menu_contexts import TRIGGERS
+    _trigger = next((t for t in TRIGGERS if t.value == sfx.trigger), None)
+    if _trigger is not None and _trigger.requires_source_elements:
+        if (sfx.source_kind or "") not in _source_kinds_for(_trigger.requires_source_elements):
+            # The author-facing word ("Trait setting"), not the catalog element.
+            from transversal.services.target_catalog import SOURCE_KINDS
+            need = " / ".join(
+                s.label for s in SOURCE_KINDS if s.element in _trigger.requires_source_elements
+            ) or " / ".join(_trigger.requires_source_elements)
+            warnings.append(
+                f"'{_trigger.label}' fires when this rule's own source is added, so it needs a "
+                f"{need} source — with {sfx.source_kind or 'no source'} it can never pass"
+            )
 
     for i, effect in enumerate(sfx.effects):
         known_here = known

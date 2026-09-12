@@ -412,6 +412,8 @@ TRIGGER_CONTEXT_KEYS: dict[str, frozenset[str]] = {
     # an opponent recorded at this location — the other side's as well. Only a
     # `targeting path` condition reads dice, so only it is gated by these keys.
     "on_pool_change": frozenset({"rolls", "opposing_rolls", "added_dice"}),
+    # The same moment; the *add* trigger narrows it to the rule's own trait.
+    "on_pool_add": frozenset({"rolls", "opposing_rolls", "added_dice"}),
     "on_location_change": frozenset({"from_location", "to_location", "universe", "arrival_kind"}),
     "on_beat": _EMPTY,
     "on_scene": _EMPTY,

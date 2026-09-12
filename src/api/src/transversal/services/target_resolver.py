@@ -780,6 +780,8 @@ def _lookup_literal(element: str, value: str, ctx: TargetContext) -> list[Any]:
         return _maybe(repo.get_projection(value))
     if element == "pool":
         return _maybe(_pool_from_id(value, repo))
+    if element == "die":
+        return _maybe(_die_from_ref(value, repo))
     return []
 
 
@@ -834,6 +836,36 @@ def _pool_dice(pool: Any, ctx: TargetContext) -> list[Any]:
         {**die, "pool_location": location_id, "pool_owner": owner_id, "pool_index": i}
         for i, die in enumerate(dice)
     ]
+
+
+def _die_from_ref(value: str, repo) -> dict | None:
+    """Reconstitute the die a reference names (``die:<location>:<owner>:<index>``).
+
+    The mirror of :func:`_pool_from_id`. A die in a pool has no id — two dice from
+    the same trait are different dice — so the reference carries *where it sits*
+    and this reads the pool back. That is what makes a **bound** die usable in a
+    path: `{added_die}` is exactly such a reference, and without this a rule could
+    hold the right die and still resolve to nobody.
+    """
+    parts = (value or "").split(":")
+    if len(parts) != 4 or parts[0] != "die":
+        return None
+    _, location_id, owner_id, index = parts
+    if not location_id or not owner_id:
+        return None
+    try:
+        want = int(index)
+    except ValueError:
+        return None
+    dice = _pool_dice(
+        {"id": f"pool:{owner_id}", "owner_id": owner_id,
+         "location_id": location_id, "kind": "pool"},
+        TargetContext(repo=repo),
+    )
+    for die in dice:
+        if die.get("pool_index") == want:
+            return die
+    return None
 
 
 def _pool_from_id(value: str, repo) -> Any | None:

@@ -34,7 +34,11 @@
       <label>Trigger</label>
       <select v-model="draft.trigger">
         <optgroup v-for="g in triggerGroups" :key="g.label" :label="g.label">
-          <option v-for="t in g.options" :key="t.value" :value="t.value">{{ t.label }}</option>
+          <!-- A trigger can be about its *source* ("this trait was added"): with a
+               source that has no such thing it could never pass, so it is disabled
+               with the reason rather than offered as a dead choice. -->
+          <option v-for="t in g.options" :key="t.value" :value="t.value"
+                  :disabled="!triggerUsable(t)">{{ t.label }}{{ triggerReason(t) }}</option>
         </optgroup>
         <option v-if="!knownTrigger" :value="draft.trigger">{{ draft.trigger }}</option>
       </select>
@@ -257,6 +261,26 @@ onMounted(() => {
 
 // Backend trigger vocabulary grouped into Dice Pool / Manual / Auto-fire. A
 // legacy value not in the vocabulary is still offered so saving never drops it.
+// A trigger whose source requirement the SFX doesn't meet can never pass. The
+// catalogue declares the requirement; this only reports it.
+function missingTriggerSource(t) {
+  const need = (t && t.requiresSourceElements) || []
+  if (!need.length) return ''
+  return need.includes(sourceElement.value) ? '' : need.join(' / ')
+}
+
+function triggerUsable(t) {
+  return !missingTriggerSource(t)
+}
+
+function triggerReason(t) {
+  const need = missingTriggerSource(t)
+  if (!need) return ''
+  // Say it in the author's words where the source vocabulary has one.
+  const label = sourceKinds().find(s => s.element === need)
+  return ` — needs a ${label ? label.label : need} source`
+}
+
 const triggerGroups = computed(() => {
   const byGroup = { dicepool: [], manual: [], auto: [] }
   for (const t of triggers.value) {

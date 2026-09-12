@@ -445,6 +445,16 @@ declared, the other side's dice come with it.
   effect can step exactly that die.
 - `select variable {dice_pool} → navigate dice → …` — the pool itself, by name
   (a handle; walking it is what `pool → dice` does).
+- `select variable {added_die} → …` — the die that arrived *from this rule's own
+  trait* (`on_pool_add` binds it per rule), so "step down the one I just added"
+  needs no filter.
+
+**A trigger can be about its own source.** `on_pool_add` fires only when the trait
+instance the rule lives on is what got added — the fact is decided structurally,
+before any condition is evaluated, so a rule that cares only about its own
+arrival isn't checked on every pool change. It needs a *Trait setting* source
+(there is no "this trait" otherwise); the editor greys the option out and
+`validateSfx` says why.
 
 So both halves of *"I add a fire technique while they have water"* are a path
 each: `added_dice → traitsetting → filter tags contains fire` and
@@ -577,7 +587,8 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 | `on_taken_out` | A side is taken out | dicepool | `{contest_entity_opponent}`, `{taken_out}` |
 | `on_prevent_taken_out` | A take-out is prevented | dicepool | `{effect_die}`, `{prevented}` |
 | `on_set` | Dice are set | dicepool | `{effect_die}`, `{total}` |
-| `on_pool_change` | Your assembled dice pool is saved | dicepool | `{contest_entity_opponent}` |
+| `on_pool_change` | Your assembled dice pool is saved | dicepool | `{dice_pool}`, `{contest_entity_opponent}` |
+| `on_pool_add` | **This trait instance** is added to your pool | dicepool | `{added_die}`, `{dice_pool}`, `{contest_entity_opponent}` |
 | `on_location_change` | Entity changes location | — | `{from_location}`, `{to_location}`, `{universe}` |
 | `on_trait_change` | A trait changes | — | `{trait}`, `{traitset}` |
 | `on_trait_learn` / `on_trait_offered` | A trait is learned / offered | — | `{trait}`, `{trait_setting}`, `{owner}`, `{learner}` / `{opponent}` |
