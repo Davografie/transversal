@@ -324,6 +324,25 @@ The gate is enforced where the grant happens, not only in the panel, so the chip
 is an honest preview of what would actually be accepted. A rule with no acquire path
 can be taken anywhere — the common case.
 
+**The gate is also how a rule recruits its carriers.** A path seeded at the
+instance can test the instance itself, not just where it is:
+
+```
+select source → filter rating_type == resource
+```
+
+*Any resource trait may take this* — one rule, no edits to any trait definition.
+That is the distributive case, and it is the one thing the trait definition's
+possible-SFX list cannot say: there, "all resource traits" means editing every
+resource trait definition by hand.
+
+Worth knowing which half each mechanism is: the **possible-SFX list is the
+offer** (who can ever show the chip) and the **acquire path is the gate** (who
+may take it right now). The path narrows the offer; it does not create it. Making
+the *offer* come from the path too is a design step not taken — it would mean
+evaluating a selector across every trait instance an entity holds, per candidate
+rule.
+
 ### Rules on a place
 
 An SFX attached to a **location** applies to the entities *in* it — and in its
