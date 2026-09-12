@@ -95,6 +95,28 @@ export function useApi() {
     }
   }
 
+  /**
+   * Take back a manual activation that has not committed yet: the undos it still
+   * owes are applied, its deferred parts are dropped, and what was still waiting
+   * on a roll is un-armed. Rolling the dice (or a delayed part firing) commits
+   * the rule, and after that there is nothing left to end.
+   */
+  async function endSfx(entityId, sfxId) {
+    error.value = null
+    try {
+      const r = await fetch(`${API_BASE}/effects/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_id: entityId, sfx_id: sfxId })
+      })
+      if (!r.ok) throw new Error(await r.text())
+      return await r.json()
+    } catch (e) {
+      error.value = e.message
+      return null
+    }
+  }
+
   async function spendResourceDie(tsId, die, count = 1) {
     error.value = null
     try {
@@ -380,5 +402,5 @@ export function useApi() {
     } catch (e) { console.error('[API] advanceScene', e.message); return null }
   }
 
-  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
+  return { loading, error, graphql, cortexRoll, simplifiedRoll, difficultyRoll, selectDice, resolvePool, markHitchesBought, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, imagenEntity, animateEntity, savePool, offerNegative, getPool, clearPool, listPools, listAllPools, getActivity, setOpposition, setResult, setStakes, giveIn, preventTakenOut, push, getTargetingBans, getContest, clearContest, setDifficulty, getDifficulty, nextBeat, advanceScene }
 }

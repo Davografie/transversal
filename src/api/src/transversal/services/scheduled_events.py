@@ -317,6 +317,23 @@ def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
     }
 
 
+def in_flight_sfx_ids(repo, entity_id: str) -> list:
+    """The rules this entity still has *in flight* — activated, not yet committed.
+
+    A rule is in flight while any row it sourced is still pending: a hold, a timed
+    revert, or a deferred part that has not fired. That is exactly the window in
+    which pressing it again takes it back.
+    """
+    ids: list = []
+    for event in repo.list_all_scheduled_events():
+        if not event.source_sfx_id or event.source_sfx_id in ids:
+            continue
+        if _event_owner_entity(repo, event) != entity_id:
+            continue
+        ids.append(event.source_sfx_id)
+    return ids
+
+
 def advance_scheduled_events(repo, event_type: str, entity_id: Optional[str] = None) -> int:
     """Advance the central timer store by one tick; fire + delete due events.
 

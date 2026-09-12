@@ -346,7 +346,7 @@ function displayName(name) {
     .join(' ')
 }
 
-const { loading, error, graphql, triggerSfx, spendResourceDie, recoverResourceDie, spendChallengeDie } = useApi()
+const { loading, error, graphql, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie } = useApi()
 const entityCache = useEntityCache()
 const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
@@ -1144,6 +1144,27 @@ async function fetchAvailableSfxIds() {
   }
 }
 
+/**
+ * Rules this entity has activated and not yet committed — the server's truth for
+ * the chips' take-back state, so it survives a reload (a client-side flag would
+ * forget, and the next press would re-apply instead of ending).
+ */
+async function fetchInFlightSfxIds() {
+  const id = props.overrideEntityId || props.entityId
+  if (!id) return
+  try {
+    const data = await graphql(
+      `query($id: ID!) { inFlightSfxIds(entityId: $id) }`,
+      { id },
+    )
+    for (const sfxId of (data?.inFlightSfxIds || []).map(String)) {
+      sfxActivations.value[sfxId] = 1
+    }
+  } catch (e) {
+    console.error('fetchInFlightSfxIds', e)
+  }
+}
+
 async function fetchPlaceSfxRules() {
   const id = props.overrideEntityId || props.entityId
   if (!id) { placeRuleGroups.value = []; return }
@@ -1362,6 +1383,7 @@ function applyEntity(e) {
   recomputeTraitSets()
   fetchTimers()
   fetchAvailableSfxIds()
+  fetchInFlightSfxIds()
   fetchPlaceSfxRules()
 }
 
@@ -1456,6 +1478,11 @@ async function activateSfx(sfxId, sourceId = null) {
   } else {
     // Deactivate (reverse)
     sfxActivations.value[sfxId] = 0
+
+    // Take back the activation: every undo it still owes is applied now (the
+    // razmerit it earned, the die it added), and what was still waiting on a
+    // roll is dropped. A rule with nothing in flight is a no-op here.
+    await endSfx(props.entityId, sfxId)
 
     if (sfxId === 'sfx-hinder') {
       const tsId = findTsIdForSfx('sfx-hinder')

@@ -166,6 +166,26 @@ class QueriesSfx:
         return [strawberry.ID(i) for i in list_armed_sfx_ids(str(entity_id))]
 
     @strawberry.field
+    def in_flight_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[strawberry.ID]:
+        """Manual rules the entity has activated and not yet committed.
+
+        The chip's take-back state: while a rule is in flight, pressing it again
+        ends it — the undos it still owes are applied, what is still waiting is
+        dropped. Once the dice are rolled (or a delayed part fires) the rule is
+        committed and leaves this list.
+        """
+        from transversal.main import _get_engine
+        from transversal.services.scheduled_events import in_flight_sfx_ids
+
+        engine = _get_engine()
+        out = []
+        for sfx_id in in_flight_sfx_ids(_em(info).repo, str(entity_id)):
+            sfx = engine.get(sfx_id)
+            if sfx is not None and sfx.trigger in ("manual", "on_activate"):
+                out.append(strawberry.ID(sfx_id))
+        return out
+
+    @strawberry.field
     def available_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str = "") -> list[strawberry.ID]:
         """SFX ids currently available to an entity (ownership + static conditions).
 
