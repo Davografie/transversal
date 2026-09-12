@@ -2,13 +2,13 @@
   <div class="sd-root">
     <input
       ref="inputEl"
-      v-model="search"
       class="sd-input"
       :class="{ 'sd-input-clearable': clearable && hasValue }"
-      :placeholder="selectedLabel || placeholder"
+      :value="open ? search : selectedLabel"
+      :placeholder="open ? (selectedLabel || placeholder) : placeholder"
       @focus="openDrop"
       @blur="scheduleClose"
-      @input="open = true"
+      @input="onInput"
     />
     <button
       v-if="clearable && hasValue"
@@ -107,6 +107,14 @@ async function openDrop() {
   }
   // Dropdown max-height is 140px; flip upward when there's not enough room below.
   dropUp.value = (window.innerHeight - rect.bottom) < 160
+}
+
+// A chosen value reads as *text*, not as placeholder-grey: the input shows the
+// label unless the author is actively searching — then the label becomes the
+// hint, so what is set stays visible while they replace it.
+function onInput(e) {
+  search.value = e.target.value
+  open.value = true
 }
 
 function scheduleClose() {

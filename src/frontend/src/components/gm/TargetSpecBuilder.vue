@@ -516,7 +516,14 @@ function onEnumChange(i, event) {
 }
 
 function onFilterPicked(i, opt) {
-  steps.value[i].value = opt?.universe || opt?.id || ''
+  // A universe-valued field stores the world's *handle* (`earth`); everything
+  // else stores the candidate's id. The candidate's own `universe` field only
+  // says where it lives — preferring it wrote a universe handle into trait
+  // filters (pick "Beast", get the universe's name/`aelor-citar`).
+  const kind = fieldReferences(i)
+  steps.value[i].value = kind === 'universe'
+    ? (opt?.universe || opt?.id || '')
+    : (opt?.id || '')
 }
 
 // Operators valid for the current field (from the catalog; falls back to the
