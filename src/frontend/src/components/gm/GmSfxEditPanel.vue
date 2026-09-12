@@ -210,34 +210,42 @@ loadCatalog()
 
 // The SFX's declared source_kind → its catalog element, so a targeting-path
 // condition can offer `select source` typed against it.
-// The names the *activation* itself puts in scope, typed for a path: the source
-// token and whatever the trigger declares. Bound by the engine when this rule
-// fires, so a condition or effect path may start from them ("the opponent in
-// this moment", "the trait this rule is attached to"). Traced from the backend
-// so the wizard offers exactly what will resolve — including nothing, when the
-// event carries no such value at fire time.
-const activationVariables = ref({})
-watch(
-  () => [draft.trigger, draft.source_kind],
-  async () => {
-    try {
-      activationVariables.value = await collectVariables(
-        [], sourceElement.value || null, null,
-        draft.trigger || null, draft.source_kind || null,
-      )
-    } catch {
-      activationVariables.value = {}
-    }
-  },
-  { immediate: true },
-)
-
 const sourceElement = computed(() => {
   const sk = draft.source_kind
   if (!sk) return ''
   const found = sourceKinds().find(s => s.value === sk)
   return found ? found.element : ''
 })
+
+// The names the *activation* itself puts in scope, typed for a path: the source
+// token and whatever the trigger declares. Bound by the engine when this rule
+// fires, so a condition or effect path may start from them ("the opponent in
+// this moment", "the trait this rule is attached to"). Traced from the backend
+// so the wizard offers exactly what will resolve — including nothing, when the
+// event carries no such value at fire time.
+//
+// Declared *after* `sourceElement`: the run is immediate, so anything this
+// callback needs must already be initialised — reading a `const` above its
+// declaration throws, and a `catch` here would swallow it into an empty map
+// (which is exactly how this shipped broken the first time).
+const activationVariables = ref({})
+watch(
+  () => [draft.trigger, draft.source_kind, sourceElement.value],
+  async () => {
+    try {
+      activationVariables.value = await collectVariables(
+        [], sourceElement.value || null, null,
+        draft.trigger || null, draft.source_kind || null,
+      )
+    } catch (e) {
+      // Never let a trace failure break the panel — but say so, rather than
+      // leaving an empty picker with no explanation (this shipped once).
+      console.warn('[sfx] activation variables unavailable:', e)
+      activationVariables.value = {}
+    }
+  },
+  { immediate: true },
+)
 
 const { load: loadActions, summarize: summarizeEffect } = useEffectActions()
 loadActions()
