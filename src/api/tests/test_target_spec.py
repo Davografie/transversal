@@ -42,6 +42,24 @@ def test_the_empower_path_reaches_a_root():
     assert types[-1] == ValueType("traitsetting", "many")
 
 
+def test_the_opponents_pool_path_type_checks():
+    """The author's suppression rule, second half — *their* water technique,
+    reached from the entity being faced:
+
+        contest_entity_opponent → pool → dice → traitsetting → tags contains water
+    """
+    s = spec(
+        SelectStep(collection="variable", variable="contest_entity_opponent"),
+        NavigateStep(edge="pool"),
+        NavigateStep(edge="dice"),
+        NavigateStep(edge="traitsetting", dedup=True),
+        FilterStep(field="tags", operator="contains", value="water"),
+    )
+    types, errors = trace(s, variables={"contest_entity_opponent": "entity"})
+    assert errors == []
+    assert types[-1] == ValueType("traitsetting", "many")
+
+
 def test_select_rolled_dice_is_many_die():
     types, errors = trace(spec(SelectStep(collection="rolled_dice")))
     assert errors == []

@@ -700,6 +700,75 @@ def test_trait_instance_filters_by_tag():
     assert [v.id for v in res.values] == ["kael:trait-anger"]
 
 
+def test_a_pool_walks_to_the_dice_assembled_in_it():
+    """A `pool` element is a *handle* (owner + location + kind); the dice live in
+    the scene store. This hop is what makes "the opponent's water technique"
+    reachable from the entity you are facing:
+
+        entity → pool → dice → trait instance → filter tags contains water
+    """
+    from transversal.services import scene_state as ss_module
+    from transversal.services.scene_state import SceneStateStore
+
+    kael, repo = _tagged_world()
+    guard = NS(id="guard-1", type="gmc", current_location="loc-1", current_universe="earth",
+               current_projection=None, razmerit=0)
+    repo.entities["guard-1"] = guard
+
+    # The guard's water technique exists as an instance of a tagged trait.
+    repo.traitsettings["guard:water"] = NS(
+        id="guard:water", trait_id="trait-water-palm", traitset_id="ts-tech",
+        entity_id="guard-1", projection_id=None, rating="d8", tags=[])
+    repo.traits["trait-water-palm"] = NS(
+        id="trait-water-palm", traitset_id="ts-tech", tags=["water"])
+
+    before = ss_module._store
+    try:
+        ss_module._store = SceneStateStore()
+        ss_module._store.save_pool("loc-1", "guard-1", [
+            {"die": "d8", "source_kind": "trait", "ts_id": "guard:water", "label": "Water Palm"},
+            {"die": "d6", "source_kind": "manual", "ts_id": None, "label": "wary"},
+        ])
+
+        ctx = TargetContext(subject=guard, repo=repo)
+        res = resolve(spec(SelectStep(collection="self"),
+                           NavigateStep(edge="pool"),
+                           NavigateStep(edge="dice")), ctx)
+        assert res.errors == []
+        assert [d["ts_id"] for d in res.values] == ["guard:water", None]
+
+        # And on to the trait behind the die — the author's second half:
+        # *their pool → their dice → the water technique among them*.
+        onward = resolve(spec(SelectStep(collection="self"),
+                              NavigateStep(edge="pool"),
+                              NavigateStep(edge="dice"),
+                              NavigateStep(edge="traitsetting", dedup=True),
+                              FilterStep(field="tags", operator="contains", value="water")), ctx)
+        assert onward.errors == []
+        assert [v.id for v in onward.values] == ["guard:water"]
+
+        # A different element finds nothing — the filter is doing the work.
+        other = resolve(spec(SelectStep(collection="self"),
+                             NavigateStep(edge="pool"),
+                             NavigateStep(edge="dice"),
+                             NavigateStep(edge="traitsetting", dedup=True),
+                             FilterStep(field="tags", operator="contains", value="fire")), ctx)
+        assert other.values == []
+    finally:
+        ss_module._store = before
+
+
+def test_the_difficulty_pool_has_no_dice_to_walk():
+    """It is a *number* in the store, not a set of dice — so the hop answers with
+    nothing rather than pretending there is something to reach."""
+    from transversal.services.target_resolver import _pool_dice
+
+    kael, repo = _tagged_world()
+    handle = {"id": "difficulty:loc-1", "owner_id": "loc-1",
+              "location_id": "loc-1", "kind": "difficulty"}
+    assert _pool_dice(handle, TargetContext(subject=kael, repo=repo)) == []
+
+
 def test_several_tags_mean_any_of():
     """The tags editor commits a chip list, and a list value reads as *any of* —
     the same one-or-several convention an enum filter follows with `in`. Without

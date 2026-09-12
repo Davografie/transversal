@@ -440,6 +440,8 @@ declared, the other side's dice come with it.
 - `select rolled_dice → …` — **your** pool.
 - `select opposing_dice → …` — **theirs** (empty while nobody has challenged you).
 
+For *theirs* there are two routes and they suit different moments: the `opposing_dice` seed above is the other side's assembled pool **at the moment a pool is saved**, while `select variable {contest_entity_opponent} → navigate pool → navigate dice` reaches any entity's pool at any moment (the same hop works for your own, too).
+
 Both are ordinary dice paths, so two sides can be compared by giving each its own
 condition and letting *both* have to pass — no value-ever-compares-to-value step
 needed:
@@ -461,7 +463,7 @@ is `source_kind == trait`). And an opponent who has not assembled yet is an
 ### Useful seeds & edges
 
 - **Collections:** `self`, `rolled_dice`, `opposing_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`, `sfxs`.
-- **Common edges:** trait instance → `trait` (registry trait) / `traitset` / `entity` / `projection`; entity → `traitsettings` / `location` / `universe` / `projections`; location → `occupants` / `difficulty_pool`; entity → `pool`.
+- **Common edges:** trait instance → `trait` (registry trait) / `traitset` / `entity` / `projection` / `subtraits`; entity → `traitsettings` / `location` / `universe` / `projections` / `pool`; location → `occupants` / `difficulty_pool`; **pool → `dice`** (what is actually assembled in it — the hop that turns *whose pool* into *which dice*, and so into the trait behind one of them). The GM difficulty pool answers with nothing: it is a number, not a set of dice.
 - **Common fields:** trait instances expose `rating`, `rating_type`, `polarity`, `trait_id`, `traitset_id`; entities expose `type`, `current_location`, `current_universe`, `razmerit`; dice expose `result`, `rating`, `effect_die`, `tier`, `role`, `source_kind`, `ts_id`.
 
 ### Output variables

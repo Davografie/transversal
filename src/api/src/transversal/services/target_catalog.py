@@ -312,6 +312,13 @@ EDGES: tuple[Edge, ...] = (
     Edge("difficulty_pool", "location", ("pool",), "one", "GM difficulty pool",
          noun="GM difficulty pool", plural="GM difficulty pools"),
 
+    # pool → the dice currently assembled in it. A pool element is a *handle*
+    # (owner + location + kind); its dice live in the scene store, which is what
+    # makes "whose pool → which dice → the trait behind one" walkable — e.g. the
+    # opponent's water technique, from the entity you are facing.
+    Edge("dice", "pool", ("die",), "many", "Dice in the pool",
+         noun="die", plural="dice"),
+
     # traitset ↔ trait, trait → universes
     Edge("traits", "traitset", ("trait",), "many", "Traits", noun="trait"),
     Edge("traitset", "trait", ("traitset",), "one", "Trait set"),

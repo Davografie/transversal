@@ -781,6 +781,30 @@ def _pool_handle(owner_id: str, location_id: str, kind: str) -> dict:
     return {"id": f"{kind}:{owner_id}", "owner_id": owner_id, "location_id": location_id, "kind": kind}
 
 
+def _pool_dice(pool: Any, ctx: TargetContext) -> list[Any]:
+    """The dice currently assembled in this pool.
+
+    A ``pool`` element is a handle (owner + location + kind); the dice themselves
+    live in the scene store, which is the one place that knows what a player has
+    actually put in. Reading it here is what lets a path walk *whose pool* →
+    *which dice* → *the trait behind one of them* (the opponent's water
+    technique, say).
+
+    The GM difficulty pool answers with nothing on purpose: it is a *number* in
+    the store, not a set of dice, so there is nothing for a path to walk into.
+    """
+    owner_id = _get_field(pool, "owner_id")
+    location_id = _get_field(pool, "location_id")
+    if not owner_id or not location_id or _get_field(pool, "kind") == "difficulty":
+        return []
+    try:
+        from transversal.services.scene_state import get_scene_store
+
+        return list(get_scene_store().get_pool(location_id, owner_id))
+    except Exception:  # no store (a bare test context) → no dice, fail closed
+        return []
+
+
 def _pool_from_id(value: str, repo) -> Any | None:
     """Reconstitute a pool handle from its composite id (literal ``pool`` step)."""
     v = (value or "").strip()
@@ -849,6 +873,7 @@ def register_default_edges() -> None:
 
     register_edge("entity", "pool",
                   lambda e, ctx: [_pool_handle(e.id, e.current_location or "", "pool")])
+    register_edge("pool", "dice", _pool_dice)
 
     register_edge("traitset", "traits", lambda ts, ctx: list(ctx.repo.get_traits_by_traitset(ts.id)))
     register_edge("trait", "traitset", lambda t, ctx: _maybe(ctx.repo.get_traitset_by_id(t.traitset_id)))

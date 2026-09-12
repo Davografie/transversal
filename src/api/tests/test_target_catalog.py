@@ -41,6 +41,16 @@ def test_the_sub_trait_edge_reaches_nested_instances():
     assert (e.noun, e.plural) == ("sub-trait", "sub-traits")
 
 
+def test_a_pool_hop_reaches_its_dice():
+    """The pool element used to be a dead end: you could reach *whose* pool, and
+    stop. `pool → dice` is what lets a path walk into the dice assembled there."""
+    e = tc.edge("pool", "dice")
+    assert e is not None
+    assert e.target == ("die",)
+    assert e.cardinality == "many"
+    assert (e.noun, e.plural) == ("die", "dice")
+
+
 def test_one_trick_path_is_typed():
     # One Trick: select rolled_dice → navigate traitsetting → (target traitsetting).
     assert tc.collection("rolled_dice").element == "die"
