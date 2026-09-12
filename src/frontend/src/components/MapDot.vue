@@ -123,7 +123,7 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
      the `arrivePop` animation, which fills `transform` forwards and would win
      the cascade — `scale` composes with `transform` instead, so it survives
      while still scaling the portrait/ring geometry (--dot-r) uniformly. */
-  --controlled-scale: 1.2;
+  --controlled-scale: 1.4;
   transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, scale 0.25s ease;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
@@ -179,6 +179,17 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
    hand-off, via the `scale` transition on `.map-dot`. */
 .map-dot.controlled {
   scale: var(--controlled-scale);
+}
+/* Handed off: the dot that just lost the perspective shrinks back to its
+   resting size instead of appearing at full size. Applied only when the entity
+   is no longer controlled, and only for the hand-off instant — see the
+   `settlingIds` watcher in LocationViewer. */
+@keyframes controlledSettle {
+  from { scale: var(--controlled-scale); }
+  to   { scale: 1; }
+}
+.map-dot.settling {
+  animation: controlledSettle 0.25s ease both;
 }
 .dot-overlay {
   position: absolute; inset: 0; border-radius: 50%;

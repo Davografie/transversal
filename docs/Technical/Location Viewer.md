@@ -228,7 +228,7 @@ inset vignette. Assumed = the `self` dot (pulsing blue), so the two states stay
 visually distinct.
 
 **Actively controlled** occupants (`.controlled`) are scaled up by
-`--controlled-scale` (currently 1.2, tunable in `MapDot`). "Controlled" is a
+`--controlled-scale` (currently 1.4, tunable in `MapDot`). "Controlled" is a
 table-wide fact, not a local one: `App.vue` unions the server's `playerBodies`
 (the entity each player is currently driving — refreshed on the `main_active`
 SSE event) with the local `entityId`, and passes `controlledEntityIds` down. The
@@ -244,10 +244,17 @@ the `arrivePop` animation, which fills `transform` forwards and therefore wins
 the cascade over any normal `transform` declaration (this silently disabled the
 first attempt). `scale` composes with `transform` instead of competing with it,
 so the dot grows on take and shrinks on hand-off while `--dot-r` geometry scales
-uniformly with the ring. Note that a switch *swaps elements* — the entity you
-take becomes the `self` dot, the one you leave returns as an occupant dot — so
-the size change reads as the abandoned dot shrinking and the new one being
-larger, not as one dot animating between the two.
+uniformly with the ring.
+
+**The animation, in both directions.** A remote hand-off is one element changing
+class, so the `scale` transition animates it (grow on take, shrink on release).
+A *local* take/release swaps elements — the local entity renders as the self dot,
+not as an occupant — so two things make it visible: the self dot is **keyed by the
+perspective entity** (`'self-' + entityId`), which remounts it on a take so
+`arrivePop` replays (a growth), and the dot that *loses* the perspective is marked
+`settling` for one cycle (`controlledSettle`, 1.4 → 1) so it shrinks out instead
+of appearing at full size. `settling` is skipped when the entity is still driven
+by another client, whose dot must not change size at all.
 
 ## Interactions
 

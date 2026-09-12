@@ -33,7 +33,7 @@
         v-if="!travelAnim.active && showElements"
         type="occupant"
         :variant="o.type"
-        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: controlledEntityIds.includes(o.id) }"
+        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: controlledEntityIds.includes(o.id), settling: settlingIds.includes(o.id) }"
         :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
         :image="o.image"
         :image-transparent="!!o.image_transparent"
@@ -122,9 +122,12 @@
       :y="selfY"
     />
 
-    <!-- Self character dot (no parallax — 1:1 with touch) -->
+    <!-- Self character dot (no parallax — 1:1 with touch). Keyed by the
+         perspective entity so a take remounts it: the dot grows in rather than
+         being patched in place (an unkeyed element never replays arrivePop). -->
     <MapDot
       v-if="!travelAnim.active && showElements && showSelf"
+      :key="'self-' + (entityId || 'roam')"
       type="self"
       variant="character"
       class="fade-in"
@@ -214,6 +217,23 @@ const occupants = ref([])
 const occupantDots = computed(() =>
   occupants.value.filter(o => o.id !== props.entityId && (props.gmMode || !o.unpublished))
 )
+
+// A take/release swaps elements — the local entity is excluded from
+// `occupantDots` and renders as the keyed self dot — so the dot that *loses* the
+// perspective mounts fresh and would appear at full size. Mark it for one
+// animation cycle so it shrinks out instead. Skipped when the entity is still
+// driven by a client: then its size does not change at all.
+const settlingIds = ref([])
+let lastPerspectiveId = null
+watch(() => props.entityId, (id) => {
+  const prev = lastPerspectiveId
+  lastPerspectiveId = id
+  if (!prev || prev === id || props.controlledEntityIds.includes(prev)) return
+  settlingIds.value = [...settlingIds.value, prev]
+  setTimeout(() => {
+    settlingIds.value = settlingIds.value.filter(x => x !== prev)
+  }, 300)
+}, { immediate: true })
 const viewerEl = ref(null)
 const activeElement = ref(null)  // { type: 'zone'|'occupant', name?, id? } — which dot is popped out
 const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })
