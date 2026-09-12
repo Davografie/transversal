@@ -863,7 +863,7 @@ let offSwitchViewLocation = null
 // SSE — live state sync (subscribe with the stable identity; free-roam has no perspective entity)
 // The SSE stream is session-wide server-side (entity_id is a legacy log-only
 // param); a free-roaming GM keeps the connection alive on their playerId.
-const { connected, lastEvent, error } = useSSE(sessionId, computed(() => entityId.value || playerId.value), playerId)
+const { connected, lastEvent, error, drainSseEvents } = useSSE(sessionId, computed(() => entityId.value || playerId.value), playerId)
 
 // Architect toast notifications
 const { toasts, addToast, dismissToast } = useToasts()
@@ -901,6 +901,15 @@ const contests = ref([])       // [{ location_id, challenger_id, defendant_id, p
 const ssePulse = ref(false)
 watch(lastEvent, (evt) => {
   if (!evt) return
+  // A burst of events can arrive in one network chunk, and the browser dispatches
+  // them all in the same task — so a single-slot `lastEvent` only ever surfaces
+  // the *last* one to this watcher. Drain the queue and handle every event, in
+  // order: a take-back publishes `razmerit_changed` and then `sfx_ended`, and the
+  // balance update was the one being thrown away.
+  for (const queued of drainSseEvents()) handleSseEvent(queued)
+})
+
+function handleSseEvent(evt) {
   ssePulse.value = true
   setTimeout(() => { ssePulse.value = false }, 300)
 
@@ -1181,7 +1190,7 @@ watch(lastEvent, (evt) => {
       }
       break
   }
-})
+}
 
 function onSfxChoiceResolved(pendingChoices) {
   sfxChoiceRequest.value = (pendingChoices && pendingChoices.length)

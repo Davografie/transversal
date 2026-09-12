@@ -5,6 +5,14 @@ export function useSSE(sessionId, entityId, playerId) {
   const lastEvent = ref(null)
   const error = ref(null)
   let source = null
+  // Every event is queued as it arrives: the browser may dispatch a whole burst
+  // from one network chunk in a single task, and a single-slot ref would let a
+  // Vue watcher see only the last one. The consumer drains the queue.
+  const queued = []
+
+  function drainSseEvents() {
+    return queued.splice(0)
+  }
 
   function connect() {
     disconnect()
@@ -46,7 +54,9 @@ export function useSSE(sessionId, entityId, playerId) {
       source.addEventListener(type, (e) => {
         try {
           const data = JSON.parse(e.data)
-          lastEvent.value = { type, data, time: Date.now() }
+          const evt = { type, data, time: Date.now() }
+          queued.push(evt)
+          lastEvent.value = evt
         } catch {}
       })
     }
@@ -67,5 +77,5 @@ export function useSSE(sessionId, entityId, playerId) {
 
   onUnmounted(disconnect)
 
-  return { connected, lastEvent, error }
+  return { connected, lastEvent, error, drainSseEvents }
 }
