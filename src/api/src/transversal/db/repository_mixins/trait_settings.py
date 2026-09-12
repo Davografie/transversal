@@ -17,6 +17,9 @@ class RepositoryTraitSettings:
     """Mixin contributing 18 member(s) to the repository."""
 
     def create_traitsetting(self, ts: TraitSetting) -> TraitSetting:
+        if self._would_cycle(ts):
+            raise ValueError(
+                f"Trait setting '{ts.id}' cannot be nested under its own descendant")
         ts = self._provision_trait_default_sfx(ts)
         doc = ts.model_dump()
         doc["_key"] = ts.id
@@ -231,6 +234,9 @@ class RepositoryTraitSettings:
         ]
 
     def update_traitsetting(self, ts: TraitSetting) -> TraitSetting:
+        if self._would_cycle(ts):
+            raise ValueError(
+                f"Trait setting '{ts.id}' cannot be nested under its own descendant")
         doc = ts.model_dump()
         doc["_key"] = ts.id
         if ts.from_type == "relationship":
@@ -244,6 +250,27 @@ class RepositoryTraitSettings:
         doc["_to"] = f"{TRAITS}/{ts.trait_id}"
         self._traitsettings.replace(doc)
         return ts
+
+    def _would_cycle(self, ts: TraitSetting) -> bool:
+        """True when anchoring ``ts`` under its proposed parent would make a loop.
+
+        A sub-trait chain has to be a path, so walking up from the proposed
+        parent must never arrive back at ``ts``. Nothing else refuses this — a
+        setting can be re-parented freely — and a loop would make every
+        ancestor walk (the ``ego`` resolver among them) either spin or lie.
+        """
+        if ts.from_type != "traitsetting" or not ts.parent_traitsetting_id:
+            return False
+        seen = {ts.id}
+        cur = self.get_traitsetting(str(ts.parent_traitsetting_id))
+        while cur is not None:
+            if cur.id in seen:
+                return True
+            seen.add(cur.id)
+            if cur.from_type != "traitsetting" or not cur.parent_traitsetting_id:
+                return False
+            cur = self.get_traitsetting(str(cur.parent_traitsetting_id))
+        return False
 
     def _delete_traitsettings_subtree(self, keys: list[str]) -> int:
         """Delete trait settings and their nested sub-trait descendants.

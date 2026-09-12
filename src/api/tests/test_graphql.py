@@ -605,3 +605,49 @@ def _make_effect_input(gql_effect):
         negative=gql_effect.negative, context=gql_effect.context,
         target_spec=gql_effect.target_spec,
     )
+
+
+# ── ego across a sub-trait chain ─────────────────────────────────
+#
+# A sub-trait is anchored to its parent, so it is ego when the *root* of its
+# chain is entity-anchored. Reporting morph unconditionally was cosmetic at one
+# level of nesting; under recursive containers it mislabels every descendant.
+
+def test_sub_trait_inherits_ego_from_the_root_of_its_chain():
+    from types import SimpleNamespace as NS
+
+    from transversal.api.graphql.type_defs.traits import _resolve_ego
+
+    class Repo:
+        def __init__(self, settings):
+            self._s = settings
+
+        def get_traitsetting(self, sid):
+            return self._s.get(sid)
+
+        def get_relationship_by_key(self, key):
+            return None
+
+    root = NS(id="e:trait", from_type="entity", entity_id="e", parent_traitsetting_id=None)
+    sub = NS(id="e:trait:sub", from_type="traitsetting", entity_id="e",
+             parent_traitsetting_id="e:trait")
+    deep = NS(id="e:trait:sub:deep", from_type="traitsetting", entity_id="e",
+              parent_traitsetting_id="e:trait:sub")
+    repo = Repo({"e:trait": root, "e:trait:sub": sub})
+
+    assert _resolve_ego(root, repo) is True
+    assert _resolve_ego(sub, repo) is True    # inherits the entity anchor
+    assert _resolve_ego(deep, repo) is True   # …through two levels
+
+    # A projection-anchored root makes the whole chain morph.
+    body = NS(id="e:body", from_type="projection", entity_id="e", parent_traitsetting_id=None)
+    body_sub = NS(id="e:body:sub", from_type="traitsetting", entity_id="e",
+                  parent_traitsetting_id="e:body")
+    body_repo = Repo({"e:body": body})
+    assert _resolve_ego(body, body_repo) is False
+    assert _resolve_ego(body_sub, body_repo) is False
+
+    # A parent loop terminates rather than spinning.
+    a = NS(id="a", from_type="traitsetting", entity_id="e", parent_traitsetting_id="b")
+    b = NS(id="b", from_type="traitsetting", entity_id="e", parent_traitsetting_id="a")
+    assert _resolve_ego(a, Repo({"a": a, "b": b})) is False

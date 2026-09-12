@@ -12,6 +12,41 @@ from transversal.api.graphql.type_defs.enums import (
 )
 
 
+def _resolve_ego(setting, repo) -> bool:
+    """Whether a trait setting is ego, following sub-trait parents to their anchor.
+
+    Entity-anchored → ego. Projection-anchored → morph. A relationship is ego
+    only when *both* endpoints are entities (soul-level); any projection
+    endpoint makes it morph. A sub-trait has no anchor of its own, so it takes
+    whatever the root of its parent chain resolves to.
+
+    Iterative with a visited set on purpose: nothing refuses re-parenting a
+    setting under its own descendant today (see ``EntityRepository._would_cycle``),
+    so this must terminate rather than recurse forever.
+    """
+    seen: set[str] = set()
+    cur = setting
+    while cur is not None:
+        key = str(cur.id)
+        if key in seen:
+            return False
+        seen.add(key)
+        from_type = getattr(cur, "from_type", None)
+        if from_type == "entity":
+            return True
+        if from_type == "relationship":
+            edge = repo.get_relationship_by_key(str(cur.entity_id))
+            return bool(edge) and (
+                str(edge.get("_from", "")).startswith("entities/")
+                and str(edge.get("_to", "")).startswith("entities/")
+            )
+        if from_type != "traitsetting":
+            return False
+        parent_id = getattr(cur, "parent_traitsetting_id", None)
+        cur = repo.get_traitsetting(str(parent_id)) if parent_id else None
+    return False
+
+
 @strawberry.type
 class TraitDisplayName:
     """Dynamic display name for a trait, keyed by universe and rating."""
@@ -147,19 +182,14 @@ class TraitSetting:
 
         Relationship traits are ego only when their edge is entity→entity
         (both soul-level); any projection endpoint makes them morph.
+
+        A *sub-trait* (``from_type='traitsetting'``) has no anchor of its own,
+        so it takes the one at the root of its parent chain. Reporting morph
+        unconditionally was cosmetic at one level of nesting; under recursive
+        containers it would mislabel every descendant of an ego trait.
         """
-        if self.from_type == "entity":
-            return True
-        if self.from_type == "relationship":
-            em = info.context["entity_manager"]
-            edge = em.repo.get_relationship_by_key(str(self.entity_id))
-            if edge is not None:
-                return (
-                    str(edge.get("_from", "")).startswith("entities/")
-                    and str(edge.get("_to", "")).startswith("entities/")
-                )
-            return False
-        return False
+        em = info.context["entity_manager"]
+        return _resolve_ego(self, em.repo)
 
     @strawberry.field
     def die_type(self) -> DieType:

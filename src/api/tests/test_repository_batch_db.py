@@ -286,3 +286,55 @@ def test_traitset_sheet_tab_defaults_to_traits_and_round_trips():
         assert repo.get_traitset_by_id(TAB_TS).sheet_tab == SheetTab.PROFILE
     finally:
         repo.delete_traitset(TAB_TS)
+
+
+# ── Sub-trait cycle guard ────────────────────────────────────────
+#
+# A sub-trait chain must stay a path. Nothing else refuses re-parenting a
+# setting under its own descendant, and a loop would make every ancestor walk
+# (the ego resolver among them) spin or lie.
+
+CYCLE_TS = "test-cycle-ts"
+CYCLE_UNIVERSE = "test-cycle-universe"
+CYCLE_ENTITY = "test-cycle-entity"
+CYCLE_TRAITS = ("test-cycle-a", "test-cycle-b")
+CYCLE_S1, CYCLE_S2 = "test-cycle-s1", "test-cycle-s2"
+
+
+def _cycle_cleanup(repo):
+    for sid in (CYCLE_S2, CYCLE_S1):
+        repo.delete_traitsetting(sid)
+    for tid in CYCLE_TRAITS:
+        repo.delete_trait(tid)
+    repo.delete_traitset(CYCLE_TS)
+
+
+def test_re_parenting_a_sub_trait_under_its_own_descendant_is_refused():
+    repo = _repo
+    _cycle_cleanup(repo)
+    try:
+        repo.create_traitset(TraitSet(id=CYCLE_TS, name="cycle", universes=[CYCLE_UNIVERSE]))
+        repo.create_trait(Trait(id=CYCLE_TRAITS[0], name="Cycle A",
+                                universes=[CYCLE_UNIVERSE], traitset_id=CYCLE_TS))
+        repo.create_trait(Trait(id=CYCLE_TRAITS[1], name="Cycle B",
+                                universes=[CYCLE_UNIVERSE], traitset_id=CYCLE_TS))
+        repo.create_traitsetting(TraitSetting(
+            id=CYCLE_S1, entity_id=CYCLE_ENTITY, trait_id=CYCLE_TRAITS[0],
+            traitset_id=CYCLE_TS, dice=[DieType.D6]))
+        repo.create_traitsetting(TraitSetting(
+            id=CYCLE_S2, entity_id=CYCLE_ENTITY, trait_id=CYCLE_TRAITS[1],
+            traitset_id=CYCLE_TS, from_type="traitsetting",
+            parent_traitsetting_id=CYCLE_S1, dice=[DieType.D6]))
+
+        # An ordinary child is not a cycle.
+        assert repo._would_cycle(repo.get_traitsetting(CYCLE_S2)) is False
+
+        # Re-parenting the root under its own child would loop → refused.
+        root = repo.get_traitsetting(CYCLE_S1)
+        root.from_type = "traitsetting"
+        root.parent_traitsetting_id = CYCLE_S2
+        assert repo._would_cycle(root) is True
+        with pytest.raises(ValueError):
+            repo.update_traitsetting(root)
+    finally:
+        _cycle_cleanup(repo)
