@@ -334,9 +334,10 @@ def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
 def in_flight_sfx_ids(repo, entity_id: str) -> list:
     """The rules this entity still has *in flight* — activated, not yet committed.
 
-    A rule is in flight while any row it sourced is still pending: a hold, a timed
-    revert, or a deferred part that has not fired. That is exactly the window in
-    which pressing it again takes it back.
+    A rule is in flight while any part of it is still pending: a row it sourced
+    (a hold, a timed revert, a deferred part that has not fired) **or** a part
+    waiting on a roll in the armed registers. That is exactly the window in which
+    pressing it again takes it back.
     """
     ids: list = []
     for event in repo.list_all_scheduled_events():
@@ -345,6 +346,10 @@ def in_flight_sfx_ids(repo, entity_id: str) -> list:
         if _event_owner_entity(repo, event) != entity_id:
             continue
         ids.append(event.source_sfx_id)
+    from transversal.services.roll_deferral import list_armed_sfx_ids
+    for sfx_id in list_armed_sfx_ids(entity_id):
+        if sfx_id not in ids:
+            ids.append(sfx_id)
     return ids
 
 

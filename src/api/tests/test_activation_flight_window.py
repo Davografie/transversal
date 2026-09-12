@@ -259,6 +259,21 @@ def test_ending_drops_deferred_parts_it_never_reached(monkeypatch):
     assert repo.events == []
 
 
+def test_in_flight_ids_include_a_part_waiting_on_a_roll():
+    """The author's Hinder shape: an armed `on_set` earn is in flight with no row."""
+    from transversal.services.scheduled_events import in_flight_sfx_ids
+
+    roll_deferral.arm_sfx(
+        "kael",
+        [Effect(timing=EffectTiming.ON_SET, type="transfer_razmerit",
+                action="earn", result="1")],
+        source_sfx_id="sfx-hinder-like",
+    )
+    repo = FakeRepo(entities=[_entity()])
+
+    assert in_flight_sfx_ids(repo, "kael") == ["sfx-hinder-like"]
+
+
 def test_ending_un_arms_what_was_still_waiting():
     roll_deferral.arm_sfx(
         "kael",
