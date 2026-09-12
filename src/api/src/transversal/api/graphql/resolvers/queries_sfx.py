@@ -7,6 +7,7 @@ from transversal.api.graphql.types import SfxInput
 from transversal.api.graphql.types import SfxOwnerKindGql
 from transversal.api.graphql.types import SfxOwnerRef
 from transversal.api.graphql.types import SfxRef
+from transversal.api.graphql.types import PlaceSfxRules
 from transversal.services.sfx_text import repo_name_resolver
 from typing import Optional
 from transversal.api.graphql.resolvers.converters import (
@@ -70,6 +71,37 @@ class QueriesSfx:
             if acquire_gate_holds(sfx, "trait_instance", ts.id, repo):
                 out.append(strawberry.ID(sfx_id))
         return out
+
+    @strawberry.field
+    def place_sfx_rules(
+        self,
+        info: strawberry.Info,
+        entity_id: strawberry.ID,
+        universe: Optional[str] = None,
+    ) -> list[PlaceSfxRules]:
+        """The rules an entity may use *because of where it stands*, by place.
+
+        A place owns rules that reach whoever is inside it (rooms included), and
+        nothing is written on the occupant — step out and they're gone. This is
+        that contribution kept apart from the entity's own rules, so the sheet
+        can show them under the place they come from. Same source as
+        ``availableSfxIds``, so the two can't disagree about what's usable.
+        """
+        from transversal.services.sfx_owner import get_place_sfx_rules
+
+        repo = _em(info).repo
+        uni = universe
+        if not uni:
+            entity = repo.get_entity(str(entity_id))
+            uni = (getattr(entity, "current_universe", "") or "") if entity is not None else ""
+        return [
+            PlaceSfxRules(
+                location_id=strawberry.ID(g["location_id"]),
+                location_name=g["location_name"],
+                sfx_ids=[strawberry.ID(s) for s in g["sfx_ids"]],
+            )
+            for g in get_place_sfx_rules(str(entity_id), uni, repo)
+        ]
 
     @strawberry.field
     def sfxs(self, info: strawberry.Info) -> list[SfxRef]:

@@ -830,6 +830,49 @@ def get_available_sfx_ids(
     return sorted(ids)
 
 
+def get_place_sfx_rules(entity_id: str, universe: str, repo) -> list[dict]:
+    """The rules an entity may press *because of where it stands*, by place.
+
+    Availability already folds a place's rules into the entity's own list; this
+    is that same contribution, kept apart and attributed to the place it comes
+    from, so a sheet can show them under a heading instead of silently mixing
+    them with the entity's own. Nothing is written on the occupant — the group
+    disappears the moment they walk out, which is the point of reading scope at
+    read time rather than attaching.
+
+    Filtered *through* :func:`get_available_sfx_ids` rather than re-deriving
+    from the place's list, so the strip can never offer something the activation
+    path would refuse. One rule, two views.
+
+    Each rule is attributed to the nearest place that carries it (the entity's
+    own room wins over an ancestor), and places with nothing left to show are
+    dropped.
+    """
+    entity = repo.get_entity(entity_id)
+    if entity is None:
+        return []
+    location_id = getattr(entity, "current_location", None)
+    if not location_id:
+        return []
+    available = set(get_available_sfx_ids(entity_id, universe, repo))
+    if not available:
+        return []
+    groups: list[dict] = []
+    claimed: set[str] = set()
+    for place in repo.list_ancestor_locations_with_sfx(location_id):
+        owned = sorted({sid for sid in (place.sfx_ids or [])
+                        if sid in available and sid not in claimed})
+        if not owned:
+            continue
+        claimed.update(owned)
+        groups.append({
+            "location_id": place.id,
+            "location_name": getattr(place, "name", None) or place.id,
+            "sfx_ids": owned,
+        })
+    return groups
+
+
 def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_kind: str):
     """Resolve an SFX's activation source from ownership when the event carries
     no explicit ``source_id`` (automatic triggers like ``on_roll``).

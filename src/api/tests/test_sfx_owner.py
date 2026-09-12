@@ -6,7 +6,7 @@ without a live ArangoDB.
 
 from types import SimpleNamespace
 
-from transversal.domain import Condition, ConditionType, Timer
+from transversal.domain import Condition, ConditionType, EntityType, Timer
 from transversal.services.sfx_owner import (
     backfill_trait_default_sfx,
     ensure_give_in_sfx,
@@ -955,6 +955,84 @@ def test_an_entity_with_no_location_gets_no_place_rules():
     repo.entity = _entity()  # unplaced
 
     assert get_available_sfx_ids("e1", "earth", repo) == []
+
+
+def test_place_rules_are_attributed_to_the_place_that_lends_them():
+    """The strip needs a heading, so the contribution is kept apart and named."""
+    from transversal.services.sfx_owner import get_place_sfx_rules, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-sect")])
+    _place(repo, "sect", ["sfx-sect"])
+    repo.locations["sect"].name = "Azure Dawn"
+    repo.entity = _entity(current_location="sect")
+
+    assert get_place_sfx_rules("e1", "earth", repo) == [
+        {"location_id": "sect", "location_name": "Azure Dawn", "sfx_ids": ["sfx-sect"]},
+    ]
+
+
+def test_a_room_rule_is_credited_to_the_room_not_its_parent():
+    """A rule both the room and its ancestor carry shows once, under the nearer
+    place — the one the entity is actually standing in."""
+    from transversal.services.sfx_owner import get_place_sfx_rules, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-shared")])
+    _place(repo, "sect", ["sfx-shared"])
+    _place(repo, "cellar", ["sfx-shared"], parent="sect")
+    repo.locations["sect"].name = "Azure Dawn"
+    repo.locations["cellar"].name = "The Cellar"
+    repo.entity = _entity(current_location="cellar")
+
+    groups = get_place_sfx_rules("e1", "earth", repo)
+    assert [(g["location_id"], g["sfx_ids"]) for g in groups] == [("cellar", ["sfx-shared"])]
+
+
+def test_a_place_rule_that_conditions_exclude_is_not_offered_as_a_button():
+    """The strip reads the *same* availability the activation path does, so it
+    can never show a button the fire path would refuse. Here the rule is
+    restricted to GMCs and the entity is a character."""
+    from transversal.domain import Condition, ConditionType
+    from transversal.services.sfx_owner import get_place_sfx_rules, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    gated = _sfx("sfx-gmc-only")
+    gated.conditions = [Condition(type=ConditionType.ENTITY_TYPE, target="gmc")]
+    repo = CountingRepo([gated])
+    _place(repo, "hall", ["sfx-gmc-only"])
+    repo.entity = SimpleNamespace(id="e1", type=EntityType.CHARACTER, sfx_ids=[],
+                                  current_projection=None, current_location="hall")
+
+    assert get_available_sfx_ids("e1", "earth", repo) == []
+    assert get_place_sfx_rules("e1", "earth", repo) == []
+
+
+def test_an_unplaced_entity_is_lent_nothing():
+    from transversal.services.sfx_owner import get_place_sfx_rules, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-hall")])
+    _place(repo, "hall", ["sfx-hall"])
+    repo.entity = _entity()
+
+    assert get_place_sfx_rules("e1", "earth", repo) == []
+
+
+def test_the_strip_never_offers_what_availability_would_refuse():
+    """One rule, two views: every id the strip groups is in `availableSfxIds`,
+    so a button on the sheet can't be one the activation path rejects."""
+    from transversal.services.sfx_owner import get_place_sfx_rules, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-sect"), _sfx("sfx-mine")])
+    _place(repo, "sect", ["sfx-sect"])
+    repo.entity = _entity(sfx_ids=["sfx-mine"], current_location="sect")
+
+    available = set(get_available_sfx_ids("e1", "earth", repo))
+    grouped = {sid for g in get_place_sfx_rules("e1", "earth", repo) for sid in g["sfx_ids"]}
+    assert grouped == {"sfx-sect"}
+    assert grouped <= available
 
 
 def test_place_rules_and_carried_rules_combine():

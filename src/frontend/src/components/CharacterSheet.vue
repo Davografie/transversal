@@ -127,6 +127,18 @@
           <SfxCard v-for="sfxId in projectionSfxIds" :key="'p-' + sfxId" v-bind="sfxCardModel(sfxId)"
                    @activate="activateSfx(sfxId, activeProjection.id)" />
         </div>
+        <!-- Rules lent by the place you are standing in. Not attached to you:
+             they reach you because you're here, and leave when you do. -->
+        <div v-if="placeRuleGroups.length" class="place-sfx-rules">
+          <div v-for="g in placeRuleGroups" :key="g.locationId" class="place-sfx-group">
+            <span class="place-sfx-label">From {{ g.locationName }}</span>
+            <div class="entity-sfx-cards">
+              <SfxCard v-for="sfxId in g.sfxIds" :key="g.locationId + ':' + sfxId"
+                       v-bind="placeCardModel(sfxId)"
+                       @activate="activateSfx(sfxId, g.locationId)" />
+            </div>
+          </div>
+        </div>
         <div v-if="gmMode" class="meta">
           <span class="location">{{ locationName || entity.currentLocation || 'Unknown' }}</span>
           <span class="universe">{{ universeName || entity.currentUniverse }}</span>
@@ -579,6 +591,10 @@ function goToNextSet() {
 const sfxActivations = ref({})
 const sfxCatalog = ref({})  // sfxId → { name, description }
 const availableSfxIds = ref(null)  // null = not loaded; else the conditions-filtered id list
+// The rules the place you're standing in lends you: [{ locationId, locationName,
+// sfxIds }]. Nothing is attached to the entity — this is where the place's own
+// rules get a button to be pressed, which attached-only strips never gave them.
+const placeRuleGroups = ref([])
 const rollTableMenu = ref(null)  // { sfxId, tableId, name } | null
 const SFX_PHASES = {
   'sfx-hinder': ['adding'],
@@ -1123,12 +1139,39 @@ async function fetchAvailableSfxIds() {
   }
 }
 
+async function fetchPlaceSfxRules() {
+  const id = props.overrideEntityId || props.entityId
+  if (!id) { placeRuleGroups.value = []; return }
+  try {
+    const data = await graphql(
+      `query($id: ID!, $u: String!) { placeSfxRules(entityId: $id, universe: $u) { locationId locationName sfxIds } }`,
+      { id, u: props.universe },
+    )
+    placeRuleGroups.value = data?.placeSfxRules || []
+  } catch (e) {
+    console.error('fetchPlaceSfxRules', e)
+    placeRuleGroups.value = []
+  }
+}
+
+// A place's rule wears the same card as the entity's own, with one difference:
+// a rule that fires on its own when the world moves isn't something you press,
+// so it reads its rules line and stays inert instead of looking like a button.
+function placeCardModel(sfxId) {
+  const model = sfxCardModel(sfxId)
+  const trigger = sfxCatalog.value[sfxId]?.trigger
+  if (trigger && trigger !== 'manual') {
+    return { ...sfxCardModel(sfxId, 'full'), disabled: true, blocked: true, title: 'Fires by itself.' }
+  }
+  return model
+}
+
 async function fetchSfxCatalog() {
   try {
     const r = await fetch('/api/v1/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `query { sfxs { id name description cardText effects { timing type action target entity result } } }` }),
+      body: JSON.stringify({ query: `query { sfxs { id name description trigger cardText effects { timing type action target entity result } } }` }),
     })
     const json = await r.json()
     const map = {}
@@ -1308,6 +1351,7 @@ function applyEntity(e) {
   recomputeTraitSets()
   fetchTimers()
   fetchAvailableSfxIds()
+  fetchPlaceSfxRules()
 }
 
 async function resolveNames(e) {
@@ -2017,6 +2061,29 @@ watch(() => props.externalPoolSources, (sources) => {
   flex-wrap: wrap;
   gap: 4px;
   padding: 4px 0;
+}
+
+/* Rules the current place lends the entity (see Place-Owned Rules). Quiet by
+   design: it belongs to the room, not to you, so it sits under your own cards
+   and names where it comes from. */
+.place-sfx-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--overlay-8);
+}
+.place-sfx-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.place-sfx-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 /* ── Relationship widget ──────────────────────── */

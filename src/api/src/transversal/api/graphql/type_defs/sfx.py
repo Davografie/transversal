@@ -98,6 +98,19 @@ class SfxOwnerRef:
     entity_type: str = ""
     sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
 
+@strawberry.type
+class PlaceSfxRules:
+    """The rules one place lends to whoever is standing in it.
+
+    The audience half of a place-owned rule: the place owns them, the occupants
+    may press them, and nothing is attached to anybody. Grouped by place so the
+    sheet can name where they come from.
+    """
+    location_id: strawberry.ID
+    location_name: str
+    sfx_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
+
+
 @strawberry.input
 class OwnerRefInput:
     """Reference to one owner instance for a batch add/remove operation."""

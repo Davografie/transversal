@@ -282,6 +282,13 @@ Two things it buys you:
 - **Lair actions.** The rule shows up in the SFX list of whoever is standing
   there, so a GM can activate it *because* they are in the lair.
 
+The player sees this as a strip under their own SFX cards, labelled **From
+<place>** — one heading per place that lends them something. It is deliberately
+the same list the activation path uses, so a card in the strip is always one
+that would actually be accepted. A rule that fires on its own (an arrival, a
+roll) appears there too, but inert and dashed, because there is nothing to
+press — it says what the place does, it isn't a button.
+
 A place's rule is the ordinary kind — trigger, conditions, effects — and can carry
 a duration like any other. To make a granted trait last *only* while they are on
 the grounds, give it a duration whose timer is a **location change**: the trait is

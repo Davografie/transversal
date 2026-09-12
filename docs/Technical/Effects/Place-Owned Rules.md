@@ -165,7 +165,10 @@ world full of lair actions, faction rules and portal effects affordable.
    the author writes the rule (a trigger + conditions), not in the mechanism.
 2. **Standing**, with the sheet surface decided (open question 1). **Partially
    answered by the author's read-time reading:** the rule is simply in the
-   occupant's list while they are there.
+   occupant's list while they are there. **The surface landed 2026-09-12**: the
+   sheet renders the place's contribution as its own strip (`placeSfxRules`,
+   *From <place>*), so a place rule has somewhere to be pressed — attached-only
+   strips never gave it one. Automatic rules show there inert.
 3. **The other owner types** — asset, faction, universe, projection — each a row
    in the table above.
 4. **Relations/portals**, reusing the same seam for the portal brief (randomised
