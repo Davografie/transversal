@@ -1232,6 +1232,7 @@ const QUERY = `
         knownTo
         possibleSfxIds
         tags
+        registryTags
         relationshipContactId
         relationshipContactName
         relationshipContactType
@@ -1280,6 +1281,7 @@ const QUERY = `
         knownTo
         possibleSfxIds
         tags
+        registryTags
         relationshipContactId
         relationshipContactName
         relationshipContactType
@@ -1594,6 +1596,7 @@ async function fetchRelationship() {
           knownTo
           possibleSfxIds
         tags
+        registryTags
           relationshipContactId
           relationshipContactName
           relationshipContactType

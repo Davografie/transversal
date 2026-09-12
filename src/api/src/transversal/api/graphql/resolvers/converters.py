@@ -136,6 +136,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         polarity=s.polarity,
         statement=s.statement,
         notes=s.notes,
+        tags=s.tags,
         from_type=s.from_type, projection_id=s.projection_id,
         parent_traitsetting_id=s.parent_traitsetting_id,
         sfx_ids=s.sfx_ids,

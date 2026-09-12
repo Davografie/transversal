@@ -127,6 +127,8 @@ type TraitSetting {
   polarity: Polarity!
   ego: Boolean!            # true = persists across all universes
   sfxIds: [ID!]!           # unlocked SFXs
+  tags: [String!]!         # labels set on this trait *instance* (B116)
+  registryTags: [String!]! # labels inherited from the registry trait; matching sees tags + registryTags
   name: String!            # resolved from trait registry
   traitsetName: String!    # resolved from traitset registry
   universe: String!        # resolved from trait registry
@@ -301,6 +303,7 @@ input TraitSettingInput {
   dice: [DieType!]!
   ratingType: RatingType
   statement: String
+  tags: [String!]          # instance-level labels (B116)
   polarity: Polarity
   ego: Boolean
   sfxIds: [ID!]
@@ -310,6 +313,7 @@ input TraitSettingUpdateInput {
   dice: [DieType!]
   ratingType: RatingType
   statement: String
+  tags: [String!]          # instance-level labels (B116)
   polarity: Polarity
   ego: Boolean
   sfxIds: [ID!]

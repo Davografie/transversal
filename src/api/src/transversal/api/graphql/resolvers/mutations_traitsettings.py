@@ -65,6 +65,7 @@ class MutationsTraitSettings:
             polarity=polarity,
             statement=input.statement,
             notes=input.notes,
+            tags=[str(t) for t in (input.tags or [])],
             from_type=from_type,
             projection_id=projection_id,
             sfx_ids=[str(s) for s in input.sfx_ids],
@@ -109,6 +110,8 @@ class MutationsTraitSettings:
             ts.statement = input.statement
         if input.notes is not None:
             ts.notes = input.notes
+        if input.tags is not None:
+            ts.tags = [str(t) for t in input.tags]
         if input.from_type is not None and ts.from_type not in ("relationship", "traitsetting"):
             if input.from_type == "projection":
                 if input.projection_id is None:

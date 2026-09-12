@@ -4,6 +4,7 @@ from types import SimpleNamespace as NS
 
 from transversal.services.target_resolver import (
     TargetContext,
+    _traitsetting_tags,
     register_edge,
     resolve,
     serialize_candidates,
@@ -829,3 +830,57 @@ def test_the_registry_filter_reads_the_columns_the_wizard_offers():
             TargetContext(repo=repo),
         )
         assert [getattr(v, "id", v) for v in out.values] == ["sfx-a"], field
+
+def _instance_tagged_world():
+    """Both traits are tagged, and the calm *instance* adds a label of its own
+    (B116 — tags can sit on the instance as well as the registry trait)."""
+    kael = NS(id="kael", type="character", current_location="loc-1", current_universe="earth",
+              current_projection=None, razmerit=0)
+    ts_anger = NS(id="kael:trait-anger", trait_id="trait-anger", traitset_id="ts-emotion",
+                  entity_id="kael", projection_id=None, rating="d8", tags=[])
+    ts_calm = NS(id="kael:trait-calm", trait_id="trait-calm", traitset_id="ts-emotion",
+                 entity_id="kael", projection_id=None, rating="d6",
+                 tags=["violent", "soothing"])
+    repo = FakeRepo(
+        entities={"kael": kael},
+        traitsettings={"kael:trait-anger": ts_anger, "kael:trait-calm": ts_calm},
+        traits={
+            "trait-anger": NS(id="trait-anger", traitset_id="ts-emotion", tags=["violent"]),
+            "trait-calm": NS(id="trait-calm", traitset_id="ts-emotion",
+                             tags=["violent", "calm"]),
+        },
+        traitsets={"ts-emotion": NS(id="ts-emotion", name="Emotion")},
+    )
+    return kael, repo
+
+
+def test_trait_instance_matches_a_tag_only_it_carries():
+    """A label set on the instance matches even when no registry trait has it."""
+    kael, repo = _instance_tagged_world()
+    s = spec(SelectStep(collection="self_traitsettings"),
+             FilterStep(field="tags", operator="contains", value="soothing"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["kael:trait-calm"]
+
+
+def test_trait_instance_tags_are_unioned_with_the_registry_traits():
+    """Both halves match: a registry tag still applies to every instance of the
+    trait, and an instance tag applies only to the instance that carries it."""
+    kael, repo = _instance_tagged_world()
+    s = spec(SelectStep(collection="self_traitsettings"),
+             FilterStep(field="tags", operator="contains", value="violent"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert [v.id for v in res.values] == ["kael:trait-anger", "kael:trait-calm"]
+
+    s = spec(SelectStep(collection="self_traitsettings"),
+             FilterStep(field="tags", operator="contains", value="calm"))
+    res = resolve(s, TargetContext(subject=kael, repo=repo))
+    assert [v.id for v in res.values] == ["kael:trait-calm"]
+
+
+def test_instance_and_registry_tags_are_deduplicated():
+    """A tag carried by both the instance and its trait reads once, own first."""
+    _, repo = _instance_tagged_world()
+    ts = repo.traitsettings["kael:trait-calm"]
+    assert _traitsetting_tags(ts, repo) == ["violent", "soothing", "calm"]

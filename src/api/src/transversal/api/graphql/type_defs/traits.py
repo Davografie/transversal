@@ -126,6 +126,7 @@ class TraitSetting:
     polarity: Polarity
     statement: str
     notes: str = ""
+    tags: list[str] = strawberry.field(default_factory=list)
     from_type: str = "entity"  # "entity" | "projection" | "relationship" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
     parent_traitsetting_id: Optional[strawberry.ID] = None
@@ -228,12 +229,12 @@ class TraitSetting:
         return trait.possible_sfx_ids if trait else []
 
     @strawberry.field
-    def tags(self, info: strawberry.Info) -> list[str]:
-        """Registry tags for this trait (B116).
+    def registry_tags(self, info: strawberry.Info) -> list[str]:
+        """Tags inherited from the registry ``Trait`` (B116).
 
-        Tags live on the registry ``Trait``, not on the setting — this surfaces
-        them on the setting the sheet already has, the same way
-        ``possible_sfx_ids`` does.
+        A setting may also carry its own ``tags``, and matching sees both — this
+        read-through field is the *inherited* half only, so an editor can show
+        what comes from the trait definition separately from what is set here.
         """
         em = info.context["entity_manager"]
         trait = em.repo.get_trait(self.trait_id)
@@ -263,6 +264,7 @@ class TraitSettingInput:
     polarity: Optional[Polarity] = None
     statement: str = ""
     notes: str = ""
+    tags: list[str] = strawberry.field(default_factory=list)
     from_type: Optional[str] = None  # "entity" | "projection" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
     parent_traitsetting_id: Optional[strawberry.ID] = None
@@ -277,6 +279,7 @@ class TraitSettingUpdateInput:
     polarity: Optional[Polarity] = None
     statement: Optional[str] = None
     notes: Optional[str] = None
+    tags: Optional[list[str]] = None
     from_type: Optional[str] = None  # "entity" | "projection" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
     parent_traitsetting_id: Optional[strawberry.ID] = None
@@ -296,6 +299,7 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
         polarity=s.polarity,
         statement=s.statement,
         notes=s.notes,
+        tags=s.tags,
         from_type=s.from_type, projection_id=s.projection_id,
         parent_traitsetting_id=s.parent_traitsetting_id,
         sfx_ids=s.sfx_ids,

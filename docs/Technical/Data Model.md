@@ -289,6 +289,7 @@ Per-entity trait configuration. The edge connects an anchor (entity, projection,
 | `polarity` | Polarity | ✅ | Baked sign: `positive` (benefit/asset) or `negative` (complication). Resolved from trait/traitset defaults at creation |
 | `statement` | string | | Distinction statement or flavor text |
 | `notes` | string | | Longer freeform notes |
+| `tags` | string[] | | Labels set on this *instance*. Matching sees these **plus** the registry trait's own `tags` (B116) |
 | `enabled` | bool | | `false` = disabled; contributes no dice until re-enabled (default `true`) |
 | `sfx_ids` | string[] | | SFX IDs unlocked for this anchor on this trait |
 | `locations_enabled` | string[] | | Location entity IDs where this trait is active |

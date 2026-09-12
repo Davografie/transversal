@@ -140,6 +140,7 @@ class TraitSetting(BaseModel):
     polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
     notes: str = ""            # longer freeform notes
+    tags: list[str] = Field(default_factory=list)  # instance-level labels, matched alongside the trait's own (B116)
     sfx_ids: list[str] = Field(default_factory=list)
     locations_enabled: list[str] = Field(default_factory=list)
     locations_disabled: list[str] = Field(default_factory=list)

@@ -235,6 +235,44 @@ class TestGraphQLMutations:
         # default_ego=False → anchored to the entity's projection (morph).
         assert ts["ego"] == False
 
+    def test_trait_instance_tags_are_settable(self, client):
+        """B116: a trait *instance* carries tags of its own, separate from the
+        ones it inherits from the registry trait."""
+        entity = _gql(client, """
+            mutation {
+                createEntity(input: {
+                    name: "Kael"
+                    type: CHARACTER
+                    universe: "earth"
+                    razmerit: 3
+                }) { id }
+            }
+        """)
+        eid = entity["createEntity"]["id"]
+
+        added = _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-hacking"
+                    traitsetId: "ts-earth-skills"
+                    dice: [D10]
+                    tags: ["protective"]
+                }) { id tags registryTags }
+            }
+        """, {"eid": eid})["addTraitSetting"]
+        assert added["tags"] == ["protective"]
+        # The registry trait itself is untagged, so the inherited half is empty.
+        assert added["registryTags"] == []
+
+        updated = _gql(client, """
+            mutation($id: ID!) {
+                updateTraitSetting(id: $id, input: { tags: ["protective", "violent"] }) {
+                    id tags
+                }
+            }
+        """, {"id": added["id"]})["updateTraitSetting"]
+        assert updated["tags"] == ["protective", "violent"]
+
     def test_add_ego_trait(self, client):
         entity = _gql(client, """
             mutation {

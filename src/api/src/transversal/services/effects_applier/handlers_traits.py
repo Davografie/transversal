@@ -84,6 +84,7 @@ def _replicate_traitsetting(src: TraitSetting, subject: Entity, repo, effect: Ef
         polarity=src.polarity,
         statement=src.statement,
         notes=src.notes,
+        tags=list(src.tags),
     )
     if carry_grants:
         ts.sfx_ids = list(src.sfx_ids)

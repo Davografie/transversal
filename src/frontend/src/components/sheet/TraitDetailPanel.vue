@@ -16,8 +16,14 @@
       <span>{{ trait.ego === false ? 'morph' : 'ego' }}</span>
       <span v-if="trait.enabled === false" class="trait-disabled-badge">disabled</span>
     </div>
-    <div v-if="trait.tags?.length" class="detail-tags">
-      <span v-for="tag in trait.tags" :key="tag" class="detail-tag">{{ tag }}</span>
+    <div v-if="tagRows.length" class="detail-tags">
+      <span
+        v-for="row in tagRows"
+        :key="row.tag"
+        class="detail-tag"
+        :class="{ 'detail-tag-inherited': row.inherited }"
+        :title="row.inherited ? 'From the trait definition' : 'Set on this trait instance'"
+      >{{ row.tag }}</span>
     </div>
   </div>
 
@@ -76,6 +82,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
@@ -84,7 +91,7 @@ import SfxCard from './SfxCard.vue'
 // the sheet allows it), SFX cards, notes, sub-traits and the derived context
 // rows. The sheet keeps the data + rules, so they arrive as one `api` object of
 // functions — helpers, not state, so nothing here needs unwrapping.
-defineProps({
+const props = defineProps({
   /** The trait being shown (`detailTrait` in the sheet). */
   trait: { type: Object, required: true },
   api: {
@@ -94,6 +101,18 @@ defineProps({
 })
 
 defineEmits(['back', 'edit'])
+
+// Tags arrive in two halves: the ones set on this trait *instance* and the ones
+// inherited from the registry trait. Matching sees both, so the panel shows
+// both — inherited entries dimmed, since only your own are editable here.
+const tagRows = computed(() => {
+  const own = props.trait.tags ?? []
+  const inherited = (props.trait.registryTags ?? []).filter((t) => !own.includes(t))
+  return [
+    ...own.map((tag) => ({ tag, inherited: false })),
+    ...inherited.map((tag) => ({ tag, inherited: true })),
+  ]
+})
 </script>
 
 <style scoped>
@@ -132,6 +151,7 @@ defineEmits(['back', 'edit'])
   border: 1px solid var(--accent-20);
   color: var(--accent);
 }
+.detail-tag-inherited { opacity: 0.6; border-style: dashed; }
 .detail-section { padding: 10px 0; border-top: 1px solid var(--overlay-8); }
 .detail-section-head {
   display: flex;

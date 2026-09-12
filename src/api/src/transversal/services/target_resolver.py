@@ -796,12 +796,20 @@ def _pool_from_id(value: str, repo) -> Any | None:
 
 
 def _traitsetting_tags(ts: Any, repo) -> list[str]:
-    """A trait *instance*'s tags are its registry trait's tags (B116)."""
+    """A trait *instance*'s tags: its own, plus its registry trait's (B116).
+
+    The two are unioned rather than one overriding the other, so a tag on the
+    registry trait stays true of every instance (a violent trait is still
+    violent), while an instance can add context of its own. Existing data has no
+    instance tags, so this is identical to the old read-through.
+    """
     if repo is None:
         return []
+    own = [t for t in (getattr(ts, "tags", None) or []) if t]
     trait_id = _get_field(ts, "trait_id")
     trait = repo.get_trait(trait_id) if trait_id else None
-    return list(getattr(trait, "tags", None) or [])
+    inherited = [t for t in (getattr(trait, "tags", None) or []) if t]
+    return own + [t for t in inherited if t not in own]
 
 
 def register_default_fields() -> None:
