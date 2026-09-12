@@ -422,9 +422,37 @@ taken back when they next move.
 
 A trait can carry free-form **tags** (authored in the trait editor — *violent*, *protective*, …), and a path can select by them: `select self_traitsettings` → `filter tag contains violent`. The filter field is `tag` on a trait instance (which reads the tags of the trait it is an instance of) and on the registry trait itself; the value box suggests the tags that exist, and typing a new one is still allowed. Naming the step (`output: violent_traits`) both labels the card *and* makes the matched instances available to later effects as a bound variable.
 
+### Reading the other side of a contest
+
+A player's assembled pool is a moment a rule can watch (**Trigger: On Pool
+Change**). It is the only place the dice exist *before* they are rolled — each
+one still pointing at the trait that produced it — and when a contest has been
+declared, the other side's dice come with it.
+
+- `select rolled_dice → …` — **your** pool.
+- `select opposing_dice → …` — **theirs** (empty while nobody has challenged you).
+
+Both are ordinary dice paths, so two sides can be compared by giving each its own
+condition and letting *both* have to pass — no value-ever-compares-to-value step
+needed:
+
+| Condition | Path |
+|---|---|
+| ① mine is fire | `select rolled_dice → traitsetting → filter tags contains fire` |
+| ② theirs is metal | `select opposing_dice → traitsetting → filter tags contains metal` |
+
+Effect: *Step Down Die* on the technique you played, and the card reads **each
+trait instance they rolled tagged metal** rather than "you rolled" — the party
+comes from which seed the path started at.
+
+Two things worth knowing. The moment fires on **every save** of your pool, so a
+rule that only cares about one kind of die should filter for it (a technique die
+is `source_kind == trait`). And an opponent who has not assembled yet is an
+*empty list*, not an error — condition ② simply does not pass.
+
 ### Useful seeds & edges
 
-- **Collections:** `self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`.
+- **Collections:** `self`, `rolled_dice`, `opposing_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`, `sfxs`.
 - **Common edges:** trait instance → `trait` (registry trait) / `traitset` / `entity` / `projection`; entity → `traitsettings` / `location` / `universe` / `projections`; location → `occupants` / `difficulty_pool`; entity → `pool`.
 - **Common fields:** trait instances expose `rating`, `rating_type`, `polarity`, `trait_id`, `traitset_id`; entities expose `type`, `current_location`, `current_universe`, `razmerit`; dice expose `result`, `rating`, `effect_die`, `tier`, `role`, `source_kind`, `ts_id`.
 
@@ -511,6 +539,7 @@ So `d4_traits` is not just a variable for later effects — it is what the reade
 | `on_taken_out` | A side is taken out | dicepool | `{contest_entity_opponent}`, `{taken_out}` |
 | `on_prevent_taken_out` | A take-out is prevented | dicepool | `{effect_die}`, `{prevented}` |
 | `on_set` | Dice are set | dicepool | `{effect_die}`, `{total}` |
+| `on_pool_change` | Your assembled dice pool is saved | dicepool | `{contest_entity_opponent}` |
 | `on_location_change` | Entity changes location | — | `{from_location}`, `{to_location}`, `{universe}` |
 | `on_trait_change` | A trait changes | — | `{trait}`, `{traitset}` |
 | `on_trait_learn` / `on_trait_offered` | A trait is learned / offered | — | `{trait}`, `{trait_setting}`, `{owner}`, `{learner}` / `{opponent}` |

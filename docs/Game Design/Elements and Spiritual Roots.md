@@ -12,7 +12,7 @@ aliases:
   - Elemental Interaction
   - Spiritual Roots
   - Five Elements
-status: proposal
+status: partly implemented  # 4 gaps landed 2026-09-12; the rules are the author's
 ---
 
 # Elements and Spiritual Roots
@@ -84,15 +84,20 @@ The condition is a path, and it **traced valid** against the live app:
 select rolled_dice → navigate traitsetting      (the technique that gave the die)
   → navigate entity                             (its owner)
   → navigate traitsettings                      (what they hold)
+  → filter trait_id == trait-138364703           (their Spiritual Power)
+  → navigate subtraits                          (its elemental roots)
   → filter tags contains wood
   → filter polarity == positive
 ```
 
 Reads as: *a die in this roll came from a wood technique whose owner has a
-positive wood root.* Note the polarity filter — without it a **d6 negative water
-root would empower water techniques by accident**. With it, the negative root
-instead feeds a second rule (the complication one), which is the dynamic the
-author described.
+positive wood root.* The two extra hops are the shape of a root: it is reached
+**through** Spiritual Power, because `entity → traitsettings` deliberately leaves
+nested instances out (a root is a facet of the trait it hangs from, not a thing
+the character holds). Note the polarity filter too — without it a **d6 negative
+water root would empower water techniques by accident**. With it, the negative
+root instead feeds a second rule (the complication one), which is the dynamic
+the author described.
 
 The empower itself is already built: `modify_pool → add_trait_rating` adds a
 trait instance's rating dice to a pool.
@@ -103,10 +108,15 @@ trait instance's rating dice to a pool.
 sides get compared without any value-to-value comparison. One rule per relation:
 
 ```
-condition ①  select <my dice>      → traitsetting → filter tags contains fire
-condition ②  select <their dice>   → traitsetting → filter tags contains metal
+condition ①  select rolled_dice    → traitsetting → filter tags contains fire
+condition ②  select opposing_dice  → traitsetting → filter tags contains metal
 effect:      step_up / step_down on the played technique
 ```
+
+Both seeds are real as of 2026-09-12: they are the actor's assembled pool and
+the other side's, at the moment a pool is saved (`on_pool_change`). Both
+conditions must pass, so the two sides are compared without any step that
+compares one value to another.
 
 ### 3. A place's element
 
@@ -124,37 +134,45 @@ Checked through the live tracer (`traceTargetSpec`) and the running app:
 
 **Works today.**
 - `rolled_dice → traitsetting → tags contains <element>` — valid.
-- `rolled_dice → traitsetting → entity → traitsettings → tags → polarity` — valid
-  (the empower match above).
-- `self → traitsettings → tags contains <element>` — valid.
-- Tag matching on traits and trait instances; `polarity`, `rating`, `rating_type`
-  as filters; `step_up`/`step_down`; `add_trait_rating`; the global-passive
-  pattern (`on_session_start` + roll-timing effect + global scope, proven by
-  *One-Trick* and *d4 Bonus*).
+- `rolled_dice → traitsetting → entity → traitsettings → filter trait_id ==
+  <Spiritual Power> → subtraits → tags / polarity` — valid, live. That is the
+  empower match: *a die in this roll came from a wood technique whose owner has a
+  positive wood root*.
+- `opposing_dice → traitsetting → tags contains <element>` and
+  `rolled_dice → …` side by side — valid, live. This is `condition ①` and
+  `condition ②` of the cycle, both expressible.
+- `self → traitsettings → tags contains <element>`; tag matching on traits and
+  instances; `polarity`, `rating`, `rating_type` as filters; `step_up`/
+  `step_down`; `add_trait_rating`; the global-passive pattern
+  (`on_session_start` + roll-timing effect + global scope, proven by *One-Trick*
+  and *d4 Bonus*).
 
-**Missing — four pieces, smallest first.**
+**The four pieces landed 2026-09-12** (`73caf9e`, `ba1182c`, `134e9f7`):
 
-1. **`traitsetting → its sub-traits` has no edge.** A path cannot reach
-   sub-traits at all, so roots-as-sub-traits are *decorative* until this exists:
-   a rule can find a root only by its trait definition, never "under my Spiritual
-   Power". One catalog edge plus one repo read.
-2. **A fire site for "the pool changed".** `PUT /api/v1/locations/{loc}/pools/{entity}`
-   is the real server moment — it already persists the assembled pool with every
-   die's `ts_id` — and it currently only **broadcasts**; it fires no SFX event.
-   One `fire_state_sfx` call makes the moment listenable. It fires on *every*
-   pool change, so it should only fire while an opposition exists.
-3. **The opposition is not in the fire context.** The contest tracker records the
-   opponent (`set_opposition`) and `contest_entity_opponent` reaches win/loss/give-in
-   events — but not the pool-change moment. Needed for `condition ②` above.
-4. **The opposition's dice are not in the fire context** either — the scene store
-   holds them (`get_pool(location, opponent)`), keyed exactly like your own. They
-   need to ride the event as a second dice collection so a path can walk into them.
+1. **`traitsetting → subtraits` is an edge.** Roots are reachable *from their
+   parent*, which is the only correct way: they are deliberately absent from
+   `entity → traitsettings` (that read filters `from_type != 'traitsetting'`), so
+   a root is never mistaken for something the entity holds on its own.
+2. **The pool save is a listenable moment.** `PUT /api/v1/locations/{loc}/pools/{entity}`
+   fires `pool_changed` → the new **`on_pool_change`** trigger ("Whenever your
+   dice pool changes"). It fires on *every* save, not only contested ones — the
+   moment is the moment, and a rule that wants a contest gates on the opposition
+   being there.
+3. **The opposition is in that context** — `contest_entity_opponent`, resolved
+   from the contest tracker (either side's save works; the defendant sees the
+   challenger).
+4. **Their dice ride with it** as `opposing_rolls`, seeded into the new
+   **`opposing_dice`** collection — so a path can *start* from the other side,
+   not merely be compared against. The card keeps the parties apart: a hop from a
+   dice seed reads *you rolled* / *they rolled* by which seed it came from.
 
-**Also relevant, verified earlier:** `select variable {contest_entity_opponent}`
-fails today — trigger variables are declared but never bound as typed seeds, so a
-path cannot *start* from the other party of an event. Binding them would be a
-second way to reach the opponent (and would help every two-party rule in the
-game, not just elements).
+**Still open.**
+- **`select variable {contest_entity_opponent}` still fails** — trigger variables
+  are declared but never bound as typed seeds, so a path cannot start from the
+  other party *as an entity*. The dice route (piece 4) reaches them; this second
+  route would help every two-party rule, not just elements.
+- **Decision 4 below is unanswered**, so a place's element is readable only by
+  the rule that *is* the place's element, not as data on the location.
 
 **And one boundary-trigger trap:** `on_session_start` is a boundary trigger and
 carries **no fire-time context**, so a roll-reading path cannot hang on the SFX's
@@ -165,19 +183,28 @@ existing passives put it.
 ## Open decisions
 
 1. **Does the pool-change rule fire on every pool save, or only when a *technique*
-   die is added?** Simpler and noisier vs. needs the die's role (already on the
-   pool).
+   die is added?** *(Answered by construction, 2026-09-12: the **event** fires on
+   every save — the moment is the moment — and the **rule** narrows itself. A
+   path can filter the dice it reads (`source_kind`, `role`, `ts_id`), so "only
+   when a technique die is in the pool" is an authoring choice, not a mechanism
+   one. What is still the author's call is whether their rules bother.)*
 2. **Do roots live as sub-traits of Spiritual Power (nesting, parent-aware rules)
-   or as a trait set?** Sub-traits match the old app and the fiction; they need
-   piece 1.
-3. **Does a root's *rating* enter the pool** (add_trait_rating) or only modify the
-   technique (step_up)? The author's description says both at different moments.
-4. **The place's element as data** — worth the location edge, or does the rule
-   suffice?
+   or as a trait set?** *(Answered by the author: sub-traits. Piece 1 landed, so
+   a rule can now say "under my Spiritual Power" literally.)*
+3. **Does a root's *rating* enter the pool** (`add_trait_rating`) or only modify
+   the technique (`step_up`)? Both are buildable today; the choice is content.
+4. **The place's element as data** — worth the `location → traitsettings` edge, or
+   does the rule suffice? Still open: today a place's element works as *the rule
+   the place owns* (place scope + tag filter + `step_down`, all built), but it is
+   not readable data several rules could share, suppress or contest.
 
 ## Suggested order
 
-1. Sub-trait edge (unblocks roots; one row + one read; independent of the rest).
-2. The pool-change fire site + the opponent and their dice in its context
-   (unblocks the cycle).
-3. Author **fire-suppresses-metal** end to end as the proof, then the other nine.
+1. ~~Sub-trait edge (unblocks roots).~~ **Landed `73caf9e`.**
+2. ~~The pool-change fire site + the opponent and their dice in its context.~~
+   **Landed `ba1182c` + `134e9f7`.**
+3. **Author *fire-suppresses-metal* end to end as the proof**, then the other
+   nine — this is the author's, not the platform's: the machine is now able to
+   express it, and nothing has been written into their world.
+4. (New, optional) **Bind trigger variables as typed seeds** — the second route
+   to the other party, for every two-party rule.
