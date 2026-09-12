@@ -121,14 +121,10 @@ export function useTraitEditor({
     if (!u || universeTagsFor === u) return
     try {
       const data = await graphql(
-        `query($u: String!) { traitsByUniverse(universe: $u) { tags } }`,
+        `query($u: String!) { traitTags(universe: $u) }`,
         { u },
       )
-      const seen = new Set()
-      for (const t of data?.traitsByUniverse || []) {
-        for (const g of (t.tags || [])) seen.add(g)
-      }
-      universeTags.value = [...seen].sort()
+      universeTags.value = data?.traitTags || []
       universeTagsFor = u
     } catch (e) {
       console.error('universe tag pool failed:', e)
