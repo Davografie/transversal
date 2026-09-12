@@ -142,6 +142,7 @@
         :raw-background-image="locationBgImage"
         :entity-id="entityId"
         :viewing-entity-id="viewingEntityId"
+        :controlled-entity-ids="controlledEntityIds"
         v-model:edit-zones="editZones"
         :overlay="locationOverlay"
         :gm-mode="gmMode"
@@ -258,7 +259,7 @@ const { fetchEntities: prefetchEntities } = useEntityCrud()
 const { quality: mediaQuality, setQuality: setMediaQuality, resolveMediaUrl, isLowQuality } = useMediaQuality()
 const entityCache = useEntityCache()
 const bus = usePanelBus()
-const { supportCharacters, activeMains, onlinePlayers, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId, fetchRecency, fetchPlayerBodies, fetchOnlinePlayers } = useTroupe()
+const { supportCharacters, activeMains, playerBodies, onlinePlayers, fetchSupportCharacters, fetchActiveMains, fetchSupportCastTableId, fetchRecency, fetchPlayerBodies, fetchOnlinePlayers } = useTroupe()
 
 // ── Diagnostic logger (must be first — used throughout setup) ──
 const DIAG = {
@@ -1224,6 +1225,19 @@ let closeTimer = null
 
 const currentPoolSources = ref([])
 const viewingEntityId = ref(null)
+
+// Entities some client is actively driving right now — every player's current
+// body (server truth via `playerBodies`, refreshed on the `main_active` SSE
+// event) plus our own perspective, which is local and immediate. The map sizes
+// these dots up; see LocationViewer's `controlledEntityIds` prop.
+const controlledEntityIds = computed(() => {
+  const ids = new Set()
+  for (const body of playerBodies.value) {
+    if (body?.entity?.id) ids.add(body.entity.id)
+  }
+  if (entityId.value) ids.add(entityId.value)
+  return [...ids]
+})
 // When the GM switches which entity they're acting as, re-seed the pool tabs
 // from the server so entities acted as earlier (with dice still saved) keep a
 // tab — the GM's own pool edits don't reach remotePools via the SSE echo.
@@ -1477,6 +1491,7 @@ onMounted(() => {
   if (playerId.value) fetchPlayerEntities()
   if (playerId.value) fetchSupportCharacters()
   if (playerId.value) fetchActiveMains()
+  if (playerId.value) fetchPlayerBodies()  // who is driving whom (dot sizing)
   // Periodically re-fetch presence so grace-window expiry (a player whose device
   // slept past the 10-minute grace) drops them from the online list.
   presencePollTimer = setInterval(() => { if (playerId.value) fetchOnlinePlayers(true) }, 60_000)

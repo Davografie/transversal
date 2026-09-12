@@ -33,7 +33,7 @@
         v-if="!travelAnim.active && showElements"
         type="occupant"
         :variant="o.type"
-        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId }"
+        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: controlledEntityIds.includes(o.id) }"
         :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
         :image="o.image"
         :image-transparent="!!o.image_transparent"
@@ -128,6 +128,7 @@
       type="self"
       variant="character"
       class="fade-in"
+      :class="{ controlled: !!entityId }"
       :x="selfX" :y="selfY"
       :image="selfImage"
       :image-transparent="!!selfOccupant.image_transparent"
@@ -191,6 +192,7 @@ const props = defineProps({
   rawBackgroundImage: { type: String, default: '' },  // pre-quality URL, used as load-error fallback
   entityId: { type: String, default: null },  // null = GM free-roam (B95)
   viewingEntityId: { type: String, default: null },  // read-only peek target (see PeersBar "viewing")
+  controlledEntityIds: { type: Array, default: () => [] },  // entities a client is driving (sized up)
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
   gmMode: { type: Boolean, default: false },

@@ -227,6 +227,18 @@ expanded ring/portrait geometry stays exact; the expanded variant re-states the
 inset vignette. Assumed = the `self` dot (pulsing blue), so the two states stay
 visually distinct.
 
+**Actively controlled** occupants (`.controlled`) are scaled up by
+`--controlled-scale` (currently 1.2, tunable in `MapDot`). "Controlled" is a
+table-wide fact, not a local one: `App.vue` unions the server's `playerBodies`
+(the entity each player is currently driving — refreshed on the `main_active`
+SSE event) with the local `entityId`, and passes `controlledEntityIds` down. The
+`self` dot carries it whenever a perspective entity is set; the GM free-roam dot
+does **not** — that is a view marker, not a driven entity. The size change is a
+`transform: scale()` rather than a width/height change so the portrait ring and
+crop (`--dot-r`) scale with it instead of drifting mid-animation, and
+`.map-dot`'s transition covers `transform` — so taking a body grows the dot and
+handing it off shrinks it.
+
 ## Interactions
 
 ### Click / pop-out
