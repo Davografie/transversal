@@ -437,8 +437,18 @@ Change**). It is the only place the dice exist *before* they are rolled — each
 one still pointing at the trait that produced it — and when a contest has been
 declared, the other side's dice come with it.
 
-- `select rolled_dice → …` — **your** pool.
+- `select rolled_dice → …` — **your** pool, as it now stands.
 - `select opposing_dice → …` — **theirs** (empty while nobody has challenged you).
+- `select added_dice → …` — **what this save just added**, as opposed to what the
+  pool holds. The client sends the whole pool on every edit, so the difference is
+  knowable only at this moment — and each added die carries *where* it sits, so an
+  effect can step exactly that die.
+- `select variable {dice_pool} → navigate dice → …` — the pool itself, by name
+  (a handle; walking it is what `pool → dice` does).
+
+So both halves of *"I add a fire technique while they have water"* are a path
+each: `added_dice → traitsetting → filter tags contains fire` and
+`opposing_dice → traitsetting → filter tags contains water`.
 
 For *theirs* there are two routes and they suit different moments: the `opposing_dice` seed above is the other side's assembled pool **at the moment a pool is saved**, while `select variable {contest_entity_opponent} → navigate pool → navigate dice` reaches any entity's pool at any moment (the same hop works for your own, too).
 

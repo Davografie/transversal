@@ -398,6 +398,12 @@ COLLECTIONS: tuple[Collection, ...] = (
     Collection("opposing_dice", "die", "Dice in the opposing pool",
                noun="die", plural="dice", origin="in the opposing pool",
                card_origin="they rolled"),
+    # What a pool save *added*, as opposed to what is in the pool (that is the
+    # `pool → dice` hop). Only the pool-change moment can know it — the client
+    # PUTs the whole pool, so the previous list is the only record of what
+    # changed.
+    Collection("added_dice", "die", "Dice just added to the pool",
+               noun="die", plural="dice", origin="just added", card_origin="you added"),
     Collection("occupants", "entity", "Entities at the current location",
                noun="entity", origin="here"),
     Collection("locations", "location", "All locations", noun="location"),

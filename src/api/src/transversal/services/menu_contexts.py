@@ -184,6 +184,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     # contest has an opponent, the other side (``contest_entity_opponent``, with
     # their dice as the ``opposing_dice`` collection).
     TriggerDef("on_pool_change", "On Pool Change", (
+        Variable("dice_pool", "pool"),
         Variable("contest_entity_opponent", "entity"),
     ), group="dicepool"),
     TriggerDef("on_location_change", "On Location Change", (

@@ -32,8 +32,9 @@ def test_a_source_token_is_a_seed_typed_by_its_element():
 
 
 def test_trigger_variables_are_seeds_when_a_path_can_walk_them():
-    # The pool-change moment declares the opponent — that is the author's case.
-    assert scope_seed_names("on_pool_change", None) == {"contest_entity_opponent": "entity"}
+    # The pool-change moment declares the pool it is changing, and the opponent.
+    assert scope_seed_names("on_pool_change", None) == {
+        "dice_pool": "pool", "contest_entity_opponent": "entity"}
     # `on_result` declares a die AND a number: the die is walkable, the number
     # is not, so only the die is offered as a `select variable` seed.
     assert scope_seed_names("on_result", None) == {"effect_die": "die"}
@@ -41,7 +42,8 @@ def test_trigger_variables_are_seeds_when_a_path_can_walk_them():
 
 def test_source_and_trigger_seeds_combine_without_colliding():
     seeds = scope_seed_names("on_pool_change", "trait_setting")
-    assert seeds == {"trait_setting": "traitsetting", "contest_entity_opponent": "entity"}
+    assert seeds == {"trait_setting": "traitsetting", "dice_pool": "pool",
+                     "contest_entity_opponent": "entity"}
 
 
 def test_declared_types_map_to_catalog_elements():

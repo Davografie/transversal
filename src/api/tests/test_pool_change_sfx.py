@@ -52,7 +52,7 @@ def captured(monkeypatch):
 
 def test_the_trigger_is_declared_and_reads_as_the_moment():
     assert trigger_card("on_pool_change") == "Whenever your dice pool changes"
-    assert [v.name for v in trigger_variables("on_pool_change")] == ["contest_entity_opponent"]
+    assert [v.name for v in trigger_variables("on_pool_change")] == ["dice_pool", "contest_entity_opponent"]
 
 
 def test_the_engine_matches_a_pool_change_event():
@@ -115,7 +115,7 @@ def test_saving_a_pool_fires_the_moment(fresh_scene, monkeypatch):
     fired: list = []
     monkeypatch.setattr(
         "transversal.services.state_events.fire_pool_change_sfx",
-        lambda location_id, entity_id, dice: fired.append((location_id, entity_id, dice)),
+        lambda location_id, entity_id, dice, before=None: fired.append((location_id, entity_id, dice, before)),
     )
     client = TestClient(_app())
 
@@ -123,11 +123,67 @@ def test_saving_a_pool_fires_the_moment(fresh_scene, monkeypatch):
         {"die": "d10", "source_kind": "manual", "source_id": "intelligence", "label": "intelligence"},
     ]})
     assert r.status_code == 200, r.text
-    assert fired == [("loc-1", "kael", [{"die": "d10", "source_kind": "manual",
-                                         "source_id": "intelligence", "label": "intelligence"}])]
+    assert len(fired) == 1
+    location_id, entity_id, dice, before = fired[0]
+    assert (location_id, entity_id) == ("loc-1", "kael")
+    assert [d["die"] for d in dice] == ["d10"]
+    assert before == []   # the pool was empty before this save
 
 
 def _app():
     app = FastAPI()
     app.include_router(scene_state_router)
     return app
+
+# ── What changed, and the pool itself ─────────────────
+
+def test_the_moment_carries_the_pool_and_what_this_save_added(fresh_scene, captured):
+    """The client PUTs the whole pool, so the *previous* list is the only record
+    of what changed — and this moment is the only place that has both."""
+    state_events.fire_pool_change_sfx(
+        "loc-1", "kael",
+        [{"die": "d8", "ts_id": "kael:fire"}, {"die": "d10", "ts_id": "kael:metal"}],
+        before=[{"die": "d8", "ts_id": "kael:fire"}],
+    )
+
+    ctx = captured["context"]
+    assert ctx["dice_pool"] == "pool:kael"
+    assert [d["ts_id"] for d in ctx["added_dice"]] == ["kael:metal"]
+    # Stamped with where it is, so an effect can act on exactly that die.
+    assert ctx["added_dice"][0]["pool_owner"] == "kael"
+    assert ctx["added_dice"][0]["pool_index"] == 1
+
+
+def test_a_resave_and_a_removal_both_add_nothing(fresh_scene, captured):
+    dice = [{"die": "d8", "ts_id": "kael:fire"}]
+    state_events.fire_pool_change_sfx("loc-1", "kael", dice, before=list(dice))
+    assert captured["context"]["added_dice"] == []
+
+    state_events.fire_pool_change_sfx("loc-1", "kael", [], before=list(dice))
+    assert captured["context"]["added_dice"] == []
+
+
+def test_the_added_dice_are_a_seed_a_path_can_start_from():
+    from transversal.services.target_resolver import event_collections
+
+    seeds = event_collections({"added_dice": [{"die": "d10", "ts_id": "kael:metal"}]})
+    assert seeds["added_dice"][0]["ts_id"] == "kael:metal"
+    # Absent when the moment carries none (a re-save, or a different event).
+    assert "added_dice" not in event_collections({"rolls": []})
+
+
+def test_the_pool_itself_is_a_typed_variable():
+    """`{dice_pool}` names the thing being changed, so a path can start at it
+    instead of walking `self → pool`."""
+    from transversal.services.target_catalog import scope_seed_names
+
+    seeds = scope_seed_names("on_pool_change", "trait_setting")
+    assert seeds["dice_pool"] == "pool"
+
+
+def test_the_added_dice_collection_is_declared_with_its_own_party():
+    from transversal.services import target_catalog as tc
+
+    c = tc.collection("added_dice")
+    assert c is not None and c.element == "die"
+    assert c.card_origin == "you added"     # the actor's own dice, not the opponent's

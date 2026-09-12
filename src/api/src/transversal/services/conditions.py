@@ -411,7 +411,7 @@ TRIGGER_CONTEXT_KEYS: dict[str, frozenset[str]] = {
     # The pool-save moment: it carries the actor's dice, and — when a contest has
     # an opponent recorded at this location — the other side's as well. Only a
     # `targeting path` condition reads dice, so only it is gated by these keys.
-    "on_pool_change": frozenset({"rolls", "opposing_rolls"}),
+    "on_pool_change": frozenset({"rolls", "opposing_rolls", "added_dice"}),
     "on_location_change": frozenset({"from_location", "to_location", "universe", "arrival_kind"}),
     "on_beat": _EMPTY,
     "on_scene": _EMPTY,
@@ -492,6 +492,8 @@ def condition_context_keys(condition: Condition) -> frozenset[str]:
                 read.add("rolls")
             elif step.collection == "opposing_dice":
                 read.add("opposing_rolls")
+            elif step.collection == "added_dice":
+                read.add("added_dice")
         return frozenset(read)
     return frozenset()
 

@@ -60,6 +60,19 @@ def test_the_opponents_pool_path_type_checks():
     assert types[-1] == ValueType("traitsetting", "many")
 
 
+def test_the_just_added_dice_path_type_checks():
+    """The author's first half: *the die I am adding right now* →
+    `select added_dice → traitsetting → tags contains fire`."""
+    s = spec(
+        SelectStep(collection="added_dice"),
+        NavigateStep(edge="traitsetting", dedup=True),
+        FilterStep(field="tags", operator="contains", value="fire"),
+    )
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("traitsetting", "many")
+
+
 def test_select_rolled_dice_is_many_die():
     types, errors = trace(spec(SelectStep(collection="rolled_dice")))
     assert errors == []

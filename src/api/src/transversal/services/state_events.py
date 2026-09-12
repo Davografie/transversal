@@ -85,7 +85,36 @@ def _opponent_in_contest(location_id: str, entity_id: str) -> str | None:
     return None
 
 
-def fire_pool_change_sfx(location_id: str, entity_id: str, dice: list[dict]) -> None:
+def _added_dice(before: list[dict], after: list[dict],
+                location_id: str, entity_id: str) -> list[dict]:
+    """The dice the save *added* (a multiset diff of the two pools).
+
+    The client PUTs the whole pool on every edit, so "what changed" is knowable
+    here and nowhere else: the previous list is still readable before the write.
+    A removal yields nothing (this is the *added* half), and a re-save of the same
+    pool yields nothing either.
+
+    Each die is stamped with its provenance (``location_id`` / ``entity_id`` and
+    its place in the new pool), like `pool → dice` does, so an effect can act on
+    exactly the die that was just added.
+    """
+    remaining: dict[tuple, int] = {}
+    for die in before or []:
+        key = (die.get("ts_id"), die.get("source_id"), die.get("die"), die.get("label"))
+        remaining[key] = remaining.get(key, 0) + 1
+    added: list[dict] = []
+    for i, die in enumerate(after or []):
+        key = (die.get("ts_id"), die.get("source_id"), die.get("die"), die.get("label"))
+        if remaining.get(key, 0):
+            remaining[key] -= 1
+            continue
+        added.append({**die, "pool_location": location_id, "pool_owner": entity_id, "pool_index": i})
+    return added
+
+
+def fire_pool_change_sfx(
+    location_id: str, entity_id: str, dice: list[dict], before: list[dict] | None = None,
+) -> None:
     """Fire ``on_pool_change`` — the moment an assembled dice pool is saved.
 
     The one server moment where a rule sees a pool as the player built it: every
@@ -94,13 +123,24 @@ def fire_pool_change_sfx(location_id: str, entity_id: str, dice: list[dict]) -> 
 
     It fires on **every** save rather than only contested ones — the moment is
     the moment, and a rule that wants a contest gates on the opposition being
-    there. The context supplies the other side when it exists
-    (``contest_entity_opponent``, and their assembled dice as ``opposing_rolls``
-    so a path can start from ``opposing_dice``). One consequence worth knowing:
-    a rule may fire while only one side has assembled, when the opponent's pool
-    is empty — an empty opposition is a real state, not an error.
+    there. The context supplies:
+
+    * the actor's dice as ``rolls`` (``rolled_dice``), and the pool itself as
+      ``dice_pool`` — a handle, so a path can walk `{dice_pool} → dice`;
+    * ``added_dice`` — what this save *added* (``before`` vs after), stamped with
+      provenance so an effect can step exactly the die that arrived;
+    * the other side, when a contest has one: ``contest_entity_opponent`` and
+      their dice as ``opposing_rolls`` (``opposing_dice``).
+
+    One consequence worth knowing: a rule may fire while only one side has
+    assembled, when the opponent's pool is empty — an empty opposition is a real
+    state, not an error.
     """
-    context: dict = {"rolls": list(dice)}
+    context: dict = {
+        "rolls": list(dice),
+        "dice_pool": f"pool:{entity_id}",
+        "added_dice": _added_dice(before or [], dice, location_id, entity_id),
+    }
     opponent_id = _opponent_in_contest(location_id, entity_id)
     if opponent_id:
         from transversal.services.scene_state import get_scene_store

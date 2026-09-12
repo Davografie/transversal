@@ -637,7 +637,13 @@ function buildRefs() {
 
 function buildEffect(meta) {
   const kind = meta.targetKind
-  const mode = kind ? (newEffect.targetMode || 'literal') : 'literal'
+  // A path is offered wherever the action says what a path *resolves to* — which
+  // an action can declare without a picker kind (`pathElement`: Step Down Die
+  // targets a die in a pool). Gating the mode on `targetKind` alone meant the
+  // editor showed the path but the save silently downgraded it to the keyword
+  // target: the author's spec was dropped on every Update.
+  const canPath = !!(meta.targetKind || meta.pathElement)
+  const mode = canPath ? (newEffect.targetMode || 'literal') : 'literal'
   let target = meta.implicitTarget || newEffect.fields.target || ''
   if (kind && mode === 'choose') target = `{choose_${kind}}`
   if (kind && mode === 'random') target = `{random:${kind}}`

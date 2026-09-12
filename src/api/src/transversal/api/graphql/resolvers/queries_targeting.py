@@ -111,7 +111,10 @@ class QueriesTargeting:
 
     @strawberry.field
     def condition_context_keys(
-        self, info: strawberry.Info, trigger: str = "", placement: str = "", timing: str = "",
+        self, info: strawberry.Info,
+        trigger: Optional[str] = None,
+        placement: Optional[str] = None,
+        timing: Optional[str] = None,
     ) -> Optional[list[str]]:
         """The context keys available at an evaluation point (null = unrestricted).
 
@@ -247,7 +250,7 @@ class QueriesTargeting:
         effects: list[EffectInput],
         source_element: Optional[str] = None,
         conditions: Optional[list[ConditionInput]] = None,
-        trigger: str = "",
+        trigger: Optional[str] = None,
         source_kind: Optional[str] = None,
     ) -> list[EffectVariable]:
         """The typed output variables exposed to a list of effects (in order).

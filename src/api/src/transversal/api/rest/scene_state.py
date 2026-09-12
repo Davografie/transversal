@@ -69,6 +69,9 @@ async def get_pool(location_id: str, entity_id: str):
 async def save_pool(location_id: str, entity_id: str, req: SavePoolRequest):
     """Persist (in-memory) an entity's assembled dice pool for a location."""
     dice = [d.model_dump(exclude_unset=True) for d in req.dice]
+    # Read the pool *before* the write: the difference between the two is "what
+    # changed", which only this moment can know.
+    was = get_scene_store().get_pool(location_id, entity_id)
     get_scene_store().save_pool(location_id, entity_id, dice)
     logger.info(f"[init] save_pool loc={location_id} entity={entity_id} dice={len(dice)}")
     broadcast_pool_change(location_id, entity_id, dice=dice, phase="adding")
@@ -77,7 +80,7 @@ async def save_pool(location_id: str, entity_id: str, req: SavePoolRequest):
     # other side of the contest too when there is one (`on_pool_change`).
     from transversal.services.state_events import fire_pool_change_sfx
 
-    fire_pool_change_sfx(location_id, entity_id, dice)
+    fire_pool_change_sfx(location_id, entity_id, dice, before=was)
 
     # Fog of war: everyone at this location learns the traits now in the pool.
     from transversal.services.trait_reveal import reveal_pool_traits, trait_setting_ids_from_pool

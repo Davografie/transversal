@@ -397,6 +397,8 @@ def event_collections(context: dict | None) -> dict[str, list[Any]]:
         seeds["rolled_dice"] = ctx["rolls"]
     if ctx.get("opposing_rolls"):
         seeds["opposing_dice"] = ctx["opposing_rolls"]
+    if ctx.get("added_dice"):
+        seeds["added_dice"] = ctx["added_dice"]
     return seeds
 
 
