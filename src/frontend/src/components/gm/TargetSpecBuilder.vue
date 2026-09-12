@@ -94,12 +94,13 @@
             <button type="button" class="tsb-token-btn" title="Compare against a bound value" @click="useToken(i, true)">{ }</button>
           </span>
           <input v-else-if="fieldSuggest(i)" :value="step.value" placeholder="value"
-                 :list="tagListId" @input="onFilterValue(i, $event)" />
+                 :list="suggestListId" @input="onFilterValue(i, $event)" />
           <input v-else :value="step.value" placeholder="value" @input="onFilterValue(i, $event)" />
-          <!-- Free-form labels: the suggestions come from the tags that exist,
-               but typing a new one stays allowed. -->
-          <datalist v-if="fieldSuggest(i)" :id="tagListId">
-            <option v-for="o in tagOptions" :key="o.id" :value="o.id" />
+          <!-- Free-form fields whose values are *data*: known ones are proposed,
+               typing a new one stays allowed. `suggest` in the catalog names the
+               source (trait tags, SFX names / triggers / source kinds). -->
+          <datalist v-if="fieldSuggest(i)" :id="suggestListId">
+            <option v-for="o in suggestOptions(i)" :key="o.id" :value="o.id" />
           </datalist>
         </div>
 
@@ -237,6 +238,7 @@
 import { computed, onMounted, ref, useId, watch } from 'vue'
 import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
+import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
 import DiePicker from '../DiePicker.vue'
 import GmList from '@/components/ui/GmList.vue'
@@ -270,15 +272,15 @@ const variablesMap = computed(() => {
   return map
 })
 
-const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections } = useTargetCatalog()
+const { loaded, load, traceSpec, elementLabel, edgesFrom, fieldsFor, aggregations, collections, sourceKinds } = useTargetCatalog()
 
-// Free-form label fields (tags) have no schema-level option list — their values
-// are data. The wizard autosuggests the values that actually exist, off the
-// traits config the GM panel already loads (`suggest: "trait_tags"` in the
-// catalog names this source).
-const { traitsets, fetchTraitsConfig } = useTraitsConfig()
+// Free-form fields whose values are data, not schema. The catalog names the
+// source; these are the lists that exist right now. One table, so a new
+// suggestable field is a catalog line plus a row here.
+const { allSfxs, traitsets, fetchTraitsConfig } = useTraitsConfig()
+const { load: loadSfxMeta, triggers } = useSfxMeta()
 
-const tagListId = `tsb-tag-options-${useId()}`
+const suggestListId = `tsb-suggest-options-${useId()}`
 
 const tagOptions = computed(() => {
   const seen = new Set()
@@ -290,14 +292,40 @@ const tagOptions = computed(() => {
   return [...seen].sort().map((tag) => ({ id: tag, name: tag }))
 })
 
+const sfxNameOptions = computed(() =>
+  (allSfxs.value || []).map((s) => ({ id: s.id, name: s.name })))
+
+const sfxTriggerOptions = computed(() =>
+  (triggers.value || []).map((t) => ({ id: t.value, name: t.label })))
+
+const sfxSourceKindOptions = computed(() =>
+  (sourceKinds() || []).map((s) => ({ id: s.value, name: s.label })))
+
+const SUGGEST_SOURCES = {
+  trait_tags: tagOptions,
+  sfx_names: sfxNameOptions,
+  sfx_triggers: sfxTriggerOptions,
+  sfx_source_kinds: sfxSourceKindOptions,
+}
+
 function fieldSuggest(i) {
   const field = steps.value[i]?.field
   const f = fieldsFor(priorElement(i)).find((x) => x.name === field)
   return f && f.suggest ? f.suggest : null
 }
 
+/** The option list for whichever suggest source this step's field names. */
+function suggestOptions(i) {
+  const source = fieldSuggest(i)
+  const list = source ? SUGGEST_SOURCES[source] : null
+  return list ? list.value : []
+}
+
+// Every suggest source is loaded up front: cheap (each is a cached config read)
+// and it keeps a path authored before the list arrives from offering nothing.
 function ensureSuggestSource() {
   if (!traitsets.value.length) fetchTraitsConfig()
+  if (!triggers.value.length) loadSfxMeta()
 }
 
 const STEP_KINDS = [

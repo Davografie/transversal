@@ -721,3 +721,48 @@ def test_the_formation_path_reaches_the_occupants_movement_traits():
     res = resolve(s, ctx)
     assert res.errors == []
     assert [v.id for v in res.values] == ["kael:movement"]
+
+
+# ── The SFX registry as a targetable collection ──────────────────
+#
+# `Grant SFX` picks its rule through the same pipeline as everything else, so a
+# path can say "any post-roll rule" instead of naming one.
+
+def test_the_registry_is_a_collection_a_path_can_filter():
+    from transversal.domain import SFX
+
+    repo = FakeRepo()
+    repo.sfxs = {
+        "sfx-a": SFX(id="sfx-a", name="A", trigger="manual", source_kind="trait_setting"),
+        "sfx-b": SFX(id="sfx-b", name="B", trigger="menu"),
+    }
+    repo.get_all_sfxs = lambda: list(repo.sfxs.values())
+
+    out = resolve(
+        spec(SelectStep(collection="sfxs"), FilterStep(field="trigger", operator="==", value="menu")),
+        TargetContext(repo=repo),
+    )
+
+    assert [getattr(v, "id", v) for v in out.values] == ["sfx-b"]
+    assert out.errors == []
+
+
+def test_the_registry_filter_reads_the_columns_the_wizard_offers():
+    """Every field in the catalog table is readable off a real record — the
+    filters and the records can't drift apart unnoticed."""
+    from transversal.domain import SFX
+    from transversal.services import target_catalog as tc
+
+    repo = FakeRepo()
+    repo.sfxs = {"sfx-a": SFX(id="sfx-a", name="A", trigger="manual", source_kind="location")}
+    repo.get_all_sfxs = lambda: list(repo.sfxs.values())
+
+    for field, wanted in (("id", "sfx-a"), ("name", "A"),
+                          ("trigger", "manual"), ("source_kind", "location")):
+        assert field in tc.SCALAR_FIELDS["sfx"], f"{field} missing from the catalog"
+        out = resolve(
+            spec(SelectStep(collection="sfxs"),
+                 FilterStep(field=field, operator="==", value=wanted)),
+            TargetContext(repo=repo),
+        )
+        assert [getattr(v, "id", v) for v in out.values] == ["sfx-a"], field

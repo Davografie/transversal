@@ -401,6 +401,12 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
         return list(ctx.repo.list_entities_by_type(EntityType.LOCATION))
     if name == "entities":
         return list(ctx.repo.list_all_entities())
+    if name == "sfxs":
+        # The rule registry, as a collection a path can walk into and filter.
+        # Read-only: nothing navigates out of an SFX yet, so this is a seed plus
+        # the scalar fields above.
+        getter = getattr(ctx.repo, "get_all_sfxs", None)
+        return list(getter()) if callable(getter) else []
     return None
 
 

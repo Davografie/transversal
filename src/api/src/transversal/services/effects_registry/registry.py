@@ -12,6 +12,7 @@ from transversal.services.effects_registry import (
     actions_razmerit,
     actions_relationships,
     actions_roll,
+    actions_sfx,
     actions_trait,
     actions_trait_gain,
     actions_world,
@@ -27,6 +28,7 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
     *actions_trait_gain.ACTIONS,
     *actions_lifepath.ACTIONS,
     *actions_relationships.ACTIONS,
+    *actions_sfx.ACTIONS,
 ]
 
 
@@ -58,6 +60,7 @@ _ACTION_GROUPS: dict[str, str] = {
     "draft_life_path": "Life Path", "force_muster": "Life Path",
     "muster": "Life Path", "enroll_life_path": "Life Path",
     "create_relationship": "Relationship", "entity_targeting_ban": "Relationship",
+    "grant_sfx": "Rules",
 }
 
 for _m in EFFECT_ACTION_REGISTRY:

@@ -36,6 +36,10 @@ ELEMENT_TYPES: dict[str, ElementType] = {
     "projection": ElementType("projection", "Projection"),
     "location": ElementType("location", "Location"),
     "universe": ElementType("universe", "Universe"),
+    # A rule in the registry, as a *targetable thing*: a path can select one
+    # (`select sfxs`) or filter to the ones a grant should reach. Read-only from
+    # the pipeline's point of view — nothing navigates *out* of an SFX yet.
+    "sfx": ElementType("sfx", "SFX"),
     "pool": ElementType("pool", "Dice pool"),
 }
 
@@ -207,6 +211,18 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "id": ScalarField("universe", "id", "string"),
         "name": ScalarField("universe", "name", "string"),
     },
+    # The SFX registry's own columns, so a path can say "the manual rules", "the
+    # ones sourced on a location", or name one outright. All three value sources
+    # are data (see ``suggest``): the wizard autosuggests what exists rather than
+    # freezing a vocabulary here, so adding a trigger or a source kind needs no
+    # change to this table.
+    "sfx": {
+        "id": ScalarField("sfx", "id", "string"),
+        "name": ScalarField("sfx", "name", "string", suggest="sfx_names"),
+        "trigger": ScalarField("sfx", "trigger", "string", suggest="sfx_triggers"),
+        "source_kind": ScalarField("sfx", "source_kind", "string",
+                                   suggest="sfx_source_kinds", label="source"),
+    },
 }
 
 
@@ -361,6 +377,7 @@ COLLECTIONS: tuple[Collection, ...] = (
     Collection("entities", "entity", "All entities", noun="entity"),
     Collection("self_traitsettings", "traitsetting", "The acting entity's trait instances",
                noun="trait instance", possessive=True),
+    Collection("sfxs", "sfx", "Rules in the registry", noun="rule"),
 )
 
 
@@ -390,6 +407,7 @@ DISPLAY_FIELDS: dict[str, DisplayFields] = {
     "location": DisplayFields("location", "name", "universe"),
     "universe": DisplayFields("universe", "name", ""),
     "pool": DisplayFields("pool", "kind", ""),
+    "sfx": DisplayFields("sfx", "name", "trigger"),
 }
 
 

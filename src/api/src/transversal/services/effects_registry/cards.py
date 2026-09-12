@@ -35,4 +35,7 @@ EFFECT_ACTION_CARDS: dict[tuple[str, str], str] = {
     ("location", "set"): "move to {target}",
     ("life_path", "discover"): "discover the {target} life path",
     ("roll_table", "menu"): "roll on {target}",
+    # The granted rule reads as its own name (resolved from the registry), and
+    # whoever receives it is the clause's subject — see ``_effects_text``.
+    ("sfx", "grant"): "gain {target}",
 }

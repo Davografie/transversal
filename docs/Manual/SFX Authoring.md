@@ -330,6 +330,29 @@ An SFX attached to a **location** applies to the entities *in* it — and in its
 sub-locations, however deep. Nothing is written onto them: the rule is simply in
 their list while they are there, so leaving ends it by itself.
 
+#### Granting a rule (the teacher case)
+
+**Grant SFX** hands a rule from the registry to the effect's subject — an entity,
+or a trait instance reached by a path. That is how a place *teaches*:
+
+```
+Azure Dawn owns "Sect Training" (manual, shows in the place strip)
+  effect: Grant SFX  →  SFX: [ wizard: select sfxs → filter name == sfx-sect-cultivation ]
+                       Grant to: [ wizard: select source → occupants → trait instances
+                                   → filter trait == spiritual power ]
+```
+
+Press it where you stand and the technique lands on the trait instance the
+training is for. The *which rule* picker is the ordinary targeting wizard, seeded
+from the registry (`select sfxs`) and filterable on its own columns — `name`,
+`trigger`, `source_kind` — so a rule can grant *any post-roll rule* rather than
+one named id.
+
+A grant goes through the same writer as a GM's attach, so it obeys both rules:
+the granted rule's declared **source** must permit that surface, and its own
+**acquire path** must hold. A grant is not a back door around either. There is no
+inverse yet — a granted rule does not expire or revert.
+
 Attach one in **Manage SFX** (owner filter → *Location* → pick the place). Set the
 **Source** to `Location` as well, and the rule knows what it is: the place is both
 where it lives *and* what it resolves to, so a targeting path can walk straight to

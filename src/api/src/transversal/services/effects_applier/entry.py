@@ -32,6 +32,9 @@ from transversal.services.effects_applier.handlers_pools import (
     _apply_roll_pool,
     _apply_set_traitset_limit,
 )
+from transversal.services.effects_applier.handlers_sfx import (
+    _apply_grant_sfx,
+)
 from transversal.services.effects_applier.handlers_traits import (
     _apply_copy_trait,
     _apply_cortex_gain,
@@ -75,6 +78,8 @@ _MUTATION_HANDLERS = {
     ("modify_trait", "enable"): _apply_enable,
     ("modify_trait", "toggle"): _apply_toggle,
     ("entity", "cancel_scheduled_event"): _apply_cancel_scheduled_event,
+    # Granting a rule to an owner (the teacher case) — see handlers_sfx.
+    ("sfx", "grant"): _apply_grant_sfx,
     ("projection", "create"): _apply_create_projection,
     ("projection", "restore"): _apply_restore_projection,
     ("modify_traitset", "set_limit"): _apply_set_traitset_limit,
