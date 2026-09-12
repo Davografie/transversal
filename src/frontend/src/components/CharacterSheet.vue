@@ -1231,6 +1231,7 @@ function resetSfxCounts() {
 const QUERY = `
   query($id: ID!) {
     entity(id: $id) {
+      id
       type
       name
       razmerit
