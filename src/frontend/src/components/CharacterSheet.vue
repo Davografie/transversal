@@ -1151,13 +1151,18 @@ async function fetchAvailableSfxIds() {
  * forget, and the next press would re-apply instead of ending). A rule the
  * server no longer lists has ended — taken back, or its cost left the pool — so
  * its optimistic flag is cleared here rather than left to lie.
+ *
+ * The same round trip reads the balance: a pool save is exactly the moment a
+ * rule's cost can leave, and the refund lands on the server as part of handling
+ * that save — so the sheet refreshes the ledger from the server at that moment
+ * instead of waiting on a push.
  */
 async function fetchInFlightSfxIds() {
   const id = props.overrideEntityId || props.entityId
   if (!id) return
   try {
     const data = await graphql(
-      `query($id: ID!) { inFlightSfxIds(entityId: $id) }`,
+      `query($id: ID!) { inFlightSfxIds(entityId: $id) entity(id: $id) { razmerit } }`,
       { id },
     )
     const ids = (data?.inFlightSfxIds || []).map(String)
@@ -1168,6 +1173,8 @@ async function fetchInFlightSfxIds() {
       sfxActivations.value[sfxId] = 1
     }
     seededInFlight.value = new Set(ids)
+    const balance = data?.entity?.razmerit
+    if (balance != null) setRazmerit(balance, id)
   } catch (e) {
     console.error('fetchInFlightSfxIds', e)
   }
@@ -1559,7 +1566,9 @@ function setRazmerit(balance, entityId) {
   // entity this sheet is currently showing (could be an override/peer).
   if (entity.value && balance != null && entity.value.id === (entityId ?? props.entityId)) {
     entity.value.razmerit = balance
+    return true
   }
+  return false
 }
 
 // Long-press detection for touchscreens

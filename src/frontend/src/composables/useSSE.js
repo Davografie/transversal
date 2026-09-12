@@ -57,6 +57,10 @@ export function useSSE(sessionId, entityId, playerId) {
           const evt = { type, data, time: Date.now() }
           queued.push(evt)
           lastEvent.value = evt
+          // One line per event, in the app's log-everything style: when a burst
+          // matters (a refund and its end-note), this shows what actually arrived.
+          console.log('[SSE] \u2190', type, data?.entity_id || data?.sfx_id || '',
+                      data?.new_balance ?? data?.old_balance ?? data?.phase ?? '')
         } catch {}
       })
     }

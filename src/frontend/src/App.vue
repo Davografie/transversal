@@ -919,12 +919,14 @@ function handleSseEvent(evt) {
   const name = entName(eid)
 
   switch (evt.type) {
-    case 'razmerit_changed':
-      entityCache.invalidateSheet(evt.data?.entity_id)
-      if (evt.data?.new_balance != null) {
-        sheetRef.value?.setRazmerit(evt.data.new_balance, evt.data.entity_id)
-      }
+    case 'razmerit_changed': {
+      const targetId = evt.data?.entity_id
+      const applied = sheetRef.value?.setRazmerit?.(evt.data?.new_balance, targetId)
+      console.log('[SSE] razmerit_changed', targetId, '\u2192', evt.data?.new_balance,
+                  '| sheet applied:', applied)
+      entityCache.invalidateSheet(targetId)
       break
+    }
     case 'dice_limits_changed':
       if (evt.data?.entity_id === entityId.value) {
         diceBonuses.total = evt.data.total_dice_bonus ?? 0
