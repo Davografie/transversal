@@ -48,6 +48,23 @@ export function countDescendants(setting) {
 }
 
 /**
+ * Whether a row should render its children.
+ *
+ * A non-container always shows its sub-traits — they are part of it, which is
+ * also why they do not count separately against the set's limit. A container
+ * shows them only once it has been opened, because its children are picks in
+ * their own right and there may be many of them.
+ *
+ * `rootKnown` carries the fog-of-war answer for the row itself: a nested row
+ * inherits its root's, since sub-traits have never been gated individually.
+ */
+export function showsChildren(trait, { rootKnown = true, expanded = false } = {}) {
+  if (childrenOf(trait).length === 0) return false
+  if (!rootKnown) return false
+  return !isContainer(trait) || expanded
+}
+
+/**
  * What a set's `limit` counts, now that traits nest.
  *
  * `limit` counts *pool picks*, not ownership. Sub-traits are part of their

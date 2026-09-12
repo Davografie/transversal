@@ -321,6 +321,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
+import { countDescendants, countSetPicks, isContainer } from '../utils/traitTree.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -550,6 +551,23 @@ const activeSetName = ref(null)
 // Traits with an EMPTY rating type, shown flat on the profile tab.
 const profileTraits = ref([])
 
+// ── Containers ────────────────────────────────────────────────────
+// A container collapses until it is opened. The open set is persisted like the
+// sheet's other state because the sheet refetches constantly (SSE, mutations);
+// a container that snapped shut on every refetch would be unusable.
+const expandedContainers = usePersistedRef('sheet.expandedContainers', [])
+function isExpanded(t) {
+  return expandedContainers.value.includes(t.id)
+}
+function toggleExpand(t) {
+  expandedContainers.value = isExpanded(t)
+    ? expandedContainers.value.filter((id) => id !== t.id)
+    : [...expandedContainers.value, t.id]
+}
+function containerCount(t) {
+  return countDescendants(t)
+}
+
 function openSet(name) {
   activeSetName.value = name
 }
@@ -582,7 +600,9 @@ const currentTraits = computed(() => {
 
 const currentSetReachedLimit = computed(() => {
   if (!currentSet.value || !currentSet.value.limit) return false
-  return currentSet.value.traits.filter(t => isInPool(t)).length >= currentSet.value.limit
+  // Counts *picks*, not settings: a sub-trait rides its parent, while a
+  // container contributes its children instead of itself.
+  return countSetPicks(currentSet.value.traits, isInPool) >= currentSet.value.limit
 })
 
 const nextSet = computed(() => {
@@ -808,6 +828,7 @@ const traitRowApi = {
   spendResourceGroup, spendChallengeGroup, challengeProgressLabel,
   resolvedDieType, resourceDisplay, sfxCardModel, activateSfx,
   openTraitDetail, startEdit, playTrait, onTouchStart, onTouchEnd,
+  isContainer, isExpanded, toggleExpand, containerCount,
 }
 
 function openTraitDetail(t) {

@@ -19,6 +19,7 @@ import {
   countSetPicks,
   countDescendants,
   isContainer,
+  showsChildren,
   traitTags,
 } from '../src/utils/traitTree.js'
 
@@ -68,6 +69,17 @@ ok('whole set', countSetPicks(tree, isInPool), 3)
 ok('nothing in the pool is 0', countSetPicks([tree[0]], () => false), 0)
 ok('contents count (all depths)', countDescendants(tree[0]), 5)
 ok('contents count ignores siblings', countDescendants(tree[1]), 1)
+
+// ── what a row reveals ──────────────────────────────────────────────────
+const plainParent = { id: 'sword', subTraitSettings: [{ id: 'sharp' }] }
+const containerRow = { id: 'pack', tags: ['container'], subTraitSettings: [{ id: 'rope' }] }
+const emptyContainer = { id: 'pack2', tags: ['container'], subTraitSettings: [] }
+
+ok('plain parent shows its children', showsChildren(plainParent), true)
+ok('container is collapsed until opened', showsChildren(containerRow), false)
+ok('opened container shows them', showsChildren(containerRow, { expanded: true }), true)
+ok('childless container shows nothing', showsChildren(emptyContainer, { expanded: true }), false)
+ok('a hidden row reveals nothing', showsChildren(plainParent, { rootKnown: false }), false)
 
 // ── a container is still a container when marked on the registry side ────
 ok('nested container detected via registryTags',

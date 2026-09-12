@@ -1,7 +1,7 @@
 <template>
-  <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }" @click="api.openTraitDetail(trait)" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd">
+  <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, container: api.isContainer(trait), 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }" @click="onRowClick" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd">
     <div class="trait-left" :class="{ 'has-statement': !!trait.statement }">
-      <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }">{{ api.displayName(trait.name) }}</span>
+      <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="api.traitTimerLabel(trait)" class="trait-timer" :title="'Re-enables after ' + api.traitTimerLabel(trait)">⏳ {{ api.traitTimerLabel(trait) }}</span>
       <span v-if="trait.enabled === false" class="trait-disabled-badge">disabled</span>
       <span v-if="trait.fromType === 'relationship' && trait.relationshipContactName" class="trait-contact">→ {{ trait.relationshipContactName }}</span>
@@ -11,7 +11,14 @@
                  @activate="api.activateSfx(sfxId, trait.id)" />
       </div>
     </div>
-    <div class="trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
+    <!-- A container carries no rating, so it has no die to play and no SFX to
+         activate — two of the three row zones vanish, and that is what frees
+         the body to be the expand toggle. Its name still opens the detail. -->
+    <div v-if="api.isContainer(trait)" class="trait-right container-toggle" :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'">
+      <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+      <span class="container-count">{{ api.containerCount(trait) }}</span>
+    </div>
+    <div v-else class="trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
       <div v-if="api.traitDiceGroups(trait).length" class="trait-die-groups">
         <div v-for="(group, gi) in api.traitDiceGroups(trait)" :key="gi" class="trait-die-group">
           <DieIcon
@@ -85,15 +92,19 @@
   <div
     v-else
     class="sub-trait-row"
-    :class="{ 'in-pool': api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }"
-    @click="api.openTraitDetail(trait)"
+    :class="{ 'in-pool': api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false, container: api.isContainer(trait) }"
+    @click="onRowClick"
     @contextmenu.prevent
   >
     <div class="sub-trait-left" :class="{ 'has-statement': !!trait.statement }">
-      <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }">{{ api.displayName(trait.name) }}</span>
+      <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="trait.statement" class="sub-trait-statement">{{ trait.statement }}</span>
     </div>
-    <div class="sub-trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
+    <div v-if="api.isContainer(trait)" class="sub-trait-right container-toggle" :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'">
+      <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+      <span class="container-count">{{ api.containerCount(trait) }}</span>
+    </div>
+    <div v-else class="sub-trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
       <div v-if="api.traitDiceGroups(trait).length" class="trait-die-groups">
         <div v-for="(group, gi) in api.traitDiceGroups(trait)" :key="gi" class="trait-die-group">
           <DieIcon
@@ -109,12 +120,14 @@
     </div>
   </div>
 
-  <!-- Children, at any depth. A trait's sub-traits are part of it, so they need
-       no expansion of their own; each level nests its own list, so the indent
-       accumulates on its own. A nested row's children render unconditionally —
-       by the time we are here, the root of the chain already passed the
-       fog-of-war check, which is how sub-traits have always behaved. -->
-  <div v-if="(depth > 0 || api.isKnown(trait)) && children.length" class="sub-trait-list">
+  <!-- Children, at any depth. A traits' sub-traits are part of it, so those
+       show inline as they always have; a CONTAINER stays collapsed until it is
+       opened, since its children are picks in their own right. Each level nests
+       its own list, so the indent accumulates on its own. A nested row's
+       children render without a fog-of-war check — by the time we are here the
+       root of the chain has already passed it, which is how sub-traits have
+       always behaved. -->
+  <div v-if="renderChildren" class="sub-trait-list">
     <TraitRow
       v-for="child in children"
       :key="child.id"
@@ -140,7 +153,7 @@
 import { computed } from 'vue'
 import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
-import { childrenOf } from '@/utils/traitTree.js'
+import { childrenOf, showsChildren } from '@/utils/traitTree.js'
 
 const props = defineProps({
   trait: { type: Object, required: true },
@@ -153,6 +166,23 @@ const props = defineProps({
 })
 
 const children = computed(() => childrenOf(props.trait))
+
+// The rendering rule lives in the model (utils/traitTree.js) so it can be
+// checked without a browser: a container stays collapsed until opened, while
+// everything else shows its sub-traits inline as it always has.
+const renderChildren = computed(() =>
+  showsChildren(props.trait, {
+    rootKnown: props.depth > 0 || api.isKnown(props.trait),
+    expanded: api.isExpanded(props.trait),
+  })
+)
+
+// The body toggles a container open, while every other row opens its detail.
+// A container's own name still opens the detail, so neither is lost.
+function onRowClick() {
+  if (api.isContainer(props.trait)) api.toggleExpand(props.trait)
+  else api.openTraitDetail(props.trait)
+}
 </script>
 
 <style scoped>
@@ -397,6 +427,36 @@ const children = computed(() => childrenOf(props.trait))
 
 .sub-trait-die {
   font-size: 12px;
+}
+
+/* ── Container rows ──────────────────────────────────────────────────────
+   A container is an ordinary trait; the only visual difference is that its
+   right-hand zone is a disclosure control rather than a die. The row reads
+   like a trait set's row — a name and a count — which is the point: a traitset
+   is a container you don't own, a container is a traitset you do. */
+.trait-right.container-toggle,
+.sub-trait-right.container-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+}
+
+.container-chevron {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.container-chevron.open {
+  transform: rotate(90deg);
+}
+
+.container-count {
+  font-size: 10px;
+  min-width: 10px;
+  text-align: right;
+  opacity: 0.8;
 }
 
 .trait-row.negative {
