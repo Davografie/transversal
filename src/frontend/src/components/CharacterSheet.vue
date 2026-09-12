@@ -1233,6 +1233,56 @@ function resetSfxCounts() {
 }
 
 const QUERY = `
+  # Every trait-setting field, shared by all levels of the tree. A nested trait
+  # opens the same detail panel and the same editor as a top-level one, and can
+  # itself be a container — so it needs the same field set, not a subset.
+  fragment TraitNode on TraitSetting {
+    id
+    traitId
+    traitsetId
+    name
+    traitsetName
+    dieType
+    ratingType
+    rating
+    ego
+    fromType
+    projectionId
+    statement
+    notes
+    sfxIds
+    universe
+    dice
+    spentDice
+    capacity
+    polarity
+    enabled
+    traitsetOrder
+    traitsetLimit
+    traitsetTab
+    knownTo
+    possibleSfxIds
+    tags
+    registryTags
+    relationshipContactId
+    relationshipContactName
+    relationshipContactType
+    relationshipType
+    possibleSubtraitIds
+  }
+  # GraphQL requires every nesting level spelled out, so the chain is linear and
+  # each link adds exactly one level: Depth2 = 2 levels, Depth3 = 3. The sheet
+  # asks for QUERY_DEPTH (4) in total — a top-level trait plus three. Keep this
+  # in step with QUERY_DEPTH in utils/traitTree.js.
+  fragment TraitNodeDepth2 on TraitSetting {
+    ...TraitNode
+    subTraitSettings { ...TraitNode }
+  }
+  fragment TraitNodeDepth3 on TraitSetting {
+    ...TraitNode
+    subTraitSettings { ...TraitNodeDepth2 }
+  }
+
   query($id: ID!) {
     entity(id: $id) {
       id
@@ -1253,108 +1303,12 @@ const QUERY = `
         id traitsetId sfxIds
       }
       traitSettings {
-        id
-        traitId
-        traitsetId
-        name
-        traitsetName
-        dieType
-        ratingType
-        rating
-        ego
-        fromType
-        projectionId
-        statement
-        notes
-        sfxIds
-        universe
-        dice
-        spentDice
-        capacity
-        polarity
-        enabled
-        traitsetOrder
-        traitsetLimit
-        traitsetTab
-        knownTo
-        possibleSfxIds
-        tags
-        registryTags
-        relationshipContactId
-        relationshipContactName
-        relationshipContactType
-        relationshipType
-        possibleSubtraitIds
-        subTraitSettings {
-          id
-          traitId
-          name
-          dieType
-          ratingType
-          rating
-          fromType
-          statement
-          sfxIds
-          dice
-          spentDice
-          capacity
-          polarity
-          enabled
-          tags
-          registryTags
-        }
+        ...TraitNode
+        subTraitSettings { ...TraitNodeDepth3 }
       }
       effectiveTraitSettings {
-        id
-        traitId
-        traitsetId
-        name
-        traitsetName
-        dieType
-        ratingType
-        rating
-        ego
-        fromType
-        projectionId
-        statement
-        notes
-        sfxIds
-        universe
-        dice
-        spentDice
-        capacity
-        polarity
-        enabled
-        traitsetOrder
-        traitsetLimit
-        traitsetTab
-        knownTo
-        possibleSfxIds
-        tags
-        registryTags
-        relationshipContactId
-        relationshipContactName
-        relationshipContactType
-        relationshipType
-        possibleSubtraitIds
-        subTraitSettings {
-          id
-          traitId
-          name
-          dieType
-          ratingType
-          rating
-          fromType
-          statement
-          sfxIds
-          dice
-          spentDice
-          capacity
-          polarity
-          enabled
-          tags
-          registryTags
-        }
+        ...TraitNode
+        subTraitSettings { ...TraitNodeDepth3 }
       }
     }
   }
