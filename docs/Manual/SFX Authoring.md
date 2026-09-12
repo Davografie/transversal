@@ -439,19 +439,17 @@ declared, the other side's dice come with it.
 
 - `select rolled_dice → …` — **your** pool, as it now stands.
 - `select opposing_dice → …` — **theirs** (empty while nobody has challenged you).
-- `select added_dice → …` — **what this save just added**, as opposed to what the
-  pool holds. The client sends the whole pool on every edit, so the difference is
-  knowable only at this moment — and each added die carries *where* it sits, so an
-  effect can step exactly that die.
 - `select variable {dice_pool} → navigate dice → …` — the pool itself, by name
   (a handle; walking it is what `pool → dice` does).
-- `select added_dice → …` — **the dice this rule's own trait just contributed**.
-  It is read from the rule's point of view: a rule on a fire technique sees the
-  dice its technique put in, not everything the save added — and a `2d8` technique
-  brings *two* dice, so it is always a list. (A rule whose source contributes no
-  dice — an entity rule, a table rule — sees everything the save added, because
-  there is nothing to narrow by.) "Step down the one I just added" therefore needs
-  no filter at all.
+- `select added_dice → …` — **the dice that just arrived from this rule's own
+  trait**. The client sends the whole pool on every edit, so what *changed* is
+  knowable only at this moment — and each added die carries *where* it sits, so an
+  effect can act on exactly it. Read from the rule's point of view: a rule on a
+  fire technique sees the dice its technique put in, not everything the save
+  added — and a `2d8` technique brings *two* dice, so it is always a list. (A rule
+  whose source contributes no dice — an entity rule, a table rule — sees
+  everything the save added, because there is nothing to narrow by.) "Step down
+  the one I just added" therefore needs no filter at all.
 
 **A trigger can be about its own source.** `on_pool_add` fires only when the trait
 instance the rule lives on is what got added — the fact is decided structurally,
@@ -461,8 +459,9 @@ arrival isn't checked on every pool change. It needs a *Trait setting* source
 `validateSfx` says why.
 
 So both halves of *"I add a fire technique while they have water"* are a path
-each: `added_dice → traitsetting → filter tags contains fire` and
-`opposing_dice → traitsetting → filter tags contains water`.
+each — and the first needs no filter, because `added_dice` is already *this
+rule's* dice: `added_dice → traitsetting` (mine) beside
+`opposing_dice → traitsetting → filter tags contains water` (theirs).
 
 For *theirs* there are two routes and they suit different moments: the `opposing_dice` seed above is the other side's assembled pool **at the moment a pool is saved**, while `select variable {contest_entity_opponent} → navigate pool → navigate dice` reaches any entity's pool at any moment (the same hop works for your own, too).
 
@@ -486,7 +485,7 @@ is `source_kind == trait`). And an opponent who has not assembled yet is an
 
 ### Useful seeds & edges
 
-- **Collections:** `self`, `rolled_dice`, `opposing_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`, `sfxs`.
+- **Collections:** `self`, `rolled_dice`, `opposing_dice`, `added_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`, `sfxs`.
 - **Common edges:** trait instance → `trait` (registry trait) / `traitset` / `entity` / `projection` / `subtraits`; entity → `traitsettings` / `location` / `universe` / `projections` / `pool`; location → `occupants` / `difficulty_pool`; **pool → `dice`** (what is actually assembled in it — the hop that turns *whose pool* into *which dice*, and so into the trait behind one of them). The GM difficulty pool answers with nothing: it is a number, not a set of dice.
 - **Common fields:** trait instances expose `rating`, `rating_type`, `polarity`, `trait_id`, `traitset_id`; entities expose `type`, `current_location`, `current_universe`, `razmerit`; dice expose `result`, `rating`, `effect_die`, `tier`, `role`, `source_kind`, `ts_id`.
 
