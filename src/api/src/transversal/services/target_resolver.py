@@ -147,8 +147,9 @@ def _get_field(element: Any, name: str) -> Any:
 # ── Derived fields ───────────────────────────────────────────
 #
 # Most catalog fields are plain attributes of the element. A few are not: a
-# trait *instance* has no tags of its own — they live on the registry trait it
-# points at. A derived reader is registered per ``(element_type, field_name)``
+# trait *instance*'s tags are a **union** of the labels set on the instance and
+# the ones on the registry trait it points at, so neither attribute alone is the
+# answer. A derived reader is registered per ``(element_type, field_name)``
 # so the catalog stays declarative and the resolver stays the one place that
 # knows how a value is actually read.
 

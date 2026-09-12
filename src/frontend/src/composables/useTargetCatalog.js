@@ -1,11 +1,15 @@
 import { ref } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 
+// Every catalog field the wizard *reads* must be selected here: a field missing
+// from this selection is one the UI silently treats as absent. `suggest` was
+// missing, so a suggestable field (trait tags, SFX names/triggers/source kinds)
+// fell back to a plain text box with no autocomplete and no tags editor.
 const CATALOG_QUERY = `{
   targetCatalog {
     elements { name label }
     edges { name source targets cardinality label }
-    fields { element name type options operators references }
+    fields { element name type options operators references suggest }
     aggregations { name label output needsField }
     collections { name element label singular }
     sourceKinds { value label element variable ownerSurface }

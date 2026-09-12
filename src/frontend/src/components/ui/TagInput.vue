@@ -39,7 +39,12 @@
       />
     </div>
 
-    <ul v-if="open && availableSuggestions.length" :id="listId" class="tag-dropdown" role="listbox">
+    <!-- The list also opens for the *create* row alone: a free-form field whose
+         typed text matches no existing tag still has something to offer, and
+         hiding that behind `availableSuggestions.length` made "create" reachable
+         only by pressing Enter. -->
+    <ul v-if="open && (availableSuggestions.length || (allowCustom && text.trim() && !exactMatch))"
+        :id="listId" class="tag-dropdown" role="listbox">
       <li
         v-for="(s, idx) in availableSuggestions"
         :id="optionId(idx)"

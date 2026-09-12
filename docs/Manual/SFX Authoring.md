@@ -426,7 +426,9 @@ taken back when they next move.
 
 A trait can carry free-form **tags** (authored in the trait editor — *violent*, *protective*, …), and a path can select by them: `select self_traitsettings` → `filter tags contains violent`. The value box is the **tags editor** — the same chips the trait editor uses, suggesting the tags that exist and letting you type a new one. Name several and it means *any of them* (the card reads *tagged violent or calm*); naming the tags is enough, no hop to the registry trait is needed.
 
-The filter field is `tags` on a trait instance — **which reads the tags of the trait it is an instance of**, so an instance filter finds instances of tagged traits: the tag lives at the registry, and the instance reads it. The same filter works on the registry trait itself, after `navigate trait`. Naming the step (`output: violent_traits`) both labels the card *and* makes the matched instances available to later effects as a bound variable.
+The suggestions come from the tags already in the registry — a tag you type but nobody has used still works, and instance-level tags are matched even though they are not yet suggested.
+
+The filter field is `tags` on a trait instance, and it reads **both halves**: tags set on the instance itself *and* the ones its registry trait carries — so tagging a trait marks every instance of it, and an instance can add context of its own (this instance is a *fire* technique). The same filter works on the registry trait directly, after `navigate trait` — that reads the inherited half only. Naming the step (`output: violent_traits`) both labels the card *and* makes the matched instances available to later effects as a bound variable.
 
 ### Reading the other side of a contest
 
