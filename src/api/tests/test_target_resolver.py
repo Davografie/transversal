@@ -699,6 +699,34 @@ def test_trait_instance_filters_by_tag():
     assert [v.id for v in res.values] == ["kael:trait-anger"]
 
 
+def test_several_tags_mean_any_of():
+    """The tags editor commits a chip list, and a list value reads as *any of* —
+    the same one-or-several convention an enum filter follows with `in`. Without
+    this a two-tag filter would silently match nothing."""
+    kael, repo = _tagged_world()
+    # Give the second instance a tag of its own, so "any of" has two things to
+    # mean: anger is violent, calm is serene.
+    repo.traits["trait-calm"] = NS(id="trait-calm", traitset_id="ts-emotion", tags=["serene"])
+
+    both = resolve(spec(SelectStep(collection="self_traitsettings"),
+                        FilterStep(field="tags", operator="contains", value=["violent", "serene"])),
+                   TargetContext(subject=kael, repo=repo))
+    assert both.errors == []
+    assert [v.id for v in both.values] == ["kael:trait-anger", "kael:trait-calm"]
+
+    # One value is the same shape it always was.
+    one = resolve(spec(SelectStep(collection="self_traitsettings"),
+                       FilterStep(field="tags", operator="contains", value=["serene"])),
+                  TargetContext(subject=kael, repo=repo))
+    assert [v.id for v in one.values] == ["kael:trait-calm"]
+
+    # A tag nobody carries resolves to nobody rather than erroring.
+    none = resolve(spec(SelectStep(collection="self_traitsettings"),
+                        FilterStep(field="tags", operator="contains", value=["serene", "gentle"])),
+                   TargetContext(subject=kael, repo=repo))
+    assert [v.id for v in none.values] == ["kael:trait-calm"]
+
+
 def test_registry_trait_filters_by_tag_directly():
     """The registry trait carries its own tags, so the same filter works after
     navigating to it (no derived read involved)."""

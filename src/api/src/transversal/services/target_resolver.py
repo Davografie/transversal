@@ -353,6 +353,11 @@ def _match(element: Any, step: FilterStep, field_type: str | None = None,
     if op == "in":
         return actual in expected
     if op == "contains":
+        # A list value means *any of* — the same one-or-several reading an enum
+        # filter gets from `in`, for a field that is itself a list (a trait's
+        # tags: "tagged fire or water").
+        if isinstance(expected, list):
+            return any(item in (actual or []) for item in expected)
         return expected in actual
     return False
 

@@ -93,6 +93,20 @@
             />
             <button type="button" class="tsb-token-btn" title="Compare against a bound value" @click="useToken(i, true)">{ }</button>
           </span>
+          <span v-else-if="isTagField(i)" class="tsb-tags">
+            <!-- The tags editor, not a text box: the same chips the trait editor
+                 uses, so a filter reads like the thing it filters on. One tag
+                 stores a string (`contains fire`); several store a list with
+                 `contains`, which the resolver reads as *any of* — the
+                 one-or-several convention an enum filter already follows. -->
+            <TagInput
+              :model-value="tagValuesOf(i)"
+              :suggestions="tagSuggestions"
+              placeholder="Add tag…"
+              aria-label="Filter by tag"
+              @update:model-value="(v) => onTagsChange(i, v)"
+            />
+          </span>
           <input v-else-if="fieldSuggest(i)" :value="step.value" placeholder="value"
                  :list="suggestListId" @input="onFilterValue(i, $event)" />
           <input v-else :value="step.value" placeholder="value" @input="onFilterValue(i, $event)" />
@@ -240,6 +254,7 @@ import { useTargetCatalog } from '@/composables/useTargetCatalog.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useSfxMeta } from '@/composables/useSfxMeta.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
+import TagInput from '@/components/ui/TagInput.vue'
 import DiePicker from '../DiePicker.vue'
 import GmList from '@/components/ui/GmList.vue'
 import Button from '@/components/ui/Button.vue'
@@ -306,6 +321,35 @@ const SUGGEST_SOURCES = {
   sfx_names: sfxNameOptions,
   sfx_triggers: sfxTriggerOptions,
   sfx_source_kinds: sfxSourceKindOptions,
+}
+
+/** The tag editor's own suggestions (string values), from the suggest table. */
+const tagSuggestions = computed(() => (tagOptions.value || []).map((o) => o.id))
+
+/** A `tags` filter is edited with the tags component, not a value box. */
+function isTagField(i) {
+  return fieldSuggest(i) === 'trait_tags'
+}
+
+/** The step's value as the chip list the component edits (string | list → list). */
+function tagValuesOf(i) {
+  const v = steps.value[i]?.value
+  if (Array.isArray(v)) return v.map(String)
+  return v ? [String(v)] : []
+}
+
+function onTagsChange(i, values) {
+  const step = steps.value[i]
+  if (!step) return
+  const had = tagValuesOf(i).length
+  const list = (values || []).map((v) => String(v)).filter(Boolean)
+  // One tag stays a string (what every authored filter already holds); several
+  // become a list, which `contains` reads as *any of*.
+  step.value = list.length === 0 ? '' : (list.length === 1 ? list[0] : list)
+  // `==` against a tags list can never pass for a single tag, so naming the
+  // first tag lands on the operator the catalogue offers first for this field.
+  // A deliberate choice is left alone afterwards — this only fires on a fill-in.
+  if (!had && list.length && step.operator !== 'contains') step.operator = 'contains'
 }
 
 function fieldSuggest(i) {

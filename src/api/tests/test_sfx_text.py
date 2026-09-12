@@ -536,6 +536,16 @@ def test_a_tag_filter_reads_as_tagged():
     assert render_phrase(phrase, "") == "your trait instances tagged violent"
 
 
+def test_several_tags_read_as_or():
+    """The tags editor can hold more than one tag, and the card says what the
+    filter means (`contains` over a list = *any of*)."""
+    phrase = path_phrase(TargetSpec_of({"steps": [
+        {"kind": "select", "collection": "self_traitsettings"},
+        {"kind": "filter", "field": "tags", "operator": "contains", "value": ["violent", "calm"]},
+    ]}), resolve=resolve)
+    assert render_phrase(phrase, "") == "your trait instances tagged violent or calm"
+
+
 def test_a_tag_filter_on_the_registry_trait_reads_the_same():
     """Reaching the registry trait through an instance works and the tag clause is
     the same; the head noun ("traits of your trait instances") is the known
