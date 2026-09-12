@@ -82,12 +82,18 @@ class Repo:
             "kael:fire-palm": NS(id="kael:fire-palm", trait_id="trait-fire-palm",
                                  traitset_id="ts-tech", entity_id="kael", projection_id=None,
                                  rating="d8", tags=[]),
+            # A second technique of the character's — *not* fire, and not the rule's
+            # home. The rule lives on the fire one; this is what gets added.
+            "kael:iron-bark": NS(id="kael:iron-bark", trait_id="trait-iron-bark",
+                                 traitset_id="ts-tech", entity_id="kael", projection_id=None,
+                                 rating="d6", tags=[]),
             "guard-1:water-palm": NS(id="guard-1:water-palm", trait_id="trait-water-palm",
                                      traitset_id="ts-tech", entity_id="guard-1", projection_id=None,
                                      rating="d10", tags=[]),
         }
         self.traits = {
             "trait-fire-palm": NS(id="trait-fire-palm", traitset_id="ts-tech", tags=["fire"]),
+            "trait-iron-bark": NS(id="trait-iron-bark", traitset_id="ts-tech", tags=["wood"]),
             "trait-water-palm": NS(id="trait-water-palm", traitset_id="ts-tech", tags=["water"]),
         }
 
@@ -240,3 +246,33 @@ def test_with_the_filter_only_the_fire_die_comes_down():
     store = run([manual, fire], [manual, fire], target=STEP_DOWN_THE_ADDED_FIRE_DIE)
 
     assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d6"]
+
+def test_the_rule_lives_on_one_trait_and_fires_when_another_is_added():
+    """The author's exact question: *"I have trait A with this SFX, and I add
+    trait B to the pool — does the SFX on trait A fire?"*
+
+    Yes. The rule's home (A) decides **whether it is available to this character**
+    and what `{trait_setting}` means — condition ① asks whether *A's* technique is
+    fire-aspected. What was *added* is the trigger's business, not its conditions:
+    `on_pool_change` fires on any save, so adding B's die while facing water brings
+    B's die down — even though B has nothing to do with fire. Naming the added die
+    (`filter ts_id == {trait_setting}`) is what ties the effect to A.
+    """
+    iron_bark = {"die": "d6", "ts_id": "kael:iron-bark", "source_kind": "trait",
+                 "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 0}
+
+    store = run([iron_bark], [iron_bark])
+
+    assert store.get_pool("loc-1", "kael")[0]["die"] == "d4", "B's die came down because the rule fired"
+
+
+def test_with_the_filter_a_die_from_another_trait_is_left_alone():
+    """The other half of the same question: with the effect naming A, adding B is
+    still *a* pool change — the rule fires, and then does nothing, because nothing
+    it was aimed at moved."""
+    iron_bark = {"die": "d6", "ts_id": "kael:iron-bark", "source_kind": "trait",
+                 "pool_location": "loc-1", "pool_owner": "kael", "pool_index": 0}
+
+    store = run([iron_bark], [iron_bark], target=STEP_DOWN_THE_ADDED_FIRE_DIE)
+
+    assert store.get_pool("loc-1", "kael")[0]["die"] == "d6"
