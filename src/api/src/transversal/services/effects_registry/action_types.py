@@ -59,6 +59,13 @@ class EffectActionMeta:
     implicit_timing: str | None = None   # if only one valid timing, hide field
     requires_choice: bool = False        # target must be resolved at runtime
     target_kind: str | None = None       # trait | entity | life_path | ...
+    # The catalog element a *targeting path* must resolve to, when that differs
+    # from the picker kind — or exists where there is no picker at all. The two
+    # questions are separate: `target_kind` names what the literal/choose/random
+    # modes offer (there is no "die" picker), while a path to a die in a pool is
+    # perfectly writable. Declaring this is what lets such an action offer the
+    # path mode without inventing a picker kind for it.
+    path_element: str = ""
     refs: list[RefDef] = field(default_factory=list)  # named references (multi-target model)
     supports_duration: bool = False      # UI shows a duration/timers builder
     supports_polarity: bool = False      # UI shows a negative (complication) toggle

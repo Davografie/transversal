@@ -31,6 +31,7 @@ from transversal.services.effects_applier.handlers_pools import (
     _apply_resolve_pool,
     _apply_roll_pool,
     _apply_set_traitset_limit,
+    _apply_step_die,
 )
 from transversal.services.effects_applier.handlers_sfx import (
     _apply_grant_sfx,
@@ -89,6 +90,11 @@ _MUTATION_HANDLERS = {
     ("modify_pool", "add_trait_rating"): _apply_add_trait_rating,
     ("modify_pool", "roll"): _apply_roll_pool,
     ("modify_pool", "resolve"): _apply_resolve_pool,
+    # Stepping a die *in the pool* (as opposed to a trait's rating). These were
+    # declared and seeded but applied nowhere: the applier passed `modify_roll`
+    # through to "the resolver context", and nothing consumed it there.
+    ("modify_roll", "step_up_die"): _apply_step_die,
+    ("modify_roll", "step_down_die"): _apply_step_die,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

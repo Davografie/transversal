@@ -618,7 +618,7 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 | Action | What it does | Sign |
 |--------|--------------|------|
 | Play as Rating | Use a trait's rating as the roll rating | cost |
-| Step Up Die / Step Down Die | Shift a die in the pool | benefit / cost |
+| Step Up Die / Step Down Die | Shift a die in the pool — clamped at d4/d12. Its target is either a **strategy keyword** (`highest_trait_die`: the highest-rated die that came from a trait) or a **targeting path** to a die, e.g. `select self → navigate pool → navigate dice → filter ts_id == {trait_setting}` for *the die from the trait this rule is attached to*. | benefit / cost |
 | Double Die | Duplicate a die | benefit |
 | Reroll Die / Reroll Highest | Re-roll a die / the highest die | benefit / either |
 | Remove Die / Split Die | Remove / split a die | cost / benefit |
@@ -627,6 +627,7 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 | Roll Dice Pool / Resolve Dice Pool | Roll / auto-resolve a pool | either |
 | Increase / Decrease Dice Limit | Change the keep-2 total (or effect) dice limit | benefit / cost |
 | Step Up Effect / Outcome | Improve the effect die / outcome | benefit |
+| Double Die / Reroll Die / Split Die … | Still resolver-context only (a keyword target): they name a die but nothing applies them yet. | benefit / either |
 | Negate / Convert Complication | Neutralize or transform a complication | benefit |
 
 **Traits**

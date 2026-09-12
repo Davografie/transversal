@@ -119,6 +119,109 @@ def _resolve_pool(target: str, entity, repo) -> tuple[str, str]:
         return (loc or "", owner.id)
     return ("", "")
 
+# Stepping a die in an assembled pool (the "Dice Pool" actions). One step up
+# the ladder, clamped at the ends: there is no d14, and no smaller die than d4.
+_DIE_STEPS = ("d4", "d6", "d8", "d10", "d12")
+
+
+def _parse_die_ref(target: str) -> tuple[str, str, int] | None:
+    """``die:<location>:<owner>:<index>`` → its parts (None when it isn't one).
+
+    What a targeting path through ``pool → dice`` resolves to — see
+    ``roll_deferral._resolved_id`` and ``target_resolver._pool_dice``, which
+    stamps the provenance on every die it hands out.
+    """
+    t = (target or "").strip()
+    if not t.startswith("die:"):
+        return None
+    parts = t.split(":")
+    if len(parts) != 4:
+        return None
+    location_id, owner_id, index = parts[1], parts[2], parts[3]
+    if not owner_id or not location_id:
+        return None
+    try:
+        return (location_id, owner_id, int(index))
+    except ValueError:
+        return None
+
+
+def _stepped(rating: str, up: bool) -> str:
+    """One step along the die ladder, clamped at both ends."""
+    try:
+        i = _DIE_STEPS.index((rating or "").strip())
+    except ValueError:
+        return rating or ""
+    j = i + 1 if up else i - 1
+    return _DIE_STEPS[max(0, min(len(_DIE_STEPS) - 1, j))]
+
+
+def _highest_trait_die(pool: list[dict]) -> int | None:
+    """Index of the highest-rated die that came from a trait (the default target).
+
+    ``highest_trait_die`` is the action's own keyword for *a* die, not a *thing* —
+    it has to be given a meaning, and this is the plain reading of its name. A
+    specific die is named with a targeting path instead.
+    """
+    best, best_i = -1, None
+    for i, die in enumerate(pool):
+        if not die.get("ts_id") and not die.get("source_id"):
+            continue
+        try:
+            rating = _DIE_STEPS.index((die.get("die") or "").strip())
+        except ValueError:
+            continue
+        if rating > best:
+            best, best_i = rating, i
+    return best_i
+
+
+def _apply_step_die(entity, effect, repo, result):
+    """Step one die in an assembled pool up or down (Step Up / Step Down Die).
+
+    ``effect.target`` is either a **die reference** — ``die:<location>:<owner>:<index>``,
+    which is what a targeting path resolves to — or one of the action's strategy
+    keywords (``highest_trait_die``; anything else is reported, not guessed at).
+    The die is rewritten **in the scene store**, so the player's pool shows the
+    change immediately; nothing is written onto any entity.
+    """
+    from transversal.services.contest_tracker import broadcast_pool_change
+    from transversal.services.scene_state import get_scene_store
+
+    up = effect.action == "step_up_die"
+    store = get_scene_store()
+
+    ref = _parse_die_ref(effect.target or "")
+    if ref is not None:
+        location_id, owner_id, index = ref
+    elif (effect.target or "").strip() == "highest_trait_die":
+        location_id = getattr(entity, "current_location", "") or ""
+        owner_id = getattr(entity, "id", "") or ""
+        index = _highest_trait_die(store.get_pool(location_id, owner_id)) if location_id else None
+        if index is None:
+            result.applied.append(AppliedEffect(effect, "no trait die to step"))
+            return
+    else:
+        result.applied.append(AppliedEffect(effect, f"die target not resolved: {effect.target!r}"))
+        return
+
+    pool = store.get_pool(location_id, owner_id)
+    if index < 0 or index >= len(pool):
+        result.applied.append(AppliedEffect(effect, f"no die at {effect.target} (pool has {len(pool)})"))
+        return
+
+    before = pool[index].get("die") or ""
+    after = _stepped(before, up)
+    if after == before:
+        result.applied.append(AppliedEffect(effect, f"{before} is already at the limit"))
+        return
+    pool[index] = {**pool[index], "die": after}
+    store.save_pool(location_id, owner_id, pool)
+    broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
+    result.applied.append(AppliedEffect(
+        effect, f"{'stepped up' if up else 'stepped down'} {before}→{after} in {owner_id}'s pool"))
+
+
 def _apply_add_dice(entity, effect, repo, result):
     """Add dice to a targeted dice pool (the GM difficulty pool or an entity's).
 

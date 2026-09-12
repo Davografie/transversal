@@ -42,10 +42,14 @@
         <div v-if="isScopedTargetField(f)" class="ee-target-group">
           <div class="ee-mode-row">
             <select v-model="newEffect.targetMode">
-              <option value="literal">Pick specific</option>
+              <!-- With a picker kind the first mode picks a thing; without one
+                   (Step Down Die names a *rule* for choosing a die) the field
+                   holds a strategy keyword instead, and the modes that need a
+                   picker are not offered at all. -->
+              <option value="literal">{{ selectedAction.targetKind ? 'Pick specific' : 'Strategy keyword' }}</option>
               <option v-if="selectedAction.supportsReturnExit" value="return">Named exit</option>
-              <option value="choose">Choose at runtime</option>
-              <option value="random">Random</option>
+              <option v-if="selectedAction.targetKind" value="choose">Choose at runtime</option>
+              <option v-if="selectedAction.targetKind" value="random">Random</option>
               <option value="spec">Targeting path</option>
             </select>
           </div>
@@ -69,8 +73,14 @@
               </template>
             </template>
           </div>
+          <input
+            v-if="newEffect.targetMode === 'literal' && !selectedAction.targetKind"
+            v-model="newEffect.fields[f.name]"
+            type="text"
+            :placeholder="f.default || 'strategy…'"
+          />
           <TargetPicker
-            v-if="newEffect.targetMode === 'literal'"
+            v-else-if="newEffect.targetMode === 'literal'"
             :model-value="newEffect.fields[f.name] || ''"
             :kind="selectedAction.targetKind"
             :scope="literalTargetScope"
@@ -407,9 +417,12 @@ const selectedAction = computed(() => {
   return effectActions.value.find(a => a.actionId === newEffect.actionId) || null
 })
 
-// The spec element type an effect's `target` should resolve to, derived from
-// the legacy target_kind. Cardinality is left loose — the wizard highlights on
-// element match and shows the actual cardinality.
+// The spec element type an effect's `target` should resolve to. Preferred: the
+// action's declared `pathElement`, because the picker kind and the path's
+// destination are different questions — there is no "die" picker, but a path to
+// a die in a pool is perfectly writable. Falls back to the legacy target_kind
+// table. Cardinality is left loose — the wizard highlights on element match and
+// shows the actual cardinality.
 const TARGET_KIND_ELEMENT = {
   trait: 'traitsetting',
   traitsetting: 'traitsetting',
@@ -424,8 +437,8 @@ const TARGET_KIND_ELEMENT = {
 }
 
 const specDestination = computed(() => {
-  const kind = selectedAction.value?.targetKind
-  const element = kind ? TARGET_KIND_ELEMENT[kind] : null
+  const meta = selectedAction.value
+  const element = meta?.pathElement || (meta?.targetKind ? TARGET_KIND_ELEMENT[meta.targetKind] : null)
   return element ? { element } : null
 })
 
@@ -524,7 +537,11 @@ function isResultDieField(f) {
 }
 
 function isScopedTargetField(f) {
-  return f.name === 'target' && !!selectedAction.value?.targetKind
+  // A path is offered when the action says what a path resolves to — which an
+  // action can declare without declaring a picker kind (Step Down Die's target
+  // is a die in a pool; there is no die picker).
+  return f.name === 'target'
+    && !!(selectedAction.value?.targetKind || selectedAction.value?.pathElement)
 }
 
 const relevantFilterFields = computed(() => {

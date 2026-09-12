@@ -1499,8 +1499,10 @@ def test_random_location_scoped_by_random_universe():
 
 
 def test_unknown_effect_is_passthrough():
+    # `reroll_die` is still resolver-context only; the step-die pair is not any
+    # more (it changes the scene store — see test_step_die.py).
     entity = _entity()
-    result = apply_effects(entity, [_effect("modify_roll", "step_up_die", "highest")], FakeRepo())
+    result = apply_effects(entity, [_effect("modify_roll", "reroll_die", "the_hitch_die")], FakeRepo())
     assert len(result.passthrough) == 1
     assert result.passthrough[0].type == "modify_roll"
     assert len(result.applied) == 0

@@ -182,4 +182,8 @@ class EffectActionMeta:
     implicit_timing: Optional[str] = None
     requires_choice: bool = False
     target_kind: Optional[str] = None
+    # The catalog element a targeting *path* must resolve to, when that is not
+    # the picker kind (or exists where there is no picker at all — a die in a
+    # pool). The editor offers the path mode on this, and type-checks against it.
+    path_element: str = ""
     refs: list[RefDef] = strawberry.field(default_factory=list)

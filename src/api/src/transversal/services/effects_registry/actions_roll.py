@@ -35,6 +35,9 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target", field_type="text",
                           required=True, default="highest_trait_die"),
         ],
+        # A die in a pool is not a *picker* kind, but it is a path: the pool hop
+        # reads the assembled dice and one of them is the target.
+        path_element="die",
     ),
     EffectActionMeta(
         action_id="step_down_die",
@@ -48,6 +51,7 @@ ACTIONS: list[EffectActionMeta] = [
             EffectFieldDef(name="target", label="Target", field_type="text",
                           required=True, default="highest_trait_die"),
         ],
+        path_element="die",
     ),
     EffectActionMeta(
         action_id="double_die",

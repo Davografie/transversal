@@ -10,6 +10,19 @@ def _meta(effect_action):
     return None
 
 
+def test_the_step_die_actions_declare_a_path_element():
+    """A die in a pool is not a *picker* kind — there is no die picker, so these
+    actions declare no `target_kind` and their literal mode stays a keyword box.
+    But a path to a die is perfectly writable, which is what `path_element` says
+    (the two questions were one field before: `target_kind` named both the picker
+    and the path's destination)."""
+    for action_id in ("step_up_die", "step_down_die"):
+        meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
+        assert meta.target_kind is None, action_id
+        assert meta.path_element == "die", action_id
+        assert [f.name for f in meta.fields] == ["target"]
+
+
 def test_delete_trait_is_authorable():
     """`remove` existed only as the internal inverse of `gain` — an author could
     not delete a trait at all. It is now a first-class action."""

@@ -54,7 +54,7 @@ class QueriesTargeting:
                 fields=[_gql_field_def(f, repo) for f in m.fields],
                 context_fields=[_gql_field_def(f, repo) for f in m.context_fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
-                requires_choice=m.requires_choice, target_kind=m.target_kind, supports_duration=m.supports_duration,
+                requires_choice=m.requires_choice, target_kind=m.target_kind, path_element=m.path_element, supports_duration=m.supports_duration,
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
                 refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
             ) for m in EFFECT_ACTION_REGISTRY

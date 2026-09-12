@@ -66,23 +66,25 @@ reason). The card states the scope (*"for each unchosen die, …"*).
 
 ## Gaps, and what each actually needs
 
-**1. Strategy keywords — 4 actions.** `step_up_die` / `step_down_die`
-(`highest_trait_die`), `reroll_die` (`the_hitch_die`), `convert_complication`
-(`botch_to_hitch`). Their target is not a *thing* but a *rule* for choosing one.
-Turning these into paths is not a declaration — the vocabulary has no way to say
-"the highest die" or "the die that hitched". **Needs vocabulary, then design.**
+**1. Strategy keywords — 2 actions left.** `reroll_die` (`the_hitch_die`) and
+`convert_complication` (`botch_to_hitch`) name a *rule* for choosing a die, not a
+thing, and nothing applies them (they are resolver-context passthroughs).
+*`step_up_die` / `step_down_die` came off this list 2026-09-12:* they now take a
+**targeting path to a die** (`path_element="die"` — the picker-kind/path-element
+split this note asked for) and are applied for real (`effects_applier`'s
+`_apply_step_die` writes the stepped rating back to the scene store). The
+keyword `highest_trait_die` is still honoured, and now has a meaning.
 
 **2. Die references — 2 actions.** `double_die`, `remove_die` name a die in the
-pool. A `pool` element exists but there is no *die* picker kind and no "dice in
-the pool" collection outside a roll. **Needs vocabulary.**
+pool. The vocabulary now exists — `pool → dice` (with each die carrying its
+provenance) and `path_element` — so these are a declaration plus an applier each,
+not a design question. **Needs the same treatment `step_up_die` got.**
 
 **3. Trait-instance references — 1 action.** `split_die` ("Source Trait",
 default `{source_trait}`) is genuinely a thing that could be pathed — the catalog
-has a `traitsetting` element. It is not a one-liner because **`target_kind`
-serves two purposes**: it names the picker kind *and* the path's destination
-element. There is no `traitsetting` picker kind, so declaring one for the path
-would leave the literal mode offering the wrong thing. **Needs the two concepts
-separated** (`path_element` vs `picker_kind`).
+has a `traitsetting` element. The blocker was that **`target_kind` served two
+purposes** (the picker kind *and* the path's destination element); that is now
+split (`path_element`), so this is a declaration plus an applier.
 
 **4. Names, not targets — 2 actions.** `create_asset` ("Asset Name"),
 `create_projection` ("Disguise Name"). Correctly flat: these are labels, not

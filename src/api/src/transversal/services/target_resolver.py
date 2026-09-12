@@ -790,6 +790,12 @@ def _pool_dice(pool: Any, ctx: TargetContext) -> list[Any]:
     *which dice* → *the trait behind one of them* (the opponent's water
     technique, say).
 
+    Each die is returned as a copy carrying its **provenance** (``pool_location``
+    / ``pool_owner`` / ``pool_index``), because a die in a pool has no id of its
+    own: two dice from the same trait are different dice, and an effect that
+    steps one down has to say *which* one. The store's own dicts are never
+    touched.
+
     The GM difficulty pool answers with nothing on purpose: it is a *number* in
     the store, not a set of dice, so there is nothing for a path to walk into.
     """
@@ -800,9 +806,13 @@ def _pool_dice(pool: Any, ctx: TargetContext) -> list[Any]:
     try:
         from transversal.services.scene_state import get_scene_store
 
-        return list(get_scene_store().get_pool(location_id, owner_id))
+        dice = list(get_scene_store().get_pool(location_id, owner_id))
     except Exception:  # no store (a bare test context) → no dice, fail closed
         return []
+    return [
+        {**die, "pool_location": location_id, "pool_owner": owner_id, "pool_index": i}
+        for i, die in enumerate(dice)
+    ]
 
 
 def _pool_from_id(value: str, repo) -> Any | None:
