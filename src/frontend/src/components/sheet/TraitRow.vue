@@ -172,16 +172,16 @@ const children = computed(() => childrenOf(props.trait))
 // everything else shows its sub-traits inline as it always has.
 const renderChildren = computed(() =>
   showsChildren(props.trait, {
-    rootKnown: props.depth > 0 || api.isKnown(props.trait),
-    expanded: api.isExpanded(props.trait),
+    rootKnown: props.depth > 0 || props.api.isKnown(props.trait),
+    expanded: props.api.isExpanded(props.trait),
   })
 )
 
 // The body toggles a container open, while every other row opens its detail.
 // A container's own name still opens the detail, so neither is lost.
 function onRowClick() {
-  if (api.isContainer(props.trait)) api.toggleExpand(props.trait)
-  else api.openTraitDetail(props.trait)
+  if (props.api.isContainer(props.trait)) props.api.toggleExpand(props.trait)
+  else props.api.openTraitDetail(props.trait)
 }
 </script>
 
