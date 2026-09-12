@@ -194,6 +194,41 @@ Timers:
 - `beat` / `scene` / `session` / a state-change event — drop the armed SFX when that boundary fires; until then it keeps firing on every matching roll.
 - no timer — armed indefinitely.
 
+### Taking it back (the flight window)
+
+A **manual** rule can be taken back until it *commits*. Press it again before
+then and everything it can undo is undone: the razmerit it earned goes back, the
+die it added to the pool comes out, the rating it stepped up steps down. What was
+still waiting on a roll — an armed `On result` part, a deferred end-of-scene —
+is dropped instead of firing.
+
+It **commits** at the first of two moments, and neither is negotiable:
+
+1. **A delayed part of it fires.** Once the part it was waiting for happens, the
+   rule has done what it was for. (The revert it schedules then fires at its own
+   timer as usual.)
+2. **Your dice are rolled.** The roll is what consumes the pool — from the dice
+   landing, what the rule changed is *used*. This is the bit that matters for a
+   purely immediate rule like *Hinder*: it has no delayed part at all, so the
+   dice are the only thing that can close its window.
+
+The card/chip reads *active* while the rule is in flight, and that state comes
+from the server — a reload does not lose it.
+
+**What a take-back cannot do**, and how to tell: reversibility is a property of
+the **action**, not of your rule. The editor's validation says so — a rule that
+can be taken back warns you which of its effects would stay in place (*"Effect 3
+cannot be undone…"*). Some things are moments rather than state — a roll
+resolved, a table opened, someone travelled — and those cannot be un-happened;
+for them, gate the effect behind the moment it should commit to (that is what
+*On roll* timing is for) instead of expecting a refund.
+
+*Costs are ordinary effects*, so they come back like anything else — the only
+cost that cannot is `transfer` razmerit (moving it between two people has no
+faithful inverse). And **End Active Effect** is the authorable version of the same
+thing: point it at a pending effect and it ends it now, applying the undo instead
+of waiting for the timer.
+
 ---
 
 ## The effect form
@@ -699,7 +734,7 @@ The editor shows these as labeled actions; each maps to a `type`/`action` pair b
 | Set Location | Move to a location | either |
 | Create Relationship | Add a relationship edge | either |
 | Targeting Ban | Prevent re-targeting an opponent | cost |
-| End Active Effect | Cancel a scheduled effect | either |
+| End Active Effect | End a running temporary effect **now** — its change is reverted (a deferred part is dropped) instead of waiting for the timer | either |
 
 **Life paths & roll tables**
 

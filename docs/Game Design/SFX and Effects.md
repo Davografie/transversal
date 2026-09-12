@@ -401,6 +401,14 @@ Running timers are exposed so the UI can reconnect a timer to its owner:
 
 Non-`IMMEDIATE` effects from the effects engine are persisted as scheduled events (`scheduled_events.schedule_deferred` → `timing_to_timer` maps `END_OF_BEAT` / `END_OF_SCENE` / `END_OF_SESSION` / `AFTER_BEATS` to a timer). There is no in-memory fallback — life-path deferrals and duration reverts share the same central store.
 
+A row's `kind` says what it is for: a **`revert`** (an undo timer) applies its
+effect when the timers expire, a **`pending`** row is a deferred forward effect,
+and a **`hold`** is the undo of an effect that had no timer — it never fires on
+its own. Holds exist so a *manual* activation can be taken back until it commits:
+ended early, its holds are applied (and its pending parts dropped); committed — a
+delayed part fired, or the entity's dice were rolled — its holds are dissolved.
+That window, and what it can and cannot undo, is [[Activation Flight Window]].
+
 ### Arming scope
 
 Roll/outcome-timed effects (`on_roll`/`on_set`/`on_result`/`on_contest_*`/`on_success`/`on_failure`) arm in `roll_deferral.py` (`_armed[entity_id]` + `_global_armed`). An armed entry's **listener scope** says *who it listens to*:
