@@ -141,6 +141,7 @@
         :background-image="displayBgImage"
         :raw-background-image="locationBgImage"
         :entity-id="entityId"
+        :viewing-entity-id="viewingEntityId"
         v-model:edit-zones="editZones"
         :overlay="locationOverlay"
         :gm-mode="gmMode"

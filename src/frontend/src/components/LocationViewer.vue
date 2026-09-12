@@ -33,7 +33,7 @@
         v-if="!travelAnim.active && showElements"
         type="occupant"
         :variant="o.type"
-        :class="{ 'dot-draft': o.unpublished }"
+        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId }"
         :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
         :image="o.image"
         :image-transparent="!!o.image_transparent"
@@ -190,6 +190,7 @@ const props = defineProps({
   backgroundImage: { type: String, default: '' },
   rawBackgroundImage: { type: String, default: '' },  // pre-quality URL, used as load-error fallback
   entityId: { type: String, default: null },  // null = GM free-roam (B95)
+  viewingEntityId: { type: String, default: null },  // read-only peek target (see PeersBar "viewing")
   editZones: { type: Boolean, default: false },
   overlay: { type: String, default: null },
   gmMode: { type: Boolean, default: false },

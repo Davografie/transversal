@@ -219,6 +219,14 @@ circular crop, the image's own alpha is the shape. The video branch (transparent
 WEBM) uses the same path. Occupants share one size (60–88px). Location images
 are assumed never transparent, so the hole path is unaffected.
 
+**Viewed occupant** (`viewed`, from `viewingEntityId`) mirrors the rail's
+`.peer-chip.viewing` state on the map: a highlight ring (2px `--accent`) with no
+fill change — "you are peeking at this one". It is drawn as a `box-shadow`
+spread rather than a border so the dot's box never changes size and the
+expanded ring/portrait geometry stays exact; the expanded variant re-states the
+inset vignette. Assumed = the `self` dot (pulsing blue), so the two states stay
+visually distinct.
+
 ## Interactions
 
 ### Click / pop-out
