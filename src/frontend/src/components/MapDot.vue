@@ -12,8 +12,8 @@
       v-if="image && overlayVisible && isVideoImage"
       :src="image"
       class="dot-overlay"
-      :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self', 'img-transparent': imageTransparent }"
-      :style="overlayImgStyle"
+      :class="{ 'occ-img-overlay': type === 'occupant' || type === 'self', 'dot-hole': holeStyle, 'img-transparent': imageTransparent }"
+      :style="holeStyle || overlayImgStyle"
       autoplay loop muted playsinline
       @click.stop="onOverlayClick"
     />

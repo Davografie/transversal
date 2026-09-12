@@ -169,7 +169,7 @@ import TravelOverlay from './location/TravelOverlay.vue'
 import MapDot from './MapDot.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
-import { isVideoUrl, coverOverscan } from '@/composables/media.js'
+import { isVideoUrl, coverOverscan, probeAspect } from '@/composables/media.js'
 import { perfMark } from '@/composables/perfLog.js'
 import { startFrameProfile, stopFrameProfile, notePointerEvent, noteFrameWork } from '@/composables/frameProfile.js'
 
@@ -1331,17 +1331,10 @@ async function preloadDestNavCache() {
       if (arriveX == null) arriveX = dest.kind === 'parent' ? 90 : 50
       if (arriveY == null) arriveY = dest.kind === 'parent' ? 15 : 50
 
-      // Get destination image aspect
-      let destAspect = null
-      const bgImg = loc?.background_image
-      if (bgImg) {
-        destAspect = await new Promise((resolve) => {
-          const img = new Image()
-          img.onload = () => resolve(img.width / img.height)
-          img.onerror = () => resolve(null)
-          img.src = bgImg
-        })
-      }
+      // Get destination image aspect. Videos must be probed through metadata:
+      // an <img> cannot decode .webm, which silently left animated destinations
+      // (e.g. Cloud-Soaked Bazaar) without a hole preview.
+      const destAspect = await probeAspect(loc?.background_image)
 
       destNavCache.value = { ...destNavCache.value, [dest.id]: { arriveX, arriveY, destAspect } }
     } catch { /* skip failed pre-fetches */ }

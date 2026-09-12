@@ -14,6 +14,32 @@ export function isVideoUrl(url) {
 }
 
 /**
+ * Resolve a media URL's intrinsic aspect ratio (width / height), or null when
+ * it cannot be decoded. Handles stills and video backgrounds alike: an
+ * `HTMLImageElement` cannot decode .webm/.mp4, so videos are probed through a
+ * metadata-only `<video>`. This is the one DOM-touching helper here — the rest
+ * of the module stays pure.
+ */
+export function probeAspect(url) {
+  if (!url) return Promise.resolve(null)
+  if (isVideoUrl(url)) {
+    return new Promise((resolve) => {
+      const vid = document.createElement('video')
+      vid.preload = 'metadata'
+      vid.onloadedmetadata = () => resolve((vid.videoWidth / vid.videoHeight) || null)
+      vid.onerror = () => resolve(null)
+      vid.src = url
+    })
+  }
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve((img.width / img.height) || null)
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
+}
+
+/**
  * Decide the background-pan axis from image and viewport aspect ratios.
  *
  * Returns:
