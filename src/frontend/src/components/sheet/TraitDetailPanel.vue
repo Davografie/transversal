@@ -56,7 +56,9 @@
 
   <div v-if="trait.notes" class="detail-section">
     <div class="detail-section-head"><span class="detail-label">Notes</span></div>
-    <p class="detail-text">{{ trait.notes }}</p>
+    <!-- renderMarkdown escapes HTML before transforming (XSS-safe) and
+         allow-lists link URLs. -->
+    <div class="detail-notes" v-html="renderMarkdown(trait.notes)"></div>
   </div>
 
   <div v-if="(trait.subTraitSettings || []).length" class="detail-section">
@@ -84,6 +86,7 @@
 <script setup>
 import { computed } from 'vue'
 import Button from '@/components/ui/Button.vue'
+import { renderMarkdown } from '@/utils/markdown.js'
 import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
 
@@ -203,6 +206,60 @@ const tagRows = computed(() => {
 .detail-context-label { min-width: 68px; color: var(--text-dim); }
 .detail-context-value { color: var(--text); }
 .detail-text { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
+
+/* Notes render as markdown. `:deep()` is required: the tags below are produced
+   by `v-html`, and Vue's scoped-CSS compiler puts the scope attribute on the
+   *last* selector — so a plain `.detail-notes p { … }` would compile to
+   `.detail-notes p[data-v-x]`, and the generated `p` never carries that
+   attribute. (BlueBook's `.bb-body` rules have exactly this bug today: their
+   markdown renders unstyled.) */
+.detail-notes {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  word-wrap: break-word;
+}
+.detail-notes :deep(p) { margin: 4px 0; }
+.detail-notes :deep(h1),
+.detail-notes :deep(h2),
+.detail-notes :deep(h3),
+.detail-notes :deep(h4),
+.detail-notes :deep(h5),
+.detail-notes :deep(h6) { margin: 8px 0 4px; line-height: 1.3; }
+.detail-notes :deep(h1) { font-size: 16px; }
+.detail-notes :deep(h2) { font-size: 15px; }
+.detail-notes :deep(h3) { font-size: 14px; }
+.detail-notes :deep(h4) { font-size: 13px; }
+.detail-notes :deep(h5) { font-size: 12px; }
+.detail-notes :deep(h6) { font-size: 12px; color: var(--text-dim); }
+.detail-notes :deep(ul),
+.detail-notes :deep(ol) { margin: 4px 0; padding-left: 20px; }
+.detail-notes :deep(li) { margin: 2px 0; }
+.detail-notes :deep(code) {
+  font-family: monospace;
+  font-size: 11px;
+  background: var(--overlay-8);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.detail-notes :deep(pre) {
+  background: var(--overlay-8);
+  border: 1px solid var(--overlay-12);
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.detail-notes :deep(pre code) { background: none; padding: 0; }
+.detail-notes :deep(blockquote) {
+  border-left: 3px solid var(--accent);
+  margin: 6px 0;
+  padding: 2px 10px;
+  color: var(--text-dim);
+}
+.detail-notes :deep(a) { color: var(--accent); text-decoration: underline; }
+.detail-notes :deep(strong) { font-weight: 700; }
+.detail-notes :deep(em) { font-style: italic; }
 .detail-section .sfx-card-rules {
   margin-top: 2px;
   font-size: 11px;

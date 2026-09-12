@@ -1258,6 +1258,8 @@ const QUERY = `
           capacity
           polarity
           enabled
+          tags
+          registryTags
         }
       }
       effectiveTraitSettings {
@@ -1307,6 +1309,8 @@ const QUERY = `
           capacity
           polarity
           enabled
+          tags
+          registryTags
         }
       }
     }
