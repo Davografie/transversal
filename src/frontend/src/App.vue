@@ -730,9 +730,9 @@ function returnToSelf() {
 
 function onInspectEntity(id) {
   if (gmMode.value) {
-    // A map-dot click must never pop the sheet open — but it keeps the rail's
-    // state semantics (view → assume on the second click, free-roam on your own
-    // dot). See ``onPeerClick``'s ``fromMap`` flag.
+    // A map-dot click never opens the panel (only the rail does that), but it
+    // still selects: `forceSheet` + `viewingEntityId` mean the sheet shows the
+    // clicked character as a foreign sheet whenever the panel is open.
     onPeerClick(id, { fromMap: true })
     return
   }
@@ -763,17 +763,18 @@ function onInspectEntity(id) {
 //   viewing — you are peeking at it (viewingEntityId) → outlined
 
 async function onPeerClick(id, { fromMap = false } = {}) {
-  // `fromMap` = the click came from a map dot. It keeps EVERY state change
-  // (view, assume, free-roam) and suppresses only the sheet side effects: the
-  // sheet is a rail affordance, the map is for spatial work.
+  // `fromMap` = the click came from a map dot. It changes exactly one thing:
+  // the mobile stack is not yanked to the sheet. Everything else matches a rail
+  // click, including `forceSheet` — so a map click *selects the sheet content*
+  // (the viewed entity) without opening anything: only `sheetVisible` opens the
+  // panel, and a map click never sets it.
   if (gmMode.value) {
     const isLocation = peers.value.find(p => p.id === id)?.type === 'LOCATION'
     if (isLocation) {
       // Locations are never assumed — view their read-only sheet (toggle).
       viewingEntityId.value = viewingEntityId.value === id ? null : id
-      if (fromMap) return
       forceSheet.value = true
-      if (mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
+      if (!fromMap && mobileStackActive.value && viewingEntityId.value) setMobileFocus('sheet')
       return
     }
     // Clicking the entity you already act as: if you were viewing another
@@ -782,29 +783,23 @@ async function onPeerClick(id, { fromMap = false } = {}) {
     if (entityId.value === id) {
       if (viewingEntityId.value) {
         viewingEntityId.value = null
-        if (fromMap) return
         forceSheet.value = true
-        if (mobileStackActive.value) setMobileFocus('sheet')
+        if (!fromMap && mobileStackActive.value) setMobileFocus('sheet')
         return
       }
-      returnToSelf()
-      if (fromMap) return
-      forceSheet.value = true
-      return
+      returnToSelf(); forceSheet.value = true; return
     }
     // Second click on the peer you are viewing → assume it.
     if (viewingEntityId.value === id) {
       await switchPerspective(id)   // clears viewingEntityId
-      if (fromMap) return
       forceSheet.value = true
-      if (mobileStackActive.value && entityId.value === id) setMobileFocus('sheet')
+      if (!fromMap && mobileStackActive.value && entityId.value === id) setMobileFocus('sheet')
       return
     }
     // First click → view only (inspect), don't assume.
     viewingEntityId.value = id
-    if (fromMap) return
     forceSheet.value = true
-    if (mobileStackActive.value) setMobileFocus('sheet')
+    if (!fromMap && mobileStackActive.value) setMobileFocus('sheet')
     return
   }
   // Clicking our own character returns to self-view (no override), keeping the header tabs visible.

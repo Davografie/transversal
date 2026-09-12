@@ -620,6 +620,16 @@ const occDragging = ref(null)  // { index }
 let occDragMoved = false       // pointer moved past the tap threshold
 let draggingEmitted = false    // emitted 'dragging' so the HUD hides during a real drag
 let occSuppressClick = false   // suppress the synthesized click after a real drag
+// Arm that suppression for one click only. It disarms on the next pointerdown,
+// so when the drag's synthesized click never fires (mouseup landed off the dot)
+// the flag cannot linger and swallow a later, unrelated click.
+function armClickSuppression() {
+  occSuppressClick = true
+  document.addEventListener(
+    'pointerdown', () => { occSuppressClick = false },
+    { capture: true, once: true },
+  )
+}
 let dragTarget = null  // non-reactive: nearest travel target during self-drag
 // Coalesce high-frequency pointermove into one update per animation frame: a
 // high-polling mouse otherwise triggers a full re-render + layout on every
@@ -802,7 +812,7 @@ async function onOccDragEnd() {
   if (!occ) return
   if (!wasMoved) return  // tap — the synthesized click handles inspect/pop
 
-  occSuppressClick = true
+  armClickSuppression()
 
   // If the player dropped near a target, travel there
   if (occ.id === props.entityId && dragTarget && !props.editZones) {
@@ -894,7 +904,7 @@ function onGmDotDragEnd() {
   const t = dragTarget
   dragTarget = null
   if (!wasMoved) return
-  occSuppressClick = true  // a drag must not fire the click handler
+  armClickSuppression()  // a drag must not fire the click handler
   persistGmDots()
   // Dropped on a location → travel the view there
   if (t && !props.editZones) travelToTarget(t)
