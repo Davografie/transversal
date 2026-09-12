@@ -82,11 +82,11 @@ def _substitute_effect_context(effect: Effect, context: dict, bindings: dict | N
         return effect
     return effect.model_copy(update=updates)
 
-def _resolved_id(value) -> str | None:
-    """Extract a target id from a resolved spec value (object or dict)."""
-    if isinstance(value, dict):
-        return value.get("ts_id") or value.get("id")
-    return getattr(value, "ts_id", None) or getattr(value, "id", None)
+# The shared implementation lives in `target_resolver` (this module is inside
+# the `effects_engine` package, which imports `roll_deferral` — so importing it
+# from here would be a cycle). Re-exported under the name the callers here use.
+from transversal.services.target_resolver import resolved_id as _resolved_id  # noqa: E402
+
 
 def _structured_choice(pc, effect: Effect, field: str, sfx: Optional[SFX] = None,
                        source_kind: str = "", source_id: str = "",

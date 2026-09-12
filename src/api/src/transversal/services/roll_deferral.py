@@ -368,17 +368,10 @@ def _apply_armed(
     return applied
 
 
-def _resolved_id(value) -> str | None:
-    """Extract the target id from a resolved spec value (object or dict)."""
-    if isinstance(value, dict):
-        # A die in a pool is identified by *where it is*, not by the trait it came
-        # from: two dice of the same trait are different dice, and the effect that
-        # steps one down has to name which. `target_resolver._pool_dice` stamps
-        # this provenance on every die it hands out.
-        if value.get("pool_owner"):
-            return f"die:{value.get('pool_location', '')}:{value['pool_owner']}:{value.get('pool_index')}"
-        return value.get("ts_id") or value.get("id")
-    return getattr(value, "ts_id", None) or getattr(value, "id", None)
+# The id an effect is applied with — one implementation, in `target_resolver`
+# (`resolved_id`), shared with the immediate path. Re-exported here for callers
+# that already import it from this module.
+from transversal.services.target_resolver import resolved_id as _resolved_id  # noqa: E402
 
 
 def _source_context(context: dict | None, source, source_element: str | None) -> dict:

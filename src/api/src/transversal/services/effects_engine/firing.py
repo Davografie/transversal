@@ -149,9 +149,17 @@ def _apply_immediate_spec(
         if sfx.source_kind and event.context.get("source_id") and repo is not None
         else (None, None)
     )
+    # Event-carried dice seed this path too: an effect's own target/entity spec
+    # must be able to start from the same collections a condition can
+    # (`rolled_dice` / `added_dice` / `opposing_dice`). `_fire_context` does this
+    # for the deferred and ref paths; this one built its context without them, so
+    # an immediate effect seeded from a collection silently resolved to nobody.
+    from transversal.services.target_resolver import event_collections
+
     resolution = resolve(
         effect.target_spec,
-        TargetContext(subject=entity, repo=repo, source=source, source_element=source_element, bindings=bindings if bindings is not None else {}),
+        TargetContext(subject=entity, repo=repo, collections=event_collections(event.context),
+                      source=source, source_element=source_element, bindings=bindings if bindings is not None else {}),
         answers=answers,
     )
 

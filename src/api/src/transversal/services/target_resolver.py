@@ -382,6 +382,25 @@ def _aggregate(values: list[Any], fn: str, field_name: str | None) -> list[Any]:
     return []
 
 
+def resolved_id(value) -> str | None:
+    """The id an effect is applied with, from a resolved spec value.
+
+    A die in a pool is identified by *where it is*, not by the trait it came from:
+    two dice of the same trait are different dice, and the effect that steps one
+    down has to name which. :func:`_pool_dice` stamps that provenance on every die
+    it hands out, and this turns it back into ``die:<location>:<owner>:<index>``.
+
+    **One implementation, both paths** — the immediate one (``effects_engine``)
+    and the deferred one (``roll_deferral``) each carried a copy, and they drifted:
+    a fix to one left the other handing a trait id to an action that wanted a die.
+    """
+    if isinstance(value, dict):
+        if value.get("pool_owner"):
+            return f"die:{value.get('pool_location', '')}:{value['pool_owner']}:{value.get('pool_index')}"
+        return value.get("ts_id") or value.get("id")
+    return getattr(value, "ts_id", None) or getattr(value, "id", None)
+
+
 def event_collections(context: dict | None) -> dict[str, list[Any]]:
     """The dice collections a fire event carries, as resolver seeds.
 
