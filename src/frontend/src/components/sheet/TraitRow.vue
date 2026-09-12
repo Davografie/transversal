@@ -13,9 +13,21 @@
     </div>
     <!-- A container carries no rating, so it has no die to play and no SFX to
          activate — two of the three row zones vanish, and that is what frees
-         the body to be the expand toggle. Its name still opens the detail. -->
-    <div v-if="api.isContainer(trait)" class="trait-right container-toggle" :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'">
-      <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+         the body to be the expand toggle. Its name still opens the detail.
+         The toggle is the shared icon `Button` (32×32, focus ring, press
+         states) rather than a bare glyph, so it is a real touch target; the
+         whole body toggles too, so the reach never depends on hitting it. -->
+    <div v-if="api.isContainer(trait)" class="trait-right container-toggle">
+      <Button
+        variant="ghost"
+        size="icon"
+        :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'"
+        :aria-expanded="api.isExpanded(trait) ? 'true' : 'false'"
+        :aria-controls="childrenListId"
+        @click.stop="api.toggleExpand(trait)"
+      >
+        <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+      </Button>
       <span class="container-count">{{ api.containerCount(trait) }}</span>
     </div>
     <div v-else class="trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
@@ -100,8 +112,17 @@
       <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="trait.statement" class="sub-trait-statement">{{ trait.statement }}</span>
     </div>
-    <div v-if="api.isContainer(trait)" class="sub-trait-right container-toggle" :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'">
-      <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+    <div v-if="api.isContainer(trait)" class="sub-trait-right container-toggle">
+      <Button
+        variant="ghost"
+        size="icon"
+        :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'"
+        :aria-expanded="api.isExpanded(trait) ? 'true' : 'false'"
+        :aria-controls="childrenListId"
+        @click.stop="api.toggleExpand(trait)"
+      >
+        <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+      </Button>
       <span class="container-count">{{ api.containerCount(trait) }}</span>
     </div>
     <div v-else class="sub-trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
@@ -127,7 +148,7 @@
        children render without a fog-of-war check — by the time we are here the
        root of the chain has already passed it, which is how sub-traits have
        always behaved. -->
-  <div v-if="renderChildren" class="sub-trait-list">
+  <div v-if="renderChildren" :id="childrenListId" class="sub-trait-list">
     <TraitRow
       v-for="child in children"
       :key="child.id"
@@ -153,6 +174,7 @@
 import { computed } from 'vue'
 import DieIcon from '@/components/DieIcon.vue'
 import SfxCard from './SfxCard.vue'
+import Button from '@/components/ui/Button.vue'
 import { childrenOf, showsChildren } from '@/utils/traitTree.js'
 
 const props = defineProps({
@@ -166,6 +188,9 @@ const props = defineProps({
 })
 
 const children = computed(() => childrenOf(props.trait))
+
+// Ties the toggle to the list it opens (`aria-controls`).
+const childrenListId = computed(() => `children-${props.trait.id}`)
 
 // The rendering rule lives in the model (utils/traitTree.js) so it can be
 // checked without a browser: a container stays collapsed until opened, while
@@ -433,23 +458,32 @@ function onRowClick() {
    A container is an ordinary trait; the only visual difference is that its
    right-hand zone is a disclosure control rather than a die. The row reads
    like a trait set's row — a name and a count — which is the point: a traitset
-   is a container you don't own, a container is a traitset you do. */
+   is a container you don't own, a container is a traitset you do.
+
+   The control itself is the shared icon `Button` (32×32 — the same target as
+   the GM location tree's disclosure), so the touch sizing, press feedback,
+   focus ring and reduced-motion handling all come from the primitive. */
 .trait-right.container-toggle,
 .sub-trait-right.container-toggle {
   flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--text-dim);
 }
 
 .container-chevron {
   display: inline-block;
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1;
   transition: transform 0.15s;
 }
 
 .container-chevron.open {
   transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .container-chevron { transition: none; }
 }
 
 .container-count {
