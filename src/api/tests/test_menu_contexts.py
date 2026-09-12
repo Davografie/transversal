@@ -227,3 +227,37 @@ def test_fire_challenge_completed_populates_context(monkeypatch):
         "trait_id": "trait-gate",
         "capacity": ["d6", "d6", "d6"],
     }
+
+
+# ── Arrival triggers: the rule is spent as its audience walks in ──────
+
+def test_arrival_is_declared_in_the_catalogue_not_guessed():
+    """One declaration site: the sheet's place-rules strip reads this to decide
+    what a place is still lending you (see [[Place-Owned Rules]])."""
+    from transversal.services.menu_contexts import trigger_fires_on_arrival
+
+    assert trigger_fires_on_arrival("on_location_change") is True
+    assert trigger_fires_on_arrival("manual") is False
+    assert trigger_fires_on_arrival("on_roll") is False
+    assert trigger_fires_on_arrival("on_scene") is False
+
+
+def test_the_arrival_flag_is_an_amendment_not_a_deletion():
+    """The trigger is still authored, still offered, still carries its variables —
+    it is only *flagged*, so nothing else that walks TRIGGERS changes meaning."""
+    from transversal.services.menu_contexts import trigger_fires_on_arrival
+
+    arrival = [t for t in TRIGGERS if t.fires_on_arrival]
+    assert [t.value for t in arrival] == ["on_location_change"]
+    assert [v.name for v in trigger_variables("on_location_change")] == [
+        "from_location", "to_location", "universe", "arrival_kind",
+    ]
+
+
+def test_an_unmodelled_trigger_is_never_called_arrival():
+    """The catalogue forbids, it never claims to prove: an unknown trigger keeps
+    its rule visible rather than silently dropping it from the strip."""
+    from transversal.services.menu_contexts import trigger_fires_on_arrival
+
+    assert trigger_fires_on_arrival("on_something_new") is False
+    assert trigger_fires_on_arrival("") is False

@@ -168,7 +168,9 @@ world full of lair actions, faction rules and portal effects affordable.
    occupant's list while they are there. **The surface landed 2026-09-12**: the
    sheet renders the place's contribution as its own strip (`placeSfxRules`,
    *From <place>*), so a place rule has somewhere to be pressed — attached-only
-   strips never gave it one. Automatic rules show there inert.
+   strips never gave it one. Recurring automatic rules show there inert; a rule
+   that fires on **arrival** is not shown at all (spent as you walk in — an
+   instant, not a permanent), via `TriggerDef.fires_on_arrival`.
 3. **The other owner types** — asset, faction, universe, projection — each a row
    in the table above.
 4. **Relations/portals**, reusing the same seam for the portal brief (randomised

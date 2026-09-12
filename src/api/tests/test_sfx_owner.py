@@ -1019,6 +1019,41 @@ def test_an_unplaced_entity_is_lent_nothing():
     assert get_place_sfx_rules("e1", "earth", repo) == []
 
 
+def test_a_standing_place_rule_is_held_up_and_an_arrival_one_is_not():
+    """The MtG line the author drew: an arrival rule is an instant — it has fired
+    by the time you are standing there — while activated and recurring rules are
+    permanents you keep track of. Both stay *available*; only the shelf differs.
+    """
+    from transversal.services.sfx_owner import get_place_sfx_rules, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([
+        _sfx("sfx-sect-initiation", "on_location_change"),
+        _sfx("sfx-use-the-forge", "manual"),
+        _sfx("sfx-sect-blessing", "on_roll"),
+    ])
+    _place(repo, "sect", ["sfx-sect-initiation", "sfx-use-the-forge", "sfx-sect-blessing"])
+    repo.entity = _entity(current_location="sect")
+
+    assert "sfx-sect-initiation" in get_available_sfx_ids("e1", "earth", repo), \
+        "arriving there still teaches you"
+    groups = get_place_sfx_rules("e1", "earth", repo)
+    assert [g["sfx_ids"] for g in groups] == [["sfx-sect-blessing", "sfx-use-the-forge"]]
+
+
+def test_a_place_whose_only_rule_is_an_arrival_rule_shows_no_group():
+    """No empty heading for a place that has nothing to hold up."""
+    from transversal.services.sfx_owner import get_place_sfx_rules, invalidate_sfx_cache
+
+    invalidate_sfx_cache()
+    repo = CountingRepo([_sfx("sfx-sect-initiation", "on_location_change")])
+    _place(repo, "sect", ["sfx-sect-initiation"])
+    repo.entity = _entity(current_location="sect")
+
+    assert get_available_sfx_ids("e1", "earth", repo) == ["sfx-sect-initiation"]
+    assert get_place_sfx_rules("e1", "earth", repo) == []
+
+
 def test_the_strip_never_offers_what_availability_would_refuse():
     """One rule, two views: every id the strip groups is in `availableSfxIds`,
     so a button on the sheet can't be one the activation path rejects."""

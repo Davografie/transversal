@@ -285,9 +285,16 @@ Two things it buys you:
 The player sees this as a strip under their own SFX cards, labelled **From
 <place>** — one heading per place that lends them something. It is deliberately
 the same list the activation path uses, so a card in the strip is always one
-that would actually be accepted. A rule that fires on its own (an arrival, a
-roll) appears there too, but inert and dashed, because there is nothing to
-press — it says what the place does, it isn't a button.
+that would actually be accepted.
+
+One thing is left out: a rule that fires **as you arrive** (`on_location_change`).
+By the time you are standing there it has already done its work — an instant,
+not a permanent — so there is nothing to keep track of. Sect Initiation still
+grants the life path; it just isn't held up as something the sect lends you.
+Everything else shows: an activated rule as a button, a rule that keeps firing
+while you are there (a roll, a scene) as an inert card that states what the place
+does. The distinction lives in the trigger catalogue (`TriggerDef.fires_on_arrival`),
+so it is declared once rather than guessed at in the UI.
 
 A place's rule is the ordinary kind — trigger, conditions, effects — and can carry
 a duration like any other. To make a granted trait last *only* while they are on

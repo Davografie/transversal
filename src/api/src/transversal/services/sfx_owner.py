@@ -844,6 +844,12 @@ def get_place_sfx_rules(entity_id: str, universe: str, repo) -> list[dict]:
     from the place's list, so the strip can never offer something the activation
     path would refuse. One rule, two views.
 
+    A rule that fires *as you arrive* is left out (see
+    :func:`menu_contexts.trigger_fires_on_arrival`): it has already done its
+    work by the time you are standing there — an instant, not a permanent — so
+    there is nothing to keep track of. The rule still *happens*; it just isn't
+    held up as something the place lends you.
+
     Each rule is attributed to the nearest place that carries it (the entity's
     own room wins over an ancestor), and places with nothing left to show are
     dropped.
@@ -861,7 +867,8 @@ def get_place_sfx_rules(entity_id: str, universe: str, repo) -> list[dict]:
     claimed: set[str] = set()
     for place in repo.list_ancestor_locations_with_sfx(location_id):
         owned = sorted({sid for sid in (place.sfx_ids or [])
-                        if sid in available and sid not in claimed})
+                        if sid in available and sid not in claimed
+                        and not _spent_on_arrival(repo, sid)})
         if not owned:
             continue
         claimed.update(owned)
@@ -871,6 +878,20 @@ def get_place_sfx_rules(entity_id: str, universe: str, repo) -> list[dict]:
             "sfx_ids": owned,
         })
     return groups
+
+
+def _spent_on_arrival(repo, sfx_id: str) -> bool:
+    """Whether this rule fires as its audience arrives (so it isn't held).
+
+    An unresolvable record answers ``False``: the strip keeps what it cannot
+    judge rather than hiding a rule the data may still be catching up to — the
+    same posture the availability read takes.
+    """
+    sfx = _load_sfx(repo, sfx_id)
+    if sfx is None:
+        return False
+    from transversal.services.menu_contexts import trigger_fires_on_arrival
+    return trigger_fires_on_arrival(getattr(sfx, "trigger", "") or "")
 
 
 def resolve_sfx_source(repo, entity_id: str, universe: str, sfx_id: str, source_kind: str):

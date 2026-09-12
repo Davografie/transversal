@@ -70,6 +70,12 @@ class TriggerDef:
     label: str
     variables: tuple[Variable, ...] = ()
     group: str = "auto"  # "manual" | "dicepool" | "auto"
+    # Fires *as the audience arrives* into the owner's scope. By the time they
+    # are standing there it has already happened, so it is not something they
+    # hold while they remain — an arrival rule is an instant, not a permanent.
+    # The sheet's place-rules strip skips these (see [[Place-Owned Rules]]);
+    # nothing else reads it.
+    fires_on_arrival: bool = False
 
     @property
     def carries_context(self) -> bool:
@@ -168,7 +174,7 @@ TRIGGERS: tuple[TriggerDef, ...] = (
         Variable("to_location", "location"),
         Variable("universe", "universe"),
         Variable("arrival_kind", "string"),
-    )),
+    ), fires_on_arrival=True),
     TriggerDef("on_trait_change", "On Trait Change", (
         Variable("trait", "trait"),
         Variable("traitset", "traitset"),
@@ -224,3 +230,17 @@ def trigger_variables(trigger: str) -> list[Variable]:
         if t.value == trigger:
             return list(t.variables)
     return []
+
+
+def trigger_fires_on_arrival(trigger: str) -> bool:
+    """Whether this trigger fires *as its audience arrives* into scope.
+
+    Such a rule is spent the moment it fires: it teaches you something or moves
+    you as you walk in, and it is not something you hold while you stand there.
+    Unmodelled triggers answer ``False`` — the catalogue forbids, it never claims
+    to prove (same posture as the fire-time context map).
+    """
+    for t in TRIGGERS:
+        if t.value == trigger:
+            return t.fires_on_arrival
+    return False
