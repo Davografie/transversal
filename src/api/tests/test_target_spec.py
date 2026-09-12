@@ -22,6 +22,26 @@ def spec(*steps):
     return TargetSpec(steps=list(steps))
 
 
+def test_the_empower_path_reaches_a_root():
+    """Elements and Spiritual Roots: *a die in this roll came from a wood
+    technique whose owner has a positive wood root* types cleanly. The last two
+    hops are the point — Spiritual Power is reached from the owner's traits, and
+    the root from the parent (sub-traits are not in the entity's own list)."""
+    s = spec(
+        SelectStep(collection="rolled_dice"),
+        NavigateStep(edge="traitsetting", dedup=True),
+        NavigateStep(edge="entity"),
+        NavigateStep(edge="traitsettings"),
+        FilterStep(field="trait_id", value="trait-138364703"),
+        NavigateStep(edge="subtraits"),
+        FilterStep(field="tags", operator="contains", value="wood"),
+        FilterStep(field="polarity", value="positive"),
+    )
+    types, errors = trace(s)
+    assert errors == []
+    assert types[-1] == ValueType("traitsetting", "many")
+
+
 def test_select_rolled_dice_is_many_die():
     types, errors = trace(spec(SelectStep(collection="rolled_dice")))
     assert errors == []

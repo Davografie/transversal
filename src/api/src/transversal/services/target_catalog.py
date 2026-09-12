@@ -281,6 +281,14 @@ EDGES: tuple[Edge, ...] = (
     Edge("entity", "traitsetting", ("entity",), "one", "Owning entity", noun="owner"),
     Edge("projection", "traitsetting", ("projection",), "one", "Owning projection"),
 
+    # traitsetting → the trait instances nested *under* it (sub-traits).
+    # A root is a facet of the trait it hangs from, not an independent thing the
+    # entity holds, so it is deliberately absent from `entity → traitsettings`
+    # (that read filters `from_type != 'traitsetting'`) and reachable only here:
+    # *my Spiritual Power → its elemental roots*. See [[Elements and Spiritual Roots]].
+    Edge("subtraits", "traitsetting", ("traitsetting",), "many", "Sub-traits",
+         noun="sub-trait", plural="sub-traits"),
+
     # entity → location / universe / projections / its trait instances
     Edge("location", "entity", ("location",), "one", "Current location", noun="location"),
     Edge("universe", "entity", ("universe",), "one", "Current universe", noun="universe"),

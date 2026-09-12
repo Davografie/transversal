@@ -26,7 +26,19 @@ def test_die_edges():
 
 def test_traitsetting_edges():
     names = [e.name for e in tc.edges_from("traitsetting")]
-    assert names == ["trait", "traitset", "entity", "projection"]
+    assert names == ["trait", "traitset", "entity", "projection", "subtraits"]
+
+
+def test_the_sub_trait_edge_reaches_nested_instances():
+    """A root hangs *from* the trait it is a facet of, so the only way a path
+    reaches it is through its parent (`Spiritual Power → its elemental roots`).
+    It is deliberately absent from `entity → traitsettings`, which filters the
+    nested instances out. See [[Elements and Spiritual Roots]]."""
+    e = tc.edge("traitsetting", "subtraits")
+    assert e is not None
+    assert e.target == ("traitsetting",)
+    assert e.cardinality == "many"
+    assert (e.noun, e.plural) == ("sub-trait", "sub-traits")
 
 
 def test_one_trick_path_is_typed():

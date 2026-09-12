@@ -52,7 +52,14 @@ class FakeRepo:
         return [p for p in self.projections.values() if p.entity_id == eid]
 
     def get_traitsettings_for_entity(self, eid):
-        return [ts for ts in self.traitsettings.values() if ts.entity_id == eid]
+        # Mirrors production: the entity's own list excludes nested instances
+        # (sub-traits are reached from their parent, never from the owner).
+        return [ts for ts in self.traitsettings.values()
+                if ts.entity_id == eid and getattr(ts, "from_type", "") != "traitsetting"]
+
+    def get_sub_traitsettings(self, pid):
+        return [ts for ts in self.traitsettings.values()
+                if getattr(ts, "parent_traitsetting_id", None) == pid]
 
     def get_traits_by_traitset(self, tsid):
         return [t for t in self.traits.values() if t.traitset_id == tsid]
@@ -80,6 +87,34 @@ def _one_trick_world():
         traitsets={"ts-combat": NS(id="ts-combat", name="Combat"), "ts-qi": NS(id="ts-qi", name="Qi")},
     )
     return kael, repo
+
+
+def test_roots_are_reachable_only_through_their_parent():
+    """Elements and Spiritual Roots: a root is a facet of Spiritual Power, not a
+    thing the entity holds on its own. So it is absent from the owner's trait
+    list and reached from the parent instance — which is what makes
+    *my Spiritual Power → its elemental roots* writable."""
+    kael = NS(id="kael", type="character", current_location="loc-1", current_universe="earth",
+              current_projection=None, razmerit=0)
+    spiritual = NS(id="kael:spiritual-power", trait_id="trait-138364703", traitset_id="ts-cultivation",
+                   entity_id="kael", projection_id=None, rating="d8")
+    fire_root = NS(id="kael:root-fire", trait_id="trait-root-fire", traitset_id="ts-elements",
+                   entity_id="kael", projection_id=None, rating="d10",
+                   parent_traitsetting_id="kael:spiritual-power", from_type="traitsetting")
+    repo = FakeRepo(
+        entities={"kael": kael},
+        traitsettings={"kael:spiritual-power": spiritual, "kael:root-fire": fire_root},
+    )
+
+    own = resolve(spec(SelectStep(collection="self_traitsettings")), TargetContext(subject=kael, repo=repo))
+    assert [v.id for v in own.values] == ["kael:spiritual-power"]
+
+    roots = resolve(
+        spec(SelectStep(collection="self_traitsettings"), NavigateStep(edge="subtraits")),
+        TargetContext(subject=kael, repo=repo),
+    )
+    assert roots.errors == []
+    assert [v.id for v in roots.values] == ["kael:root-fire"]
 
 
 def test_one_trick_resolves_to_traitsettings():

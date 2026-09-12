@@ -794,6 +794,11 @@ def register_default_edges() -> None:
     register_edge("traitsetting", "entity", lambda ts, ctx: _maybe(ctx.repo.get_entity(ts.entity_id)))
     register_edge("traitsetting", "projection",
                   lambda ts, ctx: _maybe(ctx.repo.get_projection(ts.projection_id)) if ts.projection_id else [])
+    # The instances nested under this one (elemental roots under Spiritual Power).
+    # One repo read: sub-traits share the traitsettings collection, anchored to
+    # the parent and marked `from_type == 'traitsetting'`.
+    register_edge("traitsetting", "subtraits",
+                  lambda ts, ctx: list(ctx.repo.get_sub_traitsettings(ts.id)))
 
     register_edge("entity", "location", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_location)))
     register_edge("entity", "universe", lambda e, ctx: _maybe(ctx.repo.get_entity(e.current_universe)))
