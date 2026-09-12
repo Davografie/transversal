@@ -247,6 +247,8 @@ class QueriesTargeting:
         effects: list[EffectInput],
         source_element: Optional[str] = None,
         conditions: Optional[list[ConditionInput]] = None,
+        trigger: str = "",
+        source_kind: Optional[str] = None,
     ) -> list[EffectVariable]:
         """The typed output variables exposed to a list of effects (in order).
 
@@ -256,10 +258,19 @@ class QueriesTargeting:
         ``entity_spec``/``refs.*.spec`` in sequence, accumulating step ``outputs``
         typed by their resolved element. The targeting wizard offers the result as
         ``select variable`` candidates.
+
+        ``trigger`` / ``source_kind`` seed the scope with the activation's **own**
+        names (``{contest_entity_opponent}``, ``{trait_setting}``, …) — declared
+        on the trigger and the source, and bound by the engine when the rule
+        fires, so a path can *start* from them and not only join to an output.
         """
         from transversal.services import target_spec as ts
+        from transversal.services.target_catalog import scope_seed_names
 
-        scope = {}
+        scope = {
+            name: ts.ValueType(element, "one")
+            for name, element in scope_seed_names(trigger, source_kind).items()
+        }
         for c in (conditions or []):
             cd = _condition_input_to_domain(c)
             if cd.spec is not None:

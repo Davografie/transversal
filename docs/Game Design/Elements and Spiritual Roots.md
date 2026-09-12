@@ -166,11 +166,19 @@ Checked through the live tracer (`traceTargetSpec`) and the running app:
    not merely be compared against. The card keeps the parties apart: a hop from a
    dice seed reads *you rolled* / *they rolled* by which seed it came from.
 
+**Landed after them, 2026-09-12 (later the same day): the activation's own names
+are path seeds.** `{contest_entity_opponent}` and the source token
+(`{trait_setting}`, `{location}`) were authorable but never *bound*, so a path
+could not start from either — the wizard had nothing to offer. Now one
+declaration types them (`target_catalog.scope_seed_names`) and the engine binds
+the same names from the live event, so `select variable {contest_entity_opponent}
+→ navigate location` (or `{trait_setting} → navigate entity`) resolves. A name the
+moment does not carry is left unbound, and a deferred effect keeps the seeds it
+armed with.
+
 **Still open.**
-- **`select variable {contest_entity_opponent}` still fails** — trigger variables
-  are declared but never bound as typed seeds, so a path cannot start from the
-  other party *as an entity*. The dice route (piece 4) reaches them; this second
-  route would help every two-party rule, not just elements.
+- **Open decision 4** (below): a place's element as *readable data* — the
+  `location → traitsettings` edge.
 - **Decision 4 below is unanswered**, so a place's element is readable only by
   the rule that *is* the place's element, not as data on the location.
 

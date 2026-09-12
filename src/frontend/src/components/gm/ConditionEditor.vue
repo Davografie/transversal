@@ -11,7 +11,7 @@
       </select>
       <span v-if="selectedProblem(c.type)" class="ce-warn">{{ selectedProblem(c.type) }}</span>
       <template v-if="usesSpec(c.type)">
-        <TargetSpecBuilder v-model="c.spec" :source-element="sourceElement" title="Condition path" boolean-terminal class="ce-spec" />
+        <TargetSpecBuilder v-model="c.spec" :source-element="sourceElement" :variables="variables" title="Condition path" boolean-terminal class="ce-spec" />
       </template>
       <template v-else>
         <input v-if="needsSubject(c.type)" v-model="c.subject" placeholder="entity (blank = current)" class="ce-subject" />
@@ -83,6 +83,10 @@ const props = defineProps({
   // The context keys this point supplies (`null` = not modelled, so nothing is
   // forbidden). A condition reading a key that isn't here can never pass.
   availableKeys: { type: Array, default: null },
+  // Typed names a condition path may `select variable` from — the activation's
+  // own (trigger + source tokens) plus whatever earlier steps bound. Passed
+  // through to the path builder; this editor invents no scope of its own.
+  variables: { type: Object, default: null },
 })
 const emit = defineEmits(['update:modelValue'])
 

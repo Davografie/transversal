@@ -68,6 +68,39 @@ def _resolve_listeners(sfx: SFX, repo, event, source, source_element) -> list[st
     return out
 
 
+def _activation_bindings(sfx: SFX, event: GameEvent, source_id: str | None) -> dict:
+    """The activation's own names, bound as typed seeds for targeting paths.
+
+    The source token and the trigger's declared variables were authorable but
+    never *bound*, so a path could not start from them (``select variable
+    {contest_entity_opponent}`` errored while ``{contest_entity_opponent}``
+    worked in a flat field). This fills the same names the editor offers —
+    ``target_catalog.scope_seed_names`` — with the values *this* event carries.
+
+    A declared name the event does not carry is left unbound rather than bound
+    empty: at a pool save with no contest there is no opponent, and a path that
+    starts from one should resolve to nobody, not to a blank id.
+    """
+    from transversal.services.target_catalog import scope_seed_names, source_kind as sk
+    from transversal.services.target_resolver import Binding
+
+    names = scope_seed_names(sfx.trigger or "", sfx.source_kind)
+    if not names:
+        return {}
+    values: dict = dict(event.context or {})
+    declared = sk(sfx.source_kind) if sfx.source_kind else None
+    if declared is not None and declared.variable and source_id:
+        values[declared.variable] = source_id
+
+    out: dict = {}
+    for name, element in names.items():
+        value = values.get(name)
+        if value is None or value == "":
+            continue
+        out[name] = Binding(value=str(value), element=element, cardinality="one")
+    return out
+
+
 class EffectsEngine:
     """Manages SFX triggers, execution, and scheduling.
 
@@ -158,7 +191,11 @@ class EffectsEngine:
             # condition's targeting path can publish named outputs into it ("the
             # d4 traits in this roll"), which the SFX's effects may then target.
             # Effect outputs extend the same scope, so later effects see them.
-            bindings: dict = {}
+            # It starts from the activation's *own* names — the source token and
+            # the trigger's declared variables — so a path can begin at "the
+            # thing this rule is attached to" or "the opponent in this moment"
+            # rather than only joining to a name an earlier step produced.
+            bindings: dict = _activation_bindings(sfx, event, source_id)
 
             # Condition gate (only when a repo is available to evaluate state)
             if sfx.conditions and repo is not None:
@@ -220,6 +257,7 @@ class EffectsEngine:
                         source_kind=sfx.source_kind,
                         source_id=source_id,
                         duration=sfx.duration,
+                        bindings=bindings,
                     )
                 else:
                     if scope == "listener_spec":
@@ -245,6 +283,7 @@ class EffectsEngine:
                                 source_kind=sfx.source_kind,
                                 source_id=source_id,
                                 duration=sfx.duration,
+                                bindings=bindings,
                                 scope="listener_spec",
                             )
                     else:
@@ -254,6 +293,7 @@ class EffectsEngine:
                             source_kind=sfx.source_kind,
                             source_id=source_id,
                             duration=sfx.duration,
+                            bindings=bindings,
                             scope="self",
                         )
                 sfx_applied = True

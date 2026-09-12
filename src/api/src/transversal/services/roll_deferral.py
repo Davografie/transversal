@@ -113,6 +113,7 @@ def arm_sfx(
     source_id: str | None = None,
     duration=None,
     scope: str = "self",
+    bindings: dict | None = None,
 ) -> None:
     """Arm an SFX's roll-timing ``effects`` so they fire at their roll events.
 
@@ -125,6 +126,12 @@ def arm_sfx(
     ``source_kind``/``source_id`` carry the SFX's activation source so a
     ``select source`` spec resolves at fire time. ``scope`` records the listener
     scope (``self``/``global``/``listener_spec``).
+
+    ``bindings`` carries the activation's typed seeds (``_activation_bindings``:
+    the source token and the trigger's declared variables). They are snapshotted
+    with the rest of the activation — the same reason ``source_id`` is — so a
+    roll-timed effect can still start a path from "the thing this rule is about"
+    after the moment that armed it has passed.
 
     Idempotent per ``source_sfx_id`` for this entity (see ``_drop_existing``).
     """
@@ -144,6 +151,7 @@ def arm_sfx(
             source_sfx_id=source_sfx_id,
             source_kind=source_kind,
             source_id=source_id,
+            bindings=dict(bindings or {}),
             scope=scope,
         )
     )
@@ -156,6 +164,7 @@ def arm_passive(
     source_sfx_id: str | None = None,
     source_kind: str | None = None,
     source_id: str | None = None,
+    bindings: dict | None = None,
 ) -> None:
     """Arm a rule's roll-timing effects in the *global* set (scope = ``global``).
 
@@ -167,6 +176,7 @@ def arm_passive(
 
     Idempotent per ``source_sfx_id`` (see ``_drop_existing``) — a global rule is
     one rule no matter how many entities carry it or how often it activates.
+    ``bindings`` carries the activation's typed seeds, as in :func:`arm_sfx`.
     """
     rolls, expiry_events = _split_duration(duration)
     log.info(
@@ -184,6 +194,7 @@ def arm_passive(
             source_sfx_id=source_sfx_id,
             source_kind=source_kind,
             source_id=source_id,
+            bindings=dict(bindings or {}),
             scope="global",
         )
     )

@@ -136,7 +136,7 @@ The wizard is catalog-driven: it cannot compose an invalid path, and a field wit
 
 - `targetCatalog` — the full catalog (elements, edges, fields + options, aggregations, collections).
 - `traceTargetSpec(input, destinationElement, destinationCardinality, sourceElement, variables)` — walks a draft spec through the shared type-checker; returns the type after each step, step errors, and `valid` (does the final type match the destination). `variables` seeds the bound-variable scope (name → element).
-- `effectVariables(effects, sourceElement, conditions)` — traces the SFX's conditions first, then each effect's specs and its declared references, and returns the typed names they expose (for `select variable` and `{name}` values).
+- `effectVariables(effects, sourceElement, conditions, trigger, sourceKind)` — the typed names a path may `select variable` from. It seeds the scope with the **activation's own names** first (`target_catalog.scope_seed_names`: the source token and the trigger's declared variables, typed by catalog element, non-walkable ones dropped), then traces the SFX's conditions, then each effect's specs and its declared references. The engine binds the same names from the live event (`effects_engine._activation_bindings`), so what the wizard offers is what resolves — and a deferred effect carries them, snapshotted with the rest of the activation.
 
 `Effect` / `EffectInput` expose `targetSpec` and `entitySpec` as JSON (camelCase on the wire; `target_spec`/`entity_spec` in Python).
 

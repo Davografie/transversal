@@ -504,6 +504,61 @@ def bind_source(source_kind: str, source_id: str | None, context: dict) -> dict:
     return {**context, sk.variable: source_id}
 
 
+# ── The activation's own names ─────────────────────────────────
+#
+# A declared ``{variable}`` type is what the token holds in the author's words
+# (``trait_setting``, ``entity``); a catalog *element* is what a targeting path
+# can walk (``traitsetting``, ``entity``). Close — but not the same vocabulary,
+# because the instance/registry split is spelled differently on each side. The
+# mapping lives here once, so the editor offers exactly what the fire binds.
+_VARIABLE_ELEMENTS: dict[str, str] = {
+    "die": "die",
+    "trait_setting": "traitsetting",
+    "traitsetting": "traitsetting",
+    "traitset_setting": "traitsetsetting",
+    "traitsetsetting": "traitsetsetting",
+    "trait": "trait",
+    "traitset": "traitset",
+    "entity": "entity",
+    "projection": "projection",
+    "location": "location",
+    "universe": "universe",
+    "pool": "pool",
+    "sfx": "sfx",
+}
+
+
+def element_for_variable(type_name: str) -> str:
+    """The catalog element a declared ``{variable}`` type resolves to ("" = not walkable)."""
+    return _VARIABLE_ELEMENTS.get(type_name or "", "")
+
+
+def scope_seed_names(trigger: str, source_kind_value: str | None) -> dict[str, str]:
+    """The names the *activation itself* puts in scope, as ``{name: element}``.
+
+    These are the tokens the SFX editor already lists under *Available
+    variables*: the source token (``{trait_setting}``, ``{location}``, …) and
+    whatever the trigger declares (``{contest_entity_opponent}``, ``{effect_die}``,
+    …). Declared tokens that a path cannot walk (a number, a string, a boolean)
+    are left out — the wizard should not offer a seed that cannot be navigated.
+
+    One declaration, two readers: the editor's ``effectVariables`` types the
+    wizard's ``select variable`` candidates from this, and the engine binds the
+    same names from the live event — so what is offered is what resolves.
+    """
+    from transversal.services.menu_contexts import trigger_variables
+
+    seeds: dict[str, str] = {}
+    declared = _SOURCE_KINDS_BY_VALUE.get(source_kind_value or "")
+    if declared is not None and declared.variable and declared.element:
+        seeds[declared.variable] = declared.element
+    for v in trigger_variables(trigger or ""):
+        element = element_for_variable(v.type)
+        if element:
+            seeds.setdefault(v.name, element)
+    return seeds
+
+
 # ── Query helpers ──────────────────────────────────────────────
 
 def element(name: str) -> ElementType | None:

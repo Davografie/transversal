@@ -20,8 +20,8 @@ const TRACE_QUERY = `query($input: TargetSpecInput!, $element: String, $cardinal
   }
 }`
 
-const VARIABLES_QUERY = `query($effects: [EffectInput!]!, $sourceElement: String, $conditions: [ConditionInput!]) {
-  effectVariables(effects: $effects, sourceElement: $sourceElement, conditions: $conditions) { name element cardinality }
+const VARIABLES_QUERY = `query($effects: [EffectInput!]!, $sourceElement: String, $conditions: [ConditionInput!], $trigger: String, $sourceKind: String) {
+  effectVariables(effects: $effects, sourceElement: $sourceElement, conditions: $conditions, trigger: $trigger, sourceKind: $sourceKind) { name element cardinality }
 }`
 
 // Module-level singleton: the catalog is shared domain data.
@@ -62,16 +62,23 @@ export function useTargetCatalog() {
     return data?.traceTargetSpec || { types: [], errors: [], valid: false }
   }
 
-  // Compute the typed output variables (name -> {element, cardinality}) exposed
-  // to a list of effects, for cross-effect `select variable` type-hinting. The
-  // SFX's conditions are traced first: their targeting paths run before any
-  // effect, so the names they output are in scope for every effect.
-  async function collectVariables(effects, sourceElement = null, conditions = null) {
-    if ((!effects || !effects.length) && (!conditions || !conditions.length)) return {}
+  // Compute the typed names (name -> {element, cardinality}) a list of effects may
+  // `select variable` from, for type-hinting. Three sources, in one answer from
+  // the backend so the editor never invents a scope of its own:
+  //   - the activation's own names (the SFX's trigger variables and its source
+  //     token), which the engine binds when the rule fires;
+  //   - the SFX's conditions, traced first: their paths run before any effect,
+  //     so the names they output are in scope for every effect;
+  //   - each effect's own paths, in order (cross-effect).
+  async function collectVariables(effects, sourceElement = null, conditions = null, trigger = null, sourceKind = null) {
+    const hasScope = trigger || sourceKind
+    if ((!effects || !effects.length) && (!conditions || !conditions.length) && !hasScope) return {}
     const data = await graphql(VARIABLES_QUERY, {
       effects: effects || [],
       sourceElement: sourceElement || null,
       conditions: (conditions && conditions.length) ? conditions : null,
+      trigger: trigger || null,
+      sourceKind: sourceKind || null,
     })
     const map = {}
     for (const v of (data?.effectVariables || [])) {

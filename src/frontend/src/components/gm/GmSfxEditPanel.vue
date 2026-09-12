@@ -72,7 +72,7 @@
            fields above answer what it does. -->
       <h5 class="sfx-slot">When it applies</h5>
       <label>Conditions</label>
-      <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" />
+      <ConditionEditor v-model="draft.conditions" :source-element="sourceElement" :available-keys="availableKeys" :variables="activationVariables" />
     </div>
 
     <!-- Effects: list inline; each effect's form opens in a child panel -->
@@ -205,11 +205,33 @@ watch(panelActive, (active) => {
 const { load: loadSfxMeta, triggers } = useSfxMeta()
 loadSfxMeta()
 
-const { load: loadCatalog, sourceKinds } = useTargetCatalog()
+const { load: loadCatalog, sourceKinds, collectVariables } = useTargetCatalog()
 loadCatalog()
 
 // The SFX's declared source_kind → its catalog element, so a targeting-path
 // condition can offer `select source` typed against it.
+// The names the *activation* itself puts in scope, typed for a path: the source
+// token and whatever the trigger declares. Bound by the engine when this rule
+// fires, so a condition or effect path may start from them ("the opponent in
+// this moment", "the trait this rule is attached to"). Traced from the backend
+// so the wizard offers exactly what will resolve — including nothing, when the
+// event carries no such value at fire time.
+const activationVariables = ref({})
+watch(
+  () => [draft.trigger, draft.source_kind],
+  async () => {
+    try {
+      activationVariables.value = await collectVariables(
+        [], sourceElement.value || null, null,
+        draft.trigger || null, draft.source_kind || null,
+      )
+    } catch {
+      activationVariables.value = {}
+    }
+  },
+  { immediate: true },
+)
+
 const sourceElement = computed(() => {
   const sk = draft.source_kind
   if (!sk) return ''

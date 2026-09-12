@@ -89,7 +89,7 @@ The single activation axis. Choose from the trigger vocabulary (see [[#Trigger r
 - **`on_*` dice-pool events** — `on_roll`, `on_result`, `on_contest_win`, `on_taken_out`, … fire automatically when that event happens.
 - **`on_beat` / `on_scene` / `on_session_start`** — fire on time/state boundaries.
 
-Some triggers expose **variables** (e.g. `on_contest_win` provides `{effect_die}`, `{taken_out}`, `{contest_entity_opponent}`). The editor lists them under "Available variables" so you can reference them in effect fields as `{variable}`.
+Some triggers expose **variables** (e.g. `on_contest_win` provides `{effect_die}`, `{taken_out}`, `{contest_entity_opponent}`). The editor lists them under "Available variables" so you can reference them in effect fields as `{variable}` — and, because a trigger variable is a *typed* value, a targeting path can also start from one: `select variable → {contest_entity_opponent} → navigate location`. Same for the source token: `{trait_setting}` is what `select variable` calls *the trait this rule is attached to*. Only the walkable ones appear there (a number or a flag is offered as a field value, not as a seed).
 
 ### Placement — removed
 
@@ -463,6 +463,15 @@ is `source_kind == trait`). And an opponent who has not assembled yet is an
 ### Output variables
 
 Any step can declare an `output` name, binding its resolved value into the activation scope so a later effect references it as `{name}` (scalar) or `select variable {name}` (a `many` collection). This is how one effect hands a result to the next.
+
+**The activation's own names are in that scope too**, before anything runs: the source token and whatever the trigger declares. So a path can *start* from what the rule is about rather than only joining to a name an earlier step produced —
+
+```
+select variable {trait_setting}          → navigate entity → …   (the trait this rule lives on)
+select variable {contest_entity_opponent} → navigate location → … (who you are facing, at a pool save)
+```
+
+Those seeds are bound from the event that fired the rule, so a name the moment does not carry simply isn't bound (no contest → no opponent) and the path resolves to nobody rather than to a blank id. A deferred (roll-timed) effect keeps the seeds it armed with, since the moment that armed it has passed by the time it fires.
 
 **Conditions share that scope, and are traced first.** A **Targeting path** condition runs before any effect, so the names its steps output are offered in the effect editor's variable picker alongside the effects' own outputs. That lets a gate do the finding and the effect do the acting on it:
 
