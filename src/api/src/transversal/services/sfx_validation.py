@@ -214,6 +214,23 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                         f"commits leaves it in place (no inverse for {effect.type}/{effect.action})"
                     )
 
+    # An effect's output name must not shadow a name the activation already binds,
+    # and two steps cannot share one name — the later binding would silently win.
+    from transversal.services.target_catalog import scope_seed_names
+    reserved = set(scope_seed_names(sfx.trigger, sfx.source_kind))
+    seen_names: set[str] = set()
+    for i, effect in enumerate(sfx.effects):
+        name = (getattr(effect, "output", "") or "").strip()
+        if not name:
+            continue
+        if name in reserved:
+            warnings.append(
+                f"Effect {i + 1}: output name '{name}' shadows the rule's own '{name}' — pick another"
+            )
+        elif name in seen_names:
+            warnings.append(f"Effect {i + 1}: output name '{name}' is already used by an earlier effect")
+        seen_names.add(name)
+
     # Arming scope consistency: a listener_spec scope needs a resolvable path.
     if sfx.arming_scope == "listener_spec" and not (sfx.listener_spec and sfx.listener_spec.steps):
         warnings.append("Arming scope is 'listener_spec' but no listener path is set")

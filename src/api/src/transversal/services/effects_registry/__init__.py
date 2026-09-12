@@ -32,6 +32,7 @@ from transversal.services.effects_registry.lookup import (  # noqa: F401
     get_action_meta,
     get_actions_by_category,
     get_inverse,
+    output_element_for,
 )
 from transversal.services.effects_registry.registry import (  # noqa: F401
     EFFECT_ACTION_REGISTRY,

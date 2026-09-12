@@ -23,6 +23,19 @@ def get_actions_by_category(category: str) -> list[EffectActionMeta]:
     return [m for m in EFFECT_ACTION_REGISTRY if m.category == category]
 
 
+def output_element_for(effect_type: str, effect_action: str) -> str:
+    """The element an action *produces* (the type of ``Effect.output``), or "".
+
+    The mirror of ``get_inverse``: one declaration, read by the runtime (which
+    binds the produced id under the author's name) and by the editor (which offers
+    that name to later steps).
+    """
+    for meta in EFFECT_ACTION_REGISTRY:
+        if meta.effect_type == effect_type and meta.effect_action == effect_action:
+            return meta.output_element
+    return ""
+
+
 def get_inverse(effect_type: str, effect_action: str) -> tuple[tuple[str, str] | None, bool]:
     """Return ``(inverse, captures_prior)`` for an effect (type, action)."""
     for meta in EFFECT_ACTION_REGISTRY:

@@ -92,3 +92,19 @@ def test_increase_by_effect_die_mirrors_reduce():
     assert sorted(f.name for f in meta.context_fields) == sorted(f.name for f in twin.context_fields)
     # Both are Trait actions in the editor (they were falling into "Other").
     assert meta.group == "Trait" and twin.group == "Trait"
+
+
+def test_producing_actions_declare_their_output_element():
+    """`Effect.output`'s type is declared on the action — one source for the
+    runtime that binds the produced id and the editor that offers the name."""
+    from transversal.services.effects_registry import output_element_for
+
+    assert output_element_for("modify_trait", "gain") == "traitsetting"
+    assert output_element_for("modify_trait", "gain_or_step_up") == "traitsetting"
+    assert output_element_for("modify_trait", "cortex_gain") == "traitsetting"
+    assert output_element_for("modify_trait", "copy") == "traitsetting"
+    assert output_element_for("modify_trait", "move") == "traitsetting"
+    assert output_element_for("projection", "create") == "projection"
+    # Actions that produce nothing nameable declare nothing, so an author's name
+    # on them is ignored rather than bound to something surprising.
+    assert output_element_for("modify_roll", "play_as_rating") == ""

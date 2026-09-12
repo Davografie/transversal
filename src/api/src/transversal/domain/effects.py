@@ -54,6 +54,10 @@ class Effect(BaseModel):
     # (see ``EffectActionMeta.refs``); ``target``/``entity`` remain as the
     # legacy single-reference fallback until the Step-3 migration removes them.
     refs: dict[str, TargetRef] = Field(default_factory=dict)
+    #: The author's name for *this step's result* ("beast"), bound into the
+    #: activation scope so a later effect can `select variable {beast}` — when the
+    #: action declares an ``output_element`` (what it produces). Empty = unnamed.
+    output: Optional[str] = None
 
 class Timer(BaseModel):
     """One countdown within an effect duration.

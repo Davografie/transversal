@@ -52,6 +52,7 @@ class Effect:
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
+    output: Optional[str] = None  # the author's name for this step's result
     conditions: list[Condition] = strawberry.field(default_factory=list)
 
 @strawberry.input
@@ -72,6 +73,7 @@ class EffectInput:
     target_spec: Optional[strawberry.scalars.JSON] = None
     entity_spec: Optional[strawberry.scalars.JSON] = None
     refs: Optional[strawberry.scalars.JSON] = None
+    output: Optional[str] = None  # the author's name for this step's result
     conditions: list[ConditionInput] = strawberry.field(default_factory=list)
 
 @strawberry.type
@@ -171,6 +173,9 @@ class EffectActionMeta:
     effect_type: str
     effect_action: str
     group: str = ""
+    #: What this action produces, when that is worth naming (`Effect.output`).
+    #: The editor shows the output-name field only for these actions.
+    output_element: str = ""
     valid_timings: list[str]
     fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
     context_fields: list[EffectFieldDef] = strawberry.field(default_factory=list)

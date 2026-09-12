@@ -55,6 +55,7 @@ class QueriesTargeting:
                 fields=[_gql_field_def(f, repo) for f in m.fields],
                 context_fields=[_gql_field_def(f, repo) for f in m.context_fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
+                output_element=m.output_element,
                 requires_choice=m.requires_choice, target_kind=m.target_kind, path_element=m.path_element, supports_duration=m.supports_duration,
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
                 refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
@@ -313,6 +314,12 @@ class QueriesTargeting:
             meta = _action_meta_for(d.type, d.action)
             for ref in (meta.refs if meta is not None else []):
                 scope[ref.name] = ts.ValueType(ref.element, "one")
+            # The step's own result, when the author named it (`Effect.output`):
+            # the runtime binds the produced element under that name
+            # (``effects_applier.publish_effect_output``), so a later step can
+            # `select variable {beast}` instead of re-finding what it just made.
+            if (getattr(d, "output", "") or "").strip() and meta is not None and meta.output_element:
+                scope[d.output.strip()] = ts.ValueType(meta.output_element, "one")
         return [
             EffectVariable(name=k, element=v.element, cardinality=v.cardinality)
             for k, v in scope.items() if v.element

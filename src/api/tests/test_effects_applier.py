@@ -2354,3 +2354,43 @@ def test_attune_takes_its_universe_from_the_resolved_projection():
 
     attuned = {a.universe for a in repo.entities["wielder"].attunements}
     assert attuned == {"the-dreamlands", "three_realms"}
+
+
+def test_publishing_an_output_binds_the_produced_trait():
+    """A gain the author named binds its result into the activation scope — what
+    a later effect's `select variable {beast}` resolves against."""
+    from transversal.domain import DieType, TraitSetting
+    from transversal.services.effects_applier.datatypes import BINDINGS_CONTEXT_KEY, EffectsResult
+    from transversal.services.effects_applier.registry import publish_effect_output
+
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait", action="gain",
+                    target="trait-beast", output="beast")
+    ts = TraitSetting(id="char-1:beast", entity_id="char-1", trait_id="trait-beast",
+                      traitset_id="ts-x", dice=[DieType.D6])
+    ctx: dict = {}
+
+    publish_effect_output(effect, EffectsResult(new_trait_settings=[ts]), ctx)
+
+    binding = ctx[BINDINGS_CONTEXT_KEY]["beast"]
+    assert (binding.value, binding.element, binding.cardinality) == (
+        "char-1:beast", "traitsetting", "one")
+
+
+def test_a_named_result_is_selectable_by_a_later_step():
+    from transversal.domain import DieType, TraitSetting
+    from transversal.services.target_resolver import Binding, TargetContext, resolve
+    from transversal.services.target_spec import TargetSpec
+
+    ts = TraitSetting(id="char-1:beast", entity_id="char-1", trait_id="trait-beast",
+                      traitset_id="ts-x", dice=[DieType.D6])
+    repo = FakeRepo(traitsettings=[ts])
+    spec = TargetSpec(steps=[{"kind": "select", "collection": "variable", "variable": "beast"}])
+    context = TargetContext(repo=repo, bindings={
+        "beast": Binding(value="char-1:beast", values=["char-1:beast"],
+                         element="traitsetting", cardinality="one"),
+    })
+
+    resolution = resolve(spec, context)
+
+    assert [getattr(v, "id", v) for v in resolution.values] == ["char-1:beast"]
+    assert not resolution.errors

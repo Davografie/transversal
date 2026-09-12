@@ -46,6 +46,28 @@ def test_a_reference_is_offered_as_a_typed_variable():
     assert names.get("projection") == "projection"
 
 
+def test_a_named_effect_output_is_offered_as_a_typed_variable():
+    """A gain that names its result (`output: "beast"`) puts `beast` in scope,
+    typed by what the action produces — so a later step can `select variable` it
+    instead of re-finding the trait it just made."""
+    effects = [
+        _effect(type="modify_trait", action="gain", target="trait-beast", output="beast", refs={}),
+        _effect(type="modify_trait", action="add_die", target="{beast}", result="d6", refs={}),
+    ]
+    names = {v.name: v.element for v in _variables(effects)}
+    assert names.get("beast") == "traitsetting"
+
+
+def test_an_unnamed_or_non_producing_effect_adds_nothing():
+    effects = [
+        _effect(type="modify_trait", action="gain", target="trait-beast", refs={}),
+        _effect(type="modify_roll", action="play_as_rating", target="", output="x", refs={}),
+    ]
+    names = {v.name: v.element for v in _variables(effects)}
+    assert "beast" not in names
+    assert "x" not in names  # names only what the action actually produces
+
+
 def test_step_outputs_still_come_through():
     effect = _effect(refs={"projection": {"spec": {"steps": [
         {"kind": "select", "collection": "self", "output": "attune_target"},

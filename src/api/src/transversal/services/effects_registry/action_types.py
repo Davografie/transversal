@@ -59,6 +59,11 @@ class EffectActionMeta:
     implicit_timing: str | None = None   # if only one valid timing, hide field
     requires_choice: bool = False        # target must be resolved at runtime
     target_kind: str | None = None       # trait | entity | life_path | ...
+    # What this action *produces*, when it produces something worth naming: the
+    # catalog element type of ``Effect.output`` ("traitsetting" for a gain). The
+    # runtime binds the produced id under the author's chosen name, and the editor
+    # offers that name as a `select variable` seed — one declaration, both readers.
+    output_element: str = ""
     # The catalog element a *targeting path* must resolve to, when that differs
     # from the picker kind — or exists where there is no picker at all. The two
     # questions are separate: `target_kind` names what the literal/choose/random

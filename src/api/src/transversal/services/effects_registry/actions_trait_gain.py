@@ -15,6 +15,7 @@ ACTIONS: list[EffectActionMeta] = [
     # ── Trait gain / complications ─────────────────────
     EffectActionMeta(
         action_id="gain_trait",
+        output_element="traitsetting",
         label="Gain Trait",
         description="Add a new trait at a die rating (no-op if already present)",
         category="either",
@@ -35,6 +36,7 @@ ACTIONS: list[EffectActionMeta] = [
     ),
     EffectActionMeta(
         action_id="gain_or_step_up_trait",
+        output_element="traitsetting",
         label="Gain or Step Up Trait",
         description="Create the trait at the rating if absent, otherwise step it up",
         category="either",
@@ -54,6 +56,7 @@ ACTIONS: list[EffectActionMeta] = [
     ),
     EffectActionMeta(
         action_id="cortex_gain_trait",
+        output_element="traitsetting",
         label="Cortex Gain Trait",
         description="Create the trait at the effect die if absent; if present, jump to the effect die when higher, else step up one step",
         category="either",

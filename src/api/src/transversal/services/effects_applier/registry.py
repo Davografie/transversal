@@ -7,6 +7,7 @@ from typing import Callable
 from transversal.services.effects_applier.datatypes import (
     SOURCE_CONTEXT_KEY,
     SOURCE_ELEMENT_CONTEXT_KEY,
+    BINDINGS_CONTEXT_KEY,
     ACTIVATION_CONTEXT_KEY,
 )
 from transversal.services.effects_applier.handlers_world import (
@@ -15,6 +16,49 @@ from transversal.services.effects_applier.handlers_world import (
 
 
 EffectHandler = Callable[[Effect, str, str, dict], None]
+
+def _produced_id(result, element: str) -> str:
+    """The id of the thing an applied effect produced, by its element type.
+
+    A gain produces a new instance; a *step-up* produces the instance it changed —
+    both are "what this step made", which is what the author named.
+    """
+    if element == "traitsetting":
+        for ts in (*result.new_trait_settings, *result.updated_trait_settings):
+            return getattr(ts, "id", "")
+    elif element == "projection":
+        for p in (*result.new_projections, *result.updated_projections):
+            return getattr(p, "id", "")
+    return ""
+
+
+def publish_effect_output(effect, result, context) -> None:
+    """Bind the thing this effect just produced under the author's chosen name.
+
+    ``Effect.output`` is the author naming the step's result ("beast"), so a later
+    step can `select variable {beast}` instead of re-finding what it just made.
+    The element comes from the action's declared ``output_element``; the binding
+    rides the *activation scope* (the same dict step outputs and refs use), which
+    the engine shares with every later effect of this activation.
+    """
+    from transversal.services.effects_registry import output_element_for
+    from transversal.services.target_resolver import Binding
+
+    name = (getattr(effect, "output", "") or "").strip()
+    if not name or result is None or not isinstance(context, dict):
+        return
+    element = output_element_for(effect.type, effect.action)
+    if not element:
+        return
+    produced = _produced_id(result, element)
+    if not produced:
+        return
+    bindings = context.get(BINDINGS_CONTEXT_KEY)
+    if not isinstance(bindings, dict):
+        bindings = {}
+        context[BINDINGS_CONTEXT_KEY] = bindings
+    bindings[name] = Binding(value=produced, values=[produced], element=element, cardinality="one")
+
 
 def _razmerit_entity(effect: Effect, acting_entity_id: str) -> str:
     """Who a razmerit effect acts on.
@@ -120,11 +164,12 @@ def _register_core_handlers(em, raz):
         entity = em.repo.get_entity(eid)
         if entity is None:
             return
-        commit_effects(
+        result = commit_effects(
             entity, [a], em.repo, ctx,
             source=(ctx or {}).get(SOURCE_CONTEXT_KEY),
             source_element=(ctx or {}).get(SOURCE_ELEMENT_CONTEXT_KEY),
         )
+        publish_effect_output(a, result, ctx)
 
     for action in ("step_up", "step_down", "reduce_by_effect", "set", "gain", "remove", "gain_or_step_up", "cortex_gain", "reveal", "disable", "enable", "toggle", "add_die", "remove_die", "copy", "move"):
         effect_registry.register("modify_trait", action, _commit)

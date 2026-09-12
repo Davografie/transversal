@@ -45,6 +45,7 @@ ACTIONS: list[EffectActionMeta] = [
     ),
     EffectActionMeta(
         action_id="create_projection",
+        output_element="projection",
         label="Temporary Projection (Disguise)",
         description="Create and activate a temporary alternate body in the current universe/location; reverts to the prior body on expiry",
         category="benefit",

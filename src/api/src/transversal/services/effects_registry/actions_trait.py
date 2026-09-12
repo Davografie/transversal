@@ -162,6 +162,7 @@ ACTIONS: list[EffectActionMeta] = [
     ),
     EffectActionMeta(
         action_id="copy_trait",
+        output_element="traitsetting",
         label="Copy Trait",
         description=(
             "Give another entity a copy of a trait instance — its dice, rating type, "
@@ -177,6 +178,7 @@ ACTIONS: list[EffectActionMeta] = [
     ),
     EffectActionMeta(
         action_id="move_trait",
+        output_element="traitsetting",
         label="Move Trait",
         description=(
             "Take a trait instance from another entity and give it to this one — "

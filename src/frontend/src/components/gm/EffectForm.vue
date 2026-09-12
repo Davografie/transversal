@@ -36,6 +36,17 @@
           {{ '{' + v.name + '}' }}<em class="ee-var-type">{{ v.type }}</em>
         </button>
       </div>
+      <div v-if="outputElement" class="ee-field">
+        <label>Output name</label>
+        <input
+          :value="newEffect.output || ''"
+          placeholder="e.g. beast"
+          @input="newEffect.output = $event.target.value"
+        />
+        <p style="font-size:10px; color:var(--text-dim); margin:2px 0 0">
+          Names this step's result — a later step can target it with <b>select variable</b>.
+        </p>
+      </div>
       <div v-for="f in visibleFields" :key="f.name" class="ee-field">
         <label>{{ f.label }}</label>
 
@@ -267,7 +278,7 @@ const emit = defineEmits(['save', 'cancel'])
 const editing = computed(() => !!props.value)
 
 const { load, actions: effectActions } = useEffectActions()
-const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, conditions: [] })
+const newEffect = reactive({ actionId: '', timing: 'IMMEDIATE', fields: {}, context: {}, extraContext: {}, duration: { timers: [], combine: 'FIRST_TO_FIRE' }, targetMode: 'literal', targetSpec: { steps: [] }, scope: '', targetFilter: {}, dieFilter: {}, returnExit: '', entityMode: 'literal', entitySpec: { steps: [] }, entityScope: '', negative: false, refs: {}, output: '', conditions: [] })
 
 // Variables the effect's *own* earlier paths expose. The engine walks an
 // effect's paths in order — target, then its references — so a name that path 1
@@ -416,6 +427,11 @@ const selectedAction = computed(() => {
   if (!newEffect.actionId) return null
   return effectActions.value.find(a => a.actionId === newEffect.actionId) || null
 })
+
+// Actions that *produce* something worth naming (a gain makes a trait instance,
+// a disguise makes a projection) declare the element here; only they show the
+// output-name field, and only their names join the variable picker.
+const outputElement = computed(() => selectedAction.value?.outputElement || '')
 
 // The spec element type an effect's `target` should resolve to. Preferred: the
 // action's declared `pathElement`, because the picker kind and the path's
@@ -683,6 +699,7 @@ function buildEffect(meta) {
     targetSpec: mode === 'spec' && (newEffect.targetSpec?.steps || []).length ? newEffect.targetSpec : null,
     entitySpec: entityMode === 'spec' && (newEffect.entitySpec?.steps || []).length ? newEffect.entitySpec : null,
     refs: buildRefs(),
+    output: (newEffect.output || '').trim() || null,
     conditions: (newEffect.conditions || []).map(c => ({ ...c })),
   }
 }
@@ -700,6 +717,7 @@ function populate(eff) {
   newEffect.actionId = meta?.actionId || ''
   initRefs(meta)
   newEffect.timing = eff.timing || 'IMMEDIATE'
+  newEffect.output = eff.output || ''
   newEffect.fields = {}
   newEffect.targetMode = detectTargetMode(eff, meta)
   newEffect.targetSpec = eff.targetSpec || { steps: [] }
