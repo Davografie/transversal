@@ -511,3 +511,100 @@ def test_roll_timing_effect_is_armed_not_applied():
         assert [e.target for e in roll_deferral.list_armed("char-1")] == ["hazard"]
     finally:
         roll_deferral.reset()
+
+
+class TestListenerSpec:
+    """`arming_scope: listener_spec` — the rule listens to whoever its path names.
+
+    The curse case: a rule armed by one entity that watches another's rolls.
+    """
+
+    class _Repo:
+        def __init__(self):
+            from transversal.domain import Entity, EntityType
+            self.entities = {
+                "char-1": Entity(id="char-1", type=EntityType.CHARACTER, name="Caster",
+                                 current_universe="earth"),
+                "gmc-1": Entity(id="gmc-1", type=EntityType.GMC, name="Bound",
+                                current_universe="earth"),
+            }
+
+        def get_entity(self, eid):
+            return self.entities.get(eid)
+
+        def list_all_entities(self):
+            return list(self.entities.values())
+
+        def list_entities_by_type(self, etype):
+            return [e for e in self.entities.values() if e.type == etype]
+
+        def list_entities_by_location(self, loc_id):
+            return []
+
+        def get_traitsettings_for_entity(self, eid):
+            return []
+
+    def _path(self, value="gmc"):
+        from transversal.services.target_spec import TargetSpec
+        return TargetSpec(steps=[
+            {"kind": "select", "collection": "entities"},
+            {"kind": "filter", "field": "type", "operator": "==", "value": value},
+        ])
+
+    def _arm(self, repo, listener_spec):
+        from transversal.services import roll_deferral
+        from transversal.services.target_spec import TargetSpec
+
+        engine = EffectsEngine()
+        sfx = _make_sfx(
+            "sfx-curse", "Curse", "manual",
+            effects=[Effect(timing=EffectTiming.ON_RESULT, type="modify_trait",
+                            action="step_down", target="rating")],
+        )
+        sfx.source_kind = None
+        sfx.arming_scope = "listener_spec"
+        sfx.listener_spec = listener_spec
+        engine.register(sfx)
+        event = GameEvent(type="manual", entity_id="char-1", universe="earth")
+        engine.process_event_outcome(event, ["sfx-curse"], 10, repo=repo)
+        return roll_deferral
+
+    def test_it_arms_the_entities_the_path_names_not_the_activator(self):
+        from transversal.services import roll_deferral
+        roll_deferral.reset()
+        try:
+            repo = self._Repo()
+
+            deferral = self._arm(repo, self._path("gmc"))
+
+            assert [e.target for e in deferral.list_armed("gmc-1")] == ["rating"]
+            assert deferral.list_armed("char-1") == [], "the caster is not listening"
+        finally:
+            roll_deferral.reset()
+
+    def test_an_empty_set_arms_nobody_rather_than_falling_back_to_the_activator(self):
+        from transversal.services import roll_deferral
+        roll_deferral.reset()
+        try:
+            repo = self._Repo()
+
+            deferral = self._arm(repo, self._path("asset"))  # nobody in the repo is one
+
+            assert deferral.list_armed("char-1") == []
+            assert deferral.list_armed("gmc-1") == []
+        finally:
+            roll_deferral.reset()
+
+    def test_the_armed_entry_records_how_it_got_there(self):
+        from transversal.services import roll_deferral
+        roll_deferral.reset()
+        try:
+            repo = self._Repo()
+
+            self._arm(repo, self._path("gmc"))
+
+            entry = roll_deferral._armed["gmc-1"][0]
+            assert entry.scope == "listener_spec"
+            assert entry.source_sfx_id == "sfx-curse"
+        finally:
+            roll_deferral.reset()

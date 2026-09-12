@@ -144,11 +144,23 @@ whole table.
 - **Self** / **Global** / **A targeting path** — explicit overrides.
 
 The empty option prints the resolved value rather than saying "auto", so you can
-see where it lands without translating. `A targeting path` is declared but **not
-implemented** — the engine warns and falls back to self.
+see where it lands without translating.
 
-You only need an override for cross-entity listening (a curse that binds two
-entities, say). Normal rules leave it on the trigger. See [[SFX Activation Model Plan]].
+**`A targeting path` works now.** Pick it, author a path, and the armed part
+listens to *the entities that path names* — the curse case: *whoever is bound to
+this curse*, rather than whoever cast it. The path is resolved **once, when the
+rule arms** (`select self` is whoever activated it; `select source` is the rule's
+source), and the rule is armed on each entity it resolves to. Two consequences
+worth knowing:
+
+- A relationship that changes *during* the window does not re-target — the set is
+a snapshot, and the window is rolls/scene-sized.
+- A path that resolves to nobody arms nobody. That is a real state (no one is
+bound yet), so the rule simply does nothing rather than falling back on the
+activator.
+
+You only need this for cross-entity listening (a curse that binds two entities,
+say). Normal rules leave it on the trigger. See [[SFX Activation Model Plan]].
 
 ### Conditions
 

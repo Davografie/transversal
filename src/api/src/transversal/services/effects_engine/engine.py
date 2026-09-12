@@ -31,6 +31,43 @@ from transversal.services.effects_engine.shared import (
 )
 
 
+def _resolve_listeners(sfx: SFX, repo, event, source, source_element) -> list[str]:
+    """The entity ids an authored ``listener_spec`` path names, at arm time.
+
+    ``select self`` is the activating entity, ``select source`` the SFX's
+    activation source, so the path reads exactly as it does in a condition. An
+    unresolvable path — errors, or a step needing a runtime choice nobody is here
+    to answer — resolves to *nobody*, not to the activator: an empty listener set
+    is a real state (nobody is bound to the curse yet), and quietly acting on the
+    wrong entity is worse than doing nothing with a log line.
+    """
+    from transversal.services.target_resolver import TargetContext, resolve
+
+    spec = getattr(sfx, "listener_spec", None)
+    if repo is None or spec is None or not spec.steps:
+        return []
+    entity = repo.get_entity(event.entity_id)
+    if entity is None:
+        return []
+    context = TargetContext(
+        subject=entity, repo=repo, source=source, source_element=source_element)
+    resolution = resolve(spec, context)
+    if resolution.errors or resolution.pending_choices:
+        log.warning(
+            "[process_event] sfx=%s listener path unresolved (errors=%s, choices=%s)",
+            sfx.id, resolution.errors, len(resolution.pending_choices),
+        )
+        return []
+    out: list[str] = []
+    for value in resolution.values:
+        listener_id = getattr(value, "id", None)
+        if listener_id is None and isinstance(value, str):
+            listener_id = value
+        if listener_id and listener_id not in out:
+            out.append(listener_id)
+    return out
+
+
 class EffectsEngine:
     """Manages SFX triggers, execution, and scheduling.
 
@@ -185,22 +222,40 @@ class EffectsEngine:
                         duration=sfx.duration,
                     )
                 else:
-                    # ``listener_spec`` fan-out to a resolved entity set is not yet
-                    # implemented (open decision D3, no current consumer) — fall back
-                    # to the triggering entity and surface it.
                     if scope == "listener_spec":
-                        log.warning(
-                            "[process_event] sfx=%s scope=listener_spec not implemented; arming on self",
-                            sfx.id,
+                        # Arm the rule on each entity the author's path names —
+                        # the curse case: the bound partner's rolls feed it, not
+                        # the caster's. Resolved *once*, here (open decision D3):
+                        # the set is a snapshot for the window's duration, because
+                        # re-resolving at fire time would re-target a rule
+                        # mid-window as relationships move. The window is
+                        # rolls/scene-sized, so "who was listening when this
+                        # armed" is the honest reading.
+                        listeners = _resolve_listeners(
+                            sfx, repo, event, source, source_element)
+                        if not listeners:
+                            log.warning(
+                                "[process_event] sfx=%s scope=listener_spec resolved no listeners"
+                                " — nothing armed", sfx.id,
+                            )
+                        for listener_id in listeners:
+                            arm_sfx(
+                                listener_id, roll_effects,
+                                source_sfx_id=sfx.id,
+                                source_kind=sfx.source_kind,
+                                source_id=source_id,
+                                duration=sfx.duration,
+                                scope="listener_spec",
+                            )
+                    else:
+                        arm_sfx(
+                            event.entity_id, roll_effects,
+                            source_sfx_id=sfx.id,
+                            source_kind=sfx.source_kind,
+                            source_id=source_id,
+                            duration=sfx.duration,
+                            scope="self",
                         )
-                    arm_sfx(
-                        event.entity_id, roll_effects,
-                        source_sfx_id=sfx.id,
-                        source_kind=sfx.source_kind,
-                        source_id=source_id,
-                        duration=sfx.duration,
-                        scope="self",
-                    )
                 sfx_applied = True
 
             for idx, effect in enumerate(sfx.effects):

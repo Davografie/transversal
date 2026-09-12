@@ -63,7 +63,7 @@
         <p class="hint">Whose rolls feed the part of this rule that waits.</p>
         <div v-if="draft.arming_scope === 'listener_spec'" class="sfx-listener">
           <TargetSpecBuilder v-model="draft.listener_spec" :destination="{ element: 'entity' }" :source-element="sourceElement" />
-          <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>).</p>
+          <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>). Resolved once, when the rule arms.</p>
         </div>
       </template>
       <!-- Where this may be *taken*, not where it works. Seeded at the thing

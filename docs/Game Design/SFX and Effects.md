@@ -407,7 +407,7 @@ Roll/outcome-timed effects (`on_roll`/`on_set`/`on_result`/`on_contest_*`/`on_su
 
 - `self` — the triggering entity (default; the `_armed[entity_id]` register).
 - `global` — every entity's rolls (the `_global_armed` register).
-- `listener_spec` — a `TargetSpec` resolving the listener entity set (open decision D3: falls back to `self` until a consumer needs it).
+- `listener_spec` — a `TargetSpec` resolving the listener entity set, **at arm time** (D3, resolved 2026-09-12): the path is resolved once against the activating entity, and the rule is armed on each entity it names. An empty set arms nobody.
 
 `SFX.arming_scope` declares this; `None` derives it from trigger (`on_session_start` → `global`, else `self`). `fire_armed` honors the `rolls` budget for **both** registers — a `rolls:N` entry fires N times then drops; `rolls=None` stays armed until a boundary expires it. This makes session-scoped passives (e.g. `sfx-one-trick`) *declare* their lifetime instead of relying on the global path silently ignoring the roll budget.
 
