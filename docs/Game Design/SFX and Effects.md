@@ -86,6 +86,7 @@ One canonical, operational effect record shared by SFX and life-path consequence
 | `target_spec` | `Optional[TargetSpec]` | Structured targeting pipeline (the new model); wins over `target` when set. See [[Targeting Model]] |
 | `entity_spec` | `Optional[TargetSpec]` | Structured subject pipeline; wins over `entity` when set. See [[Targeting Model]] |
 | `refs` | `dict[str, TargetRef]` | Named references (multi-target model); each key is a declared ref name → `{value, spec, scope}` |
+| `output` | `Optional[str]` | The author's name for *this step's result*. Bound into the activation scope when the action declares an `output_element` (gain/copy/move → `traitsetting`, disguise → `projection`), so a later step targets the just-made thing with `select variable {name}` (`effects_applier.publish_effect_output`) |
 | `conditions` | `list[Condition]` | Per-effect gate; the effect is skipped unless all conditions pass against the fire-time context (reuses the SFX condition model) |
 | `negative` | `bool` | Trait-grant effects only: bake the created trait as `polarity=NEGATIVE` (complication) |
 | `context` | `dict` | Extra data (e.g. relationship description, `transversal_type`, faction `relationship`, `learner`, `steps`) |

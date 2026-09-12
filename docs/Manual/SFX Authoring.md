@@ -311,7 +311,7 @@ The structured way to target. A **path** is an ordered pipeline of steps that re
 | Step | What it does |
 |------|--------------|
 | **Select** | Seed the working set from a collection (`self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`), the SFX `source`, or a bound `variable`. |
-| **Filter** | Keep items whose field matches a predicate (`polarity == negative`, `rating_type == static`, `traitset_id == …`). Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `contains`. **A type test narrows the path**: `entity.type == location` means the rest of the path may use location-only steps (→ `occupants`). |
+| **Filter** | Keep items whose field matches a predicate (`polarity == negative`, `rating_type == static`, `traitset_id == …`). Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `contains`. Two take one value or several: `in` (*is one of them*) and `not in` (*is none of them*) — several arrive as a list. Values show as **names**; an id never appears in the editor. **A type test narrows the path**: `entity.type == location` means the rest of the path may use location-only steps (→ `occupants`). |
 | **Navigate** | Hop an edge to related elements (a trait instance → its entity, an entity → its current location, …). `dedup` collapses duplicates by identity. |
 | **Aggregate** | Collapse a collection to a scalar: `count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`. |
 | **Top** | Keep *one* element — the highest or lowest by a comparable field (a number, a die, or a **timestamp**). For a timestamp, `desc` reads as "the most recently used" and `asc` as "the least recently used"; otherwise "the highest/lowest …". This is how you ask for *the body you were last in*: `select self → navigate projections → top last used at`. |
@@ -558,6 +558,31 @@ Those seeds are bound from the event that fired the rule, so a name the moment d
 > Two things to know: a roll-inspecting path only resolves on a roll-bearing trigger (`on_roll`/`on_result`), which is what puts the dice in context — and a condition seeded from `rolled_dice` is skipped when availability is computed for *listing*, so it still shows up as available and only gates at fire time.
 
 ---
+
+### Naming a step's result
+
+A step that **produces** something can be named, and the name is then a variable for
+everything after it — no re-finding by filter, no ids. Set **Output name** on the
+step (the field appears only on the actions that produce something: Gain Trait and
+its siblings, Copy/Move Trait, Disguise):
+
+```
+step 1   Gain Trait          trait: Beast        Output name: beast
+step 2   Add Die to Rating   target (path): select variable → beast → navigate trait
+```
+
+Why the `navigate → trait` hop in step 2: `{beast}` is bound to the trait
+*instance* you just made, while Add Die to Rating points at the *registry* trait —
+the hop is instance → its definition. A step whose field wants an instance takes
+the name directly (`select variable → beast`).
+
+The name joins the same scope the wizard already offers (`select variable`, and
+`{beast}` in fields that take a bound value), the picker lists it as soon as it is
+typed, and the engine binds it when the step actually runs — which is why a name
+only means anything on a step that produces something. Two rules keep it honest,
+and both are warnings in the panel rather than silent failures: a name may not
+shadow the rule's own token (`{trait_setting}`, `{location}` …), and two steps may
+not share one.
 
 ## How your SFX reads
 
