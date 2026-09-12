@@ -56,6 +56,29 @@ def _attach_continuation(outcome: EventOutcome, continuation: list[Effect]) -> N
     elif outcome.pending:
         outcome.pending[-1].continuation = continuation
 
+def _emit_sfx_ended(entity_id: str, sfx_id: str) -> None:
+    """Broadcast an ``sfx_ended`` SSE event: the rule was taken back — or its cost
+    left the pool before it committed, and the rule went with it."""
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    name = ""
+    try:  # the toast reads better with the rule's name; the id is the fallback
+        from transversal.main import _get_engine
+
+        sfx = _get_engine().get(sfx_id)
+        name = getattr(sfx, "name", "") or ""
+    except Exception:  # noqa: BLE001 — never let a toast break the ending
+        pass
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="sfx_ended",
+            session_id=s.id,
+            data={"entity_id": entity_id, "sfx_id": sfx_id, "sfx_name": name},
+        ))
+
+
 def _emit_sfx_triggered(entity_id: str, sfx) -> None:
     """Broadcast an ``sfx_triggered`` SSE event so clients can toast it."""
     from transversal.api.sse.bus import StreamEvent, event_bus

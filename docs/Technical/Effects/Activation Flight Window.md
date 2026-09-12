@@ -77,6 +77,27 @@ applied on the spot, a deferred forward row is dropped. (It used to delete the
 row without applying — which made a temporary change permanent, the opposite of
 what its label promises. No content used it, so the semantics were corrected.)
 
+## The pool is the ledger
+
+Removing a rule's die from the pool before it commits *is* taking the rule back:
+the benefit is held by the cost, so if the cost leaves the table the benefit goes
+with it. `fire_pool_change_sfx` checks every save — for each **manual** rule in
+flight for the entity that had dice in the saved pool, if none of them survives,
+the activation is ended (its undos applied, its waiting parts dropped) and an
+`sfx_ended` event tells the table (toast + the sheet re-derives its chips).
+
+Which dice are a rule's is answered by evidence already in the data: a die the
+client added while the rule was active carries it in `armed_sfx_ids`, and a pool
+add an *effect* performed records its dice in the rule's own undo row
+(`pool_add.entries`). A rule that contributed no dice is untouched — it has no
+cost here to lose. The undo itself removes by **identity at the recorded
+position** (falling back to where the die moved), so a pool that shifted under
+the player's hands cannot make it remove a stranger.
+
+The honest boundary: the server sees saves and rolls, not the screen. This is the
+rules *noticing*, never preventing — and it reads as a feature, because dropping
+the die is simply how a player takes Hinder back.
+
 ## What a take-back can and cannot undo
 
 Reversibility is a **declaration on the action**, not something each rule has to

@@ -37,6 +37,10 @@ async def end_sfx(req: EndRequest, request: Request):
     from transversal.services.scheduled_events import end_activation
 
     summary = end_activation(_get_repo(), req.entity_id, req.sfx_id)
+    if summary["records"]:
+        from transversal.services.effects_engine import _emit_sfx_ended
+
+        _emit_sfx_ended(req.entity_id, req.sfx_id)
     return {"ended": summary["records"] > 0, **summary}
 
 

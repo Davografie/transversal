@@ -246,9 +246,12 @@ def _apply_add_dice(entity, effect, repo, result):
     store = get_scene_store()
     pool = store.get_pool(location_id, owner_id)
     positions = []
+    entries = []
     for die in dice:
+        entry = {"die": die, "source_kind": "sfx", "source_id": "", "label": die, "ts_id": None}
         positions.append(len(pool))
-        pool.append({"die": die, "source_kind": "sfx", "source_id": "", "label": die, "ts_id": None})
+        pool.append(entry)
+        entries.append(dict(entry))
     store.save_pool(location_id, owner_id, pool)
     broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
     result.applied.append(AppliedEffect(effect, f"added {len(dice)} dice to {owner_id} pool"))
@@ -257,25 +260,28 @@ def _apply_add_dice(entity, effect, repo, result):
     _queue_entity_revert(
         repo, entity, effect,
         context_extra={"pool_add": {"location": location_id, "owner": owner_id,
-                                    "positions": positions, "dice": list(dice)}},
+                                    "positions": positions, "dice": list(dice),
+                                    "entries": entries}},
     )
 
 def _add_trait_rating_to_pool(ts_id: str, pool_id: str, entity, repo):
-    """Add a trait setting's rating dice to a pool; return ``(location_id, owner_id, positions)``.
+    """Add a trait setting's rating dice to a pool.
 
-    ``positions`` are the pool indices the dice were appended at, so the undo can
-    remove exactly these dice. Returns ``(None, None, [])`` when the trait is
-    missing/has no rating, or the pool target is unresolvable.
+    Returns ``(location_id, owner_id, positions, entries)`` — where the dice
+    landed, and the dice themselves, so the undo can remove exactly these (by
+    identity, not just by index, in case the pool shifted in between).
+    ``(None, None, [], [])`` when the trait is missing/has no rating, or the pool
+    target is unresolvable.
     """
     from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.services.scene_state import get_scene_store
 
     ts = repo.get_traitsetting(ts_id) if ts_id else None
     if ts is None or not ts.dice:
-        return (None, None, [])
+        return (None, None, [], [])
     location_id, owner_id = _resolve_pool(pool_id, entity, repo)
     if not location_id or not owner_id:
-        return (None, None, [])
+        return (None, None, [], [])
 
     trait = repo.get_trait(ts.trait_id)
     label = trait.name if trait else ts.trait_id
@@ -283,12 +289,15 @@ def _add_trait_rating_to_pool(ts_id: str, pool_id: str, entity, repo):
     store = get_scene_store()
     pool = store.get_pool(location_id, owner_id)
     positions = []
+    entries = []
     for die in dice:
+        entry = {"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id}
         positions.append(len(pool))
-        pool.append({"die": die, "source_kind": "trait", "source_id": ts.id, "label": label, "ts_id": ts.id})
+        pool.append(entry)
+        entries.append(dict(entry))
     store.save_pool(location_id, owner_id, pool)
     broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
-    return (location_id, owner_id, positions)
+    return (location_id, owner_id, positions, entries)
 
 def _apply_add_trait_rating(entity, effect, repo, result):
     """Add a trait instance's rating dice to a targeted dice pool.
@@ -310,7 +319,7 @@ def _apply_add_trait_rating(entity, effect, repo, result):
         result.applied.append(AppliedEffect(effect, f"trait {ts_id} has no rating"))
         return
 
-    location_id, owner_id, positions = _add_trait_rating_to_pool(ts_id, pool_id, entity, repo)
+    location_id, owner_id, positions, entries = _add_trait_rating_to_pool(ts_id, pool_id, entity, repo)
     if not location_id or not owner_id:
         result.applied.append(AppliedEffect(effect, f"pool target not found: {pool_id or '(unset)'}"))
         return
@@ -321,17 +330,29 @@ def _apply_add_trait_rating(entity, effect, repo, result):
         repo, entity, effect,
         context_extra={"pool_add": {"location": location_id, "owner": owner_id,
                                     "positions": positions,
-                                    "dice": [d.value for d in ts.dice]}},
+                                    "dice": [d.value for d in ts.dice],
+                                    "entries": entries}},
+    )
+
+
+def _same_pool_die(a: dict, b: dict) -> bool:
+    """Two pool entries are the same die when their identity matches (not their index)."""
+    return (
+        a.get("ts_id") == b.get("ts_id")
+        and a.get("source_id") == b.get("source_id")
+        and a.get("die") == b.get("die")
+        and a.get("label") == b.get("label")
     )
 
 
 def _apply_remove_added_dice(entity, effect, repo, result):
     """Remove the dice a pool add appended (the inverse of ``add_dice``).
 
-    The forward handler recorded the pool coordinates and the exact positions it
-    appended (``effect.context.pool_add``); this removes them, newest first so
-    the earlier positions stay valid. A pool that has since changed shape is not
-    guessed at — only positions that still exist are popped.
+    The forward handler recorded the pool coordinates, the positions, and the
+    dice themselves (``effect.context.pool_add``). Each is removed by **identity**
+    at its recorded position — and if the pool shifted in the meantime (a player
+    removed a different die by hand), the entry is found wherever it moved. A die
+    that is no longer there at all is skipped rather than guessed at.
     """
     from transversal.services.contest_tracker import broadcast_pool_change
     from transversal.services.scene_state import get_scene_store
@@ -339,17 +360,26 @@ def _apply_remove_added_dice(entity, effect, repo, result):
     record = (effect.context or {}).get("pool_add") or {}
     location_id = record.get("location") or ""
     owner_id = record.get("owner") or ""
-    positions = sorted(record.get("positions") or [], reverse=True)
+    positions = record.get("positions") or []
+    entries = record.get("entries") or []
     if not location_id or not owner_id or not positions:
         result.applied.append(AppliedEffect(effect, "no recorded pool add to undo"))
         return
     store = get_scene_store()
     pool = store.get_pool(location_id, owner_id)
     removed = 0
-    for index in positions:
-        if 0 <= index < len(pool):
+    for i, index in enumerate(positions):
+        entry = entries[i] if i < len(entries) else None
+        if 0 <= index < len(pool) and (entry is None or _same_pool_die(pool[index], entry)):
             pool.pop(index)
             removed += 1
+            continue
+        if entry is not None:
+            for j in range(len(pool) - 1, -1, -1):
+                if _same_pool_die(pool[j], entry):
+                    pool.pop(j)
+                    removed += 1
+                    break
     store.save_pool(location_id, owner_id, pool)
     broadcast_pool_change(location_id, owner_id, dice=pool, phase="adding")
     result.applied.append(AppliedEffect(effect, f"removed {removed} added dice from {owner_id} pool"))

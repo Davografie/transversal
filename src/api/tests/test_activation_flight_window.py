@@ -25,6 +25,7 @@ from transversal.services.scheduled_events import (
     activation_booking,
     advance_scheduled_events,
     commit_holds,
+    end_activations_whose_cost_left,
     end_activation,
     schedule_revert,
 )
@@ -417,9 +418,11 @@ def test_a_trait_rating_add_books_a_removable_undo():
     assert [d["die"] for d in pool] == ["d4"]
     hold = repo.events[0]
     assert hold.kind == "hold"
-    assert hold.effect.context["pool_add"] == {
+    record = hold.effect.context["pool_add"]
+    assert {k: record[k] for k in ("location", "owner", "positions", "dice")} == {
         "location": "loc-1", "owner": "kael", "positions": [0], "dice": ["d4"],
     }
+    assert record["entries"][0]["ts_id"] == "ts-1"  # the die's identity, for the undo
 
     apply_effects(entity, [hold.effect], repo)
     assert _pool_of("loc-1", "kael") == []
@@ -528,6 +531,107 @@ def test_validation_names_what_a_take_back_cannot_undo():
     warnings = validate_sfx(sfx)
 
     assert any("cannot be undone" in w for w in warnings)
+
+
+# ── The pool is the ledger ───────────────────────────
+
+def _cost_die(sfx_id="sfx-x", ts_id="ts-hinder"):
+    """A die the client stamped with the rule that put it in the pool."""
+    return {"die": "d4", "source_kind": "trait", "source_id": ts_id,
+            "label": "Hinder", "ts_id": ts_id, "armed_sfx_ids": [sfx_id]}
+
+
+def _other_die():
+    return {"die": "d6", "source_kind": "trait", "source_id": "ts-other",
+            "label": "Other", "ts_id": "ts-other"}
+
+
+def _arm_hinder_like(sfx_id="sfx-x"):
+    roll_deferral.arm_sfx(
+        "kael",
+        [Effect(timing=EffectTiming.ON_SET, type="transfer_razmerit",
+                action="earn", result="1")],
+        source_sfx_id=sfx_id,
+    )
+
+
+def test_a_removed_cost_die_ends_the_activation():
+    """Hinder's bargain: the razmerit is held by the d4, so losing the d4 ends it."""
+    _arm_hinder_like()
+    repo = FakeRepo(entities=[_entity()])
+
+    ended = end_activations_whose_cost_left(
+        repo, "kael", [_cost_die(), _other_die()], [_other_die()], manual_ids={"sfx-x"},
+    )
+
+    assert ended == ["sfx-x"]
+    assert roll_deferral.list_armed("kael") == []  # what it was waiting for never fires
+
+
+def test_a_kept_cost_die_keeps_the_rule():
+    _arm_hinder_like()
+    repo = FakeRepo(entities=[_entity()])
+    pool = [_cost_die(), _other_die()]
+
+    ended = end_activations_whose_cost_left(repo, "kael", pool, pool, manual_ids={"sfx-x"})
+
+    assert ended == []
+    assert roll_deferral.list_armed("kael") != []
+
+
+def test_a_rule_with_no_pooled_dice_is_not_ended():
+    """Sect Cultivation's shape: in flight, but nothing of it sits in a pool."""
+    repo = FakeRepo(entities=[_entity()])
+    with activation_booking("sfx-x", cancelable=True):
+        schedule_revert(repo, "entity", "kael", _invertible_effect())
+
+    ended = end_activations_whose_cost_left(
+        repo, "kael", [_other_die()], [], manual_ids={"sfx-x"},
+    )
+
+    assert ended == []
+    assert len(repo.events) == 1
+
+
+def test_the_manual_filter_leaves_auto_rules_alone():
+    _arm_hinder_like(sfx_id="sfx-auto")
+    repo = FakeRepo(entities=[_entity()])
+
+    ended = end_activations_whose_cost_left(
+        repo, "kael",
+        [_cost_die("sfx-auto"), _other_die()], [_other_die()],
+        manual_ids=set(),
+    )
+
+    assert ended == []
+    assert roll_deferral.list_armed("kael") != []
+
+
+def test_the_undo_finds_a_die_that_shifted():
+    """A hand-removed die shifts the pool; the recorded undo must not grab a stranger."""
+    from transversal.services.effects_applier import apply_effects
+    from transversal.services.scene_state import get_scene_store
+
+    store = get_scene_store()
+    store.clear_all()
+    entity = _entity(current_location="loc-1")
+    repo = FakeRepo(entities=[entity])
+    store.save_pool("loc-1", "kael", [dict(_other_die())])
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_pool", action="add_dice",
+                    target="pool:kael", context={"dice": ["d6", "d6"]})
+    with activation_booking("sfx-x", cancelable=True):
+        apply_effects(entity, [effect], repo)
+    hold = repo.events[0]
+    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d6", "d6"]
+
+    # The player hand-removes the *other* die first (positions shift).
+    store.save_pool("loc-1", "kael",
+                    [d for d in store.get_pool("loc-1", "kael") if d.get("label") != "Other"])
+
+    apply_effects(entity, [hold.effect], repo)
+
+    assert store.get_pool("loc-1", "kael") == []  # only what it added is gone
+    store.clear_all()
 
 
 # ── The plumbing that carries the booking ────────────

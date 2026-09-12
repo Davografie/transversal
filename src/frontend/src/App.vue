@@ -1160,6 +1160,16 @@ watch(lastEvent, (evt) => {
       }
       armedSfxRefresh.value++  // an SFX just (de)activated → refresh the armed rail
       break
+    case 'sfx_ended':
+      // The rule was taken back — or its cost left the pool before it committed,
+      // and the rule went with it. Either way the chip must stop reading active.
+      if (evt.data?.entity_id === entityId.value || gmMode.value) {
+        const endedLabel = evt.data?.sfx_name || evt.data?.sfx_id || ''
+        addToast(`SFX ended: ${endedLabel}`, 'sfx')
+      }
+      sheetRef.value?.fetchInFlightSfxIds?.()
+      armedSfxRefresh.value++
+      break
     case 'sfx_choice_required':
       if (evt.data?.entity_id === entityId.value || gmMode.value) {
         sfxChoiceRequest.value = (evt.data.choices || []).map((c, i) => ({

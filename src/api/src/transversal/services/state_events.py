@@ -147,6 +147,33 @@ def fire_pool_change_sfx(
 
         context["contest_entity_opponent"] = opponent_id
         context["opposing_rolls"] = get_scene_store().get_pool(location_id, opponent_id)
+    # The pool is the ledger: a rule whose cost die left it in this save goes with
+    # it — the benefit is held by the cost. Manual rules only (an auto rule's dice
+    # are not a price anyone paid), and the save itself must never fail on this.
+    ended: list[str] = []
+    try:
+        from transversal.main import _get_engine, _get_repo
+        from transversal.services.scheduled_events import (
+            end_activations_whose_cost_left,
+            in_flight_sfx_ids,
+        )
+
+        engine = _get_engine()
+        repo = _get_repo()
+        manual_ids = {
+            sfx_id for sfx_id in in_flight_sfx_ids(repo, entity_id)
+            if (sfx := engine.get(sfx_id)) is not None
+            and sfx.trigger in ("manual", "on_activate")
+        }
+        ended = end_activations_whose_cost_left(
+            repo, entity_id, before or [], dice, manual_ids=manual_ids,
+        )
+    except Exception as exc:  # noqa: BLE001 — a pool save must not break on this
+        logging.getLogger(__name__).warning("[pool_change] cost check skipped: %s", exc)
+    for sfx_id in ended:
+        from transversal.services.effects_engine import _emit_sfx_ended
+        _emit_sfx_ended(entity_id, sfx_id)
+
     fire_state_sfx(entity_id, "", "pool_changed", context)
 
 

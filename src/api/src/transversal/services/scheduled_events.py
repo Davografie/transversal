@@ -331,6 +331,62 @@ def end_activation(repo, entity_id: str, sfx_id: str) -> dict:
     }
 
 
+def _die_identity(die: dict) -> tuple:
+    """How two dice in a pool count as *the same one* (the key ``_added_dice`` diffs by)."""
+    return (die.get("ts_id"), die.get("source_id"), die.get("die"), die.get("label"))
+
+
+def _contribution_keys(repo, sfx_id: str, entity_id: str, pool: list) -> list:
+    """The dice in ``pool`` this rule put there.
+
+    Two kinds of evidence, because a rule can put a die in a pool two ways: the
+    client stamps the die it adds with the rules that were active for its trait
+    (``armed_sfx_ids``), and a pool-add *effect* records the dice it appended in
+    its own undo row (``pool_add``).
+    """
+    keys = [_die_identity(d) for d in (pool or []) if sfx_id in (d.get("armed_sfx_ids") or [])]
+    for event in repo.list_all_scheduled_events():
+        if event.source_sfx_id != sfx_id:
+            continue
+        record = (event.effect.context or {}).get("pool_add") or {}
+        if record.get("owner") != entity_id:
+            continue
+        keys.extend(_die_identity(d) for d in (record.get("entries") or []))
+    return keys
+
+
+def end_activations_whose_cost_left(
+    repo, entity_id: str, before: list, after: list, *, manual_ids=None,
+) -> list:
+    """The pool is the ledger: a rule whose cost left it goes with it.
+
+    For every rule in flight for this entity that *had* dice in the saved pool,
+    if none of them survives the save, the activation is ended — its undos are
+    applied (the razmerit goes back), what was still waiting is dropped. A rule
+    that contributed no dice is untouched: it has no cost here to lose. Any one
+    of its dice still on the table keeps it in force.
+
+    ``manual_ids`` narrows to the rules that can be taken back at all (only a
+    manual activation is a bargain a player struck).
+    """
+    ended: list = []
+    for sfx_id in in_flight_sfx_ids(repo, entity_id):
+        if manual_ids is not None and sfx_id not in manual_ids:
+            continue
+        contributed = _contribution_keys(repo, sfx_id, entity_id, before)
+        if not contributed:
+            continue
+        surviving: dict[tuple, int] = {}
+        for die in (after or []):
+            key = _die_identity(die)
+            surviving[key] = surviving.get(key, 0) + 1
+        if any(surviving.get(key, 0) for key in contributed):
+            continue  # the cost is still on the table
+        end_activation(repo, entity_id, sfx_id)
+        ended.append(sfx_id)
+    return ended
+
+
 def in_flight_sfx_ids(repo, entity_id: str) -> list:
     """The rules this entity still has *in flight* — activated, not yet committed.
 

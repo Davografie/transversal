@@ -229,6 +229,14 @@ faithful inverse). And **End Active Effect** is the authorable version of the sa
 thing: point it at a pending effect and it ends it now, applying the undo instead
 of waiting for the timer.
 
+There is a second door to the same room: **removing the rule's die from your
+pool before you roll also takes it back.** A rule whose cost is a die in the pool
+— Hinder's d4, a technique's rating dice — is held by that die; take the die out
+and the rule ends with it (the razmerit returns, anything waiting is dropped),
+and the table sees an *SFX ended* note. That is not a punishment: dropping the die
+*is* how you change your mind about the Hinder. A rule that put nothing in a pool
+has no such door — use the chip.
+
 ---
 
 ## The effect form

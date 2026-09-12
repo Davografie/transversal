@@ -593,6 +593,7 @@ function goToNextSet() {
 
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})
+const seededInFlight = ref(new Set())  // what the server last reported as in flight
 const sfxCatalog = ref({})  // sfxId → { name, description }
 const availableSfxIds = ref(null)  // null = not loaded; else the conditions-filtered id list
 // The rules the place you're standing in lends you: [{ locationId, locationName,
@@ -1053,7 +1054,7 @@ function setPoolSources(sources) {
   if (recovered) fetchEntity()
 }
 
-defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, refreshBlueBook: () => blueBookRef.value?.refresh() })
+defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, fetchInFlightSfxIds, refreshBlueBook: () => blueBookRef.value?.refresh() })
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0
@@ -1147,7 +1148,9 @@ async function fetchAvailableSfxIds() {
 /**
  * Rules this entity has activated and not yet committed — the server's truth for
  * the chips' take-back state, so it survives a reload (a client-side flag would
- * forget, and the next press would re-apply instead of ending).
+ * forget, and the next press would re-apply instead of ending). A rule the
+ * server no longer lists has ended — taken back, or its cost left the pool — so
+ * its optimistic flag is cleared here rather than left to lie.
  */
 async function fetchInFlightSfxIds() {
   const id = props.overrideEntityId || props.entityId
@@ -1157,9 +1160,14 @@ async function fetchInFlightSfxIds() {
       `query($id: ID!) { inFlightSfxIds(entityId: $id) }`,
       { id },
     )
-    for (const sfxId of (data?.inFlightSfxIds || []).map(String)) {
+    const ids = (data?.inFlightSfxIds || []).map(String)
+    for (const sfxId of seededInFlight.value) {
+      if (!ids.includes(sfxId)) sfxActivations.value[sfxId] = 0
+    }
+    for (const sfxId of ids) {
       sfxActivations.value[sfxId] = 1
     }
+    seededInFlight.value = new Set(ids)
   } catch (e) {
     console.error('fetchInFlightSfxIds', e)
   }
