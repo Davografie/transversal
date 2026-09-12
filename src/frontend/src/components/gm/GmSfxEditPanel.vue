@@ -45,18 +45,27 @@
         Carries a stored placement of <em>{{ draft.placement }}</em>.
       </p>
 
-      <h5 class="sfx-slot">Who it's about</h5>
-      <label>Listens to</label>
-      <select v-model="draft.arming_scope">
-        <option :value="null">Auto (from trigger)</option>
-        <option value="self">Self</option>
-        <option value="global">Global (everyone)</option>
-        <option value="listener_spec">A targeting path</option>
-      </select>
-      <div v-if="draft.arming_scope === 'listener_spec'" class="sfx-listener">
-        <TargetSpecBuilder v-model="draft.listener_spec" :destination="{ element: 'entity' }" :source-element="sourceElement" />
-        <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>).</p>
-      </div>
+      <!-- Only meaningful when part of the rule *waits* for a roll: the scope says
+           whose rolls feed that waiting part. With nothing waiting there is no
+           answer to give, so the field is out of the way (same condition as the
+           armed window below). -->
+      <template v-if="hasDeferredEffects">
+        <h5 class="sfx-slot">Who it's about</h5>
+        <label>Listens to</label>
+        <select v-model="draft.arming_scope">
+          <option :value="null">From the trigger — {{ derivedArmingScope }}</option>
+          <option value="self">Self (whoever activated it)</option>
+          <option value="global">Global (everyone's rolls)</option>
+          <option value="listener_spec">A targeting path</option>
+          <!-- Never strand a stored value (see the placement note above). -->
+          <option v-if="unknownArmingScope" :value="draft.arming_scope">{{ draft.arming_scope }} (stored)</option>
+        </select>
+        <p class="hint">Whose rolls feed the part of this rule that waits.</p>
+        <div v-if="draft.arming_scope === 'listener_spec'" class="sfx-listener">
+          <TargetSpecBuilder v-model="draft.listener_spec" :destination="{ element: 'entity' }" :source-element="sourceElement" />
+          <p class="hint">Resolve which entities this SFX listens to (e.g. <em>select self → navigate relationships → filter type == curse_bind → navigate target</em>).</p>
+        </div>
+      </template>
       <!-- Where this may be *taken*, not where it works. Seeded at the thing
            being unlocked, so `select source` is the trait instance (or entity)
            the rule is being attached to. Empty = acquirable anywhere. -->
@@ -233,6 +242,17 @@ const unknownPlacement = computed(() => !!draft.placement)
 // Placement is no longer authored here — the menu is a trigger. A rule saved
 // before the change keeps whatever it holds; showing it beats rewriting it.
 const storedPlacement = unknownPlacement
+
+// Mirror of `derive_arming_scope` (domain/traits.py): every trigger listens to
+// the entity that activated it, except a session-start passive, which watches
+// everyone. Shown resolved rather than as "auto", so the empty option says where
+// it lands instead of naming a value the author has to translate.
+const derivedArmingScope = computed(() =>
+  (draft.trigger || '') === 'on_session_start' ? 'global' : 'self')
+
+const ARMING_SCOPES = ['self', 'global', 'listener_spec']
+const unknownArmingScope = computed(() =>
+  !!draft.arming_scope && !ARMING_SCOPES.includes(draft.arming_scope))
 
 // A condition that reads the fire-time context can only be offered where the
 // point supplies it. The keys come from the backend capability map (shared with

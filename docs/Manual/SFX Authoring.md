@@ -128,20 +128,27 @@ Set **Trait setting** when the SFX is granted by and scales with a trait (so `so
 
 ### Listens to (arming scope)
 
-Who the armed SFX **listens to** once it fires its delayed (roll/outcome-timed) effects. **Auto (from trigger)** derives it:
+**This field only appears when part of the rule waits for a roll** — an effect with
+`On roll`, `On set`, `On result` or an `On contest …` timing. With nothing waiting
+there is nobody to listen to, so the panel leaves it out (the same condition as
+the *How long it's held* window). That is why a purely immediate rule like
+*Sect Cultivation* has no answer here.
 
-- `on_session_start` → **global** (a passive rule — listens to every entity's rolls)
-- anything else → **self** (listens to the triggering entity)
+When it does appear: whose rolls feed that waiting part.
 
-The **Listens to** control overrides it:
+- **From the trigger — self** (the default) — whoever activated it. *Crimson
+Scars* presses, arms its `On result` step, and then waits for **your** next roll.
+- **From the trigger — global** — everyone's rolls. A `on_session_start` rule
+reads this way by itself; *One-Trick* and *d4 Bonus* are passives that watch the
+whole table.
+- **Self** / **Global** / **A targeting path** — explicit overrides.
 
-| Scope | Listens to |
-|-------|-----------|
-| **Self** | The triggering entity |
-| **Global** | Every entity's rolls |
-| **A targeting path** | The entity set resolved from a targeting path (`select self → navigate relationships → filter type == curse_bind → navigate target`) |
+The empty option prints the resolved value rather than saying "auto", so you can
+see where it lands without translating. `A targeting path` is declared but **not
+implemented** — the engine warns and falls back to self.
 
-You only need this for cross-entity listening (e.g. a curse that binds two entities). Normal SFX leave it on **Auto**. See [[SFX Activation Model Plan]] for the design.
+You only need an override for cross-entity listening (a curse that binds two
+entities, say). Normal rules leave it on the trigger. See [[SFX Activation Model Plan]].
 
 ### Conditions
 
