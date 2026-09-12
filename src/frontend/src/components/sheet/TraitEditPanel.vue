@@ -36,6 +36,18 @@
 
       <template #after-fields>
         <div class="edit-field">
+          <span class="edit-label">Tags</span>
+          <TagInput
+            v-model="tagsModel"
+            :suggestions="tagSuggestions"
+            placeholder="Add a tag…"
+            aria-label="Trait instance tags"
+          />
+          <span v-if="inheritTags.length" class="edit-tags-inherited">
+            from the trait: {{ inheritTags.join(', ') }}
+          </span>
+        </div>
+        <div class="edit-field">
           <span class="edit-label">Type</span>
           <div class="edit-flags">
             <button
@@ -105,6 +117,7 @@
 <script setup>
 import { computed } from 'vue'
 import Button from '@/components/ui/Button.vue'
+import TagInput from '@/components/ui/TagInput.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 
 // The sheet's full-panel trait editor: a header, the shared rating editor, and
@@ -137,6 +150,14 @@ const props = defineProps({
    * pending (or failed) query must not hide chips. The attach enforces the gate
    * server-side regardless.
    */
+  /**
+   * The instance's own tags (B116) — editable here. The registry trait's tags
+   * are authoring, not instance state, and are only shown as context.
+   */
+  tags: { type: Array, default: () => [] },
+  /** Read-only: tags inherited from the registry trait, shown dimmed. */
+  inheritTags: { type: Array, default: () => [] },
+  tagSuggestions: { type: Array, default: () => [] },
   acquirableSfxIds: { type: Array, default: null },
 })
 
@@ -152,6 +173,12 @@ const diceModel = computed({ get: () => props.dice, set: (v) => emit('update:dic
 const capacityModel = computed({ get: () => props.capacity, set: (v) => emit('update:capacity', v) })
 const statementModel = computed({ get: () => props.statement, set: (v) => emit('update:statement', v) })
 const notesModel = computed({ get: () => props.notes, set: (v) => emit('update:notes', v) })
+// TagInput drives a v-model; the editor persists on the same path as the other
+// fields, so the setter writes the draft and then asks the sheet to save.
+const tagsModel = computed({
+  get: () => props.tags,
+  set: (v) => { emit('update:tags', v); emit('change', 'tags') },
+})
 
 /**
  * What the chip list shows: rules acquirable here, plus anything already
@@ -219,6 +246,14 @@ function displayName(name) {
   font-size: 11px;
   color: var(--text-dim);
   font-style: italic;
+}
+/* Registry tags are inherited, not editable here — dimmed so they read as
+   context rather than as something the instance carries of its own. */
+.edit-tags-inherited {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
 }
 .sfx-chip {
   font-size: 10px;

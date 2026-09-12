@@ -177,6 +177,9 @@
           :notes="editNotes"
           :sfx-ids="editSfxIds"
           :acquirable-sfx-ids="acquirableSfxIds"
+          :tags="editTags"
+          :inherit-tags="editingTrait?.registryTags || []"
+          :tag-suggestions="tagSuggestions"
           :is-ego="editIsEgo"
           :projection-id="editProjectionId"
           :projection-name="editProjectionName"
@@ -189,6 +192,7 @@
           @update:capacity="editCapacity = $event"
           @update:statement="editStatement = $event"
           @update:notes="editNotes = $event"
+          @update:tags="editTags = $event"
           @rating-type="onEditorRatingType"
           @change="onEditorChange"
           @field-blur="onEditorFieldBlur"
@@ -778,6 +782,7 @@ const {
   editingTraitId, editingTrait, availableSubtraits,
   editDice, editRatingType, editPolarity, editCapacity, editStatement, editNotes,
   editSfxIds, editIsEgo, editProjectionId, showProjectionPicker, acquirableSfxIds,
+  editTags, tagSuggestions,
   editProjectionOptions, editProjectionName,
   deleteCountdown, deletingTraitId,
   startEdit, cancelEdit, onDeleteClick, doSave,

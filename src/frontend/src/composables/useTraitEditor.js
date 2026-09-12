@@ -76,6 +76,9 @@ export function useTraitEditor({
   const editStatement = usePersistedRef('sheet.editStatement', '')
   const editNotes = usePersistedRef('sheet.editNotes', '')
   const editSfxIds = usePersistedRef('sheet.editSfxIds', [])
+  // The instance's *own* tags (B116). Registry tags are authoring, not editable
+  // from the sheet — they surface read-only as `registryTags`.
+  const editTags = usePersistedRef('sheet.editTags', [])
   const editIsEgo = usePersistedRef('sheet.editIsEgo', true)
   const editProjectionId = usePersistedRef('sheet.editProjectionId', null)
   const showProjectionPicker = ref(false)
@@ -103,6 +106,22 @@ export function useTraitEditor({
       acquirableSfxIds.value = null
     }
   }
+
+  // Suggestions for the instance-tag field: every tag already in play on this
+  // character, own or inherited. Local data — no extra query — and it keeps new
+  // instance tags spelled the way the rest of the sheet spells them.
+  const tagSuggestions = computed(() => {
+    const out = new Set()
+    const rows = [
+      ...(traitSets.value || []).flatMap((s) => s.traits || []),
+      ...(profileTraits.value || []),
+    ]
+    for (const t of rows) {
+      for (const g of (t.tags || [])) out.add(g)
+      for (const g of (t.registryTags || [])) out.add(g)
+    }
+    return [...out].sort()
+  })
 
   const editProjectionOptions = computed(() => entity.value?.projections || [])
   const editProjectionName = computed(() => {
@@ -133,6 +152,7 @@ export function useTraitEditor({
     editStatement.value = t.statement || ''
     editNotes.value = t.notes || ''
     editSfxIds.value = [...(t.sfxIds || [])]
+    editTags.value = [...(t.tags || [])]
     const isMorph = t.fromType === 'projection' || t.ego === false
     editIsEgo.value = !isMorph
     editProjectionId.value =
@@ -211,8 +231,8 @@ export function useTraitEditor({
     const isRel = editingTrait.value?.fromType === 'relationship'
     const newDice = editDice.value.map(d => d.toUpperCase())
     const newCapacity = editCapacity.value.map(d => d.toUpperCase())
-    const query = `mutation($id: ID!, $dice: [DieType!], $capacity: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $notes: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID) {
-    updateTraitSetting(id: $id, input: { dice: $dice, capacity: $capacity, ratingType: $ratingType, polarity: $polarity, statement: $statement, notes: $notes, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId }) { id }
+    const query = `mutation($id: ID!, $dice: [DieType!], $capacity: [DieType!], $ratingType: RatingType, $polarity: Polarity, $statement: String, $notes: String, $sfxIds: [ID!], $fromType: String, $projectionId: ID, $tags: [String!]) {
+    updateTraitSetting(id: $id, input: { dice: $dice, capacity: $capacity, ratingType: $ratingType, polarity: $polarity, statement: $statement, notes: $notes, sfxIds: $sfxIds, fromType: $fromType, projectionId: $projectionId, tags: $tags }) { id }
   }`
     const variables = {
       id: editingTraitId.value,
@@ -223,6 +243,7 @@ export function useTraitEditor({
       statement: editStatement.value ?? null,
       notes: editNotes.value ?? null,
       sfxIds: editSfxIds.value,
+      tags: editTags.value,
       // Relationship traits keep their anchor; only entity/projection traits toggle it.
       fromType: isRel ? null : (editIsEgo.value ? 'entity' : 'projection'),
       projectionId: isRel ? null : (editIsEgo.value ? null : editProjectionId.value),
@@ -240,6 +261,7 @@ export function useTraitEditor({
       t.polarity = editPolarity.value
       t.rating = null  // force fallback to dice display
       t.sfxIds = [...editSfxIds.value]
+      t.tags = [...editTags.value]
       t.statement = editStatement.value
       t.notes = editNotes.value
       if (!isRel) {
@@ -358,7 +380,7 @@ export function useTraitEditor({
     editingTraitId, editingTrait, availableSubtraits,
     editDice, editRatingType, editPolarity, editCapacity, editStatement, editNotes,
     editSfxIds, editIsEgo, editProjectionId, showProjectionPicker,
-    acquirableSfxIds,
+    acquirableSfxIds, editTags, tagSuggestions,
     editProjectionOptions, editProjectionName,
     deleteCountdown, deletingTraitId,
     // actions
