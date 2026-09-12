@@ -43,6 +43,7 @@ from transversal.domain.enums import (  # noqa: F401
     ImageType,
     MessageKind,
     HistoricalRecordType,
+    SheetTab,
 )
 
 from transversal.domain.dice import (  # noqa: F401

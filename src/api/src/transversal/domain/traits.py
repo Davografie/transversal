@@ -12,6 +12,7 @@ from transversal.domain.enums import (
     EntityType,
     Polarity,
     RatingType,
+    SheetTab,
 )
 
 
@@ -77,6 +78,7 @@ class TraitSet(BaseModel):
     limit: int = 1
     allow_duplicates: bool = False
     polarity: Optional["Polarity"] = None  # default polarity override (None = global positive)
+    sheet_tab: SheetTab = SheetTab.TRAITS  # which sheet tab this set's traits render on ("traits" | "profile")
     default_rating_type: RatingType = RatingType.STATIC
     default_die_type: DieType = DieType.D4
 

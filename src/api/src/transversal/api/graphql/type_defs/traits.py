@@ -8,6 +8,7 @@ from transversal.api.graphql.type_defs.enums import (
     EntityType,
     Polarity,
     RatingType,
+    SheetTab,
 )
 
 
@@ -52,6 +53,7 @@ class TraitSetRef:
     limit: int = 1
     allow_duplicates: bool = False
     polarity: Optional[Polarity] = None
+    sheet_tab: SheetTab = SheetTab.TRAITS
 
     @strawberry.field
     def traits(self, info: strawberry.Info) -> list["TraitRef"]:
@@ -209,6 +211,19 @@ class TraitSetting:
         em = info.context["entity_manager"]
         ts = em.repo.get_traitset_by_id(self.traitset_id)
         return ts.order if ts else 0
+
+    @strawberry.field
+    def traitset_tab(self, info: strawberry.Info) -> SheetTab:
+        """Which sheet tab this trait belongs on ('traits' | 'profile').
+
+        Read from the trait's *set*, not inferred from its rating type: a
+        container trait has no rating either, so the rating type could not tell
+        it apart from a descriptive one.
+        """
+        from transversal.services.entity_manager import EntityManager
+        em = info.context["entity_manager"]
+        ts = em.repo.get_traitset_by_id(self.traitset_id)
+        return ts.sheet_tab if ts else SheetTab.TRAITS
 
     @strawberry.field
     async def traitset_limit(self, info: strawberry.Info) -> int:

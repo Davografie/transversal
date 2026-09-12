@@ -235,6 +235,7 @@ Registry of trait groupings. Defines named sets of traits available to entity ty
 | `order` | int | | Display sort order (default `0`) |
 | `limit` | int | | Max traits an entity can select from this set (default `1`) |
 | `allow_duplicates` | bool | | Allow multiple instances of the same trait definition, distinguished by `statement` (default `false`) |
+| `sheet_tab` | SheetTab | | Which character-sheet tab this set's traits render on: `traits` (default) or `profile`. A deliberate authoring choice — the sheet does not infer it from the rating type, because a container trait carries no rating either |
 | `polarity` | Polarity? | | Default polarity override for traits in this set (null = global positive) |
 | `default_rating_type` | RatingType | | Default rating behaviour for new traits in this set (default `static`) |
 | `default_die_type` | DieType | | Default die for new traits in this set (default `d4`) |

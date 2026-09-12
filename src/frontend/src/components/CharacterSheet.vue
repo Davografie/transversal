@@ -456,8 +456,12 @@ function groupTraitSettings(settings) {
 function recomputeTraitSets() {
   const src = showAllTraits.value ? allTraitSettings.value : effectiveSettings.value
   const settings = src || []
-  profileTraits.value = settings.filter(t => t.ratingType === 'EMPTY')
-  traitSets.value = groupTraitSettings(settings.filter(t => t.ratingType !== 'EMPTY'))
+  // Which tab a trait belongs on is the trait *set's* decision now, not the
+  // rating's: a container trait carries no rating either, so `ratingType` could
+  // never tell it apart from a genuinely descriptive trait.
+  const onProfile = (t) => t.traitsetTab === 'PROFILE'
+  profileTraits.value = settings.filter(onProfile)
+  traitSets.value = groupTraitSettings(settings.filter(t => !onProfile(t)))
 }
 
 // ── Relationship widget (foreign sheets only) ──────
@@ -1271,6 +1275,7 @@ const QUERY = `
         enabled
         traitsetOrder
         traitsetLimit
+        traitsetTab
         knownTo
         possibleSfxIds
         tags
@@ -1322,6 +1327,7 @@ const QUERY = `
         enabled
         traitsetOrder
         traitsetLimit
+        traitsetTab
         knownTo
         possibleSfxIds
         tags
@@ -1648,6 +1654,7 @@ async function fetchRelationship() {
           enabled
           traitsetOrder
           traitsetLimit
+          traitsetTab
           knownTo
           possibleSfxIds
         tags

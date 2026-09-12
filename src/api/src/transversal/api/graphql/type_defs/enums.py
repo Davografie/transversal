@@ -12,6 +12,7 @@ from transversal.domain import Polarity as DomainPolarity
 from transversal.domain import RatingType as DomainRatingType
 from transversal.domain import RollSource as DomainRollSource
 from transversal.domain import RollTableScheme as DomainRollTableScheme
+from transversal.domain import SheetTab as DomainSheetTab
 from transversal.domain import TimerCombine as DomainTimerCombine
 from transversal.domain import TransversalType as DomainTransversalType
 
@@ -39,3 +40,5 @@ RollSource = strawberry.enum(DomainRollSource)
 ConditionType = strawberry.enum(DomainConditionType)
 
 TimerCombineGql = strawberry.enum(DomainTimerCombine)
+
+SheetTab = strawberry.enum(DomainSheetTab)

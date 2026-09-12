@@ -109,7 +109,13 @@ type TraitSetRef {
   order: Int!
   limit: Int!
   allowDuplicates: Boolean!
+  sheetTab: SheetTab!      # which sheet tab the set's traits render on (TRAITS | PROFILE)
   polarity: Polarity
+}
+
+enum SheetTab {
+  TRAITS   # mechanical — the traits tab, grouped by set
+  PROFILE  # descriptive (name, gender, appearance) — the profile tab
 }
 
 # Per-entity trait configuration (edge: entity → trait registry)
@@ -131,6 +137,7 @@ type TraitSetting {
   registryTags: [String!]! # labels inherited from the registry trait; matching sees tags + registryTags
   name: String!            # resolved from trait registry
   traitsetName: String!    # resolved from traitset registry
+  traitsetTab: SheetTab!   # resolved from traitset registry — the tab this trait renders on
   universe: String!        # resolved from trait registry
 }
 
@@ -301,8 +308,7 @@ input UpdateEntityInput {
 input TraitSettingInput {
   traitId: ID!
   traitsetId: ID!
-  dice: [DieType!]!
-  ratingType: RatingType
+  dice: [DieType!]!  ratingType: RatingType
   statement: String
   tags: [String!]          # instance-level labels (B116)
   polarity: Polarity

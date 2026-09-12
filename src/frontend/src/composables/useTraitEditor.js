@@ -14,11 +14,11 @@ import { usePersistedRef } from './usePersistedState.js'
  *   props                the sheet's props (entityId, universe, …)
  *   entity               ref — the fetched entity (projections, razmerit)
  *   traitSets            ref — [{ name, limit, traits }] as rendered
- *   profileTraits        ref — EMPTY-rated traits, rendered in the profile tab
+ *   profileTraits        ref — traits whose *set* is designated profile
  *   detailTrait          ref — the read-only detail view (cleared on edit)
  *   graphql              query helper from useApi
  *   fetchEntity          reload the entity after anchor-changing edits
- *   recomputeTraitSets   re-split the tab lists after a rating-type change
+ *   recomputeTraitSets   re-split the tab lists after an edit that moves a trait
  *   recoverResourceDie   REST helper for pulling a spent die back
  *   universeDisplay      universe key → display name (for the projection chip)
  */

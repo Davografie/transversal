@@ -20,7 +20,8 @@ class QueriesTraits:
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
                         entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
-                        allow_duplicates=ts.allow_duplicates, polarity=ts.polarity)
+                        allow_duplicates=ts.allow_duplicates, polarity=ts.polarity,
+                        sheet_tab=ts.sheet_tab)
             for ts in tss
         ]
 
@@ -59,6 +60,7 @@ class QueriesTraits:
         return [
             TraitSetRef(id=ts.id, name=ts.name, universes=ts.universes,
                         entity_types=ts.entity_types, order=ts.order, limit=ts.limit,
-                        allow_duplicates=ts.allow_duplicates, polarity=ts.polarity)
+                        allow_duplicates=ts.allow_duplicates, polarity=ts.polarity,
+                        sheet_tab=ts.sheet_tab)
             for ts in tss
         ]

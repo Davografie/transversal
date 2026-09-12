@@ -18,6 +18,7 @@ from transversal.domain import (
     Entity,
     EntityType,
     Projection,
+    SheetTab,
     Trait,
     TraitSet,
     TraitSetSetting,
@@ -256,3 +257,32 @@ def test_trait_tags_by_universe_agrees_with_folding_the_traits(tag_data):
 
 def test_trait_tags_by_universe_is_empty_for_an_unknown_universe(tag_data):
     assert tag_data.get_trait_tags_by_universe("no-such-universe") == []
+
+
+# ── Trait-set sheet tab ──────────────────────────────────────────
+#
+# The sheet routes a trait by its *set's* designation, not by the trait's
+# rating type. Sets written before the field existed must read as "traits",
+# and a designated set must persist.
+
+TAB_TS = "test-sheet-tab-ts"
+TAB_UNIVERSE = "test-sheet-tab-universe"
+
+
+def test_traitset_sheet_tab_defaults_to_traits_and_round_trips():
+    repo = _repo
+    repo.delete_traitset(TAB_TS)  # self-heal from an interrupted prior run
+    try:
+        repo.create_traitset(TraitSet(id=TAB_TS, name="sheet tab", universes=[TAB_UNIVERSE]))
+
+        # The default — what every pre-existing set reads as.
+        fresh = repo.get_traitset_by_id(TAB_TS)
+        assert fresh.sheet_tab == SheetTab.TRAITS
+        assert TraitSet(id=TAB_TS, name="x", universes=[TAB_UNIVERSE]).sheet_tab == SheetTab.TRAITS
+
+        # A designated set persists its choice.
+        fresh.sheet_tab = SheetTab.PROFILE
+        repo.update_traitset(fresh)
+        assert repo.get_traitset_by_id(TAB_TS).sheet_tab == SheetTab.PROFILE
+    finally:
+        repo.delete_traitset(TAB_TS)

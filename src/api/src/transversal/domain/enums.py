@@ -221,3 +221,16 @@ class HistoricalRecordType(str, Enum):
     ROLL_TABLE = "roll_table"
     CONTEST = "contest"
     TRANSVERSAL = "transversal"
+
+
+class SheetTab(str, Enum):
+    """Which character-sheet tab a trait set renders its traits on.
+
+    ``traits`` is the default: mechanically usable traits, grouped by set.
+    ``profile`` is for descriptive traits that carry no mechanical benefit
+    (name, gender, appearance). It is a deliberate authoring decision rather
+    than an inference from the rating type, which could not tell a container
+    trait (sub-traits, no own rating) from a genuinely descriptive one.
+    """
+    TRAITS = "traits"
+    PROFILE = "profile"

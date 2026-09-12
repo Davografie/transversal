@@ -18,6 +18,7 @@ from transversal.api.graphql.type_defs.enums import (  # noqa: F401
     RollSource,
     ConditionType,
     TimerCombineGql,
+    SheetTab,
 )
 from transversal.api.graphql.type_defs.conditions import (  # noqa: F401
     Condition,
