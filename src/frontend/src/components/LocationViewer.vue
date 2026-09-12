@@ -771,15 +771,17 @@ function travelToTarget(t) {
     const child = childForZone(zone)
     if (child) {
       travelWithAnimation(zone, child)
-    } else if (props.entityId) {
-      moveTo(zone.location_id || '', '')
+    } else if (props.entityId && zone.location_id) {
+      moveTo(zone.location_id, '')
     } else {
+      // No link and nothing to fall back to (e.g. an unlinked zone): no-op
+      // rather than a moveTo('') request.
       return false
     }
     return true
   }
   if (t.type === 'nav') {
-    const nd = navDots.value.find(d => d.key === t.key)
+    const nd = navDots.value.find(d => d.key === t.id)
     if (!nd) return false
     activeElement.value = { type: 'nav', key: nd.key }
     // Destination display name, for the view-only move's location label
