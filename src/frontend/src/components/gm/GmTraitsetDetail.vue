@@ -15,6 +15,11 @@
         <option value="POSITIVE">Positive</option>
         <option value="NEGATIVE">Negative</option>
       </select>
+      <label>Sheet Tab</label>
+      <select v-model="form.sheetTab" title="Which character-sheet tab this set's traits render on">
+        <option value="TRAITS">Traits</option>
+        <option value="PROFILE">Profile</option>
+      </select>
       <label class="checkbox-label"><input type="checkbox" v-model="form.allowDuplicates" /> Allow duplicate trait instances</label>
     </div>
 
@@ -102,7 +107,7 @@ watch(traitset, (ts) => {
 })
 
 const saving = ref(false)
-const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1, polarity: '', allowDuplicates: false })
+const form = reactive({ name: '', universes: [], entityTypes: [], limit: 1, polarity: '', allowDuplicates: false, sheetTab: 'TRAITS' })
 
 watch(traitset, (ts) => {
   if (ts) {
@@ -112,11 +117,12 @@ watch(traitset, (ts) => {
     form.limit = ts.limit || 1
     form.polarity = ts.polarity || ''
     form.allowDuplicates = !!ts.allowDuplicates
+    form.sheetTab = ts.sheetTab || 'TRAITS'
   }
 }, { immediate: true })
 
 let saveTimer = null
-watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit, () => form.polarity, () => form.allowDuplicates], () => {
+watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], () => form.limit, () => form.polarity, () => form.allowDuplicates, () => form.sheetTab], () => {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => saveTraitset(), 600)
 })
@@ -124,11 +130,11 @@ watch([() => form.name, () => [...form.universes], () => [...form.entityTypes], 
 async function saveTraitset() {
   if (!traitset.value?.id) return
   await graphql(
-    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int, $polarity: Polarity, $clearPolarity: Boolean, $allowDuplicates: Boolean) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit, polarity: $polarity, clearPolarity: $clearPolarity, allowDuplicates: $allowDuplicates) { id } }`,
-    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit, polarity: form.polarity || null, clearPolarity: !form.polarity, allowDuplicates: form.allowDuplicates }
+    `mutation($id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!], $limit: Int, $polarity: Polarity, $clearPolarity: Boolean, $allowDuplicates: Boolean, $sheetTab: SheetTab) { updateTraitset(id: $id, name: $name, universes: $universes, entityTypes: $entityTypes, limit: $limit, polarity: $polarity, clearPolarity: $clearPolarity, allowDuplicates: $allowDuplicates, sheetTab: $sheetTab) { id } }`,
+    { id: traitset.value.id, name: form.name, universes: form.universes, entityTypes: form.entityTypes, limit: form.limit, polarity: form.polarity || null, clearPolarity: !form.polarity, allowDuplicates: form.allowDuplicates, sheetTab: form.sheetTab }
   )
   patchData('traitsets', traitset.value.id, {
-    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit, polarity: form.polarity || null, allowDuplicates: form.allowDuplicates,
+    name: form.name, universes: [...form.universes], entityTypes: [...form.entityTypes], limit: form.limit, polarity: form.polarity || null, allowDuplicates: form.allowDuplicates, sheetTab: form.sheetTab,
   })
 }
 
