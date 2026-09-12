@@ -79,6 +79,16 @@ def test_collections_seed_types():
     assert tc.collection("self_traitsettings").element == "traitsetting"
 
 
+def test_the_opposing_dice_collection_is_declared():
+    """The other side of a contest is a seed of its own, so a path can *start*
+    there ("their metal against my fire") — not only be compared against."""
+    c = tc.collection("opposing_dice")
+    assert c is not None
+    assert c.element == "die"
+    assert (c.noun, c.plural) == ("die", "dice")
+    assert c.origin == "in the opposing pool"
+
+
 def test_unknown_lookups_return_none():
     assert tc.element("nope") is None
     assert tc.edge("die", "nope") is None

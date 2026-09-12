@@ -10,11 +10,19 @@ from transversal.domain import (
 )
 from transversal.services.conditions import (
     CONDITION_TYPES,
+    condition_context_keys,
     evaluate_condition,
     evaluate_conditions,
     static_conditions,
 )
-from transversal.services.target_spec import AggregateStep, EvaluateStep, FilterStep, SelectStep, TargetSpec
+from transversal.services.target_spec import (
+    AggregateStep,
+    EvaluateStep,
+    FilterStep,
+    NavigateStep,
+    SelectStep,
+    TargetSpec,
+)
 
 
 class FakeRepo:
@@ -26,6 +34,9 @@ class FakeRepo:
 
     def get_traitsettings_for_entity(self, entity_id):
         return [ts for ts in self.traitsettings if ts.entity_id == entity_id]
+
+    def get_traitsetting(self, ts_id):
+        return next((ts for ts in self.traitsettings if ts.id == ts_id), None)
 
     def get_trait(self, trait_id):
         return self.traits.get(trait_id)
@@ -370,6 +381,42 @@ def test_target_path_self_filter():
     cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
     assert evaluate_condition(_entity(), cond, FakeRepo())
     assert not evaluate_condition(_entity(type=EntityType.GMC), cond, FakeRepo())
+
+
+def test_target_path_can_start_from_the_opposing_dice():
+    """Elements and Spiritual Roots: the cycle rule compares two sides by giving
+    each its own condition path — mine seeded from ``rolled_dice``, theirs from
+    ``opposing_dice``. Both must pass, so the two are compared without any
+    value-to-value comparison. No contest in the moment means no opposing dice,
+    and the gate is simply not met."""
+    from transversal.domain import Trait
+
+    spec = TargetSpec(steps=[
+        SelectStep(collection="opposing_dice"),
+        NavigateStep(edge="traitsetting", dedup=True),
+        FilterStep(field="tags", operator="contains", value="metal"),
+    ])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    metal_tech = TraitSetting(id="guard:metal", entity_id="guard", trait_id="trait-metal-palm",
+                              traitset_id="ts-tech", dice=[DieType.D8])
+    trait = Trait(id="trait-metal-palm", name="Metal Palm", traitset_id="ts-tech", tags=["metal"])
+    repo = FakeRepo(traitsettings=[metal_tech], traits=[trait])
+    die = {"ts_id": "guard:metal", "source_kind": "trait", "die": "d8"}
+
+    assert evaluate_condition(_entity(), cond, repo, context={"opposing_rolls": [die]})
+    assert not evaluate_condition(_entity(), cond, repo, context={})
+    assert not evaluate_condition(_entity(), cond, repo)
+
+
+def test_opposing_dice_reads_the_opposing_key():
+    """So the editor can keep the gate out of a moment that supplies no
+    opposition (and the validator can name what is missing)."""
+    spec = TargetSpec(steps=[SelectStep(collection="opposing_dice")])
+    cond = Condition(type=ConditionType.TARGET_PATH, spec=spec)
+    assert condition_context_keys(cond) == frozenset({"opposing_rolls"})
+
+
+# ── Entry point: the effect page is the moment a rule can read a pool ──
 
 
 def test_target_path_empty_spec_fails():

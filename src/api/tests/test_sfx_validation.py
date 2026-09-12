@@ -222,6 +222,22 @@ def test_roll_reading_path_on_a_non_rolling_trigger_warns():
     assert any("it reads 'rolls'" in w for w in validate_sfx(sfx))
 
 
+def test_the_opposing_dice_gate_is_allowed_exactly_where_it_can_pass():
+    """The cycle rule reads the other side, which only the pool-save moment
+    carries — everywhere else the gate could never pass, and the validator says
+    which key is missing rather than letting it be authored blind."""
+    from transversal.domain import TargetSpec
+
+    spec = TargetSpec(steps=[{"kind": "select", "collection": "opposing_dice"}])
+    conditions = [Condition(type=ConditionType.TARGET_PATH, spec=spec)]
+
+    allowed = SFX(id="sfx-x", name="X", trigger="on_pool_change", conditions=conditions)
+    assert not any("can never pass" in w for w in validate_sfx(allowed))
+
+    flagged = SFX(id="sfx-y", name="Y", trigger="on_beat", conditions=conditions)
+    assert any("it reads 'opposing_rolls'" in w for w in validate_sfx(flagged))
+
+
 def test_user_role_needs_no_context():
     """It prefers context['role'] but falls back to the controlling player."""
     sfx = SFX(

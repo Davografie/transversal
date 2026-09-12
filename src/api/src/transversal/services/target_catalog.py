@@ -373,12 +373,24 @@ class Collection:
     origin: str = ""
     possessive: bool = False
     pronoun: bool = False
+    # The phrase a hop *from* this seed absorbs into ("you rolled" / "they
+    # rolled"). Where a seed knows its own party, the hop uses it instead of the
+    # edge's default, so the other side's dice never read as the actor's.
+    card_origin: str = ""
 
 
 COLLECTIONS: tuple[Collection, ...] = (
     Collection("self", "entity", "The acting entity", singular=True, pronoun=True),
     Collection("rolled_dice", "die", "Dice in the current roll",
-               noun="die", plural="dice", origin="in your roll"),
+               noun="die", plural="dice", origin="in your roll",
+               card_origin="you rolled"),
+    # The other side of a contest, at the moment a pool is saved. Seeded from the
+    # event's ``opposing_rolls`` (see [[Elements and Spiritual Roots]]) — this is
+    # what makes "their metal against my fire" writable as one rule: each side is
+    # a condition path, and the two are compared by both having to pass.
+    Collection("opposing_dice", "die", "Dice in the opposing pool",
+               noun="die", plural="dice", origin="in the opposing pool",
+               card_origin="they rolled"),
     Collection("occupants", "entity", "Entities at the current location",
                noun="entity", origin="here"),
     Collection("locations", "location", "All locations", noun="location"),

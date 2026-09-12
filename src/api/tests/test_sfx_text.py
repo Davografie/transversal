@@ -53,6 +53,19 @@ ONE_TRICK_PATH = spec(
 
 
 class TestPaths:
+    def test_the_opposing_side_reads_as_their_dice(self):
+        """The cycle rule's second condition: a path seeded from the other side's
+        pool reads as *their* dice, not as yours — the card has to keep the two
+        sides apart, because both conditions sit on one rule."""
+        s = spec(
+            {"kind": "select", "collection": "opposing_dice"},
+            {"kind": "navigate", "edge": "traitsetting", "dedup": True},
+            {"kind": "filter", "field": "tags", "operator": "contains", "value": "metal"},
+        )
+        phrase = path_phrase(TargetSpec_of(s), resolve=resolve)
+        # And it does *not* read "you rolled" — the party comes from the seed.
+        assert render_phrase(phrase, "each") == "each trait instance they rolled tagged metal"
+
     def test_d4_condition_reads_as_a_predicate(self):
         cond = Condition(type=ConditionType.TARGET_PATH, spec=D4_CONDITION)
         assert condition_text(cond, resolve=resolve) == "there is at least one d4 trait"

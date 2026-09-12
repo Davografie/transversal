@@ -236,6 +236,7 @@ class Phrase:
     noun: str = ""            # singular head noun
     plural: str = ""          # plural head noun ("" → pluralize(noun))
     origin: str = ""          # trailing qualifier: "in your roll" / "you rolled"
+    absorb: str = ""          # the phrase a hop from this seed reads as: "you rolled"
     prefix: str = ""          # leading quantifier: "one of the …"
     scalar: str = ""          # a complete scalar phrase (aggregates)
     predicate: str = ""       # a complete boolean clause (evaluate)
@@ -414,6 +415,7 @@ def _select_phrase(step: SelectStep, source_element: str | None = None,
         noun="" if col.pronoun else (col.noun or element_noun(col.element)),
         plural="" if col.pronoun else (col.plural or ("" if col.noun else element_plural(col.element))),
         origin=col.origin,
+        absorb=col.card_origin,
         possessive=col.possessive,
         pronoun=col.pronoun,
     )
@@ -503,7 +505,10 @@ def _navigate_phrase(p: Phrase, step: NavigateStep) -> Phrase:
     noun, plural = tc.edge_noun(edge)
     element = edge.target[0] if len(edge.target) == 1 else p.element
     cardinality = "many" if (p.cardinality == "many" or edge.cardinality == "many") else "one"
-    origin = edge.card_origin
+    # Where the hop's source came from decides who did the rolling: an edge
+    # origin is the actor's default, a seed that knows its own party wins (the
+    # other side's dice read "they rolled", never "you rolled").
+    origin = p.absorb or edge.card_origin
 
     if p.pronoun:
         # "you" → "your location" (one possessive hop; a further hop goes back

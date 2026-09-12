@@ -376,6 +376,24 @@ def _aggregate(values: list[Any], fn: str, field_name: str | None) -> list[Any]:
     return []
 
 
+def event_collections(context: dict | None) -> dict[str, list[Any]]:
+    """The dice collections a fire event carries, as resolver seeds.
+
+    One rule for every caller: an event that carries dice exposes them under the
+    names the catalog declares, so a path seeded from ``rolled_dice`` — or from
+    the other side's ``opposing_dice`` — resolves wherever the context is
+    threaded through (conditions, immediate effects, deferred effects). Absent
+    keys seed nothing, which is a real state at a moment with no contest.
+    """
+    ctx = context or {}
+    seeds: dict[str, list[Any]] = {}
+    if ctx.get("rolls"):
+        seeds["rolled_dice"] = ctx["rolls"]
+    if ctx.get("opposing_rolls"):
+        seeds["opposing_dice"] = ctx["opposing_rolls"]
+    return seeds
+
+
 def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
     """Lazily seed a catalog collection from the subject/repo.
 

@@ -143,7 +143,9 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
     untouched, and a spec that resolves to nothing leaves the effect as authored
     so the existing "resolved to nothing" report still fires.
 
-    ``collections`` seeds the path's event-scoped collections. Callers that are
+    ``collections`` *overrides* the path's event-scoped collections, which are
+    seeded from the event context (``rolls`` / ``opposing_rolls``) so an
+    immediate effect can read the same dice a condition can. Callers that are
     already iterating one die should pass ``{"rolled_dice": [die]}`` — inside a
     per-die effect, the die being processed *is* the roll the path should read.
     """
@@ -152,8 +154,15 @@ def resolve_effect_entity(effect: Effect, entity_id: str, repo, context: dict | 
     entity = repo.get_entity(entity_id) if repo is not None else None
     if entity is None:
         return effect
+    from transversal.services.target_resolver import event_collections
+
     bindings = (context or {}).get(BINDINGS_CONTEXT_KEY) or {}
-    resolved = _resolve_entity_spec(effect, entity, repo, bindings, collections)
+    # The event's own dice seed the path (an immediate effect reads the same
+    # collections a condition does); an explicit argument still wins, because a
+    # caller iterating one die means *that die* is the roll.
+    seeds = event_collections(context)
+    seeds.update(collections or {})
+    resolved = _resolve_entity_spec(effect, entity, repo, bindings, seeds)
     return resolved if resolved is not None else effect
 
 def _resolve_entity_spec(effect: Effect, entity: Entity, repo, bindings: dict,

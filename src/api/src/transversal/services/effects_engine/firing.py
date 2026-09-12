@@ -74,7 +74,7 @@ def _emit_sfx_triggered(entity_id: str, sfx) -> None:
 
 def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None, bindings: dict | None = None):
     """Build the resolver context for a fire-time effect (spec + refs paths share it)."""
-    from transversal.services.target_resolver import TargetContext, resolve_source
+    from transversal.services.target_resolver import TargetContext, event_collections, resolve_source
 
     entity = repo.get_entity(event.entity_id) if repo is not None else None
     source_id = event.context.get("source_id") if event.context else None
@@ -83,8 +83,13 @@ def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = N
         if sfx.source_kind and source_id and repo is not None
         else (None, None)
     )
+    # Event-carried dice are seeds wherever the context travels, so an immediate
+    # effect can read the same collections a condition can; an explicit
+    # ``collections`` argument still wins (the per-die deferred path builds it).
+    seeds = event_collections(event.context)
+    seeds.update(collections or {})
     return TargetContext(
-        subject=entity, repo=repo, collections=collections or {},
+        subject=entity, repo=repo, collections=seeds,
         source=source, source_element=source_element,
         bindings=bindings if bindings is not None else {},
     )

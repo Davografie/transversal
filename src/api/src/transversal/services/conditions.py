@@ -151,14 +151,12 @@ def evaluate_condition(entity: "Entity | None", condition: Condition, repo: "Ent
         # error-free. All comparison lives in the path's filter/navigate steps.
         if condition.spec is None or not condition.spec.steps:
             return False
-        from transversal.services.target_resolver import TargetContext, resolve
+        from transversal.services.target_resolver import TargetContext, event_collections, resolve
 
         # Event-scoped seeds: a roll-bearing trigger (on_roll / on_result) carries
-        # its dice in the context, so a path can inspect *this* roll.
-        collections: dict = {}
-        rolls = (context or {}).get("rolls")
-        if rolls:
-            collections["rolled_dice"] = rolls
+        # its dice in the context, so a path can inspect *this* roll — and, at the
+        # pool-save moment, the other side's as well (``opposing_dice``).
+        collections = event_collections(context)
 
         target_context = TargetContext(
             subject=entity, repo=repo, source=source,
@@ -480,10 +478,17 @@ def condition_context_keys(condition: Condition) -> frozenset[str]:
         return frozenset({"arrival_kind"})
     if ctype == ConditionType.TARGET_PATH:
         spec = condition.spec
-        if spec is not None and any(
-            step.kind == "select" and step.collection == "rolled_dice" for step in spec.steps
-        ):
-            return frozenset({"rolls"})
+        if spec is None:
+            return frozenset()
+        read: set[str] = set()
+        for step in spec.steps:
+            if step.kind != "select":
+                continue
+            if step.collection == "rolled_dice":
+                read.add("rolls")
+            elif step.collection == "opposing_dice":
+                read.add("opposing_rolls")
+        return frozenset(read)
     return frozenset()
 
 
