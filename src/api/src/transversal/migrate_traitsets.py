@@ -131,6 +131,7 @@ def migrate() -> int:
             "entity_types": new_types,
             "order": ts.get("order") or 0,
             "limit": limit,
+            "allow_duplicates": ts.get("duplicates") or False,
             "location_restricted": ts.get("location_restricted") or False,
             "default_rating_type": default_rt,
             "default_die_type": default_die.value,
