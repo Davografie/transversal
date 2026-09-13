@@ -11,7 +11,7 @@
       v-for="(d, i) in positionedDice"
       :key="i"
       class="pool-die-item"
-      :class="{ tumbling: isTumbling, locked: d.locked }"
+      :class="{ tumbling: tumbleActive, locked: d.locked }"
       :style="{ transform: 'translate(' + d.tx.toFixed(0) + 'px, ' + d.ty.toFixed(0) + 'px)' }"
     >
       <DieIcon :die="d.die" :result="d.face" />
@@ -93,8 +93,11 @@ function distribute(items, startAngle) {
 }
 
 // ── What the ring shows ────────────────────────────────────────────────────
-// Same timing as the roller's tumbling dice.
+// Same timings as the roller: it tumbles a face every 70ms and locks its dice
+// left-to-right so the numbers fall into place.
 const TUMBLE_MS = 70
+const FIRST_LOCK_MS = 900
+const LOCK_STAGGER_MS = 1000
 
 // Rolled results win over the specs they came from: once we have them, the ring
 // shows the numbers that landed, in every phase after the roll.
@@ -112,8 +115,34 @@ const specDice = computed(() => props.dice.map((d) => {
 
 const baseDice = computed(() => (rolledDice.value.length ? rolledDice.value : specDice.value))
 
-// A roll in flight and no results yet: tumble, exactly like the panel does.
-const isTumbling = computed(() => props.phase === 'rolling' && rolledDice.value.length === 0)
+// How many rolled dice have visibly settled. Staggered, so the ring reads like
+// the panel rather than flipping every number in one frame.
+const revealedCount = ref(0)
+let lockTimers = []
+
+function clearLockTimers() {
+  for (const t of lockTimers) clearTimeout(t)
+  lockTimers = []
+}
+
+// Restart the sequence whenever a fresh set of results lands (and drop it when
+// there are none — e.g. the pool was cleared and the phase went back to adding).
+watch(() => rolledDice.value.length, (n) => {
+  clearLockTimers()
+  revealedCount.value = 0
+  for (let i = 0; i < n; i++) {
+    lockTimers.push(setTimeout(() => {
+      revealedCount.value = Math.max(revealedCount.value, i + 1)
+    }, FIRST_LOCK_MS + i * LOCK_STAGGER_MS))
+  }
+}, { immediate: true })
+
+// Tumbling covers both halves: the roll in flight (no results yet), and the
+// staggered reveal while the numbers fall into place one by one.
+const tumbleActive = computed(() => {
+  if (rolledDice.value.length) return revealedCount.value < rolledDice.value.length
+  return props.phase === 'rolling' && baseDice.value.length > 0
+})
 const tumbleFaces = ref([])
 let tumbleTimer = null
 
@@ -122,7 +151,7 @@ function rollFace(die) {
   return Math.floor(Math.random() * sides) + 1
 }
 
-watch(isTumbling, (on) => {
+watch(tumbleActive, (on) => {
   if (tumbleTimer) { clearInterval(tumbleTimer); tumbleTimer = null }
   if (!on) { tumbleFaces.value = []; return }
   tumbleFaces.value = baseDice.value.map(d => rollFace(d.die))
@@ -131,13 +160,19 @@ watch(isTumbling, (on) => {
   }, TUMBLE_MS)
 }, { immediate: true })
 
-onUnmounted(() => { if (tumbleTimer) clearInterval(tumbleTimer) })
+onUnmounted(() => {
+  if (tumbleTimer) clearInterval(tumbleTimer)
+  clearLockTimers()
+})
 
-const shownDice = computed(() => baseDice.value.map((d, i) => ({
-  ...d,
-  face: d.result != null ? d.result : (isTumbling.value ? (tumbleFaces.value[i] ?? null) : null),
-  locked: d.result != null,
-})))
+const shownDice = computed(() => baseDice.value.map((d, i) => {
+  const settled = d.result != null && i < revealedCount.value
+  return {
+    ...d,
+    face: settled ? d.result : (tumbleActive.value ? (tumbleFaces.value[i] ?? null) : null),
+    locked: settled,
+  }
+}))
 
 const positionedDice = computed(() =>
   distribute(shownDice.value, -Math.PI / 2)
@@ -179,9 +214,10 @@ const totalOffsetY = computed(() =>
   transform-origin: 0 0;
 }
 /* Roll animation, mirroring DiceRoller's (roll-pop when the dice appear, die-lock
-   when a face settles). Animated with the *scale* property, never `transform`:
-   each item's inline transform is what places it on the ring, and an animation on
-   `transform` would override it and stack every die at the centre. */
+   as each face settles, one per LOCK_STAGGER_MS). Animated with the *scale*
+   property, never `transform`: each item's inline transform is what places it on
+   the ring, and an animation on `transform` would override it and stack every die
+   at the centre. */
 .pool-die-item.tumbling { animation: ringRollPop 0.09s ease-in-out; }
 .pool-die-item.locked { animation: ringDieLock 0.2s ease-out; }
 @keyframes ringRollPop {

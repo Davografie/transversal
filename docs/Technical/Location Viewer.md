@@ -276,15 +276,21 @@ presence poll also re-fetches `playerBodies`, so a missed `body_changed` cannot
 leave a dot sized up for long.
 
   `poolDiceFor` returns the pool's dice for `rolling` as well as `adding`, and
-  prefers `results.rolls` whenever they exist — so the ring shows the numbers that
-  landed in **every** phase after the roll (previously `rolling` and `resolved`
-  returned nothing, and the ring's `v-if` dropped it entirely mid-roll).
-- **The roll animation is mirrored from the panel**: while `phase === 'rolling'`
-  with no results yet, the ring tumbles each die's face every `TUMBLE_MS` (70ms,
-  the roller's interval) and plays a `roll-pop` on entry / `die-lock` on settle —
-  the same shapes as `DiceRoller`, but animated with the **`scale` property, never
-  `transform`**: each item's inline `transform` is what places it on the ring, so a
-  `transform` animation would override it and stack every die at the centre.
+  prefers `results.rolls` once the phase is past `adding` (never in `adding`, where
+  the pool itself is the truth).
+- **The roll animation is mirrored from the panel**: while a roll is live the ring
+  tumbles each die's face every `TUMBLE_MS` (70ms, the roller's interval) and locks
+  them **one at a time** left-to-right — `FIRST_LOCK_MS` (900) before the first,
+  `LOCK_STAGGER_MS` (1000) between each — playing `roll-pop` on entry and
+  `die-lock` as each face settles, the same shapes as `DiceRoller`. Animations use
+  the **`scale` property, never `transform`**: each item's inline `transform` is
+  what places it on the ring, so a `transform` animation would override it and
+  stack every die at the centre.
+- **Results are shown only while the roll is live.** `poolDiceFor` serves the
+  pool's dice in `adding`/`rolling` and prefers `results.rolls` only when the phase
+  is *past* `adding` — so clearing the pool (which returns the phase to `adding`)
+  hides the ring immediately instead of holding the last roll's dice until the end
+  of the beat.
 - **Your own ring is fed locally.** `sharePhase`/`onDiceRolled`/`@picked` write the
   acting entity's phase and results into `remotePools`/`remoteResults` too (via
   `mirrorOwnResult`). Solo play has no SSE at all, and in a session the `pool_updated`

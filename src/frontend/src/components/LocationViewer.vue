@@ -48,7 +48,7 @@
       />
       <!-- Pool dice ring around occupant dot -->
       <PoolDiceRing
-        v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || remoteResults[o.id])"
+        v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || (poolPhaseFor(o.id) !== 'adding' && remoteResults[o.id]))"
         :dice="poolDiceFor(o.id)"
         :phase="poolPhaseFor(o.id)"
         :cx="o.map_x ?? occupantX(i, o)"
@@ -146,7 +146,7 @@
       @drag-start="(e) => onSelfDragStart(e)"
     />
     <PoolDiceRing
-      v-if="!travelAnim.active && showElements && (poolDiceFor(entityId).length > 0 || remoteResults[entityId])"
+      v-if="!travelAnim.active && showElements && (poolDiceFor(entityId).length > 0 || (poolPhaseFor(entityId) !== 'adding' && remoteResults[entityId]))"
       :dice="poolDiceFor(entityId)"
       :phase="poolPhaseFor(entityId)"
       :cx="selfX"
@@ -635,14 +635,13 @@ function occupantInitials(name) {
 const poolDiceFor = (eid) => {
   const pool = props.remotePools[eid]
   const results = props.remoteResults[eid]
-  // Rolled results win whenever we have them — the ring shows the numbers that
-  // landed, in every phase after the roll (not just while picking).
-  if (results?.rolls?.length) return results.rolls
-  if (!pool) return []
-  // `adding` and `rolling` both carry the pool's dice; during a roll the ring
-  // tumbles them (see PoolDiceRing).
-  if (pool.phase === 'adding' || pool.phase === 'rolling') {
-    return (pool.dice || []).map(d => (typeof d === 'string' ? d : d.die || d))
+  const phase = pool?.phase || 'adding'
+  // Rolled results are live only while the roll is: back in `adding` the ring
+  // shows the pool itself — and nothing at all once the pool is cleared, rather
+  // than holding the last roll's dice until the end of the beat.
+  if (phase !== 'adding' && results?.rolls?.length) return results.rolls
+  if (phase === 'adding' || phase === 'rolling') {
+    return (pool?.dice || []).map(d => (typeof d === 'string' ? d : d.die || d))
   }
   return []
 }
