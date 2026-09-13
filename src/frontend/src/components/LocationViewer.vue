@@ -1053,9 +1053,10 @@ function zoneId(z, i) {
 }
 
 // Is a client actively driving this entity? (The `controlled` dot state, and the
-// input to the pool dice ring radius.)
+// input to the pool dice ring radius.) Props are NOT auto-unwrapped in script
+// scope — this must go through `props`.
 function isControlled(id) {
-  return !!id && controlledEntityIds.includes(id)
+  return !!id && props.controlledEntityIds.includes(id)
 }
 
 function childImage(zone) {
