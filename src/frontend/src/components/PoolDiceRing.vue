@@ -25,11 +25,12 @@
       />
     </span>
 
-    <!-- Resolved: total badge above, effect dice below -->
+    <!-- Resolved: total badge above, effect dice below (below the ring when the
+         portrait overflows the top) -->
     <template v-if="phase === 'resolved' && resolved">
       <span
         class="resolved-total"
-        :style="{ transform: 'translate(-50%, ' + (-radiusPx - 16) + 'px)' }"
+        :style="{ transform: 'translate(-50%, ' + totalOffsetY + 'px)' }"
       >{{ resolved.total }}</span>
       <span
         v-for="(ed, i) in positionedEffectDice"
@@ -53,10 +54,19 @@ const props = defineProps({
   cx: { type: Number, required: true },
   cy: { type: Number, required: true },
   resolved: { type: Object, default: null },
+  scale: { type: Number, default: 1 },        // the dot's own scale (controlled dots are bigger)
+  transparent: { type: Boolean, default: false },  // portrait overflows the top of the rim
 })
 
-// Radius in pixels from dot center — keeps dice equidistant regardless of viewport shape
-const radiusPx = 44
+// Radius in pixels from the dot center — keeps dice equidistant regardless of
+// viewport shape. Scaled with the dot so a sized-up dot keeps its ring outside
+// the rim instead of inside the portrait.
+const BASE_RADIUS_PX = 44
+// Fraction of the circle a transparent portrait may overflow into (its head).
+// Dice never enter this slice: they are spread over the rest of the arc.
+const TOP_GAP_FRACTION = 0.2
+
+const radiusPx = computed(() => BASE_RADIUS_PX * (props.scale || 1))
 
 function radialOffset(index, total, radius, startAngle) {
   const angle = (2 * Math.PI / total) * index + startAngle
@@ -66,26 +76,51 @@ function radialOffset(index, total, radius, startAngle) {
   }
 }
 
-const positionedDice = computed(() => {
-  const n = props.dice.length
+// Transparent portraits stick out above the rim, so their dice are anchored on
+// the bottom (6 o'clock — +π/2 in screen coords) and spread upward to both
+// sides, filling the arc outside the reserved top slice.
+function radialOffsetBottomAnchored(index, total, radius) {
+  const span = 2 * Math.PI * (1 - TOP_GAP_FRACTION)
+  const angle = (Math.PI / 2) - span / 2 + (span / total) * (index + 0.5)
+  return {
+    tx: radius * Math.cos(angle),
+    ty: radius * Math.sin(angle),
+  }
+}
+
+// `items` are per-die payloads; each gets the offset for its place in the ring.
+function distribute(items, startAngle) {
+  const n = items.length
   if (n === 0) return []
-  return props.dice.map((d, i) => {
-    const off = radialOffset(i, n, radiusPx, -Math.PI / 2)
-    return { ...off, die: d }
+  return items.map((item, i) => {
+    const off = props.transparent
+      ? radialOffsetBottomAnchored(i, n, radiusPx.value)
+      : radialOffset(i, n, radiusPx.value, startAngle)
+    return { ...item, ...off }
   })
-})
+}
+
+// The resolved total sits outside the ring: above it normally, below it when the
+// portrait overflows the top.
+const totalOffsetY = computed(() =>
+  props.transparent ? radiusPx.value + 16 : -radiusPx.value - 16
+)
+
+const positionedDice = computed(() =>
+  distribute(props.dice.map(d => ({ die: d })), -Math.PI / 2)
+)
 
 const positionedEffectDice = computed(() => {
-  const effectDice = props.resolved?.effect_dice || []
-  if (props.resolved?.effect_die && effectDice.length === 0) {
-    effectDice.push({ die: props.resolved.effect_die, result: props.resolved.effect_die_value })
+  const resolved = props.resolved
+  // Copy — never push into a prop's array.
+  const effectDice = resolved?.effect_dice ? [...resolved.effect_dice] : []
+  if (resolved?.effect_die && effectDice.length === 0) {
+    effectDice.push({ die: resolved.effect_die, result: resolved.effect_die_value })
   }
-  const n = effectDice.length
-  if (n === 0) return []
-  return effectDice.map((ed, i) => {
-    const off = radialOffset(i, n, radiusPx, Math.PI / 2)
-    return { ...off, die: ed.die, result: ed.result }
-  })
+  return distribute(
+    effectDice.map(ed => ({ die: ed.die, result: ed.result })),
+    Math.PI / 2,
+  )
 })
 </script>
 

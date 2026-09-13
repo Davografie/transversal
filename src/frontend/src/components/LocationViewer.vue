@@ -1,5 +1,5 @@
 <template>
-  <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" @click="onBgClick">
+  <div ref="viewerEl" class="location-viewer" :class="{ 'portal-active': travelAnim.active }" :style="{ '--controlled-scale': CONTROLLED_SCALE }" @click="onBgClick">
     <!-- Scene layer: background + world dots, all panned by ONE transform.
          Dots sit at image-space coordinates inside the layer, so panning
          never moves them individually (compositor-only, no per-dot paint). -->
@@ -33,7 +33,7 @@
         v-if="!travelAnim.active && showElements"
         type="occupant"
         :variant="o.type"
-        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: controlledEntityIds.includes(o.id), settling: settlingIds.includes(o.id) }"
+        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: isControlled(o.id), settling: settlingIds.includes(o.id) }"
         :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
         :image="o.image"
         :image-transparent="!!o.image_transparent"
@@ -54,6 +54,8 @@
         :cx="o.map_x ?? occupantX(i, o)"
         :cy="o.map_y ?? occupantY(i, o)"
         :resolved="remoteResults[o.id] || null"
+        :scale="isControlled(o.id) ? CONTROLLED_SCALE : 1"
+        :transparent="!!o.image_transparent"
       />
       </template>
 
@@ -150,6 +152,8 @@
       :cx="selfX"
       :cy="selfY"
       :resolved="remoteResults[entityId] || null"
+      :scale="isControlled(entityId) ? CONTROLLED_SCALE : 1"
+      :transparent="!!selfOccupant.image_transparent"
     />
 
     <!-- Travel expansion animation -->
@@ -186,6 +190,9 @@ const CAMERA_START = 0.6         // window-height fraction where the zoom-in beg
 const CAMERA_FULL = 0.2          // window-height fraction where the zoom is full
 const EXPAND_PROXIMITY = 24      // image-% — distance at which bubbles pop out
 const TRAVEL_PROXIMITY_FACTOR = 0.5  // <1 = narrower drop-to-travel zone
+const CONTROLLED_SCALE = 1.4     // actively-controlled dots render this much bigger
+                                 // (also drives the pool dice ring radius, so the
+                                 // ring stays outside the rim at every size)
 
 const props = defineProps({
   locationId: { type: String, required: true },
@@ -1043,6 +1050,12 @@ function childForZone(zone) {
 function zoneId(z, i) {
   if (z.location_id) return z.location_id
   return `idx-${i === undefined ? zones.value.indexOf(z) : i}`
+}
+
+// Is a client actively driving this entity? (The `controlled` dot state, and the
+// input to the pool dice ring radius.)
+function isControlled(id) {
+  return !!id && controlledEntityIds.includes(id)
 }
 
 function childImage(zone) {

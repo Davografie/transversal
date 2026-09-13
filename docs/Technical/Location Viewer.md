@@ -55,6 +55,15 @@ locally.
   to a larger image/label bubble when `expanded`, and grows again when
   `draggable`. Emits `click`, `overlay-click`, and `drag-start`.
 - `PoolDiceRing.vue` — the dice ring orbiting a dot (dice pool phase + resolved total).
+  Its radius is `BASE_RADIUS_PX × scale`, where `scale` is the dot's own
+  `CONTROLLED_SCALE` (1.4) when a client is driving that entity and 1 otherwise —
+  so the ring stays outside the rim at every dot size instead of slipping inside a
+  grown portrait. Transparent portraits overflow the rim at the top, so their dice
+  are **bottom-anchored**: spread over the arc that excludes the top
+  `TOP_GAP_FRACTION` (0.2) of the circle, centred on 6 o'clock and fanning upward
+  to both sides (verified: no die lands in the reserved slice for n = 1–6, and
+  `n = 1` sits exactly at the bottom). The resolved total badge mirrors that —
+  above the ring normally, below it when the portrait overflows the top.
 - `composables/useTransversalLinks.js` — toggles a transversal edge's
   `transversal_type` (`consciousness` ⇄ `inapposite`).
 - `composables/media.js` — shared helpers `isVideoUrl(url)` and
@@ -381,7 +390,9 @@ border), and the overlay/particle system below — run continuously.
   with `lerpActive = true`, so non-self occupant dots ease to their new positions
   over 1.5s instead of teleporting.
 - `remotePools` / `remoteResults` props drive `PoolDiceRing` around occupant and
-  self dots.
+  self dots; the ring takes the dot's `scale` and `transparent` so it tracks both
+  the controlled-dot size and the portrait's top overflow (see the component entry
+  above).
 
 ## Key design decisions & gotchas
 

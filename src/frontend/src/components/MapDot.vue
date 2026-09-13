@@ -123,7 +123,7 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
      the `arrivePop` animation, which fills `transform` forwards and would win
      the cascade — `scale` composes with `transform` instead, so it survives
      while still scaling the portrait/ring geometry (--dot-r) uniformly. */
-  --controlled-scale: 1.4;
+  --controlled-scale: 1.4;  /* fallback — LocationViewer passes CONTROLLED_SCALE */
   transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, scale 0.25s ease;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
