@@ -322,7 +322,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { ancestorsOf, canPickUp, carriedNegatives, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
+import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -913,7 +913,7 @@ const projectionChoices = computed(() =>
 // Helpers the read-only trait detail needs; functions only, so the child can
 // take them as one object without any unwrapping.
 const detailApi = {
-  canPlayTrait, playTrait, ratingTypeLabel, challengeProgressLabel, detailContext,
+  canPlayTrait, playTrait, ratingTypeLabel, challengeProgressLabel, challengeRemainingGroups, detailContext,
   displayName, sfxCardModel, activateSfx,
 }
 
@@ -939,7 +939,7 @@ const {
 // so creating the object earlier would hit the TDZ).
 const traitRowApi = {
   isKnown, isInPool, isOffered, displayName, traitTimerLabel, isResourceDepleted,
-  traitDiceGroups, resourceDiceGroups, resourceSpentGroups,
+  traitDiceGroups, resourceDiceGroups, resourceSpentGroups, challengeRemainingGroups,
   spendResourceGroup, spendChallengeGroup, challengeProgressLabel,
   resolvedDieType, resourceDisplay, sfxCardModel, activateSfx,
   openTraitDetail, startEdit, playTrait, onTouchStart, onTouchEnd,
@@ -1195,11 +1195,22 @@ function resourceSpentGroups(t) {
   return groupByDieType(t.spentDice)
 }
 
+// A challenge pool's unfilled capacity, rendered as ghost dice beside the dice
+// that have filled it (see challengeRemaining in utils/traitTree.js).
+function challengeRemainingGroups(t) {
+  return groupByDieType(challengeRemaining(t))
+}
+
 function isResourceDepleted(t) {
   // Resources and challenge pools show a dimmed "depleted/empty" state when
   // their spendable dice ledger is empty.
   if (t.ratingType !== 'RESOURCE' && t.ratingType !== 'CHALLENGE') return false
-  return (!t.dice || t.dice.length === 0)
+  if ((t.dice || []).length) return false
+  // An unfilled challenge track is not depleted — it is *waiting*, and its
+  // ghost dice say so. Only a challenge with no track at all reads as depleted;
+  // for a resource, an empty ledger is exactly what depleted means.
+  if (t.ratingType === 'CHALLENGE') return !(t.capacity || []).length
+  return true
 }
 
 function isInPool(t) {

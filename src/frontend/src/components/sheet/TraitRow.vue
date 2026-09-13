@@ -104,7 +104,11 @@
         </div>
         <span v-if="!(trait.dice || []).length && !(trait.spentDice || []).length" class="trait-die depleted">depleted</span>
       </div>
-      <div v-else-if="trait.ratingType === 'CHALLENGE'" class="trait-die-groups challenge">
+      <div
+        v-else-if="trait.ratingType === 'CHALLENGE'"
+        class="trait-die-groups challenge"
+        :title="api.challengeProgressLabel(trait) ? api.challengeProgressLabel(trait) + ' filled' : null"
+      >
         <div
           v-for="(group, gi) in api.resourceDiceGroups(trait)"
           :key="'c' + gi"
@@ -120,8 +124,24 @@
             :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
           />
         </div>
-        <span v-if="api.challengeProgressLabel(trait)" class="challenge-progress">{{ api.challengeProgressLabel(trait) }}</span>
-        <span v-if="!(trait.dice || []).length" class="trait-die depleted">empty</span>
+        <!-- The unfilled tail of the track — the capacity's own dice, dimmed
+             and not clickable: there is nothing to spend until a slot fills.
+             The filled dice above stay themselves, so a d6 filling a d8 slot
+             reads as a d6 rather than being disguised as the capacity. -->
+        <div
+          v-for="(group, gi) in api.challengeRemainingGroups(trait)"
+          :key="'r' + gi"
+          class="trait-die-group"
+        >
+          <DieIcon
+            v-for="(die, i) in group"
+            :key="i"
+            :die="die"
+            class="trait-die-icon ghost"
+            :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
+          />
+        </div>
+        <span v-if="!(trait.dice || []).length && !api.challengeRemainingGroups(trait).length" class="trait-die depleted">empty</span>
       </div>
       <span v-else class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
     </div>

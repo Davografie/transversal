@@ -37,12 +37,13 @@
       <span class="detail-label">Rating</span>
       <span class="detail-meta">{{ api.ratingTypeLabel(trait) }}</span>
     </div>
-    <div class="detail-dice">
-      <DieIcon v-for="(die, i) in (trait.dice || [])" :key="i" :die="String(die).toLowerCase()" class="detail-die" />
-      <span v-if="api.challengeProgressLabel(trait)" class="challenge-progress">{{ api.challengeProgressLabel(trait) }}</span>
-      <span v-if="!(trait.dice || []).length" class="trait-die depleted">unrated</span>
+    <div class="detail-dice" :title="api.challengeProgressLabel(trait) ? api.challengeProgressLabel(trait) + ' filled' : null">
+      <DieIcon v-for="(die, i) in (trait.dice || [])" :key="'f' + i" :die="String(die).toLowerCase()" class="detail-die" />
+      <!-- The unfilled capacity of a challenge track, dimmed (see
+           challengeRemainingGroups). Not clickable — nothing to spend yet. -->
+      <DieIcon v-for="(die, i) in api.challengeRemainingGroups(trait).flat()" :key="'r' + i" :die="die" class="detail-die ghost" />
+      <span v-if="!(trait.dice || []).length && !api.challengeRemainingGroups(trait).length" class="trait-die depleted">unrated</span>
     </div>
-    <div v-if="!(trait.dice || []).length" class="trait-die depleted">unrated</div>
     <p v-if="trait.statement" class="detail-statement">{{ trait.statement }}</p>
   </div>
 
@@ -181,6 +182,8 @@ const tagRows = computed(() => {
   flex-wrap: wrap;
 }
 .detail-die { width: 40px; height: 43px; }
+/* Unfilled challenge capacity — the same dimming as the row's ghost dice. */
+.detail-die.ghost { opacity: 0.32; }
 .detail-statement {
   margin: 8px 0 0;
   font-size: 13px;

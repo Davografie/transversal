@@ -9,12 +9,13 @@
  *     -w /work transversal2-frontend:latest node scripts/check-trait-tree.mjs
  *
  * It pins the semantics that are easy to get subtly wrong: the tag union that
- * marks a container, the query-depth cap, and the limit recursion where a
+ * marks a container, the query-depth cap, the limit recursion where a
  * sub-trait rides its parent but a container contributes its children instead
- * of itself.
+ * of itself, and the unfilled tail of a challenge track.
  */
 
 import {
+  challengeRemaining,
   childrenOf,
   countSetPicks,
   countDescendants,
@@ -163,6 +164,26 @@ ok('a deep sub-trait of a non-container cannot',
 ok('nested container detected via registryTags',
    isContainer(tree[0].subTraitSettings[1]), true)
 ok('deeper nesting is reachable', childrenOf(tree[0].subTraitSettings[1]).length, 2)
+
+// ── a challenge track draws its unfilled capacity as ghost dice ──────────
+// The filled dice ARE the ledger (`dice`); the shortfall is the tail of the
+// capacity array, and it keeps its own slot types — a d6 can fill a d8 slot,
+// and the two lists must not be paired.
+const track = (dice, capacity) => ({ ratingType: 'CHALLENGE', dice, capacity })
+ok('4 filled of 6 leaves the last 2 capacity dice',
+   challengeRemaining(track(['d8', 'd8', 'd8', 'd8'], ['d8', 'd8', 'd8', 'd8', 'd8', 'd8'])), ['d8', 'd8'])
+ok('an empty track leaves the whole capacity',
+   challengeRemaining(track([], ['d6', 'd6', 'd6'])), ['d6', 'd6', 'd6'])
+ok('a full track leaves none',
+   challengeRemaining(track(['d6', 'd6'], ['d6', 'd6'])), [])
+ok('an over-filled track leaves none (never invents dice)',
+   challengeRemaining(track(['d6', 'd6', 'd6'], ['d6', 'd6'])), [])
+ok('a mixed capacity keeps its own slot types, in order',
+   challengeRemaining(track(['d4'], ['d4', 'd4', 'd6'])), ['d4', 'd6'])
+ok('no capacity set, no ghosts',
+   challengeRemaining(track(['d6'], null)), [])
+ok('a non-challenge trait has no track',
+   challengeRemaining({ ratingType: 'STATIC', dice: ['d6'], capacity: ['d8'] }), [])
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

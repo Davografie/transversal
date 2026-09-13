@@ -209,3 +209,24 @@ function subtreeTouched(setting, isInPool) {
   if (isInPool(setting)) return true
   return childrenOf(setting).some((child) => subtreeTouched(child, isInPool))
 }
+
+/**
+ * The **unfilled** dice of a challenge track, in track order.
+ *
+ * `capacity` is the pool's target (positive) or ceiling (negative) — e.g.
+ * `[D6, D6, D6]` — and `dice` is what the ledger has filled toward it, so the
+ * shortfall is the *tail* of the capacity array. Slice rather than synthesize:
+ * live capacities are mixed-type (`['d8','d8','d6']`), and an unfilled slot has
+ * its own type.
+ *
+ * The shortfall is deliberately **not** paired with the filled dice. The two
+ * lists are independent — a `d6` can fill a `d8` slot — and pairing them would
+ * invent an alignment the data does not carry. The sheet shows the filled dice
+ * as themselves and the shortfall as the capacity it is.
+ */
+export function challengeRemaining(setting) {
+  if (!setting || setting.ratingType !== 'CHALLENGE') return []
+  const capacity = setting.capacity || []
+  const filled = (setting.dice || []).length
+  return filled >= capacity.length ? [] : capacity.slice(filled)
+}

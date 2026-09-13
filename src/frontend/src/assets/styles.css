@@ -292,14 +292,6 @@ select option {
 .die-d10 { color: var(--die-d10); }
 .die-d12 { color: var(--die-d12); }
 
-/* Challenge progress readout ("3/5") next to a challenge trait's dice — shared
-   between the list row and the detail panel for the same reason. */
-.challenge-progress {
-  align-self: center;
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
 .entity-die { width: 28px; height: 32px; }
 .entity-result {
   font-size: 11px; color: var(--text-dim); text-align: center;
