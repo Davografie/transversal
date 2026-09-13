@@ -4,7 +4,7 @@
        trait and its own sub-traits — which made the sub-traits look like they
        did not belong ("the neutron staff is the asset; damaged is a detail that
        lives on the staff"). -->
-  <div class="trait-node" :class="{ wrap, 'has-contents': renderChildren }">
+  <div class="trait-node" :class="{ wrap, 'has-contents': renderChildren, 'is-morph': trait.ego === false, 'is-negative': trait.polarity === 'NEGATIVE' }">
   <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, container: api.isContainer(trait), 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false, 'drag-over': api.isDragOver(trait), dragging: api.isDragging(trait) }" :data-ts-id="trait.id" :data-drop-container="api.isContainer(trait) ? trait.id : null" @click="onRowClick" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd" @dragover.prevent="api.onTraitDragOver($event)" @dragleave="api.onTraitDragLeave()" @drop.prevent="api.onTraitDrop($event)" @dragend="api.onTraitDragEnd()">
     <!-- The grip exists only in a set that holds a container — outside one there
          is nowhere to drop, so it would be chrome with no purpose. The GM tree
@@ -360,8 +360,10 @@ function onRowClick() {
 }
 
 .trait-row.morph {
-  background: var(--accent-8);
-  border-left: 2px solid var(--accent);
+  /* The tint is on the node now (see .trait-node.is-morph) so it can wrap the
+     trait's contents too; painting it here as well would double it. */
+  background: transparent;
+  border-left: none;
 }
 
 .trait-row.wrap .trait-left {
@@ -496,14 +498,30 @@ function onRowClick() {
   max-width: 100%;
 }
 
-/* Sub-traits — and a container's contents — are small chips that wrap in-line
-   and grow to fill the row, so a trait's details read as one filled block
-   rather than a ragged tail. The inset indent is the nesting cue; the node's
-   background is the grouping. (The old app right-aligned these rows instead —
-   `justify-content: end` — but the human asked for them to stretch.) */
+/* The morph tint belongs to the whole trait, not just its header: a body's
+   details are as much the body's as the trait is. So it lives on the node,
+   which holds the row AND its contents. Placed after `has-contents` so it wins
+   that tie — a morph container is tinted, not neutral. */
+.trait-node.is-morph {
+  background: var(--accent-8);
+  border-left: 2px solid var(--accent);
+  border-radius: 8px;
+}
+
+.trait-node.is-morph.is-negative {
+  background: color-mix(in srgb, var(--die-d8-neg) 14%, transparent);
+  border-left-color: var(--die-d8-neg);
+}
+
+/* Sub-traits — and a container's contents — are small chips that wrap in-line.
+   They pack to the RIGHT rather than stretching: the right edge is where the
+   trait's own die sits, so they read as hanging off it. (That is what the old
+   app did — `justify-content: end` — and the human asked for it back; the
+   profile chips still stretch, since there the node is the flex item.) */
 .sub-trait-list {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 4px;
   padding: 4px 2px 2px 12px;
 }
@@ -518,8 +536,8 @@ function onRowClick() {
   font-size: 12px;
   cursor: pointer;
   transition: background 0.1s;
-  /* A chip, and it fills the row it is on. */
-  flex: 1 1 auto;
+  /* A chip, sized to its content so the row can be packed right. */
+  flex: 0 0 auto;
   max-width: 100%;
   background: var(--overlay-4);
 }
@@ -675,7 +693,9 @@ function onRowClick() {
 }
 
 .trait-row.negative.morph {
-  background: color-mix(in srgb, var(--die-d8-neg) 14%, transparent);
-  border-left: 2px solid var(--die-d8-neg);
+  /* Likewise: the node carries the negative-morph tint, so the row only keeps
+     its die colours (set above). */
+  background: transparent;
+  border-left: none;
 }
 </style>
