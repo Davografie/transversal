@@ -11,24 +11,39 @@
                  @activate="api.activateSfx(sfxId, trait.id)" />
       </div>
     </div>
-    <!-- A container carries no rating, so it has no die to play and no SFX to
-         activate — two of the three row zones vanish, and that is what frees
-         the body to be the expand toggle. Its name still opens the detail.
-         The toggle is the shared icon `Button` (32×32, focus ring, press
-         states) rather than a bare glyph, so it is a real touch target; the
-         whole body toggles too, so the reach never depends on hitting it. -->
-    <div v-if="api.isContainer(trait)" class="trait-right container-toggle">
-      <Button
-        variant="ghost"
-        size="icon"
-        :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'"
-        :aria-expanded="api.isExpanded(trait) ? 'true' : 'false'"
-        :aria-controls="childrenListId"
-        @click.stop="api.toggleExpand(trait)"
-      >
-        <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
-      </Button>
-      <span class="container-count">{{ api.containerCount(trait) }}</span>
+    <!-- A container is a trait like any other, so its right zone keeps whatever
+         rating it has (one instance of the container trait in the live data is
+         a static d6 — a container *may* be rated). The disclosure is added
+         below it, and only when there is something to disclose: an empty
+         container is the default state right after tagging, and a chevron that
+         opens nothing is a dead affordance. Without contents this cell renders
+         exactly like any other trait. -->
+    <div v-if="api.isContainer(trait)" class="trait-right container-cell">
+      <div v-if="api.traitDiceGroups(trait).length" class="trait-die-groups">
+        <div v-for="(group, gi) in api.traitDiceGroups(trait)" :key="gi" class="trait-die-group">
+          <DieIcon
+            v-for="(die, i) in group"
+            :key="i"
+            :die="die"
+            class="trait-die-icon"
+            :style="i ? { marginLeft: '-20px', marginTop: `${i * 4}px` } : null"
+          />
+        </div>
+      </div>
+      <span v-else-if="trait.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
+      <div v-if="api.hasContents(trait)" class="container-toggle">
+        <Button
+          variant="ghost"
+          size="icon"
+          :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'"
+          :aria-expanded="api.isExpanded(trait) ? 'true' : 'false'"
+          :aria-controls="childrenListId"
+          @click.stop="api.toggleExpand(trait)"
+        >
+          <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+        </Button>
+        <span class="container-count">{{ api.containerCount(trait) }}</span>
+      </div>
     </div>
     <div v-else class="trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
       <div v-if="api.traitDiceGroups(trait).length" class="trait-die-groups">
@@ -112,18 +127,32 @@
       <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="trait.statement" class="sub-trait-statement">{{ trait.statement }}</span>
     </div>
-    <div v-if="api.isContainer(trait)" class="sub-trait-right container-toggle">
-      <Button
-        variant="ghost"
-        size="icon"
-        :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'"
-        :aria-expanded="api.isExpanded(trait) ? 'true' : 'false'"
-        :aria-controls="childrenListId"
-        @click.stop="api.toggleExpand(trait)"
-      >
-        <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
-      </Button>
-      <span class="container-count">{{ api.containerCount(trait) }}</span>
+    <div v-if="api.isContainer(trait)" class="sub-trait-right container-cell">
+      <div v-if="api.traitDiceGroups(trait).length" class="trait-die-groups">
+        <div v-for="(group, gi) in api.traitDiceGroups(trait)" :key="gi" class="trait-die-group">
+          <DieIcon
+            v-for="(die, i) in group"
+            :key="i"
+            :die="die"
+            class="trait-die-icon sub-trait-die"
+            :style="i ? { marginLeft: '-12px' } : null"
+          />
+        </div>
+      </div>
+      <span v-else-if="trait.ratingType !== 'EMPTY'" class="trait-die" :class="`die-${api.resolvedDieType(trait)}`">{{ api.resourceDisplay(trait) }}</span>
+      <div v-if="api.hasContents(trait)" class="container-toggle">
+        <Button
+          variant="ghost"
+          size="icon"
+          :title="api.isExpanded(trait) ? 'Hide contents' : 'Show contents'"
+          :aria-expanded="api.isExpanded(trait) ? 'true' : 'false'"
+          :aria-controls="childrenListId"
+          @click.stop="api.toggleExpand(trait)"
+        >
+          <span class="container-chevron" :class="{ open: api.isExpanded(trait) }">▶</span>
+        </Button>
+        <span class="container-count">{{ api.containerCount(trait) }}</span>
+      </div>
     </div>
     <div v-else class="sub-trait-right" @click.stop="api.playTrait(trait)" :title="'Play ' + api.displayName(trait.name)">
       <div v-if="api.traitDiceGroups(trait).length" class="trait-die-groups">
@@ -203,9 +232,11 @@ const renderChildren = computed(() =>
 )
 
 // The body toggles a container open, while every other row opens its detail.
-// A container's own name still opens the detail, so neither is lost.
+// An EMPTY container has nothing to disclose, so it opens its detail like any
+// other trait rather than swallowing the tap. A container's own name always
+// opens the detail either way.
 function onRowClick() {
-  if (props.api.isContainer(props.trait)) props.api.toggleExpand(props.trait)
+  if (props.api.hasContents(props.trait)) props.api.toggleExpand(props.trait)
   else props.api.openTraitDetail(props.trait)
 }
 </script>
@@ -455,19 +486,23 @@ function onRowClick() {
 }
 
 /* ── Container rows ──────────────────────────────────────────────────────
-   A container is an ordinary trait; the only visual difference is that its
-   right-hand zone is a disclosure control rather than a die. The row reads
-   like a trait set's row — a name and a count — which is the point: a traitset
-   is a container you don't own, a container is a traitset you do.
+   A container is an ordinary trait. Its cell keeps whatever rating the instance
+   has — a container *may* be rated — and adds a disclosure line below it, and
+   only when there is something to disclose. An empty container therefore
+   renders exactly like any other trait, which is the state it is in the moment
+   it is tagged.
 
-   The control itself is the shared icon `Button` (32×32 — the same target as
-   the GM location tree's disclosure), so the touch sizing, press feedback,
-   focus ring and reduced-motion handling all come from the primitive. */
-.trait-right.container-toggle,
-.sub-trait-right.container-toggle {
-  flex-direction: row;
+   The control is the shared icon `Button` (32×32 — the same target as the GM
+   location tree's disclosure), so touch sizing, press feedback, focus ring and
+   reduced-motion handling all come from the primitive. */
+.container-cell {
+  gap: 2px;
+}
+
+.container-toggle {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   color: var(--text-dim);
 }
 

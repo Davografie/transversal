@@ -48,6 +48,18 @@ export function countDescendants(setting) {
 }
 
 /**
+ * A container with contents — the only kind that earns a disclosure control.
+ *
+ * An *empty* container must not show one: the chevron would open nothing, which
+ * is a dead affordance, and a container is empty by default the moment it is
+ * tagged. Without this, tagging a trait every character already holds turns
+ * every one of those rows into a control that does nothing.
+ */
+export function hasContents(trait) {
+  return isContainer(trait) && childrenOf(trait).length > 0
+}
+
+/**
  * Whether a row should render its children.
  *
  * A non-container always shows its sub-traits — they are part of it, which is

@@ -321,7 +321,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { countDescendants, countSetPicks, isContainer } from '../utils/traitTree.js'
+import { countDescendants, countSetPicks, hasContents, isContainer } from '../utils/traitTree.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -828,7 +828,7 @@ const traitRowApi = {
   spendResourceGroup, spendChallengeGroup, challengeProgressLabel,
   resolvedDieType, resourceDisplay, sfxCardModel, activateSfx,
   openTraitDetail, startEdit, playTrait, onTouchStart, onTouchEnd,
-  isContainer, isExpanded, toggleExpand, containerCount,
+  isContainer, isExpanded, toggleExpand, containerCount, hasContents,
 }
 
 function openTraitDetail(t) {

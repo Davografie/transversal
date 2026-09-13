@@ -18,6 +18,7 @@ import {
   childrenOf,
   countSetPicks,
   countDescendants,
+  hasContents,
   isContainer,
   showsChildren,
   traitTags,
@@ -80,6 +81,12 @@ ok('container is collapsed until opened', showsChildren(containerRow), false)
 ok('opened container shows them', showsChildren(containerRow, { expanded: true }), true)
 ok('childless container shows nothing', showsChildren(emptyContainer, { expanded: true }), false)
 ok('a hidden row reveals nothing', showsChildren(plainParent, { rootKnown: false }), false)
+
+// ── only a container with something to disclose gets a control ──────────
+ok('filled container earns a disclosure', hasContents(containerRow), true)
+ok('empty container does not', hasContents(emptyContainer), false)
+ok('a non-container never does', hasContents(plainParent), false)
+ok('a container is still one while empty', isContainer(emptyContainer), true)
 
 // ── a container is still a container when marked on the registry side ────
 ok('nested container detected via registryTags',
