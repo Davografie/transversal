@@ -79,6 +79,34 @@ export function subtreeContains(root, id) {
   return childrenOf(root).some((child) => subtreeContains(child, id))
 }
 
+/** Find a setting by id anywhere in a list of trees. */
+export function findSetting(nodes, id) {
+  for (const setting of nodes || []) {
+    if (setting.id === id) return setting
+    const hit = findSetting(childrenOf(setting), id)
+    if (hit) return hit
+  }
+  return null
+}
+
+/**
+ * The top-level setting that anchors a trait's chain — the setting a sub-trait
+ * ultimately hangs from. `null` if the chain is not in `nodes`.
+ *
+ * Mirrors `_resolve_ego` on the backend: a sub-trait has no anchor of its own,
+ * so anything derived from the anchor comes from the root of its chain.
+ */
+export function rootAnchor(nodes, settingId) {
+  let cur = findSetting(nodes, settingId)
+  const seen = new Set()
+  while (cur && cur.fromType === 'traitsetting' && cur.parentTraitsettingId) {
+    if (seen.has(cur.id)) return null
+    seen.add(cur.id)
+    cur = findSetting(nodes, cur.parentTraitsettingId)
+  }
+  return cur || null
+}
+
 /**
  * Whether a row should render its children.
  *

@@ -39,6 +39,17 @@ function sections(src) {
   return { script, template }
 }
 
+/**
+ * Drop comments, keeping line numbering. A comment that *documents* `api.x` is
+ * not a bare reference — and the first version of this check flagged exactly
+ * that, which is a false alarm loud enough to train people to ignore it.
+ */
+function withoutComments(code) {
+  return code
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, '')
+}
+
 const members = {
   traitRowApi: providedMembers('traitRowApi'),
   detailApi: providedMembers('detailApi'),
@@ -65,9 +76,10 @@ for (const file of files) {
   const { script, template } = sections(src)
 
   // 1. scope: no bare `api.` in <script setup> — it must be `props.api.`
-  const bareInScript = [...script.matchAll(/(^|[^.\w$])api\./g)]
+  const scan = withoutComments(script)
+  const bareInScript = [...scan.matchAll(/(^|[^.\w$])api\./g)]
     .filter((m) => !/props\.$/.test(m[1]))
-    .map((m) => script.slice(0, m.index).split('\n').length)
+    .map((m) => scan.slice(0, m.index).split('\n').length)
   report(bareInScript.length === 0,
     `${file}: no bare \`api.\` in <script setup>` +
     (bareInScript.length ? ` — found at script line(s) ${bareInScript.join(', ')}; use \`props.api\`` : ''))

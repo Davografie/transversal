@@ -21,6 +21,8 @@ import {
   hasContents,
   isContainer,
   isOpenContainer,
+  findSetting,
+  rootAnchor,
   showsChildren,
   subtreeContains,
   traitTags,
@@ -115,6 +117,30 @@ ok('a container cannot be dropped into its own descendant',
 ok('a container can be dropped into an unrelated container',
    droppable(tree[0], [tree[1]]), true)
 ok('nothing droppable with no open container', droppable(tree[0], []), false)
+
+// ── finding a setting, and the anchor its chain resolves to ─────────────
+ok('findSetting finds a root', findSetting(tree, 'sword')?.id, 'sword')
+ok('findSetting finds a nested child', findSetting(tree, 'coin')?.id, 'coin')
+ok('findSetting returns null when absent', findSetting(tree, 'nope'), null)
+
+// A sub-trait carries no anchor, so un-nesting it must resolve the ROOT of its
+// chain — otherwise a child of a morph container would come out ego.
+const nested = [
+  { id: 'ego-root', fromType: 'entity', subTraitSettings: [
+    { id: 'ego-child', fromType: 'traitsetting', parentTraitsettingId: 'ego-root', subTraitSettings: [
+      { id: 'ego-grandchild', fromType: 'traitsetting', parentTraitsettingId: 'ego-child', subTraitSettings: [] },
+    ] },
+  ] },
+  { id: 'body-root', fromType: 'projection', projectionId: 'body-1', subTraitSettings: [
+    { id: 'body-child', fromType: 'traitsetting', parentTraitsettingId: 'body-root', subTraitSettings: [] },
+  ] },
+]
+ok('a root anchors itself', rootAnchor(nested, 'ego-root')?.id, 'ego-root')
+ok('a child resolves to its root', rootAnchor(nested, 'ego-child')?.id, 'ego-root')
+ok('…through two levels', rootAnchor(nested, 'ego-grandchild')?.id, 'ego-root')
+ok('a morph chain resolves to its body', rootAnchor(nested, 'body-child')?.fromType, 'projection')
+ok('…carrying the body id', rootAnchor(nested, 'body-child')?.projectionId, 'body-1')
+ok('an unknown id has no anchor', rootAnchor(nested, 'nope'), null)
 
 // ── a container is still a container when marked on the registry side ────
 ok('nested container detected via registryTags',

@@ -245,7 +245,6 @@
               :phase="phase"
               :limit-reached="currentSetReachedLimit"
               :wrap="activeSheetView === 'profile'"
-              :draggable="draggableRowIds.has(t.id)"
             />
           <Button
             v-if="activeSheetView === 'traits' && nextSet"
@@ -323,7 +322,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { childrenOf, countDescendants, countSetPicks, hasContents, isContainer, isOpenContainer, subtreeContains } from '../utils/traitTree.js'
+import { childrenOf, countDescendants, countSetPicks, findSetting, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -575,37 +574,58 @@ function containerCount(t) {
 // the write path checks a container against the registry's nominations, so any
 // trait can go into any container.
 //
-// Which rows carry a grip is one predicate with two consequences:
+// Which rows carry a grip. One predicate, covering every row at any depth:
 //   - grips appear only while a container is *open* (expanded, or empty — see
 //     isOpenContainer), so they never clutter an ordinary sheet;
 //   - a container is draggable only when some *other* container can receive it,
 //     and never one inside itself.
+// A row nested in a container therefore qualifies through its own container
+// being open — which is what lets a child be dragged back out to the top level.
 const draggableRowIds = computed(() => {
   const roots = currentSet.value?.traits || []
+  const all = []
   const open = []
   const collect = (list) => {
     for (const t of list || []) {
+      all.push(t)
       if (isOpenContainer(t, isExpanded(t))) open.push(t)
       collect(childrenOf(t))
     }
   }
   collect(roots)
   const ids = new Set()
-  for (const t of roots) {
+  for (const t of all) {
     if (open.some((c) => c.id !== t.id && !subtreeContains(t, c.id))) ids.add(t.id)
   }
   return ids
 })
 
+function canDrag(t) { return draggableRowIds.value.has(t.id) }
+
+function dragPayload(t) {
+  return { id: t.id, nested: t.fromType === 'traitsetting', parent: t.parentTraitsettingId || null }
+}
+
 const { dragging, source, over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useDragDrop({
-  // Only a container row is a drop zone — including an EMPTY one, which is the
-  // state you most want to drop into.
+  // A container row takes the trait. Any OTHER row means "out of its container"
+  // — back to the top level of the set. Using every non-container row as that
+  // zone is deliberate: on touch the target has to be forgiving, and the row you
+  // drag past on the way out of an indented list is exactly the one above the
+  // container.
   resolveTarget: (el) => {
-    const row = el && el.closest ? el.closest('[data-drop-container]') : null
-    return row ? { id: row.dataset.dropContainer } : null
+    const row = el && el.closest ? el.closest('[data-ts-id]') : null
+    if (!row) return null
+    return row.dataset.dropContainer ? { id: row.dataset.dropContainer } : { id: null }
   },
   ghostSource: (el) => (el && el.closest ? el.closest('[data-ts-id]') : el),
-  onCommit: ({ from, to }) => { suppressClicks(); moveTraitInto(from.id, to.id) },
+  onCommit: ({ from, to }) => {
+    suppressClicks()
+    if (to.id) {
+      if (to.id !== from.parent) moveTraitInto(from.id, to.id)
+    } else if (from.nested) {
+      moveTraitOut(from.id)
+    }
+  },
 })
 
 async function moveTraitInto(traitSettingId, containerId) {
@@ -628,8 +648,24 @@ async function moveTraitInto(traitSettingId, containerId) {
   await fetchEntity()
 }
 
-function onTraitDragStart(e, t) { dragStart(e, { id: t.id }) }
-function onGripTouchStart(e, t) { touchStart(e, { id: t.id }, { instant: true }) }
+async function moveTraitOut(traitSettingId) {
+  // Come out as whatever anchors the chain: a child of a morph container returns
+  // to morph on the same body rather than silently becoming ego. Mirrors how
+  // nesting inherits its anchor.
+  const anchor = rootAnchor(currentSet.value?.traits || [], traitSettingId)
+  const input = anchor && anchor.fromType === 'projection' && anchor.projectionId
+    ? { fromType: 'projection', projectionId: anchor.projectionId }
+    : { fromType: 'entity' }
+  perfMark('trait-move-out-start', { traitSettingId, to: input.fromType })
+  const result = await graphql(`mutation($id: ID!, $input: TraitSettingUpdateInput!) {
+    updateTraitSetting(id: $id, input: $input) { id fromType parentTraitsettingId }
+  }`, { id: traitSettingId, input })
+  if (!result) return
+  await fetchEntity()
+}
+
+function onTraitDragStart(e, t) { dragStart(e, dragPayload(t)) }
+function onGripTouchStart(e, t) { touchStart(e, dragPayload(t), { instant: true }) }
 function onTraitDragOver(e) { dragOver(e) }
 function onTraitDragLeave() { dragLeave() }
 function onTraitDrop(e) { drop(e) }
@@ -905,7 +941,7 @@ const traitRowApi = {
   openTraitDetail, startEdit, playTrait, onTouchStart, onTouchEnd,
   isContainer, isExpanded, toggleExpand, containerCount, hasContents,
   onTraitDragStart, onGripTouchStart, onTraitDragOver, onTraitDragLeave, onTraitDrop, onTraitDragEnd,
-  isDragOver, isDragging, clickSuppressed,
+  isDragOver, isDragging, clickSuppressed, canDrag,
 }
 
 function openTraitDetail(t) {
@@ -1367,6 +1403,7 @@ const QUERY = `
     relationshipContactType
     relationshipType
     possibleSubtraitIds
+    parentTraitsettingId
   }
   # GraphQL requires every nesting level spelled out, so the chain is linear and
   # each link adds exactly one level: Depth2 = 2 levels, Depth3 = 3. The sheet

@@ -5,7 +5,7 @@
          resolves the same conflict the same way: a dedicated handle, instant
          drag, leaving long-press free for the row's own action (here: edit). -->
     <span
-      v-if="draggable"
+      v-if="api.canDrag(trait)"
       class="trait-drag-handle"
       draggable="true"
       title="Drag into a container"
@@ -143,6 +143,19 @@
     @drop.prevent="api.onTraitDrop($event)"
     @dragend="api.onTraitDragEnd()"
   >
+    <!-- A nested row carries a grip too, so a trait can be dragged back OUT of
+         the container it sits in. Dropping it on any non-container row does
+         that (see the sheet's resolveTarget). -->
+    <span
+      v-if="api.canDrag(trait)"
+      class="trait-drag-handle sub-trait-grip"
+      draggable="true"
+      title="Drag out of this container"
+      @click.stop
+      @touchstart.stop="api.onGripTouchStart($event, trait)"
+      @dragstart="api.onTraitDragStart($event, trait)"
+      @dragend="api.onTraitDragEnd()"
+    >⠿</span>
     <div class="sub-trait-left" :class="{ 'has-statement': !!trait.statement }">
       <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="trait.statement" class="sub-trait-statement">{{ trait.statement }}</span>
@@ -232,11 +245,10 @@ const props = defineProps({
   phase: { type: String, default: '' },
   limitReached: { type: Boolean, default: false },
   wrap: { type: Boolean, default: false },
-  // 0 = a row in the set's trait list; > 0 = nested under a parent.
+  // 0 = a row in the set's trait list; > 0 = nested under a parent. Whether the
+  // row can be dragged is the sheet's call (api.canDrag), since it depends on
+  // what else is on screen.
   depth: { type: Number, default: 0 },
-  // Whether this row carries a drag grip. The sheet decides per set: grips only
-  // appear where a container exists to drop into.
-  draggable: { type: Boolean, default: false },
 })
 
 const children = computed(() => childrenOf(props.trait))
@@ -569,6 +581,14 @@ function onRowClick() {
   font-size: 14px;
   border-radius: 6px;
   transition: background 0.12s, color 0.12s;
+}
+
+/* A nested row is smaller, so its grip follows the row's own scale. */
+.trait-drag-handle.sub-trait-grip {
+  width: 20px;
+  min-height: 24px;
+  line-height: 24px;
+  font-size: 12px;
 }
 
 .trait-drag-handle:hover {
