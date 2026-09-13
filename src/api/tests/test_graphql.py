@@ -302,6 +302,178 @@ class TestGraphQLMutations:
         assert ts["ego"] == True
         assert ts["statement"] == "Overly analytical"
 
+    def test_move_trait_into_a_container(self, client):
+        """A setting can be re-anchored under another setting — the drag-into-a-container move.
+
+        Deliberately *not* checked against the trait registry's
+        ``possible_subtrait_ids``: containment is direct manipulation, and no other
+        write path enforces that nomination either.
+        """
+        entity = _gql(client, """
+            mutation {
+                createEntity(input: { name: "Kael", type: CHARACTER, universe: "earth", razmerit: 3 }) { id }
+            }
+        """)
+        eid = entity["createEntity"]["id"]
+
+        container = _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-intelligence"
+                    traitsetId: "ts-earth-attributes"
+                    dice: [D6]
+                }) { id }
+            }
+        """, {"eid": eid})["addTraitSetting"]["id"]
+
+        loose = _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-hacking"
+                    traitsetId: "ts-earth-skills"
+                    dice: [D10]
+                    statement: "kept"
+                }) { id }
+            }
+        """, {"eid": eid})["addTraitSetting"]["id"]
+
+        moved = _gql(client, """
+            mutation($id: ID!, $parent: ID!) {
+                updateTraitSetting(id: $id, input: {
+                    fromType: "traitsetting"
+                    parentTraitsettingId: $parent
+                }) { id fromType parentTraitsettingId dice statement }
+            }
+        """, {"id": loose, "parent": container})["updateTraitSetting"]
+
+        assert moved["fromType"] == "traitsetting"
+        assert moved["parentTraitsettingId"] == container
+        # The move carries the instance's own values — addSubTrait would instead
+        # create a fresh setting from the registry defaults, leaving the original
+        # behind, which is why this is an update and not a re-add.
+        assert moved["dice"] == ["D10"]
+        assert moved["statement"] == "kept"
+
+        # End to end through the entity query the sheet actually uses: the trait now
+        # hangs off the container. (Asserted as *containment* rather than as a
+        # departure from the top-level list: the in-memory repo doesn't implement
+        # the real one's `from_type != 'traitsetting'` filter, so only the nesting
+        # half of that behaviour is observable here.)
+        listed = _gql(client, """
+            query($id: ID!) { entity(id: $id) { traitSettings { id subTraitSettings { id } } } }
+        """, {"id": eid})["entity"]["traitSettings"]
+        held = [st["id"] for t in listed if t["id"] == container for st in t["subTraitSettings"]]
+        assert loose in held
+
+    def test_move_refuses_a_missing_parent(self, client):
+        entity = _gql(client, """
+            mutation {
+                createEntity(input: { name: "Kael", type: CHARACTER, universe: "earth", razmerit: 3 }) { id }
+            }
+        """)
+        eid = entity["createEntity"]["id"]
+        loose = _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-hacking"
+                    traitsetId: "ts-earth-skills"
+                    dice: [D6]
+                }) { id }
+            }
+        """, {"eid": eid})["addTraitSetting"]["id"]
+
+        r = client.post("/api/v1/graphql", json={
+            "query": """
+                mutation($id: ID!, $parent: ID!) {
+                    updateTraitSetting(id: $id, input: {
+                        fromType: "traitsetting"
+                        parentTraitsettingId: $parent
+                    }) { id }
+                }
+            """,
+            "variables": {"id": loose, "parent": "does-not-exist"},
+        })
+        body = r.json()
+        assert body.get("errors"), body
+        assert "not found" in body["errors"][0]["message"]
+
+    def test_move_refuses_a_parent_on_another_entity(self, client):
+        """Sub-traits inherit their parent's entity, so a cross-entity parent is refused."""
+        made = []
+        for name in ("Kael", "Mira"):
+            made.append(_gql(client, """
+                mutation($name: String!) {
+                    createEntity(input: { name: $name, type: CHARACTER, universe: "earth", razmerit: 3 }) { id }
+                }
+            """, {"name": name})["createEntity"]["id"])
+        kael, mira = made
+
+        mine = _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-hacking" traitsetId: "ts-earth-skills" dice: [D6]
+                }) { id }
+            }
+        """, {"eid": kael})["addTraitSetting"]["id"]
+        theirs = _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-intelligence" traitsetId: "ts-earth-attributes" dice: [D6]
+                }) { id }
+            }
+        """, {"eid": mira})["addTraitSetting"]["id"]
+
+        r = client.post("/api/v1/graphql", json={
+            "query": """
+                mutation($id: ID!, $parent: ID!) {
+                    updateTraitSetting(id: $id, input: {
+                        fromType: "traitsetting" parentTraitsettingId: $parent
+                    }) { id }
+                }
+            """,
+            "variables": {"id": mine, "parent": theirs},
+        })
+        body = r.json()
+        assert body.get("errors"), body
+        assert "same entity" in body["errors"][0]["message"]
+
+    def test_move_refuses_itself(self, client):
+        """A setting cannot be its own parent.
+
+        The resolver checks this rather than leaving it to the repository: the
+        descendant-cycle guard lives in the Arango write path, and an
+        implementation without it (the in-memory test repo, for one) would nest a
+        setting under itself. Descendant cycles remain the repository's to refuse,
+        and are covered against the real repo in ``test_repository_batch_db.py``.
+        """
+        entity = _gql(client, """
+            mutation {
+                createEntity(input: { name: "Kael", type: CHARACTER, universe: "earth", razmerit: 3 }) { id }
+            }
+        """)
+        eid = entity["createEntity"]["id"]
+        setting = _gql(client, """
+            mutation($eid: ID!) {
+                addTraitSetting(entityId: $eid, input: {
+                    traitId: "trait-earth-hacking" traitsetId: "ts-earth-skills" dice: [D6]
+                }) { id }
+            }
+        """, {"eid": eid})["addTraitSetting"]["id"]
+
+        r = client.post("/api/v1/graphql", json={
+            "query": """
+                mutation($id: ID!, $parent: ID!) {
+                    updateTraitSetting(id: $id, input: {
+                        fromType: "traitsetting" parentTraitsettingId: $parent
+                    }) { id }
+                }
+            """,
+            "variables": {"id": setting, "parent": setting},
+        })
+        body = r.json()
+        assert body.get("errors"), body
+        assert "under itself" in body["errors"][0]["message"]
+
     def test_step_up_trait(self, client):
         entity = _gql(client, """
             mutation {

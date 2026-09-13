@@ -112,7 +112,10 @@ class MutationsTraitSettings:
             ts.notes = input.notes
         if input.tags is not None:
             ts.tags = [str(t) for t in input.tags]
-        if input.from_type is not None and ts.from_type not in ("relationship", "traitsetting"):
+        # Re-anchoring. A **relationship** setting is anchored by its edge key and
+        # must not be moved; everything else may be (a top-level trait, or a
+        # sub-trait moving between containers or back out to the entity).
+        if input.from_type is not None and ts.from_type != "relationship":
             if input.from_type == "projection":
                 if input.projection_id is None:
                     raise ValueError("projectionId is required when fromType is 'projection'")
@@ -121,8 +124,35 @@ class MutationsTraitSettings:
                     raise ValueError(f"Projection '{input.projection_id}' does not belong to this entity")
                 ts.from_type = "projection"
                 ts.projection_id = str(input.projection_id)
+                ts.parent_traitsetting_id = None
             elif input.from_type == "entity":
                 ts.from_type = "entity"
+                ts.projection_id = None
+                ts.parent_traitsetting_id = None
+            elif input.from_type == "traitsetting":
+                # Nest under another setting — the drag-into-a-container move.
+                # The parent is deliberately *not* checked against the trait
+                # registry's ``possible_subtrait_ids``: containment is direct
+                # manipulation, and nothing else on the write path enforces that
+                # nomination either. Cycles are refused by the repository
+                # (``_would_cycle``), which walks the ancestor chain.
+                if input.parent_traitsetting_id is None:
+                    raise ValueError(
+                        "parentTraitsettingId is required when fromType is 'traitsetting'")
+                parent = _em(info).repo.get_traitsetting(str(input.parent_traitsetting_id))
+                if parent is None:
+                    raise ValueError(
+                        f"Parent TraitSetting '{input.parent_traitsetting_id}' not found")
+                if str(parent.id) == str(ts.id):
+                    # Checked here, not only in the repository: the guard lives in
+                    # the Arango write path, so an implementation without it (the
+                    # in-memory test repo, for one) would happily nest a setting
+                    # under itself. Descendant cycles are still the repository's.
+                    raise ValueError("A trait setting cannot be nested under itself")
+                if str(parent.entity_id) != str(ts.entity_id):
+                    raise ValueError("A sub-trait's parent must belong to the same entity")
+                ts.from_type = "traitsetting"
+                ts.parent_traitsetting_id = str(parent.id)
                 ts.projection_id = None
             else:
                 raise ValueError(f"Unknown fromType '{input.from_type}'")
