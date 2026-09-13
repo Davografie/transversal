@@ -211,7 +211,7 @@
        children render without a fog-of-war check — by the time we are here the
        root of the chain has already passed it, which is how sub-traits have
        always behaved. -->
-  <div v-if="renderChildren" :id="childrenListId" class="sub-trait-list">
+  <div v-if="renderChildren" :id="childrenListId" class="sub-trait-list" :class="{ 'chip-row': contentsInLine }">
     <TraitRow
       v-for="child in children"
       :key="child.id"
@@ -264,12 +264,20 @@ const childrenListId = computed(() => `children-${props.trait.id}`)
 // The rendering rule lives in the model (utils/traitTree.js) so it can be
 // checked without a browser: a container stays collapsed until opened, while
 // everything else shows its sub-traits inline as it always has.
+// A trait inside a container renders minimally: as a chip, and without its own
+// sub-traits — those are part of it, and the container is already the thing you
+// are looking into.
 const renderChildren = computed(() =>
+  !props.insideContainer &&
   showsChildren(props.trait, {
     rootKnown: props.depth > 0 || props.api.isKnown(props.trait),
     expanded: props.api.isExpanded(props.trait),
   })
 )
+
+// A container shows its contents as an inline, wrapping row rather than a
+// stacked list of rows.
+const contentsInLine = computed(() => props.api.isContainer(props.trait))
 
 // The body toggles a container open, while every other row opens its detail.
 // An EMPTY container has nothing to disclose, so it opens its detail like any
@@ -300,6 +308,18 @@ function onRowClick() {
   font-size: 13px;
   cursor: pointer;
   transition: background 0.1s;
+}
+
+/* A trait with visible contents reads as ONE block: the row caps the top and
+   the list is its body underneath, so the traits inside look like they are
+   *in* it rather than merely below it. `:has(+ …)` is what lets the row know
+   the list follows — the two are siblings, so nothing had to be restructured.
+   Placed here, before the state rules, so in-pool / offered / morph still win
+   the tie they would have won before. */
+.trait-row:has(+ .sub-trait-list),
+.sub-trait-row:has(+ .sub-trait-list) {
+  border-radius: 8px 8px 0 0;
+  background: var(--overlay-2);
 }
 
 .trait-row.wrap {
@@ -460,10 +480,38 @@ function onRowClick() {
   opacity: 0.32;
 }
 
+/* The body of that block. No inset rule any more — the box itself is the
+   nesting cue, with a small indent for depth. */
 .sub-trait-list {
-  margin: 0 0 4px 20px;
-  padding-left: 8px;
-  border-left: 2px solid var(--overlay-10);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 2px 6px 6px 10px;
+  background: var(--overlay-2);
+  border-radius: 0 0 8px 8px;
+}
+
+/* A container's contents are laid out in-line and wrap, rather than stacked. */
+.sub-trait-list.chip-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+}
+
+/* …and each of those renders minimally: a chip, no inner list of its own. */
+.sub-trait-list.chip-row .sub-trait-row {
+  flex: 0 0 auto;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--overlay-4);
+}
+
+.sub-trait-list.chip-row .sub-trait-row:hover {
+  background: var(--overlay-8);
 }
 
 .sub-trait-row {

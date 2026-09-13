@@ -679,6 +679,9 @@ function suppressClicks() { suppressClickUntil = Date.now() + 200 }
 
 function openSet(name) {
   activeSetName.value = name
+  // Containers start closed every time a set is opened: their contents are
+  // something you look into deliberately, not state carried over from last time.
+  expandedContainers.value = []
 }
 
 function closeSet() {
@@ -721,7 +724,10 @@ const nextSet = computed(() => {
 })
 
 function goToNextSet() {
-  if (nextSet.value) activeSetName.value = nextSet.value.name
+  if (nextSet.value) {
+    activeSetName.value = nextSet.value.name
+    expandedContainers.value = []
+  }
 }
 
 // SFX usage tracking — reset per dice pool cycle
@@ -1917,6 +1923,7 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-list-wrap {
   flex-direction: row;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
 }
   .set-back { align-self: flex-start;
