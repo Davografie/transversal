@@ -623,9 +623,41 @@ const lastSent = ref('')
 const lastEvtDebug = ref('')
 
 function sharePhase() {
+  // Mirror locally too: the ring around your own dot reads the same phase (and
+  // pool) the roller has. Solo play has no SSE at all, and in a session the
+  // `pool_updated` echo deliberately skips the acting entity — so without this
+  // the dot you are rolling from would never animate.
+  if (entityId.value) {
+    const prev = remotePools.value[entityId.value] || {}
+    remotePools.value = {
+      ...remotePools.value,
+      [entityId.value]: { ...prev, player_id: playerId.value, phase: phase.value },
+    }
+  }
   if (sessionId.value === 'session-default') return
   lastSent.value = `phase:${phase.value}`
   publishEvent(sessionId.value, 'pool_updated', { player_id: playerId.value, entity_id: entityId.value, phase: phase.value })
+}
+
+// The same shape the SSE handler builds for remote entities, applied to our own
+// roll — so our own dot's ring shows the results too (see `sharePhase` for why).
+function mirrorOwnResult(result) {
+  if (!entityId.value || !result) return
+  const res = result.result || result
+  const existing = remoteResults.value[entityId.value] || {}
+  remoteResults.value = {
+    ...remoteResults.value,
+    [entityId.value]: {
+      ...existing,
+      total: res.total || res.highest || existing.total,
+      effect_die: res.effect_die || existing.effect_die,
+      tier: res.tier || existing.tier,
+      botch: res.botch ?? existing.botch,
+      pipeline: res.pipeline || existing.pipeline,
+      hitches: res.hitches || existing.hitches || [],
+      rolls: (res.rolls && res.rolls.length) ? res.rolls : (existing.rolls || []),
+    },
+  }
 }
 function shareRoll(result) {
   if (sessionId.value !== 'session-default') {
@@ -838,6 +870,7 @@ function onDiceRolled(result) {
     return
   }
   onRolled()
+  mirrorOwnResult(result)
   shareRoll(result)
 }
 
