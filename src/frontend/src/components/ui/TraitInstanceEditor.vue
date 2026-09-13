@@ -23,10 +23,16 @@
           v-for="(d, i) in dice"
           :key="i"
           class="die-chip die-chip-icon"
+          :class="{ editing: showPicker && pickIdx === i }"
           :title="`Change ${d}`"
           @click="openPicker(i)"
         ><DieIcon :die="d" /></button>
-        <button class="die-chip add-chip" @click="openPicker(dice.length)">+</button>
+        <button
+          class="die-chip add-chip"
+          :class="{ editing: showPicker && pickIdx >= dice.length }"
+          :title="showPicker && pickIdx >= dice.length ? 'Close the picker' : 'Add a die'"
+          @click="openPicker(dice.length)"
+        >+</button>
       </div>
       <div v-if="ratingType === 'RESOURCE' && spentDice.length" class="te-spent-dice">
         <span class="te-spent-label">Recoverable</span>
@@ -38,7 +44,7 @@
           @click="$emit('recover-die', die)"
         ><DieIcon :die="die.toLowerCase()" /></button>
       </div>
-      <DiePicker v-if="showPicker" v-model="pickedDie" @update:model-value="onPicked" />
+      <DiePicker v-if="showPicker" :model-value="pickedDie" @update:model-value="onPicked" />
     </div>
 
     <!-- Dice — single mode: one inline picker, optionally a variable placeholder -->
@@ -62,12 +68,18 @@
           v-for="(d, i) in capacity"
           :key="'cap' + i"
           class="die-chip die-chip-icon"
+          :class="{ editing: showCapacityPicker && capacityPickIdx === i }"
           :title="`Change ${d}`"
           @click="openCapacityPicker(i)"
         ><DieIcon :die="d" /></button>
-        <button class="die-chip add-chip" @click="openCapacityPicker(capacity.length)">+</button>
+        <button
+          class="die-chip add-chip"
+          :class="{ editing: showCapacityPicker && capacityPickIdx >= capacity.length }"
+          :title="showCapacityPicker && capacityPickIdx >= capacity.length ? 'Close the picker' : 'Add a die'"
+          @click="openCapacityPicker(capacity.length)"
+        >+</button>
       </div>
-      <DiePicker v-if="showCapacityPicker" v-model="pickedCapacityDie" @update:model-value="onCapacityPicked" />
+      <DiePicker v-if="showCapacityPicker" :model-value="pickedCapacityDie" @update:model-value="onCapacityPicked" />
     </div>
 
     <!-- Polarity -->
@@ -179,47 +191,63 @@ function setRatingType(id) {
   emit('change', 'ratingType')
 }
 
-// --- dice row (array mode) ---
-const showPicker = ref(false)
-const pickIdx = ref(0)
-const pickedDie = ref('')
+// --- dice rows (array mode) ---
+// One interaction state per row: the chips plus their shared picker. `+` opens
+// the picker on the next empty slot and **stays open after each pick**, so faces
+// can be added one after another (resource/challenge ratings); a chip opens it on
+// that slot, which stays marked while the picker is open — unambiguous which die
+// a face click will change. An edit commits and closes; the picker's × clears the
+// edited die, and in an empty slot it just dismisses (nothing to clear).
+function dieRowState(getList, commit) {
+  const show = ref(false)
+  const idx = ref(0)
+  const picked = ref('')
 
-function openPicker(i) {
-  pickIdx.value = i
-  pickedDie.value = props.dice[i] || ''
-  showPicker.value = true
+  function open(i) {
+    // Clicking the slot that is already open closes the picker.
+    if (show.value && idx.value === i) { show.value = false; return }
+    idx.value = i
+    picked.value = getList()[i] || ''
+    show.value = true
+  }
+
+  function pick(die) {
+    const next = [...getList()]
+    const append = idx.value >= next.length
+    if (!die) {
+      if (!append) { next.splice(idx.value, 1); commit(next) }
+      show.value = false
+      return
+    }
+    if (append) {
+      next.push(die)
+      idx.value = next.length     // keep the picker open on the next empty slot
+      picked.value = ''
+    } else {
+      next.splice(idx.value, 1, die)
+      show.value = false          // an edit commits and closes
+    }
+    commit(next)
+  }
+
+  return { show, idx, picked, open, pick }
 }
 
-function onPicked(die) {
-  const next = [...props.dice]
-  if (!die) next.splice(pickIdx.value, 1)
-  else if (pickIdx.value >= next.length) next.push(die)
-  else next.splice(pickIdx.value, 1, die)
-  showPicker.value = false
-  emit('update:dice', next)
-  emit('change', 'dice')
-}
-
-// --- capacity row ---
-const showCapacityPicker = ref(false)
-const capacityPickIdx = ref(0)
-const pickedCapacityDie = ref('')
-
-function openCapacityPicker(i) {
-  capacityPickIdx.value = i
-  pickedCapacityDie.value = props.capacity[i] || ''
-  showCapacityPicker.value = true
-}
-
-function onCapacityPicked(die) {
-  const next = [...props.capacity]
-  if (!die) next.splice(capacityPickIdx.value, 1)
-  else if (capacityPickIdx.value >= next.length) next.push(die)
-  else next.splice(capacityPickIdx.value, 1, die)
-  showCapacityPicker.value = false
-  emit('update:capacity', next)
-  emit('change', 'capacity')
-}
+const diceRow = dieRowState(
+  () => props.dice,
+  (next) => { emit('update:dice', next); emit('change', 'dice') },
+)
+const capacityRow = dieRowState(
+  () => props.capacity,
+  (next) => { emit('update:capacity', next); emit('change', 'capacity') },
+)
+const {
+  show: showPicker, idx: pickIdx, picked: pickedDie, open: openPicker, pick: onPicked,
+} = diceRow
+const {
+  show: showCapacityPicker, idx: capacityPickIdx, picked: pickedCapacityDie,
+  open: openCapacityPicker, pick: onCapacityPicked,
+} = capacityRow
 
 // --- single-die mode ---
 const isVariable = ref((props.die || '').startsWith('{'))
@@ -311,6 +339,14 @@ function togglePolarity() {
 }
 .te-dice .die-chip:hover {
   border-color: var(--accent);
+}
+/* The slot the picker is on — a chip being edited, or the `+` chip when the
+   picker is open on the next empty slot. Keeps "which die will this click
+   change" visible while the picker is open (and while adding several dice). */
+.te-dice .die-chip.editing {
+  border-color: var(--accent);
+  background: var(--accent-12);
+  box-shadow: 0 0 0 2px var(--accent-12);
 }
 .te-dice .add-chip {
   color: var(--accent);

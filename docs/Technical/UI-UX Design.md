@@ -172,6 +172,14 @@ trait editor) and the effect form's *Gain Trait* action — see
   `mode="single"` gives one inline picker with an optional `Die`/`Variable`
   toggle for effects. The sheet hides polarity (`show-polarity="false"`) because
   its own Type block owns ego/morph, projection and polarity together.
+- **Dice rows speak one interaction language.** `+` opens the picker on the next
+  empty slot and **stays open after each pick**, so faces are added one after
+  another (resource/challenge ratings); a chip opens it on that slot; whichever
+  slot the picker is on is **marked** (`.editing` — accent chip, or the `+` chip
+  for the empty slot), so it is unambiguous which die a face click will change.
+  An **edit commits and closes**; clicking the open slot again closes; the
+  picker's `×` clears the edited die, and on an empty slot it just dismisses.
+  The dice and capacity rows behave identically (one `dieRowState()` backs both).
 - **Two skins.** `variant="panel"` is bare sections for the sheet's full-panel
   view; `variant="box"` is the compact bordered chrome used inside editor forms.
 - **Extras ride slots:** `after-dice` (SFX chips), `after-fields` (ego/morph,
