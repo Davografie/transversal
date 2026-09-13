@@ -1923,7 +1923,6 @@ watch(() => props.externalPoolSources, (sources) => {
 .trait-list-wrap {
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 6px;
 }
   .set-back { align-self: flex-start;

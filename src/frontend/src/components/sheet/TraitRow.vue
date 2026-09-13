@@ -1,4 +1,10 @@
 <template>
+  <!-- One node per trait, holding the row AND its contents. Without this the two
+       were siblings in the list, so the list's `gap` opened a seam between a
+       trait and its own sub-traits — which made the sub-traits look like they
+       did not belong ("the neutron staff is the asset; damaged is a detail that
+       lives on the staff"). -->
+  <div class="trait-node" :class="{ wrap, 'has-contents': renderChildren }">
   <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, container: api.isContainer(trait), 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false, 'drag-over': api.isDragOver(trait), dragging: api.isDragging(trait) }" :data-ts-id="trait.id" :data-drop-container="api.isContainer(trait) ? trait.id : null" @click="onRowClick" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd" @dragover.prevent="api.onTraitDragOver($event)" @dragleave="api.onTraitDragLeave()" @drop.prevent="api.onTraitDrop($event)" @dragend="api.onTraitDragEnd()">
     <!-- The grip exists only in a set that holds a container — outside one there
          is nowhere to drop, so it would be chrome with no purpose. The GM tree
@@ -211,7 +217,7 @@
        children render without a fog-of-war check — by the time we are here the
        root of the chain has already passed it, which is how sub-traits have
        always behaved. -->
-  <div v-if="renderChildren" :id="childrenListId" class="sub-trait-list" :class="{ 'chip-row': contentsInLine }">
+  <div v-if="renderChildren" :id="childrenListId" class="sub-trait-list">
     <TraitRow
       v-for="child in children"
       :key="child.id"
@@ -221,6 +227,7 @@
       :depth="depth + 1"
       :inside-container="api.isContainer(trait)"
     />
+  </div>
   </div>
 </template>
 
@@ -277,7 +284,6 @@ const renderChildren = computed(() =>
 
 // A container shows its contents as an inline, wrapping row rather than a
 // stacked list of rows.
-const contentsInLine = computed(() => props.api.isContainer(props.trait))
 
 // The body toggles a container open, while every other row opens its detail.
 // An EMPTY container has nothing to disclose, so it opens its detail like any
@@ -308,18 +314,6 @@ function onRowClick() {
   font-size: 13px;
   cursor: pointer;
   transition: background 0.1s;
-}
-
-/* A trait with visible contents reads as ONE block: the row caps the top and
-   the list is its body underneath, so the traits inside look like they are
-   *in* it rather than merely below it. `:has(+ …)` is what lets the row know
-   the list follows — the two are siblings, so nothing had to be restructured.
-   Placed here, before the state rules, so in-pool / offered / morph still win
-   the tie they would have won before. */
-.trait-row:has(+ .sub-trait-list),
-.sub-trait-row:has(+ .sub-trait-list) {
-  border-radius: 8px 8px 0 0;
-  background: var(--overlay-2);
 }
 
 .trait-row.wrap {
@@ -480,38 +474,38 @@ function onRowClick() {
   opacity: 0.32;
 }
 
-/* The body of that block. No inset rule any more — the box itself is the
-   nesting cue, with a small indent for depth. */
-.sub-trait-list {
+/* One node per trait, holding the row AND its contents. Their being siblings in
+   the list is what used to open a seam between a trait and its own sub-traits —
+   which made the sub-traits read as unrelated ("the neutron staff is the asset;
+   damaged is a detail that lives on the staff"). */
+.trait-node {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin: 0 0 6px;
-  padding: 2px 6px 6px 10px;
+}
+
+.trait-node.has-contents {
   background: var(--overlay-2);
-  border-radius: 0 0 8px 8px;
+  border-radius: 8px;
+  padding: 2px 3px 3px;
 }
 
-/* A container's contents are laid out in-line and wrap, rather than stacked. */
-.sub-trait-list.chip-row {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px;
-}
-
-/* …and each of those renders minimally: a chip, no inner list of its own. */
-.sub-trait-list.chip-row .sub-trait-row {
-  flex: 0 0 auto;
+/* In the profile's chip layout the NODE is the flex item, so the node is what
+   grows to fill the line. */
+.trait-node.wrap {
+  flex: 1 1 auto;
   max-width: 100%;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--overlay-4);
 }
 
-.sub-trait-list.chip-row .sub-trait-row:hover {
-  background: var(--overlay-8);
+/* Sub-traits — and a container's contents — are small chips that wrap in-line
+   and grow to fill the row, so a trait's details read as one filled block
+   rather than a ragged tail. The inset indent is the nesting cue; the node's
+   background is the grouping. (The old app right-aligned these rows instead —
+   `justify-content: end` — but the human asked for them to stretch.) */
+.sub-trait-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 2px 2px 12px;
 }
 
 .sub-trait-row {
@@ -524,10 +518,14 @@ function onRowClick() {
   font-size: 12px;
   cursor: pointer;
   transition: background 0.1s;
+  /* A chip, and it fills the row it is on. */
+  flex: 1 1 auto;
+  max-width: 100%;
+  background: var(--overlay-4);
 }
 
 .sub-trait-row:hover {
-  background: var(--overlay-4);
+  background: var(--overlay-8);
 }
 
 .sub-trait-row.in-pool {
