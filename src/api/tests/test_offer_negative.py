@@ -142,3 +142,59 @@ def test_offer_negative_broadcasts_actor(monkeypatch):
     assert calls == [{"entity_id": "opponent", "actor_id": "player", "dice": [
         {"die": "d8", "source_kind": "trait", "source_id": "ts-neg-1", "label": "d8", "ts_id": "ts-neg-1"},
     ]}]
+
+
+def test_offer_negative_to_difficulty_lands_the_die_but_earns_nothing(monkeypatch):
+    """No contest to feed — the negative lands in the difficulty (location) pool.
+
+    The reveal still happens (the table learns the complication), but the
+    `on_trait_offered` reward must not fire: a location id is never in
+    `known_to`, so `newly_revealed` is true on every click and the seeded
+    +1 razmerit would be farmable by clicking twice.
+    """
+    fired = []
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda entity_id, universe, event_type, context: fired.append((entity_id, event_type, context)),
+    )
+    trait = _trait(known_to=[])
+    client = _client(monkeypatch, trait, _occupants("player", "bystander"))
+
+    r = client.post(
+        "/api/v1/locations/loc-1/pools/player/offer-negative",
+        json={
+            "opponent_id": "loc-1", "trait_setting_id": "ts-neg-1",
+            "dice": ["d4"], "label": "Damaged", "award": False,
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"offered": True, "removed": False, "newly_revealed": True}
+    assert trait.known_to == ["player", "bystander"]
+    assert fired == []
+
+    pool = ss_module.get_scene_store().get_pool("loc-1", "loc-1")
+    assert [d["ts_id"] for d in pool] == ["ts-neg-1"]
+
+
+def test_offer_negative_difficulty_pays_nothing_across_repeated_toggles(monkeypatch):
+    """Offer → remove → offer must not pay out on the re-offer either."""
+    fired = []
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda entity_id, universe, event_type, context: fired.append((entity_id, event_type, context)),
+    )
+    trait = _trait(known_to=[])
+    client = _client(monkeypatch, trait, _occupants("player"))
+    body = {
+        "opponent_id": "loc-1", "trait_setting_id": "ts-neg-1",
+        "dice": ["d4"], "award": False,
+    }
+
+    for _ in range(3):
+        r = client.post("/api/v1/locations/loc-1/pools/player/offer-negative", json=body)
+        assert r.status_code == 200, r.text
+
+    assert fired == []
+    # Odd number of toggles: offer, remove, offer — it ends up in the pool,
+    # and none of the three clicks paid out.
+    assert [d["ts_id"] for d in ss_module.get_scene_store().get_pool("loc-1", "loc-1")] == ["ts-neg-1"]

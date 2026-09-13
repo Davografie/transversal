@@ -1090,9 +1090,15 @@ function addFromSheet(payload) {
   const { source, label, tsId, negative, resource, armedSfxIds } = payload || {}
   const dice = Array.isArray(payload?.dice) ? payload.dice : (payload?.die ? [payload.die] : [])
   if (!dice.length) return
-  // Negative trait during a contest contributes to the opponent's pool.
-  if (negative && challenged.value && opponentId.value) {
-    addToOpponentPool(dice, source, label, tsId)
+  // A negative trait never sits in its owner's own pool — it is the other
+  // side's ammunition. In a contest that is the opponent; with no contest the
+  // difficulty (location) pool is the opposition. GM free-roam already writes
+  // to the location pool below, so it keeps the plain path.
+  // Only a contest offer earns the `on_trait_offered` reward — the difficulty
+  // destination must not, or the seeded +1 razmerit becomes farmable.
+  if (negative && poolEntityKey() !== props.locationId) {
+    const contestTarget = (challenged.value && opponentId.value) ? opponentId.value : null
+    addToOpponentPool(dice, source, label, tsId, contestTarget || props.locationId, !!contestTarget)
     return
   }
   // Toggle: if a non-resource trait is already in the pool, remove its dice.
@@ -1112,16 +1118,20 @@ function addFromSheet(payload) {
   notifyPool()
 }
 
-async function addToOpponentPool(dice, source, label, tsId) {
-  if (!props.locationId || !opponentId.value) return
+async function addToOpponentPool(dice, source, label, tsId, targetId = null, award = true) {
+  // `targetId` defaults to the contest opponent; the difficulty pool passes the
+  // location id instead (`award` false — see addFromSheet).
+  const target = targetId || opponentId.value
+  if (!props.locationId || !target) return
   // Server-authoritative toggle + reveal + reward (on_trait_offered).
   const res = await apiOfferNegative(
     props.locationId,
     editingEntityId.value,
-    opponentId.value,
+    target,
     tsId,
     dice,
     label || source || '',
+    award,
   )
   if (res) {
     if (res.removed) {

@@ -40,6 +40,14 @@ class OfferNegativeRequest(BaseModel):
     trait_setting_id: str
     dice: list[str] = Field(default_factory=list)
     label: str = ""
+    # Whether this offer earns the ``on_trait_offered`` reward. True for a
+    # contest offer (you exposed a weakness to an opponent who did not know it).
+    # False when the destination is the difficulty/location pool because there
+    # is no contest to feed: the reveal still happens, but the reward must not,
+    # or the seeded ``sfx-offer-negative-trait`` (+1 razmerit) becomes farmable
+    # — a location id is never in ``known_to``, so ``newly_revealed`` would be
+    # true on every click, and the toggle-off path does not spend it back.
+    award: bool = True
 
 
 class DifficultyRequest(BaseModel):
@@ -147,7 +155,7 @@ async def offer_negative(location_id: str, entity_id: str, req: OfferNegativeReq
         repo.update_traitsetting(ts)
         newly_revealed = not was_known
 
-    if newly_revealed and ts is not None:
+    if newly_revealed and ts is not None and req.award:
         from transversal.services.state_events import fire_state_sfx
         fire_state_sfx(entity_id, "", "on_trait_offered", {
             "trait": ts.trait_id,
