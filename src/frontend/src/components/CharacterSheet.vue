@@ -245,7 +245,7 @@
               :phase="phase"
               :limit-reached="currentSetReachedLimit"
               :wrap="activeSheetView === 'profile'"
-              :draggable="setHasContainer"
+              :draggable="draggableRowIds.has(t.id)"
             />
           <Button
             v-if="activeSheetView === 'traits' && nextSet"
@@ -323,7 +323,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { countDescendants, countSetPicks, hasContents, isContainer } from '../utils/traitTree.js'
+import { childrenOf, countDescendants, countSetPicks, hasContents, isContainer, isOpenContainer, subtreeContains } from '../utils/traitTree.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -575,9 +575,27 @@ function containerCount(t) {
 // the write path checks a container against the registry's nominations, so any
 // trait can go into any container.
 //
-// Grips appear only in a set that actually holds a container. Otherwise the
-// gesture has nowhere to land and the chrome would be noise on every row.
-const setHasContainer = computed(() => (currentSet.value?.traits || []).some(isContainer))
+// Which rows carry a grip is one predicate with two consequences:
+//   - grips appear only while a container is *open* (expanded, or empty — see
+//     isOpenContainer), so they never clutter an ordinary sheet;
+//   - a container is draggable only when some *other* container can receive it,
+//     and never one inside itself.
+const draggableRowIds = computed(() => {
+  const roots = currentSet.value?.traits || []
+  const open = []
+  const collect = (list) => {
+    for (const t of list || []) {
+      if (isOpenContainer(t, isExpanded(t))) open.push(t)
+      collect(childrenOf(t))
+    }
+  }
+  collect(roots)
+  const ids = new Set()
+  for (const t of roots) {
+    if (open.some((c) => c.id !== t.id && !subtreeContains(t, c.id))) ids.add(t.id)
+  }
+  return ids
+})
 
 const { dragging, source, over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useDragDrop({
   // Only a container row is a drop zone — including an EMPTY one, which is the

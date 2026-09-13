@@ -60,6 +60,26 @@ export function hasContents(trait) {
 }
 
 /**
+ * A container is "open" for arranging when it is expanded — or when it is empty.
+ *
+ * An empty container has nothing to hide, and it is the state you most want to
+ * drop into. Requiring a disclosure tap to reach it would deadlock: an empty
+ * container has no disclosure (a chevron opening nothing is a dead control), so
+ * it could never be opened, so nothing could ever be dropped into it.
+ */
+export function isOpenContainer(trait, expanded = false) {
+  if (!isContainer(trait)) return false
+  return expanded || childrenOf(trait).length === 0
+}
+
+/** Whether `id` is `root` itself or sits anywhere beneath it. */
+export function subtreeContains(root, id) {
+  if (!root) return false
+  if (root.id === id) return true
+  return childrenOf(root).some((child) => subtreeContains(child, id))
+}
+
+/**
  * Whether a row should render its children.
  *
  * A non-container always shows its sub-traits — they are part of it, which is

@@ -20,7 +20,9 @@ import {
   countDescendants,
   hasContents,
   isContainer,
+  isOpenContainer,
   showsChildren,
+  subtreeContains,
   traitTags,
 } from '../src/utils/traitTree.js'
 
@@ -87,6 +89,32 @@ ok('filled container earns a disclosure', hasContents(containerRow), true)
 ok('empty container does not', hasContents(emptyContainer), false)
 ok('a non-container never does', hasContents(plainParent), false)
 ok('a container is still one while empty', isContainer(emptyContainer), true)
+
+// ── "open" for arranging: expanded, or empty ────────────────────────────
+ok('an empty container is open without being expanded', isOpenContainer(emptyContainer), true)
+ok('a filled container is not open while collapsed', isOpenContainer(containerRow), false)
+ok('…until it is expanded', isOpenContainer(containerRow, true), true)
+ok('a non-container is never open', isOpenContainer(plainParent, true), false)
+
+// ── where a row may be dropped: not itself, not inside itself ───────────
+ok('a container contains itself', subtreeContains(tree[0], 'assets'), true)
+ok('…its direct child', subtreeContains(tree[0], 'rope'), true)
+ok('…and its grandchild', subtreeContains(tree[0], 'coin'), true)
+ok('…but not a sibling', subtreeContains(tree[0], 'sword'), false)
+ok('a leaf contains only itself', subtreeContains(tree[1], 'sharp'), true)
+ok('…and nothing else', subtreeContains(tree[1], 'assets'), false)
+
+// ── a container is draggable only into ANOTHER container ────────────────
+// The rule the sheet applies per row: some open container that is neither this
+// row nor anywhere inside it must be able to receive it.
+const droppable = (t, open) => open.some((c) => c.id !== t.id && !subtreeContains(t, c.id))
+ok('a trait can be dropped into an open container', droppable(tree[1], [tree[0]]), true)
+ok('a container cannot be dropped into itself', droppable(tree[0], [tree[0]]), false)
+ok('a container cannot be dropped into its own descendant',
+   droppable(tree[0], [tree[0].subTraitSettings[1]]), false)
+ok('a container can be dropped into an unrelated container',
+   droppable(tree[0], [tree[1]]), true)
+ok('nothing droppable with no open container', droppable(tree[0], []), false)
 
 // ── a container is still a container when marked on the registry side ────
 ok('nested container detected via registryTags',
