@@ -305,6 +305,19 @@ Per-entity trait configuration. The edge connects an anchor (entity, projection,
 
 **ID convention:** `{entity_id}:{trait_id}` for entity/projection anchors; `{anchor_id}:{trait_id}` for relationship anchors; parent + suffix for sub-traits.
 
+> [!note] Sub-trait chains
+> A sub-trait (`from_type: "traitsetting"`) has no anchor of its own — it is anchored to its parent,
+> so **`ego` follows the root of the chain** rather than the immediate parent: a child of an
+> entity-anchored trait is ego too. The chain must be a **path**; `create_traitsetting` and
+> `update_traitsetting` refuse a re-parent that would put a setting under its own descendant
+> (`_would_cycle`), because a loop would make every ancestor walk spin or lie. Neither rule is
+> enforced by a schema — both live in code.
+
+> [!tip] Containment is not reference
+> A sub-trait is *contained*: it does not exist outside its parent and is deleted with it. A trait
+> that only *points at* another trait — two guns sharing one ammunition pool — is a different thing
+> and does **not** exist yet; see [[Shortcut Traits Design Log]].
+
 > [!note] Legacy fold
 > Old docs may carry `negative`/`polarity=None`; the model folds `negative: true` into `polarity: negative` at load, and defaults a null polarity to `positive`.
 
