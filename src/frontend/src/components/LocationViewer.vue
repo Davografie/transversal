@@ -48,7 +48,7 @@
       />
       <!-- Pool dice ring around occupant dot -->
       <PoolDiceRing
-        v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || (poolPhaseFor(o.id) === 'resolved' && remoteResults[o.id]))"
+        v-if="!travelAnim.active && showElements && (poolDiceFor(o.id).length > 0 || remoteResults[o.id])"
         :dice="poolDiceFor(o.id)"
         :phase="poolPhaseFor(o.id)"
         :cx="o.map_x ?? occupantX(i, o)"
@@ -146,7 +146,7 @@
       @drag-start="(e) => onSelfDragStart(e)"
     />
     <PoolDiceRing
-      v-if="!travelAnim.active && showElements && (poolDiceFor(entityId).length > 0 || (poolPhaseFor(entityId) === 'resolved' && remoteResults[entityId]))"
+      v-if="!travelAnim.active && showElements && (poolDiceFor(entityId).length > 0 || remoteResults[entityId])"
       :dice="poolDiceFor(entityId)"
       :phase="poolPhaseFor(entityId)"
       :cx="selfX"
@@ -634,12 +634,16 @@ function occupantInitials(name) {
 
 const poolDiceFor = (eid) => {
   const pool = props.remotePools[eid]
-  if (!pool) return []
-  // In adding phase, dice are strings or { die, label } objects
-  if (pool.phase === 'adding') return (pool.dice || []).map(d => typeof d === 'string' ? d : d.die || d)
-  // In picking/resolved, dice are result objects
   const results = props.remoteResults[eid]
-  if (pool.phase === 'picking' && results?.rolls) return results.rolls
+  // Rolled results win whenever we have them — the ring shows the numbers that
+  // landed, in every phase after the roll (not just while picking).
+  if (results?.rolls?.length) return results.rolls
+  if (!pool) return []
+  // `adding` and `rolling` both carry the pool's dice; during a roll the ring
+  // tumbles them (see PoolDiceRing).
+  if (pool.phase === 'adding' || pool.phase === 'rolling') {
+    return (pool.dice || []).map(d => (typeof d === 'string' ? d : d.die || d))
+  }
   return []
 }
 const poolPhaseFor = (eid) => props.remotePools[eid]?.phase || 'adding'

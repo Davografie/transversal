@@ -275,6 +275,22 @@ skipped — while the server list still drives *other* clients' dots. The 60s
 presence poll also re-fetches `playerBodies`, so a missed `body_changed` cannot
 leave a dot sized up for long.
 
+  `poolDiceFor` returns the pool's dice for `rolling` as well as `adding`, and
+  prefers `results.rolls` whenever they exist — so the ring shows the numbers that
+  landed in **every** phase after the roll (previously `rolling` and `resolved`
+  returned nothing, and the ring's `v-if` dropped it entirely mid-roll).
+- **The roll animation is mirrored from the panel**: while `phase === 'rolling'`
+  with no results yet, the ring tumbles each die's face every `TUMBLE_MS` (70ms,
+  the roller's interval) and plays a `roll-pop` on entry / `die-lock` on settle —
+  the same shapes as `DiceRoller`, but animated with the **`scale` property, never
+  `transform`**: each item's inline `transform` is what places it on the ring, so a
+  `transform` animation would override it and stack every die at the centre.
+- **Your own ring is fed locally.** `sharePhase`/`onDiceRolled`/`@picked` write the
+  acting entity's phase and results into `remotePools`/`remoteResults` too (via
+  `mirrorOwnResult`). Solo play has no SSE at all, and in a session the `pool_updated`
+  echo deliberately skips the acting entity — so without this the dot you are
+  rolling from would never animate.
+
 ## Interactions
 
 ### Click / pop-out

@@ -1,28 +1,20 @@
 <template>
   <div
-    v-if="dice.length > 0 || (phase === 'resolved' && resolved)"
+    v-if="positionedDice.length > 0 || (phase === 'resolved' && resolved)"
     class="pool-dice-container"
     :style="{ left: cx.toFixed(1) + '%', top: cy.toFixed(1) + '%' }"
   >
-    <!-- Adding / Picking: radial die icons -->
+    <!-- Adding / rolling / picking / resolved: the dice themselves. Faces are the
+         rolled results when we have them, a tumbling random face while a roll is
+         in flight, and blank otherwise. -->
     <span
       v-for="(d, i) in positionedDice"
       :key="i"
       class="pool-die-item"
+      :class="{ tumbling: isTumbling, locked: d.locked }"
       :style="{ transform: 'translate(' + d.tx.toFixed(0) + 'px, ' + d.ty.toFixed(0) + 'px)' }"
     >
-      <!-- Adding: d is a die-type string like "d8" -->
-      <DieIcon
-        v-if="phase === 'adding'"
-        :die="d.die"
-        :result="null"
-      />
-      <!-- Picking: d is { die, result, source } — no kept/unused dimming for remote view -->
-      <DieIcon
-        v-else-if="phase === 'picking'"
-        :die="d.die.die || d.die"
-        :result="d.die.result != null ? d.die.result : d.result"
-      />
+      <DieIcon :die="d.die" :result="d.face" />
     </span>
 
     <!-- Resolved: total badge above, effect dice below (below the ring when the
@@ -45,7 +37,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import DieIcon from './DieIcon.vue'
 
 const props = defineProps({
@@ -100,14 +92,55 @@ function distribute(items, startAngle) {
   })
 }
 
-// The resolved total sits outside the ring: above it normally, below it when the
-// portrait overflows the top.
-const totalOffsetY = computed(() =>
-  props.transparent ? radiusPx.value + 16 : -radiusPx.value - 16
-)
+// ── What the ring shows ────────────────────────────────────────────────────
+// Same timing as the roller's tumbling dice.
+const TUMBLE_MS = 70
+
+// Rolled results win over the specs they came from: once we have them, the ring
+// shows the numbers that landed, in every phase after the roll.
+const rolledDice = computed(() => {
+  const rolls = props.resolved?.rolls || []
+  return rolls.length ? rolls.map(r => ({ die: r.die, result: r.result ?? null })) : []
+})
+
+// Otherwise the pool's own dice: strings in `adding`, result objects in `picking`.
+const specDice = computed(() => props.dice.map((d) => {
+  if (typeof d === 'string') return { die: d, result: null }
+  const die = d.die?.die ?? d.die
+  return { die, result: d.result ?? null }
+}))
+
+const baseDice = computed(() => (rolledDice.value.length ? rolledDice.value : specDice.value))
+
+// A roll in flight and no results yet: tumble, exactly like the panel does.
+const isTumbling = computed(() => props.phase === 'rolling' && rolledDice.value.length === 0)
+const tumbleFaces = ref([])
+let tumbleTimer = null
+
+function rollFace(die) {
+  const sides = Number(String(die).replace(/^d/, '')) || 6
+  return Math.floor(Math.random() * sides) + 1
+}
+
+watch(isTumbling, (on) => {
+  if (tumbleTimer) { clearInterval(tumbleTimer); tumbleTimer = null }
+  if (!on) { tumbleFaces.value = []; return }
+  tumbleFaces.value = baseDice.value.map(d => rollFace(d.die))
+  tumbleTimer = setInterval(() => {
+    tumbleFaces.value = baseDice.value.map(d => rollFace(d.die))
+  }, TUMBLE_MS)
+}, { immediate: true })
+
+onUnmounted(() => { if (tumbleTimer) clearInterval(tumbleTimer) })
+
+const shownDice = computed(() => baseDice.value.map((d, i) => ({
+  ...d,
+  face: d.result != null ? d.result : (isTumbling.value ? (tumbleFaces.value[i] ?? null) : null),
+  locked: d.result != null,
+})))
 
 const positionedDice = computed(() =>
-  distribute(props.dice.map(d => ({ die: d })), -Math.PI / 2)
+  distribute(shownDice.value, -Math.PI / 2)
 )
 
 const positionedEffectDice = computed(() => {
@@ -122,6 +155,12 @@ const positionedEffectDice = computed(() => {
     Math.PI / 2,
   )
 })
+
+// The resolved total sits outside the ring: above it normally, below it when the
+// portrait overflows the top.
+const totalOffsetY = computed(() =>
+  props.transparent ? radiusPx.value + 16 : -radiusPx.value - 16
+)
 </script>
 
 <style scoped>
@@ -138,6 +177,21 @@ const positionedEffectDice = computed(() => {
   margin-left: -18px;
   margin-top: -20px;
   transform-origin: 0 0;
+}
+/* Roll animation, mirroring DiceRoller's (roll-pop when the dice appear, die-lock
+   when a face settles). Animated with the *scale* property, never `transform`:
+   each item's inline transform is what places it on the ring, and an animation on
+   `transform` would override it and stack every die at the centre. */
+.pool-die-item.tumbling { animation: ringRollPop 0.09s ease-in-out; }
+.pool-die-item.locked { animation: ringDieLock 0.2s ease-out; }
+@keyframes ringRollPop {
+  0% { scale: 0.92; }
+  50% { scale: 1.04; }
+  100% { scale: 1; }
+}
+@keyframes ringDieLock {
+  0% { scale: 1.18; }
+  100% { scale: 1; }
 }
 .resolved-total {
   position: absolute;
