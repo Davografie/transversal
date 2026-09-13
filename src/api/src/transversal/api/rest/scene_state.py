@@ -48,6 +48,11 @@ class OfferNegativeRequest(BaseModel):
     # — a location id is never in ``known_to``, so ``newly_revealed`` would be
     # true on every click, and the toggle-off path does not spend it back.
     award: bool = True
+    # Take the die out and nothing else. Retracting a trait group's baggage
+    # (the main trait left the pool, so its negative does too) must never turn
+    # into an *offer* when the die turns out not to be there — a stale client
+    # view must not be able to re-add it.
+    remove_only: bool = False
 
 
 class DifficultyRequest(BaseModel):
@@ -132,6 +137,10 @@ async def offer_negative(location_id: str, entity_id: str, req: OfferNegativeReq
         store.save_pool(location_id, req.opponent_id, filtered)
         broadcast_pool_change(location_id, req.opponent_id, dice=filtered, phase="adding", actor_id=entity_id)
         return {"offered": False, "removed": True, "newly_revealed": False}
+
+    if req.remove_only:
+        # Nothing to retract — report it and leave the pool alone.
+        return {"offered": False, "removed": False, "newly_revealed": False}
 
     added = [
         {"die": die, "source_kind": "trait", "source_id": req.trait_setting_id,

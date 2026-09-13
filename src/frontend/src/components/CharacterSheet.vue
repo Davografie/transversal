@@ -339,7 +339,7 @@ const props = defineProps({
   mainEntityId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange'])
+const emit = defineEmits(['addToPool', 'removeFromPool', 'splitDie', 'removeByTsId', 'retractNegative', 'sfxToggled', 'stampSfx', 'openSettings', 'sheetViewChange'])
 
 function displayName(name) {
   return name
@@ -1031,9 +1031,19 @@ function playBaggage(t, skipId = null) {
 // by `playTrait`; this only completes (or dismantles) the group around it.
 function cascadeGroup(t) {
   if (isInPool(t)) {
-    // Removing a trait takes its subtree with it.
+    // Removing a trait takes its subtree out of the pool, and the group's
+    // negative baggage back out of whatever pool it was routed to. A
+    // complication must not outlive the trait that carried it.
     for (const child of descendantsOf(t)) {
       if (isInPool(child)) emit('removeByTsId', child.id)
+    }
+    for (const member of [t, ...descendantsOf(t)]) {
+      for (const carried of carriedNegatives(member)) {
+        if (!isOffered(carried)) continue
+        emit('retractNegative', {
+          tsId: carried.id, source: carried.name, label: displayName(carried.name),
+        })
+      }
     }
     return
   }

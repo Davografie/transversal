@@ -198,3 +198,58 @@ def test_offer_negative_difficulty_pays_nothing_across_repeated_toggles(monkeypa
     # Odd number of toggles: offer, remove, offer — it ends up in the pool,
     # and none of the three clicks paid out.
     assert [d["ts_id"] for d in ss_module.get_scene_store().get_pool("loc-1", "loc-1")] == ["ts-neg-1"]
+
+
+def test_offer_negative_remove_only_never_offers(monkeypatch):
+    """A retraction must not become an offer.
+
+    Removing a trait group from the sheet retracts the group's negative baggage.
+    If the die turns out not to be in the target pool (a stale client view), a
+    plain toggle would *add* it — `remove_only` reports the miss and leaves the
+    pool alone.
+    """
+    fired = []
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda entity_id, universe, event_type, context: fired.append((entity_id, event_type, context)),
+    )
+    trait = _trait(known_to=[])
+    client = _client(monkeypatch, trait, _occupants("player"))
+
+    r = client.post(
+        "/api/v1/locations/loc-1/pools/player/offer-negative",
+        json={
+            "opponent_id": "loc-1", "trait_setting_id": "ts-neg-1",
+            "dice": [], "remove_only": True,
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"offered": False, "removed": False, "newly_revealed": False}
+    assert ss_module.get_scene_store().get_pool("loc-1", "loc-1") == []
+    assert fired == []
+
+
+def test_offer_negative_remove_only_retracts_something_that_is_there(monkeypatch):
+    """The retraction path still works when the die IS in the target pool."""
+    monkeypatch.setattr(
+        "transversal.services.state_events.fire_state_sfx",
+        lambda entity_id, universe, event_type, context: None,
+    )
+    trait = _trait(known_to=[])
+    client = _client(monkeypatch, trait, _occupants("player"))
+
+    client.post(
+        "/api/v1/locations/loc-1/pools/player/offer-negative",
+        json={"opponent_id": "loc-1", "trait_setting_id": "ts-neg-1", "dice": ["d4"], "award": False},
+    )
+    assert [d["ts_id"] for d in ss_module.get_scene_store().get_pool("loc-1", "loc-1")] == ["ts-neg-1"]
+
+    r = client.post(
+        "/api/v1/locations/loc-1/pools/player/offer-negative",
+        json={
+            "opponent_id": "loc-1", "trait_setting_id": "ts-neg-1",
+            "dice": [], "remove_only": True,
+        },
+    )
+    assert r.json() == {"offered": False, "removed": True, "newly_revealed": False}
+    assert ss_module.get_scene_store().get_pool("loc-1", "loc-1") == []

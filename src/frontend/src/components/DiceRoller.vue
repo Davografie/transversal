@@ -431,6 +431,7 @@ const viewPoolGroups = computed(() => {
 })
 const opponentId = ref('')
 const offeredTraitIds = ref([])  // trait-setting ids routed to the opponent's pool
+const offeredTargets = ref({})   // tsId → the pool key it was routed to (for retraction)
 const contestResult = ref(null)
 const contestCompare = ref(null)
 const contestError = ref('')
@@ -1118,10 +1119,11 @@ function addFromSheet(payload) {
   notifyPool()
 }
 
-async function addToOpponentPool(dice, source, label, tsId, targetId = null, award = true) {
-  // `targetId` defaults to the contest opponent; the difficulty pool passes the
-  // location id instead (`award` false — see addFromSheet).
-  const target = targetId || opponentId.value
+async function addToOpponentPool(dice, source, label, tsId, targetId = null, award = true, removeOnly = false) {
+  // `targetId` defaults to where this trait was routed before (so a retraction
+  // reaches the pool it actually went to, even if the contest has since ended),
+  // then to the contest opponent. The difficulty pool passes the location id.
+  const target = targetId || offeredTargets.value[tsId] || opponentId.value
   if (!props.locationId || !target) return
   // Server-authoritative toggle + reveal + reward (on_trait_offered).
   const res = await apiOfferNegative(
@@ -1132,16 +1134,29 @@ async function addToOpponentPool(dice, source, label, tsId, targetId = null, awa
     dice,
     label || source || '',
     award,
+    removeOnly,
   )
   if (res) {
     if (res.removed) {
       offeredTraitIds.value = offeredTraitIds.value.filter(id => id !== tsId)
+      const { [tsId]: _retracted, ...rest } = offeredTargets.value
+      offeredTargets.value = rest
     } else if (res.offered && tsId && !offeredTraitIds.value.includes(tsId)) {
       offeredTraitIds.value = [...offeredTraitIds.value, tsId]
+      offeredTargets.value = { ...offeredTargets.value, [tsId]: target }
     }
     emit('offered-change', offeredTraitIds.value)
   }
   panelOpen.value = true
+}
+
+// Take a trait group's negative baggage back out of the pool it was routed to.
+// Called when the group leaves its owner's pool — the negative must not outlive
+// the trait that carried it. Idempotent server-side (`remove_only`), so a stale
+// client view cannot turn this into a fresh offer.
+function retractNegative({ tsId, source, label } = {}) {
+  if (!tsId || !offeredTraitIds.value.includes(tsId)) return
+  addToOpponentPool([], source, label, tsId, offeredTargets.value[tsId] || null, false, true)
 }
 
 function removeBySource(source) {
@@ -1188,7 +1203,7 @@ function stampArmedSfx(tsId, sfxId) {
   if (changed) notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, retractNegative, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen })
 
 function isHitch(idx) {
   if (!result.value) return false
@@ -1770,6 +1785,7 @@ function resetEditor() {
   showDiePicker.value = false
   if (offeredTraitIds.value.length) {
     offeredTraitIds.value = []
+    offeredTargets.value = {}
     emit('offered-change', [])
   }
 }

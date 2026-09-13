@@ -183,6 +183,7 @@
           @add-to-pool="(d) => diceRef?.addFromSheet(d)"
           @remove-from-pool="(s) => diceRef?.removeBySource(s)"
           @remove-by-ts-id="(id) => diceRef?.removeByTsId(id)"
+          @retract-negative="(p) => diceRef?.retractNegative(p)"
           @split-die="(d) => diceRef?.splitDie(d)"
           @sfx-toggled="onSfxToggled"
           @stamp-sfx="(d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId)"

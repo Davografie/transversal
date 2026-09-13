@@ -226,12 +226,12 @@ export function useApi() {
     } catch (e) { console.error('[API] savePool', e.message); return null }
   }
 
-  async function offerNegative(locationId, entityId, opponentId, traitSettingId, dice, label = '', award = true) {
+  async function offerNegative(locationId, entityId, opponentId, traitSettingId, dice, label = '', award = true, removeOnly = false) {
     if (!locationId || !entityId || !opponentId) return null
     try {
       const r = await fetch(`${API_BASE}/locations/${locationId}/pools/${entityId}/offer-negative`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opponent_id: opponentId, trait_setting_id: traitSettingId, dice, label, award })
+        body: JSON.stringify({ opponent_id: opponentId, trait_setting_id: traitSettingId, dice, label, award, remove_only: removeOnly })
       })
       if (!r.ok) throw new Error(await r.text())
       return await r.json()
