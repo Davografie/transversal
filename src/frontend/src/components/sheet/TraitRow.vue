@@ -5,7 +5,7 @@
          resolves the same conflict the same way: a dedicated handle, instant
          drag, leaving long-press free for the row's own action (here: edit). -->
     <span
-      v-if="api.canDrag(trait)"
+      v-if="api.canDrag(trait, depth, insideContainer)"
       class="trait-drag-handle"
       draggable="true"
       title="Drag into a container"
@@ -143,11 +143,12 @@
     @drop.prevent="api.onTraitDrop($event)"
     @dragend="api.onTraitDragEnd()"
   >
-    <!-- A nested row carries a grip too, so a trait can be dragged back OUT of
-         the container it sits in. Dropping it on any non-container row does
-         that (see the sheet's resolveTarget). -->
+    <!-- A row directly inside a container carries a grip, so it can be pulled
+         back OUT. Dropping it on any non-container row does that (see the
+         sheet's resolveTarget). Deeper rows get none: a sub-trait of a sub-trait
+         is part of its parent and stays put. -->
     <span
-      v-if="api.canDrag(trait)"
+      v-if="api.canDrag(trait, depth, insideContainer)"
       class="trait-drag-handle sub-trait-grip"
       draggable="true"
       title="Drag out of this container"
@@ -218,6 +219,7 @@
       :api="api"
       :phase="phase"
       :depth="depth + 1"
+      :inside-container="api.isContainer(trait)"
     />
   </div>
 </template>
@@ -247,8 +249,11 @@ const props = defineProps({
   wrap: { type: Boolean, default: false },
   // 0 = a row in the set's trait list; > 0 = nested under a parent. Whether the
   // row can be dragged is the sheet's call (api.canDrag), since it depends on
-  // what else is on screen.
+  // depth, on what the parent is, and on what else is on screen.
   depth: { type: Number, default: 0 },
+  // True when this row sits directly under a container — the only nested rows
+  // that may be picked up.
+  insideContainer: { type: Boolean, default: false },
 })
 
 const children = computed(() => childrenOf(props.trait))

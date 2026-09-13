@@ -322,7 +322,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { childrenOf, countDescendants, countSetPicks, findSetting, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
+import { canPickUp, childrenOf, countDescendants, countSetPicks, findSetting, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -574,33 +574,31 @@ function containerCount(t) {
 // the write path checks a container against the registry's nominations, so any
 // trait can go into any container.
 //
-// Which rows carry a grip. One predicate, covering every row at any depth:
-//   - grips appear only while a container is *open* (expanded, or empty — see
-//     isOpenContainer), so they never clutter an ordinary sheet;
-//   - a container is draggable only when some *other* container can receive it,
-//     and never one inside itself.
-// A row nested in a container therefore qualifies through its own container
-// being open — which is what lets a child be dragged back out to the top level.
+// Which ROOT rows carry a grip: only while some open container can receive them
+// (see isOpenContainer), so grips never clutter an ordinary sheet, and a
+// container is never draggable into itself or into its own descendants.
 const draggableRowIds = computed(() => {
   const roots = currentSet.value?.traits || []
-  const all = []
   const open = []
   const collect = (list) => {
     for (const t of list || []) {
-      all.push(t)
       if (isOpenContainer(t, isExpanded(t))) open.push(t)
       collect(childrenOf(t))
     }
   }
   collect(roots)
   const ids = new Set()
-  for (const t of all) {
+  for (const t of roots) {
     if (open.some((c) => c.id !== t.id && !subtreeContains(t, c.id))) ids.add(t.id)
   }
   return ids
 })
 
-function canDrag(t) { return draggableRowIds.value.has(t.id) }
+// Depth decides too — see canPickUp: a nested row is pickable only when it sits
+// directly inside a container, never deeper.
+function canDrag(t, depth = 0, insideContainer = false) {
+  return canPickUp({ depth, insideContainer, rootHasDestination: draggableRowIds.value.has(t.id) })
+}
 
 function dragPayload(t) {
   return { id: t.id, nested: t.fromType === 'traitsetting', parent: t.parentTraitsettingId || null }

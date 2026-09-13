@@ -108,6 +108,24 @@ export function rootAnchor(nodes, settingId) {
 }
 
 /**
+ * Which rows can be picked up with a grip.
+ *
+ * Exactly two kinds (human, 2026-09-13):
+ *   - a **root** trait (`depth === 0`) — and only when some open container can
+ *     receive it, i.e. `rootHasDestination`;
+ *   - a trait sitting **directly inside** a container (`depth === 1`,
+ *     `insideContainer`) — so it can be pulled back out.
+ *
+ * Anything deeper is a sub-trait of a sub-trait: part of its parent, stays put.
+ * So does a sub-trait of a NON-container parent — those are part of their parent
+ * too, not container contents.
+ */
+export function canPickUp({ depth = 0, insideContainer = false, rootHasDestination = false } = {}) {
+  if (depth === 0) return rootHasDestination
+  return depth === 1 && insideContainer
+}
+
+/**
  * Whether a row should render its children.
  *
  * A non-container always shows its sub-traits — they are part of it, which is

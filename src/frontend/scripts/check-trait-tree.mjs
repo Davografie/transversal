@@ -21,6 +21,7 @@ import {
   hasContents,
   isContainer,
   isOpenContainer,
+  canPickUp,
   findSetting,
   rootAnchor,
   showsChildren,
@@ -141,6 +142,22 @@ ok('…through two levels', rootAnchor(nested, 'ego-grandchild')?.id, 'ego-root'
 ok('a morph chain resolves to its body', rootAnchor(nested, 'body-child')?.fromType, 'projection')
 ok('…carrying the body id', rootAnchor(nested, 'body-child')?.projectionId, 'body-1')
 ok('an unknown id has no anchor', rootAnchor(nested, 'nope'), null)
+
+// ── which rows can be picked up ─────────────────────────────────────────
+// Two kinds only: a root trait with somewhere to go, and a trait sitting
+// directly inside a container. The human corrected this twice; pin it.
+ok('a root trait with a destination can be picked up',
+   canPickUp({ depth: 0, rootHasDestination: true }), true)
+ok('a root trait with nowhere to go cannot',
+   canPickUp({ depth: 0, rootHasDestination: false }), false)
+ok('a trait directly inside a container can',
+   canPickUp({ depth: 1, insideContainer: true }), true)
+ok('a sub-trait of a NON-container cannot',
+   canPickUp({ depth: 1, insideContainer: false }), false)
+ok('a sub-trait of a sub-trait cannot, even in a container',
+   canPickUp({ depth: 2, insideContainer: true }), false)
+ok('a deep sub-trait of a non-container cannot',
+   canPickUp({ depth: 3, insideContainer: false }), false)
 
 // ── a container is still a container when marked on the registry side ────
 ok('nested container detected via registryTags',
