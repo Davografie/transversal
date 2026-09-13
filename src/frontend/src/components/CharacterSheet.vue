@@ -322,7 +322,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { canPickUp, childrenOf, countDescendants, countSetPicks, findSetting, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
+import { ancestorsOf, canPickUp, carriedNegatives, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -994,9 +994,84 @@ function detailContext(t) {
 }
 
 // ── Playing a trait (rating zone) ───────────────────
+
+// A trait and its sub-traits are ONE pool pick: `countSetPicks` counts the
+// subtree once, so the set limit is satisfied by whichever member you touch.
+// The old app completed the group from either end and this keeps that:
+//
+//   - playing a **sub-trait** pulls its ancestor chain in, so the pick is whole
+//     (`click_subtrait` → `play_trait()` on the parent);
+//   - playing a trait also pushes the **negative** sub-traits it carries — in a
+//     contest those route to the opposition (`DiceRoller.addFromSheet`);
+//   - removing a trait clears its whole subtree, so no orphan dice linger
+//     (the old `remove_traitsetting_dice` loop over subtraits).
+//
+// Only **static** negative children ride along automatically: a resource or
+// challenge sub-trait is *spent*, and spending is the player's deliberate act,
+// not a side effect of playing its parent.
+// The graph walks (`ancestorsOf` / `descendantsOf` / `carriedNegatives`) live in
+// utils/traitTree.js with the rest of the group semantics.
+function settingSearchSpace() {
+  return [...(effectiveSettings.value || []), ...(allTraitSettings.value || [])]
+}
+
+// The negative sub-traits a trait carries when it is played. `skipId` is the
+// trait whose own dice `playTrait` is about to push: without it, playing a
+// negative sub-trait would push it once here and once there, and the dice
+// layer's toggle would add then immediately remove it.
+function playBaggage(t, skipId = null) {
+  for (const child of carriedNegatives(t)) {
+    if (child.id === skipId) continue
+    if (child.enabled === false || isInPool(child)) continue
+    emitTraitDice(child)
+  }
+}
+
+// The related members of `t`'s group. The clicked trait's own dice are handled
+// by `playTrait`; this only completes (or dismantles) the group around it.
+function cascadeGroup(t) {
+  if (isInPool(t)) {
+    // Removing a trait takes its subtree with it.
+    for (const child of descendantsOf(t)) {
+      if (isInPool(child)) emit('removeByTsId', child.id)
+    }
+    return
+  }
+  // Playing a sub-trait completes its pick: bring the ancestors in first.
+  // A resource or challenge ancestor is *spent*, not played, so it is left
+  // alone — its own row click owns that decision.
+  for (const ancestor of ancestorsOf(t, settingSearchSpace())) {
+    if (ancestor.ratingType === 'RESOURCE' || ancestor.ratingType === 'CHALLENGE') continue
+    if (isInPool(ancestor) || !canPlayTrait(ancestor)) continue
+    emitTraitDice(ancestor)
+    playBaggage(ancestor, t.id)
+  }
+  playBaggage(t, t.id)
+}
+
+// Push one trait's rating into the pool. Negativity rides the payload so the
+// dice layer can route it (opposition during a contest).
+function emitTraitDice(t) {
+  const dice = (t.dice || []).map(d => (typeof d === 'string' ? d.toLowerCase() : d))
+  if (!dice.length) return  // no die rating — nothing to add
+  const payload = {
+    source: t.name,
+    label: displayName(t.name),
+    tsId: t.id,
+    negative: t.polarity === 'NEGATIVE',
+    armedSfxIds: armedSfxIdsForTrait(t),
+  }
+  // Multi-die traits contribute one pool die per rating entry.
+  if (dice.length > 1) emit('addToPool', { ...payload, dice })
+  else emit('addToPool', { ...payload, die: dice[0] })
+}
+
 async function playTrait(t) {
   if (props.phase !== 'adding') return
   if (t.enabled === false) return  // disabled trait contributes no dice
+
+  // Complete (or dismantle) the group before the clicked trait's own dice.
+  cascadeGroup(t)
 
   // Resource traits: the row click spends only when the pool has a single
   // die type; mixed-type resources are spent per die group.
@@ -1014,17 +1089,7 @@ async function playTrait(t) {
     return
   }
 
-  const negative = t.polarity === 'NEGATIVE'
-  const dieType = (t.dice && t.dice.length ? t.dice[0] : '').toLowerCase()
-
-  // Multi-die static traits contribute one pool die per rating entry.
-  if (t.ratingType === 'STATIC' && (t.dice || []).length > 1) {
-    emit('addToPool', { dice: t.dice.map(d => d.toLowerCase()), source: t.name, label: displayName(t.name), tsId: t.id, negative, armedSfxIds: armedSfxIdsForTrait(t) })
-    return
-  }
-
-  if (!dieType) return  // no die rating — nothing to add
-  emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative, armedSfxIds: armedSfxIdsForTrait(t) })
+  emitTraitDice(t)
 }
 
 async function spendResourceGroup(t, dieType) {
@@ -1148,7 +1213,9 @@ function isKnown(t) {
 }
 
 function inPoolCount(ts) {
-  return ts.traits.filter(t => isInPool(t)).length
+  // Must agree with `currentSetReachedLimit`: a sub-trait rides its parent, so
+  // the subtree counts once however many of its members are in the pool.
+  return countSetPicks(ts.traits, isInPool)
 }
 
 function sfxAllowedInPhase(sfxId) {
@@ -1162,10 +1229,12 @@ function setPoolSources(sources) {
   poolSources.value = sources.map(s => s.tsId).filter(Boolean)
 
   // When the current set fills to its limit, advance to the next set's list.
+  // Same count as the limit dots and the gate (countSetPicks): a sub-trait
+  // rides its parent, so the subtree is one pick.
   const sets = traitSets.value
   const idx = sets.findIndex(s => s.name === activeSetName.value)
   if (idx !== -1) {
-    const count = sets[idx].traits.filter(t => poolSources.value.includes(t.id)).length
+    const count = countSetPicks(sets[idx].traits, isInPool)
     if (sets[idx].limit && count >= sets[idx].limit) {
       activeSetName.value = sets[idx + 1] ? sets[idx + 1].name : null
     }

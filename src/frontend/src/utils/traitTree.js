@@ -32,6 +32,45 @@ export function childrenOf(setting) {
   return setting?.subTraitSettings || []
 }
 
+/** Every setting under this one, at any depth, depth-first. */
+export function descendantsOf(setting) {
+  const out = []
+  for (const child of childrenOf(setting)) out.push(child, ...descendantsOf(child))
+  return out
+}
+
+/**
+ * The chain of parents above a sub-trait, **root-first**.
+ *
+ * A sub-trait has no anchor of its own, so playing one completes the pick by
+ * bringing its chain in. `nodes` is the search space (the sheet's effective and
+ * all-trait lists); the walk is cycle-guarded so a malformed parent link cannot
+ * hang it.
+ */
+export function ancestorsOf(setting, nodes) {
+  const chain = []
+  const seen = new Set([setting.id])
+  let cur = setting
+  while (cur && cur.fromType === 'traitsetting' && cur.parentTraitsettingId) {
+    const parent = findSetting(nodes, cur.parentTraitsettingId)
+    if (!parent || seen.has(parent.id)) break
+    seen.add(parent.id)
+    chain.unshift(parent)
+    cur = parent
+  }
+  return chain
+}
+
+/**
+ * The negative sub-traits a trait **carries** — the ones a group play pushes
+ * alongside it. Static only: a resource or challenge sub-trait is *spent*, and
+ * spending is the player's deliberate act, not a side effect of its parent.
+ */
+export function carriedNegatives(setting) {
+  return childrenOf(setting).filter(child =>
+    child?.polarity === 'NEGATIVE' && child?.ratingType === 'STATIC')
+}
+
 /** A setting's own tags plus its registry trait's, deduped (B116). */
 export function traitTags(trait) {
   return [...new Set([...(trait?.tags || []), ...(trait?.registryTags || [])])]
