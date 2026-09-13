@@ -1073,6 +1073,20 @@ function handleSseEvent(evt) {
       if (eid === entityId.value && actor !== entityId.value && Array.isArray(evt.data.dice)) {
         // Another entity changed my pool (e.g. offered a negative trait) — sync it.
         diceRef.value?.syncPool(evt.data.dice)
+      } else if (eid === entityId.value && Array.isArray(evt.data.dice)) {
+        // The server's own broadcast for *my* pool. Its roll endpoints send the
+        // enriched dice the moment the roll resolves — before the roller has run
+        // its settle animation — so recording them here is what lets my own dot's
+        // ring settle in step with the panel instead of a full cycle behind it.
+        // (Phase-only publishes from `sharePhase` carry no dice and are ignored.)
+        remotePools.value = { ...remotePools.value, [eid]: {
+          dice: evt.data.dice,
+          player_id: pid,
+          phase: evt.data.phase || 'adding',
+        }}
+        if (evt.data.location_id) {
+          poolLocations.value = { ...poolLocations.value, [eid]: evt.data.location_id }
+        }
       } else if (eid && eid !== entityId.value) {
         const phase = evt.data.phase || 'adding'
         const hasDice = Array.isArray(evt.data.dice)

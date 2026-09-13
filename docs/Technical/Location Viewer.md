@@ -302,6 +302,23 @@ leave a dot sized up for long.
   **vanished until the results landed**. It now returns the pool's dice in every
   phase; a cleared pool still empties it, because the server sends that as
   `dice: []` with phase `adding`.
+- **The ring's reveal runs *with* the panel, not after it.** The roller's own
+  sequence is: tumble → (server call) → first lock at `FIRST_LOCK_MS` (900) → one
+  die per `LOCK_STAGGER_MS` (1000) → `emit('rolled')` *at the end*. Anything keyed
+  off `roll_result` therefore started a full settle-cycle late (the reported
+  "the diceroll already settled before the rings start"). The ring instead derives
+  its results from **the server's enriched dice**: `api/rest/roll.py` broadcasts
+  `pool_updated` with dice already carrying `result` the moment the roll resolves,
+  and `PoolDiceRing.rolledDice` treats a fully-resulted pool as the result set. On
+  our own device that broadcast used to be dropped entirely (the handler's
+  own-entity branches both declined it), so `App.vue` now records it into
+  `remotePools` as well — same data the other devices already had.
+- **The reveal reads left-to-right, like the panel's row.** Dice are placed from
+  9 o'clock sweeping up and over (`distribute(..., Math.PI)`), and the
+  bottom-anchored transparent spread starts at the arc's *left* end — previously
+  the transparent case began on the right, so its settle order mirrored the panel.
+  (Verified numerically for n = 1–5: x ascends with the index, and no die enters
+  the reserved top slice.)
 - **Your own ring is fed locally.** `sharePhase`/`onDiceRolled`/`@picked` write the
   acting entity's phase and results into `remotePools`/`remoteResults` too (via
   `mirrorOwnResult`). Solo play has no SSE at all, and in a session the `pool_updated`

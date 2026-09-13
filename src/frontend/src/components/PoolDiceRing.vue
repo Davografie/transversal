@@ -69,11 +69,13 @@ function radialOffset(index, total, radius, startAngle) {
 }
 
 // Transparent portraits stick out above the rim, so their dice are anchored on
-// the bottom (6 o'clock — +π/2 in screen coords) and spread upward to both
-// sides, filling the arc outside the reserved top slice.
+// the bottom (6 o'clock — +π/2 in screen coords) and spread across the arc outside
+// the reserved top slice. The sweep starts at the arc's **left** end and works
+// rightwards so the dice settle in the same visual order as the panel's row
+// (starting at the other end made the ring read right-to-left).
 function radialOffsetBottomAnchored(index, total, radius) {
   const span = 2 * Math.PI * (1 - TOP_GAP_FRACTION)
-  const angle = (Math.PI / 2) - span / 2 + (span / total) * (index + 0.5)
+  const angle = (Math.PI / 2) + span / 2 - (span / total) * (index + 0.5)
   return {
     tx: radius * Math.cos(angle),
     ty: radius * Math.sin(angle),
@@ -103,7 +105,18 @@ const LOCK_STAGGER_MS = 1000
 // shows the numbers that landed, in every phase after the roll.
 const rolledDice = computed(() => {
   const rolls = props.resolved?.rolls || []
-  return rolls.length ? rolls.map(r => ({ die: r.die, result: r.result ?? null })) : []
+  if (rolls.length) return rolls.map(r => ({ die: r.die, result: r.result ?? null }))
+  // Otherwise fall back to the pool's dice *when they already carry results*: the
+  // server broadcasts the enriched dice the moment the roll resolves, which is
+  // before the roller has finished settling. Deriving from them starts the ring's
+  // reveal in step with the panel rather than a whole settle-cycle behind it.
+  // (Requires every die to carry a result — a partially-rolled pool is not a
+  // result set, and an unrolled builder pool never matches.)
+  const dice = props.dice
+  if (!dice.length) return []
+  const settled = dice.filter(d => typeof d === 'object' && d.result != null)
+  if (settled.length !== dice.length) return []
+  return settled.map(d => ({ die: d.die?.die ?? d.die, result: d.result }))
 })
 
 // Otherwise the pool's own dice: strings in `adding`, result objects in `picking`.
@@ -175,7 +188,9 @@ const shownDice = computed(() => baseDice.value.map((d, i) => {
 }))
 
 const positionedDice = computed(() =>
-  distribute(shownDice.value, -Math.PI / 2)
+  // First die at 9 o'clock, sweeping up and over: the reveal then reads
+  // left-to-right, matching the panel's row (see DiceRoller's lock order).
+  distribute(shownDice.value, Math.PI)
 )
 
 const positionedEffectDice = computed(() => {
