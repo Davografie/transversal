@@ -1,9 +1,15 @@
-"""Challenge-rating pool operations — spend dice and check completion.
+"""Challenge-rating pool operations — spend dice, refund them, check completion.
 
 A challenge trait is a pool of dice that drains (negative → doom) or fills
 (positive → progress). Unlike a resource pool, there is no ``spent_dice``
 recovery ledger: spending removes a die from ``dice`` outright, and the pool
 grows back through ``add_die``/``step_up`` (or hitches for doom pools).
+
+There is still a **refund**: a die spent into a pool that never reached a roll
+(the player pulled it back out while still assembling) was not really spent, so
+``recover_challenge_die`` puts it straight back into ``dice``. That is the
+mirror of the resource auto-recover, and it is why a challenge pool needs no
+ledger — the refund is an un-spend, not a recovery of something spent for good.
 
 Positive progress pools carry a ``capacity`` — the target the ``dice`` ledger
 fills toward. When ``dice`` reaches ``capacity`` the project is complete.
@@ -68,6 +74,40 @@ def spend_challenge_die(
         session_id,
     )
     return ChallengeSpend(ts=result, die=die, resource=destination == "pool")
+
+
+def recover_challenge_die(
+    ts: TraitSetting,
+    die: DieType,
+    em: EntityManager,
+    session_id: str = "",
+) -> TraitSetting:
+    """Return one *die* to a challenge pool's ``dice`` (refund an un-rolled spend).
+
+    The caller is the pool's owner pulling a die back out of a still-assembling
+    pool, so it was never really spent — this appends to ``dice`` rather than
+    moving a ledger entry (challenge pools have none).
+
+    Deliberately does **not** re-check completion: a refund restores the state
+    from before the spend, and re-firing ``challenge_completed`` would pay the
+    completion reward a second time. For the same reason it is not capped
+    against ``capacity`` — refusing the refund would destroy a die the player
+    still owns, which is the worse failure.
+    """
+    if ts.rating_type != RatingType.CHALLENGE:
+        raise ChallengePoolError(f"TraitSetting '{ts.id}' is not challenge-rated")
+
+    ts.dice.append(die)
+    result = em.update_traitsetting(ts)
+
+    change_log.record(
+        ts.entity_id,
+        f"traitsetting.{ts.id}.challenge.recover",
+        "",
+        f"{die.value}",
+        session_id,
+    )
+    return result
 
 
 def _multiset(dice: Optional[list[DieType]]) -> Counter:

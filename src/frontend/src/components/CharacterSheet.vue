@@ -323,6 +323,7 @@ import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
 import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
+import { splitRefunds } from '../utils/poolSpends.js'
 
 const props = defineProps({
   entityId: { type: String, default: null },  // null = GM free-roam (B95); guards at use sites
@@ -348,7 +349,7 @@ function displayName(name) {
     .join(' ')
 }
 
-const { loading, error, graphql, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie } = useApi()
+const { loading, error, graphql, triggerSfx, endSfx, spendResourceDie, recoverResourceDie, spendChallengeDie, recoverChallengeDie } = useApi()
 const entityCache = useEntityCache()
 const { fetchFor: fetchScheduledEvents, formatTimers } = useScheduledEvents()
 const entity = ref(null)
@@ -750,9 +751,10 @@ const poolSources = ref([])
 // during a contest) — highlighted in the sheet and counted toward the set limit.
 const offeredTraits = ref(new Set())
 
-// Track resource trait dice that have been spent into the pool
-// { tsId: [dieType, ...] } — cleared when a die is removed from the pool
-const spentResources = ref({})
+// Dice spent out of a trait into the pool, kept so they can be refunded if the
+// pool drops them before rolling. { tsId: [{ die, kind }, ...] } — `kind` picks
+// the recover path ('resource' → spent ledger, 'challenge' → outright refund).
+const refundableSpends = ref({})
 
 
 const RATING_TYPES = [
@@ -1107,8 +1109,8 @@ async function spendResourceGroup(t, dieType) {
   if (props.phase !== 'adding') return
   if (t.enabled === false) return
   await spendResourceDie(t.id, dieType)
-  if (!spentResources.value[t.id]) spentResources.value[t.id] = []
-  spentResources.value[t.id].push(dieType)
+  if (!refundableSpends.value[t.id]) refundableSpends.value[t.id] = []
+  refundableSpends.value[t.id].push({ die: dieType, kind: 'resource' })
   emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative: t.polarity === 'NEGATIVE', resource: true, armedSfxIds: armedSfxIdsForTrait(t) })
   await fetchEntity()
 }
@@ -1123,6 +1125,14 @@ async function spendChallengeGroup(t, dieType) {
   const res = await spendChallengeDie(t.id, dieType, destination)
   if (!res) return
   t.dice = (res.dice || []).map(d => d.toUpperCase())
+  // Only a die that lands in an editable pool can be pulled back out again —
+  // a doom die routed to the opposition/difficulty pool is tracked by nobody
+  // here, and treating it as "missing from my own pool" would refund it while
+  // it is legitimately sitting in the difficulty pool.
+  if (res.resource) {
+    if (!refundableSpends.value[t.id]) refundableSpends.value[t.id] = []
+    refundableSpends.value[t.id].push({ die: res.die.toLowerCase(), kind: 'challenge' })
+  }
   emit('addToPool', {
     die: res.die.toLowerCase(),
     source: t.name,
@@ -1261,27 +1271,22 @@ function setPoolSources(sources) {
     }
   }
 
-  // Auto-recover resource dice that were removed from the pool
+  // Auto-recover dice that were removed from the pool before rolling
   // (e.g. via chip click in DiceRoller).  Only during adding phase —
-  // once dice are rolled they stay spent.
+  // once dice are rolled they stay spent.  A resource die returns through its
+  // spent ledger; a challenge die is refunded outright (no ledger).
   if (props.phase !== 'adding') return
   let recovered = false
-  for (const tsId of Object.keys(spentResources.value)) {
-    const spent = [...spentResources.value[tsId]]
-    const inPool = sources.filter(s => s.tsId === tsId).map(s => s.die)
-    const remaining = []
-    for (const dieType of spent) {
-      const at = inPool.indexOf(dieType)
-      if (at !== -1) {
-        inPool.splice(at, 1)
-        remaining.push(dieType)
-      } else {
-        recoverResourceDie(tsId, dieType)
-        recovered = true
-      }
+  for (const tsId of Object.keys(refundableSpends.value)) {
+    const poolDice = sources.filter(s => s.tsId === tsId).map(s => s.die)
+    const { keep, refunds } = splitRefunds(refundableSpends.value[tsId], poolDice)
+    for (const entry of refunds) {
+      if (entry.kind === 'challenge') recoverChallengeDie(tsId, entry.die)
+      else recoverResourceDie(tsId, entry.die)
+      recovered = true
     }
-    if (remaining.length) spentResources.value[tsId] = remaining
-    else delete spentResources.value[tsId]
+    if (keep.length) refundableSpends.value[tsId] = keep
+    else delete refundableSpends.value[tsId]
   }
   if (recovered) fetchEntity()
 }
@@ -1457,7 +1462,7 @@ async function fetchSfxCatalog() {
 
 function resetSfxCounts() {
   sfxActivations.value = {}
-  spentResources.value = {}
+  refundableSpends.value = {}
 }
 
 const QUERY = `

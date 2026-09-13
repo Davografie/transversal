@@ -7,6 +7,7 @@ from transversal.services.challenge_pools import (
     ChallengePoolError,
     challenge_capacity,
     check_challenge_completion,
+    recover_challenge_die,
     spend_challenge_die,
 )
 
@@ -122,3 +123,55 @@ class TestChallengeCapacity:
     def test_returns_empty_when_unset(self):
         ts = _doom_ts()
         assert challenge_capacity(ts) == []
+
+
+class TestRecoverChallengeDie:
+    """Refunding a die that was spent into a pool and then pulled back out.
+
+    The mirror of the resource auto-recover: the die never reached a roll, so
+    it goes straight back into ``dice`` (a challenge pool keeps no ledger).
+    """
+
+    def test_refund_restores_the_spent_die(self, em):
+        ts = _doom_ts()
+        spent = spend_challenge_die(ts, DieType.D6, em, destination="opposition")
+        assert spent.ts.dice.count(DieType.D6) == 1
+
+        back = recover_challenge_die(spent.ts, DieType.D6, em)
+        assert back.dice.count(DieType.D6) == 2
+        assert back.dice.count(DieType.D8) == 1
+        assert len(back.dice) == 3
+
+    def test_refund_works_for_a_positive_progress_pool(self, em):
+        ts = _progress_ts()
+        spent = spend_challenge_die(ts, DieType.D6, em, destination="pool")
+        assert spent.resource is True
+        back = recover_challenge_die(spent.ts, DieType.D6, em)
+        assert back.dice.count(DieType.D6) == 2
+
+    def test_refund_does_not_re_fire_completion(self, em):
+        """A refund restores the pre-spend state; completion is not re-checked."""
+        ts = _progress_ts(dice=[DieType.D6, DieType.D6, DieType.D6],
+                          capacity=[DieType.D6, DieType.D6, DieType.D6])
+        assert check_challenge_completion(ts) is True
+        spent = spend_challenge_die(ts, DieType.D6, em, destination="pool")
+        assert check_challenge_completion(spent.ts) is False
+        back = recover_challenge_die(spent.ts, DieType.D6, em)
+        # Back to capacity — and the caller is responsible for not re-firing.
+        assert check_challenge_completion(back) is True
+        assert [d for d in back.dice].count(DieType.D6) == 3
+
+    def test_refund_rejects_a_non_challenge_trait(self, em):
+        ts = TraitSetting(
+            id="x:res", entity_id="x", trait_id="t", traitset_id="ts",
+            rating_type=RatingType.RESOURCE, dice=[DieType.D6],
+            capacity=[DieType.D6], polarity=Polarity.POSITIVE,
+        )
+        with pytest.raises(ChallengePoolError):
+            recover_challenge_die(ts, DieType.D6, em)
+
+    def test_refund_persists_through_the_em(self, em):
+        ts = _doom_ts()
+        spent = spend_challenge_die(ts, DieType.D8, em, destination="opposition")
+        recover_challenge_die(spent.ts, DieType.D8, em)
+        assert em._ts["loc:doom"].dice.count(DieType.D8) == 1
