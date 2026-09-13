@@ -464,7 +464,7 @@ function groupTraitSettings(settings) {
     .map(({ name, traits, traitsetId, order, limit }) => ({ name, traits, traitsetId, limit }))
 }
 
-function recomputeTraitSets() {
+function recomputeTraitSets(reason = 'unspecified') {
   const src = showAllTraits.value ? allTraitSettings.value : effectiveSettings.value
   const settings = src || []
   // Which tab a trait belongs on is the trait *set's* decision now, not the
@@ -473,6 +473,9 @@ function recomputeTraitSets() {
   const onProfile = (t) => t.traitsetTab === 'PROFILE'
   profileTraits.value = settings.filter(onProfile)
   traitSets.value = groupTraitSettings(settings.filter(t => !onProfile(t)))
+  // Every rebuild is a fresh array of set objects, so the list re-renders even
+  // when the membership is identical — worth seeing while chasing the reload.
+  perfMark('trait-sets-rebuilt', { reason, sets: traitSets.value.length })
 }
 
 // ── Relationship widget (foreign sheets only) ──────
@@ -541,7 +544,7 @@ async function commitProjectionName() {
       `mutation($id: ID!, $name: String) { updateProjection(projectionId: $id, name: $name) { id name } }`,
       { id: projection.id, name },
     )
-    await fetchEntity()
+    await fetchEntity('projection-name-save')
   } catch (e) {
     console.error('updateProjection failed:', e)
     alert('Could not rename this projection.')
@@ -652,7 +655,7 @@ async function moveTraitInto(traitSettingId, containerId) {
   if (!expandedContainers.value.includes(containerId)) {
     expandedContainers.value = [...expandedContainers.value, containerId]
   }
-  await fetchEntity()
+  await fetchEntity('trait-move-in')
 }
 
 async function moveTraitOut(traitSettingId) {
@@ -668,7 +671,7 @@ async function moveTraitOut(traitSettingId) {
     updateTraitSetting(id: $id, input: $input) { id fromType parentTraitsettingId }
   }`, { id: traitSettingId, input })
   if (!result) return
-  await fetchEntity()
+  await fetchEntity('trait-move-out')
 }
 
 function onTraitDragStart(e, t) { dragStart(e, dragPayload(t)) }
@@ -893,7 +896,7 @@ async function addTrait(trait) {
     showAddTrait.value = false
     addPhase.value = 'sets'
     selectedTraitSet.value = null
-    fetchEntity()
+    fetchEntity('add-relationship-trait')
     return
   }
 
@@ -915,7 +918,7 @@ async function addTrait(trait) {
   showAddTrait.value = false
   addPhase.value = 'sets'
   selectedTraitSet.value = null
-  fetchEntity()
+  fetchEntity('add-trait')
 }
 
 // ── Trait detail (read-only) ────────────────────────────────────
@@ -1129,7 +1132,7 @@ async function spendResourceGroup(t, dieType) {
   if (!refundableSpends.value[t.id]) refundableSpends.value[t.id] = []
   refundableSpends.value[t.id].push({ die: dieType, kind: 'resource' })
   emit('addToPool', { die: dieType, source: t.name, label: displayName(t.name), tsId: t.id, negative: t.polarity === 'NEGATIVE', resource: true, armedSfxIds: armedSfxIdsForTrait(t) })
-  await fetchEntity()
+  await fetchEntity('resource-spend')
 }
 
 async function spendChallengeGroup(t, dieType) {
@@ -1159,7 +1162,7 @@ async function spendChallengeGroup(t, dieType) {
     resource: res.resource,
     armedSfxIds: armedSfxIdsForTrait(t),
   })
-  await fetchEntity()
+  await fetchEntity('challenge-spend')
 }
 
 function resolvedDieType(t) {
@@ -1284,7 +1287,13 @@ function setPoolSources(sources) {
   if (idx !== -1) {
     const count = countSetPicks(sets[idx].traits, isInPool)
     if (sets[idx].limit && count >= sets[idx].limit) {
-      activeSetName.value = sets[idx + 1] ? sets[idx + 1].name : null
+      const to = sets[idx + 1] ? sets[idx + 1].name : null
+      // The jump the player actually sees — put it on the same timeline as the
+      // fetches, so "the next set appeared, then it reloaded" is one sequence.
+      if (to !== activeSetName.value) {
+        perfMark('set-advanced', { from: activeSetName.value, to, picks: count, limit: sets[idx].limit })
+      }
+      activeSetName.value = to
     }
   }
 
@@ -1305,7 +1314,7 @@ function setPoolSources(sources) {
     if (keep.length) refundableSpends.value[tsId] = keep
     else delete refundableSpends.value[tsId]
   }
-  if (recovered) fetchEntity()
+  if (recovered) fetchEntity('pool-dice-refunded')
 }
 
 defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, fetchInFlightSfxIds, refreshBlueBook: () => blueBookRef.value?.refresh() })
@@ -1411,9 +1420,10 @@ async function fetchAvailableSfxIds() {
  * that save — so the sheet refreshes the ledger from the server at that moment
  * instead of waiting on a push.
  */
-async function fetchInFlightSfxIds() {
+async function fetchInFlightSfxIds(reason = 'unspecified') {
   const id = props.overrideEntityId || props.entityId
   if (!id) return
+  _stampFetch('in-flight-sfx-fetch', reason)
   try {
     const data = await graphql(
       `query($id: ID!) { inFlightSfxIds(entityId: $id) entity(id: $id) { razmerit } }`,
@@ -1565,9 +1575,33 @@ const QUERY = `
   }
 `
 
-async function fetchEntity() {
+// ── Fetch attribution (temporary diagnostic) ─────────────────────────────
+// Symptom under investigation: adding a trait to the pool makes the *next* set
+// appear to reload. useApi already logs every GraphQL call, but not *why* it
+// fired — so each fetch is stamped with the caller that asked for it, numbered
+// per kind, and flagged when a second one lands inside the same interaction.
+// Console-only; strip this block and the reason arguments once the cause is
+// fixed and the paths are quiet again.
+const _fetchLog = {}
+function _stampFetch(kind, reason) {
+  const now = performance.now()
+  const s = _fetchLog[kind] || (_fetchLog[kind] = { n: 0, lastAt: 0 })
+  const gap = s.lastAt ? Math.round(now - s.lastAt) : null
+  s.n += 1
+  s.lastAt = now
+  const repeat = gap !== null && gap < 1500
+  console.log(`[diag] ${kind} #${s.n} reason=${reason}${gap === null ? '' : ` gap=${gap}ms`}${repeat ? '   <<< fires again inside one interaction' : ''}`)
+  if (repeat) {
+    const chain = (new Error().stack || '').split('\n').slice(2, 6).map(l => l.trim()).join('  <-  ')
+    console.log(`[diag] ${kind} #${s.n} caller chain: ${chain}`)
+  }
+  perfMark(kind, { reason, n: s.n, gap })
+}
+
+async function fetchEntity(reason = 'unspecified') {
   const id = props.overrideEntityId || props.entityId
   if (!id) return
+  _stampFetch('entity-fetch', reason)
   const data = await graphql(QUERY, { id })
   if (data?.entity) {
     entityCache.setSheet(id, data.entity)
@@ -1595,7 +1629,7 @@ function loadCachedEntity() {
   if (inflightLoad && inflightLoad.id === id) {
     return
   }
-  const promise = fetchEntity()
+  const promise = fetchEntity('cache-miss')
   inflightLoad = { id, promise }
   promise.finally(() => {
     if (inflightLoad && inflightLoad.id === id) inflightLoad = null
@@ -1607,7 +1641,7 @@ function applyEntity(e) {
   resolveNames(e)
   allTraitSettings.value = e.traitSettings || []
   effectiveSettings.value = e.effectiveTraitSettings || []
-  recomputeTraitSets()
+  recomputeTraitSets('entity-applied')
   fetchTimers()
   fetchAvailableSfxIds()
   fetchInFlightSfxIds()
@@ -1691,7 +1725,7 @@ async function activateSfx(sfxId, sourceId = null) {
     // Re-stamp dice already in the pool (armed after adding).
     const tsId = findTsIdForSfx(sfxId)
     if (tsId) emit('stampSfx', { tsId, sfxId })
-    await fetchEntity()
+    await fetchEntity('sfx-activate')
 
     if (sfxId === 'sfx-hinder') {
       const tsId = findTsIdForSfx('sfx-hinder')
@@ -1724,7 +1758,7 @@ async function activateSfx(sfxId, sourceId = null) {
       emit('removeFromPool', 'shooting-b')
     }
     emit('sfxToggled', { sfxId, active: false })
-    await fetchEntity()
+    await fetchEntity('sfx-end')
   }
 }
 
@@ -1823,7 +1857,7 @@ watch(() => props.entityId, loadCachedEntity)
 watch(() => props.universe, loadCachedEntity)
 watch(() => props.overrideEntityId, loadCachedEntity)
 watch(() => [props.entityId, props.overrideEntityId], () => { activeSetName.value = null })
-watch(showAllTraits, recomputeTraitSets)
+watch(showAllTraits, () => recomputeTraitSets('show-all-toggled'))
 
 // ── Relationship fetch ─────────────────────────────
 async function fetchRelationship() {

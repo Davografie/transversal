@@ -694,7 +694,7 @@ function onPoolSaved({ key, locationId, dice }) {
   poolLocations.value = { ...poolLocations.value, [key]: locationId || currentLocationId.value }
   // A pool save is also the moment a rule's cost can leave it — ask the server
   // whether anything ended, so the chip tells the truth without waiting for SSE.
-  sheetRef.value?.fetchInFlightSfxIds?.()
+  sheetRef.value?.fetchInFlightSfxIds?.('pool-saved')
 }
 
 async function switchPerspective(id) {
@@ -981,10 +981,11 @@ function handleSseEvent(evt) {
     case 'trait_updated':
       entityCache.invalidateSheet(evt.data?.entity_id)
       if (evt.data?.entity_id === entityId.value) {
+        perfMark('sse-trait-updated', { trait: evt.data?.trait_id, ts: evt.data?.trait_setting_id })
         if (evt.data?.trait_setting_id) {
           diceRef.value?.resyncTraitDie(evt.data.trait_setting_id, evt.data.new_dice ?? [evt.data.new_rating])
         }
-        sheetRef.value?.fetchEntity()
+        sheetRef.value?.fetchEntity('sse-trait-updated')
       }
       if (gmMode.value && foreign) {
         const tName = evt.data?.trait_name || evt.data?.name || 'a trait'
@@ -1179,7 +1180,15 @@ function handleSseEvent(evt) {
       break
     case 'traits_revealed':
       if ((evt.data?.learner_ids || []).includes(entityId.value)) {
-        sheetRef.value?.fetchEntity()
+        // The heavy one: fog-of-war reveal pulls the whole entity back down.
+        // Stamped so the console shows event -> fetch -> list rebuild as one
+        // sequence (see the fetch attribution in CharacterSheet.vue).
+        perfMark('sse-traits-revealed', {
+          owner: evt.data?.owner_id,
+          changed: (evt.data?.trait_setting_ids || []).length,
+          learners: (evt.data?.learner_ids || []).length,
+        })
+        sheetRef.value?.fetchEntity('sse-traits-revealed')
       }
       break
     case 'sfx_triggered':
@@ -1198,7 +1207,7 @@ function handleSseEvent(evt) {
         const endedLabel = evt.data?.sfx_name || evt.data?.sfx_id || ''
         addToast(`SFX ended: ${endedLabel}`, 'sfx')
       }
-      sheetRef.value?.fetchInFlightSfxIds?.()
+      sheetRef.value?.fetchInFlightSfxIds?.('sse-sfx-ended')
       armedSfxRefresh.value++
       break
     case 'sfx_choice_required':
