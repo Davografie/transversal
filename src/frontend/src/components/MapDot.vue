@@ -118,13 +118,11 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  /* Actively-controlled dots are this much bigger (tune here). Applied with the
-     *individual* `scale` property, not `transform: scale()`: the self dot runs
-     the `arrivePop` animation, which fills `transform` forwards and would win
-     the cascade — `scale` composes with `transform` instead, so it survives
-     while still scaling the portrait/ring geometry (--dot-r) uniformly. */
+  /* Actively-controlled dots are this much bigger (tune here). How the size is
+     applied differs per dot type — see the `.controlled` rules below — because
+     the self dot carries a filling `transform` animation and occupants do not. */
   --controlled-scale: 1.4;  /* fallback — LocationViewer passes CONTROLLED_SCALE */
-  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, scale 0.25s ease;
+  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
   z-index: 3;
@@ -144,7 +142,7 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
   50% { box-shadow: 0 0 24px rgba(100,180,255,0.9), 0 0 48px rgba(100,180,255,0.5), 0 0 80px rgba(100,180,255,0.25); }
 }
 .occ-dot:not(.self).lerping {
-  transition: left 1.5s ease-out, top 1.5s ease-out, width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, scale 0.25s ease;
+  transition: left 1.5s ease-out, top 1.5s ease-out, width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
 }
 .nav-dot { width: 16px; height: 16px; }
 .nav-dot.nav-parent { background: rgba(200,170,60,0.8); box-shadow: 0 0 6px rgba(200,170,60,0.4); }
@@ -176,8 +174,23 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 }
 /* Actively controlled — someone at the table is driving this entity right now
    (the map's counterpart to the "assumed" state). Grows on take, shrinks on
-   hand-off, via the `scale` transition on `.map-dot`. */
-.map-dot.controlled {
+   hand-off.
+
+   Occupant dots size with `transform`, NOT the individual `scale` property: an
+   individual property starts at `none`, and Chrome does not interpolate
+   `none` → number, so `transition: scale` snaps instead of animating (that was
+   the "instant resize" bug). `transform: none` → `scale(x)` is the long-standing,
+   reliably interpolated case. Occupants have no transform animation of their own,
+   so the property is free. */
+.map-dot.controlled:not(.self) {
+  transform: scale(var(--controlled-scale));
+}
+/* The self dot runs `arrivePop`, which fills `transform` forwards — a normal
+   `transform` declaration would lose that cascade — so *its* scale comes from the
+   individual `scale` property, which composes with `transform` instead. It never
+   changes size while mounted (a take remounts it, keyed by the perspective
+   entity), so it has nothing to interpolate. */
+.map-dot.self.controlled {
   scale: var(--controlled-scale);
 }
 /* Handed off: the dot that just lost the perspective shrinks back to its
@@ -185,8 +198,8 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
    is no longer controlled, and only for the hand-off instant — see the
    `settlingIds` watcher in LocationViewer. */
 @keyframes controlledSettle {
-  from { scale: var(--controlled-scale); }
-  to   { scale: 1; }
+  from { transform: scale(var(--controlled-scale)); }
+  to   { transform: scale(1); }
 }
 .map-dot.settling {
   animation: controlledSettle 0.25s ease both;
