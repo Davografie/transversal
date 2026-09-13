@@ -425,7 +425,11 @@ class EntityManager:
             if entity is None:
                 return []
             return self.repo.get_effective_traitsettings_for_projections(
-                entity_id, self.repo.active_projections(entity)
+                entity_id,
+                self.repo.active_projections(entity),
+                # The bodies' universes gate *set*-scoped ego traits; the helper is the
+                # canonical scope and carries the body-less legacy fallback with it.
+                self.repo.effective_universes(entity),
             )
         return self.repo.get_effective_traitsettings(entity_id, universes)
 

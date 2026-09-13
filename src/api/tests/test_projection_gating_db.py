@@ -58,13 +58,23 @@ TRAITSET_ALPHA_TWIN = "test-gating-ts-alpha-twin"
 ALPHA_TWIN = f"{CHAR_ID}:{UNIVERSE_ALPHA}:2"
 TRAIT_ALPHA_TWIN = "test-gating-trait-alpha-twin"
 
+# The set-scoped ego cases (2026-09-13): an ungated set is universal, a set gated
+# elsewhere takes its ego traits dark — and its own ``universes`` list is never
+# consulted (TRAIT_EGO_DARK declares ALPHA but sits in a GAMMA-gated set).
+TRAITSET_EGO_UNIVERSAL = "test-gating-ts-ego-universal"
+TRAIT_EGO_UNIVERSAL = "test-gating-trait-ego-universal"
+TRAITSET_EGO_DARK = "test-gating-ts-ego-dark"
+TRAIT_EGO_DARK = "test-gating-trait-ego-dark"
+
 
 def _cleanup(repo):
     """Remove the fixture data (idempotent — safe on a partial/absent run)."""
     repo.delete_entity(CHAR_ID)  # cascades projections + trait settings
-    for tid in (TRAIT_ALPHA, TRAIT_BETA, TRAIT_GAMMA, TRAIT_EGO):
+    for tid in (TRAIT_ALPHA, TRAIT_BETA, TRAIT_GAMMA, TRAIT_EGO,
+                TRAIT_EGO_UNIVERSAL, TRAIT_EGO_DARK):
         repo.delete_trait(tid)
-    for tsid in (TRAITSET_ALPHA, TRAITSET_BETA, TRAITSET_GAMMA, TRAITSET_EGO):
+    for tsid in (TRAITSET_ALPHA, TRAITSET_BETA, TRAITSET_GAMMA, TRAITSET_EGO,
+                 TRAITSET_EGO_UNIVERSAL, TRAITSET_EGO_DARK):
         repo.delete_traitset(tsid)
 
 
@@ -78,12 +88,16 @@ def gating_data():
     repo.create_traitset(TraitSet(id=TRAITSET_BETA, name="beta set", universes=[UNIVERSE_BETA]))
     repo.create_traitset(TraitSet(id=TRAITSET_GAMMA, name="gamma set", universes=[UNIVERSE_GAMMA]))
     repo.create_traitset(TraitSet(id=TRAITSET_EGO, name="ego set", universes=[UNIVERSE_ALPHA]))
+    repo.create_traitset(TraitSet(id=TRAITSET_EGO_UNIVERSAL, name="ego universal set", universes=[]))
+    repo.create_traitset(TraitSet(id=TRAITSET_EGO_DARK, name="ego gamma set", universes=[UNIVERSE_GAMMA]))
 
     # Traits.
     repo.create_trait(Trait(id=TRAIT_ALPHA, name="alpha morph", universes=[UNIVERSE_ALPHA], traitset_id=TRAITSET_ALPHA))
     repo.create_trait(Trait(id=TRAIT_BETA, name="beta morph", universes=[UNIVERSE_BETA], traitset_id=TRAITSET_BETA))
     repo.create_trait(Trait(id=TRAIT_GAMMA, name="gamma morph", universes=[UNIVERSE_GAMMA], traitset_id=TRAITSET_GAMMA))
     repo.create_trait(Trait(id=TRAIT_EGO, name="ego distinction", universes=[UNIVERSE_ALPHA], traitset_id=TRAITSET_EGO))
+    repo.create_trait(Trait(id=TRAIT_EGO_UNIVERSAL, name="ego everywhere", universes=[UNIVERSE_ALPHA], traitset_id=TRAITSET_EGO_UNIVERSAL))
+    repo.create_trait(Trait(id=TRAIT_EGO_DARK, name="ego in a gamma set", universes=[UNIVERSE_ALPHA], traitset_id=TRAITSET_EGO_DARK))
 
     # Character — active body is the alpha NATIVE projection.
     repo.create_entity(Entity(
@@ -129,6 +143,14 @@ def gating_data():
     repo.create_traitsetting(TraitSetting(
         id=f"{CHAR_ID}:ego", entity_id=CHAR_ID, trait_id=TRAIT_EGO,
         traitset_id=TRAITSET_EGO, dice=[DieType.D8],
+    ))
+    repo.create_traitsetting(TraitSetting(
+        id=f"{CHAR_ID}:ego-universal", entity_id=CHAR_ID, trait_id=TRAIT_EGO_UNIVERSAL,
+        traitset_id=TRAITSET_EGO_UNIVERSAL, dice=[DieType.D8],
+    ))
+    repo.create_traitsetting(TraitSetting(
+        id=f"{CHAR_ID}:ego-dark", entity_id=CHAR_ID, trait_id=TRAIT_EGO_DARK,
+        traitset_id=TRAITSET_EGO_DARK, dice=[DieType.D8],
     ))
 
     yield repo
@@ -236,10 +258,11 @@ def test_effective_traitsettings_are_projection_native(gating_data):
         traitset_id=TRAITSET_ALPHA_TWIN, dice=[DieType.D6],
     ))
     try:
-        live = repo.get_effective_traitsettings_for_projections(CHAR_ID, [alpha_body])
+        live = repo.get_effective_traitsettings_for_projections(
+            CHAR_ID, [alpha_body], [UNIVERSE_ALPHA])
         assert _has(live, TRAIT_ALPHA)           # the live body's morph trait
         assert not _has(live, TRAIT_ALPHA_TWIN)  # same universe, but not live
-        assert _has(live, TRAIT_EGO)             # ego traits are always available
+        assert _has(live, TRAIT_EGO)             # ego, in a set gated to this universe
 
         # The universe-scoped question is the coarser one — it cannot separate them.
         by_universe = repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_ALPHA])
@@ -258,17 +281,46 @@ def test_projection_anchored_trait_gated_by_origin(gating_data):
     assert not _has(elsewhere, TRAIT_BETA)
 
 
-def test_entity_anchored_traits_always_effective(gating_data):
+def test_ego_traits_follow_the_set_not_the_trait(gating_data):
+    """The 2026-09-13 decision: *the traits not universe gated, the traitset gated*.
+
+    An ego trait's own ``universes`` list is never consulted. Its **set's** is: an
+    ungated set is universal, and a set gated elsewhere takes its ego traits dark
+    with it — ``TRAIT_EGO_DARK`` declares ALPHA itself but sits in a GAMMA-gated
+    set, so it is dark in ALPHA and live in GAMMA. This replaces the old
+    "entity-anchored traits are always effective" invariant, which the human
+    overruled.
+    """
     repo = gating_data
-    for universes in (
-        [UNIVERSE_ALPHA],
-        [UNIVERSE_BETA],
-        [UNIVERSE_GAMMA],
-        [UNIVERSE_ALPHA, UNIVERSE_BETA, UNIVERSE_GAMMA],
-    ):
-        effective = repo.get_effective_traitsettings(CHAR_ID, universes)
-        assert _has(effective, TRAIT_EGO)
-        assert _has(effective, TRAIT_ALPHA)
+    # TRAIT_EGO — set gated to ALPHA: live there, dark elsewhere.
+    assert _has(repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_ALPHA]), TRAIT_EGO)
+    for universes in ([UNIVERSE_BETA], [UNIVERSE_GAMMA], [UNIVERSE_BETA, UNIVERSE_GAMMA]):
+        assert not _has(repo.get_effective_traitsettings(CHAR_ID, universes), TRAIT_EGO)
+
+    # TRAIT_EGO_DARK — its OWN list says ALPHA, its SET says GAMMA: the set wins, so
+    # it is dark in ALPHA and live in GAMMA. That is the whole decision in one pair.
+    assert not _has(repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_ALPHA]), TRAIT_EGO_DARK)
+    assert not _has(repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_BETA]), TRAIT_EGO_DARK)
+    assert _has(repo.get_effective_traitsettings(CHAR_ID, [UNIVERSE_GAMMA]), TRAIT_EGO_DARK)
+
+    # An ungated set is universal, whatever the trait declares.
+    for universes in ([UNIVERSE_ALPHA], [UNIVERSE_BETA], [UNIVERSE_GAMMA]):
+        assert _has(repo.get_effective_traitsettings(CHAR_ID, universes), TRAIT_EGO_UNIVERSAL)
+
+
+def test_ego_set_gate_on_the_projection_native_path(gating_data):
+    """The same rule on the body-scoped question the sheet actually asks."""
+    repo = gating_data
+    at_alpha = repo.get_effective_traitsettings_for_projections(
+        CHAR_ID, [f"{CHAR_ID}:{UNIVERSE_ALPHA}"], [UNIVERSE_ALPHA])
+    assert _has(at_alpha, TRAIT_EGO)
+    assert not _has(at_alpha, TRAIT_EGO_DARK)      # set gated to gamma → dark
+    assert _has(at_alpha, TRAIT_EGO_UNIVERSAL)     # ungated set → live
+
+    at_gamma = repo.get_effective_traitsettings_for_projections(
+        CHAR_ID, [f"{CHAR_ID}:{UNIVERSE_GAMMA}"], [UNIVERSE_GAMMA])
+    assert _has(at_gamma, TRAIT_EGO_DARK)
+    assert not _has(at_gamma, TRAIT_EGO)           # and the alpha set is dark here
 
 
 def test_fixture_current_projection_valid(gating_data):

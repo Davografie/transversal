@@ -146,16 +146,24 @@ class RepositoryAttunement:
         ]
 
     def get_effective_traitsettings_for_projections(
-        self, entity_id: str, projection_ids: list[str]
+        self, entity_id: str, projection_ids: list[str], universes: list[str]
     ) -> list[TraitSetting]:
-        """Trait settings live for a set of **active bodies**.
+        """Trait settings live for a set of **active bodies**, in ``universes``.
 
-        The direct test the universe-name indirection stood in for: ego traits
-        (``from_type='entity'``) are always returned; a morph trait is returned iff
-        the projection it is anchored to is in ``projection_ids``. Two bodies in the
-        same universe therefore no longer share availability — only the live one
-        counts (see [[Active Projections Design Log]]). The registry checks (the
-        trait and its set must declare the projection's universe) still apply.
+        The direct test the universe-name indirection stood in for: a morph trait is
+        returned iff the projection it is anchored to is in ``projection_ids``. Two
+        bodies in the same universe therefore no longer share availability — only the
+        live one counts (see [[Active Projections Design Log]]). The registry checks
+        (the trait and its set must declare the projection's universe) still apply.
+
+        **Ego traits** (``from_type='entity'``) are not universe-gated *as traits* —
+        their own ``universes`` list is never consulted — but the **set** they belong
+        to is: an ego trait is returned when its set is universal (no ``universes``)
+        or shares a universe with the active bodies. A set gated to another universe
+        takes its ego traits dark with it (the human, 2026-09-13: *“I expect the
+        traits not to be universe gated, but I do expect the traitset to be gated”*).
+        ``universes`` is the caller's scope, so it belongs to the same bodies passed
+        as ``projection_ids`` — callers use :meth:`effective_universes`.
         """
         refs = [f"{PROJECTIONS}/{pid}" for pid in projection_ids]
         query = f"""
@@ -169,7 +177,12 @@ class RepositoryAttunement:
             LET trait = DOCUMENT(ts._to)
             LET set_doc = (trait.traitset_id != null)
                 ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
-            FILTER ts.from_type == 'entity'
+            FILTER (
+                    ts.from_type == 'entity'
+                    AND (set_doc == null
+                         OR LENGTH(NOT_NULL(set_doc.universes, [])) == 0
+                         OR LENGTH(INTERSECTION(NOT_NULL(set_doc.universes, []), @universes)) > 0)
+                )
                 OR (
                     is_projection AND proj != null
                     AND ts._from IN @refs
@@ -181,7 +194,7 @@ class RepositoryAttunement:
         return [
             TraitSetting.model_validate({**doc, "id": doc["_key"]})
             for doc in self.db.aql.execute(
-                query, bind_vars={"eid": entity_id, "refs": refs}
+                query, bind_vars={"eid": entity_id, "refs": refs, "universes": universes}
             )
         ]
 
@@ -190,8 +203,11 @@ class RepositoryAttunement:
     ) -> list[TraitSetting]:
         """Get trait settings active in a set of universes.
 
-        Ego traits (``from_type='entity'``) are always returned. Projection-anchored
-        morph traits are gated by their projection's ``origin_universe`` being in
+        Ego traits (``from_type='entity'``) are not gated by their own ``universes``
+        list, but they are gated by their **set's**: one is returned when the set is
+        universal or shares a universe with ``universes`` (see
+        :meth:`get_effective_traitsettings_for_projections`). Projection-anchored morph
+        traits are gated by their projection's ``origin_universe`` being in
         ``universes`` (falling back to the projection key's universe suffix for
         pre-migration data).
         """
@@ -206,7 +222,12 @@ class RepositoryAttunement:
             LET trait = DOCUMENT(ts._to)
             LET set_doc = (trait.traitset_id != null)
                 ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
-            FILTER ts.from_type == 'entity'
+            FILTER (
+                    ts.from_type == 'entity'
+                    AND (set_doc == null
+                         OR LENGTH(NOT_NULL(set_doc.universes, [])) == 0
+                         OR LENGTH(INTERSECTION(NOT_NULL(set_doc.universes, []), @universes)) > 0)
+                )
                 OR (
                     is_projection AND proj != null
                     AND origin IN @universes
@@ -244,7 +265,12 @@ class RepositoryAttunement:
             LET trait = DOCUMENT(ts._to)
             LET set_doc = (trait.traitset_id != null)
                 ? DOCUMENT(CONCAT('{TRAITSETS}/', trait.traitset_id)) : null
-            FILTER ts.from_type == 'entity'
+            FILTER (
+                    ts.from_type == 'entity'
+                    AND (set_doc == null
+                         OR LENGTH(NOT_NULL(set_doc.universes, [])) == 0
+                         OR LENGTH(INTERSECTION(NOT_NULL(set_doc.universes, []), @universes)) > 0)
+                )
                 OR (
                     is_projection AND proj != null
                     AND origin IN @universes
