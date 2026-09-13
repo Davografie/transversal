@@ -1,5 +1,19 @@
 <template>
-  <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, container: api.isContainer(trait), 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false }" @click="onRowClick" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd">
+  <div v-if="depth === 0 && api.isKnown(trait)" class="trait-row" :class="{ wrap, morph: trait.ego === false, container: api.isContainer(trait), 'in-pool': api.isInPool(trait), offered: api.isOffered(trait), 'limit-reached': limitReached && !api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false, 'drag-over': api.isDragOver(trait), dragging: api.isDragging(trait) }" :data-ts-id="trait.id" :data-drop-container="api.isContainer(trait) ? trait.id : null" @click="onRowClick" @contextmenu.prevent="api.startEdit(trait)" @touchstart="api.onTouchStart(trait)" @touchend="api.onTouchEnd" @touchmove="api.onTouchEnd" @dragover.prevent="api.onTraitDragOver($event)" @dragleave="api.onTraitDragLeave()" @drop.prevent="api.onTraitDrop($event)" @dragend="api.onTraitDragEnd()">
+    <!-- The grip exists only in a set that holds a container — outside one there
+         is nowhere to drop, so it would be chrome with no purpose. The GM tree
+         resolves the same conflict the same way: a dedicated handle, instant
+         drag, leaving long-press free for the row's own action (here: edit). -->
+    <span
+      v-if="draggable"
+      class="trait-drag-handle"
+      draggable="true"
+      title="Drag into a container"
+      @click.stop
+      @touchstart.stop="api.onGripTouchStart($event, trait)"
+      @dragstart="api.onTraitDragStart($event, trait)"
+      @dragend="api.onTraitDragEnd()"
+    >⠿</span>
     <div class="trait-left" :class="{ 'has-statement': !!trait.statement }">
       <span class="trait-name" :class="{ disabled: phase !== 'adding' || api.isResourceDepleted(trait) }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
       <span v-if="api.traitTimerLabel(trait)" class="trait-timer" :title="'Re-enables after ' + api.traitTimerLabel(trait)">⏳ {{ api.traitTimerLabel(trait) }}</span>
@@ -119,9 +133,15 @@
   <div
     v-else
     class="sub-trait-row"
-    :class="{ 'in-pool': api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false, container: api.isContainer(trait) }"
+    :class="{ 'in-pool': api.isInPool(trait), negative: trait.polarity === 'NEGATIVE', 'trait-disabled': trait.enabled === false, container: api.isContainer(trait), 'drag-over': api.isDragOver(trait), dragging: api.isDragging(trait) }"
+    :data-ts-id="trait.id"
+    :data-drop-container="api.isContainer(trait) ? trait.id : null"
     @click="onRowClick"
     @contextmenu.prevent
+    @dragover.prevent="api.onTraitDragOver($event)"
+    @dragleave="api.onTraitDragLeave()"
+    @drop.prevent="api.onTraitDrop($event)"
+    @dragend="api.onTraitDragEnd()"
   >
     <div class="sub-trait-left" :class="{ 'has-statement': !!trait.statement }">
       <span class="sub-trait-name" :class="{ disabled: phase !== 'adding' || trait.enabled === false }" @click.stop="api.openTraitDetail(trait)">{{ api.displayName(trait.name) }}</span>
@@ -214,6 +234,9 @@ const props = defineProps({
   wrap: { type: Boolean, default: false },
   // 0 = a row in the set's trait list; > 0 = nested under a parent.
   depth: { type: Number, default: 0 },
+  // Whether this row carries a drag grip. The sheet decides per set: grips only
+  // appear where a container exists to drop into.
+  draggable: { type: Boolean, default: false },
 })
 
 const children = computed(() => childrenOf(props.trait))
@@ -236,6 +259,8 @@ const renderChildren = computed(() =>
 // other trait rather than swallowing the tap. A container's own name always
 // opens the detail either way.
 function onRowClick() {
+  // A drop lands on the row under the pointer, and a click follows it.
+  if (props.api.clickSuppressed()) return
   if (props.api.hasContents(props.trait)) props.api.toggleExpand(props.trait)
   else props.api.openTraitDetail(props.trait)
 }
@@ -526,6 +551,47 @@ function onRowClick() {
   min-width: 10px;
   text-align: right;
   opacity: 0.8;
+}
+
+/* ── Dragging a trait into a container ───────────────────────────────────
+   The grip mirrors the GM tree's handle (same 32px tall target, same hover and
+   grab cursor) so the two surfaces feel alike. It is only rendered when the set
+   holds a container — see `draggable`. */
+.trait-drag-handle {
+  width: 24px;
+  min-height: 32px;
+  line-height: 32px;
+  text-align: center;
+  flex-shrink: 0;
+  user-select: none;
+  color: var(--text-dim);
+  cursor: grab;
+  font-size: 14px;
+  border-radius: 6px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.trait-drag-handle:hover {
+  color: var(--text);
+  background: var(--overlay-8);
+}
+
+.trait-drag-handle:active {
+  cursor: grabbing;
+  background: var(--overlay-12);
+}
+
+.trait-row.dragging,
+.sub-trait-row.dragging {
+  opacity: 0.4;
+}
+
+/* The container under the pointer — the same treatment the GM tree gives a
+   valid drop target. */
+.trait-row.drag-over,
+.sub-trait-row.drag-over {
+  background: var(--accent-16);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .trait-row.negative {

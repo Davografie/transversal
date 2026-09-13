@@ -245,6 +245,7 @@
               :phase="phase"
               :limit-reached="currentSetReachedLimit"
               :wrap="activeSheetView === 'profile'"
+              :draggable="setHasContainer"
             />
           <Button
             v-if="activeSheetView === 'traits' && nextSet"
@@ -310,6 +311,7 @@ import { perfMark } from '../composables/perfLog.js'
 import { useScheduledEvents } from '../composables/useScheduledEvents.js'
 import { usePersistedRef } from '../composables/usePersistedState.js'
 import { useTraitEditor } from '../composables/useTraitEditor.js'
+import { useDragDrop } from '../composables/useDragDrop.js'
 import TraitEditPanel from './sheet/TraitEditPanel.vue'
 import SfxCard from './sheet/SfxCard.vue'
 import TraitDetailPanel from './sheet/TraitDetailPanel.vue'
@@ -567,6 +569,61 @@ function toggleExpand(t) {
 function containerCount(t) {
   return countDescendants(t)
 }
+
+// ── Drag a trait into a container ────────────────────────────────
+// Direct manipulation, and the reason no authoring is needed first: nothing on
+// the write path checks a container against the registry's nominations, so any
+// trait can go into any container.
+//
+// Grips appear only in a set that actually holds a container. Otherwise the
+// gesture has nowhere to land and the chrome would be noise on every row.
+const setHasContainer = computed(() => (currentSet.value?.traits || []).some(isContainer))
+
+const { dragging, source, over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useDragDrop({
+  // Only a container row is a drop zone — including an EMPTY one, which is the
+  // state you most want to drop into.
+  resolveTarget: (el) => {
+    const row = el && el.closest ? el.closest('[data-drop-container]') : null
+    return row ? { id: row.dataset.dropContainer } : null
+  },
+  ghostSource: (el) => (el && el.closest ? el.closest('[data-ts-id]') : el),
+  onCommit: ({ from, to }) => { suppressClicks(); moveTraitInto(from.id, to.id) },
+})
+
+async function moveTraitInto(traitSettingId, containerId) {
+  if (!traitSettingId || !containerId || traitSettingId === containerId) return
+  perfMark('trait-move-start', { traitSettingId, containerId })
+  const result = await graphql(`mutation($id: ID!, $input: TraitSettingUpdateInput!) {
+    updateTraitSetting(id: $id, input: $input) { id fromType parentTraitsettingId }
+  }`, {
+    id: traitSettingId,
+    input: { fromType: 'traitsetting', parentTraitsettingId: containerId },
+  })
+  // graphql() returns null on error rather than throwing; the message is already
+  // in `error`, and moving on would refetch a sheet that did not change.
+  if (!result) return
+  // Show where it went: open the container so the trait that just landed in it
+  // is visible instead of appearing to have vanished.
+  if (!expandedContainers.value.includes(containerId)) {
+    expandedContainers.value = [...expandedContainers.value, containerId]
+  }
+  await fetchEntity()
+}
+
+function onTraitDragStart(e, t) { dragStart(e, { id: t.id }) }
+function onGripTouchStart(e, t) { touchStart(e, { id: t.id }, { instant: true }) }
+function onTraitDragOver(e) { dragOver(e) }
+function onTraitDragLeave() { dragLeave() }
+function onTraitDrop(e) { drop(e) }
+function onTraitDragEnd() { dragEnd() }
+function isDragOver(t) { return over.value?.id === t.id }
+function isDragging(t) { return dragging.value && source.value?.id === t.id }
+
+// A drop lands on the row under the pointer and the browser then fires a click
+// there, which would toggle the container we just dropped into. Swallow it.
+let suppressClickUntil = 0
+function clickSuppressed() { return Date.now() < suppressClickUntil }
+function suppressClicks() { suppressClickUntil = Date.now() + 200 }
 
 function openSet(name) {
   activeSetName.value = name
@@ -829,6 +886,8 @@ const traitRowApi = {
   resolvedDieType, resourceDisplay, sfxCardModel, activateSfx,
   openTraitDetail, startEdit, playTrait, onTouchStart, onTouchEnd,
   isContainer, isExpanded, toggleExpand, containerCount, hasContents,
+  onTraitDragStart, onGripTouchStart, onTraitDragOver, onTraitDragLeave, onTraitDrop, onTraitDragEnd,
+  isDragOver, isDragging, clickSuppressed,
 }
 
 function openTraitDetail(t) {
