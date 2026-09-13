@@ -284,9 +284,9 @@ skipped — while the server list still drives *other* clients' dots. The 60s
 presence poll also re-fetches `playerBodies`, so a missed `body_changed` cannot
 leave a dot sized up for long.
 
-  `poolDiceFor` returns the pool's dice for `rolling` as well as `adding`, and
-  prefers `results.rolls` once the phase is past `adding` (never in `adding`, where
-  the pool itself is the truth).
+  `poolDiceFor` returns the pool's dice in every phase, and prefers `results.rolls`
+  once the phase is past `adding` (never in `adding`, where the pool itself is the
+  truth).
 - **The roll animation is mirrored from the panel**: while a roll is live the ring
   tumbles each die's face every `TUMBLE_MS` (70ms, the roller's interval) and locks
   them **one at a time** left-to-right — `FIRST_LOCK_MS` (900) before the first,
@@ -295,11 +295,19 @@ leave a dot sized up for long.
   the **`scale` property, never `transform`**: each item's inline `transform` is
   what places it on the ring, so a `transform` animation would override it and
   stack every die at the centre.
-- **Results are shown only while the roll is live.** `poolDiceFor` serves the
-  pool's dice in `adding`/`rolling` and prefers `results.rolls` only when the phase
-  is *past* `adding` — so clearing the pool (which returns the phase to `adding`)
-  hides the ring immediately instead of holding the last roll's dice until the end
-  of the beat.
+- **Results are shown only while the roll is live.** `poolDiceFor` prefers
+  `results.rolls` only when the phase is *past* `adding` — so clearing the pool
+  (which returns the phase to `adding`) hides the ring immediately instead of
+  holding the last roll's dice until the end of the beat.
+- **The ring's dice come from the pool in *every* phase.** There are two phase
+  vocabularies: the roller publishes `rolling`/`picking`, while the server's roll
+  endpoints (`api/rest/roll.py`) broadcast `rolled`/`selected`/`resolved` with the
+  dice already carrying their results. Gating on a phase list (`adding`/`rolling`)
+  meant that mid-roll — when the server's `rolled` arrives before `roll_result` sets
+  `results.rolls` — the ring had dice and a phase it didn't recognise, so it
+  **vanished until the results landed**. It now returns the pool's dice in every
+  phase; a cleared pool still empties it, because the server sends that as
+  `dice: []` with phase `adding`.
 - **Your own ring is fed locally.** `sharePhase`/`onDiceRolled`/`@picked` write the
   acting entity's phase and results into `remotePools`/`remoteResults` too (via
   `mirrorOwnResult`). Solo play has no SSE at all, and in a session the `pool_updated`

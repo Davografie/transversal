@@ -640,10 +640,14 @@ const poolDiceFor = (eid) => {
   // shows the pool itself — and nothing at all once the pool is cleared, rather
   // than holding the last roll's dice until the end of the beat.
   if (phase !== 'adding' && results?.rolls?.length) return results.rolls
-  if (phase === 'adding' || phase === 'rolling') {
-    return (pool?.dice || []).map(d => (typeof d === 'string' ? d : d.die || d))
-  }
-  return []
+  // Otherwise the pool's own dice, in **every** phase. Phase names come from two
+  // vocabularies — the roller publishes `rolling`/`picking`, while the server's
+  // roll endpoints broadcast `rolled`/`selected`/`resolved` (with the dice already
+  // carrying their results). Gating this on a phase list is what made the ring
+  // vanish the instant a roll started, with its dice still sitting right there.
+  // A *cleared* pool still empties the ring: the server broadcasts it as
+  // `dice: []` with phase `adding`, so this returns nothing.
+  return (pool?.dice || []).map(d => (typeof d === 'string' ? d : d.die || d))
 }
 const poolPhaseFor = (eid) => props.remotePools[eid]?.phase || 'adding'
 
