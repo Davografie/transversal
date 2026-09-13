@@ -174,17 +174,8 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 }
 /* Actively controlled — someone at the table is driving this entity right now
    (the map's counterpart to the "assumed" state). Grows on take, shrinks on
-   hand-off.
-
-   Occupant dots size with `transform`, NOT the individual `scale` property: an
-   individual property starts at `none`, and Chrome does not interpolate
-   `none` → number, so `transition: scale` snaps instead of animating (that was
-   the "instant resize" bug). `transform: none` → `scale(x)` is the long-standing,
-   reliably interpolated case. Occupants have no transform animation of their own,
-   so the property is free. */
-.map-dot.controlled:not(.self) {
-  transform: scale(var(--controlled-scale));
-}
+   hand-off. How the size is *applied* differs per dot type; see the block below
+   the self-dot rule. */
 /* The self dot runs `arrivePop`, which fills `transform` forwards — a normal
    `transform` declaration would lose that cascade — so *its* scale comes from the
    individual `scale` property, which composes with `transform` instead. It never
@@ -193,17 +184,25 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 .map-dot.self.controlled {
   scale: var(--controlled-scale);
 }
-/* Handed off: the dot that just lost the perspective shrinks back to its
-   resting size instead of appearing at full size. Applied only when the entity
-   is no longer controlled, and only for the hand-off instant — see the
-   `settlingIds` watcher in LocationViewer. */
+/* Handed off: the dot that just lost a driver shrinks back to its resting size;
+   taken: it grows. Both are one-cycle keyframes rather than transitions — a
+   transition needs the element to persist *and* the property to interpolate, and
+   neither held for dots re-rendered on an SSE update (the size snapped on Chrome
+   and Firefox alike). A keyframe fires whenever the class appears, even on a
+   freshly mounted element. `both` fill makes the end state match the resting rule
+   (`grown` ends at the controlled scale, `settling` at 1), so removing the class
+   afterwards cannot jump. */
+@keyframes controlledGrow {
+  from { transform: scale(1); }
+  to   { transform: scale(var(--controlled-scale)); }
+}
 @keyframes controlledSettle {
   from { transform: scale(var(--controlled-scale)); }
   to   { transform: scale(1); }
 }
-.map-dot.settling {
-  animation: controlledSettle 0.25s ease both;
-}
+.map-dot.controlled:not(.self) { transform: scale(var(--controlled-scale)); }
+.map-dot.growing  { animation: controlledGrow 0.25s ease both; }
+.map-dot.settling { animation: controlledSettle 0.25s ease both; }
 .dot-overlay {
   position: absolute; inset: 0; border-radius: 50%;
   opacity: 0; transition: opacity 0.2s ease;

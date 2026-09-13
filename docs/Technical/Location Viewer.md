@@ -249,30 +249,24 @@ touching spotlight recency (see [[Troupe Play]]), and `returnToSelf` clears it
 when the GM goes to free-roam. Both arrive over SSE as `body_changed`, which
 refreshes `playerBodies`.
 
-**How the size is applied — and why it must differ.** Occupant dots use
-`transform: scale(var(--controlled-scale))`: `transform: none` → a scale list is the
-long-standing, reliably interpolated case, so the class change **animates**.
-The `self` dot cannot use that — it runs `arrivePop`, which fills `transform`
-forwards and outranks any normal `transform` declaration — so its size comes from
-the *individual* `scale` property, which composes with `transform` instead of
-competing with it. It needs no interpolation, because a take remounts it (keyed by
-the perspective entity).
+**How the size is applied — and why it must differ.** Occupant dots rest at
+`transform: scale(var(--controlled-scale))`. The `self` dot cannot use that — it
+runs `arrivePop`, which fills `transform` forwards and outranks any normal
+`transform` declaration — so its resting size comes from the *individual* `scale`
+property, which composes with `transform` instead of competing with it. That costs
+nothing there, because a take remounts the self dot (it is keyed by the perspective
+entity).
 
-**The bug this replaced:** the size was applied with the individual `scale`
-property on *all* dots. `scale` starts at `none`, and Chrome does **not**
-interpolate `none` → number — so `transition: scale` never ran and every
-controlled-size change snapped (size correct, animation absent), which is exactly
-what was reported from desktop and mobile alike.
-
-**The animation, in both directions.** A remote hand-off is one element changing
-class, so the `scale` transition animates it (grow on take, shrink on release).
-A *local* take/release swaps elements — the local entity renders as the self dot,
-not as an occupant — so two things make it visible: the self dot is **keyed by the
-perspective entity** (`'self-' + entityId`), which remounts it on a take so
-`arrivePop` replays (a growth), and the dot that *loses* the perspective is marked
-`settling` for one cycle (`controlledSettle`, 1.4 → 1) so it shrinks out instead
-of appearing at full size. `settling` is skipped when the entity is still driven
-by another client, whose dot must not change size at all.
+**The animation is a keyframe, not a transition.** A transition only runs if the
+element *persists* and the property *interpolates*; neither held for dots
+re-rendered by an SSE update, so the size snapped on Chrome and Firefox alike.
+Instead `LocationViewer` diffs `controlledEntityIds` on every change
+(`animateSizeChanges`) and marks the ids that entered or left for one 300ms cycle:
+`.growing` runs `controlledGrow` (1 → `--controlled-scale`), `.settling` runs
+`controlledSettle` (`--controlled-scale` → 1). A keyframe fires whenever the class
+appears — **including on a freshly mounted element** — so the growth cannot be
+skipped. Both use `both` fill, so their end state equals the resting rule and
+removing the class afterwards cannot jump.
 
 **Why a dot could stick large.** `controlledEntityIds` used to union *every*
 `playerBodies` entry, our own included — and our own is a server echo: it arrives

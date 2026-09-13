@@ -33,7 +33,7 @@
         v-if="!travelAnim.active && showElements"
         type="occupant"
         :variant="o.type"
-        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: isControlled(o.id), settling: settlingIds.includes(o.id) }"
+        :class="{ 'dot-draft': o.unpublished, viewed: o.id === viewingEntityId, controlled: isControlled(o.id), growing: growingIds.includes(o.id), settling: settlingIds.includes(o.id) }"
         :x="o.map_x ?? occupantX(i, o)" :y="o.map_y ?? occupantY(i, o)"
         :image="o.image"
         :image-transparent="!!o.image_transparent"
@@ -225,22 +225,41 @@ const occupantDots = computed(() =>
   occupants.value.filter(o => o.id !== props.entityId && (props.gmMode || !o.unpublished))
 )
 
-// A take/release swaps elements — the local entity is excluded from
-// `occupantDots` and renders as the keyed self dot — so the dot that *loses* the
-// perspective mounts fresh and would appear at full size. Mark it for one
-// animation cycle so it shrinks out instead. Skipped when the entity is still
-// driven by a client: then its size does not change at all.
+// ── Size animation for driven dots ─────────────────────────────────────────
+// One-cycle, class-triggered keyframes — deliberately NOT a transition. A
+// transition only runs if (a) the element persists and (b) the property
+// interpolates; on a client that receives a control change over SSE neither could
+// be relied on, and the size snapped on Chrome and Firefox alike. A keyframe
+// animation runs whenever the class appears — including on a freshly mounted
+// element — so the growth is guaranteed.
+//
+// Driving it from `controlledEntityIds` (rather than the perspective) covers both
+// directions on every screen: a remote take grows, a remote hand-off shrinks, and
+// a local take/release does the same (the entity that loses the perspective leaves
+// this set, since our own body is the set's `entityId`).
+const growingIds = ref([])
 const settlingIds = ref([])
-let lastPerspectiveId = null
-watch(() => props.entityId, (id) => {
-  const prev = lastPerspectiveId
-  lastPerspectiveId = id
-  if (!prev || prev === id || props.controlledEntityIds.includes(prev)) return
-  settlingIds.value = [...settlingIds.value, prev]
-  setTimeout(() => {
-    settlingIds.value = settlingIds.value.filter(x => x !== prev)
-  }, 300)
-}, { immediate: true })
+let lastControlledIds = null
+
+function animateSizeChanges(next) {
+  const now = new Set(next)
+  if (lastControlledIds === null) { lastControlledIds = now; return }  // first pass: no animation
+  const grew = [...now].filter(id => !lastControlledIds.has(id))
+  const shrank = [...lastControlledIds].filter(id => !now.has(id))
+  lastControlledIds = now
+
+  const animate = (ids, bucket) => {
+    if (!ids.length) return
+    bucket.value = [...bucket.value, ...ids]
+    setTimeout(() => {
+      bucket.value = bucket.value.filter(x => !ids.includes(x))
+    }, 300)
+  }
+  animate(grew, growingIds)
+  animate(shrank, settlingIds)
+}
+
+watch(() => props.controlledEntityIds, animateSizeChanges, { immediate: true })
 const viewerEl = ref(null)
 const activeElement = ref(null)  // { type: 'zone'|'occupant', name?, id? } — which dot is popped out
 const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })
