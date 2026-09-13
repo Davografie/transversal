@@ -246,12 +246,20 @@
               :limit-reached="currentSetReachedLimit"
               :wrap="activeSheetView === 'profile'"
             />
-          <Button
-            v-if="activeSheetView === 'traits' && nextSet"
-            class="next-set-btn"
-            variant="neutral"
-            @click="goToNextSet"
-          >Next: {{ nextSet.name }} →</Button>
+          <div v-if="activeSheetView === 'traits' && (prevSet || nextSet)" class="set-nav">
+            <Button
+              v-if="prevSet"
+              class="set-nav-btn"
+              variant="neutral"
+              @click="goToPrevSet"
+            >← Previous: {{ prevSet.name }}</Button>
+            <Button
+              v-if="nextSet"
+              class="set-nav-btn"
+              variant="neutral"
+              @click="goToNextSet"
+            >Next: {{ nextSet.name }} →</Button>
+          </div>
         </div> <!-- .trait-list -->
       <div v-else-if="!showAddTrait" class="empty">{{ activeSheetView === 'profile' ? 'No profile traits' : 'No traits configured' }}</div>
       <Button v-if="(!overrideEntityId || gmMode) && !showAddTrait" class="add-trait-btn" variant="secondary" block @click="openAddTrait">+ Add Trait</Button>
@@ -724,12 +732,21 @@ const nextSet = computed(() => {
   return traitSets.value[idx + 1] || null
 })
 
-function goToNextSet() {
-  if (nextSet.value) {
-    activeSetName.value = nextSet.value.name
-    expandedContainers.value = []
-  }
+const prevSet = computed(() => {
+  const idx = traitSets.value.findIndex(ts => ts.name === activeSetName.value)
+  return idx > 0 ? traitSets.value[idx - 1] : null
+})
+
+// Both directions land the same way: the set becomes active and its containers
+// start closed, so a set you step into reads the same however you got there.
+function goToSet(ts) {
+  if (!ts) return
+  activeSetName.value = ts.name
+  expandedContainers.value = []
 }
+
+function goToNextSet() { goToSet(nextSet.value) }
+function goToPrevSet() { goToSet(prevSet.value) }
 
 // SFX usage tracking — reset per dice pool cycle
 const sfxActivations = ref({})
@@ -2022,8 +2039,12 @@ watch(() => props.externalPoolSources, (sources) => {
 }
   .set-back { align-self: flex-start;
     margin-bottom: 6px; }
-  .next-set-btn { align-self: flex-end;
-    margin-top: 6px; }
+  .set-nav { align-self: flex-end;
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px; }
 
 .limit-dots {
   font-size: 10px;
