@@ -249,13 +249,13 @@
           <div v-if="activeSheetView === 'traits' && (prevSet || nextSet)" class="set-nav">
             <Button
               v-if="prevSet"
-              class="set-nav-btn"
+              class="set-nav-prev"
               variant="neutral"
               @click="goToPrevSet"
             >← Previous: {{ prevSet.name }}</Button>
             <Button
               v-if="nextSet"
-              class="set-nav-btn"
+              class="set-nav-next"
               variant="neutral"
               @click="goToNextSet"
             >Next: {{ nextSet.name }} →</Button>
@@ -2039,12 +2039,17 @@ watch(() => props.externalPoolSources, (sources) => {
 }
   .set-back { align-self: flex-start;
     margin-bottom: 6px; }
-  .set-nav { align-self: flex-end;
+  /* Previous hugs the left edge, Next the right. `align-self: stretch` is what
+     makes the row span the list — right-aligned, the two buttons could only ever
+     huddle together. The auto margin (not justify-content) keeps a *lone* Next on
+     the right, the way the single button always sat, while a lone Previous sits
+     left. */
+  .set-nav { align-self: stretch;
     margin-top: 6px;
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
     gap: 6px; }
+  .set-nav-next { margin-left: auto; }
 
 .limit-dots {
   font-size: 10px;
