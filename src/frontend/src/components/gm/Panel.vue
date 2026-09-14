@@ -28,10 +28,19 @@
           <Button v-if="isCollapsed" class="panel-header-btn" variant="ghost" size="sm" title="Expand" @pointerdown.stop @click.stop="toggleCollapse()">▸</Button>
           <!-- What kind of panel this is (spec.badge). Declarative: the opener
                passes it, the chrome shows it — any panel can use it (an entity's
-               type, a trait-set, a wizard's step...). -->
-          <span v-if="spec?.badge" class="entity-type-badge panel-badge" :class="'type-' + spec.badge">{{ spec.badge }}</span>
+               type, a trait-set, a wizard's step...). It sits at the right end of
+               the header (the title flexes), and it *is* the copy-ID control: the
+               old '#' button lives behind clicking it. -->
           <span v-if="title" class="panel-title" :title="isCollapsed ? 'Drag to move' : ''">{{ title }}</span>
-          <Button v-if="id && !isCollapsed" type="button" class="panel-id-btn" variant="neutral" size="sm" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</Button>
+          <button
+            v-if="spec?.badge"
+            type="button"
+            class="entity-type-badge panel-badge"
+            :class="['type-' + spec.badge, { 'is-copyable': !!id }]"
+            :title="id ? (copied ? 'Copied!' : `Copy ID (${id})`) : ''"
+            @pointerdown.stop
+            @click="id && copyId()"
+          >{{ copied && id ? '✓' : spec.badge }}</button>
           <Button v-if="isCollapsed" class="panel-header-btn" variant="ghost" size="sm" title="Close" @pointerdown.stop @click.stop="$emit('close')">×</Button>
         </slot>
       </header>
@@ -1103,13 +1112,16 @@ provide(panelKey, {
   font-size: 12px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.5px;
 }
-/* spec.badge — what kind of panel this is. Never squashed by a long title. */
-.panel-badge { flex: 0 0 auto; }
-.panel-header .panel-id-btn {
-  flex-shrink: 0;
-  font-family: monospace;
-  font-weight: 600;
+/* spec.badge — what kind of panel this is. Right-aligned (the title flexes),
+   never squashed, and — when the panel has an id — the copy-ID control. */
+.panel-badge {
+  flex: 0 0 auto;
+  font-family: inherit;
+  border: none;
+  cursor: default;
 }
+.panel-badge.is-copyable { cursor: pointer; }
+
 
 .panel-body {
   flex: 1; overflow-y: auto; padding: 10px;
