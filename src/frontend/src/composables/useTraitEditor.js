@@ -27,6 +27,7 @@ export function useTraitEditor({
   entity,
   traitSets,
   profileTraits,
+  relationTraits,
   detailTrait,
   graphql,
   fetchEntity,
@@ -55,7 +56,12 @@ export function useTraitEditor({
       const t = ts.traits.find(t => t.id === editingTraitId.value)
       if (t) return t
     }
-    return profileTraits.value.find(t => t.id === editingTraitId.value) || null
+    // Relationship traits are not in the viewed entity's settings — they arrive
+    // through the relationship query (what *we* hold about this sheet), so they
+    // need their own lookup or the editor can never open on one.
+    return profileTraits.value.find(t => t.id === editingTraitId.value)
+      || relationTraits.value.find(t => t.id === editingTraitId.value)
+      || null
   })
 
   function slugTraitId(id) {

@@ -896,7 +896,17 @@ async function addTrait(trait) {
     showAddTrait.value = false
     addPhase.value = 'sets'
     selectedTraitSet.value = null
-    fetchEntity('add-relationship-trait')
+    // A relationship trait hangs off *our* outgoing edge to this sheet, so it
+    // arrives through the relationship query — the entity refresh the other path
+    // uses would load the other side's settings and never show it (the relation
+    // tab's rows are `relationTraits`, not the viewed entity's).
+    const newRelationshipId = result.addRelationshipTrait.id
+    try {
+      await fetchRelationship()
+      openEditorForNewTrait(newRelationshipId, { relation: true })
+    } catch (e) {
+      console.error('[sheet] add: refreshed but could not open the editor', e)
+    }
     return
   }
 
@@ -942,15 +952,20 @@ async function addTrait(trait) {
  * A trait whose set the universe gate excludes is added but has no row to open;
  * the console says so rather than the click looking like it did nothing.
  */
-function openEditorForNewTrait(id) {
+function openEditorForNewTrait(id, { relation = false } = {}) {
   if (!id) return
-  const source = (showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || []
+  const source = relation
+    ? (relationTraits.value || [])
+    : ((showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || [])
   const setting = source.find(t => t.id === id)
   if (!setting) {
     console.warn('[sheet] added trait is not in the visible trait lists:', id)
     return
   }
-  if (setting.traitsetTab === 'PROFILE') {
+  if (relation) {
+    // Where it was added from, and where its rows live.
+    activeSheetView.value = 'relation'
+  } else if (setting.traitsetTab === 'PROFILE') {
     activeSheetView.value = 'profile'
   } else {
     activeSheetView.value = 'traits'
@@ -993,7 +1008,7 @@ const {
   onEditorRatingType, onEditorChange, onEditorFieldBlur,
   addSubTrait, removeSubTrait, onStatementInput, splitStatement, recoverSpentDie,
 } = useTraitEditor({
-  props, entity, traitSets, profileTraits, detailTrait, graphql,
+  props, entity, traitSets, profileTraits, relationTraits, detailTrait, graphql,
   fetchEntity, recomputeTraitSets, recoverResourceDie, universeDisplay,
 })
 
