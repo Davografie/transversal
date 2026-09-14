@@ -414,6 +414,8 @@ function onMoved(data) {
   currentLocationId.value = data.location_id || data.location
   fetchLocationBg()
   fetchPeers(true)
+  // The scene roster reads the entity list's currentLocation.
+  prefetchEntities()
 }
 
 // One persisted perspective: `entityId` = who you are (player: main/assumed SC;
@@ -1026,6 +1028,10 @@ function handleSseEvent(evt) {
       }
       break
     case 'location_changed':
+      // Whoever moved, the entity list's currentLocation is now stale — the GM
+      // panel's scene roster reads it, exactly as the LocationViewer refreshes
+      // itself below. Refresh it for our own travel and for everyone else's.
+      prefetchEntities()
       if (eid === entityId.value && evt.data?.to) {
         currentLocationId.value = evt.data.to
         if (evt.data?.universe) universe.value = evt.data.universe
