@@ -175,13 +175,35 @@ class ImagenOrchestrator:
         height = params["height"]
         seed = random.randint(0, 2**32 - 1)
 
-        logger.info(f"Imagen prompt for {entity_id} ({entity.name}):\n  prompt: {prompt[:200]}...\n  negative: {negative[:200]}...\n  loras: {loras}\n  steps={steps} size={width}x{height} seed={seed}")
-
         # 2. Prepare Loras
         lora1 = loras[0] if len(loras) > 0 else ""
         lora1_weight = 0.8 if lora1 else 0.0
         lora2 = loras[1] if len(loras) > 1 else ""
         lora2_weight = 0.4 if lora2 else 0.0
+
+        # Full, untruncated generation log — mirrors the old app's format so the
+        # exact prompt, negative, and applied LoRAs (with weights) are inspectable
+        # after the fact. Only the first two LoRAs are injected into the workflow.
+        lora_note = ""
+        if len(loras) > 2:
+            lora_note = f"loras configured (only the first two apply): {loras}\n"
+        logger.info(
+            f"generating image\n"
+            f"entity: {entity_id} ({entity.name})\n"
+            f"universe: {universe}\n"
+            f"projection: {projection_id or '(none)'}\n"
+            f"steps: {steps}\n"
+            f"width: {width}\n"
+            f"height: {height}\n"
+            f"seed: {seed}\n"
+            f"lora 1: {lora1 or '(none)'}\n"
+            f"weight 1: {lora1_weight}\n"
+            f"lora 2: {lora2 or '(none)'}\n"
+            f"weight 2: {lora2_weight}\n"
+            f"{lora_note}"
+            f"prompt: {prompt}\n"
+            f"negative: {negative}"
+        )
 
         await self._report(entity_id, gen_type, GenerationStatus.GENERATING, "Generating image...", 20)
 
