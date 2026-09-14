@@ -82,7 +82,7 @@
       </div>
       <div v-if="!projections.length" class="gallery-empty">No projections yet.</div>
       <div v-else class="projection-list">
-        <div v-for="p in projections" :key="p.id" class="projection-block">
+        <div v-for="p in sortedProjections" :key="p.id" class="projection-block">
           <div
             class="projection-row"
             :class="{ 'drag-over': dropTarget === p.id }"
@@ -297,6 +297,21 @@ async function addProjectionLocal() {
 }
 
 // ── Image → projection drag-and-drop (HTML5 + touch longpress) ──
+
+// Static projection order, regardless of update time: the native body first,
+// then the active one, then the rest by their origin universe's name. Without
+// this the list followed whatever order the server (or the last patch) left
+// behind, so an edited projection appeared to jump.
+const sortedProjections = computed(() => {
+  const rank = (p) => (p.transversalType === 'NATIVE' ? 0 : p.id === currentProjection.value ? 1 : 2)
+  return [...(projections.value || [])].sort((a, b) => {
+    const byRank = rank(a) - rank(b)
+    if (byRank) return byRank
+    const ua = (universeName(a.originUniverse) || a.originUniverse || '').toLowerCase()
+    const ub = (universeName(b.originUniverse) || b.originUniverse || '').toLowerCase()
+    return ua.localeCompare(ub) || String(a.id).localeCompare(String(b.id))
+  })
+})
 
 // Entity-level vs projection-scoped images (ownership is ``projection_id``).
 const entityImages = computed(() => images.value.filter(i => !i.projection_id))
