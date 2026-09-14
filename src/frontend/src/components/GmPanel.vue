@@ -165,7 +165,7 @@ function endSession() { emit('end-session') }
 // ── Filtering (entities) ────────────────────────────
 const {
   activeFilters, filterInput, showSuggestions,
-  filteredEntities, filteredFactions, sceneEntities,
+  filteredEntities, filteredFactions,
   suggestions, selectSuggestion, hideSuggestions,
 } = useEntityFilter(entities)
 
@@ -259,10 +259,17 @@ watch(() => mode.value, (m) => {
   scrollLocationIntoView(props.currentLocationId)
 })
 
+// The scene's pool: every occupant type, assets included (the filter's
+// sceneEntities leaves assets out). Same priority the tree uses.
+const SCENE_TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
+const sceneOccupants = computed(() =>
+  filteredEntities.value.filter((e) => e.type in SCENE_TYPE_PRIORITY)
+)
+
 // Scene scope: the current location only — its parents and zones are drawers in
 // the summary, not part of the roster (the human's call).
 const sceneEntitiesHere = computed(() =>
-  sceneEntities.value.filter((e) => e.currentLocation === props.currentLocationId)
+  sceneOccupants.value.filter((e) => e.currentLocation === props.currentLocationId)
 )
 
 function _findTreeNode(nodes, id) {
@@ -275,7 +282,7 @@ function _findTreeNode(nodes, id) {
 }
 
 function _sceneEntitiesAt(locationId) {
-  return sceneEntities.value.filter((e) => e.currentLocation === locationId)
+  return sceneOccupants.value.filter((e) => e.currentLocation === locationId)
 }
 
 function _placeName(id) {

@@ -1,15 +1,15 @@
 <template>
   <div class="scene-summary">
     <h3>Scene</h3>
-    <div v-if="entities.length === 0" class="empty">No characters or GMCs here</div>
-    <div v-for="e in entities" :key="e.id" class="scene-row" @click="$emit('inspect', e.id)">
-      <span class="entity-type-badge" :class="'type-' + e.type">{{ e.type === 'GMC' ? 'GMC' : 'PC' }}</span>
+    <div v-if="roster.length === 0" class="empty">No characters, GMCs or assets here</div>
+    <div v-for="e in roster" :key="e.id" class="scene-row" @click="$emit('inspect', e.id)">
+      <span class="entity-type-badge" :class="'type-' + e.type">{{ badgeLabel(e) }}</span>
       <span class="entity-name">{{ e.name }}</span>
       <span class="scene-raz">⚡{{ e.razmerit }}</span>
     </div>
 
     <!-- Parents and zones live under drawers: the roster above is here only. -->
-    <template v-for="d in drawers" :key="d.key">
+    <template v-for="d in sortedDrawers" :key="d.key">
       <button class="scene-drawer" @click="toggle(d.key)">
         <span class="scene-caret">{{ open[d.key] ? '▾' : '▸' }}</span>
         {{ d.label }} ({{ d.groups.length }})
@@ -19,7 +19,7 @@
           <div class="scene-group-label">{{ g.name }}</div>
           <div v-if="!g.entities.length" class="empty scene-group-empty">no one</div>
           <div v-for="e in g.entities" :key="e.id" class="scene-row" @click="$emit('inspect', e.id)">
-            <span class="entity-type-badge" :class="'type-' + e.type">{{ e.type === 'GMC' ? 'GMC' : 'PC' }}</span>
+            <span class="entity-type-badge" :class="'type-' + e.type">{{ badgeLabel(e) }}</span>
             <span class="entity-name">{{ e.name }}</span>
             <span class="scene-raz">⚡{{ e.razmerit }}</span>
           </div>
@@ -44,6 +44,25 @@ const drawers = computed(() => [
   { key: 'parents', label: 'Parents', groups: props.parents },
   { key: 'zones', label: 'Zones', groups: props.zones },
 ].filter((d) => d.groups.length))
+
+// Characters first, then GMCs, then assets — the order the location tree gives
+// its occupants; name breaks ties so the rows don't shuffle.
+const TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
+function byTypeThenName(list) {
+  return [...(list || [])].sort((a, b) => {
+    const byType = (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9)
+    return byType || String(a.name || '').localeCompare(String(b.name || ''))
+  })
+}
+const roster = computed(() => byTypeThenName(props.entities))
+const sortedDrawers = computed(() => drawers.value.map((d) => ({
+  ...d,
+  groups: d.groups.map((g) => ({ ...g, entities: byTypeThenName(g.entities) })),
+})))
+
+function badgeLabel(e) {
+  return e.type === 'GMC' ? 'GMC' : e.type === 'ASSET' ? 'ASSET' : 'PC'
+}
 
 // Collapsed by default — the point is a quiet roster with the wider picture a
 // click away.
