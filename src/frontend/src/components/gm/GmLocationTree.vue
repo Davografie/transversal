@@ -4,7 +4,7 @@
       v-for="node in flatTree"
       :key="node.kind + '-' + node.id"
       class="entity-row tree-row"
-      :class="{ selected: node.id === selectedId, occupant: node.kind === 'occupant', location: node.kind === 'location', more: node.kind === 'more', 'drag-over': over && over.id === node.id, 'pulse-reject': node.id === rejectedId }"
+      :class="{ selected: node.id === selectedId, occupant: node.kind === 'occupant', location: node.kind === 'location', more: node.kind === 'more', add: node.kind === 'add', 'drag-over': over && over.id === node.id, 'pulse-reject': node.id === rejectedId }"
       :style="{ paddingLeft: (12 + node.depth * 20) + 'px' }"
       :data-node-id="node.id"
       :data-node-kind="node.kind"
@@ -15,8 +15,14 @@
       @click="onClick(node)"
       @touchstart="onRowTouchStart($event, node)"
     >
-      <span v-if="node.kind === 'more'" class="tree-toggle more"></span>
-      <span v-if="node.kind === 'more'" class="entity-name more-name" :title="`Show the other ${node.count} children of this level`">⋯ {{ node.name }}</span>
+      <template v-if="node.kind === 'add'">
+        <span class="tree-toggle add"></span>
+        <span class="entity-name add-name">＋ {{ node.name }}</span>
+      </template>
+      <template v-else-if="node.kind === 'more'">
+        <span class="tree-toggle more"></span>
+        <span class="entity-name more-name" :title="`Show the other ${node.count} children of this level`">⋯ {{ node.name }}</span>
+      </template>
       <template v-else>
       <span v-if="node.hasChildren" class="tree-toggle" @click.stop="$emit('toggle-expand', node.id)">
         {{ node.expanded ? '▾' : '▸' }}
@@ -52,7 +58,7 @@ const props = defineProps({
   rejectedId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['select-universe', 'select-location', 'select-occupant', 'toggle-expand', 'move-entity', 'select-more'])
+const emit = defineEmits(['select-universe', 'select-location', 'select-occupant', 'toggle-expand', 'move-entity', 'select-more', 'add-entity'])
 
 let preventNextClick = false
 
@@ -69,7 +75,8 @@ function srcPayload(node) {
 
 function onClick(node) {
   if (preventNextClick) { preventNextClick = false; return }
-  if (node.kind === 'more') emit('select-more', node.parentId)
+  if (node.kind === 'add') emit('add-entity', node)
+  else if (node.kind === 'more') emit('select-more', node.parentId)
   else if (node.kind === 'universe') emit('select-universe', node.id)
   else if (node.kind === 'location') emit('select-location', node.id)
   else emit('select-occupant', node.entity || { id: node.id })
@@ -157,6 +164,13 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
   cursor: pointer; border-bottom: 1px dashed var(--overlay-25);
 }
 .entity-row.more:hover .more-name { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Inline "add" rows: trail their collection, quieter than real entities. */
+.entity-name.add-name {
+  font-style: normal; color: var(--text-dim); font-size: 11px;
+  cursor: pointer; border-bottom: 1px dashed var(--overlay-18);
+}
+.entity-row.add:hover .add-name { color: var(--accent); border-bottom-color: var(--accent); }
 
 .tree-enter-active, .tree-leave-active { transition: all 0.2s ease; }
 .tree-enter-from, .tree-leave-to { opacity: 0; transform: translateY(-8px); }

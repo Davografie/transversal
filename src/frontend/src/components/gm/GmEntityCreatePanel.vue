@@ -55,6 +55,7 @@ const { saving } = useEntityCrud()
 const props = defineProps({
   defaultUniverse: { type: String, default: 'earth' },
   defaultLocationId: { type: String, default: '' },
+  defaultType: { type: String, default: '' },
   locationTree: { type: Array, default: () => [] },
 })
 
@@ -91,7 +92,7 @@ function resolveUniverse(locationId) {
 
 const initForm = () => ({
   name: '',
-  type: 'CHARACTER',
+  type: props.defaultType || 'CHARACTER',
   location: props.defaultLocationId || '',
   razmerit: 0,
 })

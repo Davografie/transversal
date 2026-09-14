@@ -68,7 +68,7 @@
             <Button class="crumb-action" variant="ghost" size="icon" title="Collapse all levels" @click="collapseTree">⌃</Button>
             <Button class="crumb-action" variant="ghost" size="icon" title="Jump to the current location" @click="scrollToNode(props.currentLocationId)">⊙</Button>
           </div>
-          <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @select-more="expandLevel" @move-entity="onMoveEntity" />
+          <GmLocationTree :flat-tree="flatTree" :expanded-ids="expandedNodes" :selected-id="selectedId" :rejected-id="rejectedUniverseId" @select-universe="onSelectUniverse" @select-location="onSelectLocation" @select-occupant="onSelectOccupant" @toggle-expand="toggleTreeNode" @select-more="expandLevel" @move-entity="onMoveEntity" @add-entity="onAddEntity" />
           <div v-if="flatTree.length === 0" class="empty">No entities found</div>
         </template>
         <template v-else>
@@ -92,8 +92,6 @@
       <div class="gm-footer">
         <Button class="canvas-btn" variant="secondary" block @click="openLocationTreeCanvas">🗺 Canvas</Button>
       </div>
-
-      <Button class="fab-create" variant="primary" size="icon" @click="startCreate" title="New Entity" aria-label="New Entity">＋</Button>
     </template>
   </div>
 </template>
@@ -364,14 +362,29 @@ function goToLocation(locId) {
   bus.emit('switch-view-location', locId)
 }
 
-function startCreate() {
+// Create panel, opened from a tree "add" row. `type` preselects the form's
+// entity type; `ctx` is the add-row node — its collection decides the default
+// universe (and, for occupants, the default location).
+function startCreate(type = '', ctx = null) {
   creating.value = true; editing.value = false; selected.value = null
   panel.open({
     component: GmEntityCreatePanel,
     title: 'New Entity',
-    props: { defaultUniverse: props.universe, defaultLocationId: props.currentLocationId, locationTree: locationTree.value },
+    props: {
+      defaultUniverse: ctx?.universe || props.universe,
+      defaultLocationId: ctx?.addType === 'occupant' ? ctx.parentId : '',
+      defaultType: type,
+      locationTree: locationTree.value,
+    },
     listeners: { 'create': createEntity },
   })
+}
+
+function onAddEntity(node) {
+  // Occupants default to CHARACTER — the create form's type dropdown still
+  // offers GMC / ASSET / FACTION / LOCATION / UNIVERSE.
+  const typeByAdd = { occupant: 'CHARACTER', location: 'LOCATION', universe: 'UNIVERSE' }
+  startCreate(typeByAdd[node.addType] || '', node)
 }
 
 function openLocationTreeCanvas() {
@@ -590,14 +603,6 @@ onUnmounted(() => {
   padding: 1px 5px; border-radius: 3px; color: var(--accent-pale);
   background: var(--accent-16); border: 1px solid var(--accent-45);
   margin-left: 6px;
-}
-
-.gm-content .fab-create {
-  position: absolute; right: 12px; bottom: 62px; z-index: 20;
-  width: 56px; height: 56px;
-  border-radius: 50%;
-  font-size: 26px; font-weight: 700; line-height: 1;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
 .entity-row { margin-bottom: 4px; }

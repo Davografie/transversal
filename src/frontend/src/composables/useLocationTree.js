@@ -129,6 +129,14 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
   // any other level ("… N more universes").
   const ROOT_KEY = '__root__'
 
+  // Inline "add" rows hang off the end of their collection. They are only
+  // offered while browsing the whole tree: with filters or focus active the
+  // list shows a curated subset, so "the end of the collection" is not a
+  // stable place to put them.
+  const showAddRows = computed(() =>
+    !hasOccupantFilter.value && !activeUniverseFilters.value.size && focusPathIds.value.size === 0
+  )
+
   function flattenTree(nodes, occupants, depth = 0) {
     const result = []
     const filterMode = hasOccupantFilter.value
@@ -198,6 +206,14 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
             entityType: e.type, entity: e,
           })
         }
+        // Occupants live in locations, so the row trails each location's roster.
+        if (kind === 'location' && expanded && showAddRows.value) {
+          result.push({
+            id: 'add:occupant:' + node.id, kind: 'add', addType: 'occupant',
+            parentId: node.id, universe: node.universe || '', depth: depth + 1,
+            hasChildren: false, name: 'add occupant',
+          })
+        }
       }
       if (expanded && kind === 'universe' && node.universe && revealOccupants) {
         const unplaced = unplacedByUniverse.value[node.universe]
@@ -229,6 +245,15 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
           }
         }
       }
+      // Locations are placed in a universe, so the row trails that universe's
+      // children — including when it has none yet.
+      if (kind === 'universe' && expanded && showAddRows.value && node.universe) {
+        result.push({
+          id: 'add:location:' + node.id, kind: 'add', addType: 'location',
+          parentId: node.id, universe: node.universe, depth: depth + 1,
+          hasChildren: false, name: 'add location',
+        })
+      }
     }
     // Root-level stub: the universes focus mode is hiding.
     if (depth === 0 && focusMode && expandedNodes.value[ROOT_KEY] !== true) {
@@ -239,6 +264,13 @@ export function useLocationTree({ filteredEntities, activeFilters, currentUniver
           name: `… ${hidden} more universes`, depth: 0, hasChildren: false,
         })
       }
+    }
+    // Universes are the top level, so their "add" row closes the whole tree.
+    if (depth === 0 && showAddRows.value) {
+      result.push({
+        id: 'add:universe', kind: 'add', addType: 'universe',
+        parentId: '', universe: '', depth: 0, hasChildren: false, name: 'add universe',
+      })
     }
     return result
   }
