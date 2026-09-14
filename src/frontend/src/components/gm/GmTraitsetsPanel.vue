@@ -61,6 +61,7 @@ function onClick(ts) {
     component: GmTraitsetDetail,
     title: ts.name,
     id: ts.id,
+    badge: 'TRAITSET',
     props: { traitsetId: ts.id },
   })
 }

@@ -143,6 +143,7 @@ function onTraitClick(t) {
     component: GmTraitEditPanel,
     title: t.name,
     id: t.id,
+    badge: 'TRAIT',
     props: { traitId: t.id, traitsetId: props.traitsetId },
   })
 }
@@ -151,6 +152,7 @@ function onNewTrait() {
   panel.open({
     component: GmTraitEditPanel,
     title: 'New Trait',
+    badge: 'TRAIT',
     props: { traitId: null, traitsetId: traitset.value?.id },
   })
 }

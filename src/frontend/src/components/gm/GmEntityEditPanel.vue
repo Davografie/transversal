@@ -449,6 +449,7 @@ function openProjectionEditor(p) {
     component: GmProjectionEditPanel,
     title: `Projection: ${p.originUniverse || p.universe}`,
     id: p.id,
+    badge: 'PROJECTION',
     props: { projection: p },
     // The projection editor lives in a *child panel*, which cannot inject this
     // panel's provide — hand the editor instance across in the spec's context
@@ -642,6 +643,7 @@ function openImage(img) {
   panel.open({
     component: ImageViewer,
     title: img.id,
+    badge: img.image_type === 'animated' ? 'ANIMATED' : 'IMAGE',
     props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: props.entityId, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
     listeners: {
       'close': () => { openedImageId.value = null },

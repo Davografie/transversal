@@ -406,6 +406,7 @@ function onImageOpen(img) {
   panel.open({
     component: ImageViewer,
     title: img.id,
+    badge: img.image_type === 'animated' ? 'ANIMATED' : 'IMAGE',
     props: { src: img.path_animated || img.path_large, animatedSrc: img.path_animated, alt: img.image_type + ' — ' + img.width + '×' + img.height, entityId: selectedId.value, imageId: img.id, imageType: img.image_type, roles: img.roles || [], sizeBytes: img.size_bytes },
     listeners: {},
   })
