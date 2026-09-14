@@ -86,7 +86,19 @@
               <Button v-if="!overrideEntityId" variant="ghost" size="icon" title="Increase razmerit" @click.stop="adjustRazmerit(1)">+</Button>
             </div>
           </div>
-          <MediaImage v-if="sheetPortrait" :src="sheetPortrait" class="sheet-portrait" :class="{ transparent: sheetPortraitTransparent }" />
+          <MediaImage
+            v-if="sheetPortrait"
+            :src="sheetPortrait"
+            class="sheet-portrait clickable"
+            :class="{ transparent: sheetPortraitTransparent }"
+            aria-role="button"
+            tabindex="0"
+            :aria-label="`View ${entity.name}'s full image`"
+            title="View full image"
+            @click.stop="portraitViewerOpen = true"
+            @keydown.enter.prevent="portraitViewerOpen = true"
+            @keydown.space.prevent="portraitViewerOpen = true"
+          />
         </div>
         <div class="header-controls">
           <div v-if="isForeignSheet" class="rel-widget">
@@ -294,6 +306,22 @@
     </div>
 
     <Teleport to="body">
+      <!-- Portrait viewer: the sheet's `background` role image (active body first,
+           then entity-level), opened as a modal inside this panel. -->
+      <div
+        v-if="portraitViewerOpen"
+        class="portrait-viewer-overlay"
+        @click.self="portraitViewerOpen = false"
+      >
+        <div class="portrait-viewer">
+          <div class="portrait-viewer-head">
+            <span>{{ entity.name }}</span>
+            <Button variant="ghost" size="sm" title="Close" @click="portraitViewerOpen = false">✕</Button>
+          </div>
+          <MediaImage :src="portraitViewerSrc" class="portrait-viewer-media" :alt="entity.name" />
+        </div>
+      </div>
+
       <RollTableMenu
         v-if="rollTableMenu"
         :entity-id="entity.id"
@@ -367,6 +395,12 @@ const activeProjection = computed(() => {
   return e.projections.find((p) => p.id === e.currentProjection) || null
 })
 const sheetPortrait = computed(() => activeProjection.value?.sheetImage || entity.value?.sheetPortrait || '')
+
+// Portrait viewer (modal). Shows the character's `background` role image —
+// resolved through the active body first, then entity-level — falling back to
+// the portrait itself when no background image exists.
+const portraitViewerOpen = ref(false)
+const portraitViewerSrc = computed(() => entity.value?.backgroundRoleImage || sheetPortrait.value)
 // Mirror sheetPortrait's resolution chain: the projection's sheet image when
 // present, else the entity's resolved sheet portrait.
 const sheetPortraitTransparent = computed(() => {
@@ -1610,6 +1644,7 @@ const QUERY = `
       currentLocation
       currentProjection
       backgroundImage
+      backgroundRoleImage: image(role: "background")
       sheetPortrait
       sheetPortraitTransparent
       sfxIds
@@ -1884,7 +1919,9 @@ function onTouchEnd() {
 
 // Close edit on Escape
 function onKeydown(e) {
-  if (e.key === 'Escape' && editingTraitId.value) cancelEdit()
+  if (e.key !== 'Escape') return
+  if (portraitViewerOpen.value) { portraitViewerOpen.value = false; return }
+  if (editingTraitId.value) cancelEdit()
 }
 
 // Close the razmerit popover when clicking outside its anchor.
@@ -2080,6 +2117,31 @@ watch(() => props.externalPoolSources, (sources) => {
   border-bottom: 1px solid var(--overlay-12);
   border-radius: 0 0 var(--portrait-bottom-radius) var(--portrait-bottom-radius);
 }
+
+/* Portrait is a control: click (or Enter/Space) opens the viewer modal. */
+.sheet-portrait.clickable { cursor: pointer; transition: border-color 0.15s ease; }
+.sheet-portrait.clickable:hover { border-color: var(--accent); }
+.sheet-portrait.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Portrait viewer modal (teleported to body, like the roll-table menu). */
+.portrait-viewer-overlay {
+  position: fixed; inset: 0; z-index: 600;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.65);
+}
+.portrait-viewer {
+  display: flex; flex-direction: column; gap: 6px;
+  max-width: min(92vw, 900px); max-height: 90vh; padding: 8px;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--overlay-10);
+  border-radius: 8px;
+}
+.portrait-viewer-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--accent);
+}
+.portrait-viewer-media { display: block; max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 4px; }
 
 .sheet-scroll {
   flex: 1;

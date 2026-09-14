@@ -22,6 +22,9 @@ const props = defineProps({
   role: { type: String, default: '' },
   alt: { type: String, default: '' },
   lazy: { type: Boolean, default: false },
+  // Explicit ARIA role for interactive media (e.g. a clickable portrait).
+  // Separate from `role`, which is the media role tag used for querying.
+  ariaRole: { type: String, default: '' },
 })
 
 defineOptions({ inheritAttrs: false })
@@ -41,6 +44,7 @@ const isVideo = computed(() => isVideoUrl(effectiveSrc.value))
 const tag = computed(() => (isVideo.value ? 'video' : 'img'))
 const elementAttrs = computed(() => {
   const base = { ...attrs, src: effectiveSrc.value }
+  if (props.ariaRole) base.role = props.ariaRole
   if (isVideo.value) {
     return { ...base, autoplay: true, loop: true, muted: true, playsinline: true }
   }
