@@ -45,8 +45,8 @@ from transversal.services.media_utils import has_transparency
 
 logger = logging.getLogger("transversal.imagen")
 logger.setLevel(logging.INFO)
-if not logger.handlers:
-    logger.addHandler(logging.StreamHandler())
+# No module-level handler: main.py's basicConfig owns root formatting, and a
+# second StreamHandler here made every line print twice (bare + formatted).
 
 # ── Paths ──────────────────────────────────────────────
 
