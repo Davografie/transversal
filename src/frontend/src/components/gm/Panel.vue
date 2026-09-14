@@ -20,12 +20,16 @@
     <!-- ⚠ Depth hiding uses visibility/display via :style (see panelVisibilityStyle).
          A depth-hidden panel is removed from layout so the chain re-anchors. -->
     <div ref="panelEl" class="panel" :class="{ 'is-collapsed': isCollapsed, 'has-title': !!title }" :style="panelVisibilityStyle">
-      <header v-if="title || (isRoot && isCollapsed)" class="panel-header" :class="{ 'is-collapsed': isCollapsed }" @pointerdown="onHeaderPointerDown">
+      <header v-if="title || spec?.badge || (isRoot && isCollapsed)" class="panel-header" :class="{ 'is-collapsed': isCollapsed }" @pointerdown="onHeaderPointerDown">
         <slot name="header">
           <!-- Collapsed: a compact [▸] title (draggable) [×] chip — a full rail
                would be overkill beside a 34px panel. The header itself is the drag
                surface, so a title-less root (the GM panel) still moves. -->
           <Button v-if="isCollapsed" class="panel-header-btn" variant="ghost" size="sm" title="Expand" @pointerdown.stop @click.stop="toggleCollapse()">▸</Button>
+          <!-- What kind of panel this is (spec.badge). Declarative: the opener
+               passes it, the chrome shows it — any panel can use it (an entity's
+               type, a trait-set, a wizard's step...). -->
+          <span v-if="spec?.badge" class="entity-type-badge panel-badge" :class="'type-' + spec.badge">{{ spec.badge }}</span>
           <span v-if="title" class="panel-title" :title="isCollapsed ? 'Drag to move' : ''">{{ title }}</span>
           <Button v-if="id && !isCollapsed" type="button" class="panel-id-btn" variant="neutral" size="sm" :title="copied ? 'Copied!' : 'Copy ID'" @click="copyId">{{ copied ? '✓' : '#' }}</Button>
           <Button v-if="isCollapsed" class="panel-header-btn" variant="ghost" size="sm" title="Close" @pointerdown.stop @click.stop="$emit('close')">×</Button>
@@ -1098,6 +1102,8 @@ provide(panelKey, {
   font-size: 12px; font-weight: 600; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.5px;
 }
+/* spec.badge — what kind of panel this is. Never squashed by a long title. */
+.panel-badge { flex: 0 0 auto; }
 .panel-header .panel-id-btn {
   flex-shrink: 0;
   font-family: monospace;

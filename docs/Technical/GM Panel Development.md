@@ -44,6 +44,19 @@ renderers that wire composable state to the DOM.**
   (e.g. `GmEntityEditPanel`, `GmTraitEditPanel`). `GmPanel.vue` is the L0 root
   content (modes, entity list, filter bar) — not the wrapper.
 
+### Panel spec fields
+
+`panel.open({ … })` takes `{ component, title, id, props, listeners, context, badge }`.
+
+- `badge` — a short label the chrome shows in the panel header, before the title
+  (and on the collapsed chip). Purely declarative: the opener passes the kind of
+  thing the panel is editing and the chrome renders it. The entity editor sets
+  the entity's type; any panel can use it for the same purpose.
+- `context` — values handed to the panel's component through `PanelScope`. This
+  is the **only** way a panel's content can pass something to its own child
+  panels: children are rendered by `Panel.vue` as siblings of the slot outlet, so
+  a `provide` in the opener never reaches them.
+
 Positioning in one paragraph: the chain derives from a draggable **anchor**
 (🛠 closed, the shallowest visible panel's rail open — drag the rail's `⠿` or
 the 🛠 itself; the anchor snaps to the nearest viewport edge on drop and is

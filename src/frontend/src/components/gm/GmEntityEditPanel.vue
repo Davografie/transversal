@@ -2,7 +2,6 @@
   <div>
     <div class="panel-top">
       <div class="panel-top-left">
-        <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
         <span v-if="agencyHolder" class="agency-line" :title="agencyTitle">
           Agency: {{ agencyHolder.playerName }}<template v-if="!agencyHolder.main"> · support</template>
         </span>
@@ -25,13 +24,6 @@
           title="Move this entity to your current location"
           @click="importToLocation"
         >📥 Import to Location</Button>
-        <Button
-          class="publish-btn"
-          :variant="form.unpublished ? 'neutral' : 'success'"
-          size="sm"
-          :title="form.unpublished ? 'Publish — make visible to players' : 'Unpublish — GM-only again'"
-          @click="form.unpublished = !form.unpublished"
-        >{{ form.unpublished ? '⬆ Publish' : '⬇ Unpublish' }}</Button>
       </div>
     </div>
     <GmEntityForm
@@ -180,6 +172,13 @@
     <div class="danger-zone">
       <h4>Danger Zone</h4>
       <div class="danger-actions">
+        <Button
+          class="publish-btn"
+          :variant="form.unpublished ? 'neutral' : 'success'"
+          size="sm"
+          :title="form.unpublished ? 'Publish — make visible to players' : 'Unpublish — GM-only again'"
+          @click="form.unpublished = !form.unpublished"
+        >{{ form.unpublished ? '⬆ Publish' : '⬇ Unpublish' }}</Button>
         <DangerButton
           label="Delete"
           @confirm="onDeleteConfirmed"

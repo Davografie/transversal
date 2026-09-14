@@ -332,6 +332,7 @@ function openEntityEdit() {
     component: GmEntityEditPanel,
     title: selected.value.name || 'Edit Entity',
     id: selectedId.value,
+    badge: selected.value.type,
     props: { entityId: selectedId.value, currentEntityId: props.entityId, currentLocationId: props.currentLocationId },
     listeners: {
       'switch-to-sheet': switchToSheet,
