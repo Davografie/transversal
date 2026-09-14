@@ -56,13 +56,9 @@
 
       <div class="browse-zone">
         <template v-if="browseTab === 'tree'">
-          <div v-if="focusPath.length" class="tree-crumbs">
-            <div class="crumbs">
-              <template v-for="(c, i) in focusPath" :key="c.id">
-                <span v-if="i" class="crumb-sep">▸</span>
-                <button class="crumb" :class="{ current: i === focusPath.length - 1 }" @click="scrollToNode(c.id)">{{ c.name }}</button>
-              </template>
-            </div>
+          <!-- The breadcrumb bar that used to live here is gone (the human's
+               call, B112); its two actions stay. -->
+          <div class="tree-actions">
             <Button class="crumb-action" variant="ghost" size="icon" title="Collapse all levels" @click="collapseTree">⌃</Button>
             <Button class="crumb-action" variant="ghost" size="icon" title="Jump to the current location" @click="scrollToNode(props.currentLocationId)">⊙</Button>
           </div>
@@ -495,21 +491,10 @@ onUnmounted(() => {
 }
 .browse-zone { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
-/* Sticky breadcrumb: the way up is always on screen, even after scrolling. */
-.tree-crumbs {
-  position: sticky; top: 0; z-index: 3;
-  display: flex; align-items: center; gap: 4px;
-  padding: 2px 0 6px; margin-bottom: 2px;
-  background: var(--bg-panel);
-}
-.crumbs { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; white-space: nowrap; }
-.crumb {
-  background: none; border: none; padding: 0; cursor: pointer;
-  font-size: 10px; color: var(--text-dim); text-overflow: ellipsis; overflow: hidden;
-}
-.crumb:hover { color: var(--accent); text-decoration: underline; }
-.crumb.current { color: var(--text); font-weight: 600; }
-.crumb-sep { font-size: 9px; color: var(--text-dim); opacity: 0.7; }
+/* Tree actions, right-aligned above the tree. The sticky breadcrumb bar that
+   used to carry them (a way up after scrolling) is gone by the human's call —
+   the jump-to-current-location button is what they kept. */
+.tree-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 0 0 4px; }
 
 .gm-footer { padding-top: 8px; }
 .gm-footer .canvas-btn { margin-bottom: 0; }
