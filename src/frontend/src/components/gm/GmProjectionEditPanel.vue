@@ -17,29 +17,22 @@
       <div class="readonly-row">
         <span>Origin: {{ universeName(projection.originUniverse) }}</span>
         <span v-if="projection.universe !== projection.originUniverse">Current universe: {{ universeName(projection.universe) }}</span>
+        <span v-if="saving" class="save-status">Saving…</span>
       </div>
-    </div>
-
-    <div class="actions">
-      <Button class="save-btn" :loading="saving" :disabled="saving" @click="save" variant="success" solid>{{ saving ? 'Saving…' : 'Save' }}</Button>
-      <Button class="cancel-btn" variant="neutral" @click="panel.close()">Cancel</Button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, inject } from 'vue'
+import { ref, onMounted, onUnmounted, watch, inject } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
-import { usePanel } from '@/composables/usePanel.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
-import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   projection: { type: Object, required: true },
 })
 
-const panel = usePanel()
 // The entity panel that opened this one provides its own editor instance, so
 // the updated projection lands in the list that panel actually renders (the
 // shared instance's list is not on screen anywhere). Fall back to the shared
@@ -55,19 +48,35 @@ const { name: universeName, load: loadUniverseNames } = useUniverseNames()
 
 onMounted(loadUniverseNames)
 
+// Auto-save, like the trait and trait-set editors: no Save button, no Cancel
+// (a Cancel that does not revert would be a lie). The panel is closed from its
+// own chrome.
+let saveTimer = null
+watch([name, currentLocation, transversalType], () => {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(save, 600)
+})
+
 async function save() {
+  saveTimer = null
   saving.value = true
   try {
     await updateProjection(props.projection.id, {
       name: name.value,
-      currentLocation: currentLocation.value || null,
+      // '' asks the service to clear (it reads null as "leave unchanged"), but
+      // the GraphQL resolver folds '' back to None, so clearing still no-ops —
+      // verified live and flagged to backend-platform. Sent as '' so the panel
+      // is already correct once that is fixed.
+      currentLocation: currentLocation.value || '',
       transversalType: transversalType.value,
     })
-    panel.close()
   } finally {
     saving.value = false
   }
 }
+
+// Closing the panel before the debounce fires must not lose the edit.
+onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); save() } })
 </script>
 
 <style scoped>
@@ -131,12 +140,5 @@ async function save() {
   color: var(--text-dim);
   margin-top: 8px;
 }
-.actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 14px;
-}
-.actions .cancel-btn {
-  padding: 6px 14px;
-}
+.save-status { color: var(--accent); }
 </style>
