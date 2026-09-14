@@ -217,7 +217,10 @@ the `imagen_progress` SSE event. Statuses are `prompting` → `generating` →
   - `LoRA*` traits → LoRA list.
   - `negative imagen` / `positive imagen` traits → negative/positive additions.
   - generic traits → `(trait is statement:rating_weight)` clauses.
-- Adds universe style guidance and the universe's per-entity-type LoRA config.
+- Adds universe style guidance, the universe's per-entity-type LoRA config, and
+  the universe's free-text **prompt steering** sentence
+  (`Entity.prompt_steering`, authored per universe in the GM LoRA panel and
+  appended last as `(sentence:0.9)` so it reads as the final style direction).
 
 For a **projection** generation, trait selection is scoped by
 `get_prompt_traitsettings(entity_id, universes, projection_id)`: entity traits
