@@ -259,11 +259,12 @@ watch(() => mode.value, (m) => {
   scrollLocationIntoView(props.currentLocationId)
 })
 
-// The scene's pool: every occupant type, assets included (the filter's
-// sceneEntities leaves assets out). Same priority the tree uses.
+// The scene's pool: every occupant type, assets included, and deliberately
+// **unfiltered** — the focus chips belong to Prep. The Play screen shows the
+// scene as it is; the GM's own acting-entity chip must not narrow it to them.
 const SCENE_TYPE_PRIORITY = { CHARACTER: 0, GMC: 1, ASSET: 2 }
 const sceneOccupants = computed(() =>
-  filteredEntities.value.filter((e) => e.type in SCENE_TYPE_PRIORITY)
+  entities.value.filter((e) => e.type in SCENE_TYPE_PRIORITY)
 )
 
 // Scene scope: the current location only — its parents and zones are drawers in
@@ -467,6 +468,9 @@ async function onMoveEntity({ entityId, entityKind, targetId, targetKind, target
         { entityId, location: targetId }
       )
     }
+    // The entity list carries currentLocation, and the scene roster reads it —
+    // without this a placement left it stale until some unrelated refetch.
+    await fetchEntities()
   } else if (entityKind === 'location') {
     if (targetUniverse) {
       try { await graphql(`mutation($input: UpdateEntityInput!) { updateEntity(input: $input) { id currentUniverse } }`, { input: { id: entityId, currentUniverse: targetUniverse } }) } catch {}
