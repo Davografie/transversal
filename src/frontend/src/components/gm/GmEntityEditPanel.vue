@@ -414,9 +414,13 @@ function openLoraConfig() {
   panel.open({
     component: GmLoRAConfigPanel,
     title: 'LoRA Configuration',
-    props: { loraConfigJson: form.value.lora_config || '{}' },
+    props: {
+      loraConfigJson: form.value.lora_config || '{}',
+      promptSteering: form.value.prompt_steering || '',
+    },
     listeners: {
       'update:loraConfig': (json) => { form.value = { ...form.value, lora_config: json } },
+      'update:promptSteering': (text) => { form.value = { ...form.value, prompt_steering: text } },
     },
   })
 }

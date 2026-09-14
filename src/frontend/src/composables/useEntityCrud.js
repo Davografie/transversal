@@ -29,7 +29,7 @@ export function createEntityCrud() {
   const ENTITY_QUERY = `query($id: ID!) {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
-      hidden unpublished supportEligible starterLocation loraConfig
+      hidden unpublished supportEligible starterLocation loraConfig promptSteering
       agency { playerId playerName main }
       projections {
         id originUniverse universe name backgroundImage currentLocation transversalType
@@ -76,6 +76,7 @@ export function createEntityCrud() {
         support_eligible: data.entity.supportEligible ?? false,
         starter_location: data.entity.starterLocation ?? false,
         lora_config: data.entity.loraConfig || '{}',
+        prompt_steering: data.entity.promptSteering || '',
       }
       return alreadyEditing
     }
@@ -89,7 +90,7 @@ export function createEntityCrud() {
     const result = await graphql(
       `mutation($input: UpdateEntityInput!) {
         updateEntity(input: $input) {
-          id name razmerit currentUniverse currentLocation hidden unpublished supportEligible starterLocation loraConfig
+          id name razmerit currentUniverse currentLocation hidden unpublished supportEligible starterLocation loraConfig promptSteering
         }
       }`,
       {
@@ -105,6 +106,7 @@ export function createEntityCrud() {
           overlay: form.value.overlay,
           starterLocation: form.value.starter_location,
           loraConfig: form.value.lora_config,
+          promptSteering: form.value.prompt_steering,
         },
       }
     )

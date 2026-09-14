@@ -113,6 +113,8 @@ class Entity(BaseModel):
     scheduled_events: list["ScheduledEvent"] = Field(default_factory=list)  # pending timed reverts
     # Universe — per-entity-type LoRA configuration
     lora_config: Optional[dict] = None  # {"CHARACTER": ["lora1"], "LOCATION": []}
+    # Universe — free-text style steering appended to every prompt generated here
+    prompt_steering: str = ""
     # Life path tracking
     life_paths: list["Enrollment"] = Field(default_factory=list)  # memberships (faction + path)
     active_universes: list[str] = Field(default_factory=list)  # faction-only: where active

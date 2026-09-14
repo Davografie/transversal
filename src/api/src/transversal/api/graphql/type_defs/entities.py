@@ -103,6 +103,7 @@ class Entity:
     owned_by: Optional[str] = None
     attunements: list[Attunement] = strawberry.field(default_factory=list)
     lora_config: Optional[str] = None  # JSON string: {"CHARACTER": ["lora1"], ...}
+    prompt_steering: Optional[str] = None  # universe-only: one steering sentence for prompts
 
     @strawberry.field
     async def projections(self, info: strawberry.Info) -> list[Projection]:
@@ -260,6 +261,7 @@ class UpdateEntityInput:
     owned_by: Optional[str] = None
     suitable_life_path_ids: Optional[list[str]] = None
     lora_config: Optional[str] = None
+    prompt_steering: Optional[str] = None
 
 @strawberry.type
 class RazmeritResult:

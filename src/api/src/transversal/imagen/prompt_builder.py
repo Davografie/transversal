@@ -165,7 +165,7 @@ def build_imagen_prompt(
         entity, trait_settings, universe
     )
 
-    # Merge universe-level LoRA config for this entity type
+    # Merge universe-level LoRA config + prompt steering for this entity type
     try:
         universe_docs = list(repository._entities.find({"type": "universe", "current_universe": universe}))
         if universe_docs:
@@ -176,6 +176,11 @@ def build_imagen_prompt(
                 for lora_name in universe_loras:
                     if lora_name not in loras:
                         loras.append(lora_name)
+            # Free-text steering sentence authored on the universe (GM panel).
+            # Appended last so it reads as the final style direction.
+            steering = clean_text(universe_entity.prompt_steering or "").strip()
+            if steering:
+                prompt = f"{prompt} ({steering}:0.9), "
     except Exception:
         pass  # Don't fail imagen if universe lookup fails
 

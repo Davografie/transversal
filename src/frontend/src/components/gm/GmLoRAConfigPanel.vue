@@ -15,6 +15,19 @@
         </select>
       </div>
     </div>
+
+    <div class="steering-block">
+      <label class="steering-label" for="prompt-steering">Prompt steering — one sentence</label>
+      <textarea
+        id="prompt-steering"
+        class="steering-input"
+        rows="2"
+        :value="promptSteering"
+        placeholder="e.g. shot on a 35mm lens, natural window light, documentary realism"
+        @input="onSteeringInput"
+      />
+      <p class="steering-hint">Appended to every prompt generated in this universe — use it to steer style, lighting, or realism.</p>
+    </div>
   </div>
 </template>
 
@@ -24,9 +37,14 @@ import { ENTITY_TYPES } from '@/constants/entityTypes.js'
 
 const props = defineProps({
   loraConfigJson: { type: String, default: '{}' },
+  promptSteering: { type: String, default: '' },
 })
 
-const emit = defineEmits(['update:loraConfig'])
+const emit = defineEmits(['update:loraConfig', 'update:promptSteering'])
+
+function onSteeringInput(e) {
+  emit('update:promptSteering', e.target.value)
+}
 
 // Universes don't generate images, so they have no LoRA slots.
 const entityTypes = ENTITY_TYPES.filter(t => t !== 'UNIVERSE')
@@ -79,4 +97,16 @@ onMounted(() => { fetchLoras() })
   border: 1px solid var(--overlay-10); background: var(--overlay-4);
   color: var(--text);
 }
+
+.steering-block { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--overlay-10); }
+.steering-label {
+  display: block; font-size: 9px; color: var(--text-dim); margin-bottom: 2px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.steering-input {
+  width: 100%; box-sizing: border-box; font-size: 10px; padding: 4px 6px;
+  border-radius: 3px; border: 1px solid var(--overlay-10); background: var(--overlay-4);
+  color: var(--text); font-family: inherit; resize: vertical;
+}
+.steering-hint { font-size: 9px; color: var(--text-dim); margin: 4px 0 0 0; }
 </style>

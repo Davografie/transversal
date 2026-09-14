@@ -72,6 +72,8 @@ class MutationsEntities:
             e.nav_positions = json.loads(input.nav_positions)
         if input.lora_config is not None:
             e.lora_config = json.loads(input.lora_config) if input.lora_config else None
+        if input.prompt_steering is not None:
+            e.prompt_steering = input.prompt_steering.strip()
         updated = _em(info).update(e)
         return _entity_to_gql(updated)
 
