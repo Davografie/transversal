@@ -13,8 +13,14 @@
           <Button v-if="!inSession" class="shortcut-btn session-btn" variant="neutral" title="Start the session" @click="startSession">▶ Start</Button>
           <Button v-else class="shortcut-btn session-btn" variant="danger" title="End the session" @click="endSession">■ End</Button>
         </div>
-        <GmSceneSummary v-if="viewSceneSummary" :entities="sceneEntitiesInScope" @inspect="inspectEntity" />
         <GmTroupeOverview :current-location-id="currentLocationId" :current-location-name="currentLocationName" @go-to-location="goToLocation" />
+        <GmSceneSummary
+          v-if="viewSceneSummary"
+          :entities="sceneEntitiesHere"
+          :parents="sceneParentGroups"
+          :zones="sceneZoneGroups"
+          @inspect="inspectEntity"
+        />
       </div>
     </template>
 
@@ -174,7 +180,7 @@ watch(() => props.entityId, (id) => {
 // ── Location tree ───────────────────────────────────
 const {
   locationTree, expandedNodes,
-  fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds, sceneLocationIds,
+  fetchLocationTree, toggleTreeNode, flatTree, findAncestorIds,
   focusPath, setFocus, collapseAll,
 } = useLocationTree({ filteredEntities, activeFilters, currentUniverse: toRef(props, 'universe') })
 
@@ -253,10 +259,43 @@ watch(() => mode.value, (m) => {
   scrollLocationIntoView(props.currentLocationId)
 })
 
-// Scene summary scope: current location + its ancestors + descendants.
-const sceneEntitiesInScope = computed(() => {
-  const ids = sceneLocationIds(props.currentLocationId)
-  return sceneEntities.value.filter((e) => e.currentLocation && ids.has(e.currentLocation))
+// Scene scope: the current location only — its parents and zones are drawers in
+// the summary, not part of the roster (the human's call).
+const sceneEntitiesHere = computed(() =>
+  sceneEntities.value.filter((e) => e.currentLocation === props.currentLocationId)
+)
+
+function _findTreeNode(nodes, id) {
+  for (const n of nodes) {
+    if (n.id === id) return n
+    const hit = _findTreeNode(n.children || [], id)
+    if (hit) return hit
+  }
+  return null
+}
+
+function _sceneEntitiesAt(locationId) {
+  return sceneEntities.value.filter((e) => e.currentLocation === locationId)
+}
+
+function _placeName(id) {
+  return entities.value.find((e) => e.id === id)?.name || id
+}
+
+// Parents: the ancestor chain, nearest first (the universe is the last step).
+const sceneParentGroups = computed(() => {
+  const path = []
+  if (!findAncestorIds(locationTree.value, props.currentLocationId, path)) return []
+  return path
+    .filter((id) => id !== props.currentLocationId)
+    .reverse()
+    .map((id) => ({ id, name: _placeName(id), entities: _sceneEntitiesAt(id) }))
+})
+
+// Zones: the current location's sub-locations, in tree order.
+const sceneZoneGroups = computed(() => {
+  const node = _findTreeNode(locationTree.value, props.currentLocationId)
+  return (node?.children || []).map((c) => ({ id: c.id, name: c.name, entities: _sceneEntitiesAt(c.id) }))
 })
 
 // ── Entity selection ────────────────────────────────
