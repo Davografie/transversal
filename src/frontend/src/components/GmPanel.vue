@@ -214,13 +214,17 @@ function collapseTree() {
   collapseAll()
 }
 
-// Breadcrumb / locate: make sure the target is on screen (and its level open).
+// Locate: make sure the target is on screen (and its level open).
 function scrollToNode(nodeId) {
   if (!nodeId) return
   const expanded = { ...expandedNodes.value }
   const path = []
   if (findAncestorIds(locationTree.value, nodeId, path)) {
-    path.forEach((id) => { if (expanded[id] === false) delete expanded[id] })
+    // Open the whole chain down to the target. Without this the jump was a
+    // silent no-op in the plain view — only the current universe renders open
+    // by default there, so the target row did not exist and the scroll found
+    // nothing (the acting-entity case, once its filter chip is removed).
+    path.filter((id) => id !== nodeId).forEach((id) => { expanded[id] = true })
     expandedNodes.value = expanded
   }
   scrollLocationIntoView(nodeId)
