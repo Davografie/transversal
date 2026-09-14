@@ -14,11 +14,14 @@
   character may support multiple mains (one edge each).
 - The old ``count`` / ``last_used`` recency fields are dropped — recency now
   lives in spotlight state (stamped at runtime), not migration.
+- ``--include-archetypes`` resolves agency targets that migrated as Phase 2b
+  archetype GMCs (e.g. the old ``Dvanda`` template).
 
 Dry-run by default. Pass ``--apply`` to write.
 
 Usage:
     docker compose exec api python -m transversal.migrate_players [--apply]
+    docker compose exec api python -m transversal.migrate_players --apply --include-archetypes
 """
 
 from __future__ import annotations
@@ -42,12 +45,14 @@ def _player_key(name: str) -> str:
     return f"player-{hashlib.md5(name.lower().strip().encode()).hexdigest()[:6]}"
 
 
-def migrate(apply: bool = False) -> int:
+def migrate(apply: bool = False, include_archetypes: bool = False) -> int:
     entities = load_json("entities.json")
     relations = load_json("relations.json")
     old_players = load_json("players.json")
 
-    entity_key_map = build_entity_key_map(entities, relations)
+    entity_key_map = build_entity_key_map(
+        entities, relations, include_archetypes=include_archetypes
+    )
     archetype_depths = build_archetype_depths(relations)
     entity_type = {e["_key"]: e.get("type") for e in entities}
 
@@ -166,4 +171,5 @@ def migrate(apply: bool = False) -> int:
 
 if __name__ == "__main__":
     apply = "--apply" in sys.argv
-    sys.exit(migrate(apply=apply))
+    include_archetypes = "--include-archetypes" in sys.argv
+    sys.exit(migrate(apply=apply, include_archetypes=include_archetypes))
