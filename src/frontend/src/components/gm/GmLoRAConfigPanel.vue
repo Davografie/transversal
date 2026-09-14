@@ -22,9 +22,8 @@
         id="prompt-steering"
         class="steering-input"
         rows="2"
-        :value="promptSteering"
+        v-model="steering"
         placeholder="e.g. shot on a 35mm lens, natural window light, documentary realism"
-        @input="onSteeringInput"
       />
       <p class="steering-hint">Appended to every prompt generated in this universe — use it to steer style, lighting, or realism.</p>
     </div>
@@ -42,9 +41,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:loraConfig', 'update:promptSteering'])
 
-function onSteeringInput(e) {
-  emit('update:promptSteering', e.target.value)
-}
+// Local state, like the LoRA selects below: a panel's props are open-time
+// snapshots, so binding :value straight to the prop lets Vue rewrite the
+// textarea on every parent re-render — wiping whatever was typed.
+const steering = ref(props.promptSteering || '')
+watch(() => props.promptSteering, (v) => { steering.value = v || '' })
+watch(steering, (v) => emit('update:promptSteering', v))
 
 // Universes don't generate images, so they have no LoRA slots.
 const entityTypes = ENTITY_TYPES.filter(t => t !== 'UNIVERSE')
