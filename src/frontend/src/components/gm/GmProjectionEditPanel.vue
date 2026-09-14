@@ -28,7 +28,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import { usePanel } from '@/composables/usePanel.js'
@@ -40,7 +40,11 @@ const props = defineProps({
 })
 
 const panel = usePanel()
-const { updateProjection } = useEntityCrud()
+// The entity panel that opened this one provides its own editor instance, so
+// the updated projection lands in the list that panel actually renders (the
+// shared instance's list is not on screen anywhere). Fall back to the shared
+// instance if opened outside that tree.
+const { updateProjection } = inject('entityEditor', null) || useEntityCrud()
 
 const name = ref(props.projection.name || '')
 const currentLocation = ref(props.projection.currentLocation || '')

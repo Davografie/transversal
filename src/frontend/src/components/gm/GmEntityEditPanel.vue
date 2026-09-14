@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, inject } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, inject, provide } from 'vue'
 import { useApi } from '@/composables/useApi.js'
 import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
@@ -221,7 +221,9 @@ const { graphql } = useApi()
 // This panel's own editor state, keyed to props.entityId. The shared instance
 // would let a second open entity panel overwrite this one's form — and this one
 // would overwrite it back.
-const { form, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = createEntityCrud()
+const editor = createEntityCrud()
+provide('entityEditor', editor)
+const { form, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = editor
 // Genuinely global: the GM panel's entity list, and the delete that clears the
 // shared selection.
 const { deleteEntity, fetchEntities } = useEntityCrud()

@@ -937,9 +937,11 @@ function replaceSelf(spec) {
 }
 
 // ── Panel navigation context for the component in this panel's slot ──
-// Whether this panel is the active tab (consumed by slot content to reload
-// singleton-composable data when the active sibling changes).
-provide('panelActive', computed(() => props.active))
+// Whether this panel is focused: its group considers it active AND it has no
+// open child of its own. The second half is what makes a panel reload after
+// its sub-panel closes — a detached window's root panel has active=true for
+// life, so the plain prop never flipped there and the reload never ran.
+provide('panelActive', computed(() => props.active && activeKey.value === null))
 provide(panelKey, {
   open: openChild,
   closeChild,
