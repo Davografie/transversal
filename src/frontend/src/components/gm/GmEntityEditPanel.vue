@@ -4,7 +4,7 @@
       <div class="panel-top-left">
         <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
         <span v-if="agencyHolder" class="agency-line" :title="agencyTitle">
-          Agency: {{ agencyHolder.playerName }}<template v-if="agencyHolder.role === 'support'"> · support of {{ agencyHolder.mainName }}</template>
+          Agency: {{ agencyHolder.playerName }}<template v-if="!agencyHolder.main"> · support</template>
         </span>
       </div>
       <div class="panel-top-actions">
@@ -201,7 +201,6 @@ import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
-import { useTroupe } from '@/composables/useTroupe.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
@@ -226,7 +225,7 @@ const { graphql } = useApi()
 // would let a second open entity panel overwrite this one's form — and this one
 // would overwrite it back.
 const editor = createEntityCrud()
-const { form, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = editor
+const { form, selected, uploadBgImage, onImagen: doImagen, onCancel: doCancel, imagenJob, projections, currentProjection, addProjection, removeProjection, selectEntity } = editor
 // Genuinely global: the GM panel's entity list, and the delete that clears the
 // shared selection.
 const { deleteEntity, fetchEntities } = useEntityCrud()
@@ -236,46 +235,20 @@ const { name: universeName, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
 
 // ── Who holds agency over this entity ────────────────
-// The `agency` relation is player → entity (with the `main` flag). The entity's
-// own `ownedBy` field is unpopulated in practice, so this joins the troupe
-// queries instead: a main answers from `activeMains`, a support character from
-// `supportCharacters` (its `ownerId`), with names resolved from the recency list
-// and the current bodies.
-const { players, supportCharacters, activeMains, playerBodies, fetchRecency, fetchSupportCharacters, fetchActiveMains, fetchPlayerBodies } = useTroupe()
-
-const playerNames = computed(() => {
-  const map = {}
-  for (const p of players.value) if (p.id) map[p.id] = p.name
-  for (const b of playerBodies.value) if (b.playerId) map[b.playerId] = b.playerName
-  return map
-})
-
+// Straight from the agency edge (Entity.agency), so it answers for a main whose
+// player is offline as well as for a support character — no "who is playing
+// right now" proxy.
 const agencyHolder = computed(() => {
-  const id = props.entityId
-  if (!id) return null
-  const main = activeMains.value.find((m) => m.main?.id === id)
-  if (main) return { playerName: main.playerName || playerNames.value[main.playerId] || main.playerId, role: 'main' }
-  const sc = supportCharacters.value.find((s) => s.entity?.id === id)
-  if (sc) return {
-    playerName: playerNames.value[sc.ownerId] || sc.ownerId,
-    role: 'support',
-    mainName: sc.main?.name || sc.main?.id || '',
-  }
-  return null
+  const a = selected.value?.agency
+  if (!a) return null
+  return { playerName: a.playerName || a.playerId, main: !!a.main }
 })
 
 const agencyTitle = computed(() => {
   if (!agencyHolder.value) return ''
-  return agencyHolder.value.role === 'support'
-    ? `Played by ${agencyHolder.value.playerName} as a support character of ${agencyHolder.value.mainName}`
-    : `Main character of ${agencyHolder.value.playerName}`
-})
-
-onMounted(() => {
-  fetchActiveMains(true)
-  fetchSupportCharacters(true)
-  fetchPlayerBodies(true)
-  fetchRecency(true)
+  return agencyHolder.value.main
+    ? `Main character of ${agencyHolder.value.playerName}`
+    : `Support character of ${agencyHolder.value.playerName}`
 })
 
 const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.value?.type))

@@ -30,6 +30,7 @@ export function createEntityCrud() {
     entity(id: $id) {
       id type name razmerit currentUniverse currentLocation currentProjection
       hidden unpublished supportEligible starterLocation loraConfig
+      agency { playerId playerName main }
       projections {
         id originUniverse universe name backgroundImage currentLocation transversalType
       }

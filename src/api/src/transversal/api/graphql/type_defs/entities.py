@@ -69,6 +69,13 @@ class PendingTerm:
     continuation: list[str]
 
 @strawberry.type
+class AgencyRef:
+    """Who holds agency over an entity — the persistent player→entity relation."""
+    player_id: strawberry.ID
+    player_name: str = ""
+    main: bool = False
+
+@strawberry.type
 class Entity:
     id: strawberry.ID
     type: EntityType
@@ -126,6 +133,26 @@ class Entity:
         em = info.context["entity_manager"]
         url = em.repo.resolve_role_image(str(self.id), "background", None, "Large")
         return url if url is not None else self._background_image
+
+    @strawberry.field
+    def agency(self, info: strawberry.Info) -> Optional[AgencyRef]:
+        """The player holding agency over this entity, if any.
+
+        Read from the ``agency`` relationship edge (player → entity) rather than
+        from transient control state, so it answers for a main whose player is
+        offline and for a support character alike. ``owned_by`` is a separate,
+        mostly-unpopulated field — do not conflate them.
+        """
+        em = info.context["entity_manager"]
+        edge = em.repo.get_agency_for_entity(str(self.id))
+        if not edge:
+            return None
+        player = em.repo.get_player(edge["player_id"])
+        return AgencyRef(
+            player_id=edge["player_id"],
+            player_name=(getattr(player, "name", "") or ""),
+            main=bool(edge.get("main")),
+        )
 
     @strawberry.field
     def sheet_portrait(self, info: strawberry.Info) -> Optional[str]:

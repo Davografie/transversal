@@ -137,6 +137,22 @@ class RepositoryPlayers:
         edge = self._relationships.get(f"edge:{player_id}:{entity_id}:agency")
         return bool(edge is not None and edge.get("main"))
 
+    def get_agency_for_entity(self, entity_id: str) -> dict | None:
+        """The agency edge pointing at an entity: ``{player_id, main}`` or None.
+
+        The inverse of ``get_agency_edges`` — the GM panel asks who holds
+        agency over an entity, which is the persistent relation, not the
+        transient "who is controlling it right now".
+        """
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._to == @eref AND r.type == 'agency'
+            LIMIT 1
+            RETURN {{ player_id: PARSE_IDENTIFIER(r._from).key, main: !!r.main }}
+        """
+        rows = list(self.db.aql.execute(query, bind_vars={"eref": f"{ENTITIES}/{entity_id}"}))
+        return rows[0] if rows else None
+
     def get_designated_main(self, player_id: str) -> str | None:
         """The player's designated main — the first agency edge flagged ``main``.
 
