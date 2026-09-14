@@ -918,7 +918,48 @@ async function addTrait(trait) {
   showAddTrait.value = false
   addPhase.value = 'sets'
   selectedTraitSet.value = null
-  fetchEntity('add-trait')
+  // Land on the trait with its editor open — the whole point of adding one from
+  // the sheet is that you then set it up (dice, rating, statement), so send the
+  // player straight there instead of leaving them on whatever set was showing.
+  const newSettingId = result.addTraitSetting.id
+  try {
+    await fetchEntity('add-trait')
+    openEditorForNewTrait(newSettingId)
+  } catch (e) {
+    // The trait is added either way — only the landing failed, so say that
+    // rather than letting the editor's absence read as a broken add.
+    console.error('[sheet] add: refreshed but could not open the editor', e)
+  }
+}
+
+/**
+ * Open the full-panel editor on a just-added trait, from wherever it landed.
+ *
+ * `editingTrait` resolves its id out of the lists the sheet is rendering, so
+ * this must run *after* the refetch — and it is why the editor cannot be opened
+ * optimistically against a setting the client has not seen yet.
+ *
+ * A trait whose set the universe gate excludes is added but has no row to open;
+ * the console says so rather than the click looking like it did nothing.
+ */
+function openEditorForNewTrait(id) {
+  if (!id) return
+  const source = (showAllTraits.value ? allTraitSettings.value : effectiveSettings.value) || []
+  const setting = source.find(t => t.id === id)
+  if (!setting) {
+    console.warn('[sheet] added trait is not in the visible trait lists:', id)
+    return
+  }
+  if (setting.traitsetTab === 'PROFILE') {
+    activeSheetView.value = 'profile'
+  } else {
+    activeSheetView.value = 'traits'
+    const target = traitSets.value.find(s => s.name === setting.traitsetName)
+    // Same landing as the set nav: the set becomes active, its containers closed.
+    if (target) goToSet(target)
+    else activeSetName.value = setting.traitsetName
+  }
+  startEdit(setting)
 }
 
 // ── Trait detail (read-only) ────────────────────────────────────
