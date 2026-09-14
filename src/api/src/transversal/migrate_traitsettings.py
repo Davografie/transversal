@@ -24,6 +24,11 @@ Decisions folded in:
 - D11: mixed-sign rating defaults to positive polarity.
 - ``rating`` int → ``dice`` (abs); negative → ``polarity: negative``.
 - challenge: negative → ``dice``=doom pool; positive → ``capacity``=target, empty.
+- Whispering Forest memory traits: settings whose location gating references the
+  WF subtree are skipped entirely (direct + inherited). The old app showed them
+  only at specific WF locations; TV2 has no location gating (D10), so
+  materializing them spread high-level techniques to every archetype descendant
+  of ``Entities/3`` ("default character"), unrestricted. See ``is_wf_gated``.
 
 Dry-run by default. Pass ``--apply`` to write.
 
@@ -64,6 +69,38 @@ REL_TYPE_MAP = {
     "archetype": None,
     "agency": None,
 }
+
+# ── Whispering Forest memory traits ───────────────────
+# The old app gated the WF "memory replay" settings by the character's *current
+# location* (flask ``filter_trait_settings_by_location``). TV2 has no location
+# gating (D10), so materializing them onto archetype descendants of
+# ``Entities/3`` ("default character") spread high-level techniques to every
+# character, unrestricted. They are location-bound experiments, not character
+# traits — skip them entirely (direct and inherited).
+WF_ROOT = "Entities/143764919"  # Whispering Forest
+
+
+def build_location_subtree(root_ref: str, relations: list[dict]) -> set[str]:
+    """All ``super`` descendants of ``root_ref`` (inclusive)."""
+    children: dict[str, list[str]] = {}
+    for r in relations:
+        if r.get("type") == "super":
+            children.setdefault(r["_to"], []).append(r["_from"])
+    seen: set[str] = set()
+    stack = [root_ref]
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        stack.extend(children.get(cur, []))
+    return seen
+
+
+def is_wf_gated(s: dict, wf_keys: set[str]) -> bool:
+    """True when the setting's location gating references the WF subtree."""
+    refs = list(s.get("locations_enabled") or []) + list(s.get("locations_disabled") or [])
+    return any(r in wf_keys for r in refs if r)
 
 
 def _rating(rating: list[int] | None, rating_type: str) -> tuple[list[str], list[str] | None, str]:
@@ -112,6 +149,7 @@ def materialize_inheritance(
     traits: list[dict],
     traitsets: list[dict],
     tsettings: list[dict],
+    wf_keys: set[str],
 ) -> tuple[list[dict], Counter]:
     """Materialize the old app's read-time trait inheritance.
 
@@ -130,6 +168,9 @@ def materialize_inheritance(
       shadows X (removed before dedup).
     - dedup key per traitset: ``name`` when ``traitset.duplicates == false``,
       else ``name + statement``; highest priority survives.
+    - Whispering Forest memory traits (``is_wf_gated``) are never inherited:
+      they are location-gated experiments the old app filtered by the
+      character's current location, which TV2 cannot represent.
 
     Returns synthetic entity-trait settings (``_from`` rewritten to the
     inheriting entity, locations reset — D10) for each surviving inherited
@@ -178,11 +219,18 @@ def materialize_inheritance(
             candidates.append((10000, s, True))
         for a_ref, d in arch_ancestors:
             for s in settings_by_entity.get(a_ref, []):
+                if is_wf_gated(s, wf_keys):
+                    stats["wf_gated_skipped"] += 1
+                    continue
                 candidates.append((max_depth - d, s, False))
         for a_ref in super_ancestors:
             for s in settings_by_entity.get(a_ref, []):
-                if s.get("inheritable") is True:
-                    candidates.append((5000, s, False))
+                if s.get("inheritable") is not True:
+                    continue
+                if is_wf_gated(s, wf_keys):
+                    stats["wf_gated_skipped"] += 1
+                    continue
+                candidates.append((5000, s, False))
 
         # inherited_as shadows (remove the shadowed setting _id).
         shadowed = {s.get("inherited_as") for _, s, _ in candidates if s.get("inherited_as")}
@@ -234,6 +282,7 @@ def migrate(apply: bool = False) -> int:
     entity_key_map = build_entity_key_map(entities, relations)
     universe_map = build_universe_map(entities, relations)
     universe_keys = set(universe_map.keys())
+    wf_keys = build_location_subtree(WF_ROOT, relations)
 
     entity_type = {e["_key"]: e.get("type") for e in entities}
     relation_by_key = {r["_key"]: r for r in relations}
@@ -355,13 +404,16 @@ def migrate(apply: bool = False) -> int:
 
     # ── Pass 1a: entity-traits (direct + materialized inheritance) ──
     synthetic, mat_stats = materialize_inheritance(
-        entities, relations, old_traits, old_tsets, tsettings
+        entities, relations, old_traits, old_tsets, tsettings, wf_keys
     )
     report.update(mat_stats)
     entity_settings = [s for s in tsettings if s["_from"].startswith("Entities/")]
     entity_settings.extend(synthetic)
 
     for s in entity_settings:
+        if is_wf_gated(s, wf_keys):
+            report["skip_wf_gated"] += 1
+            continue
         ent_old = s["_from"].split("/")[1]
         trait_old = s["_to"].split("/")[1]
 
