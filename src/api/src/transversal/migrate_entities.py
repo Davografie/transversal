@@ -11,12 +11,15 @@ Conventions (see [[Data Migration Plan]]):
   ``universe`` entities; all other locations → ``location``.
 - ID: ``{type}-{old_numeric_key}`` for non-universes (matches the existing
   ``loc-{numeric}`` convention); ``universe-{slug}`` for universes.
-- archetype templates (``is_archetype``) are dropped (D1).
+- archetype templates (``is_archetype``) are dropped (D1) — unless
+  ``--include-archetypes`` (Phase 2b), which migrates the spawnable ones as
+  GMCs (``gmc-{numeric}``) and leaves the character-creation base templates out.
 
 Dry-run by default. Pass ``--apply`` to write.
 
 Usage:
     docker compose exec api python -m transversal.migrate_entities [--apply]
+    docker compose exec api python -m transversal.migrate_entities --apply --include-archetypes
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from transversal.migrate_common import (
     TYPE_PREFIX,
     build_parent_map,
     build_universe_map,
+    is_migratable_archetype,
     load_json,
     resolve_direct_location,
     resolve_universe_key,
@@ -42,7 +46,7 @@ DESCRIPTION_TRAIT = "trait-description"
 DESCRIPTION_TRAITSET = "ts-secrets-1b55"
 
 
-def migrate(apply: bool = False) -> int:
+def migrate(apply: bool = False, include_archetypes: bool = False) -> int:
     entities = load_json("entities.json")
     relations = load_json("relations.json")
 
@@ -64,6 +68,7 @@ def migrate(apply: bool = False) -> int:
         "skipped_system": 0,
         "skipped_existing": 0,
         "created_entity": 0,
+        "created_archetype": 0,
         "created_universe": 0,
         "type_map": {},
         "dropped_fields": ["active", "favorite",
@@ -88,13 +93,18 @@ def migrate(apply: bool = False) -> int:
         # is_archetype (e.g. "The Floating Vagabond") still migrates as a universe.
         is_universe = old_type == "location" and key in universe_keys
 
-        # D1 — drop archetype templates (but never a universe)
+        # D1 — drop archetype templates (but never a universe). Phase 2b
+        # (``--include-archetypes``) resurrects the spawnable ones as GMCs.
+        is_arch_gmc = False
         if is_arch and not is_universe:
-            report["dropped_archetype"] += 1
-            continue
+            if include_archetypes and is_migratable_archetype(e):
+                is_arch_gmc = True
+            else:
+                report["dropped_archetype"] += 1
+                continue
 
         # Type remap
-        if old_type == "npc" or old_type == "gm":
+        if old_type == "npc" or old_type == "gm" or is_arch_gmc:
             new_type = EntityType.GMC
         elif is_universe:
             new_type = EntityType.UNIVERSE
@@ -127,6 +137,8 @@ def migrate(apply: bool = False) -> int:
         # ID
         if new_type == EntityType.UNIVERSE:
             new_id = f"universe-{universe_map[key]}"
+        elif is_arch_gmc:
+            new_id = f"gmc-{key}"
         else:
             prefix = TYPE_PREFIX[old_type]
             new_id = f"{prefix}-{key}"
@@ -146,6 +158,8 @@ def migrate(apply: bool = False) -> int:
             )
             if new_type == EntityType.UNIVERSE:
                 report["created_universe"] += 1
+            elif is_arch_gmc:
+                report["created_archetype"] += 1
             else:
                 report["created_entity"] += 1
             if apply:
@@ -193,4 +207,5 @@ def migrate(apply: bool = False) -> int:
 
 if __name__ == "__main__":
     apply = "--apply" in sys.argv
-    sys.exit(migrate(apply=apply))
+    include_archetypes = "--include-archetypes" in sys.argv
+    sys.exit(migrate(apply=apply, include_archetypes=include_archetypes))

@@ -15,10 +15,17 @@ Per [[Media Migration Proposal]] and media's response:
 - Format: re-encode to WebP via ``_save_image_variants`` (Original/Large/Small/
   Mini), one EntityImage with ``extension="webp"``, ``image_type=uploaded``.
 
+Flags:
+- ``--include-archetypes`` — also migrate image folders for the Phase 2b
+  archetype GMCs (``gmc-{numeric}`` keys).
+- ``--skip-existing`` — skip entities that already have an image (makes a
+  re-run idempotent instead of duplicating every image).
+
 Dry-run by default. Pass ``--apply`` to write files + records.
 
 Usage:
     docker compose exec api python -m transversal.migrate_media [--apply]
+    docker compose exec api python -m transversal.migrate_media --apply --include-archetypes --skip-existing
 """
 
 from __future__ import annotations
@@ -29,7 +36,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from transversal.db.arango import get_db
+from transversal.db.arango import ENTITY_IMAGES, get_db
 from transversal.db.repository import EntityRepository
 from transversal.domain import EntityImage, ImageType
 from transversal.imagen.orchestrator import _safe_filename, _save_image_variants
@@ -59,10 +66,13 @@ def _pick(variants: dict[str, Path], order: list[str]) -> Path | None:
     return None
 
 
-def migrate(apply: bool = False) -> int:
+def migrate(apply: bool = False, include_archetypes: bool = False,
+            skip_existing: bool = False) -> int:
     entities = load_json("entities.json")
     relations = load_json("relations.json")
-    key_map = build_entity_key_map(entities, relations)  # "Entities/{k}" → new id
+    key_map = build_entity_key_map(
+        entities, relations, include_archetypes=include_archetypes
+    )  # "Entities/{k}" → new id
     parent_map = build_parent_map(relations)
     universe_map = build_universe_map(entities, relations)
     universe_keys = set(universe_map.keys())
@@ -70,6 +80,10 @@ def migrate(apply: bool = False) -> int:
     db = get_db()
     repo = EntityRepository()
     new_entities = {e["_key"]: e for e in db.collection("entities").all()}
+    entities_with_images: set[str] = (
+        {img["entity_id"] for img in db.collection(ENTITY_IMAGES).all()}
+        if skip_existing else set()
+    )
 
     def universe_of_loc(loc_key: str) -> str | None:
         if loc_key in universe_keys:
@@ -93,6 +107,9 @@ def migrate(apply: bool = False) -> int:
             if e is None:
                 report["skip_not_found"] += 1
                 continue
+            if new_id in entities_with_images:
+                report["skip_has_images"] += 1
+                continue
             role = "sheet" if e.get("type") in SHEET_TYPES else "background"
             report[f"flat_{role}"] += 1
             if apply:
@@ -107,6 +124,9 @@ def migrate(apply: bool = False) -> int:
         e = new_entities.get(new_id)
         if e is None:
             report["skip_not_found"] += 1
+            continue
+        if new_id in entities_with_images:
+            report["skip_has_images"] += 1
             continue
 
         # Direct variant files → entity-level images (entity's current_universe).
@@ -185,4 +205,7 @@ def _write_image(repo: EntityRepository, entity: dict, source: Path, roles: list
 
 if __name__ == "__main__":
     apply = "--apply" in sys.argv
-    sys.exit(migrate(apply=apply))
+    include_archetypes = "--include-archetypes" in sys.argv
+    skip_existing = "--skip-existing" in sys.argv
+    sys.exit(migrate(apply=apply, include_archetypes=include_archetypes,
+                     skip_existing=skip_existing))

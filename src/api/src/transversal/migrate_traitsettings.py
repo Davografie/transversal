@@ -38,6 +38,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from collections import Counter, defaultdict
 
@@ -271,7 +272,7 @@ def materialize_inheritance(
     return synthetic, stats
 
 
-def migrate(apply: bool = False) -> int:
+def migrate(apply: bool = False, include_archetypes: bool = False) -> int:
     entities = load_json("entities.json")
     relations = load_json("relations.json")
     old_traits = load_json("traits.json")
@@ -279,7 +280,7 @@ def migrate(apply: bool = False) -> int:
     tsettings = load_json("traitsettings.json")
 
     tset_map, trait_map, trait_tset_map = build_registry_key_maps(old_tsets, old_traits)
-    entity_key_map = build_entity_key_map(entities, relations)
+    entity_key_map = build_entity_key_map(entities, relations, include_archetypes=include_archetypes)
     universe_map = build_universe_map(entities, relations)
     universe_keys = set(universe_map.keys())
     wf_keys = build_location_subtree(WF_ROOT, relations)
@@ -290,6 +291,17 @@ def migrate(apply: bool = False) -> int:
     for t in old_traits:
         ref = t.get("traitset") or ""
         trait_old_tset[t["_key"]] = ref.split("/")[1] if "/" in ref else ""
+
+    # Traits whose traitset allows duplicates (old ``duplicates`` flag) get
+    # statement-discriminated keys — mirrors ``repository.resolve_traitsetting_id``
+    # so two instances of the same trait (two natural weapons, two distinctions)
+    # don't collide on one key and silently lose all but the first.
+    tset_allows_dup = {ts["_key"]: bool(ts.get("duplicates")) for ts in old_tsets}
+    dup_trait_ids: set[str] = {
+        trait_map[f"Traits/{t['_key']}"]
+        for t in old_traits
+        if tset_allows_dup.get((t.get("traitset") or "").split("/")[-1])
+    }
 
     # Default settings (_to "Traits/1"), keyed by their source key.
     trait_defaults: dict[str, dict] = {}
@@ -307,6 +319,15 @@ def migrate(apply: bool = False) -> int:
     ts_col = db.collection(TRAITSETTINGS)
     proj_col = db.collection(PROJECTIONS)
     existing_proj: set[str] = set(p["_key"] for p in proj_col.all())
+    # Idempotency by logical identity (anchor + trait + statement), not by key:
+    # an existing plain-keyed setting still counts as present when the key
+    # scheme gains statement discrimination.
+    existing_sigs: set[tuple[str, str, str, str]] = {
+        (r.get("from_type") or "entity", r.get("_from") or "",
+         r.get("_to") or "", r.get("statement") or "")
+        for r in ts_col.all()
+    }
+    existing_keys: set[str] = {r["_key"] for r in ts_col.all()}
 
     report: Counter = Counter()
 
@@ -366,6 +387,8 @@ def migrate(apply: bool = False) -> int:
                capacity: list[str] | None, polarity: str, statement: str,
                notes: str, projection_id: str | None = None,
                parent_key: str | None = None) -> None:
+        if trait_id in dup_trait_ids and statement:
+            key = f"{key}:{hashlib.sha1(statement.encode('utf-8')).hexdigest()[:8]}"
         doc: dict = {
             "_key": key,
             "_from": from_handle,
@@ -392,9 +415,18 @@ def migrate(apply: bool = False) -> int:
             doc["projection_id"] = projection_id
         if parent_key is not None:
             doc["parent_traitsetting_id"] = parent_key
-        if apply and ts_col.get(key) is not None:
+        sig = (from_type, from_handle, f"traits/{trait_id}", statement)
+        if sig in existing_sigs:
             report["skipped_existing"] += 1
             return
+        if key in existing_keys:
+            # Plain-key collision: e.g. two empty-statement instances in a
+            # duplicates-allowed set. The old app deduped those by name+
+            # statement, so dropping the extra is faithful.
+            report["skipped_key_collision"] += 1
+            return
+        existing_sigs.add(sig)
+        existing_keys.add(key)
         if apply:
             ts_col.insert(doc)
         report["created"] += 1
@@ -556,4 +588,5 @@ def migrate(apply: bool = False) -> int:
 
 if __name__ == "__main__":
     apply = "--apply" in sys.argv
-    sys.exit(migrate(apply=apply))
+    include_archetypes = "--include-archetypes" in sys.argv
+    sys.exit(migrate(apply=apply, include_archetypes=include_archetypes))

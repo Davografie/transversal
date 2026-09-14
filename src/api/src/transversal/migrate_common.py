@@ -121,14 +121,41 @@ def resolve_direct_location(
     return None
 
 
+# ── Archetype templates (optional Phase 2b) ───────────
+# D1 dropped archetype templates. Phase 2b (2026-09-14) resurrects the
+# *spawnable* ones as real GMCs ([[Data Migration Runbook]]): npc/gm/character
+# templates, minus the character-creation base templates below, which stay
+# dropped. Faction/asset/location archetypes are not migrated.
+ARCHETYPE_SKIP_KEYS = {
+    "3",          # default character — base template for all characters
+    "201550846",  # character from earth — Earth base template
+    "203138253",  # human — species base template
+    "227337941",  # human (Three Realms) — species base template
+    "206403975",  # support character — base template for support cast
+}
+
+
+def is_migratable_archetype(e: dict) -> bool:
+    """True for archetype templates that Phase 2b migrates as GMCs."""
+    if e.get("is_archetype") is not True:
+        return False
+    if e.get("type") not in ("npc", "gm", "character"):
+        return False
+    return e["_key"] not in ARCHETYPE_SKIP_KEYS
+
+
 def build_entity_key_map(
-    entities: list[dict], relations: list[dict]
+    entities: list[dict], relations: list[dict], include_archetypes: bool = False
 ) -> dict[str, str]:
     """Return the full old→new entity key map (``Entities/{numeric}`` → new id).
 
     Applies the same rules as the entity migration: archetypes and system
     entities are excluded (they have no new id); universes key as
     ``universe-{slug}``; everything else as ``{prefix}-{numeric}``.
+
+    With ``include_archetypes=True``, migratable archetype templates
+    (``is_migratable_archetype``) key as ``gmc-{numeric}`` — Phase 2b creates
+    them as GMCs.
     """
     parent_map = build_parent_map(relations)
     universe_map = build_universe_map(entities, relations)
@@ -149,6 +176,9 @@ def build_entity_key_map(
         # Archetype templates are dropped (D1), but a universe flagged
         # is_archetype (The Floating Vagabond) still migrates as a universe.
         if is_arch and not is_universe:
+            if not (include_archetypes and is_migratable_archetype(e)):
+                continue
+            old_to_new[f"Entities/{key}"] = f"gmc-{key}"
             continue
 
         if old_type == "npc" or old_type == "gm":
