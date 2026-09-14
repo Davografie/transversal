@@ -3,6 +3,9 @@
     <div class="panel-top">
       <div class="panel-top-left">
         <span class="entity-type-badge" :class="'type-' + (form.type || '')">{{ form.type }}</span>
+        <span v-if="agencyHolder" class="agency-line" :title="agencyTitle">
+          Agency: {{ agencyHolder.playerName }}<template v-if="agencyHolder.role === 'support'"> · support of {{ agencyHolder.mainName }}</template>
+        </span>
       </div>
       <div class="panel-top-actions">
         <Button
@@ -198,6 +201,7 @@ import { useEntityCrud, createEntityCrud } from '@/composables/useEntityCrud.js'
 import { useTraitsConfig } from '@/composables/useTraitsConfig.js'
 import { useLifePaths } from '@/composables/useLifePaths.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
+import { useTroupe } from '@/composables/useTroupe.js'
 import { usePanel } from '@/composables/usePanel.js'
 import { usePanelBus } from '@/composables/usePanelBus.js'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
@@ -230,6 +234,49 @@ const { traitNameMap } = useTraitsConfig()
 const { fetchLifePaths } = useLifePaths()
 const { name: universeName, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
+
+// ── Who holds agency over this entity ────────────────
+// The `agency` relation is player → entity (with the `main` flag). The entity's
+// own `ownedBy` field is unpopulated in practice, so this joins the troupe
+// queries instead: a main answers from `activeMains`, a support character from
+// `supportCharacters` (its `ownerId`), with names resolved from the recency list
+// and the current bodies.
+const { players, supportCharacters, activeMains, playerBodies, fetchRecency, fetchSupportCharacters, fetchActiveMains, fetchPlayerBodies } = useTroupe()
+
+const playerNames = computed(() => {
+  const map = {}
+  for (const p of players.value) if (p.id) map[p.id] = p.name
+  for (const b of playerBodies.value) if (b.playerId) map[b.playerId] = b.playerName
+  return map
+})
+
+const agencyHolder = computed(() => {
+  const id = props.entityId
+  if (!id) return null
+  const main = activeMains.value.find((m) => m.main?.id === id)
+  if (main) return { playerName: main.playerName || playerNames.value[main.playerId] || main.playerId, role: 'main' }
+  const sc = supportCharacters.value.find((s) => s.entity?.id === id)
+  if (sc) return {
+    playerName: playerNames.value[sc.ownerId] || sc.ownerId,
+    role: 'support',
+    mainName: sc.main?.name || sc.main?.id || '',
+  }
+  return null
+})
+
+const agencyTitle = computed(() => {
+  if (!agencyHolder.value) return ''
+  return agencyHolder.value.role === 'support'
+    ? `Played by ${agencyHolder.value.playerName} as a support character of ${agencyHolder.value.mainName}`
+    : `Main character of ${agencyHolder.value.playerName}`
+})
+
+onMounted(() => {
+  fetchActiveMains(true)
+  fetchSupportCharacters(true)
+  fetchPlayerBodies(true)
+  fetchRecency(true)
+})
 
 const isOccupant = computed(() => ['CHARACTER', 'GMC', 'ASSET'].includes(form.value?.type))
 
@@ -698,6 +745,11 @@ defineExpose({ refresh: loadImages })
 .canvas-open-row { margin-top: 12px; display: flex; gap: 6px; }
 .section-btn { flex: 1; }
 .section-count { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
+
+.agency-line {
+  font-size: 11px; color: var(--text-dim); margin-left: 8px;
+}
+.agency-line::before { content: '·'; margin-right: 6px; }
 
 .projections-section { margin-top: 12px; }
 .projection-list { display: flex; flex-direction: column; gap: 8px; }
