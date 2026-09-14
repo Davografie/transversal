@@ -203,5 +203,21 @@ ok('a list with no containers is untouched',
    sortSetTraits([tPlain1, tPlain2]).map(t => t.id), ['p1', 'p2'])
 ok('an absent list is fine', sortSetTraits(undefined), [])
 
+// ── and ego before morph, with containers still under both ──────────────
+const tEgo = { id: 'e1', ego: true, tags: [] }
+const tMorph = { id: 'm1', ego: false, tags: [] }
+ok('ego before morph',
+   sortSetTraits([tMorph, tEgo]).map(t => t.id), ['e1', 'm1'])
+ok('containers stay under both',
+   sortSetTraits([tBox1, tMorph, tEgo]).map(t => t.id), ['e1', 'm1', 'c1'])
+ok('an ego container outranks a morph one',
+   sortSetTraits([{ id: 'cm', tags: ['container'], ego: false },
+                  { id: 'ce', tags: ['container'], ego: true },
+                  tEgo]).map(t => t.id), ['e1', 'ce', 'cm'])
+ok('a missing ego flag reads as ego',
+   sortSetTraits([{ id: 'x' }, tMorph]).map(t => t.id), ['x', 'm1'])
+ok('ego/morph does not disturb the order inside a group',
+   sortSetTraits([{ id: 'e2', ego: true }, { id: 'e1', ego: true }]).map(t => t.id), ['e2', 'e1'])
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

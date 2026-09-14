@@ -182,17 +182,24 @@ export function showsChildren(trait, { rootKnown = true, expanded = false } = {}
 }
 
 /**
- * A set's traits, containers last.
+ * A set's traits: ego first, morph after, containers last.
  *
- * A container holds rather than acts — it carries no die to play — so it is the
- * set's furniture, and interleaving it pushes the playable traits apart. Stable:
- * each group keeps the order the query returned, so nothing else moves.
+ * Ego traits are what the character *is* — they travel between bodies; a morph
+ * trait belongs to one body and changes when the projection does. Reading
+ * self → body → furniture separates the two instead of interleaving them, which
+ * matters because most sets mix them heavily (``distinctions`` carries 878 morph
+ * settings against 66 ego ones). A container holds rather than acts — no die to
+ * play — so it sits under both, ego containers still above morph ones.
+ *
+ * Stable: each group keeps the order the query returned, so nothing else moves.
  */
 export function sortSetTraits(traits) {
-  const plain = []
-  const containers = []
-  for (const t of traits || []) (isContainer(t) ? containers : plain).push(t)
-  return [...plain, ...containers]
+  // 0 ego · 1 morph · +2 when it is a container
+  const rank = (t) => (isContainer(t) ? 2 : 0) + (t?.ego === false ? 1 : 0)
+  return (traits || [])
+    .map((t, i) => ({ rank: rank(t), i, t }))
+    .sort((a, b) => (a.rank - b.rank) || (a.i - b.i))
+    .map(entry => entry.t)
 }
 
 /**
