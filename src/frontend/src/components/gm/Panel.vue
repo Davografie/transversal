@@ -56,6 +56,7 @@
         :key="c.key"
         v-show="c.key === activeKey"
         nested
+        :spec="c.spec"
         :depth="depth + 1"
         :min-visible-depth="minVisibleDepth"
         :title="c.spec.title"
