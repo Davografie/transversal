@@ -144,6 +144,46 @@ def _find_relationship_key(db, from_id: str, to_id: str, rel_type: str) -> str |
     return cur[0] if cur else None
 
 
+def build_default_gating(
+    tsettings: list[dict],
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Trait-default / traitset-default ``locations_disabled`` (D4 fallback chain)."""
+    tdef_dis: dict[str, list[str]] = {}
+    sdef_dis: dict[str, list[str]] = {}
+    for s in tsettings:
+        if s.get("_to") != "Traits/1":
+            continue
+        src = s.get("_from") or ""
+        if src.startswith("Traits/"):
+            tdef_dis[src.split("/")[1]] = s.get("locations_disabled") or []
+        elif src.startswith("Traitsets/"):
+            sdef_dis[src.split("/")[1]] = s.get("locations_disabled") or []
+    return tdef_dis, sdef_dis
+
+
+def carries_morph_gating(
+    s: dict,
+    tdef_dis: dict[str, list[str]],
+    sdef_dis: dict[str, list[str]],
+    trait_tset_of: dict[str, str],
+) -> bool:
+    """Whether the source's *own* gating is the only morph signal.
+
+    D10 strips ancestor scoping from the materialized copy, so a setting
+    whose own ``locations_disabled`` names the Multiverse (e.g. an
+    Earth-scoped ``tool``/"Smartphone" on the ``default character`` archetype)
+    would otherwise fall back to the trait/traitset defaults and materialize
+    as an unrestricted ego trait. Carry the gating in exactly that case:
+    settings whose morph signal also lives in the defaults keep their existing
+    projection anchors untouched.
+    """
+    if "Entities/2" not in (s.get("locations_disabled") or []):
+        return False
+    tk = s["_to"].split("/")[1]
+    fallback = tdef_dis.get(tk) or sdef_dis.get(trait_tset_of.get(tk, "")) or []
+    return "Entities/2" not in fallback
+
+
 def materialize_inheritance(
     entities: list[dict],
     relations: list[dict],
@@ -182,6 +222,10 @@ def materialize_inheritance(
     for t in traits:
         ref = t.get("traitset") or ""
         trait_meta[t["_key"]] = (t.get("name") or "", ref.split("/")[1] if "/" in ref else "")
+
+    # Default gating for the D4 fallback chain (trait default → traitset default).
+    tdef_dis, sdef_dis = build_default_gating(tsettings)
+    trait_tset_of = {k: v[1] for k, v in trait_meta.items()}
 
     settings_by_entity: dict[str, list[dict]] = defaultdict(list)
     for s in tsettings:
@@ -255,6 +299,7 @@ def materialize_inheritance(
                 continue  # direct trait — already migrated normally
             materialized += 1
             stats["materialized"] += 1
+            carried = carries_morph_gating(s, tdef_dis, sdef_dis, trait_tset_of)
             synthetic.append({
                 "_from": entity_ref,
                 "_to": s["_to"],
@@ -263,8 +308,12 @@ def materialize_inheritance(
                 "rating": s.get("rating"),
                 "statement": s.get("statement") or "",
                 "notes": s.get("notes") or "",
-                "locations_enabled": [],   # D10: ancestor scoping doesn't carry over
-                "locations_disabled": [],  # D10
+                # Carry the source's gating only when it is the sole morph
+                # signal (see ``carries_morph_gating``) so Pass 1a's ego/morph
+                # decision lands on the right projection. The stored doc still
+                # drops locations (D10) — ``insert`` writes empty lists.
+                "locations_enabled": list(s.get("locations_enabled") or []) if carried else [],
+                "locations_disabled": list(s.get("locations_disabled") or []) if carried else [],
                 "_materialized": True,
             })
         stats["dedup_dropped"] += inherited_kept - materialized
