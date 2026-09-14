@@ -182,6 +182,20 @@ export function showsChildren(trait, { rootKnown = true, expanded = false } = {}
 }
 
 /**
+ * A set's traits, containers last.
+ *
+ * A container holds rather than acts — it carries no die to play — so it is the
+ * set's furniture, and interleaving it pushes the playable traits apart. Stable:
+ * each group keeps the order the query returned, so nothing else moves.
+ */
+export function sortSetTraits(traits) {
+  const plain = []
+  const containers = []
+  for (const t of traits || []) (isContainer(t) ? containers : plain).push(t)
+  return [...plain, ...containers]
+}
+
+/**
  * What a set's `limit` counts, now that traits nest.
  *
  * `limit` counts *pool picks*, not ownership. Sub-traits are part of their

@@ -26,6 +26,7 @@ import {
   findSetting,
   rootAnchor,
   showsChildren,
+  sortSetTraits,
   subtreeContains,
   traitTags,
 } from '../src/utils/traitTree.js'
@@ -184,6 +185,23 @@ ok('no capacity set, no ghosts',
    challengeRemaining(track(['d6'], null)), [])
 ok('a non-challenge trait has no track',
    challengeRemaining({ ratingType: 'STATIC', dice: ['d6'], capacity: ['d8'] }), [])
+
+// ── a set's list puts its containers last ───────────────────────────────
+// Containers hold rather than act, so they sit under the playable traits. The
+// sort is stable: each group keeps the order the query returned.
+const tPlain1 = { id: 'p1', tags: [] }
+const tPlain2 = { id: 'p2', tags: [] }
+const tBox1 = { id: 'c1', tags: ['container'] }
+const tBox2 = { id: 'c2', tags: ['container'] }
+ok('containers move to the bottom',
+   sortSetTraits([tBox1, tPlain1, tBox2, tPlain2]).map(t => t.id), ['p1', 'p2', 'c1', 'c2'])
+ok('each group keeps its order',
+   sortSetTraits([tPlain2, tPlain1]).map(t => t.id), ['p2', 'p1'])
+ok('a registry-tagged container counts as one',
+   sortSetTraits([{ id: 'reg', registryTags: ['container'] }, tPlain1]).map(t => t.id), ['p1', 'reg'])
+ok('a list with no containers is untouched',
+   sortSetTraits([tPlain1, tPlain2]).map(t => t.id), ['p1', 'p2'])
+ok('an absent list is fine', sortSetTraits(undefined), [])
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

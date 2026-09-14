@@ -330,7 +330,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, subtreeContains } from '../utils/traitTree.js'
+import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, sortSetTraits, subtreeContains } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
 
 const props = defineProps({
@@ -461,7 +461,7 @@ function groupTraitSettings(settings) {
       limit: traits[0]?.traitsetLimit ?? 1,
     }))
     .sort((a, b) => a.order - b.order)
-    .map(({ name, traits, traitsetId, order, limit }) => ({ name, traits, traitsetId, limit }))
+    .map(({ name, traits, traitsetId, order, limit }) => ({ name, traits: sortSetTraits(traits), traitsetId, limit }))
 }
 
 function recomputeTraitSets(reason = 'unspecified') {
