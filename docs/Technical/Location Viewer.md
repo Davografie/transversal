@@ -201,12 +201,14 @@ gotchas).
 | `self` | `character` | pulsing blue | The player's own character |
 
 Zones and nav dots show the destination's background as their expanded image
-(the `navdot_image` role) — the "hole": an overscan-sized inner `<img>` moved by
-an explicit px transform that cancels the scene layer's pan (screen-fixed
-content), aligns the destination's arrival point, and adds the inverse-parallax
-shift. The dot's own `border-radius` + `overflow: hidden` clips it; the img must
-not clip itself (`border-radius: 0`). `destNavCache` supplies
-`arrivalX`/`arrivalY`/`destAspect` so that preview shows the exact arrival point.
+(the `navdot_image` role) — the "hole": an inner `<img>` sized as the
+**destination's own scene layer** (cover + `PAN_OVERSCAN` + the teaser zoom) and
+moved by an explicit px transform that cancels the scene layer's pan
+(screen-fixed content), aligns the destination's arrival point, and adds the
+inverse-parallax shift. The dot's own `border-radius` + `overflow: hidden` clips
+it; the img must not clip itself (`border-radius: 0`). `destNavCache` supplies
+`arrivalX`/`arrivalY`/`destAspect` so that preview shows the exact arrival point
+**and scale** — see the destination-preview gotcha below.
 
 `self` is the camera anchor: the scene pans so this dot keeps its image position,
 and it is always draggable. With no perspective entity (`entityId == null` — the
@@ -409,7 +411,10 @@ The travel effect is a choreographed sequence:
 
 1. **Portal expand** (`.travel-overlay`, `portal-expand`) — a `clip-path: circle()`
    expands from dot-size at the departure point to full-screen over 1.2s,
-   revealing the destination background.
+   revealing the destination background. The overlay renders the destination as
+   the scene layer it is about to become (`travelScene` → `destSceneLayer`), not
+   as a CSS `cover`: a plain `cover` is a `PAN_OVERSCAN` short, so the background
+   visibly grows the moment the wipe swaps out.
 2. **Background swap** — at ~1.3s the real background is switched in with the
    portal removed, transitions force-disabled for one frame to avoid cross-frame
    flicker, then re-enabled.
@@ -450,6 +455,16 @@ border), and the overlay/particle system below — run continuously.
   `toViewportPos`/`toImagePos`, `navDotPerspective`, `holeStyleFor`,
   `travelProximity`, the drag frame) reads from the single `sceneCamera`
   computed — never re-derive the pan independently or the math will drift.
+- **Destination previews are sized as the destination's scene layer.** The hole
+  preview and the travel wipe must both go through `destSceneSize` /
+  `destSceneLayer`, which apply the same cover + `PAN_OVERSCAN` + teaser zoom as
+  `sceneCamera` but for the destination's aspect and arrival point. A CSS
+  `background-size: cover` looks equivalent and is not: it comes out exactly
+  `1 / PAN_OVERSCAN` (≈90.9%) short, so the destination jumps ~10% larger the
+  instant the preview hands over to the real scene layer (and much more in the
+  teaser band, where the zoom is unaccounted for). `destSceneLayer` is
+  algebraically identical to `sceneCamera` at the arrival point, so the wipe and
+  the background it exposes are the same box.
 - **The scene layer is `pointer-events: none`.** Background taps must fall
   through to the viewer (`onBgClick`); dots opt back in with
   `pointer-events: auto`.

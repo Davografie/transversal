@@ -164,6 +164,7 @@
       :image="travelAnim.image"
       :bg-x="travelAnim.bgX"
       :bg-y="travelAnim.bgY"
+      :scene="travelScene"
     />
 
   </div>
@@ -385,10 +386,51 @@ const sceneCamera = computed(() => {
   // Pan shift in px (positive = scene shifted left/up) so the self character
   // sits at the anchor point.
   return {
-    cw, ch, zoom, w, h,
+    cw, ch, zoom, p, w, h,
     panX: (mx / 100) * w - (anchor.x / 100) * cw,
     panY: (my / 100) * h - (anchor.y / 100) * ch,
   }
+})
+
+// ── Destination scene geometry ────────────────────────────────────────────
+// The same math for the location on the other side of a travel. A travel never
+// changes the container, so only the aspect and the anchored point differ — but
+// a destination preview MUST be sized from here (cover + PAN_OVERSCAN + the
+// teaser zoom) rather than a CSS `cover`, or it comes out a PAN_OVERSCAN short
+// and visibly grows the instant it becomes the new scene layer.
+// `panX`/`panY` are the offsets that put `arriveX`/`arriveY` exactly where the
+// arrival camera will anchor it (its `self`), so the preview and the scene layer
+// it hands over to are the same box.
+function destSceneSize(destAspect) {
+  const c = sceneCamera.value
+  return coverOverscan(c.cw * c.zoom, c.ch * c.zoom, destAspect)
+}
+
+function destSceneLayer(destAspect, arriveX, arriveY, panX = 0, panY = 0) {
+  const c = sceneCamera.value
+  const { w, h } = destSceneSize(destAspect)
+  // Clamp the alignment point to [0, 100]: beyond the image there is nothing to
+  // show, so the shift is limited by the remaining image space in each direction
+  // (asymmetric when the arrival point sits near an edge).
+  const ax = Math.min(100, Math.max(0, arriveX + panX))
+  const ay = Math.min(100, Math.max(0, arriveY + panY))
+  const anchorX = ax + (50 - ax) * c.p
+  const anchorY = ay + (50 - ay) * c.p
+  return {
+    w, h,
+    panX: (ax / 100) * w - (anchorX / 100) * c.cw,
+    panY: (ay / 100) * h - (anchorY / 100) * c.ch,
+  }
+}
+
+// The wipe that plays while travelling, rendered as the scene layer it is about
+// to become: same box, same anchoring, so the handover cannot jump. Null while
+// the destination's aspect is unknown — the overlay then falls back to a CSS
+// `cover` background.
+const travelScene = computed(() => {
+  const t = travelAnim.value
+  if (!t.destAspect) return null
+  return destSceneLayer(t.destAspect, t.bgX, t.bgY)
 })
 
 // Convert image-relative position to viewport position based on the camera
@@ -409,7 +451,7 @@ const navDotPerspective = computed(() => {
   for (const nd of navDots.value) {
     const destAspect = destNavCache.value[nd.target.id]?.destAspect
     if (!destAspect) continue
-    const dest = coverOverscan(c.cw, c.ch, destAspect)
+    const dest = destSceneSize(destAspect)
     const overX = dest.w - c.cw
     const overY = dest.h - c.ch
     out[nd.key] = {
@@ -427,19 +469,15 @@ const navDotPerspective = computed(() => {
 function holeStyleFor(imgX, imgY, arriveX, arriveY, destAspect, panX, panY) {
   if (arriveX == null || arriveY == null || !destAspect) return null
   const c = sceneCamera.value
-  const { w, h } = coverOverscan(c.cw, c.ch, destAspect)
-  const overX = w - c.cw
-  const overY = h - c.ch
-  // Clamp the alignment point to [0, 100]: beyond the image there is nothing
-  // to show, so the parallax shift is limited by the remaining image space in
-  // each direction (asymmetric when the arrival point sits near an edge).
-  const alignX = Math.min(100, Math.max(0, arriveX + (panX || 0)))
-  const alignY = Math.min(100, Math.max(0, arriveY + (panY || 0)))
-  const x = (-(alignX / 100) * overX) + c.panX - ((imgX / 100) * c.w)
-  const y = (-(alignY / 100) * overY) + c.panY - ((imgY / 100) * c.h)
+  const d = destSceneLayer(destAspect, arriveX, arriveY, panX, panY)
+  // The destination layer is screen-fixed (its own pan is cancelled against the
+  // dot's position inside the travelling scene), so moving the hole over it
+  // reveals more world instead of dragging the world along.
+  const x = -d.panX + c.panX - ((imgX / 100) * c.w)
+  const y = -d.panY + c.panY - ((imgY / 100) * c.h)
   return {
-    width: `${w}px`,
-    height: `${h}px`,
+    width: `${d.w}px`,
+    height: `${d.h}px`,
     transform: `translate3d(${x}px, ${y}px, 0)`,
   }
 }
@@ -1243,7 +1281,13 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   // Compute portal origin using current character position
   const vp = toViewportPos(zone.x, zone.y)
 
-  travelAnim.value = { active: true, x: parseFloat(vp.left), y: parseFloat(vp.top), image: img, bgX: arriveX, bgY: arriveY }
+  // Aspect for the wipe's sizing: the same one the arrival camera will use. The
+  // cache is filled by the destination preload via `probeAspect` (video-aware);
+  // the `<img>` preload above cannot decode a .webm, so it is only a fallback.
+  const destAspect = destNavCache.value[child._key]?.destAspect
+    || (preload.naturalWidth && preload.naturalHeight ? preload.naturalWidth / preload.naturalHeight : null)
+
+  travelAnim.value = { active: true, x: parseFloat(vp.left), y: parseFloat(vp.top), image: img, bgX: arriveX, bgY: arriveY, destAspect }
 
   // Now set the new aspect ratio so background switch uses correct sizing
   if (preload.naturalWidth && preload.naturalHeight) {
