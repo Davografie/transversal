@@ -251,3 +251,28 @@ export function challengeRemaining(setting) {
   const filled = (setting.dice || []).length
   return filled >= capacity.length ? [] : capacity.slice(filled)
 }
+
+/**
+ * The trait count at which the sheet stops showing one flat list and starts
+ * splitting by trait set. From [[Troupe Play]] § *Sheet & base difficulty* (B60):
+ * a list layer that only ever holds an entry or two is a click that buys
+ * nothing, so a low-trait entity skips it; a high-trait one needs it.
+ */
+export const FLAT_TRAIT_LIMIT = 12
+
+/**
+ * Whether the Traits tab shows **one flat list** rather than the trait-set layer.
+ *
+ * Counts the traits that tab would list — the roots of `traitSets`, which already
+ * excludes profile traits: those render on their own tab and `recomputeTraitSets`
+ * keeps them out of the sets entirely. So the profile half never moves this
+ * threshold, which is the rule the human asked for.
+ *
+ * Nested sub-traits do **not** count. They ride their parent rather than being
+ * picks of their own (the same distinction `countSetPicks` makes), so a single
+ * trait carrying a dozen details is still one trait to look at.
+ */
+export function usesFlatTraitList(traitSets, limit = FLAT_TRAIT_LIMIT) {
+  const roots = (traitSets || []).reduce((n, ts) => n + (ts?.traits?.length || 0), 0)
+  return roots <= limit
+}

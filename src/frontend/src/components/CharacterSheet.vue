@@ -230,8 +230,12 @@
           @edit="startEdit"
         />
 
-        <!-- Traits tab: trait-set list -->
-        <div v-else-if="activeSheetView === 'traits' && !activeSetName && traitSets.length && !showAddTrait" class="trait-sets">
+        <!-- Traits tab: trait-set list. Skipped entirely on a low-trait sheet
+             (B60) — the list below then shows every set's traits at once. The
+             two things that live only here and are therefore absent flat: a
+             set's limit dots and its trait-set-unit SFX cards (0 rows in the
+             live data carry the latter — flagged, not yet designed). -->
+        <div v-else-if="activeSheetView === 'traits' && !flatTraitList && !activeSetName && traitSets.length && !showAddTrait" class="trait-sets">
           <div v-for="ts in traitSets" :key="ts.name" class="trait-set">
             <h4 @click="openSet(ts.name)" class="set-header">
               <span class="set-name">{{ ts.name }}</span>
@@ -246,19 +250,19 @@
           </div>
         </div>
 
-        <!-- Set detail (traits) or profile: flat trait list -->
+        <!-- Set detail, the whole-sheet flat list (B60), or profile -->
         <div v-else-if="currentTraits.length && !showAddTrait" class="trait-list" :class="{ 'trait-list-wrap': activeSheetView === 'profile' }">
-          <h4 v-if="activeSheetView === 'traits'" class="trait-list-title" @click="closeSet" title="Back to trait sets">← {{ activeSetName }}</h4>
+          <h4 v-if="activeSheetView === 'traits' && !flatTraitList" class="trait-list-title" @click="closeSet" title="Back to trait sets">← {{ activeSetName }}</h4>
             <TraitRow
               v-for="t in currentTraits"
               :key="t.id"
               :trait="t"
               :api="traitRowApi"
               :phase="phase"
-              :limit-reached="currentSetReachedLimit"
+              :limit-reached="limitReachedFor(t)"
               :wrap="activeSheetView === 'profile'"
             />
-          <div v-if="activeSheetView === 'traits' && (prevSet || nextSet)" class="set-nav">
+          <div v-if="activeSheetView === 'traits' && !flatTraitList && (prevSet || nextSet)" class="set-nav">
             <Button
               v-if="prevSet"
               class="set-nav-prev"
@@ -358,7 +362,7 @@ import MediaImage from './MediaImage.vue'
 import Button from '@/components/ui/Button.vue'
 import TraitInstanceEditor from '@/components/ui/TraitInstanceEditor.vue'
 import RollTableMenu from './gm/RollTableMenu.vue'
-import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, sortSetTraits, subtreeContains } from '../utils/traitTree.js'
+import { ancestorsOf, canPickUp, carriedNegatives, challengeRemaining, childrenOf, countDescendants, countSetPicks, descendantsOf, hasContents, isContainer, isOpenContainer, rootAnchor, sortSetTraits, subtreeContains, usesFlatTraitList } from '../utils/traitTree.js'
 import { splitRefunds } from '../utils/poolSpends.js'
 
 const props = defineProps({
@@ -624,7 +628,9 @@ function containerCount(t) {
 // (see isOpenContainer), so grips never clutter an ordinary sheet, and a
 // container is never draggable into itself or into its own descendants.
 const draggableRowIds = computed(() => {
-  const roots = currentSet.value?.traits || []
+  // The rows on screen, whichever way the list is scoped — a flat sheet has no
+  // active set, and asking `currentSet` would find no containers to drop into.
+  const roots = currentTraits.value || []
   const open = []
   const collect = (list) => {
     for (const t of list || []) {
@@ -696,7 +702,7 @@ async function moveTraitOut(traitSettingId) {
   // Come out as whatever anchors the chain: a child of a morph container returns
   // to morph on the same body rather than silently becoming ego. Mirrors how
   // nesting inherits its anchor.
-  const anchor = rootAnchor(currentSet.value?.traits || [], traitSettingId)
+  const anchor = rootAnchor(currentTraits.value || [], traitSettingId)
   const input = anchor && anchor.fromType === 'projection' && anchor.projectionId
     ? { fromType: 'projection', projectionId: anchor.projectionId }
     : { fromType: 'entity' }
@@ -750,18 +756,31 @@ const currentSet = computed(() => {
   return traitSets.value.find(ts => ts.name === activeSetName.value) || null
 })
 
+// B60 — a sheet with few traits skips the set-list layer: the sets are a
+// navigation device, and with a handful of traits there is nothing to navigate.
+// The list itself is the same either way; only the layer above it changes, so a
+// container, a sub-trait and a die all read exactly as they do when drilled in.
+const flatTraits = computed(() => traitSets.value.flatMap(ts => ts.traits))
+const flatTraitList = computed(() => usesFlatTraitList(traitSets.value))
+
 const currentTraits = computed(() => {
   if (activeSheetView.value === 'relation') return relationTraits.value
   if (activeSheetView.value === 'profile') return profileTraits.value
+  // Checked before `currentSet`: a stale `activeSetName` (the count dropped under
+  // the limit while drilled in) must not resurrect the set view.
+  if (flatTraitList.value) return flatTraits.value
   return currentSet.value?.traits || []
 })
 
-const currentSetReachedLimit = computed(() => {
-  if (!currentSet.value || !currentSet.value.limit) return false
-  // Counts *picks*, not settings: a sub-trait rides its parent, while a
-  // container contributes its children instead of itself.
-  return countSetPicks(currentSet.value.traits, isInPool) >= currentSet.value.limit
-})
+// Whether a row's set has used up its picks. The flat list mixes sets, so the
+// answer has to be found per row; drilled into one set, the lookup returns that
+// same set. Counts *picks*, not settings: a sub-trait rides its parent, while a
+// container contributes its children instead of itself.
+function limitReachedFor(t) {
+  const set = traitSets.value.find(ts => ts.traits.some(x => x.id === t.id))
+  if (!set || !set.limit) return false
+  return countSetPicks(set.traits, isInPool) >= set.limit
+}
 
 const nextSet = computed(() => {
   const idx = traitSets.value.findIndex(ts => ts.name === activeSetName.value)
@@ -1003,10 +1022,15 @@ function openEditorForNewTrait(id, { relation = false } = {}) {
     activeSheetView.value = 'profile'
   } else {
     activeSheetView.value = 'traits'
-    const target = traitSets.value.find(s => s.name === setting.traitsetName)
-    // Same landing as the set nav: the set becomes active, its containers closed.
-    if (target) goToSet(target)
-    else activeSetName.value = setting.traitsetName
+    // A flat sheet has no set layer to land in, and the new trait is already in
+    // the list it shows — drilling in would only strand an `activeSetName` the
+    // view ignores.
+    if (!flatTraitList.value) {
+      const target = traitSets.value.find(s => s.name === setting.traitsetName)
+      // Same landing as the set nav: the set becomes active, its containers closed.
+      if (target) goToSet(target)
+      else activeSetName.value = setting.traitsetName
+    }
   }
   startEdit(setting)
 }
@@ -1354,7 +1378,7 @@ function isKnown(t) {
 }
 
 function inPoolCount(ts) {
-  // Must agree with `currentSetReachedLimit`: a sub-trait rides its parent, so
+  // Must agree with `limitReachedFor`: a sub-trait rides its parent, so
   // the subtree counts once however many of its members are in the pool.
   return countSetPicks(ts.traits, isInPool)
 }
@@ -1372,6 +1396,8 @@ function setPoolSources(sources) {
   // When the current set fills to its limit, advance to the next set's list.
   // Same count as the limit dots and the gate (countSetPicks): a sub-trait
   // rides its parent, so the subtree is one pick.
+  // A flat sheet (B60) has no set on screen, so `idx` is -1 and nothing moves:
+  // every set is already listed, so there is no next one to step to.
   const sets = traitSets.value
   const idx = sets.findIndex(s => s.name === activeSetName.value)
   if (idx !== -1) {

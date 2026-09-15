@@ -11,7 +11,8 @@
  * It pins the semantics that are easy to get subtly wrong: the tag union that
  * marks a container, the query-depth cap, the limit recursion where a
  * sub-trait rides its parent but a container contributes its children instead
- * of itself, and the unfilled tail of a challenge track.
+ * of itself, the unfilled tail of a challenge track, and the trait count at
+ * which the sheet drops the trait-set layer for one flat list (B60).
  */
 
 import {
@@ -29,6 +30,7 @@ import {
   sortSetTraits,
   subtreeContains,
   traitTags,
+  usesFlatTraitList,
 } from '../src/utils/traitTree.js'
 
 let pass = 0, fail = 0
@@ -218,6 +220,26 @@ ok('a missing ego flag reads as ego',
    sortSetTraits([{ id: 'x' }, tMorph]).map(t => t.id), ['x', 'm1'])
 ok('ego/morph does not disturb the order inside a group',
    sortSetTraits([{ id: 'e2', ego: true }, { id: 'e1', ego: true }]).map(t => t.id), ['e2', 'e1'])
+
+// ── B60: a low-trait sheet skips the trait-set layer ────────────────────
+// The count is the traits the Traits tab would list — the roots of the sets.
+// Profile traits are a separate tab and never reach `traitSets`, so they cannot
+// move this threshold; nested sub-traits ride their parent and do not count.
+const setOf = (name, n) => ({ name, traits: Array.from({ length: n }, (_, i) => ({ id: `${name}-${i}` })) })
+ok('no traits at all → flat', usesFlatTraitList([]), true)
+ok('one short set → flat', usesFlatTraitList([setOf('a', 3)]), true)
+ok('exactly at the limit → flat', usesFlatTraitList([setOf('a', 12)]), true)
+ok('one over the limit → split', usesFlatTraitList([setOf('a', 13)]), false)
+ok('the limit is the total across sets, not per set',
+   usesFlatTraitList([setOf('a', 6), setOf('b', 6)]), true)
+ok('one more across two sets tips it over',
+   usesFlatTraitList([setOf('a', 6), setOf('b', 7)]), false)
+ok('a sub-trait does not count — it rides its parent',
+   usesFlatTraitList([{ name: 'a', traits: [
+     { id: 'p', subTraitSettings: Array.from({ length: 20 }, (_, i) => ({ id: `c${i}` })) },
+   ] }]), true)
+ok('an absent list is flat rather than a crash', usesFlatTraitList(undefined), true)
+ok('the limit is overridable', usesFlatTraitList([setOf('a', 5)], 4), false)
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)
