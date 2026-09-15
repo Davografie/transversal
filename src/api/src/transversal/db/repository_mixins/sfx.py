@@ -104,6 +104,10 @@ class RepositorySfx:
             """,
             bind_vars={"sid": sfx_id},
         )
+        # The trait write above is raw AQL, so it bypasses the registry index
+        # cache; without this a read within the cache's TTL still serves the
+        # deleted id (and default-SFX provisioning would re-grant it).
+        self._invalidate_traits_index()
         try:
             self._sfxs.delete(sfx_id)
             return True
