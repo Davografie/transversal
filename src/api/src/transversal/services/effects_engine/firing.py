@@ -95,6 +95,31 @@ def _emit_sfx_triggered(entity_id: str, sfx) -> None:
             },
         ))
 
+
+def _emit_sfx_armed(sfx) -> None:
+    """Broadcast an ``sfx_armed`` SSE event for a passive armed for the session.
+
+    A rule whose effects are all roll/outcome-timed never "fires" at the moment
+    it is armed, so without this the table is told nothing and the rule is
+    silently on — the author's One Trick. ``scope="global"`` because a
+    session-armed passive covers every entity, late joiners included, so there is
+    no single entity to address; ``entity_id`` stays empty for the same reason.
+    """
+    from transversal.api.sse.bus import StreamEvent, event_bus
+    from transversal.services.session_manager import session_manager
+
+    for s in session_manager.list_active():
+        event_bus.publish(StreamEvent(
+            event="sfx_armed",
+            session_id=s.id,
+            data={
+                "entity_id": "",
+                "sfx_id": sfx.id,
+                "sfx_name": sfx.name,
+                "scope": "global",
+            },
+        ))
+
 def _fire_context(event: GameEvent, sfx: SFX, repo, collections: dict | None = None,
                   bindings: dict | None = None, source_id: str | None = None,
                   source_element: str | None = None):

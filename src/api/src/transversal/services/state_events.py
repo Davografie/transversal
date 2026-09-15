@@ -299,7 +299,7 @@ def fire_projection_created(entity_id: str, universe: str, projection_id: str) -
     })
 
 
-def fire_session_start() -> None:
+def fire_session_start(*, announce: bool = False) -> None:
     """Fire every entity's ``on_session_start`` SFX; arm its deferred half once.
 
     A session-start SFX has two halves, and they fan out differently:
@@ -315,6 +315,11 @@ def fire_session_start() -> None:
     pass above. Letting it arm too would stack N+1 copies of the same rule,
     because ``arm_passive`` appends without dedupe — the passive would then roll
     its effect once per owning entity plus once for the pass.
+
+    ``announce`` broadcasts an ``sfx_armed`` event per passive armed here. It is
+    on for a real [Session] Start — the table should know a standing rule just
+    came on — and off for the re-arm an SFX edit triggers, which corrects an
+    existing state rather than establishing a new one.
     """
     from transversal.main import _get_repo
     from transversal.services.roll_deferral import (
@@ -337,6 +342,10 @@ def fire_session_start() -> None:
                 source_kind=sfx.source_kind,
                 source_id=None,
             )
+            if announce:
+                from transversal.services.effects_engine import _emit_sfx_armed
+
+                _emit_sfx_armed(sfx)
 
     fire_global_state_sfx("on_session_start", arm_deferred=False)
 

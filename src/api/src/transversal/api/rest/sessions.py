@@ -69,7 +69,9 @@ async def start_session(session_id: str) -> dict:
     from transversal.services.state_events import fire_session_start
 
     session_manager.set_in_session(session_id, True)
-    fire_session_start()
+    # announce: a standing passive that never "fires" at this moment must still
+    # tell the table it is on (the One Trick case).
+    fire_session_start(announce=True)
     event_bus.publish(StreamEvent(event="session_started", session_id=session_id, data={"session_id": session_id, "in_session": True}))
     logger.info(f"[init] start_session id={session_id}")
     return {"started": True, "in_session": True}
