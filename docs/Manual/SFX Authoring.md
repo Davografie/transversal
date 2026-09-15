@@ -215,6 +215,14 @@ It **commits** at the first of two moments, and neither is negotiable:
 The card/chip reads *active* while the rule is in flight, and that state comes
 from the server — a reload does not lose it.
 
+The **Active** rail down the left edge lists every rule currently on a character,
+wherever it is in its life: armed and waiting on a roll, in flight, or still
+inside an effect's duration. Each card names the rule and its countdown
+(*On Roll · 1 roll*), so the ⏳ line on the sheet — a bare *1 roll* — always has
+something that says where it came from. It reads the server's active set
+(`activeSfxIds`), not the take-back window, so an **automatic** rule's running
+duration shows there too.
+
 **What a take-back cannot do**, and how to tell: reversibility is a property of
 the **action**, not of your rule. The editor's validation says so — a rule that
 can be taken back warns you which of its effects would stay in place (*"Effect 3
