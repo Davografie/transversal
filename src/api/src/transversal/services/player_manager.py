@@ -58,8 +58,9 @@ class PlayerManager:
     def get(self, player_id: str) -> Player | None:
         return self._repo.get_player(player_id)
 
-    def claim_entity(self, player_id: str, entity_id: str) -> bool:
-        return self._repo.claim_entity(player_id, entity_id)
+    def claim_entity(self, player_id: str, entity_id: str, main: bool | None = None) -> bool:
+        """Claim an entity; ``main=None`` auto-designates a first character (B117)."""
+        return self._repo.claim_entity(player_id, entity_id, main=main)
 
     def release_entity(self, player_id: str, entity_id: str) -> bool:
         return self._repo.release_entity(player_id, entity_id)

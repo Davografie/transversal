@@ -79,17 +79,35 @@ class RepositoryPlayers:
         except Exception:
             return False
 
-    def claim_entity(self, player_id: str, entity_id: str) -> bool:
+    def claim_entity(
+        self, player_id: str, entity_id: str, main: bool | None = None
+    ) -> bool:
+        """Claim an entity for a player (an ``agency`` edge).
+
+        ``main=None`` (the default) auto-designates the player's main when they
+        have none (B117): a player with no flagged main — the fresh player
+        creating their first, or only, character — gets this claim flagged, so
+        spotlight and the troupe machinery work without a manual GM
+        designation. A player who already has a main keeps it: a later claim
+        never steals the flag.
+
+        ``main=False`` is the explicit opt-out, for a claim that is known not to
+        be a main (support-character creation, B59). An existing edge is never
+        re-flagged — the client re-claims on every character switch, and the
+        designation is changed only via ``set_agency_main``.
+        """
         if not self._players.has(player_id):
             return False
         edge_key = f"edge:{player_id}:{entity_id}:agency"
         if not self._relationships.has(edge_key):
+            if main is None:
+                main = self.get_designated_main(player_id) is None
             self._relationships.insert({
                 "_key": edge_key,
                 "_from": f"{PLAYERS}/{player_id}",
                 "_to": f"{ENTITIES}/{entity_id}",
                 "type": "agency",
-                "main": False,
+                "main": bool(main),
             })
         return True
 

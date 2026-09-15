@@ -48,19 +48,22 @@ def test_player_domain_round_trip_and_agency_main():
     repo.create_entity(_char(SC_ID))
     repo.create_player(P_ID, "test-player", role="player")
 
+    # B117: the first claim is auto-designated main; the second does not steal it.
     assert repo.claim_entity(P_ID, MAIN_ID) is True
     assert repo.claim_entity(P_ID, SC_ID) is True
 
-    # No main flag yet.
     agency = repo.get_agency_edges(P_ID)
     assert {a["entity_id"] for a in agency} == {MAIN_ID, SC_ID}
-    assert all(a["main"] is False for a in agency)
+    assert {a["entity_id"]: a["main"] for a in agency} == {MAIN_ID: True, SC_ID: False}
 
-    # Flag the main.
+    # Re-flagging an existing main is idempotent; un-flagging round-trips.
     assert repo.set_agency_main(P_ID, MAIN_ID, True) is True
     agency = {a["entity_id"]: a["main"] for a in repo.get_agency_edges(P_ID)}
     assert agency[MAIN_ID] is True
     assert agency[SC_ID] is False
+    assert repo.set_agency_main(P_ID, MAIN_ID, False) is True
+    assert repo.get_agency_main(P_ID, MAIN_ID) is False
+    assert repo.set_agency_main(P_ID, MAIN_ID, True) is True
 
     # Un-flagging an entity with no agency edge is refused.
     assert repo.set_agency_main(P_ID, "no-such-entity", True) is False
@@ -230,8 +233,10 @@ def test_designated_main_fallback():
     repo.create_entity(_char(MAIN_ID))
     repo.create_entity(_char(SC_ID))
     repo.create_player(P_ID, "test-player", role="player")
-    repo.claim_entity(P_ID, MAIN_ID)
-    repo.claim_entity(P_ID, SC_ID)
+    # Explicit opt-out on both claims, so nothing is designated (B117 otherwise
+    # auto-designates the first claim).
+    repo.claim_entity(P_ID, MAIN_ID, main=False)
+    repo.claim_entity(P_ID, SC_ID, main=False)
 
     # No main designated → no fallback.
     assert repo.get_designated_main(P_ID) is None
@@ -366,4 +371,49 @@ def test_create_support_character_flow():
 
     repo.delete_entity(sc.id, rmtree=True)
     repo.delete_roll_table(table_id)
+    _cleanup(repo)
+
+
+def test_b117_first_claim_auto_designates_main():
+    """B117 — a player with no main gets one from their first claim, not their second."""
+    repo = _repo
+    _cleanup(repo)
+
+    repo.create_entity(_char(MAIN_ID))
+    repo.create_entity(_char(SC_ID))
+    repo.create_player(P_ID, "test-player", role="player")
+
+    assert repo.claim_entity(P_ID, MAIN_ID) is True
+    assert repo.get_agency_main(P_ID, MAIN_ID) is True
+
+    # A later claim does not steal the designation.
+    assert repo.claim_entity(P_ID, SC_ID) is True
+    assert repo.get_agency_main(P_ID, SC_ID) is False
+    assert repo.get_agency_main(P_ID, MAIN_ID) is True
+
+    # The client re-claims on every character switch; an existing edge is never
+    # re-flagged, so a switch cannot move the designation either.
+    assert repo.set_agency_main(P_ID, MAIN_ID, False) is True
+    assert repo.claim_entity(P_ID, MAIN_ID) is True
+    assert repo.get_agency_main(P_ID, MAIN_ID) is False
+
+    _cleanup(repo)
+
+
+def test_b117_explicit_main_false_opts_out_of_auto_designation():
+    """An SC claim (``main=False``) is never auto-designated, even for a fresh player."""
+    repo = _repo
+    _cleanup(repo)
+
+    repo.create_entity(_char(MAIN_ID))
+    repo.create_entity(_char(SC_ID))
+    repo.create_player(P_ID, "test-player", role="player")
+
+    assert repo.claim_entity(P_ID, SC_ID, main=False) is True
+    assert repo.get_designated_main(P_ID) is None
+
+    # The player's first ordinary claim still takes the designation.
+    assert repo.claim_entity(P_ID, MAIN_ID) is True
+    assert repo.get_designated_main(P_ID) == MAIN_ID
+
     _cleanup(repo)

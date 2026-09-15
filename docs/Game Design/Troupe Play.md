@@ -35,7 +35,7 @@ They are different signals and must not share a field.
 
 ## Spotlight model
 
-- **Main character is explicit** — a player designates 1+ mains; it is *not* "any owned entity" (a player may own non-main entities like retainers).
+- **Main character is explicit** — a player designates 1+ mains; it is *not* "any owned entity" (a player may own non-main entities like retainers). The designation is **seeded on claim** (B117): a player who has no main yet gets one from their first claimed character, so a new player never sits at "NO MAIN" waiting for a manual GM flag. Support characters are claimed with `main: false` and never take it, and the GM can move the designation by hand at any time.
 - **Auto-spotlight** — the spotlight signal is *taking control of a main character*. No manual GM stamp: when a player's active body becomes a main, the stamp fires.
 - **Recency list** — character-fronted, player-sorted: one row per player, showing that player's most-recent main, ordered by `last_spotlight_at` ascending (oldest = most due for spotlight).
 

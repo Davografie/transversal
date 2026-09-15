@@ -616,7 +616,7 @@ Response: `{"player_id": "...", "role": "architect", "updated": true}`
 
 Valid roles: `"player"`, `"architect"`. The role controls which UI elements are visible (architect sees location labels, overlay switcher, arrange tools, and the GmPanel).
 
-**`POST /api/v1/players/{player_id}/claim/{entity_id}`** — claim an entity (adds to player's entity_ids).
+**`POST /api/v1/players/{player_id}/claim/{entity_id}`** — claim an entity (adds to player's entity_ids). **B117:** the claim auto-designates the entity as the player's main when the player has no `main`-flagged `agency` edge yet, so a fresh player's first (or only) character becomes their main with no manual GM flag. A player who already has a main keeps it, and the flag is only ever set on the claim that *creates* the edge — the re-claim the client makes on every character switch cannot move it. Support-character creation opts out (it claims with `main: false`).
 
 **`POST /api/v1/players/{player_id}/release/{entity_id}`** — release an entity.
 

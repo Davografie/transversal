@@ -133,8 +133,10 @@ def create_support_character(
         location=main.current_location,
     )
 
-    # 3. Own it (agency, main:false) and link SC → main.
-    repo.claim_entity(player_id, sc.id)
+    # 3. Own it (agency, main:false) and link SC → main. The explicit
+    # ``main=False`` opts out of B117's first-claim auto-designation: an SC is
+    # never a main, even for a player who owns nothing yet.
+    repo.claim_entity(player_id, sc.id, main=False)
     repo.create_relationship(sc.id, main.id, "support")
 
     # 4. The entry's benefit effects land on the new SC.
