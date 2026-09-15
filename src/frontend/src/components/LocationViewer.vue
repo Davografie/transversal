@@ -5,7 +5,7 @@
          never moves them individually (compositor-only, no per-dot paint). -->
     <div class="scene-layer" :style="sceneLayerStyle">
       <video v-if="currentImage && isVideoBg" ref="videoBgEl" :src="currentImage" class="scene-media" autoplay loop muted playsinline />
-      <img v-else-if="currentImage" :src="currentImage" class="scene-media" alt="" />
+      <img v-else-if="currentImage" ref="bgImgEl" :src="currentImage" class="scene-media" alt="" />
 
       <!-- Zone dots -->
       <template v-for="(z, i) in zones" :key="'z-' + zoneId(z, i)">
@@ -178,7 +178,7 @@ import TravelOverlay from './location/TravelOverlay.vue'
 import MapDot from './MapDot.vue'
 import PoolDiceRing from './PoolDiceRing.vue'
 import { useTransversalLinks } from '@/composables/useTransversalLinks.js'
-import { isVideoUrl, coverOverscan, probeAspect } from '@/composables/media.js'
+import { isVideoUrl, coverOverscan, probeAspect, preloadMedia } from '@/composables/media.js'
 import { perfMark } from '@/composables/perfLog.js'
 import { startFrameProfile, stopFrameProfile, notePointerEvent, noteFrameWork } from '@/composables/frameProfile.js'
 
@@ -216,6 +216,7 @@ const { toggleTransversalType } = useTransversalLinks()
 
 const currentImage = ref('')
 const videoBgEl = ref(null)
+const bgImgEl = ref(null)   // scene-layer still, for the arrival paint gate
 const isVideoBg = computed(() => isVideoUrl(currentImage.value))
 const nav = ref({})
 const zones = ref([])
@@ -264,6 +265,10 @@ watch(() => props.controlledEntityIds, animateSizeChanges, { immediate: true })
 const viewerEl = ref(null)
 const activeElement = ref(null)  // { type: 'zone'|'occupant', name?, id? } — which dot is popped out
 const travelAnim = ref({ active: false, x: 50, y: 50, image: '' })
+// Holds the warm destination element for the duration of a travel: a detached
+// <video> that is collected mid-wipe stops buffering, leaving the scene layer to
+// start over at the handover.
+let warmMedia = null
 const showElements = ref(true)  // toggled off during portal for fade-in remount
 const showSelf = ref(true)     // delayed after travel for dramatic arrival
 
@@ -1240,13 +1245,12 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   // Keep dot expanded during animation
   activeElement.value = { type: 'zone', name: zone.name }
 
-  // Preload destination image
-  const preload = new Image()
-  preload.src = img
-  await new Promise((resolve) => {
-    if (preload.complete) resolve()
-    else { preload.onload = resolve; preload.onerror = resolve }
-  })
+  // Warm the destination before the portal opens. `new Image()` is not enough:
+  // it cannot decode a .webm at all, and even a cached still has to be decoded
+  // before it can paint. Bounded, because a cold asset must not stall the drop —
+  // the real guarantee is the paint gate at the handover below.
+  const preload = await preloadMedia(img, { timeout: 500 })
+  warmMedia = preload
 
   // Hide elements during portal
   showElements.value = false
@@ -1283,16 +1287,17 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
 
   // Aspect for the wipe's sizing: the same one the arrival camera will use. The
   // cache is filled by the destination preload via `probeAspect` (video-aware);
-  // the `<img>` preload above cannot decode a .webm, so it is only a fallback.
-  const destAspect = destNavCache.value[child._key]?.destAspect
-    || (preload.naturalWidth && preload.naturalHeight ? preload.naturalWidth / preload.naturalHeight : null)
+  // the warm element's own intrinsic size is preferred when it arrived in time.
+  const preW = preload ? (preload.videoWidth || preload.naturalWidth) : 0
+  const preH = preload ? (preload.videoHeight || preload.naturalHeight) : 0
+  const destAspect = (preW && preH ? preW / preH : null)
+    || destNavCache.value[child._key]?.destAspect
 
   travelAnim.value = { active: true, x: parseFloat(vp.left), y: parseFloat(vp.top), image: img, bgX: arriveX, bgY: arriveY, destAspect }
 
   // Now set the new aspect ratio so background switch uses correct sizing
-  if (preload.naturalWidth && preload.naturalHeight) {
-    imageAspect.value = preload.naturalWidth / preload.naturalHeight
-  }
+  if (preW && preH) imageAspect.value = preW / preH
+  else if (destAspect) imageAspect.value = destAspect
 
   relocate(child._key, child.current_universe, child.transversal_type === 'consciousness', child.effects, child.name)
 
@@ -1302,21 +1307,29 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     // Reset overlay to new location's value (may be null)
     optimisticOverlay.value = props.overlay
 
-    // Lock position, switch background, and remove portal — all in one frame
+    // Lock position and swap the background UNDER the portal. The portal is not
+    // lifted here — it waits for that media to actually paint (see
+    // `waitForBackgroundPaint`). Removing it on the timer alone is what flashed
+    // black: the element had the new `src` but no decoded frame yet, and a
+    // .webm had not even started playing.
     const so = occupants.value.find(o => o.id === props.entityId)
     if (so) { so.map_x = arriveX; so.map_y = arriveY }
     else { setGmDotPos(arriveX, arriveY); persistGmDots() }  // free-roam dot lands here
     currentImage.value = img
+
+    // Sync background if it changed during travel (watch skips while travelAnim is active)
+    if (props.backgroundImage && props.backgroundImage !== currentImage.value) {
+      currentImage.value = props.backgroundImage
+    }
+
+    await waitForBackgroundPaint()
+    warmMedia = null
 
     // Force-disable transitions on the viewer element to prevent any cross-frame animation
     if (viewerEl.value) {
       viewerEl.value.style.transition = 'none'
     }
     travelAnim.value.active = false
-    // Sync background if it changed during travel (watch skips while travelAnim is active)
-    if (props.backgroundImage && props.backgroundImage !== currentImage.value) {
-      currentImage.value = props.backgroundImage
-    }
     activeElement.value = null
 
     // Fade-in elements
@@ -1330,6 +1343,56 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
     })
     showSelf.value = true
   }, 1300)
+}
+
+// Resolve once the scene layer's OWN media has a frame to paint, so the portal is
+// never lifted off a blank background. Waiting on the preloaded element is not
+// enough — Vue patches the scene layer's element separately, and a video has to
+// reach a decoded frame, not merely fetched bytes. Capped so a broken or slow
+// asset cannot strand the overlay on screen.
+function nextPaint() {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+}
+
+function waitForBackgroundPaint(timeout = 2000) {
+  const painted = (async () => {
+    await nextTick()  // let Vue mount/patch the scene-layer media first
+    if (isVideoBg.value) {
+      const el = videoBgEl.value
+      if (!el) return
+      if (el.readyState < 2) {  // HAVE_CURRENT_DATA — no decoded frame yet
+        await new Promise((resolve) => {
+          el.addEventListener('loadeddata', resolve, { once: true })
+          el.addEventListener('error', resolve, { once: true })
+        })
+      }
+      // A decoded first frame exists now (a paused video still paints it), so the
+      // compositor only needs a paint cycle. `requestVideoFrameCallback` is the
+      // exact signal, but a fully-occluded video can be throttled into never
+      // presenting, so it may only *confirm* the paint — never hold it up.
+      if (el.requestVideoFrameCallback) {
+        await Promise.race([
+          new Promise((resolve) => el.requestVideoFrameCallback(() => resolve())),
+          nextPaint(),
+        ])
+      } else {
+        await nextPaint()
+      }
+    } else {
+      const el = bgImgEl.value
+      if (!el) return
+      // decode() settles when the still is decoded and ready to paint.
+      if (el.decode) await el.decode().catch(() => {})
+      else if (!el.complete) {
+        await new Promise((resolve) => {
+          el.addEventListener('load', resolve, { once: true })
+          el.addEventListener('error', resolve, { once: true })
+        })
+      }
+      await nextPaint()
+    }
+  })()
+  return Promise.race([painted, new Promise((resolve) => setTimeout(resolve, timeout))])
 }
 
 function placeCharacterAtSource(sourceId) {

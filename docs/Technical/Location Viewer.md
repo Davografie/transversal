@@ -415,9 +415,12 @@ The travel effect is a choreographed sequence:
    the scene layer it is about to become (`travelScene` → `destSceneLayer`), not
    as a CSS `cover`: a plain `cover` is a `PAN_OVERSCAN` short, so the background
    visibly grows the moment the wipe swaps out.
-2. **Background swap** — at ~1.3s the real background is switched in with the
-   portal removed, transitions force-disabled for one frame to avoid cross-frame
-   flicker, then re-enabled.
+2. **Background swap** — at ~1.3s the real background is patched in *under* the
+   portal, then the portal is lifted only once that media has actually painted
+   (`waitForBackgroundPaint`: image `decode()`, or video `loadeddata` + a paint
+   cycle). Transitions are force-disabled for one frame to avoid cross-frame
+   flicker, then re-enabled. The portal is **not** removed on the timer — see the
+   arrival-paint gotcha.
 3. **Arrival rings** — around the landing spot: two implode rings (energy drawn
    inward), a portal flash, then three outward bursts.
 4. **Self pop-in** (`arrivePop`) — the character scales in with a brightness
@@ -465,6 +468,21 @@ border), and the overlay/particle system below — run continuously.
   teaser band, where the zoom is unaccounted for). `destSceneLayer` is
   algebraically identical to `sceneCamera` at the arrival point, so the wipe and
   the background it exposes are the same box.
+- **The handover waits for a painted frame, never for the clock.** The portal is
+  lifted only after the scene layer's *own* element has a frame to paint
+  (`waitForBackgroundPaint`), because the scene layer's media is a separate
+  element from anything preloaded: it needs its own `decode()` (stills) or
+  `loadeddata` (video), and a video needs to have started at all. Removing the
+  overlay on the 1.3s timer instead — which is what it used to do — flashes the
+  dark viewer background for the frames between "new `src`" and "decoded frame".
+  `preloadMedia` (in `composables/media.js`) warms the URL video-aware and is
+  deliberately *bounded*, so a slow asset costs at most a short delay before the
+  portal opens and never strands the overlay; the gate itself is capped too.
+  Note an `<img>`/`background-image` cannot decode a `.webm` — the wipe needs a
+  real `<video>` branch (`TravelOverlay`), exactly like the hole preview in
+  `MapDot`. `requestVideoFrameCallback` may only *confirm* the paint: a
+  fully-occluded video can be throttled into never presenting a frame, so it is
+  raced against a plain paint cycle rather than awaited outright.
 - **The scene layer is `pointer-events: none`.** Background taps must fall
   through to the viewer (`onBgClick`); dots opt back in with
   `pointer-events: auto`.

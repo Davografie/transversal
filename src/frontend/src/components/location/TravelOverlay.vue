@@ -11,16 +11,22 @@
     }"
   >
     <!-- Sized as the destination's own scene layer (cover + overscan + zoom), so
-         the wipe and the background it hands over to are the same box. -->
-    <img
-      v-if="scene"
+         the wipe and the background it hands over to are the same box. An
+         animated destination needs a real <video>: an <img>/background-image
+         cannot decode a .webm, which left the wipe blank (and black on the
+         swap) for every animated location. -->
+    <video
+      v-if="scene && isVideo"
       class="travel-scene"
       :src="image"
-      :style="{
-        width: scene.w + 'px',
-        height: scene.h + 'px',
-        transform: 'translate3d(' + (-scene.panX) + 'px, ' + (-scene.panY) + 'px, 0)',
-      }"
+      :style="sceneStyle"
+      autoplay loop muted playsinline
+    />
+    <img
+      v-else-if="scene"
+      class="travel-scene"
+      :src="image"
+      :style="sceneStyle"
       alt=""
       draggable="false"
     />
@@ -28,10 +34,13 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { isVideoUrl } from '@/composables/media.js'
+
 // The portal-expand wipe played while travelling: the destination image opens
 // from a circle at the origin point (the two custom properties), fixed over the
 // whole viewport. Mounted only while `travelAnim.active`.
-defineProps({
+const props = defineProps({
   x: { type: Number, default: 50 },
   y: { type: Number, default: 50 },
   image: { type: String, default: '' },
@@ -42,6 +51,14 @@ defineProps({
   // below is the fallback.
   scene: { type: Object, default: null },
 })
+
+const isVideo = computed(() => isVideoUrl(props.image))
+
+const sceneStyle = computed(() => ({
+  width: props.scene.w + 'px',
+  height: props.scene.h + 'px',
+  transform: 'translate3d(' + (-props.scene.panX) + 'px, ' + (-props.scene.panY) + 'px, 0)',
+}))
 </script>
 
 <style scoped>
