@@ -249,6 +249,12 @@ async def create_edge(from_id: str, to_id: str, body: EdgeRequest):
             }
             repo._relationships.insert(rev_doc)
 
+    # Materialise the nav-dot defaults the new link needs, so the viewer has a
+    # stored dot to draw *and* land on. This endpoint inserts edge documents
+    # directly and so does not go through `create_relationship` — both paths call
+    # the same helper.
+    repo.ensure_location_link_defaults(from_id, to_id, body.type)
+
     return {"status": "created", "key": edge_key}
 
 

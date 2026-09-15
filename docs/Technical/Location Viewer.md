@@ -458,6 +458,28 @@ border), and the overlay/particle system below — run continuously.
   `toViewportPos`/`toImagePos`, `navDotPerspective`, `holeStyleFor`,
   `travelProximity`, the drag frame) reads from the single `sceneCamera`
   computed — never re-derive the pan independently or the math will drift.
+- **One arrival-point rule.** `arrivalPoint(destNav, fromId)` is the only place
+  that answers "where does an entity land when it arrives at a location from
+  another one", and both the dot preview (`preloadDestNavCache`) and the travel
+  (`travelWithAnimation`) call it. There used to be two implementations, with
+  *different fallbacks* when nothing was stored — the preview guessed the map
+  centre, the travel guessed the parent dot — so for the 351 of 410 locations
+  with empty `nav_positions` the hole framed the destination at one spot and the
+  arrival anchored it at another. That is the "the image drifts on arrival" bug:
+  the preview and the landing were answering the same question differently.
+  The same rule covers which dot each relation lands on: a zone on the
+  destination whose `location_id` is the source, else the destination's parent
+  dot, else its matching portal dot (by index). The defaults it falls back to are
+  `NAV_DOT_DEFAULTS`, the same object `navDots` draws the dots from, so a missing
+  value cannot make the drawing and the landing disagree.
+- **The backend materialises those defaults when a link is created.**
+  `ensure_location_link_defaults` (repository) writes the child's `parent` dot on
+  a `super` edge and both ends' `portal` dot on a `transversal`, matching
+  `NAV_DOT_DEFAULTS` in the viewer — keep the two in step. It is called from
+  *both* edge-creation paths, because the REST edge endpoint inserts the edge
+  document directly and never goes through `create_relationship`; the UI uses the
+  REST path. Seeding is idempotent and never overwrites an authored position.
+  Locations that predate it are simply unseeded, which the shared rule handles.
 - **Destination previews are sized as the destination's scene layer.** The hole
   preview and the travel wipe must both go through `destSceneSize` /
   `destSceneLayer`, which apply the same cover + `PAN_OVERSCAN` + teaser zoom as
@@ -514,6 +536,13 @@ border), and the overlay/particle system below — run continuously.
   aspect silently drops the hole preview back to a dot-sized thumbnail
   (`holeStyleFor` returns null). The cache also counts only a *non-null* aspect as
   cached, so a destination that gains an image can pick it up without a reload.
+- **The cache is invalidated when this location's dots move.** An entry describes
+  how to arrive *here*, so it is derived from this location's own `nav_positions`
+  and zones; editing either (dragging a nav dot, dragging a zone — `onEnd` and the
+  zone `PUT`) drops `destNavCache[thisLocation]`. Without that the staleness is
+  invisible and sticky: the hole keeps framing a destination at the old spot, and
+  because the travel now reads the same rule both would agree on the *wrong*
+  number until the page was reloaded.
 - **GM free-roam is device-local by design** (decided 2026-09-11). The GM dot's
   position per location lives in `localStorage` only, and dropping it on a target
   travels the **view** only — no server state, no cross-device sync.

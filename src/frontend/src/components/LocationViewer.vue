@@ -586,6 +586,7 @@ async function onDragEnd() {
       }))),
     })
   } catch { /* silent */ }
+  invalidateDestCache()  // the arrival point here just changed
 }
 
 onUnmounted(() => {
@@ -603,7 +604,20 @@ const UNIVERSE_NAMES = { earth: 'Earth', three_realms: 'Three Realms' }
 const displayUniverse = computed(() => UNIVERSE_NAMES[props.universe] || props.universe)
 const displayName = computed(() => nav.value.location?.name || props.locationName || props.locationId)
 
-const navDotPositions = ref({ parent: { x: 90, y: 15 }, portal: { x: 90, y: 50 } })
+// ── Nav dot positions ──────────────────────────────────────────────────────
+// One rule for where a location's own nav dots sit: the parent dot (leads up)
+// and its portal dots (lead sideways). The dots are *drawn* from these numbers
+// and a travel *lands* on them, so a missing value has to resolve identically in
+// both places — when it did not, the destination image visibly drifted at the
+// handover. The backend seeds the same numbers when a link is created
+// (`_ensure_child_zone` / `_ensure_parent_nav_position`), so these are the
+// fallback for links authored before that existed.
+const NAV_DOT_DEFAULTS = { parent: { x: 90, y: 15 }, portal: { x: 90, y: 50 } }
+const portalKey = (i) => (i === 0 ? 'portal' : `portal:${i}`)
+const parentDotDefault = () => ({ ...NAV_DOT_DEFAULTS.parent })
+const portalDotDefault = (i = 0) => ({ x: NAV_DOT_DEFAULTS.portal.x, y: NAV_DOT_DEFAULTS.portal.y + i * 10 })
+
+const navDotPositions = ref({ parent: parentDotDefault(), portal: portalDotDefault(0) })
 
 function loadNavPositions() {
   const raw = nav.value.location?.nav_positions
@@ -632,7 +646,7 @@ const navDots = computed(() => {
   }
   for (const [i, t] of (nav.value.transversal || []).entries()) {
     const key = i === 0 ? 'portal' : `portal:${i}`
-    const pos = navDotPositions.value[key] || { x: 90, y: 50 + i * 10 }
+    const pos = navDotPositions.value[key] || portalDotDefault(i)
     dots.push({
       key, type: 'portal', name: `${t.name} · ${t.transversal_type || 'inapposite'}`,
       image: t.navdot_image || t.background_image || null,
@@ -643,6 +657,36 @@ const navDots = computed(() => {
   }
   return dots
 })
+
+// ── The arrival-point rule ─────────────────────────────────────────────────
+// Where an entity lands when it arrives at a location coming from `fromId`.
+// This is the ONE rule: the dot preview (`preloadDestNavCache`) and the travel
+// itself (`travelWithAnimation`) both call it, so the framing you see through a
+// hole is by construction the framing you land on. They used to be two separate
+// implementations with different defaults, which is what made the destination
+// image jump at the handover.
+// Identity is always the stored link — a zone's `location_id`, or the parent /
+// transversal edge — never a display name.
+function arrivalPoint(destNav, fromId) {
+  const loc = destNav?.location
+  if (!loc || !fromId) return null
+  // Arriving from a child: the destination carries a zone whose stored link
+  // points back at where we came from.
+  for (const z of (loc.zones || [])) {
+    if (z.location_id === fromId) return { x: z.x, y: z.y }
+  }
+  // Arriving from the parent: this location's parent dot.
+  if (destNav.parent?._key === fromId) {
+    return loc.nav_positions?.parent || parentDotDefault()
+  }
+  // Arriving through a portal: this location's matching portal dot, by index —
+  // a location can be linked to several, and each gets its own dot.
+  const idx = (destNav.transversal || []).findIndex(t => t._key === fromId)
+  if (idx >= 0) {
+    return loc.nav_positions?.[portalKey(idx)] || portalDotDefault(idx)
+  }
+  return null
+}
 
 const imageAspect = ref(null)  // width/height ratio of current image, or null if unknown
 
@@ -1189,6 +1233,7 @@ function onNavDragStart(e, nd) {
         }),
       })
     } catch {}
+    invalidateDestCache()  // the arrival point here just changed
   }
 
   document.addEventListener('mousemove', onMove)
@@ -1256,30 +1301,14 @@ async function travelWithAnimation(zone, child, imageUrl = null) {
   showElements.value = false
   showSelf.value = false
 
-  // Pre-fetch destination nav data to find the exact arrival position
-  let arriveX = zone.x, arriveY = zone.y  // fallback: use source zone position
+  // Where the character lands: the SAME rule the dot preview used to frame the
+  // hole (`arrivalPoint`), so the preview and the landing cannot disagree.
+  let arriveX = zone.x, arriveY = zone.y  // fallback: the source zone's position
   try {
     const r = await fetch(`/api/v1/locations/${child._key}/navigate`)
     const destNav = await r.json()
-    const destLoc = destNav.location
-    // Find which dot on destination links back to source (by child ID)
-    for (const z of (destLoc?.zones || [])) {
-      if (z.location_id === sourceId) { arriveX = z.x; arriveY = z.y; break }
-    }
-    if (arriveX === zone.x && arriveY === zone.y) {
-      // Check parent dot
-      const parent = destNav.parent
-      if (parent && parent._key === sourceId) {
-        const parentPos = (destLoc?.nav_positions?.parent) || { x: 90, y: 15 }
-        arriveX = parentPos.x; arriveY = parentPos.y
-      }
-      // Check portal dot
-      const trans = destNav.transversal || []
-      if (trans.some(t => t._key === sourceId)) {
-        const portalPos = (destLoc?.nav_positions?.portal) || { x: 90, y: 50 }
-        arriveX = portalPos.x; arriveY = portalPos.y
-      }
-    }
+    const arrive = arrivalPoint(destNav, sourceId)
+    if (arrive) { arriveX = arrive.x; arriveY = arrive.y }
   } catch { /* use fallback */ }
 
   // Compute portal origin using current character position
@@ -1471,6 +1500,15 @@ watch(() => props.locationId, () => {
 const lerpActive = ref(false)
 const destNavCache = ref({})  // { [locationId]: { arriveX, arriveY, destAspect } } lazy-populated
 
+// Drop this location's cached landing point. That entry describes how to arrive
+// *here* — it is computed from this location's own nav positions and zones — so
+// editing either makes it stale. The staleness is invisible and sticky: the hole
+// keeps framing the destination at the old spot, and the travel now reads the
+// same rule, so both would agree on the wrong number until the page reloaded.
+function invalidateDestCache() {
+  delete destNavCache.value[props.locationId]
+}
+
 // ── Lazy pre-fetch destination nav data for dot overlay positioning ──
 
 async function preloadDestNavCache() {
@@ -1479,15 +1517,15 @@ async function preloadDestNavCache() {
 
   // Children
   for (const child of (nav.value.children || [])) {
-    destinations.push({ id: child._key, name: child.name, kind: 'child', image: child.navdot_image || child.background_image || null })
+    destinations.push({ id: child._key, name: child.name, image: child.navdot_image || child.background_image || null })
   }
   // Parent
   if (nav.value.parent) {
-    destinations.push({ id: nav.value.parent._key, name: nav.value.parent.name, kind: 'parent', image: nav.value.parent.navdot_image || nav.value.parent.background_image || null })
+    destinations.push({ id: nav.value.parent._key, name: nav.value.parent.name, image: nav.value.parent.navdot_image || nav.value.parent.background_image || null })
   }
   // Portal
   for (const t of (nav.value.transversal || [])) {
-    destinations.push({ id: t._key, name: t.name, kind: 'portal', image: t.navdot_image || t.background_image || null })
+    destinations.push({ id: t._key, name: t.name, image: t.navdot_image || t.background_image || null })
   }
 
   for (const dest of destinations) {
@@ -1499,28 +1537,12 @@ async function preloadDestNavCache() {
       const r = await fetch(`/api/v1/locations/${dest.id}/navigate`)
       const data = await r.json()
       const loc = data.location
-      let arriveX = null, arriveY = null
 
-      if (dest.kind === 'child') {
-        // Child's parent dot points back to us
-        const parentPos = loc?.nav_positions?.parent
-        if (parentPos) { arriveX = parentPos.x; arriveY = parentPos.y }
-      } else if (dest.kind === 'parent') {
-        // Parent: find which zone on parent links back to us (by child ID)
-        for (const z of (loc?.zones || [])) {
-          if (z.location_id === currentId) { arriveX = z.x; arriveY = z.y; break }
-        }
-      } else if (dest.kind === 'portal') {
-        // Portal: use the destination's matching portal dot position
-        const idx = (data.transversal || []).findIndex(t => t._key === currentId)
-        const posKey = idx > 0 ? `portal:${idx}` : 'portal'
-        const portalPos = loc?.nav_positions?.[posKey] || loc?.nav_positions?.portal
-        if (portalPos) { arriveX = portalPos.x; arriveY = portalPos.y }
-      }
-
-      // Fallback: use default positions
-      if (arriveX == null) arriveX = dest.kind === 'parent' ? 90 : 50
-      if (arriveY == null) arriveY = dest.kind === 'parent' ? 15 : 50
+      // The very same rule the travel uses — see `arrivalPoint`. Reading it from
+      // the destination's own payload (rather than re-deriving it from the
+      // relation kind) is what keeps the preview and the landing in step.
+      const arrive = arrivalPoint(data, currentId)
+      if (!arrive) continue  // no storeable landing point — leave the dot a thumbnail
 
       // Get destination image aspect. Videos must be probed through metadata:
       // an <img> cannot decode .webm, which silently left animated destinations
@@ -1533,7 +1555,7 @@ async function preloadDestNavCache() {
       // drops the hole preview back to a plain dot-sized thumbnail.
       const destAspect = await probeAspect(loc?.background_image || dest.image)
 
-      destNavCache.value = { ...destNavCache.value, [dest.id]: { arriveX, arriveY, destAspect } }
+      destNavCache.value = { ...destNavCache.value, [dest.id]: { arriveX: arrive.x, arriveY: arrive.y, destAspect } }
     } catch { /* skip failed pre-fetches */ }
   }
 }

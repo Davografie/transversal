@@ -12,6 +12,15 @@ from transversal.domain import PERSONAL_RELATIONSHIP_TYPE
 from transversal.domain import TraitSetting
 from transversal.domain import Zone
 
+# Default nav-dot positions, seeded onto a location when a link is created so the
+# viewer never has to guess. They mirror the location viewer's own defaults
+# (``NAV_DOT_DEFAULTS`` in LocationViewer.vue) — the parent dot sits top-right,
+# portal dots run down the right edge. Keep the two in step: if they drift apart,
+# a location with no stored position is *drawn* at one spot and *landed on* at
+# another, which reads as the destination image jumping on arrival.
+DEFAULT_PARENT_NAV_POSITION = {"x": 90, "y": 15}
+DEFAULT_PORTAL_NAV_POSITION = {"x": 90, "y": 50}
+
 
 class RepositoryRelationships:
     """Mixin contributing 11 member(s) to the repository."""
@@ -170,8 +179,31 @@ class RepositoryRelationships:
         # the GM can drag the dot into place afterwards.
         if rel_type == "super":
             self._ensure_child_zone(from_id, to_id)
+        self.ensure_location_link_defaults(from_id, to_id, rel_type)
 
         return created
+
+    def ensure_location_link_defaults(self, from_id: str, to_id: str, rel_type: str) -> None:
+        """Materialise the nav-dot defaults a newly created location link needs.
+
+        A link is stored from both ends and the viewer needs a stored dot on each
+        end — one it **draws** and also **lands** on. With none stored it falls
+        back to a default, and the preview and the travel used to resolve that
+        default differently, so the destination image jumped at the handover:
+
+        * ``super`` (child → parent): the child gets the 'parent' dot leading up.
+        * ``transversal``: both ends get a 'portal' dot pointing at the other.
+
+        This lives in one place because the REST edge endpoint inserts the edge
+        document directly and never goes through :meth:`create_relationship` —
+        seeding only one of them would leave whichever path the UI happens to use
+        unseeded. Idempotent: an authored position is never overwritten.
+        """
+        if rel_type == "super":
+            self._ensure_parent_nav_position(from_id)
+        elif rel_type == "transversal":
+            self._ensure_portal_nav_position(from_id)
+            self._ensure_portal_nav_position(to_id)
 
     def _ensure_child_zone(self, child_id: str, parent_id: str) -> None:
         """Add a default zone to ``parent_id`` for the child sub-location, if absent."""
@@ -186,6 +218,34 @@ class RepositoryRelationships:
                 return  # already registered
         parent.zones.append(Zone(name=child.name, x=50.0, y=50.0, location_id=child_id))
         self.update_entity(parent)
+
+    def _ensure_parent_nav_position(self, child_id: str) -> None:
+        """Give ``child_id`` a default 'parent' nav-dot position, if absent.
+
+        The mirror of :meth:`_ensure_child_zone`, seen from the child's own end:
+        the parent holds a zone for the child, and the child holds the dot that
+        leads back up. Without it the viewer has no stored landing point for
+        arriving at the child from its parent, so it falls back to a default —
+        and when the preview and the travel disagreed about that default, the
+        destination image jumped on arrival.
+        """
+        child = self.get_entity(child_id)
+        if child is None or child.type != EntityType.LOCATION:
+            return
+        if child.nav_positions.get("parent"):
+            return  # already registered
+        child.nav_positions["parent"] = dict(DEFAULT_PARENT_NAV_POSITION)
+        self.update_entity(child)
+
+    def _ensure_portal_nav_position(self, location_id: str) -> None:
+        """Give ``location_id`` a default 'portal' nav-dot position, if absent."""
+        loc = self.get_entity(location_id)
+        if loc is None or loc.type != EntityType.LOCATION:
+            return
+        if loc.nav_positions.get("portal"):
+            return  # already registered
+        loc.nav_positions["portal"] = dict(DEFAULT_PORTAL_NAV_POSITION)
+        self.update_entity(loc)
 
     def list_ancestor_locations_with_sfx(self, location_id: str, max_depth: int = 8) -> list["Entity"]:
         """The location and its ancestors that own SFX — the *location scope*.
