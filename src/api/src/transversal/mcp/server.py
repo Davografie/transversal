@@ -138,14 +138,14 @@ query { traitsets { id name } }
 """
 
 _QUERY_TRAITSETS_FULL = """
-query { traitsets { id name universes entityTypes order limit } }
+query { traitsets { id name universes entityTypes order limit sheetTab } }
 """
 
 _QUERY_TRAITS = """
 query {
   traitsets {
     id name traits {
-      id name universes traitsetId defaultDieType defaultRatingType
+      id name universes traitsetId defaultDieType defaultRatingType tags
     }
   }
 }
@@ -154,12 +154,12 @@ query {
 _MUT_UPDATE_TRAITSET = """
 mutation(
   $id: ID!, $name: String, $universes: [String!], $entityTypes: [EntityType!],
-  $description: String, $order: Int, $limit: Int
+  $description: String, $order: Int, $limit: Int, $sheetTab: SheetTab
 ) {
   updateTraitset(
     id: $id, name: $name, universes: $universes, entityTypes: $entityTypes,
-    description: $description, order: $order, limit: $limit
-  ) { id name universes entityTypes order limit }
+    description: $description, order: $order, limit: $limit, sheetTab: $sheetTab
+  ) { id name universes entityTypes order limit sheetTab }
 }
 """
 
@@ -194,7 +194,7 @@ mutation(
 _MUT_ADD_TRAIT_SETTING = """
 mutation($entityId: ID!, $input: TraitSettingInput!) {
   addTraitSetting(entityId: $entityId, input: $input) {
-    id entityId traitId traitsetId dice ratingType statement
+    id entityId traitId traitsetId dice ratingType statement tags
   }
 }
 """
@@ -202,7 +202,7 @@ mutation($entityId: ID!, $input: TraitSettingInput!) {
 _MUT_UPDATE_TRAIT_SETTING = """
 mutation($id: ID!, $input: TraitSettingUpdateInput!) {
   updateTraitSetting(id: $id, input: $input) {
-    id dice ratingType polarity statement
+    id dice ratingType polarity statement tags
   }
 }
 """
@@ -213,14 +213,14 @@ mutation($id: ID!) { removeTraitSetting(id: $id) }
 
 _MUT_CREATE_TRAIT = """
 mutation($input: TraitInput!) {
-  createTrait(input: $input) { id name universes traitsetId defaultDieType defaultRatingType }
+  createTrait(input: $input) { id name universes traitsetId defaultDieType defaultRatingType tags }
 }
 """
 
 _MUT_UPDATE_TRAIT = """
 mutation($id: ID!, $input: TraitUpdateInput!) {
   updateTrait(id: $id, input: $input) {
-    id name universes traitsetId defaultDieType defaultRatingType
+    id name universes traitsetId defaultDieType defaultRatingType tags
   }
 }
 """
@@ -228,12 +228,13 @@ mutation($id: ID!, $input: TraitUpdateInput!) {
 _MUT_CREATE_TRAITSET = """
 mutation(
   $id: String!, $name: String!, $universes: [String!]!,
-  $entityTypes: [EntityType!], $description: String, $order: Int, $limit: Int
+  $entityTypes: [EntityType!], $description: String, $order: Int, $limit: Int,
+  $sheetTab: SheetTab
 ) {
   createTraitset(
     id: $id, name: $name, universes: $universes, entityTypes: $entityTypes,
-    description: $description, order: $order, limit: $limit
-  ) { id name universes }
+    description: $description, order: $order, limit: $limit, sheetTab: $sheetTab
+  ) { id name universes sheetTab }
 }
 """
 
@@ -495,6 +496,7 @@ def add_trait_to_entity(args: dict) -> dict:
     for key, gql_key in (
         ("polarity", "polarity"), ("from_type", "fromType"),
         ("projection_id", "projectionId"), ("sfx_ids", "sfxIds"),
+        ("tags", "tags"),
     ):
         if args.get(key) is not None:
             input_[gql_key] = args[key]
@@ -509,6 +511,7 @@ def update_trait_setting(args: dict) -> dict:
     for key, gql_key in (
         ("dice", "dice"), ("rating_type", "ratingType"),
         ("statement", "statement"), ("polarity", "polarity"), ("notes", "notes"),
+        ("tags", "tags"),
     ):
         if args.get(key) is not None:
             input_[gql_key] = args[key]
@@ -536,6 +539,7 @@ def create_trait(args: dict) -> dict:
         "possibleSfxIds": args.get("possible_sfx_ids", []),
         "defaultSfxIds": args.get("default_sfx_ids", []),
         "defaultEgo": args.get("default_ego", False),
+        "tags": args.get("tags", []),
     }
     if args.get("polarity") is not None:
         input_["polarity"] = args["polarity"]
@@ -555,6 +559,8 @@ def create_traitset(args: dict) -> dict:
         "order": args.get("order", 0),
         "limit": args.get("limit", 1),
     }
+    if args.get("sheet_tab") is not None:
+        variables["sheetTab"] = args["sheet_tab"]
     return _call_mutation("createTraitset", _MUT_CREATE_TRAITSET, variables,
                           args.get("dry_run", True), "createTraitset")
 
@@ -713,6 +719,8 @@ def update_traitset(args: dict) -> dict:
             variables[key] = args[key]
     if args.get("entity_types") is not None:
         variables["entityTypes"] = args["entity_types"]
+    if args.get("sheet_tab") is not None:
+        variables["sheetTab"] = args["sheet_tab"]
     return _call_mutation("updateTraitset", _MUT_UPDATE_TRAITSET, variables,
                           args.get("dry_run", True), "updateTraitset")
 
@@ -727,6 +735,7 @@ def update_trait(args: dict) -> dict:
         ("default_rating_type", "defaultRatingType"),
         ("polarity", "polarity"),
         ("default_ego", "defaultEgo"),
+        ("tags", "tags"),
     ):
         if args.get(key) is not None:
             inp[gql_key] = args[key]
@@ -1165,6 +1174,7 @@ TOOL_SCHEMAS = {
                 "description": {"type": "string"},
                 "order": {"type": "integer"},
                 "limit": {"type": "integer"},
+                "sheet_tab": {"type": "string", "description": "TRAITS|PROFILE — designate the set as a profile set"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["id"],
@@ -1183,6 +1193,8 @@ TOOL_SCHEMAS = {
                 "default_rating_type": {"type": "string"},
                 "polarity": {"type": "string", "description": "POSITIVE|NEGATIVE"},
                 "default_ego": {"type": "boolean"},
+                "tags": {"type": "array", "items": {"type": "string"},
+                         "description": "Registry-level labels (B116); [] clears them"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["id"],
@@ -1248,6 +1260,8 @@ TOOL_SCHEMAS = {
                 "statement": {"type": "string"},
                 "polarity": {"type": "string", "description": "POSITIVE|NEGATIVE"},
                 "from_type": {"type": "string", "description": "entity|projection|relationship"},
+                "tags": {"type": "array", "items": {"type": "string"},
+                         "description": "Instance-level labels (B116); matched alongside the registry trait's own tags"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["entity_id", "trait_id", "traitset_id"],
@@ -1265,6 +1279,8 @@ TOOL_SCHEMAS = {
                 "statement": {"type": "string"},
                 "polarity": {"type": "string"},
                 "notes": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"},
+                         "description": "Instance-level labels (B116); [] clears them"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["id"],
@@ -1293,6 +1309,8 @@ TOOL_SCHEMAS = {
                 "default_rating_type": {"type": "string"},
                 "polarity": {"type": "string"},
                 "default_ego": {"type": "boolean"},
+                "tags": {"type": "array", "items": {"type": "string"},
+                         "description": "Registry-level labels a condition/target can match on (B116)"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["id", "name", "traitset_id"],
@@ -1312,6 +1330,7 @@ TOOL_SCHEMAS = {
                 "description": {"type": "string"},
                 "order": {"type": "integer"},
                 "limit": {"type": "integer"},
+                "sheet_tab": {"type": "string", "description": "TRAITS|PROFILE — which sheet tab the set's traits render on (default TRAITS)"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["id", "name"],
