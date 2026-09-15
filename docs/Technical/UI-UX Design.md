@@ -108,7 +108,9 @@ suggested) and a **restricted multi-select** (values must come from the list).
 list/form button patterns — `save-btn` (→ `success solid`), `ps-add-btn`
 (→ `secondary block`), `row-del-btn` (→ `danger-ghost sm`), 20 sites across 10
 GM panels; their local rules were deleted and only layout hooks (margins,
-`width`) kept.
+`width`) kept. Also 21 of `CharacterSheet.vue`'s 41 buttons, in the same idiom
+([[character-sheet]], `385b00c`) — its header pills and rating-type toggles are
+segmented controls, so they are out of scope here.
 
 ### Migration guide (for surface owners)
 
@@ -144,14 +146,27 @@ both themes.
    </Button>
    ```
 
+   > [!warning] The first pass skipped this step — check for it
+   > The GM list/form migration moved the markup but wired **no** `:loading`, so every
+   > save and create silently waited. [[gm-panels]]' audit (`a1b9ff5`) found it and fixed
+   > the six that await. Do it in the same pass, and watch the **stale-prop trap** the fix
+   > exposed: `GmEntityCreatePanel` was handed `saving: saving.value` snapshotted when the
+   > panel opened, so its busy state could never become true. Pass the live ref or the
+   > shared singleton — never a copied value.
+
 4. **Don't** hand-roll a spinner, disable via CSS opacity, or leave a
    double-submit window open — `:loading` implies `disabled`.
 
-Still un-migrated: player surfaces (login/settings overlay, dice roller,
-character sheet, blue book), the GM action rails (`.section-btn`,
-`.cancel-btn`, `.shortcut-btn`), canvas and location-viewer buttons.
-Segmented controls (mode/media-quality toggles) are not buttons — a
-`SegmentedControl` primitive is the right follow-up for those.
+Still un-migrated: the player surfaces (login/settings overlay, dice roller, blue book),
+the GM action rails (`.section-btn`, `.cancel-btn`, `.shortcut-btn`), canvas and
+location-viewer controls, and the rest of the character sheet's buttons.
+
+**Raw by design — do not convert these** (their surface owner's call, and [[gm-panels]]
+audited the list): segmented controls (mode / media-quality, the die-variable toggle), die
+and picker chips, toggles, wizard candidate rows, the composite imagen button, and the 🛠
+panel anchor — its 42px geometry feeds the rail anchor math. Segmented controls have their
+own primitive now ([[#SegmentedControl]]), so they are a `SegmentedControl` migration, not
+a `Button` one.
 
 ### Trait instance editor
 
@@ -275,6 +290,53 @@ Navigation lives in the header **pills**: 👤 profile · 🎲 traits · 📘 bl
 - **Next set**: a `Next: <name> →` button sits under the trait list (right-aligned), jumping to the next set without picking. When a set fills to its limit, the view **auto-advances to the next set** (and returns to the list on the last set).
 - **Own vs foreign sheet**: your own sheet always shows the pills; a foreign sheet hides them and swaps in the relationship widget + "add relationship" affordance.
 
+### Sub-traits and containers
+
+Nesting is **plain recursion**, not a special case: a **container** is an ordinary trait
+carrying the `container` tag (registry ∪ instance tags, B116), so it inherits statements,
+notes, SFX, polarity, provenance and fog-of-war for free, and it may even carry a rating.
+The model and the decision behind it live in [[Container Traits Design Log]]; what follows
+is the interaction convention.
+
+- **One recursive row.** `sheet/TraitRow` renders itself for `subTraitSettings`, one
+  `depth` per level, so nesting is as deep as the query delivered. The query spells out
+  `QUERY_DEPTH = 4` levels as chained fragments in `CharacterSheet.vue` — raising one
+  without the other silently truncates or over-fetches.
+- **Expand to organize. Drill in to inspect.** Both affordances exist on purpose: the
+  **name** always opens the trait detail/editor, while **expand** discloses a container's
+  contents inline. Expand is the only one of the two that can support reordering, because
+  a drag needs source and destination visible at once.
+- **A container keeps its rating and adds a disclosure** — a chevron plus a count of
+  everything beneath it (`countDescendants`), and the disclosure appears **only when there
+  is something to disclose**. An empty container renders exactly like any other trait,
+  because a chevron that opens nothing is a dead affordance (and empty is the state a
+  container is in the moment it is tagged). On a container **with** contents, the row body
+  *is* the expand toggle.
+- **Sub-traits are chips.** Their list wraps and packs to the **right** — the edge the
+  parent's own die sits on — rather than stacking as full rows. The morph tint rides the
+  whole node, the trait *and* its contents, so a body's details read as the body's.
+- **Grips are gated by destination.** A grip means "this can be picked up and put
+  somewhere": a *root* row shows one only while some **open** container can receive it
+  (never itself or its own descendant), and a nested row only when it sits **directly
+  inside** a container, so it can be pulled back out. A sub-trait of a sub-trait is part of
+  its parent and never moves.
+- **"Open" for arranging means expanded *or empty*.** An empty container has no chevron,
+  so requiring a tap to expand it would deadlock: it could never be opened, so nothing
+  could ever be dropped into it.
+- **Drop zones are forgiving.** A container row takes the trait; **any other row** means
+  "out, to the top of the set" — on touch the row you drag past on the way out is exactly
+  the one above the container, so the whole row is the out-zone on purpose. Landing a trait
+  opens its new container, so the trait does not appear to have vanished.
+- **Set order is ego → morph → containers last** (`sortSetTraits`, stable). Reordering
+  within a group is **deferred**: `TraitSetting` has no `order` field and there is no
+  mutation to persist one, so today the grip only moves a trait *in and out of* containers,
+  and the row layout does not yet reserve grip space ([[Container Traits Design Log]]).
+- **The set limit counts picks, not ownership.** A sub-trait is part of its parent, so a
+  non-container contributes 1 however many sub-traits ride along; a **container contributes
+  its children instead of itself**, so an empty container costs nothing and a container
+  never enters the pool. This is a client-side convention — nothing on the server enforces
+  it.
+
 ## Dice roller and dice panel
 
 The bottom panel (`#dice-panel-wrapper`) is a retractable sheet. Open/close is a `transform` between fully-open (`translateY(0)`) and a `PANEL_CLOSED_PEEK` peek.
@@ -325,16 +387,36 @@ transform now, and both `openPanel()` and `closePanel()` clear it.
 
 ## Peer selection
 
-Two surfaces select a character and must agree (see [[System Architecture]] component table):
+Two surfaces select a character (see [[System Architecture]] component table), and since
+`fb78654` they **deliberately differ** — a chip is a rail you can act from, a dot is the
+map itself. One `viewingEntityId` (the peek) sits beside `entityId` (who you are).
 
-- **Peer chips** (above the character sheet).
-- **Occupant navdots** (on the location map).
+- **Peer chips** (`app/PeersBar.vue`, the strip above the sheet) — two states, styled
+  apart: **`.assumed`** (you *are* it — `entityId`) takes the solid accent fill;
+  **`.viewing`** (you are only peeking — `viewingEntityId`) takes the accent border alone,
+  no fill.
+- **Occupant navdots** (on the location map) — their own semantics, below.
 
-Shared semantics (both route through the same toggle):
+**Chips** (`onPeerClick`). A player's chip toggles inspect and never assumes: your own
+chip (`entityId` *or* your main) returns to self — `viewingEntityId = null`, which brings
+the header pills back — and another chip views it, a second click on that same chip
+returning to self. A **GM** chip is view-then-assume:
 
-- Click a peer → inspect that character (foreign sheet).
-- Click the **same peer again** → return to self.
-- Click **your own chip/dot** → return to self (`viewingEntityId = null`), keeping the header pills visible.
+1. first click on a peer → **view only** (foreign sheet), never assume;
+2. second click on the peer you are viewing → **assume** it;
+3. clicking the entity you already act as → drop the peek and keep acting on it; with
+   nothing being viewed, it exits to free-roam.
+
+A **location** chip is view-only at every step — a location is never assumed.
+
+**Dots are not the chip toggle** (`onInspectEntity`). A player's self dot opens their own
+sheet; a foreign dot opens it if it is closed or showing someone else, and closes it if it
+is already showing that character. A GM's dot routes through the chip path with `fromMap`,
+which changes exactly one thing — the mobile stack is not yanked to the sheet — and it
+*selects* the sheet's content without opening the panel, since only `sheetVisible` opens it.
+
+The distinction is the point: "who am I" and "who am I looking at" are different questions,
+and a single `.active` class answered neither.
 
 ## Mobile focus stack
 
