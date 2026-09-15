@@ -6,6 +6,7 @@ const EVENT_LABELS = {
   beat: 'beat',
   scene: 'scene',
   session: 'session',
+  rolls: 'roll',
   location_changed: 'location change',
 }
 

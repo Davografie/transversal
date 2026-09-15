@@ -1,8 +1,8 @@
 <template>
-  <div v-if="armed.length" class="armed-sfx-rail" aria-label="Armed SFX">
-    <div class="armed-sfx-rail__heading">Armed</div>
+  <div v-if="active.length" class="armed-sfx-rail" aria-label="Active SFX">
+    <div class="armed-sfx-rail__heading">Active</div>
     <button
-      v-for="sfx in armed"
+      v-for="sfx in active"
       :key="sfx.id"
       class="armed-sfx-card"
       :class="{ 'armed-sfx-card--open': expandedId === sfx.id }"
@@ -27,7 +27,7 @@
             <dd>{{ labelize(sfx.armingScope) }}</dd>
           </div>
           <div v-if="durationLabel(sfx)" class="armed-sfx-card__meta-row">
-            <dt>Armed for</dt>
+            <dt>Duration</dt>
             <dd>{{ durationLabel(sfx) }}</dd>
           </div>
         </dl>
@@ -46,6 +46,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useApi } from '../composables/useApi.js'
+import { formatTimers } from '../composables/useScheduledEvents.js'
 
 const props = defineProps({
   entityId: { type: String, default: '' },
@@ -55,12 +56,12 @@ const props = defineProps({
 
 const { graphql } = useApi()
 
-const armedIds = ref([])
+const activeIds = ref([])
 const catalog = ref({}) // sfxId → { id, name, description, trigger, armingScope, duration, effects }
 const expandedId = ref(null)
 let refreshTimer = null
 
-const armed = computed(() => armedIds.value.map((id) => catalog.value[id]).filter(Boolean))
+const active = computed(() => activeIds.value.map((id) => catalog.value[id]).filter(Boolean))
 
 function labelize(str) {
   if (!str) return ''
@@ -72,16 +73,15 @@ function labelize(str) {
 }
 
 function shortHint(sfx) {
-  if (sfx.trigger && sfx.trigger !== 'manual') return labelize(sfx.trigger)
-  return ''
+  const parts = []
+  if (sfx.trigger && sfx.trigger !== 'manual') parts.push(labelize(sfx.trigger))
+  const duration = durationLabel(sfx)
+  if (duration) parts.push(duration)
+  return parts.join(' · ')
 }
 
 function durationLabel(sfx) {
-  const timers = sfx.duration?.timers || []
-  if (!timers.length) return ''
-  return timers
-    .map((t) => `${t.remaining ? t.remaining + ' × ' : ''}${labelize(t.event)}`)
-    .join(', ')
+  return formatTimers(sfx.duration?.timers, sfx.duration?.combine)
 }
 
 function effectLine(fx) {
@@ -98,7 +98,7 @@ async function loadCatalog() {
       `query {
         sfxs {
           id name description trigger placement armingScope
-          duration { timers { event remaining } }
+          duration { timers { event remaining } combine }
           effects { timing type action target entity result }
         }
       }`,
@@ -113,17 +113,17 @@ async function loadCatalog() {
   }
 }
 
-async function loadArmed() {
+async function loadActive() {
   const id = props.entityId
-  if (!id) { armedIds.value = []; return }
+  if (!id) { activeIds.value = []; return }
   try {
     const data = await graphql(
-      `query($id: ID!) { armedSfxIds(entityId: $id) }`,
+      `query($id: ID!) { activeSfxIds(entityId: $id) }`,
       { id },
     )
-    armedIds.value = (data?.armedSfxIds || []).map(String)
+    activeIds.value = (data?.activeSfxIds || []).map(String)
   } catch (e) {
-    console.error('[ArmedSfxRail] armedSfxIds', e)
+    console.error('[ArmedSfxRail] activeSfxIds', e)
   }
 }
 
@@ -131,7 +131,7 @@ function scheduleRefresh() {
   clearTimeout(refreshTimer)
   refreshTimer = setTimeout(async () => {
     if (!Object.keys(catalog.value).length) await loadCatalog()
-    await loadArmed()
+    await loadActive()
   }, 120)
 }
 
