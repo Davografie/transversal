@@ -231,6 +231,14 @@ and sits on every character's rail for the session. A passive applies to
 everyone — late joiners included — so nobody has to be told it is "theirs", and
 it is not a take-back the way a manual activation is.
 
+Expanding a rail card says what the activation is holding: its **Source** — the
+instance the rule was activated from, named (*Spiritual Power*) — and its
+**Bound** names, the variables its targeting paths could use
+(*{trait_setting} → Spiritual Power*, *{rolled_dice} → 2 dice*). Sources are part
+of the record and survive a reload; bound names are the activation's own scope,
+so they are shown while the rule is running in this process and are gone after a
+server restart.
+
 **What a take-back cannot do**, and how to tell: reversibility is a property of
 the **action**, not of your rule. The editor's validation says so — a rule that
 can be taken back warns you which of its effects would stay in place (*"Effect 3
