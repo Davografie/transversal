@@ -226,6 +226,11 @@ the dice landing, or a rule ending — and leave the display alone when nothing
 changed. A trait's own countdown reads the same way: the row shows the ⏳ time,
 and the trait detail names the rule (*re-enables: 1 beat* / *from: One Trick*).
 
+A **passive** rule armed at [Session] Start is announced (*SFX armed: One Trick*)
+and sits on every character's rail for the session. A passive applies to
+everyone — late joiners included — so nobody has to be told it is "theirs", and
+it is not a take-back the way a manual activation is.
+
 **What a take-back cannot do**, and how to tell: reversibility is a property of
 the **action**, not of your rule. The editor's validation says so — a rule that
 can be taken back warns you which of its effects would stay in place (*"Effect 3
