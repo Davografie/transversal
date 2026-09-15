@@ -86,6 +86,7 @@ class ScheduledEvent:
     timers: list[Timer] = strawberry.field(default_factory=list)
     combine: TimerCombineGql = TimerCombineGql.FIRST_TO_FIRE
     source_sfx_id: Optional[str] = None
+    source_sfx_name: Optional[str] = None
 
 @strawberry.type
 class ConsequenceOption:

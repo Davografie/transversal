@@ -226,7 +226,13 @@ def _condition_to_gql(c: DomainCondition) -> Condition:
         spec=c.spec.model_dump() if c.spec else None,
     )
 
-def _scheduled_event_to_gql(e: DomainScheduledEvent) -> GqlScheduledEvent:
+def _scheduled_event_to_gql(e: DomainScheduledEvent, repo=None) -> GqlScheduledEvent:
+    # The rule that booked the timer, by name — a running countdown is only
+    # meaningful with its origin (the sheet's "1 beat" needs to say *One Trick*).
+    source_name = None
+    if repo is not None and e.source_sfx_id:
+        sfx = repo.get_sfx(e.source_sfx_id)
+        source_name = getattr(sfx, "name", None) if sfx is not None else None
     return GqlScheduledEvent(
         id=e.id,
         target_type=e.target_type,
@@ -235,6 +241,7 @@ def _scheduled_event_to_gql(e: DomainScheduledEvent) -> GqlScheduledEvent:
         timers=[GqlTimer(event=t.event, remaining=t.remaining) for t in e.timers],
         combine=e.combine,
         source_sfx_id=e.source_sfx_id,
+        source_sfx_name=source_name,
     )
 
 def _entry_to_gql(e: DomainRollTableEntry) -> RollTableEntry:

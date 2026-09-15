@@ -148,7 +148,8 @@ class QueriesSfx:
         scopes to one owner; ``target_ids`` scopes to a set of owners (e.g. a
         sheet's trait-setting ids). Omit all for the full store.
         """
-        events = _em(info).repo.list_scheduled_events(
+        repo = _em(info).repo
+        events = repo.list_scheduled_events(
             target_type=target_type,
             target_id=str(target_id) if target_id is not None else None,
             target_ids=[str(i) for i in target_ids] if target_ids is not None else None,
@@ -156,7 +157,7 @@ class QueriesSfx:
         # Holds are the activation's *cancelability* record, not a running timer:
         # they are not displayed as a countdown. (The sheet asks for them through
         # the activation's own affordance, not the ⏳ line.)
-        return [_scheduled_event_to_gql(e) for e in events if getattr(e, "kind", "revert") != "hold"]
+        return [_scheduled_event_to_gql(e, repo) for e in events if getattr(e, "kind", "revert") != "hold"]
 
     @strawberry.field
     def armed_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[strawberry.ID]:

@@ -1,11 +1,14 @@
-"""``activeSfxIds`` — the armed rail's read.
+"""The active-timer surfaces: *what* is running, and *what it came from*.
 
-``inFlightSfxIds`` answers the take-back question and is narrowed to **manual**
-rules (its caller is the chip that offers to end the rule). ``activeSfxIds`` is
-the *display* union, so an **automatic** rule whose duration timer is still
-running appears here even though it is not "in flight" — that gap is why the rail
-stayed empty while the sheet showed a bare "1 rolls" and nothing said where it
-came from.
+``inFlightSfxIds`` is narrowed to the manual take-back window (its caller is the
+chip that offers to end the rule). ``activeSfxIds`` is the *display* union, so an
+**automatic** rule whose duration timer is still running appears here even though
+it is not "in flight" — that gap is why the rail stayed empty while the sheet
+showed a bare "1 rolls" and nothing said where it came from.
+
+A running timer must also name the rule that booked it: the sheet's trait detail
+and the Active rail both show a countdown, and a countdown with no origin is a
+mystery.
 """
 
 from types import SimpleNamespace
@@ -92,3 +95,24 @@ def test_a_row_from_a_deleted_rule_is_dropped(monkeypatch):
     repo = _Repo([_duration_row("sfx-gone")])
 
     assert QueriesSfx().active_sfx_ids(_info(repo), "pc-rail") == []
+
+
+def test_a_timer_row_names_the_rule_that_booked_it():
+    """`sourceSfxName` is what lets the trait detail say *One Trick*, not just *1 beat*."""
+    from transversal.api.graphql.resolvers.converters import _scheduled_event_to_gql
+    from transversal.domain import Effect
+
+    class _NamedRepo:
+        def get_sfx(self, sfx_id):
+            return SimpleNamespace(name="One Trick") if sfx_id == "sfx-one-trick" else None
+
+    event = ScheduledEvent(
+        id="se-beat", target_type="trait_setting", target_id="pc-rail:martial",
+        effect=Effect(type="modify_trait", action="step_up", target="pc-rail:martial"),
+        timers=[Timer(event="beat", remaining=1)], source_sfx_id="sfx-one-trick",
+    )
+
+    assert _scheduled_event_to_gql(event, _NamedRepo()).source_sfx_name == "One Trick"
+    # A rule that no longer exists (or a repo that cannot resolve names) degrades
+    # to no origin rather than an error.
+    assert _scheduled_event_to_gql(event, None).source_sfx_name is None

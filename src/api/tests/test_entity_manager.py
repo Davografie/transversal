@@ -42,6 +42,7 @@ class InMemoryRepository(EntityRepository):
         self._traitsets: dict[str, dict] = {}
         self._traitsettings: dict[str, dict] = {}
         self._traitsetsettings: dict[str, dict] = {}
+        self._sfxs: dict[str, dict] = {}
         self._sfx_owners: dict[str, dict] = {}
         self._scheduled_events: dict[str, dict] = {}
         self._historical_records: dict[str, dict] = {}
