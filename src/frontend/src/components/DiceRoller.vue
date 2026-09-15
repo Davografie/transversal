@@ -1058,6 +1058,21 @@ function notifyPool() {
   if (key) emit('poolSaved', { key, locationId: props.locationId, dice: buildPoolDice() })
 }
 
+// Is the pool already exactly the roll-table dice being prepared? The wizard's
+// `setupRoller` re-emits on every mount, and a parent re-render can remount it
+// (B120); without this check each remount re-cleared and re-added, and every
+// write emitted `poolSaved` — the loop. Comparing the live pool lets a repeated
+// prepare be a no-op, while a genuinely cleared pool still gets its die back.
+function poolMatchesRollTableDice(dice = []) {
+  if (pool.length !== dice.length) return false
+  return dice.every((d, i) => {
+    const p = pool[i]
+    if (!p) return false
+    return String(p.die).toLowerCase() === String(d.die).toLowerCase()
+      && (p.label || p.source || '') === (d.label || d.source || '')
+  })
+}
+
 function addDie(die) {
   ensureSelfTab()
   markPurpose('difficulty')
@@ -1203,7 +1218,7 @@ function stampArmedSfx(tsId, sfxId) {
   if (changed) notifyPool()
 }
 
-defineExpose({ addFromSheet, removeBySource, removeByTsId, retractNegative, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen })
+defineExpose({ addFromSheet, removeBySource, removeByTsId, retractNegative, splitDie, clearPool, syncPool, resyncTraitDie, onChallenged, setContestOutcome, onContestCompare, onContestPush, onOpponentCommitted, onOpponentGiveIn, loadTargetingBans, setHighStakes, stampArmedSfx, panelOpen, poolMatchesRollTableDice })
 
 function isHitch(idx) {
   if (!result.value) return false

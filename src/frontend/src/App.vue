@@ -726,9 +726,13 @@ function onPoolSaved({ key, locationId, dice }) {
   if (!key) return
   remotePools.value = { ...remotePools.value, [key]: { dice: dice || [], player_id: key, phase: 'adding' } }
   poolLocations.value = { ...poolLocations.value, [key]: locationId || currentLocationId.value }
-  // A pool save is also the moment a rule's cost can leave it — ask the server
-  // whether anything ended, so the chip tells the truth without waiting for SSE.
-  sheetRef.value?.fetchInFlightSfxIds?.('pool-saved')
+  // NOTE: this handler deliberately does NOT refresh the sheet (B120). A pool
+  // save is a hot path — the roller saves on every pool edit, and the wizard's
+  // prepare clears then adds, so each save is two writes. Refreshing the sheet
+  // here re-rendered the component tree, remounted LifePathWizard, which
+  // re-prepared the roller, which saved again: an endless loop. In-flight SFX
+  // state is kept truthful by the `sfx_ended` SSE push (and `applyEntity` still
+  // refreshes it on real entity changes), so no per-save round trip is needed.
 }
 
 async function switchPerspective(id) {
@@ -888,6 +892,11 @@ function onRollTablePrepare({ dice = [] } = {}) {
   rollerMode.value = 'roll_table'
   const roller = diceRef.value
   if (!roller) return
+  // Idempotent (B120): the wizard re-emits `prepare` whenever it remounts, and
+  // clearing + re-adding wrote the pool twice each time — those writes fed the
+  // sheet refresh that caused the remount. If the pool already holds exactly
+  // these dice, there is nothing to do.
+  if (roller.poolMatchesRollTableDice?.(dice)) return
   roller.clearPool()
   for (const d of dice) roller.addFromSheet(d)
 }
