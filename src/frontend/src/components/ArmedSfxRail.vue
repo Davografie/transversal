@@ -1,8 +1,8 @@
 <template>
-  <div v-if="active.length" class="armed-sfx-rail" aria-label="Active SFX">
+  <div v-if="cards.length" class="armed-sfx-rail" aria-label="Active SFX">
     <div class="armed-sfx-rail__heading">Active</div>
     <button
-      v-for="sfx in active"
+      v-for="sfx in cards"
       :key="sfx.id"
       class="armed-sfx-card"
       :class="{ 'armed-sfx-card--open': expandedId === sfx.id }"
@@ -30,7 +30,21 @@
             <dt>Duration</dt>
             <dd>{{ durationLabel(sfx) }}</dd>
           </div>
+          <div v-if="sourceLabel(sfx)" class="armed-sfx-card__meta-row">
+            <dt>Source</dt>
+            <dd>{{ sourceLabel(sfx) }}</dd>
+          </div>
         </dl>
+
+        <div v-if="sfx.activation?.bindings?.length" class="armed-sfx-card__bound">
+          <div class="armed-sfx-card__bound-head">Bound</div>
+          <ul class="armed-sfx-card__bindings">
+            <li v-for="b in sfx.activation.bindings" :key="b.name" class="armed-sfx-card__binding">
+              <span class="armed-sfx-card__binding-name">{{ '{' + b.name + '}' }}</span>
+              <span class="armed-sfx-card__binding-value">{{ b.summary }}</span>
+            </li>
+          </ul>
+        </div>
 
         <ul v-if="sfx.effects?.length" class="armed-sfx-card__effects">
           <li v-for="(fx, i) in sfx.effects" :key="i" class="armed-sfx-card__effect">
@@ -56,12 +70,17 @@ const props = defineProps({
 
 const { graphql } = useApi()
 
-const activeIds = ref([])
-const catalog = ref({}) // sfxId → { id, name, description, trigger, armingScope, duration, effects }
+const active = ref([])   // what this activation holds: source + bound names
+const catalog = ref({}) // sfxId → the authored definition (description, trigger, duration, effects)
 const expandedId = ref(null)
 let refreshTimer = null
 
-const active = computed(() => activeIds.value.map((id) => catalog.value[id]).filter(Boolean))
+// A card is the definition plus what *this* activation holds — two queries
+// because a definition is authored once, while a source and its bound variables
+// exist only while the rule is running in this process.
+const cards = computed(() => active.value
+  .map((a) => ({ ...(catalog.value[a.sfxId] || {}), ...a, id: a.sfxId, activation: a }))
+  .filter((c) => c.name))
 
 function labelize(str) {
   if (!str) return ''
@@ -82,6 +101,14 @@ function shortHint(sfx) {
 
 function durationLabel(sfx) {
   return formatTimers(sfx.duration?.timers, sfx.duration?.combine)
+}
+
+// Where the rule was activated from — the instance it lives on, named where the
+// repository can, falling back to the declared kind.
+function sourceLabel(sfx) {
+  const a = sfx.activation
+  if (!a) return ''
+  return a.sourceName || (a.sourceKind ? labelize(a.sourceKind) : '')
 }
 
 function effectLine(fx) {
@@ -115,15 +142,20 @@ async function loadCatalog() {
 
 async function loadActive() {
   const id = props.entityId
-  if (!id) { activeIds.value = []; return }
+  if (!id) { active.value = []; return }
   try {
     const data = await graphql(
-      `query($id: ID!) { activeSfxIds(entityId: $id) }`,
+      `query($id: ID!) {
+        activeSfx(entityId: $id) {
+          sfxId name sourceKind sourceId sourceName
+          bindings { name element cardinality summary }
+        }
+      }`,
       { id },
     )
-    activeIds.value = (data?.activeSfxIds || []).map(String)
+    active.value = data?.activeSfx || []
   } catch (e) {
-    console.error('[ArmedSfxRail] activeSfxIds', e)
+    console.error('[ArmedSfxRail] activeSfx', e)
   }
 }
 
@@ -257,6 +289,45 @@ watch(
 .armed-sfx-card__meta-row dd {
   margin: 0;
   color: var(--text, #e8eaf0);
+}
+
+.armed-sfx-card__bound {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.armed-sfx-card__bound-head {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim, #8890a0);
+}
+
+.armed-sfx-card__bindings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.armed-sfx-card__binding {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.armed-sfx-card__binding-name {
+  color: var(--accent, #7dd3fc);
+  font-family: var(--font-mono, monospace);
+}
+
+.armed-sfx-card__binding-value {
+  color: var(--text, #e8eaf0);
+  text-align: right;
 }
 
 .armed-sfx-card__effects {
