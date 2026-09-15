@@ -1010,6 +1010,7 @@ function handleSseEvent(evt) {
     case 'session_ended':
       inSession.value = false
       addToast('Session ended', 'session')
+      armedSfxRefresh.value++  // session end drops the globally-armed passives
       break
     case 'main_active':
       // A main became active/inactive — refresh support-character availability,
@@ -1278,6 +1279,13 @@ function handleSseEvent(evt) {
       sheetRef.value?.fetchInFlightSfxIds?.('sse-sfx-ended')
       sheetRef.value?.fetchTimers?.()  // an ended activation drops its timer early
       armedSfxRefresh.value++
+      break
+    case 'sfx_armed':
+      // A passive armed at session start never "fires" at that moment, so this is
+      // the only notice the table gets (One Trick). Global scope covers every
+      // entity, so — unlike `sfx_triggered` — it is not gated on the viewer's.
+      addToast(`SFX armed: ${evt.data?.sfx_name || evt.data?.sfx_id}`, 'sfx')
+      armedSfxRefresh.value++  // it belongs in the Active rail now
       break
     case 'sfx_choice_required':
       if (evt.data?.entity_id === entityId.value || gmMode.value) {
