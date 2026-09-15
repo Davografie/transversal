@@ -221,7 +221,9 @@ inside an effect's duration. Each card names the rule and its countdown
 (*On Roll · 1 roll*), so the ⏳ line on the sheet — a bare *1 roll* — always has
 something that says where it came from. It reads the server's active set
 (`activeSfxIds`), not the take-back window, so an **automatic** rule's running
-duration shows there too.
+duration shows there too. Both surfaces re-read when a timer can actually move —
+the dice landing, or a rule ending — and leave the display alone when nothing
+changed.
 
 **What a take-back cannot do**, and how to tell: reversibility is a property of
 the **action**, not of your rule. The editor's validation says so — a rule that
