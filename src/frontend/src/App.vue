@@ -878,6 +878,11 @@ function onDiceRolled(result) {
   onRolled()
   mirrorOwnResult(result)
   shareRoll(result)
+  // The roll endpoint ticks every ``rolls`` timer for this entity before it
+  // answers, and publishes nothing when it does — so both countdown surfaces
+  // (the sheet's ⏳ line and the Active rail) are stale the moment dice land.
+  sheetRef.value?.fetchTimers?.()
+  armedSfxRefresh.value++
 }
 
 function onSheetViewChange(view) {
@@ -1261,6 +1266,7 @@ function handleSseEvent(evt) {
         addToast(`SFX: ${sfxLabel}${who}`, 'sfx')
       }
       armedSfxRefresh.value++  // an SFX just (de)activated → refresh the armed rail
+      sheetRef.value?.fetchTimers?.()  // a durationed effect may have started a timer
       break
     case 'sfx_ended':
       // The rule was taken back — or its cost left the pool before it committed,
@@ -1270,6 +1276,7 @@ function handleSseEvent(evt) {
         addToast(`SFX ended: ${endedLabel}`, 'sfx')
       }
       sheetRef.value?.fetchInFlightSfxIds?.('sse-sfx-ended')
+      sheetRef.value?.fetchTimers?.()  // an ended activation drops its timer early
       armedSfxRefresh.value++
       break
     case 'sfx_choice_required':

@@ -471,6 +471,22 @@ function traitTimerLabel(t) {
     .join(' · ')
 }
 
+// The countdown line is re-fetched at every moment a timer can tick (a roll, an
+// SFX ending). The display depends only on each row's owner, countdown and
+// combine mode, so assign only when that projection actually differs — an
+// unchanged fetch must not re-render the sheet.
+function timerDisplayKey(events) {
+  return JSON.stringify((events || []).map((ev) => [
+    ev.id, ev.targetId, ev.combine,
+    (ev.timers || []).map((t) => [t.event, t.remaining]),
+  ]))
+}
+
+function assignIfChanged(ref, next) {
+  if (timerDisplayKey(ref.value) === timerDisplayKey(next)) return
+  ref.value = next
+}
+
 async function fetchTimers() {
   const eid = props.overrideEntityId || props.entityId
   if (!eid) return
@@ -479,8 +495,8 @@ async function fetchTimers() {
     fetchScheduledEvents('entity', eid),
     tsIds.length ? fetchScheduledEvents('trait_setting', null, tsIds) : Promise.resolve([]),
   ])
-  entityTimers.value = ent || []
-  traitSettingTimers.value = ts || []
+  assignIfChanged(entityTimers, ent || [])
+  assignIfChanged(traitSettingTimers, ts || [])
 }
 
 function groupTraitSettings(settings) {
@@ -1433,7 +1449,7 @@ function setPoolSources(sources) {
   if (recovered) fetchEntity('pool-dice-refunded')
 }
 
-defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, fetchInFlightSfxIds, refreshBlueBook: () => blueBookRef.value?.refresh() })
+defineExpose({ resetSfxCounts, setPoolSources, setRazmerit, setOfferedTraits, fetchEntity, fetchInFlightSfxIds, fetchTimers, refreshBlueBook: () => blueBookRef.value?.refresh() })
 
 function sfxActive(sfxId) {
   return (sfxActivations.value[sfxId] || 0) > 0
