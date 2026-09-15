@@ -315,7 +315,7 @@ def _apply_armed(
         resolved = resolve_source(armed.source_kind or "", armed.source_id, _get_repo())
         if resolved:
             source, source_element = resolved
-    effect_context = _source_context(context, source, source_element)
+    effect_context = _source_context(context, source, source_element, armed.source_sfx_id, armed.source_id)
     applied: list[Effect] = []
     for effect in armed.effects:
         if effect.timing.value != event_type:
@@ -374,17 +374,43 @@ def _apply_armed(
 from transversal.services.target_resolver import resolved_id as _resolved_id  # noqa: E402
 
 
-def _source_context(context: dict | None, source, source_element: str | None) -> dict:
+def _source_context(
+    context: dict | None,
+    source,
+    source_element: str | None,
+    source_sfx_id: str | None = None,
+    source_id: str | None = None,
+) -> dict:
     """Thread a resolved activation source into the effect context.
 
     Per-effect ``source_rating`` / ``target_path`` conditions read ``_source`` /
-    ``_source_element`` back out in ``effects_applier._commit``. No-op when the
-    armed SFX carries no source.
+    ``_source_element`` back out in ``effects_applier._commit``.
+
+    It also names the activation, because the armed path bypasses
+    ``EffectsEngine.process_event_outcome`` — the one place that sets
+    ``_activation``. Without it a revert an armed rule schedules books no
+    ``source_sfx_id``: the row has no origin to show, so the trait detail cannot
+    name it and it drops out of the Active rail. An armed/passive rule is never
+    *cancelable* — cancelable marks a manual activation, the only kind whose
+    untimed undos book holds.
     """
-    if source is None:
-        return context or {}
-    from transversal.services.effects_applier import SOURCE_CONTEXT_KEY, SOURCE_ELEMENT_CONTEXT_KEY
-    return {**(context or {}), SOURCE_CONTEXT_KEY: source, SOURCE_ELEMENT_CONTEXT_KEY: source_element}
+    from transversal.services.effects_applier import (
+        ACTIVATION_CONTEXT_KEY,
+        SOURCE_CONTEXT_KEY,
+        SOURCE_ELEMENT_CONTEXT_KEY,
+    )
+
+    ctx = {**(context or {})}
+    if source is not None:
+        ctx[SOURCE_CONTEXT_KEY] = source
+        ctx[SOURCE_ELEMENT_CONTEXT_KEY] = source_element
+    if source_sfx_id:
+        ctx[ACTIVATION_CONTEXT_KEY] = {
+            "sfx_id": source_sfx_id,
+            "cancelable": False,
+            "source_id": source_id or "",
+        }
+    return ctx
 
 
 def resolve_armed_subject(effect: Effect, entity_id: str, bindings: dict,
@@ -432,7 +458,7 @@ def _apply_refs_roll(
     repo = _get_repo()
     entity = repo.get_entity(entity_id)
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
-    effect_context = _source_context(context, source, source_element)
+    effect_context = _source_context(context, source, source_element, source_sfx_id, source_id)
     before = len(structured) if structured is not None else 0
     resolved_list = resolve_refs(
         resolve_armed_subject(_substitute_effect_context(effect, context or {}, bindings),
@@ -477,7 +503,7 @@ def _apply_spec_target(
     repo = _get_repo()
     entity = repo.get_entity(entity_id)
     source, source_element = resolve_source(source_kind or "", source_id, repo) if source_id else (None, None)
-    effect_context = _source_context(context, source, source_element)
+    effect_context = _source_context(context, source, source_element, source_sfx_id, source_id)
     # Substitute roll-context variables (e.g. ``{effect_die}``) before applying,
     # mirroring ``_apply_refs_roll``.
     effect = _substitute_effect_context(effect, context or {}, bindings)

@@ -219,3 +219,51 @@ def test_select_source_immediate_path(monkeypatch):
 
     assert [e.target for e in outcome.applied] == ["char-1:martial"]
     assert [e.target for e in applied] == ["char-1:martial"]
+
+
+def test_an_armed_rules_revert_is_attributed_to_it(monkeypatch):
+    """The row an armed rule books must name the rule that booked it.
+
+    ``fire_armed`` bypasses ``EffectsEngine.process_event_outcome`` — the one
+    place that sets ``_activation`` — so before this the revert carried
+    ``source_sfx_id=None``: the trait detail had no origin to show ("1 beat" and
+    nothing else) and the Active rail could not list it. The booking must reach
+    ``schedule_event`` through ``activation_booking`` like the engine path does.
+    """
+    from transversal.domain import Timer, TimerCombine
+    from transversal.services.effects_applier.registry import EffectRegistry
+    from transversal.services.scheduled_events import schedule_event
+    from transversal.services.state_events import fire_session_start
+
+    roll_deferral.reset()
+    repo = OneTrickRepo()
+    repo.create_sfx(one_trick_sfx())
+    rows: list = []
+    repo.create_scheduled_event = lambda e: (rows.append(e), e)[1]
+    monkeypatch.setattr(main, "_get_repo", lambda: repo)
+
+    fire_session_start()
+    assert len(roll_deferral.list_global_armed()) == 1
+
+    registry = EffectRegistry()
+
+    def book(action, entity_id, universe, context):
+        # Stand in for the real handler: it books a revert *without* naming a
+        # source, exactly as `schedule_revert` does (``ctx.get("sfx_id")`` is
+        # empty on this path) — the activation is what must supply it.
+        schedule_event(
+            repo, "trait_setting", action.target, action,
+            [Timer(event="beat", remaining=1)], TimerCombine.FIRST_TO_FIRE,
+        )
+
+    registry.register("modify_trait", "step_down", book)
+    monkeypatch.setattr("transversal.services.effects_applier.effect_registry", registry)
+
+    roll_deferral.fire_armed("char-1", "on_roll", "earth", {"rolls": [
+        {"ts_id": "char-1:martial", "source_kind": "trait", "result": 7},
+        {"ts_id": "char-1:qi", "source_kind": "trait", "result": 3},
+    ]})
+
+    assert [e.source_sfx_id for e in rows] == ["sfx-one-trick", "sfx-one-trick"]
+    assert [e.target_id for e in rows] == ["char-1:martial", "char-1:qi"]
+    assert [t.event for e in rows for t in e.timers] == ["beat", "beat"]
