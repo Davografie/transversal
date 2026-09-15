@@ -193,20 +193,24 @@ class QueriesSfx:
         Unlike ``inFlightSfxIds`` (deliberately narrowed to the manual take-back
         window, because its caller is the chip that offers to end the rule), this
         is the *display* union: an armed rule waiting on a roll, a manual
-        activation not yet committed, and an **automatic** rule whose duration
-        timer is still running all count. Holds count too — an un-fired undo
-        still means the activation is live. Unknown ids are dropped, so an
-        orphaned row from a deleted rule cannot render a card.
+        activation not yet committed, an **automatic** rule whose duration timer
+        is still running, and a **globally-armed passive** (a session rule covers
+        every entity, so it belongs on every entity's rail even though no entity
+        armed it). Holds count too — an un-fired undo still means the activation
+        is live. Unknown ids are dropped, so an orphaned row from a deleted rule
+        cannot render a card.
         """
         from transversal.main import _get_engine
+        from transversal.services.roll_deferral import list_global_armed_sfx_ids
         from transversal.services.scheduled_events import in_flight_sfx_ids
 
         engine = _get_engine()
-        return [
-            strawberry.ID(sfx_id)
-            for sfx_id in in_flight_sfx_ids(_em(info).repo, str(entity_id))
-            if engine.get(sfx_id) is not None
-        ]
+        ids: list[str] = []
+        for sfx_id in (*in_flight_sfx_ids(_em(info).repo, str(entity_id)),
+                       *list_global_armed_sfx_ids()):
+            if sfx_id not in ids and engine.get(sfx_id) is not None:
+                ids.append(sfx_id)
+        return [strawberry.ID(sfx_id) for sfx_id in ids]
 
     @strawberry.field
     def available_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str = "") -> list[strawberry.ID]:

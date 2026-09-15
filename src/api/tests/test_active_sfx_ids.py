@@ -18,6 +18,7 @@ import pytest
 from transversal.api.graphql.resolvers.queries_sfx import QueriesSfx
 from transversal.domain import Effect, EffectTiming, ScheduledEvent, Timer
 from transversal.services import roll_deferral
+from transversal.services.scheduled_events import in_flight_sfx_ids
 
 
 class _Repo:
@@ -95,6 +96,23 @@ def test_a_row_from_a_deleted_rule_is_dropped(monkeypatch):
     repo = _Repo([_duration_row("sfx-gone")])
 
     assert QueriesSfx().active_sfx_ids(_info(repo), "pc-rail") == []
+
+
+def test_a_globally_armed_passive_shows_as_active(monkeypatch):
+    """A session passive covers every entity, so it belongs on every rail — even
+    though no entity armed it and it is nobody's take-back to cancel (One
+    Trick)."""
+    from transversal import main
+
+    monkeypatch.setattr(main, "_get_engine", lambda: _Engine({"sfx-passive"}))
+    roll_deferral.arm_passive(
+        [Effect(timing=EffectTiming.ON_ROLL, type="modify_trait", action="step_down")],
+        source_sfx_id="sfx-passive",
+    )
+
+    assert QueriesSfx().active_sfx_ids(_info(_Repo()), "pc-rail") == ["sfx-passive"]
+    # ...but it is not in the manual take-back window.
+    assert in_flight_sfx_ids(_Repo(), "pc-rail") == []
 
 
 def test_a_timer_row_names_the_rule_that_booked_it():

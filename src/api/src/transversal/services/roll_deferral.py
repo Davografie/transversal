@@ -613,6 +613,23 @@ def list_armed_sfx_ids(entity_id: str) -> list[str]:
     return [a.source_sfx_id for a in _armed.get(entity_id, []) if a.source_sfx_id]
 
 
+def list_global_armed_sfx_ids() -> list[str]:
+    """The SFX ids armed in the *global* register (the passives), for display.
+
+    Global entries are not entity-keyed — a passive armed at session start covers
+    every entity, late joiners included — so they belong to no single entity's
+    take-back window and :func:`list_armed_sfx_ids` deliberately omits them. The
+    Active rail unions these in, because "this rule is on you" is true for
+    everyone; the manual take-back chip does not, because a passive is not the
+    player's bargain to cancel.
+    """
+    out: list[str] = []
+    for armed in _global_armed:
+        if armed.source_sfx_id and armed.source_sfx_id not in out:
+            out.append(armed.source_sfx_id)
+    return out
+
+
 def expire_global(event_type: str) -> None:
     """Drop passive rules whose boundary expiry matches ``event_type``."""
     global _global_armed
