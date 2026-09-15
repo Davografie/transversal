@@ -50,6 +50,7 @@ export function useScheduledEvents() {
           targetType
           targetId
           sourceSfxId
+          sourceSfxName
           combine
           timers { event remaining }
           effect { type action target result }

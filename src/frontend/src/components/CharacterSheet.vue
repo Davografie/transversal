@@ -471,6 +471,15 @@ function traitTimerLabel(t) {
     .join(' · ')
 }
 
+// Which rule booked the timers running on this trait. A countdown is only half
+// the story — "1 beat" with no origin is a mystery; the row carries the rule it
+// came from (`sourceSfxName`), and several rules can stack timers on one trait.
+function traitTimerOrigin(t) {
+  const evs = timersByTraitId.value[t.id]
+  if (!evs || !evs.length) return ''
+  return [...new Set(evs.map((ev) => ev.sourceSfxName).filter(Boolean))].join(', ')
+}
+
 // The countdown line is re-fetched at every moment a timer can tick (a roll, an
 // SFX ending). The display depends only on each row's owner, countdown and
 // combine mode, so assign only when that projection actually differs — an
@@ -1141,7 +1150,11 @@ function detailContext(t) {
     rows.push({ label: 'known to', value: `${t.knownTo.length} ${t.knownTo.length === 1 ? 'entity' : 'entities'}` })
   }
   const timer = traitTimerLabel(t)
-  if (timer) rows.push({ label: 're-enables', value: timer })
+  if (timer) {
+    rows.push({ label: 're-enables', value: timer })
+    const origin = traitTimerOrigin(t)
+    if (origin) rows.push({ label: 'from', value: origin })
+  }
   return rows
 }
 
