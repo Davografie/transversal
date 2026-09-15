@@ -1479,19 +1479,22 @@ async function preloadDestNavCache() {
 
   // Children
   for (const child of (nav.value.children || [])) {
-    destinations.push({ id: child._key, name: child.name, kind: 'child' })
+    destinations.push({ id: child._key, name: child.name, kind: 'child', image: child.navdot_image || child.background_image || null })
   }
   // Parent
   if (nav.value.parent) {
-    destinations.push({ id: nav.value.parent._key, name: nav.value.parent.name, kind: 'parent' })
+    destinations.push({ id: nav.value.parent._key, name: nav.value.parent.name, kind: 'parent', image: nav.value.parent.navdot_image || nav.value.parent.background_image || null })
   }
   // Portal
   for (const t of (nav.value.transversal || [])) {
-    destinations.push({ id: t._key, name: t.name, kind: 'portal' })
+    destinations.push({ id: t._key, name: t.name, kind: 'portal', image: t.navdot_image || t.background_image || null })
   }
 
   for (const dest of destinations) {
-    if (destNavCache.value[dest.id]) continue  // already cached
+    // Only a real aspect counts as cached — a destination that probed before its
+    // image existed must be able to pick one up, and a null aspect is exactly
+    // what makes the hole preview silently fall back to a dot-sized thumbnail.
+    if (destNavCache.value[dest.id]?.destAspect) continue
     try {
       const r = await fetch(`/api/v1/locations/${dest.id}/navigate`)
       const data = await r.json()
@@ -1522,7 +1525,13 @@ async function preloadDestNavCache() {
       // Get destination image aspect. Videos must be probed through metadata:
       // an <img> cannot decode .webm, which silently left animated destinations
       // (e.g. Cloud-Soaked Bazaar) without a hole preview.
-      const destAspect = await probeAspect(loc?.background_image)
+      //
+      // The background is only the arrival image when it exists: most locations
+      // carry a navdot image and NO background (283 of 410), and the arrival
+      // falls back to the navdot image there (the dot's own `childImage`). Probing
+      // `background_image` alone left every one of those with a null aspect, which
+      // drops the hole preview back to a plain dot-sized thumbnail.
+      const destAspect = await probeAspect(loc?.background_image || dest.image)
 
       destNavCache.value = { ...destNavCache.value, [dest.id]: { arriveX, arriveY, destAspect } }
     } catch { /* skip failed pre-fetches */ }

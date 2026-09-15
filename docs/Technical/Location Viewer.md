@@ -504,7 +504,16 @@ border), and the overlay/particle system below — run continuously.
   `portal-expand` keyframe; changing one without the other desyncs the transition.
 - **`destNavCache` avoids blocking renders.** Destination nav data is pre-fetched
   in the background so the dot previews (arrival point + aspect) are ready before
-  a travel, not fetched on click.
+  a travel, not fetched on click. Its `destAspect` must be probed from the image
+  the destination **actually shows**: `background_image` when it has one, else the
+  **navdot image** (`dest.image`, taken from the source's own nav payload — the
+  destination's `/navigate` does not carry its own navdot role). Most locations
+  carry a navdot image and no background at all (283 of 410 at time of writing),
+  and the arrival falls back to the navdot image for those, so probing
+  `background_image` alone left every one of them with a null aspect — and a null
+  aspect silently drops the hole preview back to a dot-sized thumbnail
+  (`holeStyleFor` returns null). The cache also counts only a *non-null* aspect as
+  cached, so a destination that gains an image can pick it up without a reload.
 - **GM free-roam is device-local by design** (decided 2026-09-11). The GM dot's
   position per location lives in `localStorage` only, and dropping it on a target
   travels the **view** only — no server state, no cross-device sync.
