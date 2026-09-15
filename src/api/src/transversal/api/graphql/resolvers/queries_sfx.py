@@ -186,6 +186,28 @@ class QueriesSfx:
         return out
 
     @strawberry.field
+    def active_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[strawberry.ID]:
+        """Every rule the entity is currently under — the armed rail's read.
+
+        Unlike ``inFlightSfxIds`` (deliberately narrowed to the manual take-back
+        window, because its caller is the chip that offers to end the rule), this
+        is the *display* union: an armed rule waiting on a roll, a manual
+        activation not yet committed, and an **automatic** rule whose duration
+        timer is still running all count. Holds count too — an un-fired undo
+        still means the activation is live. Unknown ids are dropped, so an
+        orphaned row from a deleted rule cannot render a card.
+        """
+        from transversal.main import _get_engine
+        from transversal.services.scheduled_events import in_flight_sfx_ids
+
+        engine = _get_engine()
+        return [
+            strawberry.ID(sfx_id)
+            for sfx_id in in_flight_sfx_ids(_em(info).repo, str(entity_id))
+            if engine.get(sfx_id) is not None
+        ]
+
+    @strawberry.field
     def available_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str = "") -> list[strawberry.ID]:
         """SFX ids currently available to an entity (ownership + static conditions).
 
