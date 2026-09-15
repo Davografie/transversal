@@ -152,7 +152,7 @@
         @inspect-entity="onInspectEntity"
         @dragging="occupantDragging = $event"
       />
-      <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @click="setMobileFocus('location')"></div>
+      <div v-if="mobileStackActive && mobileFocus !== 'location'" class="band-tap" @touchstart="onBandDragStart($event, 'location')" @click="tapBand('location')"></div>
     </div>
     <div ref="wrapperEl" class="dice-panel-wrapper" :class="{ open: wrapperOpen, dragging: occupantDragging && !isMobile }" @mouseenter="onWrapperEnter" @mouseleave="onWrapperLeave">
       <PeersBar
@@ -189,11 +189,11 @@
           @stamp-sfx="(d) => diceRef?.stampArmedSfx(d.tsId, d.sfxId)"
           @sheet-view-change="onSheetViewChange"
         />
-        <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @click="setMobileFocus('sheet')"></div>
+        <div v-if="mobileStackActive && !sheetEmpty && mobileFocus !== 'sheet'" class="band-tap" @touchstart="onBandDragStart($event, 'sheet')" @click="tapBand('sheet')"></div>
       </div>
       <div class="roller-band">
         <DiceRoller ref="diceRef" :entity-id="entityId" :universe="universe" :mode="rollerMode" :keep-count="keepCount" :effect-count="effectCount" :gm-mode="gmMode" :difficulty="currentDifficulty" :player-id="playerId" :location-id="currentLocationId" :location-name="locationName" :pool-locations="poolLocations" :contests="contests" :peers="peers" :entity-names="entityNames" :remote-pools="remotePools" :remote-results="remoteResults" :sfx-choice-request="sfxChoiceRequest" @update:universe="u => universe = u" @rolled="onDiceRolled" @picked="(r) => { mirrorOwnResult({ result: r }); shareRoll(r) }" @difficulty="onDifficultyCommitted" @pool-change="onPoolChange" @pool-saved="onPoolSaved" @phase-change="onPhaseChange" @panel-open="onPanelOpen" @panel-drag-start="onPanelDragStart" @panel-drag="onPanelDrag" @panel-drag-end="onPanelDragEnd" @sfx-choice-resolved="onSfxChoiceResolved" @acting-entity-change="onActingEntityChange" @offered-change="(ids) => sheetRef?.setOfferedTraits(ids)" />
-        <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @click="setMobileFocus('dice')"></div>
+        <div v-if="mobileStackActive && mobileFocus !== 'dice'" class="band-tap" @touchstart="onBandDragStart($event, 'dice')" @click="tapBand('dice')"></div>
       </div>
     </div>
   </div>
@@ -1419,7 +1419,7 @@ function onPanelDragEnd({ dy, velocity }) {
 // ── Theme (light/dark) — see composables/useThemeMode.js
 const { colorMode } = useThemeMode()
 
-const { isMobile, mobileFocus, mobileStackActive, sheetEmpty, setMobileFocus, rollerContentH } = useMobileBands({
+const { isMobile, mobileFocus, mobileStackActive, sheetEmpty, setMobileFocus, rollerContentH, onBandDragStart, tapBand } = useMobileBands({
   wrapperEl, gmMode, entityId, viewingEntityId,
 })
 

@@ -999,12 +999,16 @@ select option {
 
   .stage.mobile-stack .peers-bar { flex-shrink: 0; }
 
-  /* Tap-capture layer over non-focused bands (rendered by App.vue).
-     Must sit above band content — DiceRoller's root is z-index 10. */
+  /* Tap-or-drag capture layer over non-focused bands (rendered by App.vue).
+     Must sit above band content — DiceRoller's root is z-index 10. A tap
+     expands the band; a drag pulls it open (useMobileBands owns the gesture),
+     so the layer claims the touch stream outright: `touch-action: none` stops
+     the browser from turning the pull into a scroll or a zoom. */
   .stage.mobile-stack .band-tap {
     position: absolute;
     inset: 0;
     z-index: 20;
+    touch-action: none;
   }
 
   /* Focus distribution — explicit heights (percents of the stage height), so

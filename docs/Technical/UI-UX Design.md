@@ -436,12 +436,36 @@ viewer hide too, leaving a clean design workspace (CSS-only via `:has`).
   measured content height with **no viewport cap**, so a targeting wizard or
   consequence menu gets the room it needs while the bands above shrink to
   their minimums — location 10%, sheet teaser 56px, roller takes the rest).
-- **Tap a teaser to expand it.** App renders a capture layer (`.band-tap`)
-  over every non-focused band; the first tap expands the band, removing the
-  layer. The focused band gets no capture layer, so its own interactions
-  (travel dots, trait taps, dice drags) work normally. Focus is tap-driven
+- **Tap *or drag* a teaser to expand it.** App renders a capture layer
+  (`.band-tap`) over every non-focused band; a tap expands the band, removing
+  the layer. The focused band gets no capture layer, so its own interactions
+  (travel dots, trait taps, dice drags) work normally. Focus is user-driven
   only — no auto-focus on phase changes (an earlier phase watcher caused
   surprising focus yanks around rolls).
+- **Dragging a teaser pulls its band open.** The handle is the same
+  `.band-tap` layer the tap uses — deliberately *not* the band body, which is
+  full of the bands' own gestures (the roller's drag, travel dots, occupant
+  drags, trait grips and long-press); a band-wide handle would fight all of
+  them. The gesture reuses the dice panel's vocabulary: an 8px dead-zone so a
+  tap stays a tap, then the bands interpolate between the current and target
+  focus states at **1:1 with the finger**, then the release settles on flick
+  velocity (0.5 px/ms) or distance (72px), else reverts to where it started.
+  A drag swallows the click the browser fires on release, so it cannot
+  double-apply.
+  - The handle sits on a *teaser*, so you grab the band you want and pull it
+    open; the sheet band is reachable from either direction.
+  - **The target layout is measured, not duplicated.** The gesture needs the
+    bands' heights in the target state, and those live in CSS and differ per
+    state — `focus-dice` mixes percentages, a 56px sheet teaser and the
+    measured `--roller-h`, and `:has(.kind-empty-pool)` and `sheet-empty`
+    each redistribute again. So the drag swaps the focus class with
+    transitions off for one synchronous frame, measures, and swaps back:
+    no second copy of the numbers to drift. (Consequence worth knowing: with
+    an **empty pool** the roller band collapses to 0 while the location is
+    focused, so there is no roller teaser to grab there — the roller is
+    reached from the sheet teaser.)
+  - The empty-pool and empty-sheet rules still apply at the endpoints; a
+    band that cannot grow simply does not start a drag.
 - **Empty pool hides the roller.** While the location is focused and the
   roller shows nothing (`kind-empty-pool` — no dice, no roll in flight, no
   results), the roller band collapses to 0 (93% / 7% / 0) and the location
@@ -474,7 +498,9 @@ viewer hide too, leaving a clean design workspace (CSS-only via `:has`).
 
 Tunables: breakpoint `MOBILE_MAX_WIDTH = 820` (App.vue) mirrored by the
 `@media (max-width: 820px)` block in `styles.css`; the focus grow ratios live
-in that same CSS block. The desktop wrapper's slide/peek mechanics (hover,
+in that same CSS block. The band drag's own `BAND_DRAG_SLOP` / `_DISTANCE` /
+`_VELOCITY` live in `useMobileBands.js` and match the dice panel's
+`PANEL_DRAG_*` feel. The desktop wrapper's slide/peek mechanics (hover,
 `syncClosedPosition`, panel drag) are inert while the stack is active.
 
 ## Theming
