@@ -223,7 +223,8 @@ something that says where it came from. It reads the server's active set
 (`activeSfxIds`), not the take-back window, so an **automatic** rule's running
 duration shows there too. Both surfaces re-read when a timer can actually move —
 the dice landing, or a rule ending — and leave the display alone when nothing
-changed.
+changed. A trait's own countdown reads the same way: the row shows the ⏳ time,
+and the trait detail names the rule (*re-enables: 1 beat* / *from: One Trick*).
 
 **What a take-back cannot do**, and how to tell: reversibility is a property of
 the **action**, not of your rule. The editor's validation says so — a rule that
