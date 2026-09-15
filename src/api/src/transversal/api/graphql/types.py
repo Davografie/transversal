@@ -66,6 +66,8 @@ from transversal.api.graphql.type_defs.effects import (  # noqa: F401
     Effect,
     EffectInput,
     ScheduledEvent,
+    ActiveSfx,
+    ActiveSfxBinding,
     EffectFieldDef,
     RefDef,
     EffectActionMeta,

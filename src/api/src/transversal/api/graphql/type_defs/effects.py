@@ -89,6 +89,36 @@ class ScheduledEvent:
     source_sfx_name: Optional[str] = None
 
 @strawberry.type
+class ActiveSfxBinding:
+    """One name an activation bound, for display — ``{beast}`` → *Summoned Beast*.
+
+    ``summary`` is the server's rendering: the resolved name for a single value,
+    a count ("3 dice") for a die or a many-valued binding. Resolution lives here
+    because a binding's value is often an id only the repository can name.
+    """
+    name: str
+    element: str = ""
+    cardinality: str = "one"
+    summary: str = ""
+
+@strawberry.type
+class ActiveSfx:
+    """A rule the entity is currently under, and what its activation is holding.
+
+    ``activeSfxIds`` answered *which*; this answers *what it came from and what
+    it bound* — the instance the rule was activated from and the names its
+    targeting paths could use. ``bindings`` are live-only (they are not persisted
+    on the timer rows), so a rule known solely by its row shows a source and no
+    bindings.
+    """
+    sfx_id: strawberry.ID
+    name: str
+    source_kind: Optional[str] = None
+    source_id: Optional[str] = None
+    source_name: Optional[str] = None
+    bindings: list[ActiveSfxBinding] = strawberry.field(default_factory=list)
+
+@strawberry.type
 class ConsequenceOption:
     """A selectable entry in the post-roll consequence menu."""
     id: strawberry.ID

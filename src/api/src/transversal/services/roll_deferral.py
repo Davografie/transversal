@@ -630,6 +630,23 @@ def list_global_armed_sfx_ids() -> list[str]:
     return out
 
 
+def armed_entry_for(entity_id: str, sfx_id: str) -> Optional[ArmedSfx]:
+    """The armed entry for a rule as seen by an entity — its own, or a global passive.
+
+    Display-only: the entry's ``source_id`` and ``bindings`` exist nowhere else.
+    Bindings are the activation's live names (the author's outputs, the engine's
+    declared seeds, condition outputs) and are deliberately **not** persisted on
+    the timer rows, so a rule known only by a row has no entry here.
+    """
+    for entry in _armed.get(entity_id, []):
+        if entry.source_sfx_id == sfx_id:
+            return entry
+    for entry in _global_armed:
+        if entry.source_sfx_id == sfx_id:
+            return entry
+    return None
+
+
 def expire_global(event_type: str) -> None:
     """Drop passive rules whose boundary expiry matches ``event_type``."""
     global _global_armed

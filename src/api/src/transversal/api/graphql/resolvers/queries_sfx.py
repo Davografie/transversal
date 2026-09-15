@@ -3,6 +3,8 @@
 import strawberry
 
 from transversal.api.graphql.types import ScheduledEvent as GqlScheduledEvent
+from transversal.api.graphql.types import ActiveSfx as GqlActiveSfx
+from transversal.api.graphql.types import ActiveSfxBinding as GqlActiveSfxBinding
 from transversal.api.graphql.types import SfxInput
 from transversal.api.graphql.types import SfxOwnerKindGql
 from transversal.api.graphql.types import SfxOwnerRef
@@ -21,9 +23,89 @@ from transversal.api.graphql.resolvers.converters import (
 )
 
 
+#: Display nouns for a binding's element, so a many-valued binding reads as a
+#: count instead of a wall of ids ("3 dice", not "die:loc:owner:0, …").
+_ELEMENT_NOUNS = {
+    "die": ("die", "dice"),
+    "traitsetting": ("trait", "traits"),
+    "traitset": ("trait set", "trait sets"),
+    "entity": ("entity", "entities"),
+    "location": ("place", "places"),
+    "projection": ("body", "bodies"),
+    "sfx": ("rule", "rules"),
+}
+
+
+def _display_name(repo, value: str, resolve) -> str:
+    """A human name for an id, statement-first for a trait instance.
+
+    Mirrors the sheet: a trait instance reads as its ``statement`` when it has
+    one ("Crimson Scar"), otherwise as its registry trait. Falls back to the raw
+    id when nothing can name it.
+    """
+    if not value:
+        return ""
+    name = resolve(value)
+    if name:
+        return name
+    get_ts = getattr(repo, "get_traitsetting", None)
+    ts = get_ts(value) if callable(get_ts) else None
+    if ts is not None:
+        statement = getattr(ts, "statement", "") or ""
+        if statement:
+            return statement
+        get_trait = getattr(repo, "get_trait", None)
+        trait = get_trait(getattr(ts, "trait_id", "")) if callable(get_trait) else None
+        return getattr(trait, "name", "") or value
+    return value
+
+
+def _binding_summary(repo, element: str, cardinality: str, values: list[str], resolve) -> str:
+    """What to print for a binding: a name for one, a count for many/dice."""
+    if not values:
+        return ""
+    if element == "die" or cardinality == "many" or len(values) > 1:
+        singular, plural = _ELEMENT_NOUNS.get(element, ("value", "values"))
+        return f"{len(values)} {singular if len(values) == 1 else plural}"
+    return _display_name(repo, values[0], resolve)
+
+
+def _binding_rows(repo, entry, resolve) -> list[GqlActiveSfxBinding]:
+    """The armed entry's bound names, ready to render."""
+    out: list[GqlActiveSfxBinding] = []
+    for name, binding in (entry.bindings or {}).items():
+        values = list(binding.values) if binding.values else ([binding.value] if binding.value else [])
+        if not values:
+            continue
+        element = binding.element or ""
+        cardinality = binding.cardinality or "one"
+        out.append(GqlActiveSfxBinding(
+            name=name,
+            element=element,
+            cardinality=cardinality,
+            summary=_binding_summary(repo, element, cardinality, values, resolve),
+        ))
+    return out
+
+
+def _row_activation_source(repo, rows, entity_id: str, sfx_id: str) -> Optional[str]:
+    """The source instance recorded on the row, for a rule with no armed entry."""
+    from transversal.services.scheduled_events import _event_owner_entity
+
+    for event in rows:
+        if event.source_sfx_id != sfx_id:
+            continue
+        if _event_owner_entity(repo, event) != entity_id:
+            continue
+        source = (event.effect.context or {}).get("activation_source")
+        if source:
+            return source
+    return None
+
+
 @strawberry.type
 class QueriesSfx:
-    """Mixin contributing 7 field(s) to the root type."""
+    """Mixin contributing 11 field(s) to the root type."""
 
     @strawberry.field
     def sfx_text(self, info: strawberry.Info, sfx: SfxInput) -> str:
@@ -187,8 +269,8 @@ class QueriesSfx:
         return out
 
     @strawberry.field
-    def active_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[strawberry.ID]:
-        """Every rule the entity is currently under — the armed rail's read.
+    def active_sfx(self, info: strawberry.Info, entity_id: strawberry.ID) -> list[GqlActiveSfx]:
+        """Every rule the entity is currently under — the Active rail's read.
 
         Unlike ``inFlightSfxIds`` (deliberately narrowed to the manual take-back
         window, because its caller is the chip that offers to end the rule), this
@@ -199,18 +281,46 @@ class QueriesSfx:
         armed it). Holds count too — an un-fired undo still means the activation
         is live. Unknown ids are dropped, so an orphaned row from a deleted rule
         cannot render a card.
+
+        Each entry also says *what it came from* (the activation's source
+        instance) and *what it bound* (the names its targeting paths could use).
+        Bindings are live-only — they are not persisted on the timer rows — so a
+        rule known solely by its row shows its source and no bindings.
         """
         from transversal.main import _get_engine
-        from transversal.services.roll_deferral import list_global_armed_sfx_ids
+        from transversal.services.roll_deferral import (
+            armed_entry_for,
+            list_global_armed_sfx_ids,
+        )
         from transversal.services.scheduled_events import in_flight_sfx_ids
 
+        repo = _em(info).repo
         engine = _get_engine()
+        eid = str(entity_id)
         ids: list[str] = []
-        for sfx_id in (*in_flight_sfx_ids(_em(info).repo, str(entity_id)),
-                       *list_global_armed_sfx_ids()):
+        for sfx_id in (*in_flight_sfx_ids(repo, eid), *list_global_armed_sfx_ids()):
             if sfx_id not in ids and engine.get(sfx_id) is not None:
                 ids.append(sfx_id)
-        return [strawberry.ID(sfx_id) for sfx_id in ids]
+
+        resolve = repo_name_resolver(repo)
+        rows = repo.list_all_scheduled_events()
+        out: list[GqlActiveSfx] = []
+        for sfx_id in ids:
+            sfx = engine.get(sfx_id)
+            entry = armed_entry_for(eid, sfx_id)
+            source_id = (
+                entry.source_id if entry is not None
+                else _row_activation_source(repo, rows, eid, sfx_id)
+            )
+            out.append(GqlActiveSfx(
+                sfx_id=strawberry.ID(sfx_id),
+                name=getattr(sfx, "name", "") or sfx_id,
+                source_kind=entry.source_kind if entry is not None else None,
+                source_id=source_id,
+                source_name=_display_name(repo, source_id, resolve) if source_id else None,
+                bindings=_binding_rows(repo, entry, resolve) if entry is not None else [],
+            ))
+        return out
 
     @strawberry.field
     def available_sfx_ids(self, info: strawberry.Info, entity_id: strawberry.ID, universe: str = "") -> list[strawberry.ID]:
