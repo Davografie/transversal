@@ -49,7 +49,7 @@
         </div>
       </div>
       <div v-if="!entityImages.length" class="gallery-empty">No entity images yet — upload or generate one.</div>
-      <div v-else class="gallery-grid entity-gallery-drop" :class="{ 'drag-over': dropTarget === '__entity__' }" @dragover.prevent="dragOver" @dragleave="dragLeave" @drop.prevent="drop">
+      <div v-else class="gallery-grid entity-gallery-drop" :class="{ 'drag-over': dropTarget === '__entity__' }" @dragover.prevent="dragOver" @dragleave="onZoneDragLeave" @drop.prevent="drop">
         <div
           v-for="img in entityImages"
           :key="img.id"
@@ -77,16 +77,21 @@
       </div>
       <div v-if="!projections.length" class="gallery-empty">No projections yet.</div>
       <div v-else class="projection-list">
-        <div v-for="p in sortedProjections" :key="p.id" class="projection-block">
-          <div
-            class="projection-row"
-            :class="{ 'drag-over': dropTarget === p.id }"
-            :data-projection-id="p.id"
-            @dragover.prevent="dragOver"
-            @dragleave="dragLeave"
-            @drop.prevent="drop"
-            @click="openProjectionEditor(p)"
-          >
+        <!-- The projection is the container: its header row and its images live
+             in the same box, and the whole box is the drop zone — so an image
+             dropped on the header, on the images or between them all land on
+             this projection. -->
+        <div
+          v-for="p in sortedProjections"
+          :key="p.id"
+          class="projection-block"
+          :class="{ 'drag-over': dropTarget === p.id }"
+          :data-projection-id="p.id"
+          @dragover.prevent="dragOver"
+          @dragleave="onZoneDragLeave"
+          @drop.prevent="drop"
+        >
+          <div class="projection-row" @click="openProjectionEditor(p)">
             <MediaImage v-if="projectionThumb(p)" :src="projectionThumb(p).image_type === 'animated' ? projectionThumb(p).path_animated : projectionThumb(p).path_large" class="proj-thumb" :alt="p.originUniverse" />
             <span v-else class="proj-thumb proj-thumb-empty">🖼</span>
             <span class="proj-name">{{ p.name || form?.name }}</span>
@@ -384,8 +389,10 @@ const { over, touchStart, dragStart, dragOver, dragLeave, drop, dragEnd } = useD
   resolveTarget: (el) => {
     if (!el || !el.closest) return null
     if (el.closest('.entity-gallery-drop')) return { kind: 'entity' }
-    const row = el.closest('.projection-row')
-    return row ? { kind: 'projection', id: row.dataset.projectionId || null } : null
+    // The whole projection container is the target, so a drop on its images (or
+    // between them) counts the same as a drop on its header row.
+    const block = el.closest('.projection-block')
+    return block ? { kind: 'projection', id: block.dataset.projectionId || null } : null
   },
   onCommit: ({ from, to }) => {
     if (!from || !to) return
@@ -409,6 +416,14 @@ const dropTarget = computed(() => {
   if (!over.value) return null
   return over.value.kind === 'entity' ? '__entity__' : over.value.id
 })
+
+// Moving from a drop zone onto one of its own children (a card's images, say)
+// fires dragleave on the parent — that is not leaving the zone, and clearing
+// `over` there would blink the highlight off the target the user is over.
+function onZoneDragLeave(e) {
+  if (e.relatedTarget && e.currentTarget?.contains?.(e.relatedTarget)) return
+  dragLeave()
+}
 
 const props = defineProps({
   entityId: { type: String, default: null },
@@ -749,8 +764,11 @@ defineExpose({ refresh: loadImages })
 
 .projections-section { margin-top: 12px; }
 .projection-list { display: flex; flex-direction: column; gap: 8px; }
-.projection-block { border: 1px solid var(--overlay-4); border-radius: 6px; padding: 4px; }
-.projection-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); }
+/* One card per projection: the header row is the card's top, its images sit
+   inside the same border, and the accent highlight (drag-over) is the card's. */
+.projection-block { border: 1px solid var(--overlay-8); border-radius: 6px; background: var(--overlay-2); overflow: hidden; }
+.projection-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--overlay-8); }
+.projection-row:last-child { border-bottom: none; }
 .proj-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj-universe { font-size: 11px; color: var(--text-dim); }
 .proj-type { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: var(--overlay-4); }
@@ -765,8 +783,8 @@ defineExpose({ refresh: loadImages })
 .proj-picker { flex: 1; min-width: 0; }
 .proj-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid var(--overlay-12); flex: 0 0 auto; }
 .proj-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-dim); background: var(--overlay-4); }
-.projection-row.drag-over { border-color: var(--accent); background: var(--accent-12); }
-.projection-gallery { margin-top: 4px; padding: 4px; border-top: 1px dashed var(--overlay-8); }
+.projection-block.drag-over { border-color: var(--accent); background: var(--accent-12); }
+.projection-gallery { padding: 6px; }
 .entity-gallery-drop.drag-over { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .transversal-links { margin-top: 12px; }
 .transversal-list { display: flex; flex-direction: column; gap: 4px; }
