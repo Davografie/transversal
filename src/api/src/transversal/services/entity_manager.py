@@ -34,7 +34,11 @@ def _publish_location_changed(entity: Entity, old_location: Optional[str], old_u
     kind = str(getattr(arrival_kind, "value", arrival_kind))
     _publish_to_sessions(StreamEvent(
         event="location_changed",
-        data={"entity_id": entity.id, "from": old_location or "",
+        # ``name`` rides along so a client can say *who* moved without holding an
+        # entity cache for everywhere they might have come from (the GM's move
+        # toast was reading the id). The destination's name is not always free —
+        # see ``move_to``, which already has the location loaded.
+        data={"entity_id": entity.id, "name": entity.name, "from": old_location or "",
               "to": entity.current_location or "", "universe": entity.current_universe,
               "arrival_kind": kind},
     ))
@@ -208,7 +212,8 @@ class EntityManager:
         if entity.current_location != old_location:
             _publish_to_sessions(StreamEvent(
                 event="location_changed",
-                data={"entity_id": entity.id, "from": old_location or "",
+                data={"entity_id": entity.id, "name": entity.name,
+                      "from": old_location or "",
                       "to": entity.current_location or "",
                       "universe": entity.current_universe},
             ))
@@ -551,7 +556,11 @@ class EntityManager:
         kind = str(getattr(arrival_kind, "value", arrival_kind))
         event = StreamEvent(
             event="location_changed",
-            data={"entity_id": entity.id, "from": old_location, "to": location,
+            # Both names ride along: ``loc`` is the destination this move already
+            # resolved above, so the place name costs nothing extra here.
+            data={"entity_id": entity.id, "name": entity.name,
+                  "from": old_location, "to": location,
+                  "to_name": loc.name if loc is not None else "",
                   "universe": entity.current_universe, "arrival_kind": kind},
         )
         _publish_to_sessions(event)

@@ -948,6 +948,24 @@ watch(peers, (p) => {
   }
 }, { deep: true })
 
+// location_id → display name, so the move toast can name a place instead of
+// printing its id. The event carries `to_name` when the server had the location
+// loaded for free (a plain move does); this covers the paths where it did not,
+// looking each place up once and remembering it.
+const placeNames = ref({})
+async function placeName(id, known) {
+  if (known) { placeNames.value[id] = known; return known }
+  if (!id) return 'somewhere'
+  if (placeNames.value[id]) return placeNames.value[id]
+  try {
+    const r = await fetch(`/api/v1/locations/${id}/navigate`)
+    const nav = await r.json()
+    const n = nav.location?.name
+    if (n) { placeNames.value[id] = n; return n }
+  } catch { /* fall through to the id */ }
+  return id
+}
+
 // A GMC is a GM-controlled character (no player owner) — the target the GM
 // must switch to when a player challenges it.
 function isGmcEntity(id) {
@@ -1061,8 +1079,13 @@ function handleSseEvent(evt) {
         locationRef.value?.fetchNav()
       }
       if (gmMode.value && foreign && evt.data?.to) {
-        nameCache.value[eid] = evt.data.to_name || eid
-        addToast(`${name} moved to ${evt.data.to}`, 'move')
+        // Names, not ids. This line used to cache `evt.data.to_name` — a field
+        // the payload did not carry — under the *entity's* key, so from the
+        // second move on the toast read "a1b2c3d4 moved to loc-142673364". The
+        // payload now carries both names; the caches are the fallback.
+        const who = evt.data?.name || name
+        placeName(evt.data.to, evt.data?.to_name)
+          .then(where => addToast(`${who} moved to ${where}`, 'move'))
       }
       break
     case 'entity_updated':

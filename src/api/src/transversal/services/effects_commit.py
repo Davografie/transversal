@@ -106,6 +106,7 @@ def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | 
         kind = str(getattr(arrival_kind, "value", arrival_kind) or ArrivalKind.EFFECT.value)
         _publish("location_changed", {
             "entity_id": entity.id,
+            "name": entity.name,
             "from": old_location or "",
             "to": entity.current_location or "",
             "universe": entity.current_universe,

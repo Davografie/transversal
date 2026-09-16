@@ -443,6 +443,16 @@ border), and the overlay/particle system below — run continuously.
 
 ## SSE & multiplayer
 
+- `location_changed` drives the GM's move toast, so its payload carries **names
+  as well as ids**: `name` (the entity) and — on a plain move — `to_name` (the
+  destination). `move_to` already loads the destination to read its universe, so
+  that one is free; `name` is free everywhere. Without them the toast can only
+  print ids, because the entity has just left the location whose peers would name
+  it and the destination may be somewhere the client has never been. `App.vue`
+  prefers the payload, falls back to `entName`/`placeNames`, and looks an unknown
+  place up once. (It used to read a `to_name` the payload did not have and cache
+  it under the *entity's* key, which is why the toast turned into ids from the
+  second move on.)
 - `entity_moved` events (broadcast by the map-position endpoint) arrive through
   `App.vue`'s SSE composable; `fetchNavWithLerp()` is exposed and re-fetches nav
   with `lerpActive = true`, so non-self occupant dots ease to their new positions
