@@ -117,8 +117,13 @@
           </div>
         </div>
       </div>
+      <div class="projection-universe">
+        <select v-model="newProjUniverse" class="proj-universe-select" title="Universe for the new projection — filters the locations below" @change="onNewProjUniverseChange">
+          <option v-for="u in universeOptions" :key="u.value" :value="u.value">{{ u.label }}</option>
+        </select>
+      </div>
       <div class="projection-add">
-        <TargetPicker v-model="newProjLocationId" kind="location" placeholder="Search location…" class="proj-picker" @select="onLocationSelect" />
+        <TargetPicker v-model="newProjLocationId" kind="location" :scope="newProjUniverse ? `universe:${newProjUniverse}` : ''" placeholder="Search location…" class="proj-picker" @select="onLocationSelect" />
         <select v-model="newProjType" class="proj-type-select">
           <option value="NATIVE">native</option>
           <option value="CONSCIOUSNESS">consciousness</option>
@@ -230,7 +235,7 @@ const { form, selected, uploadBgImage, onImagen: doImagen, onCancel: doCancel, i
 const { deleteEntity, fetchEntities } = useEntityCrud()
 const { traitNameMap } = useTraitsConfig()
 const { fetchLifePaths } = useLifePaths()
-const { name: universeName, load: loadUniverseNames } = useUniverseNames()
+const { name: universeName, options: universeOptions, load: loadUniverseNames } = useUniverseNames()
 loadUniverseNames()
 
 // ── Who holds agency over this entity ────────────────
@@ -302,9 +307,22 @@ async function importToLocation() {
 const newProjLocationId = ref('')
 const newProjLocation = ref(null)
 const newProjType = ref('NATIVE')
+// The new projection's universe: an explicit first choice, which also scopes the
+// location picker (a location in another universe makes a body in that universe).
+// Defaults to where the entity is now, so the common case is one click.
+const newProjUniverse = ref('')
+watch(() => form.value?.current_universe, (u) => {
+  if (u && !newProjUniverse.value) newProjUniverse.value = u
+}, { immediate: true })
 
 function onLocationSelect(loc) {
   newProjLocation.value = loc
+}
+
+// A pick made under another universe must not survive the switch.
+function onNewProjUniverseChange() {
+  newProjLocationId.value = ''
+  newProjLocation.value = null
 }
 
 async function addProjectionLocal() {
@@ -739,6 +757,8 @@ defineExpose({ refresh: loadImages })
 .proj-type.active { color: var(--accent-pale); background: var(--accent-16); }
 .proj-imagen.cancelling { color: var(--danger-strong); }
 .projection-add { display: flex; gap: 6px; margin-top: 8px; }
+.projection-universe { display: flex; margin-top: 8px; }
+.proj-universe-select { flex: 1; min-width: 0; padding: 6px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .proj-input { flex: 1; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .proj-type-select { padding: 6px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .section-btn.proj-add-btn { flex: 0 0 auto; padding: 6px 10px; }
