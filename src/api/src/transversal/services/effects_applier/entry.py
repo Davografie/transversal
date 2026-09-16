@@ -9,6 +9,15 @@ from transversal.services.effects_applier.datatypes import (
     BINDINGS_CONTEXT_KEY,
     EffectsResult,
 )
+from transversal.services.effects_applier.handlers_change_die import (
+    _apply_change_double,
+    _apply_change_remove,
+    _apply_restore_die,
+    _apply_change_set,
+    _apply_change_split,
+    _apply_change_step_down,
+    _apply_change_step_up,
+)
 from transversal.services.effects_applier.handlers_dice import (
     _apply_add_die,
     _apply_disable,
@@ -32,7 +41,6 @@ from transversal.services.effects_applier.handlers_pools import (
     _apply_resolve_pool,
     _apply_roll_pool,
     _apply_set_traitset_limit,
-    _apply_step_die,
 )
 from transversal.services.effects_applier.handlers_sfx import (
     _apply_grant_sfx,
@@ -92,11 +100,17 @@ _MUTATION_HANDLERS = {
     ("modify_pool", "remove_added_dice"): _apply_remove_added_dice,
     ("modify_pool", "roll"): _apply_roll_pool,
     ("modify_pool", "resolve"): _apply_resolve_pool,
-    # Stepping a die *in the pool* (as opposed to a trait's rating). These were
-    # declared and seeded but applied nowhere: the applier passed `modify_roll`
-    # through to "the resolver context", and nothing consumed it there.
-    ("modify_roll", "step_up_die"): _apply_step_die,
-    ("modify_roll", "step_down_die"): _apply_step_die,
+    # Changing a die — in a trait instance's rating *or* in an assembled pool.
+    # Which one is the target's business (`rating:<i>:<ts>` / `die:<loc>:<owner>:<i>`),
+    # so every verb dispatches on the locus and the two homes cannot drift.
+    ("modify_roll", "set_die"): _apply_change_set,
+    ("modify_roll", "step_up_die"): _apply_change_step_up,
+    ("modify_roll", "step_down_die"): _apply_change_step_down,
+    ("modify_roll", "double_die"): _apply_change_double,
+    ("modify_roll", "split_die"): _apply_change_split,
+    ("modify_roll", "remove_die"): _apply_change_remove,
+    # The undo of a change-die effect, from the prior dice the handler recorded.
+    ("modify_roll", "restore_die"): _apply_restore_die,
     ("modify_trait", "reveal"): _apply_reveal,
     ("transfer_razmerit", "earn"): _apply_earn,
     ("transfer_razmerit", "spend"): _apply_spend,

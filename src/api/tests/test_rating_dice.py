@@ -139,9 +139,10 @@ def test_a_rating_die_navigates_back_to_its_trait_instance():
 
 
 def test_a_rating_die_resolves_to_a_rating_reference():
-    """The reference an effect is applied with names *which* die of the rating."""
+    """The reference an effect is applied with names *which* die of the rating.
+    The index comes first, because a traitsetting id contains colons."""
     die = {"locus": "rating", "rating": "d8", "ts_id": "kael:qi", "index": 1}
-    assert resolved_id(die) == "rating:kael:qi:1"
+    assert resolved_id(die) == "rating:1:kael:qi"
 
 
 def test_a_pool_die_still_resolves_to_its_position():

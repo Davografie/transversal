@@ -402,12 +402,15 @@ def resolved_id(value) -> str | None:
     a fix to one left the other handing a trait id to an action that wanted a die.
 
     A **rating die** is addressed the same way but from the other locus:
-    ``rating:<ts_id>:<index>``, since a trait's rating is a list and the effect
-    has to name which die of it. Both forms are what ``_parse_die_ref`` reads.
+    ``rating:<index>:<ts_id>``, since a trait's rating is a list and the effect
+    has to name which die of it. The index comes *first* there because a
+    traitsetting id contains colons (``kael:spiritual-power``), so the tail is the
+    only unambiguous place for it. Both forms are what ``_parse_die_ref`` (pool)
+    and ``handlers_change_die._parse_rating_ref`` (rating) read.
     """
     if isinstance(value, dict):
         if value.get("locus") == "rating":
-            return f"rating:{value.get('ts_id', '')}:{value.get('index')}"
+            return f"rating:{value.get('index')}:{value.get('ts_id', '')}"
         if value.get("pool_owner"):
             return f"die:{value.get('pool_location', '')}:{value['pool_owner']}:{value.get('pool_index')}"
         return value.get("ts_id") or value.get("id")

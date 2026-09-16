@@ -194,3 +194,32 @@ def dice_list_to_rating(dice: list[DieType]) -> str:
         n = counts[die]
         parts.append(die.value if n == 1 else f"{n}{die.value}")
     return " + ".join(parts)
+
+
+def step_die(die: Optional[DieType], steps: int) -> Optional[DieType]:
+    """Move ``steps`` along the die ladder; ``None`` when the die falls off it.
+
+    One rule for both places a die lives — a trait instance's *rating* and an
+    assembled *pool* — because "one step up" has to mean the same thing wherever
+    it is applied.
+
+    - Climbing past d12 saturates at d12.
+    - A d4 stepped down is **gone** (``None``). The rating keeps its other dice,
+      and an empty rating is a valid state: a trait with no dice is still a trait.
+    - Stepping up from nothing restores a d4. An empty rating sits *below* the
+      ladder, so one step lands on the bottom rung and further steps climb from
+      there (2 steps from empty → d6).
+    """
+    if steps == 0:
+        return die
+    order = list(DieType)
+    if die is None:
+        return order[min(steps - 1, len(order) - 1)] if steps > 0 else None
+    try:
+        idx = order.index(die)
+    except ValueError:
+        return die
+    idx += steps
+    if idx < 0:
+        return None
+    return order[min(idx, len(order) - 1)]

@@ -291,10 +291,12 @@ def _register_core_handlers(em, raz):
     effect_registry.register("travel", "move", _travel)
     effect_registry.register("location", "set", _commit)
 
-    # Stepping a die in the pool is a state change (the scene store), so it goes
-    # through the mutation dispatch above rather than the resolver passthrough.
-    effect_registry.register("modify_roll", "step_up_die", _commit)
-    effect_registry.register("modify_roll", "step_down_die", _commit)
+    # Changing a die is a real state change — a trait instance's rating, or the
+    # scene store's pool — so these go through the mutation dispatch above rather
+    # than the resolver passthrough.
+    for action in ("set_die", "step_up_die", "step_down_die", "double_die",
+                   "split_die", "remove_die", "restore_die"):
+        effect_registry.register("modify_roll", action, _commit)
     # The rest of the dice-pool actions are still resolver-context only.
     effect_registry.register("modify_roll", "*",
         lambda a, eid, u, ctx: None)  # passed through to resolver context
