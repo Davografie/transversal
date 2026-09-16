@@ -33,8 +33,13 @@ def _publish_trait_changed(ts, universe: str) -> None:
     })
     resync_pool_dice_for_trait(ts.entity_id, ts.id, new_dice)
     from transversal.services.scheduled_events import dispatch_event
+    # The *instance*, not just the registry trait: several settings can share one
+    # generic trait — an agenda's steps all instantiate "grim portent" — so a
+    # `trait` alone cannot tell step 3 from step 5. The SSE payload above always
+    # carried it; the effects context dropped it.
     dispatch_event(None, "trait_updated", entity_id=ts.entity_id, universe=universe,
-                   context={"trait": ts.trait_id, "traitset": ts.traitset_id})
+                   context={"trait": ts.trait_id, "traitset": ts.traitset_id,
+                            "trait_setting": ts.id})
 
 
 def commit_effects(entity: Entity, effects: list[Effect], repo, context: dict | None = None, source=None, source_element: str | None = None, arrival_kind: str | None = None) -> EffectsResult:

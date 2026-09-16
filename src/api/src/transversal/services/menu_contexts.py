@@ -214,6 +214,10 @@ TRIGGERS: tuple[TriggerDef, ...] = (
     TriggerDef("on_trait_change", "On Trait Change", (
         Variable("trait", "trait"),
         Variable("traitset", "traitset"),
+        # Which *instance* changed. Several settings can share one registry trait
+        # (an agenda's steps all instantiate one generic trait), so without this a
+        # rule can see that a portent changed but not which one.
+        Variable("trait_setting", "trait_setting"),
     )),
     TriggerDef("on_trait_learn", "On Trait Learned", (
         Variable("trait", "trait"),

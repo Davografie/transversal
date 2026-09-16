@@ -115,3 +115,48 @@ def test_commit_apply_then_resolve_roundtrip():
     result2 = commit_effects(entity, [resolved], repo)
     assert repo.created_relationships == [("char-1", "loc-x", "linked", "")]
     assert len(result2.applied) == 1
+
+
+def test_trait_updated_context_names_the_instance_that_changed(monkeypatch):
+    """`trait_updated` reaches the effects engine with the *setting* id.
+
+    The SSE payload always carried it; the engine context dropped it, so an
+    `on_trait_change` rule could see which registry trait changed but never which
+    instance. That is fatal for a container whose children share one generic trait
+    (an agenda's steps): with five portents there is no way to tell step 3 from
+    step 5.
+    """
+    from types import SimpleNamespace
+
+    from transversal.services import effects_commit as ec
+    from transversal.services import scheduled_events as se
+
+    captured = {}
+    monkeypatch.setattr(ec, "resync_pool_dice_for_trait", lambda *a, **k: None)
+    monkeypatch.setattr(ec, "_publish", lambda event, data: captured.setdefault("sse", (event, data)))
+    monkeypatch.setattr(se, "dispatch_event",
+                        lambda repo, event, **kw: captured.setdefault("dispatch", (event, kw)))
+
+    ts = SimpleNamespace(id="e1:portent-3", entity_id="e1", trait_id="trait-portent",
+                         traitset_id="ts-agenda", dice=[DieType.D6])
+    ec._publish_trait_changed(ts, "earth")
+
+    event, sse_data = captured["sse"]
+    assert event == "trait_updated"
+    assert sse_data["trait_setting_id"] == "e1:portent-3"
+
+    event, kwargs = captured["dispatch"]
+    assert event == "trait_updated"
+    assert kwargs["context"]["trait_setting"] == "e1:portent-3"
+    # The registry trait and set still ride along.
+    assert kwargs["context"]["trait"] == "trait-portent"
+    assert kwargs["context"]["traitset"] == "ts-agenda"
+
+
+def test_the_trait_change_trigger_declares_the_instance():
+    """Declared, so the editor offers `{trait_setting}` and the engine binds it —
+    a context key nobody declares is plumbing nobody can use."""
+    from transversal.services.menu_contexts import trigger_variables
+
+    names = {v.name for v in trigger_variables("on_trait_change")}
+    assert {"trait", "traitset", "trait_setting"} <= names

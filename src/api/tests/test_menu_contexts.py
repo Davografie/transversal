@@ -132,7 +132,7 @@ def test_state_fire_sites_populate_declared_variables(monkeypatch):
         "projection_created": {"entity_created": "c1", "projection_created": "c1:three_realms", "universe": "three_realms"},
         "location_changed": {"from_location": "a", "to_location": "b", "universe": "earth",
                                 "arrival_kind": "move"},
-        "trait_updated": {"trait": "t1", "traitset": "ts1"},
+        "trait_updated": {"trait": "t1", "traitset": "ts1", "trait_setting": "s1"},
         "relationship_created": {"target_entity": "e2", "relationship_type": "ally"},
         "on_trait_learn": {"trait": "t1", "trait_setting": "s1", "owner": "o", "learner": "l"},
         "on_trait_offered": {"trait": "t1", "trait_setting": "s1", "owner": "o", "opponent": "p", "newly_revealed": "true"},
