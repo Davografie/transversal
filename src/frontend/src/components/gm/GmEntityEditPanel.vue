@@ -175,6 +175,31 @@
         </Button>
       </div>
     </div>
+    <div v-if="form.type === 'FACTION'" class="members-section">
+      <div class="gallery-header">
+        <h4>Members</h4>
+      </div>
+      <div v-if="!members.length" class="gallery-empty">No members yet.</div>
+      <div v-else class="members-list">
+        <div v-for="m in members" :key="m.id" class="member-row" :class="{ self: m.id === currentEntityId }">
+          <span class="entity-type-badge" :class="'type-' + m.type">{{ m.type }}</span>
+          <span class="member-name">{{ m.name }}</span>
+          <span v-if="m.role" class="member-role">{{ m.role }}</span>
+          <span v-if="m.rank" class="member-rank">{{ m.rank }}</span>
+        </div>
+      </div>
+      <!-- The tie is member → faction, and the member is whoever the GM is
+           acting as: one gesture to claim a slot, one to give it up. -->
+      <div v-if="canHoldMembership" class="members-action">
+        <Button v-if="actingMembership" variant="neutral" :loading="memberBusy" :title="`Remove the membership tie ${acting.name} → ${form.name}`" @click="leaveFaction">
+          Leave as {{ acting.name }}
+        </Button>
+        <Button v-else variant="secondary" :loading="memberBusy" :title="`Create the membership tie ${acting.name} → ${form.name}`" @click="joinFaction">
+          Join as {{ acting.name }}
+        </Button>
+      </div>
+      <div v-if="memberNote" class="members-note">{{ memberNote }}</div>
+    </div>
     <div v-if="form.type === 'UNIVERSE'" class="section-buttons">
       <Button class="section-btn" variant="neutral" @click="openLoraConfig">🖼 LoRA Configuration</Button>
       <Button class="section-btn" variant="neutral" @click="openRollTables">🎲 Roll Tables</Button>
@@ -227,7 +252,7 @@ import MediaImage from '@/components/MediaImage.vue'
 
 const panel = usePanel()
 const bus = usePanelBus()
-const { graphql } = useApi()
+const { graphql, error: apiError } = useApi()
 
 // ── Composables: shared state with GmPanel ──────────
 // This panel's own editor state, keyed to props.entityId. The shared instance
@@ -440,6 +465,9 @@ const emit = defineEmits(['switch-to-sheet', 'image-open', 'go-to-location'])
 const panelActive = inject('panelActive', computed(() => true))
 watch(panelActive, (active) => {
   if (active && props.entityId) selectEntity({ id: props.entityId })
+  // A roster can move while this panel sits behind another one (a join from a
+  // sibling faction panel, say), so re-read it on the way back to the front.
+  if (active && form.value?.type === 'FACTION') loadMembers()
 }, { immediate: true })
 
 // ── Sub-panel openers ───────────────────────────────
@@ -605,6 +633,80 @@ async function createZone() {
 
 watch(() => [props.entityId, form.value?.type], ([id, type]) => {
   if (id && (type === 'LOCATION' || type === 'UNIVERSE')) loadZones()
+}, { immediate: true })
+
+// ── Members (faction entities) ──────────────────────
+// The roster read and the membership tie are both backend-platform's; the panel
+// owns the gesture. A roster entry is a `membership` (or roster-trait `relation`)
+// tie pointing member → faction, and the member here is whoever the GM is acting
+// as (the panel's `currentEntityId`).
+const members = ref([])
+const acting = ref(null)            // the acting entity: { id, name, type }
+const memberBusy = ref(false)
+const memberNote = ref('')
+// Who may hold a membership — the same set the backend validates against.
+const HOLDER_TYPES = ['CHARACTER', 'GMC', 'ASSET']
+const canHoldMembership = computed(() => !!acting.value && HOLDER_TYPES.includes(acting.value.type))
+const actingMembership = computed(() => members.value.find(m => m.id === props.currentEntityId) || null)
+
+async function loadMembers() {
+  members.value = []
+  acting.value = null
+  memberNote.value = ''
+  if (!props.entityId) return
+  const wanted = props.currentEntityId
+  const [roster, me] = await Promise.all([
+    graphql(`query($id: ID!) { factionMembers(factionId: $id) { id name type role rank } }`, { id: props.entityId }),
+    wanted ? graphql(`query($id: ID!) { entity(id: $id) { id name type } }`, { id: wanted }) : null,
+  ])
+  // A response that is missing rather than empty is a failed read; say so once
+  // rather than rendering an empty roster as if the faction had no members.
+  if (!roster) { memberNote.value = apiError.value || 'Could not load the roster.'; return }
+  members.value = roster.factionMembers || []
+  acting.value = me?.entity || null
+}
+
+async function joinFaction() {
+  if (!canHoldMembership.value || memberBusy.value) return
+  memberBusy.value = true
+  try {
+    const res = await graphql(
+      `mutation($input: CreateRelationshipInput!) { createRelationship(input: $input) { id } }`,
+      { input: { fromEntityId: props.currentEntityId, toEntityId: props.entityId, type: 'membership' } },
+    )
+    // Read the reason before the reload below: every call clears the api error
+    // ref on the way in, so a stale message cannot survive it.
+    const failure = res ? '' : (apiError.value || 'Could not add the membership.')
+    await loadMembers()
+    if (failure) memberNote.value = failure
+  } finally {
+    memberBusy.value = false
+  }
+}
+
+async function leaveFaction() {
+  if (memberBusy.value) return
+  memberBusy.value = true
+  try {
+    const res = await graphql(
+      `mutation($input: DeleteRelationshipInput!) { deleteRelationship(input: $input) }`,
+      { input: { fromEntityId: props.currentEntityId, toEntityId: props.entityId, type: 'membership' } },
+    )
+    const failure = res ? '' : (apiError.value || 'Could not remove the membership.')
+    // false = there was no membership edge to remove, yet the roster still lists
+    // them: that slot is a `relation` tie, which carries roster traits and is not
+    // this button's to delete.
+    const nothingRemoved = !!res && res.deleteRelationship === false
+    await loadMembers()
+    if (failure) memberNote.value = failure
+    else if (nothingRemoved) memberNote.value = 'That roster slot is a relation tie, not a membership — edit or remove it from the relationship editor.'
+  } finally {
+    memberBusy.value = false
+  }
+}
+
+watch(() => [props.entityId, form.value?.type, props.currentEntityId], ([id, type]) => {
+  if (id && type === 'FACTION') loadMembers()
 }, { immediate: true })
 
 // ── Imagen ──────────────────────────────────────────
@@ -800,4 +902,14 @@ defineExpose({ refresh: loadImages })
 .zones-add { display: flex; gap: 6px; margin-top: 8px; }
 .zone-input { flex: 1; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 12px; }
 .section-btn.zone-add-btn { flex: 0 0 auto; padding: 6px 10px; }
+.members-section { margin-top: 12px; }
+.members-list { display: flex; flex-direction: column; gap: 4px; }
+.member-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--overlay-8); border-radius: 4px; background: var(--overlay-2); }
+.member-row.self { border-color: var(--accent); }
+.member-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-role { font-size: 11px; color: var(--text-dim); }
+.member-rank { font-size: 10px; text-transform: uppercase; color: var(--text-dim); padding: 1px 6px; border-radius: 3px; background: var(--overlay-4); }
+.members-action { display: flex; gap: 6px; margin-top: 8px; }
+.members-action .btn { flex: 1; }
+.members-note { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
 </style>
