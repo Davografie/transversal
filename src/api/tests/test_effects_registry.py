@@ -91,11 +91,14 @@ def test_the_effect_die_comparisons_name_a_die_with_a_spec():
 
 def test_delete_trait_is_authorable():
     """`remove` existed only as the internal inverse of `gain` — an author could
-    not delete a trait at all. It is now a first-class action."""
+    not delete a trait at all. It is now a first-class action, and its target is a
+    path to the trait instance: the instance names whose trait it is, so there is
+    no subject left to ask for."""
     meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "delete_trait")
     assert (meta.effect_type, meta.effect_action) == ("modify_trait", "remove")
-    assert meta.target_kind == "trait"
-    assert [f.name for f in meta.fields] == ["target", "entity"]
+    assert meta.path_element == ("traitsetting",)
+    assert meta.target_kind is None
+    assert [f.name for f in meta.fields] == ["target"]
     assert effect_card("modify_trait", "remove") == "remove {target}"
 
 
@@ -111,10 +114,12 @@ def test_step_actions_declare_steps_context_field():
 
 
 def test_entity_effects_declare_entity_field():
-    # Trait/razmerit effects that act on an entity must expose the `entity`
-    # subject field so the editor renders an ENTITY input.
+    # Effects whose `entity` is a genuine *subject* — who it lands on — must
+    # expose the field so the editor renders an ENTITY input. `set` is not here:
+    # its target is a path to a trait instance, which already says whose trait it
+    # is, so the subject is implied rather than asked for.
     for action in ("earn", "spend", "gain", "gain_or_step_up", "cortex_gain",
-                   "step_up", "step_down", "set"):
+                   "step_up", "step_down"):
         meta = _meta(action)
         assert meta is not None, action
         fields = {f.name: f for f in meta.fields}

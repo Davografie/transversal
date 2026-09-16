@@ -32,7 +32,7 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         supports_polarity=True,
         inverse=("modify_trait", "remove"),
-        target_kind="trait",
+        path_element=("trait",),
     ),
     EffectActionMeta(
         action_id="gain_or_step_up_trait",
@@ -52,7 +52,7 @@ ACTIONS: list[EffectActionMeta] = [
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STEPS_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
         supports_duration=True,
         supports_polarity=True,
-        target_kind="trait",
+        path_element=("trait",),
     ),
     EffectActionMeta(
         action_id="cortex_gain_trait",
@@ -70,8 +70,8 @@ ACTIONS: list[EffectActionMeta] = [
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
         context_fields=[_RELATIONSHIP_CONTEXT_FIELD, _STATEMENT_CONTEXT_FIELD, _NOTES_CONTEXT_FIELD],
-        target_kind="trait",
         supports_polarity=True,
+        path_element=("trait",),
     ),
     EffectActionMeta(
         action_id="reveal_trait",
@@ -83,13 +83,12 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         fields=[
             EffectFieldDef(name="target", label="Trait", field_type="text", required=True),
-            _ENTITY_FIELD,
         ],
         context_fields=[
             EffectFieldDef(name="learner", label="Learner", field_type="entity",
                           required=False, default="self"),
         ],
-        target_kind="trait",
+        path_element=("traitsetting",),
     ),
 
 ]

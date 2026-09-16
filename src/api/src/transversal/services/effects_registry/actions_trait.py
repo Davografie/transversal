@@ -119,15 +119,13 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True),
-            _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         supports_duration=True,
         inverse=("modify_trait", "set"),
         inverse_captures_prior=True,
-        target_kind="trait",
+        path_element=("traitsetting",),
     ),
     EffectActionMeta(
         action_id="add_rating_die",
@@ -139,14 +137,12 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "ON_ROLL", "ON_SET", "ON_RESULT"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
-            _ENTITY_FIELD,
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         supports_duration=True,
         inverse=("modify_trait", "remove_die"),
-        target_kind="trait",
+        path_element=("traitsetting",),
     ),
     EffectActionMeta(
         action_id="remove_rating_die",
@@ -182,9 +178,8 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
-            _ENTITY_FIELD,
         ],
-        target_kind="trait",
+        path_element=("traitsetting",),
     ),
     EffectActionMeta(
         action_id="copy_trait",
@@ -231,12 +226,10 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
-            _ENTITY_FIELD,
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         supports_duration=True,
         inverse=("modify_trait", "enable"),
-        target_kind="trait",
+        path_element=("traitsetting",),
     ),
     EffectActionMeta(
         action_id="toggle_trait",
@@ -249,12 +242,10 @@ ACTIONS: list[EffectActionMeta] = [
         fields=[
             EffectFieldDef(name="target", label="Target Trait", field_type="text",
                           required=True, default="primary"),
-            _ENTITY_FIELD,
         ],
-        context_fields=[_RELATIONSHIP_CONTEXT_FIELD],
         supports_duration=True,
         inverse=("modify_trait", "toggle"),
-        target_kind="trait",
+        path_element=("traitsetting",),
     ),
 
 ]

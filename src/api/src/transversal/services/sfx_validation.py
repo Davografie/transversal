@@ -16,6 +16,10 @@ from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
 
 _TOKEN = re.compile(r"\{([^{}]+)\}")
 
+# A runtime picker placeholder — `{choose:trait}` or `{choose_trait}`. The kind
+# is what a filter over the candidates has to apply to.
+_PICKER_KIND = re.compile(r"^\{(?:choose|random)[:_]([a-z_]+)\}$")
+
 # Placeholders the effect system resolves itself, not trigger variables.
 # choose/random/return are target/exit mechanisms; the rest are applier-internal
 # context keys that happen to appear in authored fields.
@@ -64,8 +68,19 @@ def _action_meta(effect: Effect):
 
 
 def _target_kind(effect: Effect):
+    """The kind of thing this effect's target picks.
+
+    From the action's declared picker kind if it still has one, else from the
+    placeholder itself: `{choose_trait}` picks a trait whether or not the action
+    offers a picker in the editor. An action whose target must be a *path*
+    declares no kind, and a filter over a path narrows nothing — so the
+    placeholder is the only place left that can say what is being picked.
+    """
     meta = _action_meta(effect)
-    return meta.target_kind if meta else None
+    if meta is not None and meta.target_kind:
+        return meta.target_kind
+    match = _PICKER_KIND.match((effect.target or "").strip())
+    return match.group(1) if match else None
 
 
 def _missing_required(effect: Effect) -> list[str]:
