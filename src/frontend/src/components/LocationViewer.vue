@@ -392,10 +392,20 @@ const sceneCamera = computed(() => {
     : { w: cw * zoom * 1.8, h: ch * zoom * 1.8 }  // unknown aspect: 180% fallback
   // Pan shift in px (positive = scene shifted left/up) so the self character
   // sits at the anchor point.
+  //
+  // Clamped so the scene always covers the viewport. Pulling the character to
+  // the anchor can ask for more pan than the image has to give — near the edge
+  // of a map that slid the image off-screen and left a black band beside the
+  // character, which is what the mobile teaser exposed (at p=0 the pan is
+  // proportional and already in range, so this only ever bites as it zooms).
+  // Better to stop following the character than to show the void behind it.
+  const panX = (mx / 100) * w - (anchor.x / 100) * cw
+  const panY = (my / 100) * h - (anchor.y / 100) * ch
+  const clampPan = (v, max) => Math.min(Math.max(v, 0), Math.max(0, max))
   return {
     cw, ch, zoom, p, w, h,
-    panX: (mx / 100) * w - (anchor.x / 100) * cw,
-    panY: (my / 100) * h - (anchor.y / 100) * ch,
+    panX: clampPan(panX, w - cw),
+    panY: clampPan(panY, h - ch),
   }
 })
 

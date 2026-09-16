@@ -458,6 +458,24 @@ border), and the overlay/particle system below — run continuously.
   `toViewportPos`/`toImagePos`, `navDotPerspective`, `holeStyleFor`,
   `travelProximity`, the drag frame) reads from the single `sceneCamera`
   computed — never re-derive the pan independently or the math will drift.
+- **The pan is clamped to the image bounds.** `sceneCamera` clamps `panX`/`panY`
+  to `[0, w - cw]` / `[0, h - ch]` so the scene always covers the viewport. The
+  teaser pulls the character to the *viewport centre*, and near the edge of a map
+  that asks for more pan than the image has to give: on mobile the image slid
+  off-screen and left a black band beside the character (measured: 99px of a
+  390px viewport with the character at 90%, up to 195px at the edge; 0 before the
+  fix when expanded, because at `p = 0` the pan is proportional and already in
+  range — so this only ever bit as the teaser zoomed). Clamping loses the
+  character's exact anchoring at the extremes; that beats showing the void behind
+  it. Verified across band heights, aspect ratios and positions: worst band is
+  0px, and the character never ends up off-screen.
+  Note the camera zoom is necessarily **uniform**: `.scene-media` is a
+  `cover`-fit, so the visible image always has the scene layer's aspect (which is
+  the image's own). "Zoom in vertically but not horizontally" would change that
+  aspect — it needs either a stretched image or a re-crop, both worse than the
+  current behaviour. If the *horizontal framing* should hold steady instead, the
+  lever is the anchor, not the zoom: keeping `anchor.x = mx` pulls the character
+  to the centre vertically only.
 - **One arrival-point rule.** `arrivalPoint(destNav, fromId)` is the only place
   that answers "where does an entity land when it arrives at a location from
   another one", and both the dot preview (`preloadDestNavCache`) and the travel
