@@ -66,37 +66,51 @@ ACTIONS: list[EffectActionMeta] = [
     EffectActionMeta(
         action_id="reduce_by_effect_die",
         label="Reduce by Effect Die",
-        description="Compare the effect die to the trait's rating: remove it if the effect die is larger, else step it down",
+        description=(
+            "Compare the effect die to a die: remove it if the effect die is "
+            "larger, else step it down. Targets a die in either home — a rating "
+            "die (which persists) or a die in the pool (which lasts the roll)"
+        ),
         category="benefit",
         effect_type="modify_trait",
         effect_action="reduce_by_effect",
         valid_timings=["IMMEDIATE", "ON_ROLL", "ON_SET", "ON_RESULT", "ON_SUCCESS", "ON_FAILURE"],
         fields=[
-            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
             _ENTITY_FIELD,
         ],
         context_fields=[
             _RELATIONSHIP_CONTEXT_FIELD,
             EffectFieldDef(name="effect_die", label="Effect Die", field_type="die_select", required=False, default="{effect_die}", options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        # A die is not a picker kind, so the path is what names one — either home.
+        # `target_kind` stays: an older effect that names a *trait* still resolves
+        # to that trait's rating, and the picker is how such a value is chosen.
+        path_element=("die", "rating_die"),
         target_kind="trait",
     ),
     EffectActionMeta(
         action_id="increase_by_effect_die",
         label="Increase by Effect Die",
-        description="Compare the effect die to the trait's rating: set it to the effect die if the effect die is larger, else step it up",
+        description=(
+            "Compare the effect die to a die: set it to the effect die if the "
+            "effect die is larger, else step it up. Targets a die in either home "
+            "— a rating die (which persists) or a die in the pool (which lasts "
+            "the roll)"
+        ),
         category="benefit",
         effect_type="modify_trait",
         effect_action="increase_by_effect",
         valid_timings=["IMMEDIATE", "ON_ROLL", "ON_SET", "ON_RESULT", "ON_SUCCESS", "ON_FAILURE"],
         fields=[
-            EffectFieldDef(name="target", label="Target Trait", field_type="text", required=True),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
             _ENTITY_FIELD,
         ],
         context_fields=[
             _RELATIONSHIP_CONTEXT_FIELD,
             EffectFieldDef(name="effect_die", label="Effect Die", field_type="die_select", required=False, default="{effect_die}", options=["d4", "d6", "d8", "d10", "d12"]),
         ],
+        path_element=("die", "rating_die"),
         target_kind="trait",
     ),
     EffectActionMeta(

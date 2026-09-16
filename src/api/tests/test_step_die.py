@@ -306,3 +306,24 @@ def test_the_commit_path_reaches_the_handler():
 
     assert store.get_pool("loc-1", "kael")[0]["die"] == "d6"
     assert any("d8 → d6" in a.summary for a in result.applied)
+
+
+def test_the_effect_die_comparison_can_target_a_pool_die():
+    """The two comparison verbs accept either home, like the rest of the family:
+    this one names a die in the assembled pool."""
+    from transversal.services.effects_applier.handlers_dice import _apply_reduce_by_effect
+
+    store = _with_pool([
+        {"die": "d6", "ts_id": None, "source_kind": "manual"},
+        {"die": "d10", "ts_id": None, "source_kind": "manual"},
+    ])
+    result = Result()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="reduce_by_effect", target="die:loc-1:kael:0",
+                    context={"effect_die": "d10"})
+
+    _apply_reduce_by_effect(Entity(), effect, None, result)
+
+    # The effect die (d10) beats the named d6, so it is removed — and the other
+    # die is untouched.
+    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d10"]

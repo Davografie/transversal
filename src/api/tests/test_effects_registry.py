@@ -66,11 +66,24 @@ def test_the_family_takes_a_count_where_it_needs_one():
 
 def test_the_change_die_family_reads_as_one_group():
     """The author asked for these to be grouped; the group is the declaration the
-    editor optgroups by."""
+    editor optgroups by. The two effect-die comparisons belong here too — the
+    effect die is their reference instead of a number."""
     for action_id in ("set_die", "step_up_die", "step_down_die",
-                      "double_die", "split_die", "remove_die", "reroll_die"):
+                      "double_die", "split_die", "remove_die", "reroll_die",
+                      "reduce_by_effect_die", "increase_by_effect_die"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert meta.group == "Change a Die", action_id
+
+
+def test_the_effect_die_comparisons_accept_a_die_as_well_as_a_trait():
+    """They were authored against a trait's rating before a die had two homes.
+    The trait picker stays (an old effect still names a trait), and a path to
+    either home is now offered as well."""
+    for action_id in ("reduce_by_effect_die", "increase_by_effect_die"):
+        meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
+        assert set(meta.path_element) == {"die", "rating_die"}, action_id
+        assert meta.target_kind == "trait", action_id
+        assert next(f.label for f in meta.fields if f.name == "target") == "Target"
 
 
 def test_delete_trait_is_authorable():
@@ -140,8 +153,12 @@ def test_increase_by_effect_die_mirrors_reduce():
     assert meta.valid_timings == twin.valid_timings
     assert [f.name for f in meta.fields] == [f.name for f in twin.fields]
     assert sorted(f.name for f in meta.context_fields) == sorted(f.name for f in twin.context_fields)
-    # Both are Trait actions in the editor (they were falling into "Other").
-    assert meta.group == "Trait" and twin.group == "Trait"
+    # Both sit with the dice actions: the effect die is their reference, and the
+    # target they compare against is a die (with the trait picker kept for
+    # content authored before a die had two homes).
+    assert meta.group == "Change a Die" and twin.group == "Change a Die"
+    assert set(meta.path_element) == {"die", "rating_die"}
+    assert set(twin.path_element) == {"die", "rating_die"}
 
 
 def test_producing_actions_declare_their_output_element():

@@ -8,6 +8,10 @@ from transversal.domain import RatingType
 from transversal.services.effects_applier.datatypes import (
     AppliedEffect,
 )
+from transversal.services.effects_applier.handlers_change_die import (
+    _apply_change,
+    targets_a_die,
+)
 from transversal.services.effects_applier.handlers_traits import (
     _maybe_complete_challenge,
 )
@@ -119,13 +123,22 @@ def _apply_remove_die(entity, effect, repo, result):
     _queue_trait_revert(repo, existing, effect)
 
 def _apply_reduce_by_effect(entity, effect, repo, result):
-    """Reduce a trait by the effect-die-vs-rating comparison.
+    """Reduce by the effect-die comparison.
 
     ``effect.context.effect_die`` is the winning effect die (``{effect_die}``
-    substituted at fire time). If it is strictly larger than the trait's rating
-    die the trait is removed; otherwise it steps down one step. Shared
-    comparison via ``dice_resolver.compare_effect_die``.
+    substituted at fire time). If it is strictly larger than the die it compares
+    against, that die is removed; otherwise it steps down one step. Shared
+    comparison via ``dice_resolver.effect_die_beats``.
+
+    **Two kinds of target.** A *die* reference (``rating:<i>:<ts>`` /
+    ``die:<loc>:<owner>:<i>``) is the newer form and names the die exactly — one
+    die of a multi-die rating, in either home. A trait id is the older form,
+    authored before a die had two homes: it means the trait's rating, and the
+    trait is removed outright when the effect die beats it.
     """
+    if targets_a_die(effect.target or ""):
+        _apply_change(entity, effect, repo, result, "lower_by_effect")
+        return
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
         return
@@ -166,14 +179,19 @@ def _apply_reduce_by_effect(entity, effect, repo, result):
         _queue_trait_revert(repo, existing, effect)
 
 def _apply_increase_by_effect(entity, effect, repo, result):
-    """Raise a trait by the effect-die-vs-rating comparison.
+    """Raise a die by the effect-die comparison.
 
-    The positive mirror of ``_apply_reduce_by_effect``: ``effect.context.effect_die``
-    is the winning effect die (``{effect_die}`` substituted at fire time). If it is
-    strictly larger than the trait's rating die the rating is *set* to it; equal or
-    smaller, the trait steps up one step. Shared predicate via
+    The positive mirror of ``_apply_reduce_by_effect``. If the effect die is
+    strictly larger than the die it compares against, that die is *set* to it;
+    equal or smaller, it steps up one step. Shared predicate via
     ``dice_resolver.effect_die_beats``.
+
+    Targets the same two ways: a die reference names the die exactly (in either
+    home), a trait id is the older form and means the trait's rating.
     """
+    if targets_a_die(effect.target or ""):
+        _apply_change(entity, effect, repo, result, "raise_by_effect")
+        return
     subject = _effect_subject(entity, effect, result, repo)
     if subject is None:
         return

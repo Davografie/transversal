@@ -755,6 +755,7 @@ and where it lands is what the change *means*.
 | Split Die | Make N+1 dice one step smaller — `split 2` on a d8 makes 3d6 | benefit |
 | Remove Die | Take the die out. A rating with no dice left is still a trait | cost |
 | Reroll Die | Reroll a die — **pool only**, since a rating die has no result to reroll | benefit |
+| Reduce by Effect Die / Increase by Effect Die | Compare the **effect die** to the target die instead of to a number: if the effect die beats it, reduce **removes** it and increase **sets it to** the effect die; otherwise one step down / one step up | benefit |
 
 - **Which home changes how long it lasts.** A path ending in a *rating die*
   changes the character: it persists, and the form offers a duration, whose undo
@@ -787,8 +788,6 @@ and where it lands is what the change *means*.
 
 | Action | What it does | Sign |
 |--------|--------------|------|
-| Reduce by Effect Die | Step a trait down by the effect die — removed if the effect die beats its rating, else one step down | benefit |
-| Increase by Effect Die | Raise a trait by the effect die — set *to* the effect die if it beats the rating, else one step up | benefit |
 | Set Trait Rating | Set a trait to a fixed rating (the change-die family's *Set Die* on a rating die is the newer spelling) | either |
 | Add Die to Rating | Add a die to a rating — seeds the trait when it has none | benefit |
 | Disable Trait / Toggle Trait | Turn a trait off / flip it | cost / either |

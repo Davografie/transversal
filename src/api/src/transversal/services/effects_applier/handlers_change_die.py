@@ -98,6 +98,32 @@ def _plan_change(die: DieType | None, verb: str, effect: Effect,
         return DieChange(smaller, count + 1, f"{die.value} → {count + 1}{smaller.value}"), ""
     if verb == "remove":
         return DieChange(None, 0, f"removed {die.value}"), ""
+    if verb in ("raise_by_effect", "lower_by_effect"):
+        # The reference is the *effect die* rather than a number — the same
+        # comparison the challenge pipeline reads (`effect_die_beats`), so an
+        # effect die that beats a die removes it, and one that does not moves it
+        # a single step.
+        from transversal.services.dice_resolver import effect_die_beats
+
+        effect_die = _die_opt((effect.context or {}).get("effect_die"))
+        if effect_die is None:
+            return None, "no effect die to compare"
+        beats = effect_die_beats(effect_die, die)
+        why = (f"the effect die {effect_die.value} beats {die.value}" if beats
+               else f"the effect die {effect_die.value} does not beat {die.value}")
+        if verb == "raise_by_effect":
+            if beats:
+                return DieChange(effect_die, 1, f"set {die.value} → {effect_die.value} ({why})"), ""
+            moved = step_die(die, 1)
+            if moved == die:
+                return DieChange(die, 1, f"{die.value} is already at the limit ({why})"), ""
+            return DieChange(moved, 1, f"{die.value} → {moved.value} ({why})"), ""
+        if beats:
+            return DieChange(None, 0, f"removed {die.value} ({why})"), ""
+        moved = step_die(die, -1)
+        if moved is None:
+            return DieChange(None, 0, f"{die.value} stepped down off the ladder ({why})"), ""
+        return DieChange(moved, 1, f"{die.value} → {moved.value} ({why})"), ""
     return None, f"unknown change-die verb {verb!r}"
 
 
@@ -245,6 +271,18 @@ def _apply_pool_change(entity, effect: Effect, repo, result, target: str, verb: 
 def _owner_entity(repo, owner_id: str):
     getter = getattr(repo, "get_entity", None) if repo else None
     return getter(owner_id) if getter else None
+
+
+def targets_a_die(target: str) -> bool:
+    """True when an effect names a *die*, rather than a legacy trait target.
+
+    The two comparison actions (`reduce_by_effect` / `increase_by_effect`) were
+    authored against a trait's rating before a die had two homes. This is how
+    their handlers tell an old target from a new one, so neither breaks.
+    """
+    t = (target or "").strip()
+    return (_parse_rating_ref(t) is not None or _parse_die_ref(t) is not None
+            or t == "highest_trait_die")
 
 
 def _apply_change(entity, effect: Effect, repo, result, verb: str) -> None:

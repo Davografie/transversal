@@ -43,6 +43,10 @@ _ACTION_GROUPS: dict[str, str] = {
     "step_down_die": "Change a Die", "double_die": "Change a Die",
     "split_die": "Change a Die", "remove_die": "Change a Die",
     "reroll_die": "Change a Die",
+    # The two comparison verbs change a die too — the effect die is their
+    # reference instead of a number — so they sit with the family rather than
+    # under Trait, which is where they lived when a die had only one home.
+    "reduce_by_effect_die": "Change a Die", "increase_by_effect_die": "Change a Die",
     "play_as_rating": "Dice Pool", "add_dice": "Dice Pool",
     "add_trait_rating_dice": "Dice Pool", "roll_pool": "Dice Pool", "resolve_pool": "Dice Pool",
     "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
@@ -50,7 +54,6 @@ _ACTION_GROUPS: dict[str, str] = {
     "negate_complication": "Outcome", "convert_complication": "Outcome",
     "reroll_highest": "Outcome",
     "step_up_trait": "Trait", "step_down_trait": "Trait", "set_trait": "Trait",
-    "reduce_by_effect_die": "Trait", "increase_by_effect_die": "Trait",
     "add_rating_die": "Trait", "remove_rating_die": "Trait",
     "disable_trait": "Trait", "toggle_trait": "Trait", "set_traitset_limit": "Trait",
     "gain_trait": "Trait", "gain_or_step_up_trait": "Trait",

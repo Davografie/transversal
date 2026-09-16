@@ -84,6 +84,12 @@ mutation. *`step_up_die` / `step_down_die` came off it 2026-09-12.*
 (`handlers_change_die._plan_change`) and two appliers — the rating list and the
 pool list — so the two homes cannot drift. `_apply_step_die` is retired with them.
 
+`reduce_by_effect_die` and `increase_by_effect_die` joined the family too: the
+effect die is their reference instead of a number, and they now name a die in
+either home. They keep their trait picker, because an effect authored before a
+die had two homes names a *trait* and means its rating — their handlers dispatch
+on the target (`targets_a_die`), so neither form breaks.
+
 **3. Trait-instance references — landed 2026-09-15.** `split_die` was the
 blocker; it now takes a path to either locus, and the `target_kind` /
 `path_element` split this note asked for is what made that writable.

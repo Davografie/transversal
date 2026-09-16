@@ -227,3 +227,72 @@ def test_a_path_resolves_a_rating_die_and_the_handler_changes_it():
 
     _apply(_apply_change_step_up, ts, ref)
     assert [d.value for d in ts.dice] == ["d6", "d12"]
+
+
+# ── The effect-die comparison, on a die ────────────────────────
+#
+# These two actions predate a die having two homes: they compared the effect die
+# against a trait's *rating*. It is the same comparison (and reads the same
+# `effect_die_beats`), but the target can now name the die exactly — which is
+# what puts them with the dice actions rather than under Trait.
+
+def _compare(handler, ts, effect_die, target=REF):
+    result = Result()
+    effect = Effect(timing=EffectTiming.IMMEDIATE, type="modify_trait",
+                    action="reduce_by_effect", target=target,
+                    context={"effect_die": effect_die})
+    handler(NS(id="kael"), effect, Repo(ts), result)
+    return result
+
+
+def test_reduce_by_effect_removes_the_die_the_effect_die_beats():
+    from transversal.services.effects_applier.handlers_dice import _apply_reduce_by_effect
+    ts = _ts(["d6", "d10"])
+    result = _compare(_apply_reduce_by_effect, ts, "d10",
+                      target="rating:0:kael:spiritual-power")
+    assert [d.value for d in ts.dice] == ["d10"]          # only the named die goes
+    assert "removed d6" in result.applied[0].summary
+    assert "beats d6" in result.applied[0].summary
+
+
+def test_reduce_by_effect_steps_the_die_down_when_it_does_not_beat():
+    from transversal.services.effects_applier.handlers_dice import _apply_reduce_by_effect
+    ts = _ts(["d8"])
+    _compare(_apply_reduce_by_effect, ts, "d6")
+    assert [d.value for d in ts.dice] == ["d6"]
+
+
+def test_reduce_by_effect_on_a_d4_that_is_not_beaten_leaves_no_die():
+    """The ladder rule holds here too: stepping a d4 down is *gone*."""
+    from transversal.services.effects_applier.handlers_dice import _apply_reduce_by_effect
+    ts = _ts(["d4"])
+    _compare(_apply_reduce_by_effect, ts, "d4")
+    assert ts.dice == []
+
+
+def test_increase_by_effect_sets_the_die_the_effect_die_beats():
+    from transversal.services.effects_applier.handlers_dice import _apply_increase_by_effect
+    ts = _ts(["d6"])
+    _compare(_apply_increase_by_effect, ts, "d10")
+    assert [d.value for d in ts.dice] == ["d10"]
+
+
+def test_increase_by_effect_steps_up_when_it_does_not_beat():
+    from transversal.services.effects_applier.handlers_dice import _apply_increase_by_effect
+    ts = _ts(["d6"])
+    _compare(_apply_increase_by_effect, ts, "d4")
+    assert [d.value for d in ts.dice] == ["d8"]
+
+
+def test_a_trait_target_still_takes_the_old_route():
+    """Backwards compatibility: an effect that names a *trait* still means that
+    trait's rating. That path is untouched — it is how these were authored before
+    a die had two homes, and nothing already written is rewritten."""
+    from transversal.services.effects_applier.handlers_change_die import targets_a_die
+
+    assert targets_a_die("rating:0:kael:qi") is True
+    assert targets_a_die("die:loc-1:kael:2") is True
+    assert targets_a_die("highest_trait_die") is True
+    assert targets_a_die("kael:trait-martial") is False
+    assert targets_a_die("trait-martial") is False
+    assert targets_a_die("") is False
