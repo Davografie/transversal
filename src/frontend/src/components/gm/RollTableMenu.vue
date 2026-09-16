@@ -5,20 +5,14 @@
 
       <!-- Step 1: pick an entry -->
       <div v-if="phase === 'menu'" class="rtm-menu">
-        <button
-          v-for="(e, i) in entries"
-          :key="i"
-          class="rtm-option"
-          :class="{ 'rtm-unaffordable': !e.affordable }"
-          :disabled="!e.affordable"
-          @click="choose(e, i + 1)"
-        >
-          <span class="rtm-label">{{ e.label || ('Entry ' + (i + 1)) }}</span>
-          <span v-if="e.description" class="rtm-desc">{{ e.description }}</span>
-          <span class="rtm-cost" :class="{ 'rtm-cost-free': !e.costLabel }">{{ e.costLabel || 'free' }}</span>
-        </button>
-        <div v-if="!entries.length && !loading" class="rtm-empty">No entries in this table.</div>
-        <button class="rtm-btn rtm-cancel" @click="$emit('close')">Cancel</button>
+        <EntryPicker
+          :options="entries"
+          :loading="loading"
+          allow-random
+          empty-text="No entries in this table."
+          @pick="(e, i) => choose(e, i + 1)"
+          @close="$emit('close')"
+        />
       </div>
 
       <!-- Step 2: resolve choose-targets the entry needs -->
@@ -48,6 +42,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import EffectTargetWizard from './EffectTargetWizard.vue'
+import EntryPicker from '@/components/ui/EntryPicker.vue'
 import { useRollTableMenu } from '@/composables/useRollTableMenu.js'
 import { useEffectActions } from '@/composables/useEffectActions.js'
 
@@ -93,15 +88,19 @@ async function load() {
   error.value = ''
   await loadActions()
   const table = await fetchTable(props.tableId)
+  // Shaped for the shared entry picker: it renders the row, this decides what a
+  // row means (an unaffordable entry is disabled; `weight` makes its 🎲
+  // weighted when the table carries weights).
   entries.value = (table?.entries || []).map((e) => {
     const cost = razmeritCost(e.costEffects)
+    const label = costLabel(e.costEffects)
     return {
       label: e.label,
       description: e.description,
-      costEffects: e.costEffects,
-      effects: e.effects,
-      costLabel: costLabel(e.costEffects),
-      affordable: cost <= (props.entityRazmerit || 0),
+      cost: label || 'free',
+      costFree: !label,
+      weight: e.weight || 0,
+      disabled: cost > (props.entityRazmerit || 0),
     }
   })
 }
@@ -153,18 +152,11 @@ async function finishResolve(resolutions) {
 .rtm-root { width: min(360px, 90vw); max-height: 80vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-panel-solid); border: 1px solid var(--overlay-10); border-radius: 8px; }
 .rtm-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .rtm-menu { display: flex; flex-direction: column; gap: 4px; }
-.rtm-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 5px; cursor: pointer; background: var(--overlay-4); border: 1px solid var(--overlay-10); color: var(--text); font-size: 12px; text-align: left; }
-.rtm-option:hover:not(:disabled) { background: rgba(0,200,150,0.1); border-color: var(--accent); }
-.rtm-option:disabled { opacity: 0.45; cursor: not-allowed; }
-.rtm-label { font-weight: 600; }
-.rtm-desc { font-size: 10px; color: var(--text-dim); }
-.rtm-cost { align-self: flex-end; font-size: 10px; color: var(--warn-bright); font-weight: 600; }
-.rtm-cost-free { color: var(--text-dim); font-weight: 400; }
-.rtm-empty { font-size: 11px; color: var(--text-dim); }
+/* The entry rows, their cost treatment and the cancel button now come from
+   ui/EntryPicker — see [[UI-UX Design#Entry picker]]. */
 .rtm-done-title { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
 .rtm-applied { margin: 0; padding-left: 16px; font-size: 11px; color: var(--text); }
 .rtm-error { font-size: 11px; color: var(--danger-bright); }
 .rtm-btn { font-size: 11px; padding: 5px 12px; border-radius: 5px; cursor: pointer; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text); }
-.rtm-cancel { color: var(--text-dim); }
 .rtm-primary { background: var(--success); color: var(--text-invert); border-color: transparent; font-weight: 600; }
 </style>

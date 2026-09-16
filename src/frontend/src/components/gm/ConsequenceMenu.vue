@@ -4,18 +4,13 @@
 
     <!-- Step 1: choose an option -->
     <div v-if="phase === 'menu'" class="cm-menu">
-      <button
-        v-for="opt in options"
-        :key="opt.id"
-        class="cm-option"
-        :class="'cm-side-' + opt.side"
-        @click="choose(opt)"
-      >
-        <span class="cm-label">{{ opt.label }}</span>
-        <span v-if="opt.source !== 'base'" class="cm-source">{{ opt.source }}</span>
-      </button>
-      <div v-if="!options.length && !loading" class="cm-empty">No options available.</div>
-      <button class="cm-btn cm-cancel" @click="$emit('close')">Cancel</button>
+      <EntryPicker
+        :options="pickerOptions"
+        :loading="loading"
+        empty-text="No options available."
+        @pick="choose"
+        @close="$emit('close')"
+      />
     </div>
 
     <!-- Step 2: resolve any choose-targets the chosen option needs -->
@@ -40,8 +35,9 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import EffectTargetWizard from './EffectTargetWizard.vue'
+import EntryPicker from '@/components/ui/EntryPicker.vue'
 import { useConsequences } from '@/composables/useConsequences.js'
 
 const props = defineProps({
@@ -60,6 +56,15 @@ const options = ref([])
 const phase = ref('menu')
 const applied = ref([])
 const pendingChoices = ref([])
+
+// Shaped for the shared entry picker: the gm/player side becomes the row's tone
+// edge, and the option's origin reads as a trailing hint when it is not base.
+const pickerOptions = computed(() => options.value.map(o => ({
+  id: o.id,
+  label: o.label,
+  hint: o.source && o.source !== 'base' ? o.source : '',
+  tone: o.side === 'gm' ? 'gm' : 'player',
+})))
 
 async function load() {
   phase.value = 'menu'
@@ -99,16 +104,10 @@ async function finishResolve(resolutions) {
 .cm-root { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--overlay-2); border: 1px solid var(--overlay-8); border-radius: 6px; }
 .cm-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
 .cm-menu { display: flex; flex-direction: column; gap: 4px; }
-.cm-option { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 4px; cursor: pointer; background: var(--overlay-4); border: 1px solid var(--overlay-10); color: var(--text); font-size: 11px; text-align: left; }
-.cm-option:hover { background: rgba(0,200,150,0.1); border-color: var(--accent); }
-.cm-label { flex: 1; }
-.cm-source { font-size: 8px; color: var(--text-dim); text-transform: uppercase; }
-.cm-side-gm { border-left: 2px solid var(--danger); }
-.cm-side-player { border-left: 2px solid var(--success); }
-.cm-empty { font-size: 10px; color: var(--text-dim); }
+/* The rows, their gm/player edges and the cancel button now come from
+   ui/EntryPicker — see [[UI-UX Design#Entry picker]]. */
 .cm-done-title { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
 .cm-applied { margin: 0; padding-left: 16px; font-size: 10px; color: var(--text); }
 .cm-btn { font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text); }
-.cm-cancel { color: var(--text-dim); }
 .cm-primary { background: var(--success); color: var(--text-invert); border-color: transparent; font-weight: 600; }
 </style>

@@ -22,7 +22,7 @@ export function useRollTableMenu() {
         `query($id: ID!) {
           rollTable(id: $id) {
             id name
-            entries { label description costEffects { ${EFFECT_FIELDS} } effects { ${EFFECT_FIELDS} } }
+            entries { label description weight costEffects { ${EFFECT_FIELDS} } effects { ${EFFECT_FIELDS} } }
           }
         }`,
         { id: tableId },

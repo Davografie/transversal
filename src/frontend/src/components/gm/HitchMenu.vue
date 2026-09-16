@@ -1,25 +1,20 @@
 <template>
   <div class="hm-root">
     <div class="hm-title">Buy hitches · {{ count }} selected</div>
-    <div v-if="visibleOptions.length" class="hm-menu">
-      <button
-        v-for="opt in visibleOptions"
-        :key="opt.id"
-        class="hm-option"
-        :disabled="applying"
-        @click="apply(opt)"
-      >
-        {{ opt.label }}
-      </button>
-    </div>
-    <div v-else-if="loading" class="hm-empty">Loading…</div>
-    <div v-else class="hm-empty">No hitch SFX available</div>
-    <button class="hm-cancel" @click="$emit('close')">Cancel</button>
+    <EntryPicker
+      :options="visibleOptions"
+      :loading="loading"
+      :busy="applying"
+      empty-text="No hitch SFX available"
+      @pick="apply"
+      @close="$emit('close')"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import EntryPicker from '@/components/ui/EntryPicker.vue'
 import { useHitchMenu } from '@/composables/useHitchMenu.js'
 
 const props = defineProps({
@@ -56,10 +51,6 @@ async function apply(opt) {
 <style scoped>
 .hm-root { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--overlay-2); border: 1px solid var(--overlay-8); border-radius: 6px; }
 .hm-title { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
-.hm-menu { display: flex; flex-direction: column; gap: 4px; }
-.hm-option { padding: 7px 9px; border-radius: 4px; cursor: pointer; background: var(--overlay-4); border: 1px solid var(--overlay-10); color: var(--text); font-size: 11px; text-align: left; }
-.hm-option:hover { background: rgba(0,200,150,0.1); border-color: var(--accent); }
-.hm-option:disabled { opacity: 0.5; cursor: default; }
-.hm-empty { font-size: 10px; color: var(--text-dim); }
-.hm-cancel { align-self: flex-start; font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer; background: var(--overlay-6); border: 1px solid var(--overlay-12); color: var(--text-dim); }
+/* The option rows, the loading/empty state and the cancel button now come from
+   ui/EntryPicker — see [[UI-UX Design#Entry picker]]. */
 </style>

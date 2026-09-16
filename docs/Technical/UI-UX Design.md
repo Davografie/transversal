@@ -33,10 +33,10 @@ Living interaction-design reference for the Transversal frontend. Captures the c
 ## Shared primitives
 
 The reusable UI set lives in `src/frontend/src/components/ui/`: `GmList`/
-`GmListItem`, `TargetPicker`/`SearchDropdown`, `Button`, `DangerButton`,
-`TagInput`, `TraitInstanceEditor`, `SegmentedControl`. (The `gm/` folder keeps the GM-specific
-panels, which compose these primitives.) New surfaces should compose the
-primitives instead of re-styling raw elements.
+`GmListItem`, `TargetPicker`/`SearchDropdown`, `EntryPicker`, `Button`,
+`DangerButton`, `TagInput`, `TraitInstanceEditor`, `SegmentedControl`. (The `gm/`
+folder keeps the GM-specific panels, which compose these primitives.) New
+surfaces should compose the primitives instead of re-styling raw elements.
 
 ### Autocomplete core
 
@@ -77,6 +77,37 @@ Semantics worth not re-deriving: `resolve()` maps typed text to a stored value
 (by label, then value) and refuses it when `allowCustom` is false; `exactMatch`
 suppresses the create row so it never offers to create what the list holds.
 `scripts/check-combobox.mjs` pins all of it and runs without a browser.
+
+### Entry picker
+
+`ui/EntryPicker.vue` renders a list of options to choose from — the row a
+roll-table entry, a consequence and a hitch all need — plus an optional 🎲 and a
+cancel. Three menus had grown this separately; they now share it.
+
+**It reports what was chosen and nothing else.** Resolving the pick is the
+host's, and the hosts genuinely differ: the roll-table and consequence menus
+hand off to `EffectTargetWizard` and then apply, while the hitch menu hands the
+option back to the dice roller. Baking the wizard into the picker would have
+made it a one-host component.
+
+- **An entry** is `{ id?, key?, label, description?, cost?, costFree?, hint?,
+  tone?, disabled?, weight? }`. `key` is the leading cell (a roll table's
+  range), `tone` is a semantic edge (`gm` / `player` — the consequence menu's
+  sides), `cost` is the trailing figure and `hint` the fallback when there is no
+  cost.
+- **The random pick is opt-in** (`allow-random`, off by default): rolling is
+  native to a roll table, while a consequence or a hitch is usually a deliberate
+  choice, so each host decides. A list carrying `weight`s rolls a die over the
+  cumulative weights and reports the number as a third `pick` argument; an
+  unweighted list picks uniformly and reports none. Disabled and zero-weight
+  entries are never rolled.
+- **The index is 0-based** — `pick(entry, index, roll)`. The roll-table API it
+  feeds is **1-based**, so `RollTableMenu` adds the 1 at the boundary.
+- **Busy is not loading.** While a host is applying a pick the list stays on
+  screen and goes inert (`busy`); it only reads *Loading…* before it has options.
+- **Not yet on it:** the life-path wizard. It has the same shape (a table of
+  entries with a weighted roll) but resolves server-side per term and drives the
+  dice, so it is the natural next adopter rather than something to force.
 
 ### Button
 
