@@ -163,6 +163,7 @@ class TraitSetting:
     polarity: Polarity
     statement: str
     notes: str = ""
+    order: Optional[int] = None
     tags: list[str] = strawberry.field(default_factory=list)
     from_type: str = "entity"  # "entity" | "projection" | "relationship" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
@@ -309,6 +310,7 @@ class TraitSettingInput:
     polarity: Optional[Polarity] = None
     statement: str = ""
     notes: str = ""
+    order: Optional[int] = None
     tags: list[str] = strawberry.field(default_factory=list)
     from_type: Optional[str] = None  # "entity" | "projection" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
@@ -324,6 +326,7 @@ class TraitSettingUpdateInput:
     polarity: Optional[Polarity] = None
     statement: Optional[str] = None
     notes: Optional[str] = None
+    order: Optional[int] = None
     tags: Optional[list[str]] = None
     from_type: Optional[str] = None  # "entity" | "projection" | "traitsetting"
     projection_id: Optional[strawberry.ID] = None
@@ -344,11 +347,17 @@ def _gql_trait_setting(s, contact: dict | None = None) -> TraitSetting:
         polarity=s.polarity,
         statement=s.statement,
         notes=s.notes,
+        order=s.order,
         tags=s.tags,
         from_type=s.from_type, projection_id=s.projection_id,
         parent_traitsetting_id=s.parent_traitsetting_id,
         sfx_ids=s.sfx_ids,
         known_to=s.known_to,
+        # Carried explicitly: this converter feeds every *read* path (the sheet's
+        # trait list, sub-traits, relationship traits), so dropping a field here
+        # makes it read as its default everywhere — which is how `enabled` came to
+        # report True for disabled settings.
+        enabled=s.enabled,
         relationship_contact_id=contact.get("contact_id"),
         relationship_contact_name=contact.get("contact_name"),
         relationship_contact_type=contact.get("contact_type"),

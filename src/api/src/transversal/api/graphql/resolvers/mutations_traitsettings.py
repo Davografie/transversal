@@ -65,6 +65,7 @@ class MutationsTraitSettings:
             polarity=polarity,
             statement=input.statement,
             notes=input.notes,
+            order=input.order,
             tags=[str(t) for t in (input.tags or [])],
             from_type=from_type,
             projection_id=projection_id,
@@ -110,6 +111,8 @@ class MutationsTraitSettings:
             ts.statement = input.statement
         if input.notes is not None:
             ts.notes = input.notes
+        if input.order is not None:
+            ts.order = input.order
         if input.tags is not None:
             ts.tags = [str(t) for t in input.tags]
         # Re-anchoring. A **relationship** setting is anchored by its edge key and
@@ -168,7 +171,7 @@ class MutationsTraitSettings:
     @strawberry.mutation
     def add_sub_trait(self, info: strawberry.Info, parent_traitsetting_id: strawberry.ID,
                       trait_id: strawberry.ID, die: Optional[GqlDieType] = None,
-                      statement: str = "") -> TraitSetting:
+                      statement: str = "", order: Optional[int] = None) -> TraitSetting:
         """Nest a sub-trait under a parent trait setting.
 
         Sub-traits reuse the ``traitsettings`` edge collection, anchored to the
@@ -202,6 +205,7 @@ class MutationsTraitSettings:
             rating_type=trait.default_rating_type,
             polarity=polarity,
             statement=statement,
+            order=order,
         )
         created = repo.create_traitsetting(ts)
         return _ts_to_gql(created)

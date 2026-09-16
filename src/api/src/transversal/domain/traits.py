@@ -142,6 +142,10 @@ class TraitSetting(BaseModel):
     polarity: Polarity = Polarity.POSITIVE  # baked sign (benefit/asset vs complication)
     statement: str = ""        # distinction statement or flavor
     notes: str = ""            # longer freeform notes
+    # Author-chosen position among siblings (sub-traits under one parent). ``None``
+    # means unordered: those sort after the ordered ones, by trait set then trait
+    # id — which is how every setting read before this field existed.
+    order: Optional[int] = None
     tags: list[str] = Field(default_factory=list)  # instance-level labels, matched alongside the trait's own (B116)
     sfx_ids: list[str] = Field(default_factory=list)
     locations_enabled: list[str] = Field(default_factory=list)

@@ -175,12 +175,16 @@ class RepositoryTraitSettings:
         Sub-traits are stored in the same `traitsettings` edge collection, with
         ``from_type == 'traitsetting'`` and ``_from`` anchored to the parent's
         document (mirroring the relationship edge-anchoring pattern).
+
+        Ordered by the author's ``order``, then by trait set and trait id for the
+        unordered remainder — so adding ``order`` changed nothing for content that
+        does not use it.
         """
         query = f"""
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.from_type == 'traitsetting'
                 AND ts.parent_traitsetting_id == @pid
-            SORT ts.traitset_id, ts.trait_id
+            SORT ts.order == null, ts.order, ts.traitset_id, ts.trait_id, ts._key
             RETURN ts
         """
         return [
@@ -200,7 +204,7 @@ class RepositoryTraitSettings:
             FOR ts IN {TRAITSETTINGS}
             FILTER ts.from_type == 'traitsetting'
                 AND ts.parent_traitsetting_id IN @pids
-            SORT ts.traitset_id, ts.trait_id
+            SORT ts.order == null, ts.order, ts.traitset_id, ts.trait_id, ts._key
             RETURN ts
         """
         grouped: dict[str, list[TraitSetting]] = {pid: [] for pid in parent_ids}
