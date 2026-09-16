@@ -8,6 +8,7 @@ from transversal.db.arango import RELATIONSHIPS
 from transversal.db.arango import TRAITSETTINGS
 from transversal.domain import Entity
 from transversal.domain import EntityType
+from transversal.domain import MEMBERSHIP_HOLDER_TYPES
 from transversal.domain import PERSONAL_RELATIONSHIP_TYPE
 from transversal.domain import TraitSetting
 from transversal.domain import Zone
@@ -310,6 +311,61 @@ class RepositoryRelationships:
         # The starting location itself is level 0 — the traversal starts at 1.
         here = self.get_entity(location_id)
         return ([here] if here is not None and (here.sfx_ids or []) else []) + out
+
+    def validate_relationship(self, from_id: str, to_id: str, rel_type: str) -> str | None:
+        """Why this edge may not exist — or ``None`` when it may.
+
+        Only ``membership`` is constrained today. A roster entry is
+        member → faction, so a self-edge, a ``_to`` that is not a faction, or a
+        ``_from`` that cannot hold membership is refused rather than written.
+        Returns a human-readable refusal; the caller raises it.
+        """
+        if rel_type != "membership":
+            return None
+        if from_id == to_id:
+            return "a membership edge cannot point an entity at itself"
+        member = self.get_entity(from_id)
+        faction = self.get_entity(to_id)
+        if member is None:
+            return f"entity '{from_id}' not found"
+        if faction is None:
+            return f"entity '{to_id}' not found"
+        if faction.type != EntityType.FACTION:
+            return (
+                f"'{faction.name}' is a {faction.type.value}, not a faction — "
+                "membership points a member at a faction"
+            )
+        if member.type not in MEMBERSHIP_HOLDER_TYPES:
+            return (
+                f"'{member.name}' is a {member.type.value}; membership is held by "
+                + ", ".join(sorted(t.value for t in MEMBERSHIP_HOLDER_TYPES))
+            )
+        return None
+
+    def upsert_relationship(
+        self, from_id: str, to_id: str, rel_type: str, description: str = "",
+        from_projection: bool = False, to_projection: bool = False,
+    ) -> dict:
+        """Create the edge, or update the existing one **in place**.
+
+        Relationship trait settings anchor to the edge ``_key``, so replacing the
+        edge document orphans them — which is how re-claiming a membership used to
+        silently wipe its rank and role. An existing edge therefore keeps its key
+        and has only ``description`` rewritten.
+        """
+        existing = self.get_relationship(
+            from_id, to_id, rel_type,
+            from_projection=from_projection, to_projection=to_projection,
+        )
+        if existing is not None:
+            if (existing.get("description") or "") != description:
+                self._relationships.update({"_key": existing["_key"], "description": description})
+                existing["description"] = description
+            return existing
+        return self.create_relationship(
+            from_id, to_id, rel_type, description=description,
+            from_projection=from_projection, to_projection=to_projection,
+        )
 
     def get_relationship(
         self, from_id: str, to_id: str, rel_type: str,

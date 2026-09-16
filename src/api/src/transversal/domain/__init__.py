@@ -82,6 +82,7 @@ from transversal.domain.entities import (  # noqa: F401
     Entity,
     STRUCTURAL_RELATIONSHIP_TYPES,
     PERSONAL_RELATIONSHIP_TYPE,
+    MEMBERSHIP_HOLDER_TYPES,
     is_structural_relationship_type,
 )
 

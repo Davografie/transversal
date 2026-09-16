@@ -31,6 +31,15 @@ STRUCTURAL_RELATIONSHIP_TYPES: frozenset[str] = frozenset({
 
 PERSONAL_RELATIONSHIP_TYPE: str = "relation"
 
+# Who may hold faction membership. A roster entry is member → faction, so the
+# member end is a person-like or owned thing; a faction cannot be a member of a
+# faction through this edge (nested orgs are a `relation` between two factions).
+MEMBERSHIP_HOLDER_TYPES: frozenset[EntityType] = frozenset({
+    EntityType.CHARACTER,
+    EntityType.GMC,
+    EntityType.ASSET,
+})
+
 def is_structural_relationship_type(rel_type: str) -> bool:
     """Whether ``rel_type`` is structural system wiring (vs a personal relation)."""
     return rel_type in STRUCTURAL_RELATIONSHIP_TYPES

@@ -147,6 +147,10 @@ class MutationsMessaging:
         endpoint to the entity (elevated + multiversal) or its active projection
         (default). Structural types (super/transversal/membership/…) stay
         entity→entity.
+
+        An existing edge is **updated in place**, never replaced: relationship
+        trait settings anchor to the edge key, so a replace would orphan them.
+        Constrained types are validated first — see ``validate_relationship``.
         Returns the real ArangoDB edge key as ``id``.
         """
         repo = _em(info).repo
@@ -158,9 +162,10 @@ class MutationsMessaging:
         else:
             frm, from_proj = from_id, False
             to, to_proj = to_id, False
-        # Upsert: delete first if exists, then create fresh.
-        repo.delete_relationship(frm, to, input.type, from_projection=from_proj, to_projection=to_proj)
-        edge = repo.create_relationship(
+        refusal = repo.validate_relationship(from_id, to_id, input.type)
+        if refusal:
+            raise ValueError(refusal)
+        edge = repo.upsert_relationship(
             frm, to, input.type, description=input.description,
             from_projection=from_proj, to_projection=to_proj,
         )
