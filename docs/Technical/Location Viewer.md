@@ -523,6 +523,22 @@ border), and the overlay/particle system below — run continuously.
   outranks a normal declaration — the same trap as `.controlled` (see above).
   `dragDotKey` ('self', an occupant id, or '') is set in the drag-move handlers
   once the 6px tap threshold is crossed, so a tap never flickers the ghost.
+- **Dot styling lives in `MapDot.vue` and nowhere else.** `LocationViewer.vue` used
+  to carry a *scoped* copy of the whole dot stylesheet, left behind when the dots
+  were extracted into their own component. Because it was scoped it compiled to
+  `.map-dot[data-v-…]` — specificity **0,3,0 against the component's own 0,2,0** —
+  so it silently outranked `MapDot`'s real rules and the two copies drifted:
+  - its `transition` had no `opacity`, so the drag ghost and the neighbour dim
+    snapped instead of fading (`transition` is a shorthand list — a second
+    declaration replaces it whole, it does not merge);
+  - its `.expanded` carried `width/height: … !important`, which beat the *inline*
+    size `dotStyle` computes, so zone/nav bubbles jumped to full size the moment
+    `expanded` appeared instead of growing through `expandLevel`;
+  - it re-declared `.expanded { z-index: 10 }` at 0,3,0, which beat the global
+    `.armed`/`.dragging` z-index lifts at 0,2,0 — so those did nothing at all.
+  Any scoped rule on a child component's root beats that component's own global
+  rules; if a component's styles "don't take effect", check for a scoped copy
+  first. One stylesheet per component.
 - **Hole alignment is clamped to [0, 100].** The destination image is aligned
   at `arriveX/Y` + the inverse-pan shift; clamping keeps the shift proportional
   to the remaining image space, so the image never runs out and shows an edge.

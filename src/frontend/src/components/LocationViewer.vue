@@ -1670,34 +1670,12 @@ onMounted(() => {
 
 .arrange-btn { font-size: 12px; }
 
-/* ── Map dots ────────────────────────────────────── */
-
-.map-dot {
-  position: absolute;
-  /* Centered via negative margins; dots live inside the transformed scene layer */
-  margin-left: -8px; margin-top: -8px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease;
-  -webkit-tap-highlight-color: transparent;
-  padding: 0;
-  z-index: 3;
-}
-
-/* Zone dots: small colored circle */
-.zone-dot {
-  width: 16px; height: 16px;
-  background: rgba(64,184,96,0.7);
-  box-shadow: 0 0 6px rgba(64,184,96,0.4);
-}
-
-/* Occupant dots */
-.occ-dot {
-  width: 16px; height: 16px;
-}
-.occ-dot.occ-character { background: rgba(64,136,212,0.8); box-shadow: 0 0 6px rgba(64,136,212,0.4); }
-.occ-dot.occ-gmc { background: rgba(232,136,48,0.8); box-shadow: 0 0 6px rgba(232,136,48,0.4); }
+/* Map-dot styling lives in MapDot.vue's global block ONLY. It used to be
+   duplicated here as a scoped copy, which — being scoped — compiled to
+   `.map-dot[data-v-…]` and outranked the component's own rules, silently
+   shadowing them: the dot's `transition` lost `opacity` and `transform`, and
+   `.armed`/`.dragging`'s z-index lifts were beaten by `.expanded`. Two copies
+   of one component's styles will always drift; keep them in MapDot. */
 
 .pool-badge {
   position: absolute;
@@ -1716,120 +1694,6 @@ onMounted(() => {
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
-
-.occ-dot.self {
-  z-index: 20 !important;
-  border: 2px solid rgba(255,255,255,0.5) !important;
-  box-shadow: 0 0 16px rgba(100,180,255,0.7), 0 0 32px rgba(100,180,255,0.35), 0 0 64px rgba(100,180,255,0.18) !important;
-  animation: selfPulse 2.5s ease-in-out infinite;
-}
-
-@keyframes selfPulse {
-  0%, 100% { box-shadow: 0 0 16px rgba(100,180,255,0.7), 0 0 32px rgba(100,180,255,0.35), 0 0 64px rgba(100,180,255,0.18); }
-  50% { box-shadow: 0 0 24px rgba(100,180,255,0.9), 0 0 48px rgba(100,180,255,0.5), 0 0 80px rgba(100,180,255,0.25); }
-}
-
-/* Non-self dots lerp only on SSE-triggered position updates */
-.occ-dot:not(.self).lerping {
-  transition: left 1.5s ease-out, top 1.5s ease-out, width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease;
-}
-
-/* Navigation dots */
-.nav-dot {
-  width: 16px; height: 16px;
-}
-.nav-dot.nav-parent { background: rgba(200,170,60,0.8); box-shadow: 0 0 6px rgba(200,170,60,0.4); }
-.nav-dot.nav-portal { background: rgba(160,80,200,0.8); box-shadow: 0 0 6px rgba(160,80,200,0.4); }
-.nav-dot.expanded {
-  width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
-  margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
-  background: rgba(10,10,20,0.85);
-  border: none;
-  box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
-  z-index: 10;
-  overflow: hidden;
-}
-
-/* Expanded state — smooth transition from dot to circle */
-.map-dot.expanded {
-  width: clamp(120px, 14vw, 260px) !important; height: clamp(120px, 14vw, 260px) !important;
-  margin-left: calc(clamp(120px, 14vw, 260px) / -2); margin-top: calc(clamp(120px, 14vw, 260px) / -2);
-  background: rgba(10,10,20,0.85);
-  border: none;
-  box-shadow: inset 0 0 20px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.1);
-  z-index: 10;
-  overflow: hidden;
-}
-.occ-dot.expanded {
-  width: clamp(60px, 5.5vw, 88px) !important; height: clamp(60px, 5.5vw, 88px) !important;
-  margin-left: calc(clamp(60px, 5.5vw, 88px) / -2); margin-top: calc(clamp(60px, 5.5vw, 88px) / -2);
-}
-
-/* Inner overlay — fills the expanded dot, hidden when collapsed */
-.dot-overlay {
-  position: absolute; inset: 0;
-  border-radius: 50%;
-  background-size: cover;
-  background-position: center;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  cursor: pointer;
-  pointer-events: none;
-}
-.map-dot.expanded .dot-overlay { opacity: 1; pointer-events: auto; }
-
-.occ-img-overlay { border-radius: 50%; }
-
-.dot-label, .dot-initials {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.2s ease;
-  cursor: pointer;
-}
-.map-dot.expanded .dot-label,
-.map-dot.expanded .dot-initials { opacity: 1; }
-
-.dot-label {
-  font-size: 11px; font-weight: 600; color: var(--map-text);
-  text-align: center; padding: 4px; line-height: 1.2;
-}
-.dot-initials {
-  font-size: 18px; font-weight: 800; color: #fff;
-}
-
-/* Draggable state — show as expanded bubbles */
-.map-dot.draggable {
-  cursor: grab; border: 2px dashed var(--map-accent);
-  animation: dot-pulse 2s ease-in-out infinite;
-}
-/* Zones full-size when editing */
-.zone-dot.draggable {
-  width: 240px !important; height: 240px !important;
-  margin-left: -120px; margin-top: -120px;
-  background: rgba(10,10,20,0.85);
-  z-index: 10;
-  overflow: hidden;
-}
-/* Nav dots full-size when editing */
-.nav-dot.draggable {
-  width: 240px !important; height: 240px !important;
-  margin-left: -120px; margin-top: -120px;
-  background: rgba(10,10,20,0.85);
-  z-index: 10;
-  overflow: hidden;
-}
-/* Show overlay in edit mode */
-.map-dot.draggable .dot-overlay,
-.map-dot.draggable .dot-label,
-.map-dot.draggable .dot-initials {
-  opacity: 1;
-}
-@keyframes dot-pulse {
-  0%, 100% { border-color: var(--map-accent); }
-  50% { border-color: rgba(64,136,212,0.3); }
-}
-
-
 
 /* ── Transitions ─────────────────────────────────── */
 
