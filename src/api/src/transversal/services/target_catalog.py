@@ -229,7 +229,11 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "id": ScalarField("location", "id", "string"),
         "name": ScalarField("location", "name", "string"),
         "type": ScalarField("location", "type", "string"),
-        "universe": ScalarField("location", "universe", "string"),
+        # Read through a derived reader: an Entity stores this as
+        # `current_universe`, so the raw attribute read returned None — which
+        # blanked the picker's subtitle and made `filter universe == earth` match
+        # nothing.
+        "universe": ScalarField("location", "universe", "string", references="universe"),
     },
     "relationship": {
         # The edge's own type ("membership", "agency", …) — content, not schema,
@@ -366,6 +370,12 @@ EDGES: tuple[Edge, ...] = (
     # location → universe / occupants
     Edge("universe", "location", ("universe",), "one", "Universe", noun="universe"),
     Edge("occupants", "location", ("entity",), "many", "Occupants", noun="occupant"),
+
+    # universe → the locations in it: the reverse of `location → universe`, and
+    # how a path ranges over a world's places instead of starting from an entity
+    # that happens to be there.
+    Edge("locations", "universe", ("location",), "many", "Locations",
+         noun="location", plural="locations"),
 
     # entity / location → their dice pool (pool-assembly target for add_dice)
     Edge("pool", "entity", ("pool",), "one", "Dice pool"),

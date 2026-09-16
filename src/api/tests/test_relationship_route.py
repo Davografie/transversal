@@ -1,6 +1,4 @@
-"""Targeting reach: the two whole-world seeds, and the relationship route.
-
-Two additions that make a targeting path able to say two things it could not:
+"""Targeting reach: what a path can get to that it could not before.
 
 - **`select traits` / `select universes`** — the whole registry of trait
   *definitions*, and every universe. A definition seed is how an action that
@@ -8,6 +6,8 @@ Two additions that make a targeting path able to say two things it could not:
 - **`entity → relationships → traitsettings`** — a trait instance can hang off a
   relationship *edge* rather than off the entity (your standing with a faction),
   and a path could not reach one at all.
+- **`universe → locations`** — a world's places, so a path ranges over them
+  instead of starting from an entity that happens to be there.
 """
 
 from types import SimpleNamespace as NS
@@ -188,3 +188,67 @@ def test_both_seeds_are_read_from_the_repo_on_demand():
     ctx = TargetContext(repo=repo)
     assert [t.id for t in _seed_collection("traits", ctx)] == ["trait-fire"]
     assert [u.id for u in _seed_collection("universes", ctx)] == ["earth"]
+
+
+# ── universe → its locations ───────────────────────────────────
+
+class WorldRepo:
+    """Universes and locations, told apart by type — the read the route uses."""
+
+    UNIVERSES = [NS(id="earth", name="Earth", type="universe"),
+                 NS(id="valhalla", name="Valhalla", type="universe")]
+    LOCATIONS = [NS(id="earth:gate", name="Rusted Gate", type="location",
+                    current_universe="earth"),
+                 NS(id="earth:market", name="Market", type="location",
+                    current_universe="earth"),
+                 NS(id="valhalla:hall", name="Hall", type="location",
+                    current_universe="valhalla")]
+
+    def list_entities_by_type(self, entity_type, universe=None):
+        kind = getattr(entity_type, "value", entity_type)
+        pool = self.UNIVERSES if kind == "universe" else self.LOCATIONS
+        return [e for e in pool if universe is None or e.current_universe == universe]
+
+
+def _run(*steps):
+    return resolve(spec(*steps), TargetContext(repo=WorldRepo()))
+
+
+def test_a_universe_reaches_the_locations_in_it():
+    """The author's ask: universe → the places in that universe, by path."""
+    s = spec(SelectStep(collection="universes"), NavigateStep(edge="locations"))
+    types, errors = trace(s)
+    assert errors == []
+    assert (types[-1].element, types[-1].cardinality) == ("location", "many")
+
+    res = _run(SelectStep(collection="universes"), NavigateStep(edge="locations"))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["earth:gate", "earth:market", "valhalla:hall"]
+
+
+def test_the_route_narrows_to_one_universe_by_filtering_it_first():
+    res = _run(SelectStep(collection="universes"),
+               FilterStep(field="id", value="earth"),
+               NavigateStep(edge="locations"))
+    assert res.errors == []
+    assert [v.id for v in res.values] == ["earth:gate", "earth:market"]
+
+
+def test_a_location_reads_its_universe():
+    """`location.universe` is what a filter compares, and an Entity stores it as
+    `current_universe` — so the raw attribute read returned None, which blanked
+    the picker's subtitle and made `filter universe == earth` match nothing."""
+    from transversal.services.target_resolver import _read_field, serialize_candidates
+
+    gate = WorldRepo.LOCATIONS[0]
+    assert _read_field(gate, "universe", "location") == "earth"
+    assert serialize_candidates("location", [gate])[0].subtitle == "earth"
+
+
+def test_the_catalog_declares_the_route_and_a_universe_valued_field():
+    edge = tc.edge("universe", "locations")
+    assert edge is not None and edge.cardinality == "many"
+    assert edge.target == ("location",)
+    # The value is a universe, so the wizard offers a universe picker for it.
+    assert tc.field("location", "universe").references == "universe"
+    assert tc.validate() == []

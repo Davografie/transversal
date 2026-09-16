@@ -992,9 +992,39 @@ def _traitsetting_rating_dice(ts: Any, ctx: TargetContext) -> list[dict]:
     return out
 
 
+def _location_universe(value: Any, repo) -> Any:
+    """A location's universe.
+
+    The catalog calls the field ``universe`` while an ``Entity`` stores it as
+    ``current_universe``, so the raw attribute read returned ``None`` — which
+    blanked the location picker's subtitle and made ``filter universe == earth``
+    match nothing. One reader, so the field, the picker and a filter agree.
+    """
+    if isinstance(value, dict):
+        return value.get("universe") or value.get("current_universe")
+    return getattr(value, "universe", None) or getattr(value, "current_universe", None)
+
+
+def _universe_locations(u: Any, ctx: TargetContext) -> list[Any]:
+    """The locations in a universe.
+
+    A universe element *is* its handle (``earth``), and a location's
+    ``current_universe`` holds that handle — so this is the reverse of the
+    ``location → universe`` hop, read through the same repo call the location
+    picker uses.
+    """
+    from transversal.domain import EntityType
+
+    if ctx.repo is None:
+        return []
+    handle = getattr(u, "id", None) or (u.get("id") if isinstance(u, dict) else None)
+    return list(ctx.repo.list_entities_by_type(EntityType.LOCATION, universe=handle or None))
+
+
 def register_default_fields() -> None:
     register_derived_field("traitsetting", "tags", _traitsetting_tags)
     register_derived_field("die", "rating", _die_rating)
+    register_derived_field("location", "universe", _location_universe)
 
 
 def register_default_edges() -> None:
@@ -1043,6 +1073,10 @@ def register_default_edges() -> None:
     register_edge("location", "occupants", lambda l, ctx: list(ctx.repo.list_entities_by_location(l.id)))
     register_edge("location", "difficulty_pool",
                   lambda l, ctx: [_pool_handle(l.id, l.id, "difficulty")])
+    # A world's places: the same repo call the location picker uses, scoped by the
+    # universe's own id (a universe *is* its handle), so a path and a picker can
+    # never disagree about what is in a world.
+    register_edge("universe", "locations", _universe_locations)
 
     register_edge("entity", "pool",
                   lambda e, ctx: [_pool_handle(e.id, e.current_location or "", "pool")])
