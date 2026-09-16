@@ -110,9 +110,12 @@ class TargetCatalogAggregation:
     """A collapse of a collection to a scalar (or, for ``random``, a sample)."""
     name: str
     label: str
-    output: str  # "int" | "number" | "same"
+    output: str  # "int" | "number" | "same" | "element"
     needs_field: bool
     needs_count: bool = False  # random: how many to sample
+    #: Field types this function runs on ([] with needs_field = any). The editor
+    #: filters its function list by the chosen field's type with this.
+    accepts: list[str] = strawberry.field(default_factory=list)
 
 @strawberry.type
 class TargetCatalogCollection:

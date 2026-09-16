@@ -490,16 +490,27 @@ class TestTwoPathAttune:
         assert "your projections" in text
 
     def test_top_step_reads_as_the_most_recently_used(self):
-        """The ordering step is how "the body you were last in" is written."""
+        """The ordering function is how "the body you were last in" is written."""
         effect = Effect(
             type="attune", action="enable",
             target_spec=spec(
                 {"kind": "select", "collection": "self"},
                 {"kind": "navigate", "edge": "projections"},
-                {"kind": "top", "field": "last_used_at"},
+                {"kind": "aggregate", "fn": "top", "field": "last_used_at"},
             ),
         )
         assert effect_text(effect) == "attune your most recently used projection"
+
+    def test_bottom_reads_as_the_least_recently_used(self):
+        effect = Effect(
+            type="attune", action="enable",
+            target_spec=spec(
+                {"kind": "select", "collection": "self"},
+                {"kind": "navigate", "edge": "projections"},
+                {"kind": "aggregate", "fn": "bottom", "field": "last_used_at"},
+            ),
+        )
+        assert effect_text(effect) == "attune your least recently used projection"
 
     def test_copy_trait_reads_as_a_gift(self):
         """`sfx-teach`: hand another entity a copy of a trait you have."""

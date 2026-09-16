@@ -27,7 +27,6 @@ from transversal.services.target_spec import (
     NavigateStep,
     SelectStep,
     TargetSpec,
-    TopStep,
     TraceError,
     ValueType,
 )
@@ -692,8 +691,17 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 values, current_type = [], None
             else:
                 agg = tc.aggregation(step.fn)
+                field = tc.field(current_type.element, step.field) if step.field else None
+                allowed = tc.aggregations_for(field.type if field else None)
                 if agg is None:
                     errors.append(TraceError(i, f"unknown aggregation {step.fn!r}"))
+                    values, current_type = [], None
+                elif step.field and field is None:
+                    errors.append(TraceError(i, f"unknown field {current_type.element}.{step.field}"))
+                    values, current_type = [], None
+                elif agg not in allowed:
+                    what = f"a {field.type} field" if field else "a whole collection"
+                    errors.append(TraceError(i, f"{step.fn} cannot run on {what}"))
                     values, current_type = [], None
                 elif agg.name == "random":
                     if step.count < 1:
@@ -706,15 +714,29 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                         values = _sample(values, step.count)
                         current_type = ValueType(
                             current_type.element, "one" if step.count == 1 else "many")
-                elif not agg.needs_field:
-                    values, current_type = [len(values)], ValueType(agg.output, "one")
-                elif step.field is None or tc.field(current_type.element, step.field) is None:
-                    errors.append(TraceError(i, f"aggregation {step.fn} needs a valid field"))
-                    values, current_type = [], None
+                elif agg.output == "element":
+                    # top/bottom: keep the element carrying the extreme value, so
+                    # a later step can walk from the thing itself (the old `top`).
+                    if current_type.cardinality != "many":
+                        errors.append(TraceError(i, f"{step.fn} requires a many-cardinality collection"))
+                        values, current_type = [], None
+                    elif not values:
+                        current_type = ValueType(current_type.element, "one")
+                    else:
+                        ranked = [(_to_number(_get_field(v, step.field)), v) for v in values]
+                        usable = [(n, v) for n, v in ranked if n is not None]
+                        if not usable:
+                            values, current_type = [], ValueType(current_type.element, "one")
+                        else:
+                            _, chosen = (max if agg.name == "top" else min)(
+                                usable, key=lambda pair: pair[0])
+                            values = [chosen]
+                            current_type = ValueType(current_type.element, "one")
+                elif agg.name == "count":
+                    values, current_type = [len(values)], ValueType("int", "one")
                 else:
-                    f = tc.field(current_type.element, step.field)
                     values = _aggregate(values, step.fn, step.field)
-                    element = f.type if agg.output == "same" else agg.output
+                    element = field.type if agg.output == "same" else agg.output
                     current_type = ValueType(element, "one")
 
         elif isinstance(step, LiteralStep):
@@ -757,26 +779,6 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 # The user's selection supplies the value; nothing resolved yet.
                 values, current_type = [], None
                 break
-
-        elif isinstance(step, TopStep):
-            f = tc.field(current_type.element, step.field) if current_type is not None else None
-            if current_type is None or f is None:
-                src = current_type.element if current_type else "nothing"
-                errors.append(TraceError(i, f"cannot order {src} by {step.field}"))
-                values, current_type = [], None
-            elif not values:
-                # Nothing to order: an empty collection stays empty (fail closed),
-                # with the cardinality the step produces.
-                current_type = ValueType(current_type.element, "one")
-            else:
-                ranked = [(_to_number(_get_field(v, step.field)), v) for v in values]
-                usable = [(n, v) for n, v in ranked if n is not None]
-                if not usable:
-                    values, current_type = [], ValueType(current_type.element, "one")
-                else:
-                    _, chosen = (max if step.direction == "desc" else min)(usable, key=lambda p: p[0])
-                    values = [chosen]
-                    current_type = ValueType(current_type.element, "one")
 
         elif isinstance(step, EvaluateStep):
             values = [_evaluate_step(values, current_type, step, context)]

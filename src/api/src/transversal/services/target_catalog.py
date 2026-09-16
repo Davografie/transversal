@@ -333,12 +333,14 @@ EDGES: tuple[Edge, ...] = (
 
 @dataclass(frozen=True)
 class Aggregation:
-    """Collapses a collection to a scalar — or, for ``random``, samples it.
+    """What an ``aggregate`` step does with a collection.
 
-    ``output`` is ``"int"`` (count), ``"number"`` (mean/avg_*), or ``"same"``
-    (min/max/random — the element's own type). ``needs_field`` is False for
-    count and random; ``needs_count`` is True only for random (how many to
-    sample — 1 collapses the collection to one element).
+    ``output`` is ``"int"`` (count), ``"number"`` (mean/avg_*), ``"same"`` (the
+    field's own type — min/max) or ``"element"`` (the element *carrying* the
+    extreme value — top/bottom). ``needs_field`` is False for count and random;
+    ``needs_count`` is True for random (how many to sample). ``accepts`` lists the
+    field types the function can run on, so a `datetime` field yields only the
+    functions that make sense for it.
     """
     name: str
     label: str
@@ -346,6 +348,12 @@ class Aggregation:
     needs_field: bool
     card: str = ""  # template with {field} and {src}; "" → derived
     needs_count: bool = False
+    accepts: tuple[str, ...] = ()  # field types; () with needs_field = any
+
+
+#: Ordering needs a comparable field; averaging needs a numeric one.
+_ORDERABLE_TYPES = ("int", "number", "die", "datetime")
+_NUMERIC_TYPES = ("int", "number", "die")
 
 
 def aggregation_card(agg: Aggregation, src: str, field: str) -> str:
@@ -359,16 +367,39 @@ def aggregation_card(agg: Aggregation, src: str, field: str) -> str:
 
 AGGREGATIONS: tuple[Aggregation, ...] = (
     Aggregation("count", "Count", "int", False, card="the number of {src}"),
-    Aggregation("random", "Random", "same", False, needs_count=True,
+    Aggregation("random", "Random", "element", False, needs_count=True,
                 card="a random {src}"),
-    Aggregation("min", "Minimum", "same", True, card="the lowest {field} among {src}"),
-    Aggregation("max", "Maximum", "same", True, card="the highest {field} among {src}"),
-    Aggregation("mean", "Mean", "number", True, card="the average {field} among {src}"),
-    Aggregation("avg_floor", "Average (floor)", "number", True,
+    Aggregation("min", "Lowest value", "same", True, accepts=_ORDERABLE_TYPES,
+                card="the lowest {field} among {src}"),
+    Aggregation("max", "Highest value", "same", True, accepts=_ORDERABLE_TYPES,
+                card="the highest {field} among {src}"),
+    # The element *carrying* the extreme value — argmax/argmin, the old `top`
+    # step. `max` gives the value (a number or a date); these give the thing, so
+    # the path keeps walking to what the element can do.
+    Aggregation("top", "Highest element", "element", True, accepts=_ORDERABLE_TYPES),
+    Aggregation("bottom", "Lowest element", "element", True, accepts=_ORDERABLE_TYPES),
+    Aggregation("mean", "Mean", "number", True, accepts=_NUMERIC_TYPES,
+                card="the average {field} among {src}"),
+    Aggregation("avg_floor", "Average (floor)", "number", True, accepts=_NUMERIC_TYPES,
                 card="the average {field} among {src}, rounded down"),
-    Aggregation("avg_ceil", "Average (ceil)", "number", True,
+    Aggregation("avg_ceil", "Average (ceil)", "number", True, accepts=_NUMERIC_TYPES,
                 card="the average {field} among {src}, rounded up"),
 )
+
+
+def aggregations_for(field_type: str | None) -> tuple[Aggregation, ...]:
+    """The functions a field of ``field_type`` can run (``None`` = no field).
+
+    One declaration, two readers: the editor filters its function list with this,
+    and the type-checker refuses a function the field cannot support — so what is
+    offered is what resolves.
+    """
+    if field_type is None:
+        return tuple(a for a in AGGREGATIONS if not a.needs_field)
+    return tuple(
+        a for a in AGGREGATIONS
+        if a.needs_field and (not a.accepts or field_type in a.accepts)
+    )
 
 
 # ── Starting collections (the `select` step's options) ────────
@@ -651,8 +682,15 @@ def validate() -> list[str]:
                 problems.append(f"field {element_name}.{f.name}: bad type {f.type!r}")
 
     for a in AGGREGATIONS:
-        if a.output not in ("int", "number", "same"):
+        if a.output not in ("int", "number", "same", "element"):
             problems.append(f"aggregation {a.name}: bad output {a.output!r}")
+        # A function's accepted types must be real field types, or the editor's
+        # gating would offer a function that can never run.
+        for t in a.accepts:
+            if t not in ("int", "number", "die", "string", "datetime"):
+                problems.append(f"aggregation {a.name}: unknown accepted type {t!r}")
+        if not a.needs_field and a.accepts:
+            problems.append(f"aggregation {a.name}: accepts fields but needs none")
 
     for c in COLLECTIONS:
         if c.element not in ELEMENT_TYPES:

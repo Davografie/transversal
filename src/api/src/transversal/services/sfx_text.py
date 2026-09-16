@@ -44,7 +44,6 @@ from transversal.services.target_spec import (
     NavigateStep,
     SelectStep,
     TargetSpec,
-    TopStep,
     ValueType,
     trace,
 )
@@ -590,6 +589,10 @@ def _aggregate_phrase(p: Phrase, step: AggregateStep) -> Phrase:
         return replace(p, cardinality="one" if step.count == 1 else p.cardinality,
                        adjectives=[*p.adjectives, "random"],
                        fixed_determiner=article)
+    if agg is not None and agg.output == "element":
+        # top/bottom select the element *carrying* the extreme value — a
+        # superlative selection, which is why the path keeps walking from it.
+        return _superlative_phrase(p, step.field or "", agg.name == "top")
     if agg is None:
         return Phrase(scalar=f"{step.fn} of {render_phrase(p, '')}".strip())
     return Phrase(element=agg.output, cardinality="one",
@@ -622,21 +625,21 @@ def _stated_grant(effect: Effect) -> str:
     return f"a {statement}" if statement else ""
 
 
-def _top_phrase(p: Phrase, step: TopStep) -> Phrase:
-    """``top`` reads as a superlative selection: "the most recently used".
+def _superlative_phrase(p: Phrase, field_name: str, highest: bool) -> Phrase:
+    """``top``/``bottom`` read as superlatives: "the most recently used".
 
     A timestamp has an obvious reading (*most recently used* — how a path asks
     for the body you were last in); any other orderable field reads as "with the
     highest/lowest …". It collapses to one, so it supplies its own determiner.
     """
     from transversal.services import target_catalog as _tc
-    f = _tc.field(p.element, step.field) if p.element else None
+    f = _tc.field(p.element, field_name) if p.element else None
     if f is not None and f.type == "datetime":
-        head = "most recently used" if step.direction == "desc" else "least recently used"
+        head = "most recently used" if highest else "least recently used"
         return replace(p, cardinality="one", adjectives=[*p.adjectives, head],
                        fixed_determiner="the")
-    label = _tc.field_label(f) if f is not None else step.field.replace("_", " ")
-    edge = "highest" if step.direction == "desc" else "lowest"
+    label = _tc.field_label(f) if f is not None else field_name.replace("_", " ")
+    edge = "highest" if highest else "lowest"
     return replace(p, cardinality="one", origin=f"with the {edge} {label}",
                    fixed_determiner="the")
 
@@ -762,8 +765,6 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
             phrase = _literal_phrase(step, resolve)
         elif isinstance(step, ChooseStep):
             phrase = _choose_phrase(phrase, step)
-        elif isinstance(step, TopStep):
-            phrase = _top_phrase(phrase, step)
         elif isinstance(step, EvaluateStep):
             phrase = _evaluate_phrase(phrase, step, named)
 

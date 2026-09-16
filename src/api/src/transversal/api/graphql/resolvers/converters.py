@@ -433,9 +433,11 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
         elif kind == "choose":
             steps.append(ts.ChooseStep(count=int(s.count or 1), output=s.output))
         elif kind == "top":
-            steps.append(ts.TopStep(field=s.field or "",
-                                    direction="asc" if s.direction == "asc" else "desc",
-                                    output=s.output))
+            # Retired as a step of its own: `top` is the aggregate function that
+            # keeps the element carrying the extreme value (argmax/argmin).
+            steps.append(ts.AggregateStep(
+                fn="bottom" if s.direction == "asc" else "top", field=s.field,
+                output=s.output))
         elif kind == "evaluate":
             steps.append(ts.EvaluateStep(operator=s.operator or "exists", field=s.field or "", value=s.value))
         else:

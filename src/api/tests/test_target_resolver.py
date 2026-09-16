@@ -17,7 +17,6 @@ from transversal.services.target_spec import (
     NavigateStep,
     SelectStep,
     TargetSpec,
-    TopStep,
 )
 
 
@@ -631,7 +630,7 @@ def _three_bodies():
 def test_top_keeps_the_most_recently_used_body():
     kael, repo = _three_bodies()
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="last_used_at"))
+             AggregateStep(fn="top", field="last_used_at"))
     res = resolve(s, TargetContext(subject=kael, repo=repo))
     assert res.errors == []
     assert [p.id for p in res.values] == ["kael:valhalla"]
@@ -640,7 +639,7 @@ def test_top_keeps_the_most_recently_used_body():
 def test_top_asc_keeps_the_least_recently_used():
     kael, repo = _three_bodies()
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="last_used_at", direction="asc"))
+             AggregateStep(fn="bottom", field="last_used_at"))
     res = resolve(s, TargetContext(subject=kael, repo=repo))
     assert [p.id for p in res.values] == ["kael:ember"]
 
@@ -650,7 +649,7 @@ def test_top_of_an_empty_collection_is_empty_not_an_error():
               current_projection=None, razmerit=0)
     repo = FakeRepo(entities={"kael": kael}, projections={})
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="last_used_at"))
+             AggregateStep(fn="top", field="last_used_at"))
     res = resolve(s, TargetContext(subject=kael, repo=repo))
     assert res.errors == []
     assert res.values == []
@@ -662,7 +661,7 @@ def test_top_skips_bodies_with_no_timestamp():
     repo.projections["kael:never"] = NS(id="kael:never", entity_id="kael", universe="somewhere",
                                         last_used_at=None)
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="last_used_at"))
+             AggregateStep(fn="top", field="last_used_at"))
     res = resolve(s, TargetContext(subject=kael, repo=repo))
     assert [p.id for p in res.values] == ["kael:valhalla"]
 

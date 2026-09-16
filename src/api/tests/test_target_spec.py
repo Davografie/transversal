@@ -9,7 +9,6 @@ from transversal.services.target_spec import (
     NavigateStep,
     SelectStep,
     TargetSpec,
-    TopStep,
     ValueType,
     check,
     final_type,
@@ -166,7 +165,7 @@ def test_aggregate_count_collapses_to_int():
 def test_aggregate_min_needs_field():
     s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="min"))
     types, errors = trace(s)
-    assert any("needs a field" in e.message for e in errors)
+    assert any("cannot run on a whole collection" in e.message for e in errors)
 
 
 def test_aggregate_min_over_die_result():
@@ -414,48 +413,69 @@ def test_choose_deserializes_from_dict():
 
 def test_top_collapses_to_one_by_a_timestamp():
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="last_used_at"))
+             AggregateStep(fn="top", field="last_used_at"))
     types, errors = trace(s)
     assert errors == []
     assert types[-1] == ValueType("projection", "one")
 
 
 def test_top_rejects_an_unorderable_field():
-    """A plain string has no ordering — the catalog's operators say so."""
+    """A plain string has no ordering — the catalog's operators say so, and the
+    field's type is what decides which functions are even offered."""
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="universe"))
+             AggregateStep(fn="top", field="universe"))
     _types, errors = trace(s)
-    assert any("cannot be ordered" in e.message for e in errors)
+    assert any("cannot run on" in e.message for e in errors)
 
 
 def test_top_rejects_an_unknown_field():
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="nope"))
+             AggregateStep(fn="top", field="nope"))
     _types, errors = trace(s)
     assert any("unknown field" in e.message for e in errors)
 
 
 def test_top_needs_a_collection():
-    s = spec(SelectStep(collection="self"), TopStep(field="last_used_at"))
+    # `self` is one entity, so there is nothing to pick the highest *of* — the
+    # field itself is valid (`entity.razmerit`), which is what isolates the check.
+    s = spec(SelectStep(collection="self"), AggregateStep(fn="top", field="razmerit"))
     _types, errors = trace(s)
     assert any("requires a many-cardinality collection" in e.message for e in errors)
+
+
+def test_a_datetime_field_offers_no_average():
+    """The field's type gates the functions: a timestamp cannot be averaged."""
+    s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
+             AggregateStep(fn="mean", field="last_used_at"))
+    _types, errors = trace(s)
+    assert any("cannot run on a datetime field" in e.message for e in errors)
+
+
+def test_a_count_needs_no_field():
+    """`count` is a collection-level function; giving it a field is an error."""
+    s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="count", field="result"))
+    _types, errors = trace(s)
+    assert any("cannot run on" in e.message for e in errors)
 
 
 def test_top_exposes_its_output():
     from transversal.services.target_spec import spec_variables
     s = spec(SelectStep(collection="self"), NavigateStep(edge="projections"),
-             TopStep(field="last_used_at", output="most_recent"))
+             AggregateStep(fn="top", field="last_used_at", output="most_recent"))
     assert spec_variables(s)["most_recent"] == ValueType("projection", "one")
 
 
-def test_top_deserializes_from_dict_defaulting_to_desc():
-    s = TargetSpec.model_validate({"steps": [
-        {"kind": "select", "collection": "self"},
-        {"kind": "navigate", "edge": "projections"},
-        {"kind": "top", "field": "last_used_at"},
-    ]})
-    assert isinstance(s.steps[2], TopStep)
-    assert s.steps[2].direction == "desc"
+def test_a_legacy_top_step_folds_into_the_aggregate():
+    """`top` is an aggregate function now (argmax); a spec authored before that
+    still loads, and `direction` decides which function it becomes."""
+    for direction, fn in (("desc", "top"), ("asc", "bottom")):
+        s = TargetSpec.model_validate({"steps": [
+            {"kind": "select", "collection": "self"},
+            {"kind": "navigate", "edge": "projections"},
+            {"kind": "top", "field": "last_used_at", "direction": direction},
+        ]})
+        assert isinstance(s.steps[2], AggregateStep)
+        assert s.steps[2].fn == fn and s.steps[2].field == "last_used_at"
 
 
 def test_a_type_filter_enables_the_narrower_elements_edges():
