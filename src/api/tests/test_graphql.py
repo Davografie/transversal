@@ -892,3 +892,13 @@ class TestBlueBookRecordOrdering:
             mutation { updateHistoricalRecord(input: {id: "no-such-record", afterIds: []}) }
         """)
         assert updated["updateHistoricalRecord"] is False
+
+
+def test_roster_graphql_surface():
+    """The faction roster is exposed — `factionMembers` and `Entity.coMembers`."""
+    from transversal.api.graphql.schema import schema
+
+    sdl = schema.as_str()
+    assert "factionMembers(factionId: ID!): [FactionMember!]!" in sdl
+    assert "coMembers: [FactionMember!]!" in sdl
+    assert "role: String" in sdl and "rank: String" in sdl

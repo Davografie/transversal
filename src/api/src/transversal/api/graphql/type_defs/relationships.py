@@ -1,5 +1,7 @@
 """Relationships — split out of src/api/src/transversal/api/graphql/types.py."""
 
+from typing import Optional
+
 import strawberry
 
 from transversal.api.graphql.type_defs.traits import (
@@ -50,4 +52,19 @@ class RelatedEntity:
     """An entity connected via a relationship edge, with portrait."""
     id: strawberry.ID
     name: str
+    type: str = ""
     sheet_portrait: str = ""
+
+
+@strawberry.type
+class FactionMember:
+    """A roster entry — who is in a faction, and what their place in it is.
+
+    ``role`` is the tie's statement ("sect elder"), ``rank`` its rating, i.e. the
+    two authored roster traits; both are None when the tie carries neither.
+    """
+    id: strawberry.ID
+    name: str
+    type: str = ""
+    role: Optional[str] = None
+    rank: Optional[str] = None

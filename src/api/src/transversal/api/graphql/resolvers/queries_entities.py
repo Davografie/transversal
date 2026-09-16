@@ -5,6 +5,7 @@ import strawberry
 from transversal.api.graphql.types import CharacterView
 from transversal.api.graphql.types import Entity
 from transversal.api.graphql.types import EntityType
+from transversal.api.graphql.types import FactionMember
 from transversal.api.graphql.types import Projection
 from transversal.api.graphql.types import RelatedEntity
 from transversal.api.graphql.types import Relationship
@@ -112,6 +113,24 @@ class QueriesEntities:
         repo = _em(info).repo
         results = repo.get_related_entities(str(entity_id), query)
         return [
-            RelatedEntity(id=r["id"], name=r["name"], sheet_portrait=r.get("sheet_portrait", ""))
+            RelatedEntity(
+                id=r["id"], name=r["name"],
+                type=r.get("type", ""),
+                sheet_portrait=r.get("sheet_portrait", ""),
+            )
             for r in results
+        ]
+
+    @strawberry.field
+    def faction_members(
+        self, info: strawberry.Info, faction_id: strawberry.ID
+    ) -> list[FactionMember]:
+        """A faction's roster — its members with their role and rank."""
+        repo = _em(info).repo
+        return [
+            FactionMember(
+                id=m["id"], name=m["name"], type=m["type"],
+                role=m.get("role"), rank=m.get("rank"),
+            )
+            for m in repo.get_faction_roster(str(faction_id))
         ]

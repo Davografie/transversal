@@ -8,6 +8,7 @@ from transversal.api.graphql.type_defs.enums import (
     EntityType,
     TransversalTypeEnum,
 )
+from transversal.api.graphql.type_defs.relationships import FactionMember
 from transversal.api.graphql.type_defs.traits import (
     TraitSetSetting,
     TraitSetting,
@@ -214,6 +215,28 @@ class Entity:
             current_table_id=pt.current_table_id,
             continuation=pt.continuation,
         )
+
+    @strawberry.field
+    def co_members(self, info: strawberry.Info) -> list[FactionMember]:
+        """The other roster members of the factions this entity belongs to.
+
+        What a GMC sheet needs to answer "who else is in my sect?" — deduped
+        across the factions, self excluded, each with their role and rank.
+        """
+        repo = info.context["entity_manager"].repo
+        me = str(self.id)
+        seen: set[str] = set()
+        out: list[FactionMember] = []
+        for faction_id in repo.get_entity_factions(me):
+            for m in repo.get_faction_roster(faction_id):
+                if m["id"] == me or m["id"] in seen:
+                    continue
+                seen.add(m["id"])
+                out.append(FactionMember(
+                    id=m["id"], name=m["name"], type=m["type"],
+                    role=m.get("role"), rank=m.get("rank"),
+                ))
+        return out
 
     @strawberry.field
     async def trait_settings(self, info: strawberry.Info) -> list[TraitSetting]:

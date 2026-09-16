@@ -158,15 +158,11 @@ class RepositoryCanvas:
         return list(self.db.aql.execute(query))
 
     def _faction_member_ids(self, faction_id: str) -> list[str]:
-        query = f"""
-            FOR r IN {RELATIONSHIPS}
-            FILTER r.type == 'membership' AND PARSE_IDENTIFIER(r._to).key == @fid
-            RETURN PARSE_IDENTIFIER(r._from).key
-        """
-        return list(self.db.aql.execute(query, bind_vars={"fid": faction_id}))
+        """Member ids by the roster read — one definition of "member", not two."""
+        return [m["id"] for m in self.get_faction_roster(faction_id)]
 
     def list_faction_members(self, faction_id: str) -> list[Entity]:
-        """Return member entities (character/gmc) of a faction via membership edges."""
+        """Return member entities (character/gmc) of a faction via its roster."""
         member_ids = self._faction_member_ids(faction_id)
         if not member_ids:
             return []
@@ -468,22 +464,24 @@ class RepositoryCanvas:
         result["occupant_relations"] = self._relations_between(occupant_ids)
         return result
 
-    def canvas_faction(self, faction_id: str) -> dict:
-        """Return conspyramid data for a faction.
+    def get_faction_roster(self, faction_id: str) -> list[dict]:
+        """The faction's roster: ``{id, name, type, location_id, role, rank}``.
 
-        Returns members (with rank/role), the locations where members are
-        placed, ancestor scaffolding for the pruned tree, and labeled
-        relations between members.
+        A roster entry is a ``membership`` edge — or a ``relation`` tie carrying a
+        roster trait, which is the shape the authored sect rosters are in. The
+        traits are matched by **name**, not by key: the registry holds two traits
+        called ``role`` (``trait-12795986``, which the migrated content uses, and
+        ``trait-13684952``), so a key comparison silently misses the real data.
+
+        The direction rule matters: only ``member → faction`` ties count. The
+        reverse is the *organisation's* view of someone (Azure Dawn's "outer sect
+        disciple"), which is a posture, not a roster slot.
+
+        This is the single roster read — the canvas and the GraphQL roster fields
+        all go through it, so they cannot disagree.
         """
-        faction = self.get_entity(faction_id)
-        if faction is None:
-            return {"faction": None, "members": [], "locations": [], "ancestors": [], "location_edges": [], "relations": []}
-
         # A roster entry is a `membership` edge — or a `relation` tie carrying a
-        # roster trait, which is the shape the authored sect rosters are in. Match
-        # the traits by **name**, not by key: the registry holds two traits called
-        # `role` (`trait-12795986`, which the migrated content uses, and
-        # `trait-13684952`), so a key comparison silently misses the real data.
+        # roster trait, which is the shape the authored sect rosters are in.
         trait_names = {t.id: t.name for t in self.get_all_traits()}
         tie_query = f"""
             FOR r IN {RELATIONSHIPS}
@@ -508,23 +506,69 @@ class RepositoryCanvas:
                 continue  # a posture tie between the faction and something else
             roster.append({"id": tie["member_key"], "role": role, "rank": rank})
 
-        members: list[dict] = []
-        if roster:
-            entity_query = f"""
-                FOR e IN {ENTITIES}
-                FILTER e._key IN @keys AND e.type IN ['gmc', 'character']
-                RETURN {{ id: e._key, name: e.name, location_id: e.current_location }}
-            """
-            by_id = {
-                doc["id"]: doc
-                for doc in self.db.aql.execute(
-                    entity_query, bind_vars={"keys": [r["id"] for r in roster]}
-                )
-            }
-            for r in roster:
-                doc = by_id.get(r["id"])
-                if doc is not None:
-                    members.append({**doc, "role": r["role"], "rank": r["rank"]})
+        if not roster:
+            return []
+        entity_query = f"""
+            FOR e IN {ENTITIES}
+            FILTER e._key IN @keys AND e.type IN ['gmc', 'character', 'asset']
+            RETURN {{ id: e._key, name: e.name, type: e.type, location_id: e.current_location }}
+        """
+        by_id = {
+            doc["id"]: doc
+            for doc in self.db.aql.execute(
+                entity_query, bind_vars={"keys": [r["id"] for r in roster]}
+            )
+        }
+        return [
+            {**by_id[r["id"]], "role": r["role"], "rank": r["rank"]}
+            for r in roster
+            if r["id"] in by_id
+        ]
+
+    def get_entity_factions(self, entity_id: str) -> list[str]:
+        """Faction ids this entity is on the roster of.
+
+        The inverse of :meth:`get_faction_roster`, and it uses the same two shapes
+        (``membership``, or a roster-trait ``relation`` tie) so the two reads agree.
+        """
+        trait_names = {t.id: t.name for t in self.get_all_traits()}
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from == @eref AND r.type IN ['membership', 'relation']
+            LET faction = DOCUMENT(r._to)
+            FILTER faction != null AND faction.type == 'faction'
+            RETURN {{ edge_key: r._key, type: r.type, faction: faction._key }}
+        """
+        rows = list(self.db.aql.execute(
+            query, bind_vars={"eref": f"{ENTITIES}/{entity_id}"}
+        ))
+        factions: list[str] = []
+        for row in rows:
+            if row["type"] != "membership":
+                names = {
+                    trait_names.get(ts.trait_id)
+                    for ts in self.get_relationship_traitsettings(row["edge_key"])
+                }
+                if not (ROLE_TRAIT_NAME in names or RANK_TRAIT_NAME in names):
+                    continue  # posture only
+            if row["faction"] not in factions:
+                factions.append(row["faction"])
+        return factions
+
+    def canvas_faction(self, faction_id: str) -> dict:
+        """Return conspyramid data for a faction.
+
+        Returns members (with rank/role), the locations where members are
+        placed, ancestor scaffolding for the pruned tree, and labeled
+        relations between members.
+        """
+        faction = self.get_entity(faction_id)
+        if faction is None:
+            return {"faction": None, "members": [], "locations": [], "ancestors": [], "location_edges": [], "relations": []}
+
+        # The canvas renders people and places, so assets are filtered out here —
+        # the roster read itself keeps them (an org owns things).
+        members = [m for m in self.get_faction_roster(faction_id) if m["type"] != "asset"]
 
         member_ids = [m["id"] for m in members]
         member_locations = [m["location_id"] for m in members if m["location_id"]]

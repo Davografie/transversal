@@ -77,7 +77,7 @@ class RepositoryPlans:
             bind_vars["nq"] = name_query.lower()
         query += """
             SORT e.name
-            RETURN { id: e._key, name: e.name }
+            RETURN { id: e._key, name: e.name, type: e.type }
         """
         rows = list(self.db.aql.execute(query, bind_vars=bind_vars))
         sheet_urls = self._role_urls([r["id"] for r in rows], "sheet", "Small")

@@ -7,10 +7,14 @@ The backend ``random`` target mode and the frontend choose-picker both consume
 Scope grammar (``Effect.target_scope``)::
 
     prefix:value    e.g. ``faction:ru-maffia``, ``subtree:krasnoyarsk``,
-                    ``life_path:path-1``
+                    ``life_path:path-1``, ``actor_faction:``
     bare value      legacy default — universe for universe-scoped kinds,
                     current location for occupants
     empty           current context
+
+``faction:X`` resolves a *named* faction's members; ``actor_faction:`` is its
+inverse — the factions the acting entity is itself on the roster of, which is how
+a member's effect acts on its own org.
 
 New scopes are added by calling :func:`register_scope` with a prefix and a
 resolver.  No dispatch table lives inside the picker or the random picker.
@@ -286,6 +290,54 @@ def _faction_scope(kind: str, value: str, entity: Entity, repo, filter: dict) ->
     return []
 
 
+def _actor_faction_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
+    """The factions the *acting* entity is on the roster of.
+
+    The inverse of :func:`_faction_scope`, which resolves a *named* faction's
+    members. This is what lets a member's effect act on its own org — step a
+    challenge trait on the sect it belongs to, rather than on itself.
+
+    ``value`` optionally narrows to one faction — an exact id wins outright,
+    otherwise it is a case-insensitive part of the name (orgs are often named with
+    a leading article, so exact-name matching is unfriendly to author by hand).
+    """
+    factions = [
+        f for f in (repo.get_entity(fid) for fid in repo.get_entity_factions(entity.id))
+        if f is not None
+    ]
+    if value:
+        by_id = [f for f in factions if f.id == value]
+        if by_id:
+            factions = by_id
+        else:
+            wanted = value.strip().lower()
+            factions = [f for f in factions if wanted in f.name.lower()]
+
+    if kind == "entity":
+        return [_candidate(f.id, f.name, f.current_universe) for f in factions]
+
+    if kind == "trait":
+        # The traits those factions actually hold. A mutate action must pick from
+        # what the subject has, so this scope is its own ownership filter.
+        seen: set[str] = set()
+        out: list[TargetCandidate] = []
+        for faction in factions:
+            for ts in repo.get_traitsettings_for_entity(faction.id):
+                if ts.trait_id in seen:
+                    continue
+                trait = repo.get_trait(ts.trait_id)
+                if trait is None:
+                    continue
+                seen.add(trait.id)
+                out.append(_candidate(
+                    trait.id, trait.name, faction.current_universe,
+                    _traitset_name(repo, trait.traitset_id),
+                ))
+        return out
+
+    return []
+
+
 def _life_path_scope(kind: str, value: str, entity: Entity, repo, filter: dict) -> list[TargetCandidate]:
     if kind == "roll_table":
         return [
@@ -320,6 +372,7 @@ register_scope("universe", _default_scope)
 register_scope("location", _location_scope)
 register_scope("subtree", _subtree_scope)
 register_scope("faction", _faction_scope)
+register_scope("actor_faction", _actor_faction_scope)
 register_scope("traitset", _traitset_scope)
 register_scope("life_path", _life_path_scope)
 
