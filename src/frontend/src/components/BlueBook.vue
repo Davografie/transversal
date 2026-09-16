@@ -70,19 +70,32 @@
         <div v-if="loading" class="bb-empty">Loading…</div>
         <div v-else-if="!displayEntries.length" class="bb-empty">No entries yet.</div>
         <TransitionGroup v-else name="bb-list" tag="div" class="bb-list" :class="{ 'bb-phasing': filterPhasing }">
-          <div v-for="(g, gidx) in renderGroups" :key="g.key" :data-bb-idx="g.type === 'entry' ? g.idx : -1" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (renderGroups.length - 1 - gidx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': g.type === 'entry' && dragIndex === g.idx, 'bb-drag-over': g.type === 'entry' && dragOverIndex === g.idx, 'bb-continuation': g.type === 'entry' && entryContinuations.has(g.entry.id) }" :draggable="g.type === 'entry'" @dragstart="g.type === 'entry' && dragStart($event, g.idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="g.type === 'entry' && touchStart($event, g.idx)">
+          <div v-for="(g, gidx) in renderGroups" :key="g.key" :data-bb-idx="g.type === 'entry' ? g.idx : -1" :style="{ animation: 'bb-enter 0.3s ease both', animationDelay: (renderGroups.length - 1 - gidx) * 0.04 + 's' }" class="bb-entry" :class="{ 'bb-dragging': g.type === 'entry' && dragIndex === g.idx, 'bb-drag-over': g.type === 'entry' && dragTarget?.kind === 'row' && dragTarget.insertBefore === g.idx, 'bb-continuation': g.type === 'entry' && entryContinuations.has(g.entry.id) }" :draggable="g.type === 'entry'" @dragstart="g.type === 'entry' && dragStart($event, g.idx)" @dragover="dragOver" @drop="drop" @dragend="dragEnd" @touchstart="g.type === 'entry' && touchStart($event, g.idx)">
+            <!-- ⠿ grip: the app-wide drag affordance (GmListItem/TraitRow). Touch
+                 drags from it engage instantly; the row keeps whole-row mouse
+                 drag and long-press. -->
+            <span
+              v-if="g.type === 'entry'"
+              class="bb-drag-handle"
+              draggable="true"
+              title="Drag to reorder"
+              @click.stop
+              @touchstart.stop="touchStart($event, g.idx, { instant: true })"
+            >⠿</span>
             <!-- ── Chain group: consecutive transversal records, inline images ── -->
             <template v-if="g.type === 'chain'">
               <div class="bb-entry-header">
                 <div class="bb-record-badge">{{ recordIcon(g.entries[0]) }} {{ recordLabel(g.entries[0]) }}</div>
               </div>
               <div class="bb-record-locations">
-                <template v-for="(locId, li) in chainLocationIds(g.entries)" :key="locId">
-                  <img v-if="locationPortraits[locId]" :src="locationPortraits[locId]" class="bb-location-img" alt="" @click="viewImage(locationPortraits[locId])" />
-                  <span v-else class="bb-location-missing">{{ locationNames[locId] || locId }}</span>
-                  <span v-if="li < chainLocationIds(g.entries).length - 1" class="bb-location-arrow">→</span>
+                <template v-for="(loc, li) in g.locations" :key="loc.id + ':' + li">
+                  <img v-if="locationPortraits[loc.id]" :src="locationPortraits[loc.id]" class="bb-location-img" :class="{ 'bb-drop-target': isLocationDropTarget(loc) }" :data-bb-insert="loc.insertBefore" alt="" draggable="false" @click="viewImage(locationPortraits[loc.id])" @dragover.stop="dragOver" @drop.stop="drop" />
+                  <span v-else class="bb-location-missing" :class="{ 'bb-drop-target': isLocationDropTarget(loc) }" :data-bb-insert="loc.insertBefore" @dragover.stop="dragOver" @drop.stop="drop">{{ locationNames[loc.id] || loc.id }}</span>
+                  <!-- The arrow is part of "after this location" too, so the whole
+                       path is a drop target rather than a run of dead gaps. -->
+                  <span v-if="li < g.locations.length - 1" class="bb-location-arrow" :data-bb-insert="loc.insertBefore">→</span>
                 </template>
-                <span v-if="!chainLocationIds(g.entries).length" class="bb-entry-title bb-record-title">{{ chainTitle(g.entries) }}</span>
+                <span v-if="!g.locations.length" class="bb-entry-title bb-record-title">{{ chainTitle(g.entries) }}</span>
               </div>
             </template>
             <!-- ── Single entry (message or non-transversal record) ── -->
@@ -348,7 +361,7 @@ const renderGroups = computed(() => {
         chain.push(items[j])
         j++
       }
-      groups.push({ key: 'chain-' + chain[0].id, type: 'chain', entries: chain })
+      groups.push({ key: 'chain-' + chain[0].id, type: 'chain', entries: chain, locations: chainLocations(chain, i) })
       i = j
     } else {
       groups.push({ key: m.id, type: 'entry', entry: m, idx: i })
@@ -358,14 +371,26 @@ const renderGroups = computed(() => {
   return groups
 })
 
-function chainLocationIds(group) {
-  const ids = []
-  for (const m of group) {
+// The location images of a chain, each carrying the flat-list index a dropped
+// item has to be inserted *at* to land directly after it. A record contributes
+// its origin (insert before the record) and its destination (insert before
+// whatever follows the record); a location shared by consecutive records is
+// emitted once, so dropping mid-path splits the chain at that point.
+function chainLocations(group, firstIdx) {
+  const out = []
+  let lastId = null
+  group.forEach((m, k) => {
     const d = m.data || {}
-    if (d.from_location && ids[ids.length - 1] !== d.from_location) ids.push(d.from_location)
-    if (d.to_location && ids[ids.length - 1] !== d.to_location) ids.push(d.to_location)
-  }
-  return ids
+    if (d.from_location && d.from_location !== lastId) {
+      out.push({ id: d.from_location, insertBefore: firstIdx + k })
+      lastId = d.from_location
+    }
+    if (d.to_location && d.to_location !== lastId) {
+      out.push({ id: d.to_location, insertBefore: firstIdx + k + 1 })
+      lastId = d.to_location
+    }
+  })
+  return out
 }
 
 function chainTitle(group) {
@@ -443,13 +468,19 @@ async function fetchThreads() {
   } catch {}
 }
 
-async function reorder(srcIdx, dropIdx) {
-  if (srcIdx < 0 || srcIdx === dropIdx) return
+async function reorder(srcIdx, target) {
+  // Every drop resolves to "insert before this flat index": a row's own index
+  // for its top edge, or the index a location image computed for "directly
+  // after me".
+  const dropIdx = typeof target === 'number' ? target : target?.insertBefore
+  if (srcIdx < 0 || dropIdx == null || dropIdx < 0) return
+  // Dropping an item on itself, or into the gap right below it, moves nothing.
+  if (dropIdx === srcIdx || dropIdx === srcIdx + 1) return
 
   const visible = [...displayEntries.value]
   if (!visible.length) return
 
-  // Reorder: remove from srcIdx, insert at dropIdx
+  // Reorder: remove from srcIdx, insert before dropIdx
   const [X] = visible.splice(srcIdx, 1)
   const targetIdx = srcIdx < dropIdx ? dropIdx - 1 : dropIdx
   visible.splice(targetIdx, 0, X)
@@ -469,15 +500,30 @@ async function reorder(srcIdx, dropIdx) {
   await fetch()
 }
 
-const { source: dragIndex, over: dragOverIndex, touchStart, dragStart, dragOver, drop, dragEnd } = useDragDrop({
+const { source: dragIndex, over: dragTarget, touchStart, dragStart, dragOver, drop, dragEnd } = useDragDrop({
   resolveTarget: (el) => {
-    const row = el && el.closest ? el.closest('.bb-entry') : null
+    if (!el || !el.closest) return null
+    // A location image (or the arrow after it) is the finer target: its payload
+    // drops the item directly after that location, splitting the chain if it
+    // lands mid-path.
+    const loc = el.closest('[data-bb-insert]')
+    if (loc) {
+      const at = parseInt(loc.dataset.bbInsert)
+      return at >= 0 ? { kind: 'location', insertBefore: at } : null
+    }
+    const row = el.closest('.bb-entry')
     if (!row || row.dataset.bbIdx === undefined) return null
     const idx = parseInt(row.dataset.bbIdx)
-    return idx >= 0 ? idx : null
+    return idx >= 0 ? { kind: 'row', insertBefore: idx } : null
   },
+  // The grip is small; ghost the whole row it belongs to.
+  ghostSource: (el) => (el && el.closest ? el.closest('.bb-entry') : el),
   onCommit: ({ from, to }) => reorder(from, to),
 })
+
+function isLocationDropTarget(loc) {
+  return dragTarget.value?.kind === 'location' && dragTarget.value.insertBefore === loc.insertBefore
+}
 
 function senderName(eid) { return senderNames.value[eid] || eid }
 function senderPortrait(eid) { return senderPortraits.value[eid] || null }
@@ -656,10 +702,16 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-thread-filter button{padding:2px 8px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-dim);font-size:11px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s}
 .bb-thread-filter button:hover{background:var(--bg-hover);color:var(--text)}
 .bb-thread-filter button.active{background:var(--accent);color: var(--text-on-accent);border-color:var(--accent)}
-.bb-entry{padding:10px 0;border-bottom:1px solid var(--border)}
+.bb-entry{position:relative;padding:10px 0;border-bottom:1px solid var(--border)}
 .bb-entry:last-child{border-bottom:none}
 .bb-entry.bb-dragging{opacity:0.4}
 .bb-entry.bb-drag-over{border-top:2px solid var(--accent)}
+/* Sits in the entries pane's right gutter so it never covers entry text. */
+.bb-drag-handle{position:absolute;top:6px;right:-12px;width:16px;line-height:16px;text-align:center;font-size:12px;color:var(--text-dim);cursor:grab;user-select:none}
+.bb-drag-handle:hover{color:var(--text)}
+.bb-drag-handle:active{cursor:grabbing}
+/* An item dropped on a location lands directly after it. */
+.bb-location-img.bb-drop-target,.bb-location-missing.bb-drop-target{outline:2px solid var(--accent);outline-offset:1px}
 .bb-entry-header{display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:wrap}
 .bb-sender-row{display:flex;align-items:center;gap:4px}
 .bb-sender-img{width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0}
