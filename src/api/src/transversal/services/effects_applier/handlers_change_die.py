@@ -43,8 +43,6 @@ from transversal.services.effects_applier.trait_helpers import (
     _die_opt,
 )
 
-_DIE_STEPS = ("d4", "d6", "d8", "d10", "d12")
-
 
 @dataclass(frozen=True)
 class DieChange:
@@ -150,26 +148,6 @@ def _parse_rating_ref(target: str) -> tuple[int, str] | None:
         return None
 
 
-def _highest_trait_die(pool: list[dict]) -> int | None:
-    """Index of the highest-rated die that came from a trait (the default target).
-
-    ``highest_trait_die`` is a *strategy keyword*, not a thing: it has to be given
-    a meaning, and this is the plain reading of its name. A specific die is named
-    with a targeting path instead.
-    """
-    best, best_i = -1, None
-    for i, die in enumerate(pool):
-        if not die.get("ts_id") and not die.get("source_id"):
-            continue
-        try:
-            rating = _DIE_STEPS.index((die.get("die") or "").strip())
-        except ValueError:
-            continue
-        if rating > best:
-            best, best_i = rating, i
-    return best_i
-
-
 # ── The two homes ──────────────────────────────────────────────
 
 def _apply_rating_change(entity, effect: Effect, repo, result, index: int,
@@ -221,18 +199,13 @@ def _apply_pool_change(entity, effect: Effect, repo, result, target: str, verb: 
     from transversal.services.scene_state import get_scene_store
 
     ref = _parse_die_ref(target)
-    if ref is not None:
-        location_id, owner_id, index = ref
-    elif (target or "").strip() == "highest_trait_die":
-        location_id = getattr(entity, "current_location", "") or ""
-        owner_id = getattr(entity, "id", "") or ""
-        index = _highest_trait_die(get_scene_store().get_pool(location_id, owner_id)) if location_id else None
-        if index is None:
-            result.applied.append(AppliedEffect(effect, "no trait die to change"))
-            return
-    else:
+    if ref is None:
+        # A die in a pool has no id, so a path is the only way to name one
+        # (`pool → dice` → filter → aggregate). There is no keyword left to fall
+        # back on, so an unmade path is reported rather than guessed at.
         result.applied.append(AppliedEffect(effect, f"die target not resolved: {target!r}"))
         return
+    location_id, owner_id, index = ref
 
     store = get_scene_store()
     pool = store.get_pool(location_id, owner_id)

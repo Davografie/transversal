@@ -21,7 +21,6 @@ from transversal.services.effects_applier.handlers_change_die import (
     _apply_change_split,
     _apply_change_step_down,
     _apply_change_step_up,
-    _highest_trait_die,
 )
 from transversal.services.effects_applier.handlers_pools import _parse_die_ref
 from transversal.services.scene_state import SceneStateStore
@@ -66,7 +65,7 @@ def test_a_die_reference_parses_and_a_keyword_does_not():
     assert _parse_die_ref("die:loc-1:kael:2") == ("loc-1", "kael", 2)
     assert _parse_die_ref("die:loc-1:kael:notanumber") is None
     assert _parse_die_ref("die:loc-1:kael") is None
-    assert _parse_die_ref("highest_trait_die") is None
+    assert _parse_die_ref("highest_trait_die") is None   # no keyword survives
     assert _parse_die_ref("") is None
 
 
@@ -83,17 +82,6 @@ def test_the_ladder_clamps_at_the_top_and_removes_at_the_bottom():
     assert step_die(None, 1) == DieType.D4              # an empty rating restores at d4
     assert step_die(None, 2) == DieType.D6
     assert step_die(None, -1) is None
-
-
-def test_the_keyword_picks_the_highest_die_that_came_from_a_trait():
-    pool = [
-        {"die": "d6", "ts_id": None, "source_kind": "manual"},
-        {"die": "d8", "ts_id": "kael:fire", "source_kind": "trait"},
-        {"die": "d10", "ts_id": "kael:metal", "source_kind": "trait"},
-    ]
-    assert _highest_trait_die(pool) == 2
-    # No trait dice at all → nothing to choose, not "the first die".
-    assert _highest_trait_die([{"die": "d6", "ts_id": None}]) is None
 
 
 # ── The verbs ─────────────────────────────────────────
@@ -200,20 +188,6 @@ def test_remove_takes_the_die_out():
     assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d8"]
 
 
-def test_the_keyword_steps_the_highest_trait_die():
-    store = _with_pool([
-        {"die": "d6", "ts_id": None, "source_kind": "manual"},
-        {"die": "d8", "ts_id": "kael:fire", "source_kind": "trait"},
-        {"die": "d10", "ts_id": "kael:metal", "source_kind": "trait"},
-    ])
-    result = Result()
-
-    _apply_change_step_down(Entity(), _effect("highest_trait_die"), None, result)
-
-    assert [d["die"] for d in store.get_pool("loc-1", "kael")] == ["d6", "d8", "d8"]
-    assert "d10 → d8" in result.applied[0].summary
-
-
 def test_a_pool_at_the_limit_reports_rather_than_pretending():
     store = _with_pool([{"die": "d12", "ts_id": None, "source_kind": "manual"}])
     result = Result()
@@ -244,12 +218,13 @@ def test_a_stale_reference_reports_instead_of_touching_another_die():
 
 
 def test_an_empty_pool_is_not_an_error():
+    """No dice at all is a state a path can legitimately resolve into."""
     _with_pool([])
     result = Result()
 
-    _apply_change_step_down(Entity(), _effect("highest_trait_die"), None, result)
+    _apply_change_step_down(Entity(), _effect("die:loc-1:kael:0"), None, result)
 
-    assert result.applied[0].summary == "no trait die to change"
+    assert "pool has 0" in result.applied[0].summary
 
 
 # ── The two halves agree ──────────────────────────────

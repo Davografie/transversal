@@ -41,8 +41,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="set_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text",
-                          required=True, default="highest_trait_die"),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
             EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
@@ -65,8 +64,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="step_up_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text",
-                          required=True, default="highest_trait_die"),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
         ],
         # A `count` in `fields` would be dropped on save — only target/entity/result
         # persist from there; everything else is a context field, which is also
@@ -91,8 +89,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="step_down_die",
         valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text",
-                          required=True, default="highest_trait_die"),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
         ],
         # A `count` in `fields` would be dropped on save — only target/entity/result
         # persist from there; everything else is a context field, which is also
@@ -178,8 +175,7 @@ ACTIONS: list[EffectActionMeta] = [
         effect_action="reroll_die",
         valid_timings=["IMMEDIATE"],
         fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text",
-                          required=True, default="the_hitch_die"),
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
         ],
         # A rating die has no result to reroll, so this one stays pool-only — the
         # destination set is what says so, rather than a runtime refusal.

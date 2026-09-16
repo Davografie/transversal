@@ -54,12 +54,12 @@
         <p v-if="f.description" class="ee-field-help">{{ f.description }}</p>
 
         <div v-if="isScopedTargetField(f)" class="ee-target-group">
-          <div class="ee-mode-row">
+          <!-- An action whose target must be a path declares destinations but no
+               picker kind, and has no keyword left to type — so the mode row
+               would be a select with one option. It is not rendered at all; the
+               path builder below is the only input. -->
+          <div v-if="!pathOnlyTarget" class="ee-mode-row">
             <select v-model="newEffect.targetMode">
-              <!-- With a picker kind the first mode picks a thing; without one
-                   (Step Down Die names a *rule* for choosing a die) the field
-                   holds a strategy keyword instead, and the modes that need a
-                   picker are not offered at all. -->
               <option value="literal">{{ selectedAction.targetKind ? 'Pick specific' : 'Strategy keyword' }}</option>
               <option v-if="selectedAction.supportsReturnExit" value="return">Named exit</option>
               <option v-if="selectedAction.targetKind" value="choose">Choose at runtime</option>
@@ -88,7 +88,7 @@
             </template>
           </div>
           <input
-            v-if="newEffect.targetMode === 'literal' && !selectedAction.targetKind"
+            v-if="newEffect.targetMode === 'literal' && !selectedAction.targetKind && !pathOnlyTarget"
             v-model="newEffect.fields[f.name]"
             type="text"
             :placeholder="f.default || 'strategy…'"
@@ -599,6 +599,14 @@ function isScopedTargetField(f) {
     && !!(selectedAction.value?.targetKind || selectedAction.value?.pathElements?.length)
 }
 
+// The target may only be named by a path: destinations are declared, no picker
+// kind is, and there is no keyword left to type. The mode row and the literal
+// input are then not rendered, and the path is what the form offers.
+const pathOnlyTarget = computed(() => {
+  const meta = selectedAction.value
+  return !!meta?.pathElements?.length && !meta.targetKind
+})
+
 const relevantFilterFields = computed(() => {
   const kind = selectedAction.value?.targetKind
   if (!kind) return []
@@ -628,7 +636,7 @@ function onActionChange() {
   newEffect.context = {}
   newEffect.extraContext = {}
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
-  newEffect.targetMode = 'literal'
+  newEffect.targetMode = pathOnlyTarget.value ? 'spec' : 'literal'
   newEffect.targetSpec = { steps: [] }
   targetLocus.value = ''
   newEffect.scope = defaultScopeFor(selectedAction.value?.targetKind)
@@ -699,7 +707,9 @@ function buildEffect(meta) {
   // the path but the save silently downgraded it to the keyword target: the
   // author's spec was dropped on every Update.
   const canPath = !!(meta.targetKind || meta.pathElements?.length)
-  const mode = canPath ? (newEffect.targetMode || 'literal') : 'literal'
+  // A path-only target has no other mode to fall back to, so its mode is `spec`
+  // whatever a stale draft says.
+  const mode = pathOnlyTarget.value ? 'spec' : (canPath ? (newEffect.targetMode || 'literal') : 'literal')
   let target = meta.implicitTarget || newEffect.fields.target || ''
   if (kind && mode === 'choose') target = `{choose_${kind}}`
   if (kind && mode === 'random') target = `{random:${kind}}`
@@ -762,6 +772,9 @@ function populate(eff) {
   newEffect.targetMode = detectTargetMode(eff, meta)
   newEffect.targetSpec = eff.targetSpec || { steps: [] }
   if ((eff.targetSpec?.steps || []).length) newEffect.targetMode = 'spec'
+  // A path-only action reads its stored spec, or starts a fresh one — either way
+  // the path is the mode, since there is no other input to show.
+  if (pathOnlyTarget.value) newEffect.targetMode = 'spec'
   newEffect.scope = eff.targetScope || ''
   newEffect.targetFilter = eff.targetFilter || {}
   newEffect.dieFilter = eff.dieFilter || {}
@@ -820,7 +833,7 @@ function resetBlank() {
   newEffect.context = {}
   newEffect.extraContext = {}
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
-  newEffect.targetMode = 'literal'
+  newEffect.targetMode = pathOnlyTarget.value ? 'spec' : 'literal'
   newEffect.targetSpec = { steps: [] }
   targetLocus.value = ''
   newEffect.scope = ''
