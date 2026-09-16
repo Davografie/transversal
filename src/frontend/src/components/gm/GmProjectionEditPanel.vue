@@ -27,6 +27,19 @@
         <span v-if="universe !== projection.originUniverse">Current universe: {{ universeName(universe) }}</span>
         <span v-if="saving" class="save-status">Saving…</span>
       </div>
+
+      <!-- Which body the entity is in. The model derives the entity's position
+           from its current projection, so this is the switch. -->
+      <div class="ps-actions">
+        <Button
+          variant="secondary"
+          block
+          :disabled="isActive"
+          :loading="activating"
+          :title="isActive ? 'This is the entity\u2019s active body' : 'Make this the entity\u2019s active body'"
+          @click="onActivate"
+        >{{ isActive ? 'Active' : 'Activate' }}</Button>
+      </div>
     </div>
   </div>
 </template>
@@ -36,6 +49,7 @@ import { ref, computed, onMounted, onUnmounted, watch, inject } from 'vue'
 import { useEntityCrud } from '@/composables/useEntityCrud.js'
 import { useUniverseNames } from '@/composables/useUniverseNames.js'
 import TargetPicker from '@/components/ui/TargetPicker.vue'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   projection: { type: Object, required: true },
@@ -45,7 +59,7 @@ const props = defineProps({
 // the updated projection lands in the list that panel actually renders (the
 // shared instance's list is not on screen anywhere). Fall back to the shared
 // instance if opened outside that tree.
-const { updateProjection, activateProjection } = inject('entityEditor', null) || useEntityCrud()
+const { updateProjection, activateProjection, currentProjection } = inject('entityEditor', null) || useEntityCrud()
 
 const name = ref(props.projection.name || '')
 const currentLocation = ref(props.projection.currentLocation || '')
@@ -57,6 +71,8 @@ const universe = ref(props.projection.universe || '')
 // universe, so the field behaves as it always did until widened.
 const universeFilter = ref(props.projection.universe || '')
 const saving = ref(false)
+const activating = ref(false)
+const isActive = computed(() => currentProjection.value === props.projection.id)
 
 // What this panel has already written. Panel.vue v-binds the spec's props, so
 // `projection` is the object captured at open time and never follows a later
@@ -130,6 +146,18 @@ async function save() {
   }
 }
 
+// Make this body the entity's current one, in place — activateProjection with no
+// destination leaves the body where it is and mirrors the entity onto it.
+async function onActivate() {
+  if (isActive.value) return
+  activating.value = true
+  try {
+    await activateProjection(props.projection.id, null, props.projection.entityId || null)
+  } finally {
+    activating.value = false
+  }
+}
+
 // Closing the panel before the debounce fires must not lose the edit.
 onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); save() } })
 </script>
@@ -195,5 +223,6 @@ onUnmounted(() => { if (saveTimer) { clearTimeout(saveTimer); save() } })
   color: var(--text-dim);
   margin-top: 8px;
 }
+.ps-actions { margin-top: 10px; }
 .save-status { color: var(--accent); }
 </style>

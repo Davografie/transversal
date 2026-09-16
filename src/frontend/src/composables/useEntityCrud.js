@@ -201,15 +201,16 @@ export function createEntityCrud() {
     return result?.updateProjection || null
   }
 
-  // Send a body to a location. Travel, not a field edit: the service derives the
-  // body's universe from the destination location, makes it the entity's current
-  // body, and mirrors the entity's universe/location onto it — so a cross-universe
+  // Send a body to a location, or make it the entity's current body in place
+  // (`location` null). Travel, not a field edit: the service derives the body's
+  // universe from the destination location, makes it the entity's current body,
+  // and mirrors the entity's universe/location onto it — so a cross-universe
   // destination lands with the record consistent and the entity following.
   // `entityId` is the panel's own entity; it falls back to this instance's
   // selection when the projection was opened outside an entity panel.
   async function activateProjection(projectionId, location, entityId = null) {
     const id = entityId || selectedId.value
-    if (!id || !location) return null
+    if (!id) return null
     const result = await graphql(
       `mutation($entityId: ID!, $projectionId: ID!, $location: ID) {
         activateProjection(entityId: $entityId, projectionId: $projectionId, location: $location) {
@@ -217,7 +218,7 @@ export function createEntityCrud() {
           projections { id entityId originUniverse universe name backgroundImage currentLocation transversalType }
         }
       }`,
-      { entityId: id, projectionId, location }
+      { entityId: id, projectionId, location: location || null }
     )
     const e = result?.activateProjection
     if (!e) return null
