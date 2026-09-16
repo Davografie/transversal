@@ -508,6 +508,21 @@ border), and the overlay/particle system below — run continuously.
 - **The scene layer is `pointer-events: none`.** Background taps must fall
   through to the viewer (`onBgClick`); dots opt back in with
   `pointer-events: auto`.
+- **Crowded travel dots: the armed one rises, the rest step back, the dragged dot
+  is a ghost.** `updateTravelTargets` already picks exactly one nearest target and
+  marks it `armed`, so "where will I travel" is never ambiguous in the *logic* —
+  it was a *visibility* problem. Every expanded bubble shares one stacking level
+  (`z-index: 10`), so ties broke by DOM order and the armed bubble could sit
+  underneath a neighbour. Now `.armed` is `z-index: 15`, the non-armed zone/nav
+  bubbles get `.dimmed` (opacity 0.35) while a target is armed, and the dot under
+  the pointer is `.dragging` — faded to 0.45 and raised to `z-index: 30`. The
+  last one matters because occupants and nav dots are *both* `expanded` and nav
+  dots come later in the DOM, so a dragged occupant otherwise paints under the
+  bubbles. `.dragging` fades with `!important` on purpose: the self dot runs
+  `arrivePop`, which animates `opacity` with a `both` fill, and an animation
+  outranks a normal declaration — the same trap as `.controlled` (see above).
+  `dragDotKey` ('self', an occupant id, or '') is set in the drag-move handlers
+  once the 6px tap threshold is crossed, so a tap never flickers the ghost.
 - **Hole alignment is clamped to [0, 100].** The destination image is aligned
   at `arriveX/Y` + the inverse-pan shift; clamping keeps the shift proportional
   to the remaining image space, so the image never runs out and shows an edge.

@@ -20,7 +20,7 @@
         :title="z.name"
         :hole-style="zoneHoleStyle(z)"
         :expand-level="expandLevels['zone-' + zoneId(z, i)] || 0"
-        :class="{ armed: armedDot === 'zone-' + zoneId(z, i) }"
+        :class="{ armed: armedDot === 'zone-' + zoneId(z, i), dimmed: !!armedDot && armedDot !== 'zone-' + zoneId(z, i) }"
         @click="onDotClick('zone', z)"
         @overlay-click="onExpandedClick('zone', z)"
         @drag-start="(e) => onZoneDragStart(e, z, i)"
@@ -40,6 +40,7 @@
         :initials="occupantInitials(o.name)"
         :expanded="true"
         :draggable="canDragOccupant(o)"
+        :dragging="dragDotKey === o.id"
         :lerping="lerpActive"
         :title="canDragOccupant(o) ? 'Drag to reposition' : (o.unpublished ? o.name + ' (draft)' : o.name)"
         @click="onDotClick('occupant', o)"
@@ -73,7 +74,7 @@
         :title="nd.name"
         :hole-style="navHoleStyle(nd)"
         :expand-level="expandLevels['nav-' + nd.key] || 0"
-        :class="{ armed: armedDot === 'nav-' + nd.key }"
+        :class="{ armed: armedDot === 'nav-' + nd.key, dimmed: !!armedDot && armedDot !== 'nav-' + nd.key }"
         @click="onDotClick('nav', nd)"
         @overlay-click="onExpandedClick('nav', nd)"
         @drag-start="(e) => onNavDragStart(e, nd)"
@@ -140,6 +141,7 @@
       :initials="selfInitials"
       :expanded="true"
       :draggable="true"
+      :dragging="dragDotKey === 'self'"
       title="Drag to explore"
       @click="onSelfClick()"
       @overlay-click="onSelfClick()"
@@ -760,6 +762,11 @@ const poolPhaseFor = (eid) => props.remotePools[eid]?.phase || 'adding'
 // ── Occupant drag ──────────────────────────────────
 
 const occDragging = ref(null)  // { index }
+// Which dot the pointer is actually dragging, set once it passes the tap/drag
+// threshold: an occupant id, or 'self' for the GM free-roam dot. The dragged dot
+// fades to a ghost so the destination preview under it stays readable, and rises
+// above the expanded bubbles — an occupant otherwise paints *under* them.
+const dragDotKey = ref('')
 let occDragMoved = false       // pointer moved past the tap threshold
 let draggingEmitted = false    // emitted 'dragging' so the HUD hides during a real drag
 let occSuppressClick = false   // suppress the synthesized click after a real drag
@@ -846,6 +853,7 @@ function onOccDragMove(e) {
     if (Math.hypot(clientX - start.startX, clientY - start.startY) < 6) return
     occDragMoved = true
     const isSelf = occupants.value[start.index]?.id === props.entityId
+    dragDotKey.value = isSelf ? 'self' : (occupants.value[start.index]?.id || '')
     startFrameProfile(isSelf ? 'self' : 'occupant')
     if (!draggingEmitted) { draggingEmitted = true; emit('dragging', true) }
   }
@@ -945,6 +953,8 @@ async function onOccDragEnd() {
   document.removeEventListener('touchend', onOccDragEnd)
   expandLevels.value = {}
   armedDot.value = ''
+  dragDotKey.value = ''   // with the rest of the transient drag state: the early
+                          // return below would otherwise leave the ghost on
   if (draggingEmitted) { draggingEmitted = false; emit('dragging', false) }
   if (!occDragging.value) return
   const occ = occupants.value[occDragging.value.index]
@@ -1008,6 +1018,7 @@ function onGmDotDragMove(e) {
   if (!gmDragMoved) {
     if (Math.hypot(clientX - gmDrag.startX, clientY - gmDrag.startY) < 6) return
     gmDragMoved = true
+    dragDotKey.value = 'self'
     if (!draggingEmitted) { draggingEmitted = true; emit('dragging', true) }
   }
   e.preventDefault()
@@ -1043,6 +1054,7 @@ function onGmDotDragEnd() {
   const wasMoved = gmDragMoved
   gmDrag = null
   gmDragMoved = false
+  dragDotKey.value = ''
   expandLevels.value = {}
   armedDot.value = ''
   if (draggingEmitted) { draggingEmitted = false; emit('dragging', false) }

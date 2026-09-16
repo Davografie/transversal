@@ -58,6 +58,7 @@ const props = defineProps({
   title: { type: String, default: '' },
   holeStyle: { type: Object, default: null },  // px transform for the "hole" dest preview (zone/nav)
   expandLevel: { type: Number, default: 0 },  // 0..1 — proximity-driven size
+  dragging: { type: Boolean, default: false },  // this dot is under the pointer right now
 })
 
 const emit = defineEmits(['click', 'overlay-click', 'drag-start'])
@@ -79,7 +80,7 @@ const dotClasses = computed(() => [
   props.type === 'self' ? 'occ-dot self' : '',
   props.variant ? `occ-${props.variant}` : '',
   props.variant && props.type === 'nav' ? `nav-${props.variant}` : '',
-  { expanded: effectiveLevel.value > 0, draggable: props.draggable, lerping: props.lerping, 'dot-transparent': props.imageTransparent },
+  { expanded: effectiveLevel.value > 0, draggable: props.draggable, lerping: props.lerping, 'dot-transparent': props.imageTransparent, dragging: props.dragging },
 ].filter(Boolean))
 
 const dotStyle = computed(() => {
@@ -122,7 +123,7 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
      applied differs per dot type — see the `.controlled` rules below — because
      the self dot carries a filling `transform` animation and occupants do not. */
   --controlled-scale: 1.4;  /* fallback — LocationViewer passes CONTROLLED_SCALE */
-  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  transition: width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease, opacity 0.2s ease;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
   z-index: 3;
@@ -241,7 +242,26 @@ function onDragStart(e) { if (props.draggable) emit('drag-start', e) }
 /* Travel-armed: the bubble breathes so a drop here will travel */
 .map-dot.armed {
   animation: armed-breathe 1.1s ease-in-out infinite;
+  /* Expanded bubbles all share one stacking level, so which of a crowded pile
+     you would actually travel to was decided by DOM order — the armed one could
+     sit underneath a neighbour's. Lift it above them. */
+  z-index: 15;
 }
+
+/* While a drag is arming a target, the other *travel* bubbles step back so the
+   one you would land on is unmistakable. Occupants are not travel targets, so
+   they are left alone. */
+.map-dot.dimmed { opacity: 0.35; }
+
+/* The dot under the pointer is a ghost: faded, and raised above the bubbles so
+   you can still see what you are dragging — occupants otherwise paint *under*
+   them (both are `expanded`, and nav dots come later in the DOM). Opacity rather
+   than visibility, so the destination preview underneath stays readable.
+   `!important` because the self dot runs `arrivePop`, which animates `opacity`
+   with a forwards fill, and an animation outranks a normal declaration — without
+   it the ghost silently does nothing on exactly the dot you drag most. */
+.map-dot.dragging { opacity: 0.45 !important; z-index: 30; }
+
 @keyframes armed-breathe {
   0%, 100% { box-shadow: 0 0 0 3px rgba(120,220,255,0.9), 0 0 18px rgba(120,220,255,0.55), 0 0 40px rgba(120,220,255,0.3); }
   50%      { box-shadow: 0 0 0 9px rgba(120,220,255,0.55), 0 0 34px rgba(120,220,255,0.9), 0 0 70px rgba(120,220,255,0.5); }
