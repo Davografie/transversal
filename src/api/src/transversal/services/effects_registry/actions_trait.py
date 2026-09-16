@@ -40,6 +40,8 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("modify_trait", "step_down"),
         target_kind="trait",
+        # Superseded by the change-die family, on a rating die.
+        retired=True,
     ),
     EffectActionMeta(
         action_id="step_down_trait",
@@ -58,6 +60,8 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("modify_trait", "step_up"),
         target_kind="trait",
+        # Superseded by the change-die family, on a rating die.
+        retired=True,
     ),
     EffectActionMeta(
         action_id="reduce_by_effect_die",
@@ -153,10 +157,12 @@ ACTIONS: list[EffectActionMeta] = [
         supports_duration=True,
         inverse=("modify_trait", "add_die"),
         target_kind="trait",
+        # Superseded by the change-die family, on a rating die.
+        retired=True,
     ),
     EffectActionMeta(
         action_id="delete_trait",
-        label="Delete Trait",
+        label="Remove Trait",
         description=(
             "Remove a trait instance from its owner — the trait burns away, is lost or "
             "destroyed (the same removal a temporary grant does when it expires)"

@@ -98,6 +98,12 @@ class EffectActionMeta:
     supports_return_exit: bool = False   # UI offers a "{return:<name>}" target mode (shared tables)
     inverse: tuple[str, str] | None = None  # (type, action) to undo this effect
     inverse_captures_prior: bool = False    # revert needs the pre-apply value
+    # Retired from *authoring*, not from the engine. The editor no longer offers
+    # it, so a superseded action cannot be picked again — but the meta stays in
+    # the registry, because that is where its inverse, its card template and its
+    # dispatch live. Content that already uses it keeps working and keeps
+    # reverting; nothing is silently rewritten under an author.
+    retired: bool = False
 
 _RELATIONSHIP_CONTEXT_FIELD = EffectFieldDef(
     name="relationship",

@@ -176,3 +176,46 @@ def test_copy_and_move_put_the_trait_before_the_recipient():
         assert field.name == "entity", action_id
         assert field.label == "Give To", action_id
         assert field.description, action_id
+
+
+# ── Retiring a superseded action ───────────────────────────────
+
+def test_a_retired_action_is_not_offered_but_still_resolves():
+    """Retiring is about *authoring*: the editor must not offer a superseded
+    action again, while the registry keeps it — that is where an existing
+    effect's inverse, its card template and its dispatch live. Nothing already
+    authored is silently rewritten or left unable to revert."""
+    from types import SimpleNamespace as NS
+
+    from transversal.api.graphql.resolvers.queries_targeting import QueriesTargeting
+    from transversal.services import effects_registry as reg
+
+    retired = {m.action_id: (m.effect_type, m.effect_action)
+               for m in EFFECT_ACTION_REGISTRY if m.retired}
+    assert retired, "the vocabulary round retired something"
+
+    class Repo:
+        def list_all_entities(self):
+            return []
+
+    info = NS(context={"entity_manager": NS(repo=Repo())})
+    served = {a.action_id for a in QueriesTargeting().effect_actions(info)}
+    assert not (served & set(retired)), "a retired action is still offered"
+
+    # Each still declares what an existing effect needs to keep working.
+    for action_id, (effect_type, action) in retired.items():
+        meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
+        assert (meta.effect_type, meta.effect_action) == (effect_type, action)
+        assert reg.effect_card(effect_type, action), action_id
+    # The inverse a durationed stored effect reverts through.
+    assert reg.get_inverse("modify_trait", "step_up")[0] == ("modify_trait", "step_down")
+    assert reg.get_inverse("modify_trait", "remove_die")[0] == ("modify_trait", "add_die")
+
+
+def test_remove_trait_is_the_name_for_taking_a_trait_off():
+    """`negate_complication` is retired in its favour: the outcome action implied
+    which trait it meant, where this one names the instance."""
+    meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == "delete_trait")
+    assert meta.label == "Remove Trait"
+    assert (meta.effect_type, meta.effect_action) == ("modify_trait", "remove")
+    assert meta.retired is False

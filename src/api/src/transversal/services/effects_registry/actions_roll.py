@@ -39,7 +39,7 @@ ACTIONS: list[EffectActionMeta] = [
         category="either",
         effect_type="modify_roll",
         effect_action="set_die",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text",
                           required=True, default="highest_trait_die"),
@@ -63,7 +63,7 @@ ACTIONS: list[EffectActionMeta] = [
         category="benefit",
         effect_type="modify_roll",
         effect_action="step_up_die",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text",
                           required=True, default="highest_trait_die"),
@@ -89,7 +89,7 @@ ACTIONS: list[EffectActionMeta] = [
         category="cost",
         effect_type="modify_roll",
         effect_action="step_down_die",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text",
                           required=True, default="highest_trait_die"),
@@ -115,7 +115,7 @@ ACTIONS: list[EffectActionMeta] = [
         category="benefit",
         effect_type="modify_roll",
         effect_action="double_die",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text", required=True),
         ],
@@ -137,7 +137,7 @@ ACTIONS: list[EffectActionMeta] = [
         category="benefit",
         effect_type="modify_roll",
         effect_action="split_die",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text", required=True),
         ],
@@ -159,7 +159,7 @@ ACTIONS: list[EffectActionMeta] = [
         category="cost",
         effect_type="modify_roll",
         effect_action="remove_die",
-        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION", "AFTER_BEATS"],
         fields=[
             EffectFieldDef(name="target", label="Target", field_type="text", required=True),
         ],
@@ -326,6 +326,9 @@ ACTIONS: list[EffectActionMeta] = [
         effect_type="modify_outcome",
         effect_action="negate_complication",
         valid_timings=["IMMEDIATE"],
+        # Superseded by Remove Trait (`delete_trait`), which names the
+        # trait instance to take off instead of implying one.
+        retired=True,
     ),
     EffectActionMeta(
         action_id="convert_complication",

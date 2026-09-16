@@ -45,6 +45,13 @@ class QueriesTargeting:
 
     @strawberry.field
     def effect_actions(self, info: strawberry.Info) -> list[GqlEffectActionMeta]:
+        """The actions the *editor* may compose.
+
+        Retired actions are left out here and nowhere else: the registry still
+        holds them, because that is where an existing effect's inverse, card and
+        dispatch come from. So a supereded action cannot be authored again, and
+        content that already uses one keeps working.
+        """
         from transversal.services.effects_registry import EFFECT_ACTION_REGISTRY
         repo = _em(info).repo
         return [
@@ -61,7 +68,7 @@ class QueriesTargeting:
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
                 refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
                 refs_first=m.refs_first,
-            ) for m in EFFECT_ACTION_REGISTRY
+            ) for m in EFFECT_ACTION_REGISTRY if not m.retired
         ]
 
     @strawberry.field
