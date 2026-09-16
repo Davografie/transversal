@@ -36,19 +36,22 @@
           {{ '{' + v.name + '}' }}<em class="ee-var-type">{{ v.type }}</em>
         </button>
       </div>
-      <div v-if="outputElement" class="ee-field">
-        <label>Output name</label>
-        <input
-          :value="newEffect.output || ''"
-          placeholder="e.g. beast"
-          @input="newEffect.output = $event.target.value"
-        />
-        <p style="font-size:10px; color:var(--text-dim); margin:2px 0 0">
-          Names this step's result — a later step can target it with <b>select variable</b>.
-        </p>
-      </div>
+      <!-- A rule that names its subject puts that ref first: "Trait to Move"
+           reads before "Give To". Same block as the one after the fields. -->
+      <template v-if="selectedAction.refsFirst">
+        <div v-for="r in selectedAction.refs" :key="r.name" class="ee-field ee-ref">
+          <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
+          <TargetSpecBuilder
+            v-model="newEffect.refs[r.name].spec"
+            :destination="{ element: r.element }"
+            :source-element="sourceElement"
+            :variables="scopedVariables"
+          />
+        </div>
+      </template>
       <div v-for="f in visibleFields" :key="f.name" class="ee-field">
         <label>{{ f.label }}</label>
+        <p v-if="f.description" class="ee-field-help">{{ f.description }}</p>
 
         <div v-if="isScopedTargetField(f)" class="ee-target-group">
           <div class="ee-mode-row">
@@ -156,15 +159,18 @@
           <input v-else v-model="newEffect.fields[f.name]" type="text" :placeholder="f.default || ''" />
         </template>
       </div>
-      <div v-for="r in selectedAction.refs" :key="r.name" class="ee-field ee-ref">
-        <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
-        <TargetSpecBuilder
-          v-model="newEffect.refs[r.name].spec"
-          :destination="{ element: r.element }"
-          :source-element="sourceElement"
-          :variables="scopedVariables"
-        />
-      </div>
+      <!-- refs-first actions repeat this block above the fields (see refsFirst). -->
+      <template v-if="!selectedAction.refsFirst">
+        <div v-for="r in selectedAction.refs" :key="r.name" class="ee-field ee-ref">
+          <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
+          <TargetSpecBuilder
+            v-model="newEffect.refs[r.name].spec"
+            :destination="{ element: r.element }"
+            :source-element="sourceElement"
+            :variables="scopedVariables"
+          />
+        </div>
+      </template>
       <TraitInstanceEditor
         v-if="isGainAction"
         mode="single"
@@ -231,6 +237,19 @@
           <input type="checkbox" v-model="newEffect.negative" />
           Negative (complication)
         </label>
+      </div>
+      <!-- The output name is what a *later* step reads, so it sits after the step
+           it names rather than at the top of the form. -->
+      <div v-if="outputElement" class="ee-field">
+        <label>Output name</label>
+        <input
+          :value="newEffect.output || ''"
+          placeholder="e.g. beast"
+          @input="newEffect.output = $event.target.value"
+        />
+        <p class="ee-field-help">
+          Names this step's result — a later step can target it with <b>select variable</b>.
+        </p>
       </div>
       <div class="ee-form-actions">
         <Button class="ee-cancel" variant="neutral" @click="emit('cancel')">Cancel</Button>
@@ -842,6 +861,7 @@ async function copyVariable(v) {
 .ee-mode-row { display: flex; margin-top: 2px; }
 .ee-field label, .ee-timing-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .ee-help { font-size: 9px; color: var(--text-dim); font-style: italic; }
+.ee-field-help { font-size: 10px; color: var(--text-dim); margin: 2px 0 0; }
 .ee-ref-element { font-style: normal; font-family: monospace; font-size: 8px; color: var(--text-dim); margin-left: 4px; }
 .ee-output-row { display: flex; align-items: center; gap: 6px; }
 .ee-output-row input { flex: 1; min-width: 0; }

@@ -22,13 +22,21 @@
           <div v-else-if="targetKind(c.type)" class="ce-target ce-picker">
             <TargetPicker v-model="c.target" :kind="targetKind(c.type)" :placeholder="targetPlaceholder(c.type)" />
           </div>
-          <!-- An enum filter takes one value or several; several means *any of*.
-               Ctrl/Cmd-click (or plain click) to add — stored in `targets`, which
-               the backend reads as a set of alternatives. -->
-          <select v-else-if="targetOptions(c.type).length" class="ce-target" multiple
-                  :value="selectedTargets(c)" @change="onTargetsChange(c, $event)">
-            <option v-for="o in targetOptions(c.type)" :key="o" :value="o">{{ o }}</option>
-          </select>
+          <!-- An enum filter takes one value or several (*any of*). A native
+               multi-select hid its own state — you could not tell what was
+               picked, or whether the click landed — so the options are toggle
+               chips that show their state, and an empty pick says it never
+               passes (the backend reads no values as matching nothing). -->
+          <div v-else-if="targetOptions(c.type).length" class="ce-multi">
+            <button
+              v-for="o in targetOptions(c.type)" :key="o"
+              type="button" class="ce-multi-opt"
+              :class="{ 'is-on': selectedTargets(c).includes(o) }"
+              :aria-pressed="selectedTargets(c).includes(o)"
+              @click="toggleTarget(c, o)"
+            >{{ labelize(o) }}</button>
+            <span v-if="!selectedTargets(c).length" class="ce-multi-empty">pick at least one — empty never passes</span>
+          </div>
           <input v-else v-model="c.target" :placeholder="targetPlaceholder(c.type)" class="ce-target" />
         </template>
         <template v-if="valueKind(c.type) === 'die'">
@@ -208,10 +216,18 @@ function selectedTargets(c) {
   return (c.targets && c.targets.length) ? [...c.targets] : (c.target ? [c.target] : [])
 }
 
-function onTargetsChange(c, event) {
-  const picked = Array.from(event.target.selectedOptions || []).map((o) => o.value)
-  c.targets = picked
-  c.target = picked.length === 1 ? picked[0] : ''
+function toggleTarget(c, value) {
+  const picked = selectedTargets(c)
+  const next = picked.includes(value) ? picked.filter((v) => v !== value) : [...picked, value]
+  c.targets = next
+  c.target = next.length === 1 ? next[0] : ''
+}
+
+// A stored value reads as a label ("give_in" → "Give In").
+function labelize(value) {
+  return String(value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 function targetOptions(type) {
@@ -246,6 +262,16 @@ function remove(i) {
 .ce-value { flex: 1 !important; }
 .ce-operator { flex: none !important; width: 58px; }
 .ce-picker { min-width: 0; }
+/* Enum targets are toggle chips: a native multi-select hid whether anything was
+   picked at all. */
+.ce-multi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 2; }
+.ce-multi-opt {
+  font-size: 10px; padding: 3px 8px; border-radius: 10px;
+  background: var(--overlay-6); border: 1px solid var(--overlay-12);
+  color: var(--text-dim); cursor: pointer; font-family: inherit;
+}
+.ce-multi-opt.is-on { background: var(--accent-12); border-color: var(--accent-dim); color: var(--accent); }
+.ce-multi-empty { font-size: 9px; color: var(--warn, #d8a13a); }
 /* "＋ Add condition" keeps its deliberate dashed accent (full width via the
    column flex parent); fill/radius/padding/hover come from ui/Button. */
 .ce-root > .ce-add { border-style: dashed; border-color: var(--overlay-15); }
