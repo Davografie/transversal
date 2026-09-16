@@ -121,6 +121,12 @@ mutation($input: CreateRelationshipInput!) {
 }
 """
 
+_MUT_DELETE_RELATIONSHIP = """
+mutation($input: DeleteRelationshipInput!) {
+  deleteRelationship(input: $input)
+}
+"""
+
 _QUERY_ENTITY = """
 query($id: ID!) {
   entity(id: $id) { id type name razmerit currentUniverse currentLocation hidden ownedBy }
@@ -415,7 +421,25 @@ def create_relationship(args: dict) -> dict:
     return _run_steps(steps, args.get("dry_run", True))
 
 
+def delete_relationship(args: dict) -> dict:
+    """Remove a relationship edge — how a membership is released."""
+    steps = [_step(
+        "deleteRelationship",
+        _MUT_DELETE_RELATIONSHIP,
+        {
+            "input": {
+                "fromEntityId": args["from_id"],
+                "toEntityId": args["to_id"],
+                "type": args["type"],
+            }
+        },
+        f"unlink {args['from_id']} --{args['type']}--> {args['to_id']}",
+    )]
+    return _run_steps(steps, args.get("dry_run", True))
+
+
 _RELATIONS_TS_CACHE: str | None = None
+_RELATIONS_TRAIT_CACHE: dict[str, str] = {}
 
 
 def _relations_traitset_id() -> str:
@@ -430,6 +454,28 @@ def _relations_traitset_id() -> str:
         if _RELATIONS_TS_CACHE is None:
             raise RuntimeError("relations trait set not found")
     return _RELATIONS_TS_CACHE
+
+
+def _relations_trait_id(name: str) -> str:
+    """Resolve a trait by *name* inside the 'relations' trait set.
+
+    Looked up by name deliberately: the registry carries more than one trait
+    called ``role``, and the previously hard-coded ``trait-role-cd1b`` does not
+    exist in it at all — so settings written with it referenced nothing and were
+    invisible to the faction canvas.
+    """
+    if name in _RELATIONS_TRAIT_CACHE:
+        return _RELATIONS_TRAIT_CACHE[name]
+    traitset_id = _relations_traitset_id()
+    data = _graphql(_QUERY_TRAITS)
+    for ts in data.get("traitsets", []):
+        if ts.get("id") != traitset_id:
+            continue
+        for trait in ts.get("traits", []):
+            if trait.get("name") == name:
+                _RELATIONS_TRAIT_CACHE[name] = trait["id"]
+                return trait["id"]
+    raise RuntimeError(f"trait '{name}' not found in the relations trait set")
 
 
 def set_rank_role(args: dict) -> dict:
@@ -453,7 +499,7 @@ def set_rank_role(args: dict) -> dict:
             _MUT_ADD_RELATIONSHIP_TRAIT,
             {
                 "from": from_id, "to": to_id, "relType": rel_type,
-                "traitId": "trait-rel-rank", "die": rank_die,
+                "traitId": _relations_trait_id("rank"), "die": rank_die,
                 "ts": traitset, "stmt": "",
             },
             f"rank {from_id} as {rank_die} in {to_id}",
@@ -464,7 +510,7 @@ def set_rank_role(args: dict) -> dict:
             _MUT_ADD_RELATIONSHIP_TRAIT,
             {
                 "from": from_id, "to": to_id, "relType": rel_type,
-                "traitId": "trait-role-cd1b", "die": "D4",
+                "traitId": _relations_trait_id("role"), "die": "D4",
                 "ts": traitset, "stmt": role,
             },
             f"role '{role}' for {from_id} in {to_id}",
@@ -851,6 +897,7 @@ TOOLS = {
     "create_gmc": create_gmc,
     "create_asset": create_asset,
     "create_relationship": create_relationship,
+    "delete_relationship": delete_relationship,
     "set_rank_role": set_rank_role,
     "get_entity": get_entity,
     "query_entities": query_entities,
@@ -975,6 +1022,20 @@ TOOL_SCHEMAS = {
                 "to_id": {"type": "string"},
                 "type": {"type": "string", "description": "Edge type (membership, super, …)"},
                 "description": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["from_id", "to_id", "type"],
+        },
+    },
+    "delete_relationship": {
+        "name": "delete_relationship",
+        "description": "Delete a directional relationship edge (e.g. release a membership).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_id": {"type": "string", "description": "Member entity id"},
+                "to_id": {"type": "string", "description": "Faction entity id"},
+                "type": {"type": "string", "description": "Edge type (membership, super, …)"},
                 "dry_run": _dry_run_property(),
             },
             "required": ["from_id", "to_id", "type"],

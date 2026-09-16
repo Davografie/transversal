@@ -30,11 +30,55 @@ from transversal.domain import (
 )
 
 RELATIONS_TRAITSET = "ts-relations-b114"
-RANK_TRAIT = "trait-rel-rank"
-ROLE_TRAIT = "trait-role-cd1b"
+
+
+def _relation_trait_id(repo: EntityRepository, name: str) -> str:
+    """Resolve a trait by *name* inside the 'relations' trait set.
+
+    Resolved rather than hard-coded: an earlier ``trait-role-cd1b`` constant does
+    not exist in the registry at all, so the rank/role settings it wrote pointed
+    at nothing and the faction canvas could not read them.
+    """
+    for trait in repo.get_traits_by_traitset(RELATIONS_TRAITSET):
+        if trait.name == name:
+            return trait.id
+    raise RuntimeError(f"trait '{name}' not found in {RELATIONS_TRAITSET}")
+
+
+def _ensure_rank_role(
+    repo: EntityRepository, edge_key: str, rank_die: DieType, role_text: str
+) -> None:
+    """Attach rank + role traitsettings to a membership edge."""
+    rank_trait = _relation_trait_id(repo, "rank")
+    rank_id = f"{edge_key}:{rank_trait}"
+    if repo.get_traitsetting(rank_id) is None:
+        repo.create_traitsetting(TraitSetting(
+            id=rank_id,
+            entity_id=edge_key,
+            trait_id=rank_trait,
+            from_type="relationship",
+            traitset_id=RELATIONS_TRAITSET,
+            rating_type=RatingType.STATIC,
+            dice=[rank_die],
+        ))
+
+    role_trait = _relation_trait_id(repo, "role")
+    role_id = f"{edge_key}:{role_trait}"
+    if repo.get_traitsetting(role_id) is None:
+        repo.create_traitsetting(TraitSetting(
+            id=role_id,
+            entity_id=edge_key,
+            trait_id=role_trait,
+            from_type="relationship",
+            traitset_id=RELATIONS_TRAITSET,
+            rating_type=RatingType.STATIC,
+            dice=[DieType.D4],
+            statement=role_text,
+        ))
 
 
 def _ensure_gmc(repo: EntityRepository, gmc_id: str, name: str, location_id: str) -> None:
+    """Create the GMC if it is not there yet."""
     if repo.get_entity(gmc_id) is None:
         repo.create_entity(Entity(
             id=gmc_id,
@@ -62,36 +106,6 @@ def _ensure_membership(repo: EntityRepository, gmc_id: str, faction_id: str) -> 
         return existing["_key"]
     edge = repo.create_relationship(gmc_id, faction_id, "membership")
     return edge["_key"]
-
-
-def _ensure_rank_role(
-    repo: EntityRepository, edge_key: str, rank_die: DieType, role_text: str
-) -> None:
-    """Attach rank + role traitsettings to a membership edge."""
-    rank_id = f"{edge_key}:{RANK_TRAIT}"
-    if repo.get_traitsetting(rank_id) is None:
-        repo.create_traitsetting(TraitSetting(
-            id=rank_id,
-            entity_id=edge_key,
-            trait_id=RANK_TRAIT,
-            from_type="relationship",
-            traitset_id=RELATIONS_TRAITSET,
-            rating_type=RatingType.STATIC,
-            dice=[rank_die],
-        ))
-
-    role_id = f"{edge_key}:{ROLE_TRAIT}"
-    if repo.get_traitsetting(role_id) is None:
-        repo.create_traitsetting(TraitSetting(
-            id=role_id,
-            entity_id=edge_key,
-            trait_id=ROLE_TRAIT,
-            from_type="relationship",
-            traitset_id=RELATIONS_TRAITSET,
-            rating_type=RatingType.STATIC,
-            dice=[DieType.D4],
-            statement=role_text,
-        ))
 
 
 def _ensure_relation(
