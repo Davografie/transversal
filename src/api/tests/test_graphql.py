@@ -851,3 +851,44 @@ def test_sub_trait_inherits_ego_from_the_root_of_its_chain():
     a = NS(id="a", from_type="traitsetting", entity_id="e", parent_traitsetting_id="b")
     b = NS(id="b", from_type="traitsetting", entity_id="e", parent_traitsetting_id="a")
     assert _resolve_ego(a, Repo({"a": a, "b": b})) is False
+
+
+class TestBlueBookRecordOrdering:
+    """A historical record can carry a Blue Book chain position (B111).
+
+    Locations are records, not messages, so ordering the Blue Book across the
+    two collections needs `after_ids` on the record side too.
+    """
+
+    def test_record_after_ids_round_trip(self, client):
+        from transversal import main as api_main
+        from transversal.domain import HistoricalRecordType
+
+        record = api_main._repo.add_historical_record(
+            "character-1", HistoricalRecordType.TRANSVERSAL,
+            {"from_location": "loc-a", "to_location": "loc-b"},
+        )
+
+        # A fresh record is a floater — no chain position yet.
+        listed = _gql(client, """
+            query { historicalRecords(entityId: "character-1") { id afterIds } }
+        """)["historicalRecords"]
+        assert listed[0]["afterIds"] == []
+
+        updated = _gql(client, """
+            mutation($id: ID!, $after: [ID!]!) {
+              updateHistoricalRecord(input: {id: $id, afterIds: $after})
+            }
+        """, {"id": record.id, "after": ["msg-or-record-above"]})
+        assert updated["updateHistoricalRecord"] is True
+
+        listed = _gql(client, """
+            query { historicalRecords(entityId: "character-1") { id afterIds } }
+        """)["historicalRecords"]
+        assert listed[0]["afterIds"] == ["msg-or-record-above"]
+
+    def test_update_unknown_record_is_false(self, client):
+        updated = _gql(client, """
+            mutation { updateHistoricalRecord(input: {id: "no-such-record", afterIds: []}) }
+        """)
+        assert updated["updateHistoricalRecord"] is False

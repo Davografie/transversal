@@ -112,6 +112,7 @@ from transversal.api.graphql.type_defs.messaging import (  # noqa: F401
     SendMessageInput,
     JournalEntryInput,
     UpdateMessageInput,
+    UpdateHistoricalRecordInput,
     HistoricalRecord,
 )
 from transversal.api.graphql.type_defs.relationships import (  # noqa: F401

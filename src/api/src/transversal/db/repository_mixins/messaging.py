@@ -131,11 +131,13 @@ class RepositoryMessaging:
         data: dict,
         universe: str = "",
         session_id: str = "",
+        after_ids: list[str] | None = None,
     ) -> HistoricalRecord:
         """Append a historical event for an entity.
 
         ``record_type`` is a ``HistoricalRecordType`` (or its string value).
-        ``data`` is the type-specific payload.
+        ``data`` is the type-specific payload. ``after_ids`` is the Blue Book
+        chain position (see ``update_historical_record``).
         """
         import uuid
         from datetime import datetime, timezone
@@ -150,6 +152,7 @@ class RepositoryMessaging:
             "universe": universe,
             "session_id": session_id,
             "data": data or {},
+            "after_ids": after_ids or [],
             "created_at": created_at,
         }
         self._historical_records.insert(doc)
@@ -160,6 +163,7 @@ class RepositoryMessaging:
             universe=universe,
             session_id=session_id,
             data=data or {},
+            after_ids=after_ids or [],
             created_at=created_at,
         )
 
@@ -193,6 +197,7 @@ class RepositoryMessaging:
                 universe=h.get("universe", ""),
                 session_id=h.get("session_id", ""),
                 data=h.get("data") or {},
+                after_ids=h.get("after_ids", []),
                 created_at=h.get("created_at", ""),
             )
             for h in results
@@ -298,4 +303,20 @@ class RepositoryMessaging:
         if threads is not None:
             doc["threads"] = threads
         self._messages.update(doc)
+        return True
+
+    def update_historical_record(
+        self, record_id: str, after_ids: list[str] | None = None
+    ) -> bool:
+        """Set a historical record's Blue Book chain position.
+
+        The record itself stays immutable — only ``after_ids`` is writable, so
+        the append-only event log can still be ordered by hand.
+        """
+        doc = self._historical_records.get(record_id)
+        if not doc:
+            return False
+        if after_ids is not None:
+            doc["after_ids"] = after_ids
+        self._historical_records.update(doc)
         return True

@@ -52,6 +52,12 @@ class UpdateMessageInput:
     after_ids: Optional[list[strawberry.ID]] = None
     threads: Optional[list[str]] = None
 
+@strawberry.input
+class UpdateHistoricalRecordInput:
+    """Input for setting a historical record's Blue Book chain position."""
+    id: strawberry.ID
+    after_ids: Optional[list[strawberry.ID]] = None
+
 @strawberry.type
 class HistoricalRecord:
     """An append-only historical event for an entity."""
@@ -61,4 +67,5 @@ class HistoricalRecord:
     universe: str = ""
     session_id: str = ""
     data: strawberry.scalars.JSON = strawberry.field(default_factory=dict)
+    after_ids: list[strawberry.ID] = strawberry.field(default_factory=list)
     created_at: str = ""

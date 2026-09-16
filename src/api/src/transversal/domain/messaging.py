@@ -38,6 +38,12 @@ class HistoricalRecord(BaseModel):
     Stored in the `historical_records` collection. ``record_type``
     discriminates the shape of ``data``; future event kinds (contests,
     location traversals) reuse the same collection.
+
+    ``after_ids`` is the one mutable field: records are otherwise append-only,
+    but the Blue Book orders entries as a causal chain (each entry points at
+    the one above it), and locations are records — so a record has to be able
+    to say what it follows. Ids are opaque and may name a message or another
+    record; readers resolve the chain across both collections.
     """
     id: str = ""
     entity_id: str = ""
@@ -45,4 +51,5 @@ class HistoricalRecord(BaseModel):
     universe: str = ""
     session_id: str = ""
     data: dict = Field(default_factory=dict)  # type-specific payload
+    after_ids: list[str] = Field(default_factory=list)
     created_at: str = ""  # ISO 8601, populated by repository on insert

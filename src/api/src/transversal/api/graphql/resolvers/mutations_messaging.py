@@ -10,6 +10,7 @@ from transversal.api.graphql.types import Message
 from transversal.api.graphql.types import Relationship
 from transversal.api.graphql.types import SendMessageInput
 from transversal.api.graphql.types import TraitSetting
+from transversal.api.graphql.types import UpdateHistoricalRecordInput
 from transversal.api.graphql.types import UpdateMessageInput
 from transversal.domain import TraitSetting as DomainTraitSetting
 from transversal.domain import is_structural_relationship_type
@@ -121,6 +122,21 @@ class MutationsMessaging:
             str(input.id),
             after_ids=[str(a) for a in input.after_ids] if input.after_ids is not None else None,
             threads=input.threads,
+        )
+
+    @strawberry.mutation
+    def update_historical_record(
+        self, info: strawberry.Info, input: UpdateHistoricalRecordInput
+    ) -> bool:
+        """Set a historical record's Blue Book chain position.
+
+        Records are append-only; ``after_ids`` is the single writable field, so
+        the Blue Book can order a location relative to its neighbours.
+        """
+        repo = _em(info).repo
+        return repo.update_historical_record(
+            str(input.id),
+            after_ids=[str(a) for a in input.after_ids] if input.after_ids is not None else None,
         )
 
     @strawberry.mutation

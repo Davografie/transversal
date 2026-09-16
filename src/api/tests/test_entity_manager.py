@@ -107,17 +107,32 @@ class InMemoryRepository(EntityRepository):
         return p
 
     # historical records
-    def add_historical_record(self, entity_id, record_type, data, universe="", session_id=""):
+    def add_historical_record(self, entity_id, record_type, data, universe="", session_id="", after_ids=None):
         import uuid
         from datetime import datetime, timezone
+        from transversal.domain import HistoricalRecord
         rtype = record_type.value if hasattr(record_type, "value") else record_type
         rec_id = str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc).isoformat()
         self._historical_records[rec_id] = {
             "_key": rec_id, "entity_id": entity_id, "record_type": rtype,
             "universe": universe, "session_id": session_id, "data": data or {},
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "after_ids": after_ids or [],
+            "created_at": created_at,
         }
-        return self._historical_records[rec_id]
+        return HistoricalRecord(
+            id=rec_id, entity_id=entity_id, record_type=rtype, universe=universe,
+            session_id=session_id, data=data or {}, after_ids=after_ids or [],
+            created_at=created_at,
+        )
+
+    def update_historical_record(self, record_id, after_ids=None):
+        doc = self._historical_records.get(record_id)
+        if not doc:
+            return False
+        if after_ids is not None:
+            doc["after_ids"] = after_ids
+        return True
 
     def list_historical_records(self, entity_id="", record_type=""):
         from transversal.domain import HistoricalRecord
@@ -130,7 +145,8 @@ class InMemoryRepository(EntityRepository):
             out.append(HistoricalRecord(
                 id=h["_key"], entity_id=h["entity_id"], record_type=h["record_type"],
                 universe=h.get("universe", ""), session_id=h.get("session_id", ""),
-                data=h.get("data") or {}, created_at=h.get("created_at", ""),
+                data=h.get("data") or {}, after_ids=h.get("after_ids", []),
+                created_at=h.get("created_at", ""),
             ))
         return out
 

@@ -474,6 +474,7 @@ def _historical_record_to_gql(r: DomainHistoricalRecord) -> HistoricalRecord:
         universe=r.universe,
         session_id=r.session_id,
         data=r.data,
+        after_ids=r.after_ids,
         created_at=r.created_at,
     )
 
