@@ -64,6 +64,12 @@ status: canonical
 - [[Performance and Resilience Plan]] — client caching, draft persistence, backend latency, multi-worker
 - [[Life Path Editor and Wizard Plan]], [[Unified Effects Plan]] — feature plans
 - [[Content Completeness Checklist]], [[MCP Tool Experience]] — authoring guidelines and worklog
+
+### 📚 Reference
+
+- [[Cortex Rules Library]] — **local, searchable copy of the Cortex RAW** (Game Handbook, Cortex Lite, Smallville, Marvel Heroic, Tales of Xadia, …) with a topic→page map
+- [[TTRPG Library]] — the external reference library (~16 GB, merged and indexed), plus Transversal's own early design material
+
 ## Getting Started
 
 > [!tip] New here? Start with the [[User Manual]].
