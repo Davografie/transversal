@@ -108,3 +108,21 @@ def test_producing_actions_declare_their_output_element():
     # Actions that produce nothing nameable declare nothing, so an author's name
     # on them is ignored rather than bound to something surprising.
     assert output_element_for("modify_roll", "play_as_rating") == ""
+
+
+def test_copy_and_move_put_the_trait_before_the_recipient():
+    """The form reads subject → destination.
+
+    "Trait to Move" is the *subject* of a copy/move, and "Give To" is where it
+    lands, so the ref renders above the field (``refs_first``) and the shared
+    entity targeter says what this action is targeting the entity *for* — it is
+    not a plain "Entity" here.
+    """
+    for action_id in ("copy_trait", "move_trait"):
+        meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
+        assert meta.refs_first is True, action_id
+        assert [r.element for r in meta.refs] == ["traitsetting"], action_id
+        (field,) = meta.fields
+        assert field.name == "entity", action_id
+        assert field.label == "Give To", action_id
+        assert field.description, action_id

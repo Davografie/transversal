@@ -186,6 +186,8 @@ class EffectFieldDef:
     # Name of a ref that supersedes this field once authored (it is the fallback
     # form); the editor hides it but keeps its stored value.
     hidden_when_ref: str = ""
+    # One line of help under the label; a shared field reads differently per action.
+    description: str = ""
 
 @strawberry.type
 class RefDef:
@@ -223,3 +225,6 @@ class EffectActionMeta:
     # pool). The editor offers the path mode on this, and type-checks against it.
     path_element: str = ""
     refs: list[RefDef] = strawberry.field(default_factory=list)
+    # Render refs above the fields: a ref naming the *subject* ("Trait to Move")
+    # reads before the field naming where it goes.
+    refs_first: bool = False

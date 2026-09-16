@@ -59,6 +59,7 @@ class QueriesTargeting:
                 requires_choice=m.requires_choice, target_kind=m.target_kind, path_element=m.path_element, supports_duration=m.supports_duration,
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
                 refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
+                refs_first=m.refs_first,
             ) for m in EFFECT_ACTION_REGISTRY
         ]
 

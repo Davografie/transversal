@@ -24,6 +24,10 @@ class EffectFieldDef:
     # that reference is authored the editor hides the field (it is the fallback
     # form) while keeping its stored value, so existing content keeps working.
     hidden_when_ref: str = ""
+    # One line of help under the label. A shared field like the entity targeter
+    # reads differently per action ("Give To" for Move Trait), so an action can
+    # say what *this* action wants the value for.
+    description: str = ""
 
 @dataclass
 class RefDef:
@@ -72,6 +76,10 @@ class EffectActionMeta:
     # path mode without inventing a picker kind for it.
     path_element: str = ""
     refs: list[RefDef] = field(default_factory=list)  # named references (multi-target model)
+    # Render the refs above the fields. A ref that names the *subject* ("Trait to
+    # Move") reads before the field that names where it goes; an action whose ref
+    # is a secondary path (Attune's "life it comes from") keeps the default order.
+    refs_first: bool = False
     supports_duration: bool = False      # UI shows a duration/timers builder
     supports_polarity: bool = False      # UI shows a negative (complication) toggle
     supports_return_exit: bool = False   # UI offers a "{return:<name>}" target mode (shared tables)

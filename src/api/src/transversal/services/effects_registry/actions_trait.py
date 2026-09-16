@@ -9,6 +9,17 @@ from transversal.services.effects_registry.action_types import (
     _STEPS_CONTEXT_FIELD,
 )
 
+#: The recipient of a copy/move. ``_ENTITY_FIELD`` says only "Entity"; for these
+#: two actions the entity is specifically *where the trait ends up*, which is the
+#: question the author is actually answering.
+_RECIPIENT_FIELD = EffectFieldDef(
+    name="entity",
+    label="Give To",
+    field_type="entity",
+    required=False,
+    description="The entity that ends up holding the trait.",
+)
+
 
 ACTIONS: list[EffectActionMeta] = [
     # ── Trait Modification ─────────────────────────────
@@ -173,8 +184,9 @@ ACTIONS: list[EffectActionMeta] = [
         effect_type="modify_trait",
         effect_action="copy",
         valid_timings=["IMMEDIATE"],
-        fields=[_ENTITY_FIELD],
+        fields=[_RECIPIENT_FIELD],
         refs=[RefDef("trait", "Trait to Copy", "traitsetting")],
+        refs_first=True,
     ),
     EffectActionMeta(
         action_id="move_trait",
@@ -189,8 +201,9 @@ ACTIONS: list[EffectActionMeta] = [
         effect_type="modify_trait",
         effect_action="move",
         valid_timings=["IMMEDIATE"],
-        fields=[_ENTITY_FIELD],
+        fields=[_RECIPIENT_FIELD],
         refs=[RefDef("trait", "Trait to Move", "traitsetting")],
+        refs_first=True,
     ),
     EffectActionMeta(
         action_id="disable_trait",
