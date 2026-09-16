@@ -139,6 +139,12 @@ query($type: EntityType, $universe: String) {
 }
 """
 
+_QUERY_FACTION_MEMBERS = """
+query($id: ID!) {
+  factionMembers(factionId: $id) { id name type role rank }
+}
+"""
+
 _QUERY_TRAITSETS = """
 query { traitsets { id name } }
 """
@@ -197,21 +203,44 @@ mutation(
 }
 """
 
+# Every field a trait-setting *write* can carry, selected on every write response.
+# An MCP client has to be able to read back what it just wrote: a field missing
+# from the selection is indistinguishable from one the server dropped — which is
+# how the create path's dropped `parentTraitsettingId` and `_ts_to_gql`'s dropped
+# `capacity` both stayed hidden.
+_TS_WRITE_FIELDS = (
+    "id entityId traitId traitsetId dice ratingType capacity polarity statement "
+    "notes order tags fromType projectionId parentTraitsettingId sfxIds knownTo enabled"
+)
+
 _MUT_ADD_TRAIT_SETTING = """
 mutation($entityId: ID!, $input: TraitSettingInput!) {
   addTraitSetting(entityId: $entityId, input: $input) {
-    id entityId traitId traitsetId dice ratingType statement tags
+    %s
   }
 }
-"""
+""" % _TS_WRITE_FIELDS
 
 _MUT_UPDATE_TRAIT_SETTING = """
 mutation($id: ID!, $input: TraitSettingUpdateInput!) {
   updateTraitSetting(id: $id, input: $input) {
-    id dice ratingType polarity statement tags
+    %s
   }
 }
-"""
+""" % _TS_WRITE_FIELDS
+
+_MUT_ADD_SUB_TRAIT = """
+mutation(
+  $parent: ID!, $traitId: ID!, $die: DieType, $statement: String, $order: Int
+) {
+  addSubTrait(
+    parentTraitsettingId: $parent, traitId: $traitId, die: $die,
+    statement: $statement, order: $order
+  ) {
+    %s
+  }
+}
+""" % _TS_WRITE_FIELDS
 
 _MUT_REMOVE_TRAIT_SETTING = """
 mutation($id: ID!) { removeTraitSetting(id: $id) }
@@ -265,6 +294,12 @@ mutation(
 _MUT_CREATE_SFX = """
 mutation($input: SfxInput!) {
   createSfx(input: $input) { id name description trigger }
+}
+"""
+
+_MUT_ADD_OWNER_SFX = """
+mutation($sfxId: ID!, $ownerRefs: [OwnerRefInput!]!) {
+  addOwnerSfx(sfxId: $sfxId, ownerRefs: $ownerRefs)
 }
 """
 
@@ -531,7 +566,12 @@ def _call_mutation(
 
 
 def add_trait_to_entity(args: dict) -> dict:
-    """Add a trait setting (an instance of a registry trait) to an entity."""
+    """Add a trait setting (an instance of a registry trait) to an entity.
+
+    ``parent_traitsetting_id`` with ``from_type: "traitsetting"`` nests the setting
+    under a container in this one call; ``add_sub_trait`` is the same move when the
+    registry trait's own die and rating are what you want.
+    """
     input_ = {
         "traitId": args["trait_id"],
         "traitsetId": args["traitset_id"],
@@ -541,8 +581,9 @@ def add_trait_to_entity(args: dict) -> dict:
     }
     for key, gql_key in (
         ("polarity", "polarity"), ("from_type", "fromType"),
-        ("projection_id", "projectionId"), ("sfx_ids", "sfxIds"),
-        ("tags", "tags"),
+        ("projection_id", "projectionId"), ("parent_traitsetting_id", "parentTraitsettingId"),
+        ("sfx_ids", "sfxIds"), ("tags", "tags"), ("notes", "notes"),
+        ("capacity", "capacity"), ("order", "order"), ("enabled", "enabled"),
     ):
         if args.get(key) is not None:
             input_[gql_key] = args[key]
@@ -551,13 +592,50 @@ def add_trait_to_entity(args: dict) -> dict:
                           args.get("dry_run", True), "addTraitSetting")
 
 
+def add_sub_trait(args: dict) -> dict:
+    """Nest a trait setting under another setting — the agenda/portent move.
+
+    The trait set and the die come from the registry trait when omitted. The
+    child's key is scoped to its parent and hashed by ``statement``, so give each
+    step distinct text — two steps with the same text are the same step twice.
+    """
+    variables = {
+        "parent": args["parent_traitsetting_id"],
+        "traitId": args["trait_id"],
+        "statement": args.get("statement", ""),
+    }
+    if args.get("die") is not None:
+        variables["die"] = args["die"]
+    if args.get("order") is not None:
+        variables["order"] = args["order"]
+    return _call_mutation("addSubTrait", _MUT_ADD_SUB_TRAIT, variables,
+                          args.get("dry_run", True), "addSubTrait")
+
+
 def update_trait_setting(args: dict) -> dict:
-    """Mutate an existing trait setting (dice, rating, statement, polarity, notes)."""
+    """Mutate an existing trait setting (dice, rating, notes, order, GM flags).
+
+    Re-anchoring is a *pair*: ``from_type: "traitsetting"`` with
+    ``parent_traitsetting_id`` to move a sub-trait into a container,
+    ``"projection"`` with ``projection_id``, or ``"entity"`` to lift it back out.
+    The resolver acts on ``from_type`` alone, so a parent or projection without it
+    would be silently ignored — refused here instead of quietly doing nothing.
+    """
+    if args.get("from_type") is None and (
+        args.get("parent_traitsetting_id") is not None or args.get("projection_id") is not None
+    ):
+        raise ValueError(
+            "re-anchoring needs from_type: 'traitsetting' + parent_traitsetting_id, "
+            "'projection' + projection_id, or 'entity'"
+        )
     input_ = {}
     for key, gql_key in (
         ("dice", "dice"), ("rating_type", "ratingType"),
         ("statement", "statement"), ("polarity", "polarity"), ("notes", "notes"),
-        ("tags", "tags"),
+        ("tags", "tags"), ("capacity", "capacity"), ("order", "order"),
+        ("enabled", "enabled"), ("known_to", "knownTo"), ("sfx_ids", "sfxIds"),
+        ("from_type", "fromType"), ("projection_id", "projectionId"),
+        ("parent_traitsetting_id", "parentTraitsettingId"),
     ):
         if args.get(key) is not None:
             input_[gql_key] = args[key]
@@ -639,6 +717,23 @@ def create_sfx(args: dict) -> dict:
                           args.get("dry_run", True), "createSfx")
 
 
+def add_owner_sfx(args: dict) -> dict:
+    """Give an owner an SFX, so that owner offers it — the other half of create_sfx.
+
+    ``owner_type`` is one of ENTITY | LOCATION | PROJECTION | TRAIT |
+    TRAIT_INSTANCE | TRAIT_SET | TABLE | GM. A location is its own surface even
+    though a location is an entity, and a rule attached to a character still has
+    to be reachable when its source is a place. Refused, with the reason, when the
+    SFX's declared source kind does not belong on the surface asked for.
+    """
+    variables = {
+        "sfxId": args["sfx_id"],
+        "ownerRefs": [{"ownerType": args["owner_type"], "ownerId": args["owner_id"]}],
+    }
+    return _call_mutation("addOwnerSfx", _MUT_ADD_OWNER_SFX, variables,
+                          args.get("dry_run", True), "addOwnerSfx")
+
+
 def get_entity(args: dict) -> dict:
     data = _graphql(_QUERY_ENTITY, {"id": args["entity_id"]})
     return data.get("entity")
@@ -655,6 +750,17 @@ def query_entities(args: dict) -> dict:
 def faction_canvas(args: dict) -> dict:
     """A faction's conspyramid: members with rank/role, locations, relations."""
     return _rest(f"/api/v1/factions/{args['faction_id']}/canvas")
+
+
+def faction_members(args: dict) -> dict:
+    """Just a faction's roster — its members with role and rank.
+
+    The light read beside ``faction_canvas``: use this to list who is in an org
+    without pulling the whole conspyramid.
+    """
+    data = _graphql(_QUERY_FACTION_MEMBERS, {"id": args["faction_id"]})
+    members = data.get("factionMembers") or []
+    return {"count": len(members), "results": members}
 
 
 def location_tree(args: dict) -> dict:
@@ -902,6 +1008,7 @@ TOOLS = {
     "get_entity": get_entity,
     "query_entities": query_entities,
     "faction_canvas": faction_canvas,
+    "faction_members": faction_members,
     "location_tree": location_tree,
     "location_neighborhood": location_neighborhood,
     "gmc_web": gmc_web,
@@ -922,6 +1029,7 @@ TOOLS = {
     "list_life_paths": list_life_paths,
     "list_roll_tables": list_roll_tables,
     "add_trait_to_entity": add_trait_to_entity,
+    "add_sub_trait": add_sub_trait,
     "update_trait_setting": update_trait_setting,
     "remove_trait_setting": remove_trait_setting,
     "create_trait": create_trait,
@@ -929,6 +1037,7 @@ TOOLS = {
     "save_roll_table": save_roll_table,
     "save_life_path": save_life_path,
     "create_sfx": create_sfx,
+    "add_owner_sfx": add_owner_sfx,
     "roll_dice": roll_dice,
     "pick_total": pick_total,
     "pick_effect_die": pick_effect_die,
@@ -1080,6 +1189,15 @@ TOOL_SCHEMAS = {
     "faction_canvas": {
         "name": "faction_canvas",
         "description": "A faction's conspyramid: members with rank/role, locations, relations.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"faction_id": {"type": "string"}},
+            "required": ["faction_id"],
+        },
+    },
+    "faction_members": {
+        "name": "faction_members",
+        "description": "Just a faction's roster — members with role and rank (the light read beside faction_canvas).",
         "inputSchema": {
             "type": "object",
             "properties": {"faction_id": {"type": "string"}},
@@ -1308,7 +1426,7 @@ TOOL_SCHEMAS = {
     },
     "add_trait_to_entity": {
         "name": "add_trait_to_entity",
-        "description": "Add a trait setting (instance) to an entity.",
+        "description": "Add a trait setting (instance) to an entity. Pass parent_traitsetting_id with from_type 'traitsetting' to nest it under a container in one call.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1318,9 +1436,21 @@ TOOL_SCHEMAS = {
                 "dice": {"type": "array", "items": {"type": "string"},
                          "description": "e.g. ['D6','D8']"},
                 "rating_type": {"type": "string", "description": "STATIC|RESOURCE|CHALLENGE|EMPTY"},
+                "capacity": {"type": "array", "items": {"type": "string"},
+                             "description": "Challenge target (positive) or ceiling (negative), e.g. ['D8','D8']"},
                 "statement": {"type": "string"},
+                "notes": {"type": "string", "description": "GM-only freeform notes"},
+                "order": {"type": "integer", "description": "Position among siblings under one parent"},
+                "enabled": {"type": "boolean",
+                            "description": "false = disabled; contributes no dice and grants no SFX until re-enabled"},
                 "polarity": {"type": "string", "description": "POSITIVE|NEGATIVE"},
-                "from_type": {"type": "string", "description": "entity|projection|relationship"},
+                "from_type": {"type": "string",
+                              "description": "entity|projection|traitsetting (+ relationship for edges)"},
+                "parent_traitsetting_id": {"type": "string",
+                                           "description": "Container setting to nest under; needs from_type 'traitsetting'"},
+                "projection_id": {"type": "string", "description": "Projection anchor when from_type is 'projection'"},
+                "sfx_ids": {"type": "array", "items": {"type": "string"},
+                            "description": "SFX this instance carries"},
                 "tags": {"type": "array", "items": {"type": "string"},
                          "description": "Instance-level labels (B116); matched alongside the registry trait's own tags"},
                 "dry_run": _dry_run_property(),
@@ -1328,18 +1458,46 @@ TOOL_SCHEMAS = {
             "required": ["entity_id", "trait_id", "traitset_id"],
         },
     },
+    "add_sub_trait": {
+        "name": "add_sub_trait",
+        "description": "Nest a trait setting under another setting (a container's child). Die and trait set default from the registry trait; give each child distinct text, since the key hashes the statement.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "parent_traitsetting_id": {"type": "string", "description": "The container setting to nest under"},
+                "trait_id": {"type": "string"},
+                "die": {"type": "string", "description": "e.g. 'D6'; defaults to the registry trait's default die"},
+                "statement": {"type": "string", "description": "The child's own text — make it distinct"},
+                "order": {"type": "integer", "description": "Position among siblings"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["parent_traitsetting_id", "trait_id"],
+        },
+    },
     "update_trait_setting": {
         "name": "update_trait_setting",
-        "description": "Mutate an existing trait setting (dice/rating/statement/polarity/notes).",
+        "description": "Mutate an existing trait setting. Re-anchoring needs the pair: from_type 'traitsetting' + parent_traitsetting_id, 'projection' + projection_id, or 'entity' to lift it back out.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "id": {"type": "string"},
                 "dice": {"type": "array", "items": {"type": "string"}},
                 "rating_type": {"type": "string"},
+                "capacity": {"type": "array", "items": {"type": "string"},
+                             "description": "Challenge target/ceiling; [] clears it"},
                 "statement": {"type": "string"},
                 "polarity": {"type": "string"},
                 "notes": {"type": "string"},
+                "order": {"type": "integer"},
+                "enabled": {"type": "boolean", "description": "false = landed/disabled"},
+                "known_to": {"type": "array", "items": {"type": "string"},
+                             "description": "Entity ids that have discovered this; [] clears"},
+                "sfx_ids": {"type": "array", "items": {"type": "string"},
+                            "description": "SFX this instance carries; [] clears"},
+                "from_type": {"type": "string", "description": "entity|projection|traitsetting"},
+                "projection_id": {"type": "string"},
+                "parent_traitsetting_id": {"type": "string",
+                                           "description": "New container when from_type is 'traitsetting'"},
                 "tags": {"type": "array", "items": {"type": "string"},
                          "description": "Instance-level labels (B116); [] clears them"},
                 "dry_run": _dry_run_property(),
@@ -1438,6 +1596,21 @@ TOOL_SCHEMAS = {
                 "dry_run": _dry_run_property(),
             },
             "required": ["input"],
+        },
+    },
+    "add_owner_sfx": {
+        "name": "add_owner_sfx",
+        "description": "Attach an existing SFX to an owner so that owner offers it (a faction's move, a location's rule). Refused with a reason when the SFX's source kind does not belong on that surface.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sfx_id": {"type": "string"},
+                "owner_type": {"type": "string",
+                               "description": "ENTITY|LOCATION|PROJECTION|TRAIT|TRAIT_INSTANCE|TRAIT_SET|TABLE|GM (a location is its own surface, even though it is an entity)"},
+                "owner_id": {"type": "string"},
+                "dry_run": _dry_run_property(),
+            },
+            "required": ["sfx_id", "owner_type", "owner_id"],
         },
     },
     "roll_dice": {
