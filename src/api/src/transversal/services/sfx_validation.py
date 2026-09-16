@@ -275,14 +275,15 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
     if repo is not None and sfx.id and sfx.source_kind:
         from transversal.services.target_catalog import source_kind as source_kind_def
         sk = source_kind_def(sfx.source_kind)
-        if sk is not None and sk.owner_surface:
+        if sk is not None and sk.owner_surfaces:
             from transversal.services.sfx_owner import owned_surfaces
             surfaces = owned_surfaces(repo, sfx.id)
-            if surfaces and sk.owner_surface not in surfaces:
+            if surfaces and not (set(sk.owner_surfaces) & surfaces):
                 owned = ", ".join(sorted(surfaces))
+                wanted = " or ".join(f"'{s}'" for s in sk.owner_surfaces)
                 warnings.append(
                     f"Source is '{sfx.source_kind}' but this SFX is owned by {owned}, "
-                    f"not '{sk.owner_surface}' — select source / source rating will resolve to nothing"
+                    f"not {wanted} — select source / source rating will resolve to nothing"
                 )
 
     # A condition that reads the source can only pass when the SFX has that kind

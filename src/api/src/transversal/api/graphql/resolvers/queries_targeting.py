@@ -235,7 +235,7 @@ class QueriesTargeting:
                 for c in tc.COLLECTIONS
             ],
             source_kinds=[
-                SourceKindOption(value=s.value, label=s.label, element=s.element, variable=s.variable, owner_surface=s.owner_surface)
+                SourceKindOption(value=s.value, label=s.label, element=s.element, variable=s.variable, owner_surfaces=list(s.owner_surfaces))
                 for s in tc.SOURCE_KINDS
             ],
         )

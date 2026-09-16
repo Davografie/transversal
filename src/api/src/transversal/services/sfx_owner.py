@@ -987,9 +987,9 @@ def owner_surfaces_for(sfx) -> frozenset[str]:
     from transversal.services import target_catalog as tc
 
     kind = tc.source_kind(getattr(sfx, "source_kind", None) or "")
-    if kind is None or not kind.owner_surface:
+    if kind is None or not kind.owner_surfaces:
         return frozenset(_OWNER_SURFACES)
-    return frozenset({kind.owner_surface})
+    return frozenset(kind.owner_surfaces)
 
 
 def can_attach(sfx, owner_type: str) -> bool:
@@ -1006,8 +1006,9 @@ def attach_refusal(sfx, owner_type: str, owner_id: str = "", repo=None) -> str |
     show this text for what they leave out.
     """
     if not can_attach(sfx, owner_type):
-        wanted = sorted(owner_surfaces_for(sfx))[0]
-        return f"belongs on {_SURFACE_LABELS.get(wanted, wanted)}"
+        wanted = sorted(owner_surfaces_for(sfx))
+        named = " or ".join(_SURFACE_LABELS.get(s, s) for s in wanted)
+        return f"belongs on {named}"
     if repo is not None and owner_id and not acquire_gate_holds(sfx, owner_type, owner_id, repo):
         return "can't be acquired here"
     return None

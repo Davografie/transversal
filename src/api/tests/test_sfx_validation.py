@@ -403,13 +403,23 @@ def test_source_kind_ownership_mismatch_warns(monkeypatch):
     sfx = _sfx()
     sfx.source_kind = "trait_setting"
     assert validate_sfx(sfx, repo=object()) == [
-        "Source is 'trait_setting' but this SFX is owned by entity, not 'trait_instance' — select source / source rating will resolve to nothing"
+        "Source is 'trait_setting' but this SFX is owned by entity, not 'trait_instance' or 'trait' — select source / source rating will resolve to nothing"
     ]
 
 
 def test_source_kind_matching_owner_no_warning(monkeypatch):
     import transversal.services.sfx_owner as sfo
     monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: {"trait_instance"})
+    sfx = _sfx()
+    sfx.source_kind = "trait_setting"
+    assert validate_sfx(sfx, repo=object()) == []
+
+
+def test_a_rule_provisioned_by_a_trait_definition_is_not_a_mismatch(monkeypatch):
+    """Hanging a trait-setting rule off the trait *definition* is how its
+    instances come to offer it — not a source/ownership mismatch."""
+    import transversal.services.sfx_owner as sfo
+    monkeypatch.setattr(sfo, "owned_surfaces", lambda repo, sid: {"trait"})
     sfx = _sfx()
     sfx.source_kind = "trait_setting"
     assert validate_sfx(sfx, repo=object()) == []

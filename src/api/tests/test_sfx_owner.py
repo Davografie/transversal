@@ -1270,11 +1270,16 @@ def test_a_declared_source_restricts_where_a_rule_can_attach():
 
     trait_sfx = _sfx("sfx-on-trait")
     trait_sfx.source_kind = "trait_setting"
-    assert owner_surfaces_for(trait_sfx) == {"trait_instance"}
+    # Both homes: the instance it fires from, and the *definition* that provisions
+    # its instances (`Trait.possible_sfx_ids` / `default_sfx_ids`).
+    assert owner_surfaces_for(trait_sfx) == {"trait_instance", "trait"}
     assert can_attach(trait_sfx, "trait_instance") is True
+    assert can_attach(trait_sfx, "trait") is True
     assert can_attach(trait_sfx, "location") is False
-    assert attach_refusal(trait_sfx, "location") == "belongs on a trait instance"
+    assert attach_refusal(trait_sfx, "location") == (
+        "belongs on a trait definition or a trait instance")
     assert attach_refusal(trait_sfx, "trait_instance") is None
+    assert attach_refusal(trait_sfx, "trait") is None
 
     place_sfx = _sfx("sfx-on-place")
     place_sfx.source_kind = "location"

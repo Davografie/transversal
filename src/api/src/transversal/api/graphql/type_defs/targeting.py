@@ -132,7 +132,7 @@ class SourceKindOption:
     label: str
     element: str
     variable: str
-    owner_surface: str
+    owner_surfaces: list[str]
 
 @strawberry.type
 class TargetCatalog:

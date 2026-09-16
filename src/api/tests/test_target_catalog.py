@@ -131,8 +131,10 @@ def test_source_kinds_are_declared_and_consistent():
     assert {s.value for s in tc.SOURCE_KINDS} == {
         "trait_setting", "traitset_setting", "entity", "location", "projection", "table", "gm",
     }
+    surfaces = {"trait_instance", "trait", "trait_set", "entity", "location", "projection", "table", "gm"}
     for s in tc.SOURCE_KINDS:
-        assert s.owner_surface in ("trait_instance", "trait_set", "entity", "location", "projection", "table", "gm")
+        assert s.owner_surfaces, s.value
+        assert set(s.owner_surfaces) <= surfaces, s.value
         # Typed sources resolve to a catalog element; bucket sources (table/gm)
         # are non-resolving (empty element).
         if s.element:

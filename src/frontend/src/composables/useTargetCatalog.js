@@ -12,7 +12,7 @@ const CATALOG_QUERY = `{
     fields { element name type label options operators references suggest }
     aggregations { name label output needsField needsCount accepts }
     collections { name element label singular }
-    sourceKinds { value label element variable ownerSurface }
+    sourceKinds { value label element variable ownerSurfaces }
   }
 }`
 
