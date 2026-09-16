@@ -677,16 +677,20 @@ watch(() => props.visible, (v) => { if (v) fetch() }, { immediate: true })
 .bb-thread{font-size:10px;color:var(--accent);opacity:0.7}
 .bb-rel{font-size:11px;color:var(--text-dim);font-style:italic}
 .bb-body{font-size:13px;color:var(--text);line-height:1.4;word-wrap:break-word}
-.bb-body p{margin:4px 0}
-.bb-body h1,.bb-body h2,.bb-body h3,.bb-body h4,.bb-body h5,.bb-body h6{margin:8px 0 4px;line-height:1.3}
-.bb-body h1{font-size:18px}.bb-body h2{font-size:16px}.bb-body h3{font-size:15px}.bb-body h4{font-size:14px}.bb-body h5{font-size:13px}.bb-body h6{font-size:12px;color:var(--text-dim)}
-.bb-body ul,.bb-body ol{margin:4px 0;padding-left:20px}
-.bb-body li{margin:2px 0}
-.bb-body code{font-family:monospace;font-size:12px;background:var(--bg-input);padding:1px 4px;border-radius:3px}
-.bb-body pre{background:var(--bg-input);border:1px solid var(--border);border-radius:4px;padding:8px;overflow-x:auto;margin:6px 0}
-.bb-body pre code{background:none;padding:0;font-size:12px}
-.bb-body blockquote{border-left:3px solid var(--accent);margin:6px 0;padding:2px 10px;color:var(--text-dim)}
-.bb-body a{color:var(--accent);text-decoration:underline}
+/* Body text arrives via `v-html`, so its tags never carry the scope attribute;
+   `:deep()` moves the scope onto `.bb-body` itself and reaches the generated
+   children. A plain `.bb-body p` compiles to `.bb-body p[data-v-x]` and matches
+   nothing. */
+.bb-body :deep(p){margin:4px 0}
+.bb-body :deep(h1),.bb-body :deep(h2),.bb-body :deep(h3),.bb-body :deep(h4),.bb-body :deep(h5),.bb-body :deep(h6){margin:8px 0 4px;line-height:1.3}
+.bb-body :deep(h1){font-size:18px}.bb-body :deep(h2){font-size:16px}.bb-body :deep(h3){font-size:15px}.bb-body :deep(h4){font-size:14px}.bb-body :deep(h5){font-size:13px}.bb-body :deep(h6){font-size:12px;color:var(--text-dim)}
+.bb-body :deep(ul),.bb-body :deep(ol){margin:4px 0;padding-left:20px}
+.bb-body :deep(li){margin:2px 0}
+.bb-body :deep(code){font-family:monospace;font-size:12px;background:var(--bg-input);padding:1px 4px;border-radius:3px}
+.bb-body :deep(pre){background:var(--bg-input);border:1px solid var(--border);border-radius:4px;padding:8px;overflow-x:auto;margin:6px 0}
+.bb-body :deep(pre code){background:none;padding:0;font-size:12px}
+.bb-body :deep(blockquote){border-left:3px solid var(--accent);margin:6px 0;padding:2px 10px;color:var(--text-dim)}
+.bb-body :deep(a){color:var(--accent);text-decoration:underline}
 .bb-images{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
 .bb-image{max-width:100%;max-height:200px;border-radius:4px;cursor:pointer;border:1px solid var(--border)}
 .bb-images-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
