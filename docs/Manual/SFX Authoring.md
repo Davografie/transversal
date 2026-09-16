@@ -330,6 +330,8 @@ Per-effect gates. If an effect has conditions and they fail at apply time, **tha
 
 The structured way to target. A **path** is an ordered pipeline of steps that resolves to a typed value (an entity, a list of trait instances, a die, a count, …). The editor's wizard is catalog-driven and type-checked — it only offers legal next steps and highlights whether the path matches the field's expected type.
 
+A path is the **bridge between the trigger and the effect**: the trigger says *when* the rule wakes and what it carries (`{trait_setting}`, `{contest_entity_opponent}`, the rolled dice), and the path turns that into the concrete things the effect lands on.
+
 ### Step types
 
 | Step | What it does |
@@ -337,12 +339,12 @@ The structured way to target. A **path** is an ordered pipeline of steps that re
 | **Select** | Seed the working set from a collection (`self`, `rolled_dice`, `occupants`, `locations`, `entities`, `self_traitsettings`), the SFX `source`, or a bound `variable`. |
 | **Filter** | Keep items whose field matches a predicate (`polarity == negative`, `rating_type == static`, `traitset_id == …`). Operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `contains`. Two take one value or several: `in` (*is one of them*) and `not in` (*is none of them*) — several arrive as a list. Values show as **names**; an id never appears in the editor. **A type test narrows the path**: `entity.type == location` means the rest of the path may use location-only steps (→ `occupants`). |
 | **Navigate** | Hop an edge to related elements (a trait instance → its entity, an entity → its current location, …). `dedup` collapses duplicates by identity. |
-| **Aggregate** | Collapse a collection to a scalar: `count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`. |
-| **Top** | Keep *one* element — the highest or lowest by a comparable field (a number, a die, or a **timestamp**). For a timestamp, `desc` reads as "the most recently used" and `asc` as "the least recently used"; otherwise "the highest/lowest …". This is how you ask for *the body you were last in*: `select self → navigate projections → top last used at`. |
+| **Aggregate** | Collapse a collection to a scalar (`count`, `min`, `max`, `mean`, `avg_floor`, `avg_ceil`) — or, with **`random`**, *sample* it instead: a count of 1 picks one element, more keeps a subset of that size. Random is an aggregation, not a step of its own. |
+| **Top** | Keep *one* **element** — the highest or lowest by a comparable field (a number, a die, or a **timestamp**). It is *argmax*: you get the element itself, so the path keeps walking, where `aggregate max` gives only the field's value (a number or a date). That difference is why both exist. For a timestamp, `desc` reads as "the most recently used" and `asc` as "the least recently used"; otherwise "the highest/lowest …". This is how you ask for *the body you were last in*: `select self → navigate projections → top last used at`. |
 | **Literal** | Name one object by id directly. |
 | **Evaluate** | Terminal boolean test — `exists` (non-empty), or compare `count` / a scalar field against a value. Produces true/false (used by **Targeting path** conditions). |
 
-Resolution modes **choose** (interactive pick) and **random** (non-interactive sample) collapse a many-cardinality collection to one (or a subset when `count > 1`).
+**`choose`** (interactive pick) collapses a many-cardinality collection to one — or a subset, with a count above 1. It is **not offered in a condition path**: a condition is *evaluated*, with nobody to answer the question, so a `choose` there could never pass. Its non-interactive counterpart, **`random`**, lives in *Aggregate* and is available everywhere, gates included.
 
 Conditions live at the SFX level and the effect level, and **an enum condition takes one value or several** — pick two and it means *either* (the card reads *you are a character or a gmc*).
 
