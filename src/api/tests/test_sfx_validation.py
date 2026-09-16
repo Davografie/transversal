@@ -474,3 +474,34 @@ def test_a_token_nothing_binds_is_still_unknown():
     ]
     warnings = validate_sfx(_sfx(effects=effects))
     assert any("unknown variable {mystery}" in w for w in warnings), warnings
+
+
+def test_a_choose_step_in_a_condition_can_never_pass():
+    """A condition is a filter; `choose` is a question nobody is there to answer,
+    so the step resolves to nothing and the gate silently never passes."""
+    from transversal.services.target_spec import ChooseStep, SelectStep
+
+    condition = Condition(
+        type=ConditionType.TARGET_PATH,
+        spec=TargetSpec(steps=[SelectStep(collection="rolled_dice"), ChooseStep()]),
+    )
+
+    warnings = validate_sfx(_sfx(conditions=[condition]))
+
+    assert any("choose" in w and "can never pass" in w for w in warnings), warnings
+
+
+def test_a_choose_step_in_an_effects_own_condition_is_named():
+    from transversal.services.target_spec import ChooseStep, SelectStep
+
+    effect = Effect(
+        timing=EffectTiming.IMMEDIATE, type="modify_trait", action="step_up", target="trait-1",
+        conditions=[Condition(
+            type=ConditionType.TARGET_PATH,
+            spec=TargetSpec(steps=[SelectStep(collection="rolled_dice"), ChooseStep()]),
+        )],
+    )
+
+    warnings = validate_sfx(_sfx(effects=[effect]))
+
+    assert any("Effect 1 condition 1" in w for w in warnings), warnings

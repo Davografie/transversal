@@ -7,7 +7,6 @@ from transversal.services.target_spec import (
     ChooseStep,
     FilterStep,
     NavigateStep,
-    RandomStep,
     SelectStep,
     TargetSpec,
     TopStep,
@@ -324,37 +323,42 @@ def test_select_source_navigates_from_source_element():
 
 
 def test_random_collapses_many_to_one():
-    s = spec(SelectStep(collection="rolled_dice"), RandomStep())
+    s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="random"))
     types, errors = trace(s)
     assert errors == []
     assert types[-1] == ValueType("die", "one")
 
 
 def test_random_count_many_keeps_many():
-    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=3))
+    s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="random", count=3))
     types, errors = trace(s)
     assert errors == []
     assert types[-1] == ValueType("die", "many")
 
 
 def test_random_requires_many_collection():
-    s = spec(SelectStep(collection="self"), RandomStep())
+    s = spec(SelectStep(collection="self"), AggregateStep(fn="random"))
     types, errors = trace(s)
     assert any("many-cardinality" in e.message for e in errors)
 
 
 def test_random_count_must_be_positive():
-    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=0))
+    s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="random", count=0))
     types, errors = trace(s)
     assert any("count must be >= 1" in e.message for e in errors)
 
 
-def test_random_deserializes_from_dict():
+def test_a_legacy_random_step_folds_into_aggregate():
+    """Random is an aggregation now; a spec authored before that still loads.
+
+    Only one spelling survives parsing, so the two can never drift apart.
+    """
     s = TargetSpec.model_validate({"steps": [
         {"kind": "select", "collection": "rolled_dice"},
         {"kind": "random", "count": 2},
     ]})
-    assert isinstance(s.steps[1], RandomStep)
+    assert isinstance(s.steps[1], AggregateStep)
+    assert s.steps[1].fn == "random" and s.steps[1].count == 2
     assert final_type(s) == ValueType("die", "many")
 
 

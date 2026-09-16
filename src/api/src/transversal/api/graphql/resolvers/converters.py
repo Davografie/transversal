@@ -424,9 +424,12 @@ def _target_spec_input_to_domain(inp: TargetSpecInput):
         elif kind == "navigate":
             steps.append(ts.NavigateStep(edge=s.edge or "", dedup=bool(s.dedup), output=s.output))
         elif kind == "aggregate":
-            steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field, output=s.output))
+            steps.append(ts.AggregateStep(fn=s.fn or "", field=s.field,
+                                          count=int(s.count or 1), output=s.output))
         elif kind == "random":
-            steps.append(ts.RandomStep(count=int(s.count or 1), output=s.output))
+            # Retired as a step of its own: random sampling is an aggregation. A
+            # client still sending the old spelling keeps working.
+            steps.append(ts.AggregateStep(fn="random", count=int(s.count or 1), output=s.output))
         elif kind == "choose":
             steps.append(ts.ChooseStep(count=int(s.count or 1), output=s.output))
         elif kind == "top":

@@ -684,3 +684,22 @@ def test_an_acquire_gate_is_not_shown_on_the_card():
         {"kind": "filter", "field": "current_location", "operator": "==", "value": "loc-rusted-gate"},
     ])
     assert sfx_text(sfx, resolve=resolve) == ungated
+
+
+def test_a_random_sample_reads_as_an_indefinite_noun():
+    """`random` samples the collection, so the card says "a random die" / "some
+    random dice" — not the definite "the random die" a collapse would use."""
+    def card(count):
+        return sfx_text(SFX(
+            id="sfx-x", name="X", trigger="manual",
+            effects=[Effect(
+                timing=EffectTiming.IMMEDIATE, type="location", action="set", target="",
+                target_spec=TargetSpec(steps=[
+                    {"kind": "select", "collection": "rolled_dice"},
+                    {"kind": "aggregate", "fn": "random", "count": count},
+                ]),
+            )],
+        ))
+
+    assert "a random die" in card(1)
+    assert "some random dice" in card(3)

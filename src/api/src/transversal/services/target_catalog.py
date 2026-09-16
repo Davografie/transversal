@@ -333,16 +333,19 @@ EDGES: tuple[Edge, ...] = (
 
 @dataclass(frozen=True)
 class Aggregation:
-    """Collapses a collection to a scalar.
+    """Collapses a collection to a scalar — or, for ``random``, samples it.
 
     ``output`` is ``"int"`` (count), ``"number"`` (mean/avg_*), or ``"same"``
-    (min/max — the field's own type). ``needs_field`` is False only for count.
+    (min/max/random — the element's own type). ``needs_field`` is False for
+    count and random; ``needs_count`` is True only for random (how many to
+    sample — 1 collapses the collection to one element).
     """
     name: str
     label: str
     output: str
     needs_field: bool
     card: str = ""  # template with {field} and {src}; "" → derived
+    needs_count: bool = False
 
 
 def aggregation_card(agg: Aggregation, src: str, field: str) -> str:
@@ -356,6 +359,8 @@ def aggregation_card(agg: Aggregation, src: str, field: str) -> str:
 
 AGGREGATIONS: tuple[Aggregation, ...] = (
     Aggregation("count", "Count", "int", False, card="the number of {src}"),
+    Aggregation("random", "Random", "same", False, needs_count=True,
+                card="a random {src}"),
     Aggregation("min", "Minimum", "same", True, card="the lowest {field} among {src}"),
     Aggregation("max", "Maximum", "same", True, card="the highest {field} among {src}"),
     Aggregation("mean", "Mean", "number", True, card="the average {field} among {src}"),

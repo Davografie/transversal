@@ -1,8 +1,10 @@
 """Target spec — the structured targeting pipeline and its type-checker.
 
 A ``TargetSpec`` is an ordered list of steps (``select`` / ``filter`` /
-``navigate`` / ``aggregate`` / ``literal`` / ``random`` / ``choose``) that resolves a
-reference against the game state.
+``navigate`` / ``aggregate`` / ``literal`` / ``choose`` / ``top`` /
+``evaluate``) that resolves a reference against the game state. Random sampling
+is an *aggregation* over a collection (``aggregate fn="random"``), not a step of
+its own — one vocabulary, not two spellings that can drift.
 This module owns the *shape* of the spec and the *type-checker* that walks a
 spec against the [[target_catalog]] to verify it can reach a destination type.
 (The runtime *resolver* — turning a valid spec into actual game objects — is a
@@ -19,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from transversal.services import target_catalog as tc
 
@@ -52,6 +54,9 @@ class AggregateStep(BaseModel):
     kind: Literal["aggregate"] = "aggregate"
     fn: str
     field: str | None = None  # required for min/max/mean/avg_*
+    #: Sample size for ``fn="random"``: 1 collapses ``many → one``, more keeps the
+    #: collection cardinality (a random subset). Ignored by the other functions.
+    count: int = 1
     output: str | None = None
 
 
@@ -59,18 +64,6 @@ class LiteralStep(BaseModel):
     kind: Literal["literal"] = "literal"
     element: str = ""  # element type name (entity/trait/location/…)
     value: str = ""    # the concrete id
-    output: str | None = None
-
-
-class RandomStep(BaseModel):
-    """Sample a subset of the current collection at random.
-
-    ``count`` 1 collapses ``many → one``; ``count > 1`` keeps the collection
-    cardinality ``many`` (a random subset). Element type is unchanged. This is
-    the non-interactive resolution mode (the interactive one is ``choose``).
-    """
-    kind: Literal["random"] = "random"
-    count: int = 1
     output: str | None = None
 
 
@@ -126,13 +119,34 @@ class EvaluateStep(BaseModel):
 
 
 TargetStep = Annotated[
-    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, RandomStep, ChooseStep, TopStep, EvaluateStep],
+    Union[SelectStep, FilterStep, NavigateStep, AggregateStep, LiteralStep, ChooseStep, TopStep, EvaluateStep],
     Field(discriminator="kind"),
 ]
 
 
 class TargetSpec(BaseModel):
     steps: list[TargetStep] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fold_legacy_random_step(cls, data):
+        """A stored ``{"kind": "random"}`` step reads as ``aggregate fn="random"``.
+
+        Random sampling became an aggregation; specs authored before that keep
+        resolving, and both spellings can never drift because only one survives
+        parsing.
+        """
+        if not isinstance(data, dict):
+            return data
+        steps = data.get("steps")
+        if not isinstance(steps, list):
+            return data
+        folded = [
+            {**s, "kind": "aggregate", "fn": "random"}
+            if isinstance(s, dict) and s.get("kind") == "random" else s
+            for s in steps
+        ]
+        return {**data, "steps": folded}
 
 
 # ── Value type ────────────────────────────────────────────────
@@ -264,6 +278,15 @@ def trace(spec: TargetSpec, source_element: str | None = None,
             if agg is None:
                 errors.append(TraceError(i, f"unknown aggregation {step.fn!r}"))
                 current = None
+            elif agg.name == "random":
+                if step.count < 1:
+                    errors.append(TraceError(i, "random count must be >= 1"))
+                    current = None
+                elif current.cardinality != "many":
+                    errors.append(TraceError(i, "random requires a many-cardinality collection"))
+                    # type unchanged (element preserved; caller sees the error)
+                else:
+                    current = ValueType(current.element, "one" if step.count == 1 else "many")
             elif not agg.needs_field:
                 current = ValueType(agg.output, "one")
             elif step.field is None:
@@ -285,20 +308,6 @@ def trace(spec: TargetSpec, source_element: str | None = None,
                 current = None
             else:
                 current = ValueType(step.element, "one")
-
-        elif isinstance(step, RandomStep):
-            if current is None:
-                errors.append(TraceError(i, "random has no collection to pick from"))
-                current = None
-            elif step.count < 1:
-                errors.append(TraceError(i, "random count must be >= 1"))
-                current = None
-            elif current.cardinality != "many":
-                errors.append(TraceError(i, "random requires a many-cardinality collection"))
-                # type unchanged (element preserved; caller sees the error)
-            else:
-                cardinality = "one" if step.count == 1 else "many"
-                current = ValueType(current.element, cardinality)
 
         elif isinstance(step, ChooseStep):
             if current is None:

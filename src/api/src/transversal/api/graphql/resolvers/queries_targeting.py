@@ -217,7 +217,8 @@ class QueriesTargeting:
                 for f in fields.values()
             ],
             aggregations=[
-                TargetCatalogAggregation(name=a.name, label=a.label, output=a.output, needs_field=a.needs_field)
+                TargetCatalogAggregation(name=a.name, label=a.label, output=a.output,
+                                         needs_field=a.needs_field, needs_count=a.needs_count)
                 for a in tc.AGGREGATIONS
             ],
             collections=[

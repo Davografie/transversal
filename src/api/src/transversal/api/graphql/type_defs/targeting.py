@@ -107,11 +107,12 @@ class TargetLabel:
 
 @strawberry.type
 class TargetCatalogAggregation:
-    """A collapse of a collection to a scalar."""
+    """A collapse of a collection to a scalar (or, for ``random``, a sample)."""
     name: str
     label: str
     output: str  # "int" | "number" | "same"
     needs_field: bool
+    needs_count: bool = False  # random: how many to sample
 
 @strawberry.type
 class TargetCatalogCollection:
@@ -143,7 +144,7 @@ class TargetCatalog:
 @strawberry.input
 class TargetSpecStepInput:
     """One step of a targeting spec (kind discriminates the relevant fields)."""
-    kind: str  # "select" | "filter" | "navigate" | "aggregate" | "random" | "choose" | "top"
+    kind: str  # "select" | "filter" | "navigate" | "aggregate" | "choose" | "top" | "evaluate"
     collection: Optional[str] = None
     variable: Optional[str] = None  # for kind == "select" + collection == "variable"
     output: Optional[str] = None  # bound variable name this step exposes
@@ -153,7 +154,7 @@ class TargetSpecStepInput:
     edge: Optional[str] = None
     dedup: bool = False
     fn: Optional[str] = None
-    count: Optional[int] = None  # random/choose: elements to sample (default 1)
+    count: Optional[int] = None  # aggregate(random)/choose: how many (default 1)
     direction: Optional[str] = None  # top: "desc" (highest/most recent) | "asc"
 
 @strawberry.input

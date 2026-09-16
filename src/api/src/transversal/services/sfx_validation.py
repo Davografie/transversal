@@ -125,6 +125,17 @@ def _specs_of(sfx: SFX):
         yield "Acquire path", sfx.acquire_spec
 
 
+def _condition_specs(sfx: SFX):
+    """The specs that are *gates*. A condition is evaluated, never answered."""
+    for i, condition in enumerate(sfx.conditions):
+        if condition.spec is not None:
+            yield f"Condition {i + 1}", condition.spec
+    for i, effect in enumerate(sfx.effects):
+        for j, condition in enumerate(effect.conditions or []):
+            if condition.spec is not None:
+                yield f"Effect {i + 1} condition {j + 1}", condition.spec
+
+
 def _source_kinds_for(elements: tuple[str, ...]) -> set[str]:
     """The source kinds whose element is one of ``elements`` (see ``SOURCE_KINDS``)."""
     from transversal.services.target_catalog import SOURCE_KINDS
@@ -303,6 +314,17 @@ def validate_sfx(sfx: SFX, repo=None) -> list[str]:
                             f"can never match"
                         )
         bound |= {s.output for s in spec.steps if getattr(s, "output", None)}
+
+    # A condition is a filter, and `choose` is a question. A gate has nobody to
+    # ask, so the step resolves to nothing and the condition silently never
+    # passes — the editor refuses to author it, and this catches content that
+    # predates that (or was authored elsewhere).
+    for label, spec in _condition_specs(sfx):
+        if any(step.kind == "choose" for step in spec.steps):
+            warnings.append(
+                f"{label}: a 'choose' step needs an answer, and a condition is "
+                f"evaluated without one — it can never pass"
+            )
 
     # Fire-time context, from the capability map: a condition that reads a key the
     # evaluation point never supplies can never pass. One rule for every context

@@ -25,7 +25,6 @@ from transversal.services.target_spec import (
     FilterStep,
     LiteralStep,
     NavigateStep,
-    RandomStep,
     SelectStep,
     TargetSpec,
     TopStep,
@@ -696,6 +695,17 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
                 if agg is None:
                     errors.append(TraceError(i, f"unknown aggregation {step.fn!r}"))
                     values, current_type = [], None
+                elif agg.name == "random":
+                    if step.count < 1:
+                        errors.append(TraceError(i, "random count must be >= 1"))
+                        values, current_type = [], None
+                    elif current_type.cardinality != "many":
+                        errors.append(TraceError(i, "random requires a many-cardinality collection"))
+                        values, current_type = [], None
+                    else:
+                        values = _sample(values, step.count)
+                        current_type = ValueType(
+                            current_type.element, "one" if step.count == 1 else "many")
                 elif not agg.needs_field:
                     values, current_type = [len(values)], ValueType(agg.output, "one")
                 elif step.field is None or tc.field(current_type.element, step.field) is None:
@@ -714,21 +724,6 @@ def resolve(spec: TargetSpec, context: TargetContext, answers: dict[int, list[st
             else:
                 values = _lookup_literal(step.element, step.value, context)
                 current_type = ValueType(step.element, "one")
-
-        elif isinstance(step, RandomStep):
-            if current_type is None:
-                errors.append(TraceError(i, "random has no collection to pick from"))
-                values, current_type = [], None
-            elif step.count < 1:
-                errors.append(TraceError(i, "random count must be >= 1"))
-                values, current_type = [], None
-            elif current_type.cardinality != "many":
-                errors.append(TraceError(i, "random requires a many-cardinality collection"))
-                values, current_type = [], None
-            else:
-                values = _sample(values, step.count)
-                cardinality = "one" if step.count == 1 else "many"
-                current_type = ValueType(current_type.element, cardinality)
 
         elif isinstance(step, ChooseStep):
             if current_type is None:

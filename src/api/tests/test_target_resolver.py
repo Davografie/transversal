@@ -15,7 +15,6 @@ from transversal.services.target_spec import (
     EvaluateStep,
     FilterStep,
     NavigateStep,
-    RandomStep,
     SelectStep,
     TargetSpec,
     TopStep,
@@ -490,7 +489,7 @@ def test_random_picks_single_member_of_set():
         {"ts_id": "c", "result": 5},
     ]
     ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
-    s = spec(SelectStep(collection="rolled_dice"), RandomStep())
+    s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="random"))
     res = resolve(s, ctx)
     assert res.errors == []
     assert len(res.values) == 1
@@ -501,7 +500,7 @@ def test_random_picks_subset_without_replacement():
     kael, repo = _one_trick_world()
     dice = [{"ts_id": "a"}, {"ts_id": "b"}, {"ts_id": "c"}, {"ts_id": "d"}]
     ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
-    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=2))
+    s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="random", count=2))
     res = resolve(s, ctx)
     assert res.errors == []
     assert len(res.values) == 2
@@ -514,7 +513,7 @@ def test_random_degrades_gracefully_when_count_exceeds_set():
     kael, repo = _one_trick_world()
     dice = [{"ts_id": "a"}, {"ts_id": "b"}]
     ctx = TargetContext(subject=kael, repo=repo, collections={"rolled_dice": dice})
-    s = spec(SelectStep(collection="rolled_dice"), RandomStep(count=5))
+    s = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="random", count=5))
     res = resolve(s, ctx)
     assert res.errors == []
     assert [v["ts_id"] for v in res.values] == ["a", "b"]  # whole set returned

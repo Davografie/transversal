@@ -42,7 +42,6 @@ from transversal.services.target_spec import (
     FilterStep,
     LiteralStep,
     NavigateStep,
-    RandomStep,
     SelectStep,
     TargetSpec,
     TopStep,
@@ -582,6 +581,15 @@ def _aggregate_phrase(p: Phrase, step: AggregateStep) -> Phrase:
     if step.field:
         field_def = tc.field(p.element, step.field) if p.element else None
         field_text = tc.field_label(field_def) if field_def else step.field.replace("_", " ")
+    if agg is not None and agg.name == "random":
+        # A sample is an indefinite noun, not a definite one: "a random die in
+        # your roll", "some random traits". A phrase that already carries its own
+        # determiner (a possessive or pronoun) is left alone.
+        article = "" if (p.possessive or p.pronoun or p.prefix) else (
+            "a" if step.count == 1 else "some")
+        return replace(p, cardinality="one" if step.count == 1 else p.cardinality,
+                       adjectives=[*p.adjectives, "random"],
+                       fixed_determiner=article)
     if agg is None:
         return Phrase(scalar=f"{step.fn} of {render_phrase(p, '')}".strip())
     return Phrase(element=agg.output, cardinality="one",
@@ -593,11 +601,6 @@ def _choose_phrase(p: Phrase, step: ChooseStep) -> Phrase:
     if step.count == 1:
         return replace(p, modal=True, prefix="one of the")
     return replace(p, modal=True, prefix="a chosen set of the")
-
-
-def _random_phrase(p: Phrase, step: RandomStep) -> Phrase:
-    return replace(p, cardinality="one" if step.count == 1 else p.cardinality,
-                   adjectives=[*p.adjectives, "random"])
 
 
 # Trait-granting actions whose target can be named by the author's own config:
@@ -757,8 +760,6 @@ def path_phrase(spec: TargetSpec | None, *, source_element: str | None = None,
             phrase = _aggregate_phrase(phrase, step)
         elif isinstance(step, LiteralStep):
             phrase = _literal_phrase(step, resolve)
-        elif isinstance(step, RandomStep):
-            phrase = _random_phrase(phrase, step)
         elif isinstance(step, ChooseStep):
             phrase = _choose_phrase(phrase, step)
         elif isinstance(step, TopStep):
