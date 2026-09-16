@@ -56,7 +56,7 @@ oppose than a level-1 one (NBA: Difficulty = level + 3).
 | 4 | **Build the roster** — `membership` per member, then `role` (statement) and optional `rank` (die) on the tie | ✅ `create_relationship` + `set_rank_role` |
 | 5 | **Name a face** — tag the tie (or the role) so "who speaks for this org" is findable | ⚠️ works, but nothing surfaces it |
 | 6 | **Write the want** — a `static` trait whose statement is the aim | ✅ |
-| 7 | **Write the agenda** — a container trait, its children the ordered portents | ❌ **not over MCP today** — see below |
+| 7 | **Write the agenda** — a container trait, its children the ordered portents | ⚠️ **backend fixed 2026-09-15** (nesting, `order`, `enabled`, `capacity` all work over raw GraphQL); **the MCP schema cannot carry it yet** — see below |
 | 8 | **Give it a weak link** — the dependency the players can attack | ✅ `add_trait_to_entity` (challenge/resource) |
 | 9 | **Wire the life path it offers** | ✅ `set_faction_life_paths` |
 | 10 | **Give it a move or two** — an SFX it owns (`entity` is an owner surface) | ✅ `create_sfx` |
@@ -66,7 +66,10 @@ gap, not a model gap: `order` and `enabled` landed on the backend on 2026-09-15.
 
 ## What the MCP tool set needs (the ask for [[mcp-architect]])
 
-The whole portent path is currently **unexpressible over MCP**. Verified against
+The portent path is unexpressible **over MCP**. Note the scope of the table below —
+it is about the *tool schemas*, not the model: the GraphQL mutations carry every
+one of these fields, and the create path was fixed on 2026-09-15 (it used to accept
+`parentTraitsettingId` and drop it, writing a dangling `_from`). Verified against
 the tool schemas:
 
 | Need | `add_trait_to_entity` | `update_trait_setting` |
@@ -82,7 +85,7 @@ the tool schemas:
 So: **a faction's roster can be authored over MCP, and its agenda cannot.** The
 minimum to close it:
 
-1. `add_trait_to_entity` — accept `from_type: "traitsetting"` + `parent_traitsetting_id`, and `order`, `enabled`, `known_to`, `sfx_ids`, `capacity`, `notes`.
+1. `add_trait_to_entity` — accept `from_type: "traitsetting"` + `parent_traitsetting_id`, and `order`, `enabled`, `sfx_ids`, `capacity`, `notes`. (`known_to` is deliberately absent from the create input — a portent starts undiscovered.) `addSubTrait` stays the dedicated nesting path; the create path now behaves the same way, including an id keyed to the **parent** and hashed by statement.
 2. `update_trait_setting` — accept `order`, `enabled`, `known_to`, `sfx_ids`, `capacity`, and the re-anchoring pair (`from_type` / `parent_traitsetting_id`) so a portent can be moved between containers.
 3. A **roster read** — `faction_canvas` returns members with rank/role, but a light `faction_members(faction_id)` (`{id name type role rank}`) avoids pulling the whole canvas for a list. The GraphQL field now exists (`factionMembers`), so it is a thin passthrough.
 4. *(Optional)* a `set_portent_landed(setting_id, landed)` convenience over `update_trait_setting`, since that is the one write a GM makes repeatedly mid-scene.
@@ -152,13 +155,18 @@ canonical before wiring it.
 - **Arming the next portent is authorable today** — a landing SFX's effect list can
   disable itself, apply its consequences, and `add_rating_die` on the next portent
   (the action explicitly covers "any rating type: static, resource, or challenge").
-  What is *not* yet possible is the container-level version, where one SFX sequences
-  the whole list; that needs the changed setting's id in the `trait_updated` event
-  ([[Effects]]' file — see the ask in [[backend-platform]]'s Blockers).
-- **A disabled portent still offers its SFX.** Suppression is not implemented yet
-  ([[Effects]] owns it), so a landed portent can currently be re-activated. Until
-  that lands, prefer effect lists that are idempotent.
+  The container-level version — one SFX sequencing the whole list — is now possible
+  too: `trait_updated` carries `trait_setting` (`b1720fff`), so a rule can gate on
+  the step that changed.
+- **A disabled portent grants nothing** (`d2bfd132`, [[Effects]], 2026-09-15): a
+  landed step stops offering its rules, so it cannot re-fire. And `trait_updated`
+  now carries `trait_setting` (`b1720fff`), so a rule **can tell which step landed** —
+  which is what makes a container-level sequencer possible.
 - **Don't author `commands`** or a stored rank ladder — both are retired.
+- **Give every portent a distinct `statement`.** A nested setting's key is
+  `{parent}:{trait}:{hash8(statement)}`, so two steps of one container with the same
+  text collide by design — they are the same step twice. Distinct text is also what
+  makes the portents readable, so this costs nothing.
 
 ## References
 

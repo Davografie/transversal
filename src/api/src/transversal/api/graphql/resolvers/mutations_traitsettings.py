@@ -23,21 +23,43 @@ class MutationsTraitSettings:
     @strawberry.mutation
     def add_trait_setting(self, info: strawberry.Info, entity_id: strawberry.ID, input: TraitSettingInput) -> TraitSetting:
         repo = _em(info).repo
+        if input.parent_traitsetting_id is not None and input.from_type != "traitsetting":
+            raise ValueError("parentTraitsettingId requires fromType 'traitsetting'")
         traitset = repo.get_traitset_by_id(str(input.traitset_id))
         allow_duplicates = traitset.allow_duplicates if traitset is not None else False
-        collision = repo.find_traitsetting_collision(
-            str(entity_id), str(input.trait_id),
-            statement=input.statement or "", allow_duplicates=allow_duplicates,
-        )
-        if collision is not None:
-            raise ValueError(
-                f"Trait '{input.trait_id}' already present"
-                + (f" with statement '{input.statement}'" if allow_duplicates and input.statement else "")
+        parent = None
+        if input.from_type == "traitsetting":
+            # A nested setting is keyed to its parent, not the entity, and one
+            # registry trait legitimately appears many times under one container —
+            # every portent in an agenda is a setting of the same generic trait. The
+            # entity-wide collision rule would refuse the second portent, and the
+            # dedicated `addSubTrait` mutation has never applied it, so the two
+            # create paths agree by skipping it here.
+            if input.parent_traitsetting_id is None:
+                raise ValueError(
+                    "parentTraitsettingId is required when fromType is 'traitsetting'")
+            parent = repo.get_traitsetting(str(input.parent_traitsetting_id))
+            if parent is None:
+                raise ValueError(
+                    f"Parent TraitSetting '{input.parent_traitsetting_id}' not found")
+            if str(parent.entity_id) != str(entity_id):
+                raise ValueError("A sub-trait's parent must belong to the same entity")
+            ts_id = repo.resolve_subtrait_id(
+                str(parent.id), str(input.trait_id), input.statement or "")
+        else:
+            collision = repo.find_traitsetting_collision(
+                str(entity_id), str(input.trait_id),
+                statement=input.statement or "", allow_duplicates=allow_duplicates,
             )
-        ts_id = repo.resolve_traitsetting_id(
-            str(entity_id), str(input.trait_id),
-            statement=input.statement or "", allow_duplicates=allow_duplicates,
-        )
+            if collision is not None:
+                raise ValueError(
+                    f"Trait '{input.trait_id}' already present"
+                    + (f" with statement '{input.statement}'" if allow_duplicates and input.statement else "")
+                )
+            ts_id = repo.resolve_traitsetting_id(
+                str(entity_id), str(input.trait_id),
+                statement=input.statement or "", allow_duplicates=allow_duplicates,
+            )
         trait = repo.get_trait(str(input.trait_id))
         from transversal.services.polarity import default_polarity
         polarity = input.polarity if input.polarity is not None else default_polarity(trait, traitset)
@@ -54,6 +76,13 @@ class MutationsTraitSettings:
                     from_type = "entity"
             else:
                 from_type = "entity"
+        # Nesting on create — the twin of `fromType: "traitsetting"` in
+        # `update_trait_setting`. The parent used to be accepted and dropped here,
+        # which wrote ``_from = TRAITSETTINGS/None``: a dangling edge that put the
+        # child in no container at all.
+        parent_traitsetting_id = str(parent.id) if parent is not None else None
+        if parent_traitsetting_id is not None:
+            projection_id = None
         ts = DomainTraitSetting(
             id=ts_id,
             entity_id=str(entity_id),
@@ -69,7 +98,9 @@ class MutationsTraitSettings:
             tags=[str(t) for t in (input.tags or [])],
             from_type=from_type,
             projection_id=projection_id,
+            parent_traitsetting_id=parent_traitsetting_id,
             sfx_ids=[str(s) for s in input.sfx_ids],
+            enabled=input.enabled,
         )
         created = _em(info).add_traitsetting(ts)
         return _ts_to_gql(created)
@@ -195,7 +226,7 @@ class MutationsTraitSettings:
         polarity = default_polarity(trait, traitset)
 
         ts = DomainTraitSetting(
-            id=f"{parent.id}:{trait_id}",
+            id=repo.resolve_subtrait_id(str(parent.id), str(trait_id), statement),
             entity_id=parent.entity_id,
             trait_id=str(trait_id),
             traitset_id=traitset_id,

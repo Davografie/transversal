@@ -115,6 +115,24 @@ class RepositoryTraitSettings:
             return f"{base}:{h}"
         return base
 
+    def resolve_subtrait_id(
+        self, parent_traitsetting_id: str, trait_id: str, statement: str = ""
+    ) -> str:
+        """Deterministic key for a setting nested under ``parent_traitsetting_id``.
+
+        A nested setting is scoped to its **parent container**, not to the entity —
+        and one registry trait legitimately appears many times under one parent
+        (every portent in an agenda is a setting of the same generic trait). So the
+        key is parent-scoped and disambiguated by the statement, the same
+        convention :meth:`resolve_traitsetting_id` uses for duplicates: the same
+        statement collides deliberately, distinct statements get distinct keys.
+        """
+        base = f"{parent_traitsetting_id}:{trait_id}"
+        if statement:
+            h = hashlib.sha1(statement.encode("utf-8")).hexdigest()[:8]
+            return f"{base}:{h}"
+        return base
+
     def get_traitsettings_for_entity(self, entity_id: str) -> list[TraitSetting]:
         query = f"""
             FOR ts IN {TRAITSETTINGS}

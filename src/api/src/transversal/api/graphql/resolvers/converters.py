@@ -134,6 +134,7 @@ def _ts_to_gql(s: DomainTraitSetting) -> TraitSetting:
         traitset_id=s.traitset_id,
         rating_type=s.rating_type, dice=s.dice,
         spent_dice=s.spent_dice,
+        capacity=s.capacity,
         polarity=s.polarity,
         statement=s.statement,
         notes=s.notes,
