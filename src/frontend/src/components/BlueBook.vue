@@ -191,12 +191,13 @@ const QUERY_TIMELINE = `
 const QUERY_RECORDS = `
   query($eid: ID!) {
     historicalRecords(entityId: $eid) {
-      id entityId recordType universe sessionId data createdAt
+      id entityId recordType universe sessionId data afterIds createdAt
     }
   }
 `
 
 const UPDATE_MESSAGE = `mutation($id:ID!,$afterIds:[ID!]!){updateMessage(input:{id:$id,afterIds:$afterIds})}`
+const UPDATE_HISTORICAL_RECORD = `mutation($id:ID!,$afterIds:[ID!]!){updateHistoricalRecord(input:{id:$id,afterIds:$afterIds})}`
 
 const SEND_LETTER = `mutation($sender:ID!,$recipient:ID!,$body:String!,$images:[String!]!,$afterIds:[ID!]!,$threads:[String!]!){sendMessage(input:{senderEntityId:$sender,recipientEntityId:$recipient,kind:LETTER,body:$body,images:$images,afterIds:$afterIds,threads:$threads}){id}}`
 const ADD_JOURNAL = `mutation($eid:ID!,$title:String!,$body:String!,$images:[String!]!,$afterIds:[ID!]!,$threads:[String!]!){addJournalEntry(input:{entityId:$eid,title:$title,body:$body,images:$images,afterIds:$afterIds,threads:$threads}){id}}`
@@ -233,6 +234,7 @@ function normalizeRecord(rec) {
     title: formatRecord(rec),
     body: '',
     images: [],
+    afterIds: rec.afterIds || [],
     threads: [rec.recordType],
     createdAt: rec.createdAt,
   }
@@ -251,6 +253,49 @@ function byCreatedAt(a, b) {
   if (!a.createdAt) return 1
   if (!b.createdAt) return -1
   return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0
+}
+
+// The Blue Book's order is the causal chain, not the clock.
+//
+// Messages and historical records are two collections but one surface, so the
+// order is built here over the union: every entry points at the entry above it
+// via `afterIds`, and an id may name either kind. Kahn's algorithm with a
+// createdAt-ordered queue keeps a chained entry directly under its parent while
+// unchained entries (every entry, until someone drags) fall back to
+// chronological — so legacy data renders exactly as before. Leftovers (a cycle,
+// or a parent outside this view) are appended by createdAt instead of vanishing.
+function orderEntries(list) {
+  const byId = new Map(list.map(e => [e.id, e]))
+  const inDegree = new Map(list.map(e => [e.id, 0]))
+  const children = new Map(list.map(e => [e.id, []]))
+  for (const e of list) {
+    for (const parentId of e.afterIds || []) {
+      if (parentId === e.id || !byId.has(parentId)) continue
+      children.get(parentId).push(e.id)
+      inDegree.set(e.id, inDegree.get(e.id) + 1)
+    }
+  }
+  const byClock = (a, b) => byCreatedAt(byId.get(a), byId.get(b))
+  const queue = list.filter(e => inDegree.get(e.id) === 0).map(e => e.id).sort(byClock)
+  const out = []
+  const placed = new Set()
+  while (queue.length) {
+    const id = queue.shift()
+    out.push(byId.get(id))
+    placed.add(id)
+    for (const childId of children.get(id)) {
+      const left = inDegree.get(childId) - 1
+      inDegree.set(childId, left)
+      if (left === 0) {
+        queue.push(childId)
+        queue.sort(byClock)
+      }
+    }
+  }
+  if (placed.size < list.length) {
+    out.push(...list.filter(e => !placed.has(e.id)).sort(byCreatedAt))
+  }
+  return out
 }
 
 const composePlaceholder = computed(() => {
@@ -414,7 +459,7 @@ async function fetch() {
     ])
     const messages = timelineData?.timeline || []
     const records = (recordsData?.historicalRecords || []).map(normalizeRecord)
-    entries.value = [...messages, ...records].sort(byCreatedAt)
+    entries.value = orderEntries([...messages, ...records])
     for (const m of entries.value) {
       if (m.recordType) continue
       if (m.senderEntityId !== props.entityId && !senderNames.value[m.senderEntityId]) {
@@ -477,29 +522,34 @@ async function reorder(srcIdx, target) {
   // Dropping an item on itself, or into the gap right below it, moves nothing.
   if (dropIdx === srcIdx || dropIdx === srcIdx + 1) return
 
-  const visible = [...displayEntries.value]
-  if (!visible.length) return
+  const view = displayEntries.value
+  const source = view[srcIdx]
+  if (!source) return
 
-  // Reorder: remove from srcIdx, insert before dropIdx
-  const [X] = visible.splice(srcIdx, 1)
-  const targetIdx = srcIdx < dropIdx ? dropIdx - 1 : dropIdx
-  visible.splice(targetIdx, 0, X)
+  // The view may be thread-filtered, but the stored chain spans everything:
+  // splice the entry into the *full* order at the position it was dropped —
+  // directly above the entry that followed the drop, or at the end.
+  const anchor = view[dropIdx] || null
+  const ordered = [...entries.value]
+  const from = ordered.findIndex(e => e.id === source.id)
+  if (from < 0) return
+  const [X] = ordered.splice(from, 1)
+  const at = anchor ? ordered.findIndex(e => e.id === anchor.id) : ordered.length
+  ordered.splice(at < 0 ? ordered.length : at, 0, X)
 
-  // Rebuild after_ids: each entry points to the one above it.
-  //
-  // Historical records (transversal/contest/roll_table) live in the
-  // `historical_records` collection, which is append-only and has no ordering
-  // field — `updateMessage` against a record id is a silent no-op (verified
-  // live: it returns false). Skip them instead of firing one dead mutation per
-  // record; ordering records is the open part of B111.
+  // Rebuild the chain: each entry points at the one above it. Messages and
+  // records are separate collections, so route the write to the owning
+  // mutation — `updateMessage` against a record id is a silent no-op.
   const updates = []
-  for (let i = 0; i < visible.length; i++) {
-    if (visible[i].recordType) continue
-    const newAfterIds = i > 0 ? [visible[i - 1].id] : []
-    const current = (visible[i].afterIds || []).sort().join(',')
-    const proposed = newAfterIds.sort().join(',')
+  for (let i = 0; i < ordered.length; i++) {
+    const entry = ordered[i]
+    const newAfterIds = i > 0 ? [ordered[i - 1].id] : []
+    const current = (entry.afterIds || []).slice().sort().join(',')
+    const proposed = newAfterIds.slice().sort().join(',')
     if (current !== proposed) {
-      updates.push(graphql(UPDATE_MESSAGE, { id: visible[i].id, afterIds: newAfterIds }))
+      updates.push(entry.recordType
+        ? graphql(UPDATE_HISTORICAL_RECORD, { id: entry.id, afterIds: newAfterIds })
+        : graphql(UPDATE_MESSAGE, { id: entry.id, afterIds: newAfterIds }))
     }
   }
 
