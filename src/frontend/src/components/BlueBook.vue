@@ -485,9 +485,16 @@ async function reorder(srcIdx, target) {
   const targetIdx = srcIdx < dropIdx ? dropIdx - 1 : dropIdx
   visible.splice(targetIdx, 0, X)
 
-  // Rebuild after_ids: each entry points to the one above it
+  // Rebuild after_ids: each entry points to the one above it.
+  //
+  // Historical records (transversal/contest/roll_table) live in the
+  // `historical_records` collection, which is append-only and has no ordering
+  // field — `updateMessage` against a record id is a silent no-op (verified
+  // live: it returns false). Skip them instead of firing one dead mutation per
+  // record; ordering records is the open part of B111.
   const updates = []
   for (let i = 0; i < visible.length; i++) {
+    if (visible[i].recordType) continue
     const newAfterIds = i > 0 ? [visible[i - 1].id] : []
     const current = (visible[i].afterIds || []).sort().join(',')
     const proposed = newAfterIds.sort().join(',')
