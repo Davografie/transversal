@@ -487,6 +487,14 @@ def _seed_collection(name: str, ctx: TargetContext) -> list[Any] | None:
         return list(ctx.repo.list_entities_by_type(EntityType.LOCATION))
     if name == "entities":
         return list(ctx.repo.list_all_entities())
+    if name == "traits":
+        # Every trait *definition* in the registry — the seed an action that
+        # creates or teaches ranges over when it is naming what, not whose.
+        getter = getattr(ctx.repo, "get_all_traits", None)
+        return list(getter()) if callable(getter) else []
+    if name == "universes":
+        from transversal.domain import EntityType
+        return list(ctx.repo.list_entities_by_type(EntityType.UNIVERSE))
     if name == "sfxs":
         # The rule registry, as a collection a path can walk into and filter.
         # Read-only: nothing navigates out of an SFX yet, so this is a seed plus
@@ -1015,6 +1023,18 @@ def register_default_edges() -> None:
                   lambda e, ctx: _maybe(ctx.repo.get_projection(e.current_projection)) if e.current_projection else [])
     register_edge("entity", "projections", lambda e, ctx: list(ctx.repo.get_projections_for_entity(e.id)))
     register_edge("entity", "traitsettings", lambda e, ctx: list(ctx.repo.get_traitsettings_for_entity(e.id)))
+    # entity → its relationship edges → the trait instances anchored to one. A
+    # trait instance can live on the edge rather than on the entity (your standing
+    # with a faction), and this is the route that reaches it.
+    register_edge("entity", "relationships",
+                  lambda e, ctx: list(ctx.repo.list_relationships_for_entity(e.id)))
+    register_edge("relationship", "traitsettings",
+                  lambda r, ctx: list(ctx.repo.get_relationship_traitsettings(r.get("id"))))
+    register_edge("relationship", "entity",
+                  lambda r, ctx: _maybe(ctx.repo.get_entity(r.get("owner_id"))))
+    register_edge("traitsetting", "relationship",
+                  lambda ts, ctx: _maybe(ctx.repo.get_relationship_by_key(ts.entity_id))
+                  if getattr(ts, "from_type", "") == "relationship" else [])
 
     register_edge("projection", "entity", lambda p, ctx: _maybe(ctx.repo.get_entity(p.entity_id)))
     register_edge("projection", "location", lambda p, ctx: _maybe(ctx.repo.get_entity(p.current_location)))

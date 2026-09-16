@@ -81,6 +81,40 @@ class RepositoryRelationships:
                 })
         return results
 
+    def list_relationships_for_entity(self, entity_id: str) -> list[dict]:
+        """The relationship edges ``entity_id`` holds *about* others.
+
+        Outgoing only — the entity or one of its projections is the ``_from``
+        side — the same orientation :meth:`get_relationship_traitsettings_for_entity`
+        uses, so what comes back is what this entity holds about others rather
+        than what others hold about it.
+
+        Each edge carries its ``_key`` (the anchor a relationship-anchored
+        ``TraitSetting`` points at) and its resolved contact, so a targeting path
+        can walk ``entity → relationships → traitsettings`` with one read and
+        know who the other party is without a second.
+        """
+        proj_ids = [p.id for p in self.get_projections_for_entity(entity_id)]
+        from_refs = [f"{ENTITIES}/{entity_id}"] + [f"{PROJECTIONS}/{pid}" for pid in proj_ids]
+
+        query = f"""
+            FOR r IN {RELATIONSHIPS}
+            FILTER r._from IN @from_refs
+            RETURN r
+        """
+        out: list[dict] = []
+        for edge in self.db.aql.execute(query, bind_vars={"from_refs": from_refs}):
+            contact = self._resolve_relationship_contact(edge["_to"]) or {}
+            out.append({
+                "id": edge["_key"],
+                "type": edge.get("type", ""),
+                "description": edge.get("description", ""),
+                "owner_id": edge["_from"].split("/", 1)[-1],
+                "contact_id": contact.get("id", ""),
+                "contact_name": contact.get("name", ""),
+            })
+        return out
+
     def get_relationship_traitsettings_for_entities(
         self, entity_ids: list[str]
     ) -> dict[str, list[dict]]:

@@ -43,6 +43,12 @@ ELEMENT_TYPES: dict[str, ElementType] = {
     "projection": ElementType("projection", "Projection"),
     "location": ElementType("location", "Location"),
     "universe": ElementType("universe", "Universe"),
+    # A relationship *edge* (a membership, an agency, any typed `_from → _to`).
+    # Its own element because a trait instance can hang off the edge rather than
+    # off the entity — a faction membership carries your standing with that
+    # faction — and until this existed the only way to say so was a field
+    # (`context.relationship`), which no path could express.
+    "relationship": ElementType("relationship", "Relationship"),
     # A rule in the registry, as a *targetable thing*: a path can select one
     # (`select sfxs`) or filter to the ones a grant should reach. Read-only from
     # the pipeline's point of view — nothing navigates *out* of an SFX yet.
@@ -225,6 +231,17 @@ SCALAR_FIELDS: dict[str, dict[str, ScalarField]] = {
         "type": ScalarField("location", "type", "string"),
         "universe": ScalarField("location", "universe", "string"),
     },
+    "relationship": {
+        # The edge's own type ("membership", "agency", …) — content, not schema,
+        # so it is a plain string rather than an enum.
+        "type": ScalarField("relationship", "type", "string"),
+        "description": ScalarField("relationship", "description", "string"),
+        "owner_id": ScalarField("relationship", "owner_id", "string",
+                                references="entity", label="holding entity"),
+        "contact_id": ScalarField("relationship", "contact_id", "string",
+                                  references="entity", label="other entity"),
+        "contact_name": ScalarField("relationship", "contact_name", "string", label="other entity's name"),
+    },
     "universe": {
         "id": ScalarField("universe", "id", "string"),
         "name": ScalarField("universe", "name", "string"),
@@ -333,6 +350,18 @@ EDGES: tuple[Edge, ...] = (
     # projection → owning entity / current location
     Edge("entity", "projection", ("entity",), "one", "Owning entity", noun="owner"),
     Edge("location", "projection", ("location",), "one", "Current location", noun="location"),
+
+    # entity → its relationship edges → the trait instances anchored to one.
+    # A trait instance can live on the *edge* rather than on the entity (your
+    # standing with a faction), and this is the route that reaches it. Outgoing
+    # only, matching the sheet's own reading of "what I hold about others".
+    Edge("relationships", "entity", ("relationship",), "many", "Relationships",
+         noun="relationship"),
+    Edge("traitsettings", "relationship", ("traitsetting",), "many", "Trait instances",
+         noun="trait instance", plural="trait instances"),
+    Edge("entity", "relationship", ("entity",), "one", "Holding entity", noun="owner"),
+    Edge("relationship", "traitsetting", ("relationship",), "one", "Owning relationship",
+         noun="relationship"),
 
     # location → universe / occupants
     Edge("universe", "location", ("universe",), "one", "Universe", noun="universe"),
@@ -475,6 +504,12 @@ COLLECTIONS: tuple[Collection, ...] = (
                noun="entity", origin="here"),
     Collection("locations", "location", "All locations", noun="location"),
     Collection("entities", "entity", "All entities", noun="entity"),
+    # The two whole-world seeds: every trait *definition* in the registry, and
+    # every universe. A definition seed is how an action that creates or teaches
+    # names what it is about without a picker (`gain_trait`), and the universes
+    # seed is how a path ranges over worlds instead of starting from one entity.
+    Collection("traits", "trait", "Traits in the registry", noun="trait"),
+    Collection("universes", "universe", "All universes", noun="universe"),
     Collection("self_traitsettings", "traitsetting", "The acting entity's trait instances",
                noun="trait instance", possessive=True),
     Collection("sfxs", "sfx", "Rules in the registry", noun="rule"),
@@ -506,6 +541,7 @@ DISPLAY_FIELDS: dict[str, DisplayFields] = {
     "entity": DisplayFields("entity", "name", "type"),
     "projection": DisplayFields("projection", "name", "universe"),
     "location": DisplayFields("location", "name", "universe"),
+    "relationship": DisplayFields("relationship", "contact_name", "type"),
     "universe": DisplayFields("universe", "name", ""),
     "pool": DisplayFields("pool", "kind", ""),
     "sfx": DisplayFields("sfx", "name", "trigger"),

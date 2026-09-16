@@ -26,7 +26,8 @@ def test_die_edges():
 
 def test_traitsetting_edges():
     names = [e.name for e in tc.edges_from("traitsetting")]
-    assert names == ["rating_dice", "trait", "traitset", "entity", "projection", "subtraits"]
+    assert names == ["rating_dice", "trait", "traitset", "entity", "projection",
+                     "subtraits", "relationship"]
 
 
 def test_the_sub_trait_edge_reaches_nested_instances():
