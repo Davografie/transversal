@@ -67,7 +67,7 @@ watch(
   { immediate: true, deep: true },
 )
 
-function onSave(eff) {
+async function onSave(eff) {
   const adding = props.index === null
   if (adding) {
     draft.effects = [...draft.effects, eff]
@@ -80,7 +80,12 @@ function onSave(eff) {
   // point for this effect, so saving here removes the separate SFX-panel
   // "Save now" step (and any reliance on the debounced auto-save). A no-op for
   // a brand-new SFX (no id yet) — the create flow saves the whole draft.
-  save()
+  //
+  // Awaited, and the panel only closes on success: closing before the write
+  // settles lets the parent re-read the SFX list while it is still the previous
+  // version, and the reload then discards the effect that was just added.
+  const ok = await save()
+  if (!ok) return
   // Update leaves the panel open so an effect can be iterated on in place (the
   // form reloads from the draft, and this panel is pinned to one effect index).
   // Adding still closes — the next effect is a different form instance.

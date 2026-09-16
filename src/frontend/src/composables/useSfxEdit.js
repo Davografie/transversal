@@ -85,6 +85,12 @@ function initialDuration(sfx) {
   const { patchData, fetchTraitsConfig } = useTraitsConfig()
 
   function open(sfx) {
+    // Loading a record is not an edit, so any write queued against the *previous*
+    // state is dropped. Otherwise a pending auto-save fires after the reload and
+    // persists the freshly-loaded (older) values over the ones just written —
+    // which is how adding an effect ended up saving an empty effect list.
+    clearTimeout(_saveTimer)
+    clearTimeout(_validationTimer)
     // Initializing the draft must not read as a user edit (else open triggers a
     // spurious auto-save/validate). Watchers are sync-flushed and check this flag.
     _suppressEdits = true
