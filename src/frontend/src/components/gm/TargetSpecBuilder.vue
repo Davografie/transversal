@@ -261,7 +261,7 @@ const props = defineProps({
   title: { type: String, default: 'Targeting path' },
   booleanTerminal: { type: Boolean, default: false }, // condition mode: the path's result is "non-empty → boolean"
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'resolve'])
 
 function normalizeVar(entry) {
   if (!entry) return { element: '', cardinality: 'one' }
@@ -392,6 +392,14 @@ const steps = computed({
 const trace = ref({ types: [], errors: [], valid: false })
 const insertingAt = ref(null)  // index of the step whose "+" was clicked (-1 = before the first)
 let traceTimer = null
+
+// Tell the parent which element the path currently resolves to. An effect that
+// means different things at different destinations reads this — a change to a
+// rating die can be timed, a change to a pool die cannot.
+watch(trace, (t) => {
+  const last = t?.types?.[t.types.length - 1]
+  emit('resolve', last?.element || '')
+})
 
 function errorAt(i) {
   return trace.value.errors.find((e) => e.stepIndex === i) || null

@@ -213,6 +213,10 @@ class EffectActionMeta:
     fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
     context_fields: list[EffectFieldDef] = strawberry.field(default_factory=list)
     supports_duration: bool = False
+    # The elements a duration is offered for, when it is meaningful for some
+    # destinations and not others (a rating die can be timed; a pool die cannot).
+    # Empty = always offered when `supports_duration` is set.
+    duration_elements: list[str] = strawberry.field(default_factory=list)
     supports_polarity: bool = False
     supports_return_exit: bool = False
     implicit_target: Optional[str] = None

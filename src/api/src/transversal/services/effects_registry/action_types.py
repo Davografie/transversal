@@ -87,6 +87,13 @@ class EffectActionMeta:
     # is a secondary path (Attune's "life it comes from") keeps the default order.
     refs_first: bool = False
     supports_duration: bool = False      # UI shows a duration/timers builder
+    # When a duration is meaningful for *some* destinations but not others, name
+    # the elements it is offered for. The change-die family changes a die in a
+    # pool (rebuilt every roll — nothing to revert) or a die of a trait's rating
+    # (a fact, so revertible); only the latter can carry a duration, and the
+    # editor reads the path's resolved element to decide. Empty = always offered
+    # when `supports_duration` is set, which is what every other action means.
+    duration_elements: tuple[str, ...] = ()
     supports_polarity: bool = False      # UI shows a negative (complication) toggle
     supports_return_exit: bool = False   # UI offers a "{return:<name>}" target mode (shared tables)
     inverse: tuple[str, str] | None = None  # (type, action) to undo this effect

@@ -6,9 +6,187 @@ from transversal.services.effects_registry.action_types import (
     RefDef,
 )
 
+#: How many steps along the die ladder a step-up/step-down moves (d8 + 2 → d12).
+_STEPS_FIELD = EffectFieldDef(
+    name="count", label="Steps", field_type="number", required=False, default="1",
+    description="How many steps along the die ladder, clamped at d4/d12 (2 steps: d8 → d12).",
+)
+
+#: How many extra dice a double/split adds. `double 2` on a d8 gives 3d8; `split 2`
+#: gives 3d6 — one extra die for each, the difference being the size of the results.
+_EXTRA_DICE_FIELD = EffectFieldDef(
+    name="count", label="Extra dice", field_type="number", required=False, default="1",
+    description="How many extra dice (2: a d8 becomes 3 dice).",
+)
+
 
 ACTIONS: list[EffectActionMeta] = [
-    # ── Dice Pool (modify_roll) ───────────────────────
+    # ── Change a Die ──────────────────────────────────
+    # One family, one question: *which die, and what happens to it*. The path
+    # answers the first half — a die in the assembled pool, or a die of a trait
+    # instance's rating — and where it lands answers the second: a pool is rebuilt
+    # every roll, so the change is transient; a rating is a fact about the
+    # character, so the change persists and a duration is offered (see
+    # `duration_elements` below). A die is not a *picker* kind, so these actions
+    # declare no `target_kind`; the path is how a die is named.
+    EffectActionMeta(
+        action_id="set_die",
+        label="Set Die",
+        description=(
+            "Set a die to a specific size. On a die in the pool this lasts the roll; "
+            "on a die of a trait's rating it changes the trait"
+        ),
+        category="either",
+        effect_type="modify_roll",
+        effect_action="set_die",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text",
+                          required=True, default="highest_trait_die"),
+            EffectFieldDef(name="result", label="Die Rating", field_type="die_select",
+                          required=True, options=["d4", "d6", "d8", "d10", "d12"]),
+        ],
+        path_element=("die", "rating_die"),
+        supports_duration=True,
+        duration_elements=("rating_die",),
+        inverse=("modify_roll", "restore_die"),
+        inverse_captures_prior=True,
+    ),
+    EffectActionMeta(
+        action_id="step_up_die",
+        label="Step Up Die",
+        description=(
+            "Increase a die by N steps (d8 + 2 → d12, clamped at d12). On a die in "
+            "the pool this lasts the roll; on a die of a trait's rating it changes "
+            "the trait"
+        ),
+        category="benefit",
+        effect_type="modify_roll",
+        effect_action="step_up_die",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text",
+                          required=True, default="highest_trait_die"),
+        ],
+        # A `count` in `fields` would be dropped on save — only target/entity/result
+        # persist from there; everything else is a context field, which is also
+        # where the applier reads it from.
+        context_fields=[_STEPS_FIELD],
+        path_element=("die", "rating_die"),
+        supports_duration=True,
+        duration_elements=("rating_die",),
+        inverse=("modify_roll", "restore_die"),
+        inverse_captures_prior=True,
+    ),
+    EffectActionMeta(
+        action_id="step_down_die",
+        label="Step Down Die",
+        description=(
+            "Decrease a die by N steps (d8 − 2 → d4); a d4 stepped down is removed. "
+            "On a die in the pool this lasts the roll; on a die of a trait's rating "
+            "it changes the trait"
+        ),
+        category="cost",
+        effect_type="modify_roll",
+        effect_action="step_down_die",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text",
+                          required=True, default="highest_trait_die"),
+        ],
+        # A `count` in `fields` would be dropped on save — only target/entity/result
+        # persist from there; everything else is a context field, which is also
+        # where the applier reads it from.
+        context_fields=[_STEPS_FIELD],
+        path_element=("die", "rating_die"),
+        supports_duration=True,
+        duration_elements=("rating_die",),
+        inverse=("modify_roll", "restore_die"),
+        inverse_captures_prior=True,
+    ),
+    EffectActionMeta(
+        action_id="double_die",
+        label="Double Die",
+        description=(
+            "Add N copies of a die at the same size (d8 + 2 → 3d8). On a die in the "
+            "pool this lasts the roll; on a die of a trait's rating it changes the "
+            "trait"
+        ),
+        category="benefit",
+        effect_type="modify_roll",
+        effect_action="double_die",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+        ],
+        context_fields=[_EXTRA_DICE_FIELD],
+        path_element=("die", "rating_die"),
+        supports_duration=True,
+        duration_elements=("rating_die",),
+        inverse=("modify_roll", "restore_die"),
+        inverse_captures_prior=True,
+    ),
+    EffectActionMeta(
+        action_id="split_die",
+        label="Split Die",
+        description=(
+            "Split a die into N+1 dice one step smaller (d8 + 2 → 3d6), gaining "
+            "extra dice to choose from. On a die in the pool this lasts the roll; on "
+            "a die of a trait's rating it changes the trait"
+        ),
+        category="benefit",
+        effect_type="modify_roll",
+        effect_action="split_die",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+        ],
+        context_fields=[_EXTRA_DICE_FIELD],
+        path_element=("die", "rating_die"),
+        supports_duration=True,
+        duration_elements=("rating_die",),
+        inverse=("modify_roll", "restore_die"),
+        inverse_captures_prior=True,
+    ),
+    EffectActionMeta(
+        action_id="remove_die",
+        label="Remove Die",
+        description=(
+            "Remove a die. On a die in the pool this lasts the roll; on a die of a "
+            "trait's rating the trait loses that die — a rating with no dice left is "
+            "still a trait"
+        ),
+        category="cost",
+        effect_type="modify_roll",
+        effect_action="remove_die",
+        valid_timings=["IMMEDIATE", "END_OF_BEAT", "END_OF_SCENE", "END_OF_SESSION"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text", required=True),
+        ],
+        path_element=("die", "rating_die"),
+        supports_duration=True,
+        duration_elements=("rating_die",),
+        inverse=("modify_roll", "restore_die"),
+        inverse_captures_prior=True,
+    ),
+    EffectActionMeta(
+        action_id="reroll_die",
+        label="Reroll Die",
+        description="Reroll a die in the pool and keep the new result",
+        category="benefit",
+        effect_type="modify_roll",
+        effect_action="reroll_die",
+        valid_timings=["IMMEDIATE"],
+        fields=[
+            EffectFieldDef(name="target", label="Target", field_type="text",
+                          required=True, default="the_hitch_die"),
+        ],
+        # A rating die has no result to reroll, so this one stays pool-only — the
+        # destination set is what says so, rather than a runtime refusal.
+        path_element=("die",),
+    ),
+
+    # ── Dice Pool ─────────────────────────────────────
     EffectActionMeta(
         action_id="play_as_rating",
         label="Play as Rating",
@@ -22,62 +200,6 @@ ACTIONS: list[EffectActionMeta] = [
                           required=True, options=["d4", "d6", "d8", "d10", "d12"]),
         ],
         implicit_target="{source_trait}",
-    ),
-    EffectActionMeta(
-        action_id="step_up_die",
-        label="Step Up Die",
-        description="Increase a die in the pool by one step (d6→d8)",
-        category="benefit",
-        effect_type="modify_roll",
-        effect_action="step_up_die",
-        valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text",
-                          required=True, default="highest_trait_die"),
-        ],
-        # A die in a pool is not a *picker* kind, but it is a path: the pool hop
-        # reads the assembled dice and one of them is the target.
-        path_element=("die",),
-    ),
-    EffectActionMeta(
-        action_id="step_down_die",
-        label="Step Down Die",
-        description="Decrease a die in the pool by one step (d8→d6)",
-        category="cost",
-        effect_type="modify_roll",
-        effect_action="step_down_die",
-        valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text",
-                          required=True, default="highest_trait_die"),
-        ],
-        path_element=("die",),
-    ),
-    EffectActionMeta(
-        action_id="double_die",
-        label="Double Die",
-        description="Add a second copy of a die to the pool",
-        category="benefit",
-        effect_type="modify_roll",
-        effect_action="double_die",
-        valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Target Die", field_type="text",
-                          required=True),
-        ],
-    ),
-    EffectActionMeta(
-        action_id="reroll_die",
-        label="Reroll Die",
-        description="Reroll a single die and keep the new result",
-        category="benefit",
-        effect_type="modify_roll",
-        effect_action="reroll_die",
-        valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Target", field_type="text",
-                          required=True, default="the_hitch_die"),
-        ],
     ),
     EffectActionMeta(
         action_id="add_dice",
@@ -136,32 +258,6 @@ ACTIONS: list[EffectActionMeta] = [
         valid_timings=["IMMEDIATE"],
         refs=[
             RefDef("pool", "Pool", "pool"),
-        ],
-    ),
-    EffectActionMeta(
-        action_id="remove_die",
-        label="Remove Die",
-        description="Remove a die from the pool",
-        category="cost",
-        effect_type="modify_roll",
-        effect_action="remove_die",
-        valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Target Die", field_type="text",
-                          required=True),
-        ],
-    ),
-    EffectActionMeta(
-        action_id="split_die",
-        label="Split Die",
-        description="Split a die into two smaller dice, gaining an extra effect die option",
-        category="benefit",
-        effect_type="modify_roll",
-        effect_action="split_die",
-        valid_timings=["IMMEDIATE"],
-        fields=[
-            EffectFieldDef(name="target", label="Source Trait", field_type="text",
-                          required=True, default="{source_trait}"),
         ],
     ),
     EffectActionMeta(

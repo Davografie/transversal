@@ -57,6 +57,7 @@ class QueriesTargeting:
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
                 output_element=m.output_element,
                 requires_choice=m.requires_choice, target_kind=m.target_kind, path_elements=list(m.path_element), supports_duration=m.supports_duration,
+                duration_elements=list(m.duration_elements),
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
                 refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
                 refs_first=m.refs_first,

@@ -114,6 +114,7 @@
             :destination="specDestination"
             :source-element="sourceElement"
             :variables="outputVariables"
+            @resolve="targetLocus = $event"
           />
           <div v-else-if="previewText" class="ee-preview">{{ previewText }}</div>
         </div>
@@ -227,7 +228,7 @@
           <input v-model="newEffect.extraContext[key]" type="text" :placeholder="key" />
         </div>
       </div>
-      <div v-if="selectedAction.supportsDuration" class="ee-field">
+      <div v-if="durationOffered" class="ee-field">
         <label>Duration (undo timer)</label>
         <DurationBuilder v-model="newEffect.duration" allow-rolls />
         <p class="ee-help">How long before this change reverts. This is the effect's own timer — separate from the SFX-level listening window (how long the SFX stays armed).</p>
@@ -480,6 +481,21 @@ const specDestination = computed(() => {
   return elements.length ? { elements } : null
 })
 
+// The element the target path currently resolves to, reported by the builder.
+// A change to a *rating* die is a fact about the character, so it can carry a
+// duration; a change to a die in the pool is gone at the next roll, so offering a
+// timer there would be a field that lies. Literal/choose/random modes name no
+// path, so there is no locus to reason about and no duration either.
+const targetLocus = ref('')
+
+const durationOffered = computed(() => {
+  const meta = selectedAction.value
+  if (!meta?.supportsDuration) return false
+  const only = meta.durationElements || []
+  if (!only.length) return true
+  return newEffect.targetMode === 'spec' && only.includes(targetLocus.value)
+})
+
 const actionGroups = computed(() => {
   const groups = {}
   for (const a of effectActions.value) {
@@ -614,6 +630,7 @@ function onActionChange() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.targetSpec = { steps: [] }
+  targetLocus.value = ''
   newEffect.scope = defaultScopeFor(selectedAction.value?.targetKind)
   newEffect.targetFilter = {}
   newEffect.dieFilter = {}
@@ -713,7 +730,7 @@ function buildEffect(meta) {
     entityScope: (entityMode !== 'literal') ? (newEffect.entityScope || null) : null,
     negative: meta.supportsPolarity ? !!newEffect.negative : false,
     context,
-    duration: (meta.supportsDuration && (newEffect.duration?.timers || []).length)
+    duration: (durationOffered.value && (newEffect.duration?.timers || []).length)
       ? {
           timers: newEffect.duration.timers.map(t => ({ event: t.event || 'scene', remaining: Number(t.remaining) || 0 })),
           combine: newEffect.duration.combine || 'FIRST_TO_FIRE',
@@ -805,6 +822,7 @@ function resetBlank() {
   newEffect.duration = { timers: [], combine: 'FIRST_TO_FIRE' }
   newEffect.targetMode = 'literal'
   newEffect.targetSpec = { steps: [] }
+  targetLocus.value = ''
   newEffect.scope = ''
   newEffect.targetFilter = {}
   newEffect.dieFilter = {}

@@ -36,11 +36,15 @@ EFFECT_ACTION_REGISTRY: list[EffectActionMeta] = [
 # Assigned after construction so each action's group lives beside the section
 # it belongs to, without repeating the label in every constructor call.
 _ACTION_GROUPS: dict[str, str] = {
-    "play_as_rating": "Dice Pool", "step_up_die": "Dice Pool",
-    "step_down_die": "Dice Pool", "double_die": "Dice Pool",
-    "reroll_die": "Dice Pool", "add_dice": "Dice Pool",
+    # One family, because they are one question: which die, and what happens to
+    # it. The path picks the die (in a pool, or in a trait's rating) and where it
+    # lands decides whether the change is transient or persists.
+    "set_die": "Change a Die", "step_up_die": "Change a Die",
+    "step_down_die": "Change a Die", "double_die": "Change a Die",
+    "split_die": "Change a Die", "remove_die": "Change a Die",
+    "reroll_die": "Change a Die",
+    "play_as_rating": "Dice Pool", "add_dice": "Dice Pool",
     "add_trait_rating_dice": "Dice Pool", "roll_pool": "Dice Pool", "resolve_pool": "Dice Pool",
-    "remove_die": "Dice Pool", "split_die": "Dice Pool",
     "step_up_effect": "Outcome", "step_up_outcome": "Outcome",
     "increase_dice_limit": "Outcome", "decrease_dice_limit": "Outcome",
     "negate_complication": "Outcome", "convert_complication": "Outcome",
