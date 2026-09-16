@@ -56,7 +56,7 @@ class QueriesTargeting:
                 context_fields=[_gql_field_def(f, repo) for f in m.context_fields],
                 implicit_target=m.implicit_target, implicit_result=m.implicit_result, implicit_timing=m.implicit_timing,
                 output_element=m.output_element,
-                requires_choice=m.requires_choice, target_kind=m.target_kind, path_element=m.path_element, supports_duration=m.supports_duration,
+                requires_choice=m.requires_choice, target_kind=m.target_kind, path_elements=list(m.path_element), supports_duration=m.supports_duration,
                 supports_polarity=m.supports_polarity, supports_return_exit=m.supports_return_exit,
                 refs=[GqlRefDef(name=r.name, label=r.label, element=r.element) for r in m.refs],
                 refs_first=m.refs_first,
@@ -236,7 +236,7 @@ class QueriesTargeting:
     def trace_target_spec(
         self, info: strawberry.Info,
         input: TargetSpecInput,
-        destination_element: Optional[str] = None,
+        destination_elements: Optional[list[str]] = None,
         destination_cardinality: Optional[str] = None,
         source_element: Optional[str] = None,
         variables: Optional[strawberry.scalars.JSON] = None,
@@ -244,6 +244,9 @@ class QueriesTargeting:
         """Type-check a targeting spec draft: the type after each step, step
         errors, and whether it reaches the requested destination type.
 
+        ``destination_elements`` is the set of element types the effect field
+        accepts — a list because a field may accept more than one (a die in a
+        pool *or* a rating die); the spec is valid when it reaches any of them.
         ``source_element`` is the catalog element type of the SFX's declared
         ``source_kind``, so ``select source`` type-checks against it.
         ``variables`` maps a bound output-variable name to its catalog element
@@ -255,8 +258,9 @@ class QueriesTargeting:
         types, errors = ts.trace(spec, source_element, variables_map)
 
         valid = False
-        if destination_element and destination_cardinality:
-            valid, _ = ts.check(spec, ts.ValueType(destination_element, destination_cardinality), source_element, variables_map)
+        if destination_elements and destination_cardinality:
+            wanted = [ts.ValueType(e, destination_cardinality) for e in destination_elements]
+            valid, _ = ts.check(spec, wanted, source_element, variables_map)
 
         return TargetTraceResult(
             types=[

@@ -24,6 +24,8 @@ from transversal.services.target_spec import (
     NavigateStep,
     SelectStep,
     TargetSpec,
+    ValueType,
+    check,
     final_type,
     trace,
 )
@@ -176,3 +178,25 @@ def test_a_pool_die_candidate_is_labelled_by_its_rating():
     """The picker label reads through the same derived reader, not the attribute."""
     cands = serialize_candidates("die", [{"die": "d8", "role": "total"}])
     assert cands[0].name == "d8"
+
+
+# ── One action, two legal destinations ─────────────────────────
+
+def test_a_destination_may_accept_either_locus():
+    """A `Change a Die` effect takes a die in a pool *or* a die of a rating, and
+    a path reaching either one is valid. The refusal names every type that would
+    have worked, so the author is told what the field actually wants."""
+    both = [ValueType("die", "one"), ValueType("rating_die", "one")]
+
+    pool = spec(SelectStep(collection="rolled_dice"), AggregateStep(fn="top", field="rating"))
+    assert check(pool, both) == (True, [])
+
+    rating = spec(SelectStep(collection="self_traitsettings"),
+                  NavigateStep(edge="rating_dice"),
+                  AggregateStep(fn="top", field="rating"))
+    assert check(rating, both) == (True, [])
+
+    nowhere = spec(SelectStep(collection="self_traitsettings"))
+    ok, errors = check(nowhere, both)
+    assert ok is False
+    assert "die/one or rating_die/one" in errors[0].message

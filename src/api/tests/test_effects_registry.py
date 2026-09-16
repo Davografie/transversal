@@ -19,7 +19,7 @@ def test_the_step_die_actions_declare_a_path_element():
     for action_id in ("step_up_die", "step_down_die"):
         meta = next(m for m in EFFECT_ACTION_REGISTRY if m.action_id == action_id)
         assert meta.target_kind is None, action_id
-        assert meta.path_element == "die", action_id
+        assert meta.path_element == ("die",), action_id
         assert [f.name for f in meta.fields] == ["target"]
 
 

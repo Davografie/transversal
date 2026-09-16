@@ -220,10 +220,12 @@ class EffectActionMeta:
     implicit_timing: Optional[str] = None
     requires_choice: bool = False
     target_kind: Optional[str] = None
-    # The catalog element a targeting *path* must resolve to, when that is not
+    # The catalog elements a targeting *path* must resolve to, when that is not
     # the picker kind (or exists where there is no picker at all — a die in a
-    # pool). The editor offers the path mode on this, and type-checks against it.
-    path_element: str = ""
+    # pool). A list, because one action can accept more than one kind of thing:
+    # the change-die family takes a pool die or a rating die. The editor offers
+    # the path mode on this and type-checks against the whole set.
+    path_elements: list[str] = strawberry.field(default_factory=list)
     refs: list[RefDef] = strawberry.field(default_factory=list)
     # Render refs above the fields: a ref naming the *subject* ("Trait to Move")
     # reads before the field naming where it goes.

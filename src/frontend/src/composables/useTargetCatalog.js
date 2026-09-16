@@ -16,8 +16,8 @@ const CATALOG_QUERY = `{
   }
 }`
 
-const TRACE_QUERY = `query($input: TargetSpecInput!, $element: String, $cardinality: String, $sourceElement: String, $variables: JSON) {
-  traceTargetSpec(input: $input, destinationElement: $element, destinationCardinality: $cardinality, sourceElement: $sourceElement, variables: $variables) {
+const TRACE_QUERY = `query($input: TargetSpecInput!, $elements: [String!], $cardinality: String, $sourceElement: String, $variables: JSON) {
+  traceTargetSpec(input: $input, destinationElements: $elements, destinationCardinality: $cardinality, sourceElement: $sourceElement, variables: $variables) {
     types { element cardinality }
     errors { stepIndex message }
     valid
@@ -49,16 +49,18 @@ export function useTargetCatalog() {
     return pending
   }
 
-  // Type-check a spec draft against an optional destination (element × cardinality),
-  // with an optional source element (for `select source`) and bound variables
-  // (name -> element, for `select variable`).
+  // Type-check a spec draft against an optional destination (elements ×
+  // cardinality), with an optional source element (for `select source`) and bound
+  // variables (name -> element, for `select variable`). `destination.elements` is
+  // a list because a field may accept more than one kind of thing — a die in a
+  // pool or a die of a trait's rating.
   async function traceSpec(steps, destination, sourceElement = null, variables = null) {
     if (!steps || !steps.length) {
       return { types: [], errors: [], valid: false }
     }
     const data = await graphql(TRACE_QUERY, {
       input: { steps },
-      element: destination?.element || null,
+      elements: destination?.elements || null,
       cardinality: destination?.cardinality || null,
       sourceElement: sourceElement || null,
       variables: variables || null,

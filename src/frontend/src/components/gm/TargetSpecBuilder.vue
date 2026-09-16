@@ -255,7 +255,7 @@ import Button from '@/components/ui/Button.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({ steps: [] }) },
-  destination: { type: Object, default: null }, // { element, cardinality }
+  destination: { type: Object, default: null }, // { elements: [...], cardinality }
   sourceElement: { type: String, default: '' },  // catalog element of the SFX's source_kind
   variables: { type: Object, default: null },     // { name: {element, cardinality} } bound output variables
   title: { type: String, default: 'Targeting path' },
@@ -436,8 +436,11 @@ function stepIsValid(i) {
     // The terminal `evaluate` step is the condition's boolean result.
     return steps.value[i]?.kind === 'evaluate' && !!t && t.element === 'boolean' && !errorAt(i)
   }
-  if (!props.destination || !props.destination.element) return false
-  if (!t || !t.element || t.element !== props.destination.element) return false
+  // A destination may accept more than one element (a die in a pool *or* a die of
+  // a trait's rating), so the match is against the whole set.
+  const wanted = props.destination?.elements || []
+  if (!wanted.length) return false
+  if (!t || !t.element || !wanted.includes(t.element)) return false
   if (props.destination.cardinality && t.cardinality !== props.destination.cardinality) return false
   return !errorAt(i)
 }
@@ -700,9 +703,11 @@ const destinationLabel = computed(() => {
     const last = steps.value[steps.value.length - 1]
     return last && last.kind === 'evaluate' ? 'boolean' : 'boolean (non-empty)'
   }
-  return props.destination
-    ? (props.destination.cardinality ? `${props.destination.element}/${props.destination.cardinality}` : props.destination.element)
-    : ''
+  const dest = props.destination
+  if (!dest?.elements?.length) return ''
+  // Several accepted elements read as a choice ("die or rating_die").
+  const names = dest.elements.join(' or ')
+  return dest.cardinality ? `${names}/${dest.cardinality}` : names
 })
 
 // A condition path is "terminal" (evaluable to true/false) once it resolves to

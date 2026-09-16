@@ -363,19 +363,28 @@ def final_type(spec: TargetSpec, source_element: str | None = None,
     return types[-1]
 
 
-def check(spec: TargetSpec, destination: ValueType, source_element: str | None = None,
+def check(spec: TargetSpec, destination, source_element: str | None = None,
           variables=None) -> tuple[bool, list[TraceError]]:
-    """True when ``spec`` type-checks and its final type matches ``destination``."""
+    """True when ``spec`` type-checks and its final type matches ``destination``.
+
+    ``destination`` is a :class:`ValueType` or an iterable of them. A destination
+    may be a **union** because an action can accept more than one kind of thing —
+    a `Change a Die` effect lands on a die in a pool *or* a die of a trait's
+    rating, and both are legal. The spec is valid when its final type matches any
+    of them, and the refusal names every type that would have worked.
+    """
     types, errors = trace(spec, source_element, variables)
     if errors:
         return False, errors
     final = types[-1] if types else None
     if final is None:
         return False, [TraceError(-1, "spec resolves to nothing")]
-    if not final.matches(destination):
+    wanted = (destination,) if isinstance(destination, ValueType) else tuple(destination)
+    if not any(final.matches(w) for w in wanted):
+        wanted_text = " or ".join(f"{w.element}/{w.cardinality}" for w in wanted)
         return False, [TraceError(
             len(types) - 1,
-            f"spec resolves to {final.element}/{final.cardinality}, not {destination.element}/{destination.cardinality}",
+            f"spec resolves to {final.element}/{final.cardinality}, not {wanted_text}",
         )]
     return True, []
 

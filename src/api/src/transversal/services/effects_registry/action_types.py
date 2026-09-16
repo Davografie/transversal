@@ -68,13 +68,19 @@ class EffectActionMeta:
     # runtime binds the produced id under the author's chosen name, and the editor
     # offers that name as a `select variable` seed — one declaration, both readers.
     output_element: str = ""
-    # The catalog element a *targeting path* must resolve to, when that differs
+    # The catalog elements a *targeting path* must resolve to, when that differs
     # from the picker kind — or exists where there is no picker at all. The two
     # questions are separate: `target_kind` names what the literal/choose/random
     # modes offer (there is no "die" picker), while a path to a die in a pool is
     # perfectly writable. Declaring this is what lets such an action offer the
     # path mode without inventing a picker kind for it.
-    path_element: str = ""
+    #
+    # A **tuple**, because an action can accept more than one kind of thing: the
+    # change-die family lands on a die in a pool *or* a die of a trait's rating
+    # (`("die", "rating_die")`), and the UI greys out the verbs that only make
+    # sense on one of them. The trace refuses a spec whose final type is none of
+    # these, naming every type that would have worked.
+    path_element: tuple[str, ...] = ()
     refs: list[RefDef] = field(default_factory=list)  # named references (multi-target model)
     # Render the refs above the fields. A ref that names the *subject* ("Trait to
     # Move") reads before the field that names where it goes; an action whose ref

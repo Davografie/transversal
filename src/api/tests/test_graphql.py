@@ -642,6 +642,16 @@ class TestTargetCatalogGraphQL:
         assert ts_edge["targets"] == ["traitsetting"]
         assert ts_edge["cardinality"] == "one"
 
+        # The other locus: a trait instance's own rating dice, and its fields.
+        assert "rating_die" in element_names
+        rating_edge = next(e for e in cat["edges"]
+                           if e["source"] == "traitsetting" and e["name"] == "rating_dice")
+        assert rating_edge["targets"] == ["rating_die"]
+        assert rating_edge["cardinality"] == "many"
+        rating_fields = {f["name"]: f["type"] for f in cat["fields"] if f["element"] == "rating_die"}
+        assert rating_fields["rating"] == "die"
+        assert rating_fields["index"] == "int"
+
         # collections seed the wizard's first step
         cols = {c["name"]: c for c in cat["collections"]}
         assert cols["self"]["singular"] is True
@@ -652,10 +662,28 @@ class TestTargetCatalogGraphQL:
         assert aggs["count"]["needsField"] is False
         assert aggs["min"]["needsField"] is True
 
+    def test_effect_actions_serve_their_accepted_path_elements(self, client):
+        """A resolver change is not a *wiring* change: `pathElements` has to reach
+        the schema, and the old singular `pathElement` must be gone.
+
+        Checked through introspection rather than the `effectActions` query because
+        that resolver fills each action's dynamic field options from the repo, and
+        the in-memory test double cannot answer `list_all_entities` — so no test
+        can exercise the query itself. A list, because one action may accept more
+        than one kind of thing (a die in a pool or a die of a trait's rating)."""
+        result = _gql(client, """
+            query { __type(name: "EffectActionMeta") { fields { name type { kind ofType { kind name } } } } }
+        """)
+        fields = {f["name"]: f for f in result["__type"]["fields"]}
+        assert "pathElements" in fields
+        assert "pathElement" not in fields
+        assert fields["pathElements"]["type"]["kind"] == "NON_NULL"
+        assert fields["pathElements"]["type"]["ofType"]["kind"] == "LIST"
+
     def test_trace_target_spec_one_trick(self, client):
         result = _gql(client, """
-            query($input: TargetSpecInput!, $e: String, $c: String) {
-                traceTargetSpec(input: $input, destinationElement: $e, destinationCardinality: $c) {
+            query($input: TargetSpecInput!, $e: [String!], $c: String) {
+                traceTargetSpec(input: $input, destinationElements: $e, destinationCardinality: $c) {
                     types { element cardinality }
                     errors { stepIndex message }
                     valid
@@ -669,7 +697,7 @@ class TestTargetCatalogGraphQL:
                     {"kind": "navigate", "edge": "traitsetting", "dedup": True},
                 ],
             },
-            "e": "traitsetting",
+            "e": ["traitsetting"],
             "c": "many",
         })
         tr = result["traceTargetSpec"]
@@ -702,8 +730,8 @@ class TestTargetCatalogGraphQL:
 
     def test_trace_target_spec_cardinality_mismatch(self, client):
         result = _gql(client, """
-            query($input: TargetSpecInput!, $e: String, $c: String) {
-                traceTargetSpec(input: $input, destinationElement: $e, destinationCardinality: $c) {
+            query($input: TargetSpecInput!, $e: [String!], $c: String) {
+                traceTargetSpec(input: $input, destinationElements: $e, destinationCardinality: $c) {
                     valid errors { stepIndex message }
                 }
             }
@@ -714,7 +742,7 @@ class TestTargetCatalogGraphQL:
                     {"kind": "navigate", "edge": "traitsetting"},
                 ],
             },
-            "e": "traitsetting",
+            "e": ["traitsetting"],
             "c": "one",
         })
         tr = result["traceTargetSpec"]
@@ -722,8 +750,8 @@ class TestTargetCatalogGraphQL:
 
     def test_trace_target_spec_choose_collapses_many_to_one(self, client):
         result = _gql(client, """
-            query($input: TargetSpecInput!, $e: String, $c: String) {
-                traceTargetSpec(input: $input, destinationElement: $e, destinationCardinality: $c) {
+            query($input: TargetSpecInput!, $e: [String!], $c: String) {
+                traceTargetSpec(input: $input, destinationElements: $e, destinationCardinality: $c) {
                     types { element cardinality }
                     errors { stepIndex message }
                     valid
@@ -736,7 +764,7 @@ class TestTargetCatalogGraphQL:
                     {"kind": "choose", "count": 1},
                 ],
             },
-            "e": "die",
+            "e": ["die"],
             "c": "one",
         })
         tr = result["traceTargetSpec"]

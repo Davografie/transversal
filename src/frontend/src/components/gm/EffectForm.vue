@@ -43,7 +43,7 @@
           <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
           <TargetSpecBuilder
             v-model="newEffect.refs[r.name].spec"
-            :destination="{ element: r.element }"
+            :destination="{ elements: [r.element] }"
             :source-element="sourceElement"
             :variables="scopedVariables"
           />
@@ -131,7 +131,7 @@
           <TargetSpecBuilder
             v-else-if="newEffect.entityMode === 'spec'"
             v-model="newEffect.entitySpec"
-            :destination="{ element: 'entity' }"
+            :destination="{ elements: ['entity'] }"
             :source-element="sourceElement"
             :variables="scopedVariables"
           />
@@ -165,7 +165,7 @@
           <label>{{ r.label }} <em class="ee-ref-element">{{ r.element }}</em></label>
           <TargetSpecBuilder
             v-model="newEffect.refs[r.name].spec"
-            :destination="{ element: r.element }"
+            :destination="{ elements: [r.element] }"
             :source-element="sourceElement"
             :variables="scopedVariables"
           />
@@ -452,12 +452,13 @@ const selectedAction = computed(() => {
 // output-name field, and only their names join the variable picker.
 const outputElement = computed(() => selectedAction.value?.outputElement || '')
 
-// The spec element type an effect's `target` should resolve to. Preferred: the
-// action's declared `pathElement`, because the picker kind and the path's
+// The spec element types an effect's `target` may resolve to. Preferred: the
+// action's declared `pathElements`, because the picker kind and the path's
 // destination are different questions — there is no "die" picker, but a path to
-// a die in a pool is perfectly writable. Falls back to the legacy target_kind
-// table. Cardinality is left loose — the wizard highlights on element match and
-// shows the actual cardinality.
+// a die is perfectly writable, and one action can accept a die in a pool *or* a
+// die of a trait's rating. Falls back to the legacy target_kind table.
+// Cardinality is left loose — the wizard highlights on element match and shows
+// the actual cardinality.
 const TARGET_KIND_ELEMENT = {
   trait: 'traitsetting',
   traitsetting: 'traitsetting',
@@ -473,8 +474,10 @@ const TARGET_KIND_ELEMENT = {
 
 const specDestination = computed(() => {
   const meta = selectedAction.value
-  const element = meta?.pathElement || (meta?.targetKind ? TARGET_KIND_ELEMENT[meta.targetKind] : null)
-  return element ? { element } : null
+  const declared = meta?.pathElements || []
+  const fallback = meta?.targetKind ? [TARGET_KIND_ELEMENT[meta.targetKind]] : []
+  const elements = (declared.length ? declared : fallback).filter(Boolean)
+  return elements.length ? { elements } : null
 })
 
 const actionGroups = computed(() => {
@@ -574,9 +577,10 @@ function isResultDieField(f) {
 function isScopedTargetField(f) {
   // A path is offered when the action says what a path resolves to — which an
   // action can declare without declaring a picker kind (Step Down Die's target
-  // is a die in a pool; there is no die picker).
+  // is a die; there is no die picker). One action may accept several kinds of
+  // thing, so the declaration is a list.
   return f.name === 'target'
-    && !!(selectedAction.value?.targetKind || selectedAction.value?.pathElement)
+    && !!(selectedAction.value?.targetKind || selectedAction.value?.pathElements?.length)
 }
 
 const relevantFilterFields = computed(() => {
@@ -673,11 +677,11 @@ function buildRefs() {
 function buildEffect(meta) {
   const kind = meta.targetKind
   // A path is offered wherever the action says what a path *resolves to* — which
-  // an action can declare without a picker kind (`pathElement`: Step Down Die
-  // targets a die in a pool). Gating the mode on `targetKind` alone meant the
-  // editor showed the path but the save silently downgraded it to the keyword
-  // target: the author's spec was dropped on every Update.
-  const canPath = !!(meta.targetKind || meta.pathElement)
+  // an action can declare without a picker kind (`pathElements`: Step Down Die
+  // targets a die). Gating the mode on `targetKind` alone meant the editor showed
+  // the path but the save silently downgraded it to the keyword target: the
+  // author's spec was dropped on every Update.
+  const canPath = !!(meta.targetKind || meta.pathElements?.length)
   const mode = canPath ? (newEffect.targetMode || 'literal') : 'literal'
   let target = meta.implicitTarget || newEffect.fields.target || ''
   if (kind && mode === 'choose') target = `{choose_${kind}}`
