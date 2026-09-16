@@ -32,7 +32,7 @@ export function createEntityCrud() {
       hidden unpublished supportEligible starterLocation loraConfig promptSteering
       agency { playerId playerName main }
       projections {
-        id originUniverse universe name backgroundImage currentLocation transversalType
+        id entityId originUniverse universe name backgroundImage currentLocation transversalType
       }
       traitSettings {
         id name dieType rating ratingType statement ego sfxIds traitsetName universe
@@ -183,7 +183,7 @@ export function createEntityCrud() {
     const result = await graphql(
       `mutation($projectionId: ID!, $name: String, $currentLocation: ID, $transversalType: TransversalType) {
         updateProjection(projectionId: $projectionId, name: $name, currentLocation: $currentLocation, transversalType: $transversalType) {
-          id originUniverse universe name currentLocation transversalType
+          id entityId originUniverse universe name currentLocation transversalType
         }
       }`,
       {
@@ -199,6 +199,44 @@ export function createEntityCrud() {
       if (idx >= 0) projections.value[idx] = p
     }
     return result?.updateProjection || null
+  }
+
+  // Send a body to a location. Travel, not a field edit: the service derives the
+  // body's universe from the destination location, makes it the entity's current
+  // body, and mirrors the entity's universe/location onto it — so a cross-universe
+  // destination lands with the record consistent and the entity following.
+  // `entityId` is the panel's own entity; it falls back to this instance's
+  // selection when the projection was opened outside an entity panel.
+  async function activateProjection(projectionId, location, entityId = null) {
+    const id = entityId || selectedId.value
+    if (!id || !location) return null
+    const result = await graphql(
+      `mutation($entityId: ID!, $projectionId: ID!, $location: ID) {
+        activateProjection(entityId: $entityId, projectionId: $projectionId, location: $location) {
+          id currentProjection currentUniverse currentLocation
+          projections { id entityId originUniverse universe name backgroundImage currentLocation transversalType }
+        }
+      }`,
+      { entityId: id, projectionId, location }
+    )
+    const e = result?.activateProjection
+    if (!e) return null
+    projections.value = e.projections || []
+    currentProjection.value = e.currentProjection || null
+    if (selected.value) {
+      selected.value.currentProjection = e.currentProjection
+      selected.value.currentUniverse = e.currentUniverse
+      selected.value.currentLocation = e.currentLocation
+    }
+    // The entity panel's form drives its own auto-save; leaving it on the old
+    // location would write the travel back out on the next edit.
+    if (form.value && selectedId.value === id) {
+      form.value.current_universe = e.currentUniverse
+      form.value.current_location = e.currentLocation || ''
+    }
+    // The updated projection, matching updateProjection's contract (the panel
+    // reads the new universe off it; its own prop is a frozen spec snapshot).
+    return (e.projections || []).find((x) => x.id === projectionId) || null
   }
 
   async function removeProjection(projectionId) {
@@ -325,6 +363,7 @@ export function createEntityCrud() {
     createEntity,
     addProjection,
     updateProjection,
+    activateProjection,
     removeProjection,
     uploadBgImage,
     // Imagen actions
