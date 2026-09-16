@@ -41,7 +41,7 @@
         :expanded="true"
         :draggable="canDragOccupant(o)"
         :dragging="dragDotKey === o.id"
-        :lerping="lerpActive"
+        :lerping="lerpActive && dragDotKey !== o.id"
         :title="canDragOccupant(o) ? 'Drag to reposition' : (o.unpublished ? o.name + ' (draft)' : o.name)"
         @click="onDotClick('occupant', o)"
         @overlay-click="onExpandedClick('occupant', o)"
@@ -989,6 +989,7 @@ async function onOccDragEnd() {
   // Keep self popped
   activeElement.value = { type: 'occupant', id: props.entityId }
 
+  noteOwnMove(occ.id, occ.map_x, occ.map_y)
   try {
     await fetch(`/api/v1/entities/${occ.id}/map-position`, {
       method: 'PATCH',
@@ -1469,6 +1470,7 @@ function placeCharacterAtSource(sourceId) {
   self.map_x = nx; self.map_y = ny
 
   // Save position
+  noteOwnMove(props.entityId, nx, ny)
   fetch(`/api/v1/entities/${props.entityId}/map-position`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -1520,6 +1522,19 @@ watch(() => props.locationId, () => {
 })
 
 const lerpActive = ref(false)
+// Position writes WE sent, so their SSE echo does not animate. The server
+// broadcasts `entity_moved` to every subscriber including the one that asked for
+// it, so without this a GM drag smooths *into* the position they just dropped it
+// at. Matched on entity + the exact position written, and only trusted briefly,
+// so a genuine foreign move to that same spot still animates later.
+const ownMoves = new Map()  // entityId -> { x, y, at }
+function noteOwnMove(id, x, y) {
+  if (id) ownMoves.set(id, { x, y, at: Date.now() })
+}
+function isOwnMove(id, x, y) {
+  const m = ownMoves.get(id)
+  return !!m && m.x === x && m.y === y && Date.now() - m.at < 2000
+}
 const destNavCache = ref({})  // { [locationId]: { arriveX, arriveY, destAspect } } lazy-populated
 
 // Drop this location's cached landing point. That entry describes how to arrive
@@ -1582,7 +1597,15 @@ async function preloadDestNavCache() {
   }
 }
 
-async function fetchNavWithLerp() {
+// Re-sync after a position update. `origin` (when the caller knows it) tells us
+// whose update it was: the lerp is for a *foreign* move — something that changed
+// where we were not looking — and direct input must land instantly, or the dot
+// slides out from under the pointer that is still holding it.
+async function fetchNavWithLerp(origin = null) {
+  if (origin && isOwnMove(origin.id, origin.x, origin.y)) {
+    await fetchNav()
+    return
+  }
   lerpActive.value = true
   await fetchNav()
   setTimeout(() => { lerpActive.value = false }, 1600)

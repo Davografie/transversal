@@ -447,6 +447,22 @@ border), and the overlay/particle system below — run continuously.
   `App.vue`'s SSE composable; `fetchNavWithLerp()` is exposed and re-fetches nav
   with `lerpActive = true`, so non-self occupant dots ease to their new positions
   over 1.5s instead of teleporting.
+- **The lerp is for *foreign* moves only — direct input must land instantly.**
+  The map-position endpoint broadcasts to *every* subscriber, including the one
+  that sent it, so the mover's own echo used to arm the 1.5s ease and the next
+  drag of a dot would slide out from under the pointer still holding it (most
+  visible for a GM repositioning several occupants in a row). Two guards, both
+  needed:
+  - `App.vue` passes the moved entity and position to `fetchNavWithLerp`, which
+    checks them against `ownMoves` — the writes this viewer sent, keyed by entity
+    and the exact position, trusted for 2s — and does a plain `fetchNav()` when
+    they match. (If the position matches what we wrote, our local state already
+    has it, so nothing would animate anyway; the point is not to *arm* the ease
+    for what comes next.)
+  - `:lerping` is `lerpActive && dragDotKey !== o.id`, so the dot under the
+    pointer never has the `left`/`top` transition regardless of what armed
+    `lerpActive`. Note `entity_updated` also calls `fetchNavWithLerp()` with no
+    origin, which is correct: only `entity_moved` carries a position to match on.
 - `remotePools` / `remoteResults` props drive `PoolDiceRing` around occupant and
   self dots; the ring takes the dot's `scale` and `transparent` so it tracks both
   the controlled-dot size and the portrait's top overflow (see the component entry

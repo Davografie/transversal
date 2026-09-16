@@ -1073,7 +1073,10 @@ function handleSseEvent(evt) {
     case 'entity_moved':
       // Position-only change (map drag/reposition): re-sync nav dots, no toast.
       if (evt.data?.current_location === currentLocationId.value) {
-        locationRef.value?.fetchNavWithLerp()
+        // Hand over the position so the viewer can tell its own write from a
+        // foreign one: the server echoes this event back to the mover too, and
+        // their own drag must land instantly rather than smooth into place.
+        locationRef.value?.fetchNavWithLerp({ id: eid, x: evt.data?.map_x, y: evt.data?.map_y })
       }
       break
     case 'scene_change':
